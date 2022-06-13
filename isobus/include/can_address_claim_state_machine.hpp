@@ -34,7 +34,7 @@ private:
     bool send_request_to_claim();
     bool send_address_claim(std::uint8_t address);
 
-    NAME &m_isoname;
+    NAME m_isoname;
     State m_currentState;
     std::uint32_t m_timestamp_ms;
     std::uint8_t m_portIndex;

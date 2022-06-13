@@ -61,7 +61,7 @@ add_executable(address_claim_tests test/address_claim_test.cpp test/test_CAN_glu
 target_link_libraries(address_claim_tests gtest_main Isobus SocketCANInterface)
 
 include(GoogleTest)
-gtest_discover_tests(address_claim_tests)
+gtest_discover_tests(address_claim_tests name_tests)
 
 
 

@@ -9,7 +9,7 @@ namespace isobus
 	std::list<PartneredControlFunction> PartneredControlFunction::partneredControlFunctionList;
 
 	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters) :
-	  ControlFunction(NAME(DEFAULT_NAME), NULL_CAN_ADDRESS, CANPort),
+	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort),
 	  NAMEFilterList(NAMEFilters)
 	{
 	}

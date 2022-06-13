@@ -29,7 +29,7 @@ CANHardwareInterface CANHardwareInterface::CAN_HARDWARE_INTERFACE;
 
 bool isobus::send_can_message_to_hardware(HardwareInterfaceCANFrame frame)
 {
-	CANHardwareInterface::transmit_can_message(frame);
+	return CANHardwareInterface::transmit_can_message(frame);
 }
 
 CANHardwareInterface::SocketCANFrameHandler::SocketCANFrameHandler(const std::string deviceName) :
