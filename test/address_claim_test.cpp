@@ -1,0 +1,39 @@
+#include <gtest/gtest.h>
+
+#include "can_internal_control_function.hpp"
+#include "can_network_manager.hpp"
+#include "can_types.hpp"
+#include "socket_can_interface.hpp"
+#include "test_CAN_glue.hpp"
+
+#include <chrono>
+#include <thread>
+
+TEST(ADDRESS_CLAIM_TESTS, AddressClaiming)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, "vcan0");
+	CANHardwareInterface::start();
+
+	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
+	CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+	isobus::NAME TestDeviceNAME(isobus::DEFAULT_NAME);
+	TestDeviceNAME.set_arbitrary_address_capable(true);
+	TestDeviceNAME.set_industry_group(1);
+	TestDeviceNAME.set_device_class(0);
+	TestDeviceNAME.set_function_code(138);
+	TestDeviceNAME.set_identity_number(1);
+	TestDeviceNAME.set_ecu_instance(0);
+	TestDeviceNAME.set_function_instance(0);
+	TestDeviceNAME.set_device_class_instance(0);
+	TestDeviceNAME.set_manufacturer_code(69);
+
+	isobus::InternalControlFunction TestInternalECU(TestDeviceNAME, 0x1C, 0);
+
+	std::this_thread::sleep_for(std::chrono::seconds(5));
+
+	CANHardwareInterface::stop();
+}
