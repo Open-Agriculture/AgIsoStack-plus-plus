@@ -24,6 +24,8 @@ public:
     ControlFunction *get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>) const;
     void add_control_function(std::uint8_t CANPort, ControlFunction *newControlFunction, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>);
 
+    InternalControlFunction *get_internal_control_function(ControlFunction *controlFunction);
+
     bool send_can_message(std::uint32_t parameterGroupNumber,
                           const std::uint8_t *dataBuffer,
                           std::uint32_t dataLength,

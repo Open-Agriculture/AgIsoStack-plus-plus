@@ -8,6 +8,7 @@ namespace isobus
 
 class ControlFunction
 {
+public:
     enum class Type
     {
         Internal,
@@ -15,7 +16,6 @@ class ControlFunction
         Partnered
     };
 
-public:
     ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort);
     virtual ~ControlFunction();
 

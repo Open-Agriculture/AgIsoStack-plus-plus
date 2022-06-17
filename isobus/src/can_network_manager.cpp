@@ -31,6 +31,18 @@ namespace isobus
 		}
 	}
 
+	InternalControlFunction *CANNetworkManager::get_internal_control_function(ControlFunction *controlFunction)
+	{
+		InternalControlFunction *retVal = nullptr;
+
+		if ((nullptr != controlFunction) && 
+			(ControlFunction::Type::Internal == controlFunction->get_type()))
+		{
+			retVal = static_cast<InternalControlFunction *>(controlFunction);
+		}
+		return retVal;
+	}
+
 	bool CANNetworkManager::send_can_message(std::uint32_t parameterGroupNumber,
 	                                         const std::uint8_t *dataBuffer,
 	                                         std::uint32_t dataLength,
