@@ -23,6 +23,7 @@ set(ISOBUS_SRC
   "can_lib_managed_message.cpp"
   "can_partnered_control_function.cpp"
   "can_NAME_filter.cpp"
+  "can_transport_protocol.cpp"
 )
 
 # Prepend the source directory path to all the source files
@@ -41,6 +42,7 @@ set(ISOBUS_INCLUDE
   "can_address_claim_state_machine.hpp"
   "can_lib_managed_message.hpp"
   "can_NAME_filter.hpp"
+  "can_transport_protocol.hpp"
 )
 
 # Prepend the include directory path to all the include files
