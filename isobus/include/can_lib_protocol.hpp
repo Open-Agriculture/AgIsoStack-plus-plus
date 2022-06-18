@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cstdint>
+#include "can_message.hpp"
+
 #include <vector>
 
 namespace isobus
@@ -18,9 +19,11 @@ public:
 
     virtual void initialize();
 
-protected:
+    virtual void process_message(CANMessage *const message) = 0;
+
     virtual void update() = 0;
 
+protected:
     static std::vector<CANLibProtocol> protocolList;
 
     bool initialized;
