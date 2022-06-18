@@ -17,6 +17,8 @@ namespace isobus
 class CANNetworkManager
 {
 public:
+    typedef void (*CANLibCallback)(CANMessage *message, void *parentPointer);
+
     static CANNetworkManager CANNetwork;
 
     void initialize();
@@ -33,6 +35,18 @@ public:
                           ControlFunction *destinationControlFunction = nullptr,
                           CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6);
 
+    void receive_can_message(CANMessage message);
+
+    void update();
+
+    static void can_lib_process_rx_message(HardwareInterfaceCANFrame &rxFrame, void *parentClass);
+
+protected:
+    // Using protected region to allow protocols use of special functions from the network manager
+    friend class AddressClaimStateMachine;
+    friend class TransportProtocolManager;
+    bool add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
+    bool remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
     bool send_can_message_raw(std::uint32_t portIndex,
                               std::uint8_t sourceAddress,
                               std::uint8_t destAddress,
@@ -42,13 +56,15 @@ public:
                               std::uint32_t size,
                               CANLibBadge<AddressClaimStateMachine>);
 
-    void receive_can_message(CANMessage message);
-
-    void update();
-
-    static void can_lib_process_rx_message(HardwareInterfaceCANFrame &rxFrame, void *parentClass);
-
 private:
+    struct CANLibProtocolPGNCallbackInfo
+    {
+        bool operator==(const CANLibProtocolPGNCallbackInfo& obj);
+        CANLibCallback callback;
+        void *parent;
+        std::uint32_t parameterGroupNumber;
+    };
+
     HardwareInterfaceCANFrame construct_frame(std::uint32_t portIndex,
                               std::uint8_t sourceAddress,
                               std::uint8_t destAddress,
@@ -65,9 +81,12 @@ private:
                               std::uint8_t priority,
                               const void *data,
                               std::uint32_t size);
+                          
     std::array<std::array<ControlFunction*, 256>, CAN_PORT_MAXIMUM> controlFunctionTable;
+    std::list<CANLibProtocolPGNCallbackInfo> protocolPGNCallbacks;
     std::list<CANMessage> receiveMessageList;
     std::mutex receiveMessageMutex;
+    std::mutex protocolPGNCallbacksMutex;
     std::uint32_t updateTimestamp_ms;
     bool initialized;
 };

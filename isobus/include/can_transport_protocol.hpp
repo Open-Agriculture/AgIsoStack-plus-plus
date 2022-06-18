@@ -2,29 +2,22 @@
 
 #include "can_lib_protocol.hpp"
 #include "can_control_function.hpp"
+#include "can_network_manager.hpp"
+#include "can_lib_badge.hpp"
 
 namespace isobus
 {
 
-class TransportProtocol : public CANLibProtocol
+class TransportProtocolManager : public CANLibProtocol
 {
-    class TransportProtocolStateMachine
+    enum class StateMachineState
     {
-    public:
-        enum class State
-        {
-            None,
-            ClearToSend,
-            RxDataSession,
-            WaitForClearToSend,
-            TxDataSession,
-            WaitForEndOfMessageAcknowledge
-        };
-
-        State get_state() const;
-
-    private:
-        State currentState;
+        None,
+        ClearToSend,
+        RxDataSession,
+        WaitForClearToSend,
+        TxDataSession,
+        WaitForEndOfMessageAcknowledge
     };
 
     class TransportProtocolSession
@@ -35,14 +28,22 @@ class TransportProtocol : public CANLibProtocol
             Transmit,
             Receive
         };
+
     private:
-        friend class TransportProtocol;
+        friend class TransportProtocolManager;
+
+        TransportProtocolSession(Direction sessionDirection);
+        ~TransportProtocolSession();
+
+        bool allocate(std::uint16_t size);
+
+        StateMachineState state;
         ControlFunction *source;
         ControlFunction *destination;
         std::uint32_t parameterGroupNumber;
         std::uint16_t messageLengthBytes;
-        std::uint8_t *dataBuffer;
-        Direction sessionDirection;
+        std::vector<std::uint8_t> *sessionData;
+        const Direction sessionDirection;
     };
 
     enum class ConnectionAbortReason : std::uint8_t
@@ -65,20 +66,24 @@ class TransportProtocol : public CANLibProtocol
     static const std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x13;
     static const std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 0x20;
     static const std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF;
+    static const std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 1785;
 
-    TransportProtocol();
-    virtual ~TransportProtocol();
+    TransportProtocolManager();
+    virtual ~TransportProtocolManager();
 
-protected:
-    virtual void update();
+    virtual void initialize();
+
+    virtual void process_message(CANMessage *const message);
+    static void process_message(CANMessage *const message, void *parent);
+
+    void update_all_sessions(CANLibBadge<CANNetworkManager> badge);
 
 private:
     bool abort_session(TransportProtocolSession &session, ConnectionAbortReason reason);
     bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber);
+    void update_state_machine(TransportProtocolSession *session);
 
     static std::vector<TransportProtocolSession *> activeSessions;
-
-    bool anySessionNeedsUpdate;
 };
 
 }

@@ -7,6 +7,7 @@
 #include "can_types.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 namespace isobus
 {
@@ -105,6 +106,56 @@ namespace isobus
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
 
+	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
+	{
+		bool retVal = false;
+		CANLibProtocolPGNCallbackInfo callbackInfo;
+
+		callbackInfo.callback = callback;
+		callbackInfo.parent = parentPointer;
+		callbackInfo.parameterGroupNumber = parameterGroupNumber;
+
+		protocolPGNCallbacksMutex.lock();
+
+		if ((nullptr != callback) && (protocolPGNCallbacks.end() == find(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end(), callbackInfo)))
+		{
+			protocolPGNCallbacks.push_back(callbackInfo);
+			retVal = true;
+		}
+
+		protocolPGNCallbacksMutex.unlock();
+
+		return retVal;
+	}
+
+	bool CANNetworkManager::remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
+	{
+		bool retVal = false;
+		CANLibProtocolPGNCallbackInfo callbackInfo;
+
+		callbackInfo.callback = callback;
+		callbackInfo.parent = parentPointer;
+		callbackInfo.parameterGroupNumber = parameterGroupNumber;
+
+		protocolPGNCallbacksMutex.lock();
+
+		if (nullptr != callback)
+		{
+			std::list<CANLibProtocolPGNCallbackInfo>::iterator callbackLocation;
+			callbackLocation = find(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end(), callbackInfo);
+
+			if (protocolPGNCallbacks.end() != callbackLocation)
+			{
+				protocolPGNCallbacks.erase(callbackLocation);
+				retVal = true;
+			}
+		}
+
+		protocolPGNCallbacksMutex.unlock();
+
+		return retVal;
+	}
+
 	HardwareInterfaceCANFrame CANNetworkManager::construct_frame(std::uint32_t portIndex,
 	                                                             std::uint8_t sourceAddress,
 	                                                             std::uint8_t destAddress,
@@ -153,6 +204,13 @@ namespace isobus
 			txFrame.identifier = identifier & 0x1FFFFFFF;
 		}
 		return txFrame;
+	}
+
+	bool CANNetworkManager::CANLibProtocolPGNCallbackInfo::operator==(const CANLibProtocolPGNCallbackInfo &obj)
+	{
+		return ((obj.callback == this->callback) &&
+		        (obj.parent == this->parent) &&
+		        (obj.parameterGroupNumber == this->parameterGroupNumber));
 	}
 
 	ControlFunction *CANNetworkManager::get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress) const
