@@ -47,6 +47,7 @@ set(ISOBUS_INCLUDE
   "can_transport_protocol.hpp"
   "can_lib_warning_logger.hpp"
   "can_lib_configuration.hpp"
+  "can_lib_callback.hpp"
 )
 
 # Prepend the include directory path to all the include files

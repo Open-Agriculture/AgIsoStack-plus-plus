@@ -7,6 +7,7 @@
 #include "can_message.hpp"
 #include "can_frame.hpp"
 #include "can_types.hpp"
+#include "can_lib_callback.hpp"
 
 #include <array>
 #include <mutex>
@@ -17,8 +18,6 @@ namespace isobus
 class CANNetworkManager
 {
 public:
-    typedef void (*CANLibCallback)(CANMessage *message, void *parentPointer);
-
     static CANNetworkManager CANNetwork;
 
     void initialize();

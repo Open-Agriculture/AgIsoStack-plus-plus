@@ -87,6 +87,8 @@ namespace isobus
 			initialize();
 		}
 
+		process_rx_messages();
+
 		InternalControlFunction::update_address_claiming();
 	}
 
@@ -226,12 +228,32 @@ namespace isobus
 
 	void CANNetworkManager::process_rx_messages()
 	{
+		// Move this to a function
 		receiveMessageMutex.lock();
+		bool processNextMessage = (!receiveMessageList.empty());
+		receiveMessageMutex.unlock();
 
-		while (receiveMessageList.size() > 0)
+		while (processNextMessage)
 		{
-			ControlFunction *messageDestination = receiveMessageList.front().get_destination_control_function();
+			receiveMessageMutex.lock();
+			CANMessage currentMessage = receiveMessageList.front();
+			receiveMessageList.pop_front();
+			processNextMessage = (!receiveMessageList.empty());
+			receiveMessageMutex.unlock();
 
+			// Update Protocols
+			protocolPGNCallbacksMutex.lock();
+			for (auto currentCallback : protocolPGNCallbacks)
+			{
+				if (currentCallback.parameterGroupNumber == currentMessage.get_identifier().get_parameter_group_number())
+				{
+					currentCallback.callback(&currentMessage, currentCallback.parent);
+				}
+			}
+			protocolPGNCallbacksMutex.unlock();
+
+			// Update Others
+			ControlFunction *messageDestination = receiveMessageList.front().get_destination_control_function();
 			if (nullptr == messageDestination)
 			{
 				// Message destined to global
@@ -246,10 +268,7 @@ namespace isobus
 					}
 				}
 			}
-			receiveMessageList.pop_front();
 		}
-
-		receiveMessageMutex.unlock();
 	}
 
 	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size)
