@@ -33,12 +33,15 @@
 
 # Cmake
 *.cmake
+Makefile
+*.dir
+*.marks
 
 # Mac Stuff
 *.DS_Store
 
-#Editor
+# Editor
 *.vscode
 
-#build
+# build
 *build

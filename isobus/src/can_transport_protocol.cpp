@@ -53,16 +53,21 @@ namespace isobus
 
 	TransportProtocolManager::~TransportProtocolManager()
 	{
-        // If we ever got initialized, this will remove our callbacks, but no harm if we fail to find them
-        CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand), process_message, this);
-        CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData), process_message, this);
+        if (initialized)
+        {
+            CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand), process_message, this);
+            CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData), process_message, this);
+        }
 	}
 
     void TransportProtocolManager::initialize()
     {
-        initialized = true;
-        CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand), process_message, this);
-        CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData), process_message, this);
+        if (!initialized)
+        {
+            initialized = true;
+            CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand), process_message, this);
+            CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData), process_message, this);
+        }
     }
 
 	void TransportProtocolManager::process_message(CANMessage *const message)
