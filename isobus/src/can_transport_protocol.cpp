@@ -218,17 +218,13 @@ namespace isobus
 			switch (session->state)
 			{
 				case StateMachineState::None:
-				{
-				}
-				break;
-
 				case StateMachineState::ClearToSend:
-				{
-				}
-				break;
-
 				case StateMachineState::RxDataSession:
+				case StateMachineState::WaitForClearToSend:
+				case StateMachineState::WaitForEndOfMessageAcknowledge:
+				case StateMachineState::TxDataSession:
 				{
+
 				}
 				break;
 			}

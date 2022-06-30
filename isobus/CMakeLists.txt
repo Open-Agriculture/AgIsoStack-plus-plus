@@ -26,6 +26,7 @@ set(ISOBUS_SRC
   "can_transport_protocol.cpp"
   "can_lib_warning_logger.cpp"
   "can_lib_configuration.cpp"
+  "can_lib_callbacks.cpp"
 )
 
 # Prepend the source directory path to all the source files
@@ -47,7 +48,7 @@ set(ISOBUS_INCLUDE
   "can_transport_protocol.hpp"
   "can_lib_warning_logger.hpp"
   "can_lib_configuration.hpp"
-  "can_lib_callback.hpp"
+  "can_lib_callbacks.hpp"
 )
 
 # Prepend the include directory path to all the include files

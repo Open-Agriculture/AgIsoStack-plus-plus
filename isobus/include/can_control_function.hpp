@@ -1,6 +1,5 @@
 #pragma once
 
-#include "can_lib_badge.hpp"
 #include "can_NAME.hpp"
 
 namespace isobus
@@ -29,6 +28,7 @@ public:
 
     Type get_type() const;
 protected:
+    friend class CANNetworkManager;
     NAME controlFunctionNAME;
     const Type controlFunctionType;
     std::uint8_t address;
