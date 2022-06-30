@@ -5,6 +5,7 @@
 #include "can_lib_protocol.hpp"
 #include "can_message.hpp"
 #include "can_types.hpp"
+#include "can_partnered_control_function.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -30,6 +31,26 @@ namespace isobus
 		{
 			controlFunctionTable[CANPort][CFAddress] = newControlFunction;
 		}
+	}
+
+	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback)
+	{
+		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback));
+	}
+
+    void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback)
+	{
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback);
+		auto callbackLocation = std::find(globalParameterGroupNumberCallbacks.begin(), globalParameterGroupNumberCallbacks.end(), tempObject);
+		if (globalParameterGroupNumberCallbacks.end() != callbackLocation)
+		{
+			globalParameterGroupNumberCallbacks.erase(callbackLocation);
+		}
+	}
+
+	std::uint32_t CANNetworkManager::get_number_global_parameter_group_number_callbacks() const
+	{
+		return globalParameterGroupNumberCallbacks.size();
 	}
 
 	InternalControlFunction *CANNetworkManager::get_internal_control_function(ControlFunction *controlFunction)
@@ -97,9 +118,22 @@ namespace isobus
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 	}
 
+	ParameterGroupNumberCallbackData CANNetworkManager::get_global_parameter_group_number_callback(std::uint32_t index) const
+	{
+		ParameterGroupNumberCallbackData retVal(0, nullptr);
+
+		if (index < get_number_global_parameter_group_number_callbacks())
+		{
+			retVal = globalParameterGroupNumberCallbacks[index];
+		}
+		return retVal;
+	}
+
 	void CANNetworkManager::can_lib_process_rx_message(HardwareInterfaceCANFrame &rxFrame, void *)
 	{
 		CANLibManagedMessage tempCANMessage(rxFrame.channel);
+
+		CANNetworkManager::CANNetwork.update_control_functions(rxFrame);
 
 		tempCANMessage.set_identifier(CANIdentifier(rxFrame.identifier));
 		tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_source_address()));
@@ -156,6 +190,68 @@ namespace isobus
 		protocolPGNCallbacksMutex.unlock();
 
 		return retVal;
+	}
+
+	void CANNetworkManager::update_address_table(CANMessage &message)
+	{
+		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
+			(message.get_can_port_index() < CAN_PORT_MAXIMUM))
+		{
+			if (nullptr == controlFunctionTable[message.get_can_port_index()][message.get_source_control_function()->address])
+			{
+				controlFunctionTable[message.get_can_port_index()][message.get_source_control_function()->address] = message.get_source_control_function();
+			}
+		}
+	}
+
+	void CANNetworkManager::update_control_functions(HardwareInterfaceCANFrame &rxFrame)
+	{
+		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
+			(CAN_DATA_LENGTH == rxFrame.dataLength))
+		{
+			std::uint64_t claimedNAME;
+			bool found = false;
+
+			// TODO: Endianness?
+			claimedNAME = rxFrame.data[0];
+			claimedNAME |= (8 << rxFrame.data[1]);
+			claimedNAME |= (16 << rxFrame.data[2]);
+			claimedNAME |= (24 << rxFrame.data[3]);
+			claimedNAME |= (32 << rxFrame.data[4]);
+			claimedNAME |= (40 << rxFrame.data[5]);
+			claimedNAME |= (48 << rxFrame.data[6]);
+			claimedNAME |= (56 << rxFrame.data[7]);
+
+			for (std::uint32_t i = 0; i < activeControlFunctions.size(); i++)
+			{
+				if (claimedNAME ==  activeControlFunctions[i]->controlFunctionNAME.get_full_name())
+				{
+					// Device already in the active list
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				// Not active, maybe it's in the inactive list (device reconnected)
+				for (std::uint32_t i = 0; i < inactiveControlFunctions.size(); i++)
+				{
+					if (claimedNAME ==  inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
+					{
+						// Device already in the inactive list
+						found = true;
+						break;
+					}
+				}
+			}
+
+			if (!found)
+			{
+				// New device, need to start keeping track of it
+				activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
+			}
+		}
 	}
 
 	HardwareInterfaceCANFrame CANNetworkManager::construct_frame(std::uint32_t portIndex,
@@ -241,6 +337,8 @@ namespace isobus
 			processNextMessage = (!receiveMessageList.empty());
 			receiveMessageMutex.unlock();
 
+			update_address_table(currentMessage);
+
 			// Update Protocols
 			protocolPGNCallbacksMutex.lock();
 			for (auto currentCallback : protocolPGNCallbacks)
@@ -253,10 +351,19 @@ namespace isobus
 			protocolPGNCallbacksMutex.unlock();
 
 			// Update Others
-			ControlFunction *messageDestination = receiveMessageList.front().get_destination_control_function();
+			ControlFunction *messageDestination = currentMessage.get_destination_control_function();
 			if (nullptr == messageDestination)
 			{
 				// Message destined to global
+				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
+				{
+					if ((currentMessage.get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
+						(nullptr != get_global_parameter_group_number_callback(i).get_callback()))
+					{
+						// We have a callback that matches this PGN
+						get_global_parameter_group_number_callback(i).get_callback()(&currentMessage, nullptr);
+					}
+				}
 			}
 			else
 			{
@@ -265,6 +372,26 @@ namespace isobus
 				{
 					if (messageDestination == InternalControlFunction::get_internal_control_function(i))
 					{
+						// Message is destined to us
+						for (std::uint32_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
+						{
+							PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
+
+							if ((nullptr != currentControlFunction) &&
+								(currentControlFunction->get_can_port() == currentMessage.get_can_port_index()))
+							{
+								// Message matches CAN port for a partnered control function
+								for (std::uint32_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
+								{
+									if ((currentMessage.get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
+										(nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
+									{
+										// We have a callback matching this message
+
+									}
+								}
+							}
+						}
 					}
 				}
 			}

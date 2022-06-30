@@ -7,7 +7,7 @@
 #include "can_message.hpp"
 #include "can_frame.hpp"
 #include "can_types.hpp"
-#include "can_lib_callback.hpp"
+#include "can_lib_callbacks.hpp"
 
 #include <array>
 #include <mutex>
@@ -24,6 +24,11 @@ public:
 
     ControlFunction *get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>) const;
     void add_control_function(std::uint8_t CANPort, ControlFunction *newControlFunction, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>);
+
+    void add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
+    void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
+
+    std::uint32_t get_number_global_parameter_group_number_callbacks() const;
 
     InternalControlFunction *get_internal_control_function(ControlFunction *controlFunction);
 
@@ -64,6 +69,9 @@ private:
         std::uint32_t parameterGroupNumber;
     };
 
+    void update_address_table(CANMessage &message);
+    void update_control_functions(HardwareInterfaceCANFrame &rxFrame);
+
     HardwareInterfaceCANFrame construct_frame(std::uint32_t portIndex,
                               std::uint8_t sourceAddress,
                               std::uint8_t destAddress,
@@ -80,10 +88,14 @@ private:
                               std::uint8_t priority,
                               const void *data,
                               std::uint32_t size);
+    ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::uint32_t index) const;
                           
     std::array<std::array<ControlFunction*, 256>, CAN_PORT_MAXIMUM> controlFunctionTable;
+    std::vector<ControlFunction *> activeControlFunctions;
+    std::vector<ControlFunction *> inactiveControlFunctions;
     std::list<CANLibProtocolPGNCallbackInfo> protocolPGNCallbacks;
     std::list<CANMessage> receiveMessageList;
+    std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks;
     std::mutex receiveMessageMutex;
     std::mutex protocolPGNCallbacksMutex;
     std::uint32_t updateTimestamp_ms;
