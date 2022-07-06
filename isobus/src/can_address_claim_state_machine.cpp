@@ -15,7 +15,8 @@ namespace isobus
 	  m_currentState(State::None),
 	  m_timestamp_ms(0),
 	  m_portIndex(portIndex),
-	  m_preferredAddress(preferredAddressValue)
+	  m_preferredAddress(preferredAddressValue),
+	  m_enabled(true)
 	{
 		assert(m_preferredAddress != BROADCAST_CAN_ADDRESS);
 		assert(m_preferredAddress != NULL_CAN_ADDRESS);
