@@ -110,6 +110,20 @@ namespace isobus
 
 		process_rx_messages();
 
+		for (uint32_t i = 0; i <  CANLibProtocol::get_number_protocols(); i++)
+		{
+			CANLibProtocol *currentProtocol = nullptr;
+
+			if (CANLibProtocol::get_protocol(i, currentProtocol))
+			{
+				if (!currentProtocol->get_is_initialized())
+				{
+					currentProtocol->initialize({});
+				}
+				currentProtocol->update({});
+			}
+		}
+
 		InternalControlFunction::update_address_claiming();
 	}
 
@@ -138,6 +152,7 @@ namespace isobus
 		tempCANMessage.set_identifier(CANIdentifier(rxFrame.identifier));
 		tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_source_address()));
 		tempCANMessage.set_destination_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_destination_address()));
+		tempCANMessage.set_data(rxFrame.data);
 
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
@@ -197,8 +212,13 @@ namespace isobus
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
 			(message.get_can_port_index() < CAN_PORT_MAXIMUM))
 		{
-			if (nullptr == controlFunctionTable[message.get_can_port_index()][message.get_source_control_function()->address])
+			if (nullptr == controlFunctionTable[message.get_can_port_index()][message.get_identifier().get_source_address()])
 			{
+				// Look through active CFs? 
+				for (auto currentControlFunction : activeControlFunctions)
+				{
+					
+				}
 				controlFunctionTable[message.get_can_port_index()][message.get_source_control_function()->address] = message.get_source_control_function();
 			}
 		}
