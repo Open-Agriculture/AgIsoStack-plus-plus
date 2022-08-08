@@ -57,14 +57,14 @@ add_subdirectory("utility")
 add_subdirectory("isobus")
 add_subdirectory("socket_can")
 
-add_executable(address_claim_tests test/address_claim_test.cpp test/test_CAN_glue.cpp)
-target_link_libraries(address_claim_tests gtest_main Isobus SocketCANInterface)
+add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/callback_tests.cpp)
+target_link_libraries(unit_tests gtest_main Isobus SocketCANInterface)
 
 add_executable(integration_test_app test/main.cpp test/test_CAN_glue.cpp)
 target_link_libraries(integration_test_app Isobus SocketCANInterface Threads::Threads)
 
 include(GoogleTest)
-gtest_discover_tests(address_claim_tests name_tests)
+gtest_discover_tests(unit_tests name_tests callback_tests)
 
 
 

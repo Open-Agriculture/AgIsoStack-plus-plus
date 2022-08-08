@@ -9,7 +9,7 @@
 #include <chrono>
 #include <thread>
 
-TEST(NAMETests, FullName)
+TEST(ADDRESS_CLAIM_TESTS, NAMETests)
 {
 	isobus::NAME TestDeviceNAME(0);
 	TestDeviceNAME.set_arbitrary_address_capable(true);
@@ -57,7 +57,7 @@ TEST(ADDRESS_CLAIM_TESTS, AddressClaiming)
 
 	isobus::InternalControlFunction TestInternalECU(TestDeviceNAME, 0x1C, 0);
 
-	std::this_thread::sleep_for(std::chrono::seconds(5));
+	std::this_thread::sleep_for(std::chrono::seconds(2));
 
 	CANHardwareInterface::stop();
 }
