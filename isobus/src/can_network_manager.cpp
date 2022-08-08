@@ -9,7 +9,6 @@
 
 #include <cstring>
 #include <algorithm>
-
 namespace isobus
 {
 	CANNetworkManager CANNetworkManager::CANNetwork;
@@ -150,10 +149,31 @@ namespace isobus
 		CANNetworkManager::CANNetwork.update_control_functions(rxFrame);
 
 		tempCANMessage.set_identifier(CANIdentifier(rxFrame.identifier));
-		tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_source_address()));
-		tempCANMessage.set_destination_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_destination_address()));
+		
+		// Note, if this is an address claim message, the address to CF table might be stale.
+		// We don't want to update that here though, as we're maybe in some other thread in this callback.
+		// So for now, manually search all of them to line up the appropriate CF. A bit unfortunate in that we may have a lot of CFs, but saves pain later so we don't have to
+		// do some gross cast to CANLibManagedMessage to edit the CFs.
+		// At least address claiming should be infrequent, so this should not happen a ton.
+		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == tempCANMessage.get_identifier().get_parameter_group_number())
+		{
+			for (std::uint32_t i = 0; i < CANNetworkManager::CANNetwork.activeControlFunctions.size(); i++)
+			{
+				if ((CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_can_port() == tempCANMessage.get_can_port_index()) &&
+					(CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_address() == tempCANMessage.get_identifier().get_source_address()))
+				{
+					tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.activeControlFunctions[i]);
+					break;
+				}
+			}
+		}
+		else
+		{
+			tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_source_address()));
+			tempCANMessage.set_destination_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_destination_address()));
+		}
 		tempCANMessage.set_data(rxFrame.data);
-
+		
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
 
@@ -209,17 +229,34 @@ namespace isobus
 
 	void CANNetworkManager::update_address_table(CANMessage &message)
 	{
+		std::uint8_t CANPort = message.get_can_port_index();
+
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
-			(message.get_can_port_index() < CAN_PORT_MAXIMUM))
+			(CANPort < CAN_PORT_MAXIMUM))
 		{
-			if (nullptr == controlFunctionTable[message.get_can_port_index()][message.get_identifier().get_source_address()])
+			std::uint8_t messageSourceAddress = message.get_identifier().get_source_address();
+
+			if ((nullptr != controlFunctionTable[CANPort][messageSourceAddress]) &&
+				(CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][messageSourceAddress]->get_address()))
 			{
-				// Look through active CFs? 
+				// Someone is at that spot in the table, but their address was stolen
+				// Need to evict them from the table
+				controlFunctionTable[CANPort][messageSourceAddress] = nullptr;
+			}
+
+			// Now, check for either a free spot in the table or recent eviction and populate if needed
+			if (nullptr == controlFunctionTable[CANPort][messageSourceAddress])
+			{
+				// Look through active CFs, maybe we've heard of this ECU before
 				for (auto currentControlFunction : activeControlFunctions)
 				{
-					
+					if (currentControlFunction->get_address() == messageSourceAddress)
+					{
+						// ECU has claimed since the last update, add it to the table
+						controlFunctionTable[CANPort][messageSourceAddress] = currentControlFunction;
+						break;
+					}
 				}
-				controlFunctionTable[message.get_can_port_index()][message.get_source_control_function()->address] = message.get_source_control_function();
 			}
 		}
 	}
@@ -230,7 +267,7 @@ namespace isobus
 			(CAN_DATA_LENGTH == rxFrame.dataLength))
 		{
 			std::uint64_t claimedNAME;
-			bool found = false;
+			ControlFunction *foundControlFunction = nullptr;
 
 			// TODO: Endianness?
 			claimedNAME = rxFrame.data[0];
@@ -247,29 +284,39 @@ namespace isobus
 				if (claimedNAME ==  activeControlFunctions[i]->controlFunctionNAME.get_full_name())
 				{
 					// Device already in the active list
-					found = true;
-					break;
+					foundControlFunction = activeControlFunctions[i];
 				}
-			}
-
-			if (!found)
-			{
-				// Not active, maybe it's in the inactive list (device reconnected)
-				for (std::uint32_t i = 0; i < inactiveControlFunctions.size(); i++)
+				else
 				{
-					if (claimedNAME ==  inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
-					{
-						// Device already in the inactive list
-						found = true;
-						break;
-					}
+					// If this CF has the same address as the one claiming, we need set it to 0xFE (null address)
+					activeControlFunctions[i]->address = CANIdentifier::NULL_ADDRESS;
 				}
 			}
 
-			if (!found)
+			// Maybe it's in the inactive list (device reconnected)
+			// Alwas have to iterate the list to check for duplicate addresses
+			for (std::uint32_t i = 0; i < inactiveControlFunctions.size(); i++)
+			{
+				if (claimedNAME ==  inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
+				{
+					// Device already in the inactive list
+					foundControlFunction = inactiveControlFunctions[i];
+				}
+				else
+				{
+					// If this CF has the same address as the one claiming, we need set it to 0xFE (null address)
+					inactiveControlFunctions[i]->address = CANIdentifier::NULL_ADDRESS;
+				}
+			}
+
+			if (nullptr == foundControlFunction)
 			{
 				// New device, need to start keeping track of it
 				activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
+			}
+			else
+			{
+				foundControlFunction->address = CANIdentifier(rxFrame.identifier).get_source_address();
 			}
 		}
 	}
@@ -372,7 +419,8 @@ namespace isobus
 
 			// Update Others
 			ControlFunction *messageDestination = currentMessage.get_destination_control_function();
-			if (nullptr == messageDestination)
+			if ((nullptr == messageDestination) &&
+				(nullptr != currentMessage.get_source_control_function()))
 			{
 				// Message destined to global
 				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)

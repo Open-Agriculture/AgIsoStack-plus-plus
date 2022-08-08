@@ -192,7 +192,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message_raw(m_portIndex,
 			                                                            NULL_CAN_ADDRESS,
 			                                                            BROADCAST_CAN_ADDRESS,
-			                                                            static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim),
+			                                                            static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest),
 			                                                            static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
 			                                                            dataBuffer,
 			                                                            3,
