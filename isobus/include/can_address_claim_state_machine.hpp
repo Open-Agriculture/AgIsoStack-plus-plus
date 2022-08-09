@@ -1,4 +1,14 @@
-#pragma once
+//================================================================================================
+/// @file can_address_claim_state_machine.hpp
+///
+/// @brief Defines a class for managing the address claiming process
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_ADDRESS_CLAIM_STATE_MACHINE_HPP
+#define CAN_ADDRESS_CLAIM_STATE_MACHINE_HPP
 
 #include "can_NAME.hpp"
 
@@ -44,3 +54,5 @@ private:
 };
 
 } // namespace isobus
+
+#endif // CAN_ADDRESS_CLAIM_STATE_MACHINE_HPP

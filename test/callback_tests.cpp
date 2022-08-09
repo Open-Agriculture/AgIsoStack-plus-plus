@@ -2,10 +2,10 @@
 
 #include "can_internal_control_function.hpp"
 #include "can_network_manager.hpp"
-#include "can_types.hpp"
+#include "can_constants.hpp"
 #include "socket_can_interface.hpp"
 #include "test_CAN_glue.hpp"
-#include "can_lib_parameter_group_numbers.hpp"
+#include "can_general_parameter_group_numbers.hpp"
 
 #include <chrono>
 #include <thread>

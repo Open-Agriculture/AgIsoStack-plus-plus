@@ -1,4 +1,14 @@
-#pragma once
+//================================================================================================
+/// @file can_NAME.hpp
+///
+/// @brief A class that represents a control function's NAME
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_NAME_HPP
+#define CAN_NAME_HPP
 
 #include <cstdint>
 #include <tuple>
@@ -57,4 +67,6 @@ namespace isobus
     private:
         std::uint64_t rawName;
     };
-}
+} // namespace isobus
+
+#endif // CAN_NAME_HPP

@@ -1,9 +1,20 @@
-#pragma once
+//================================================================================================
+/// @file can_transport_protocol.hpp
+///
+/// @brief A protocol that handles the ISO11783/J1939 transport protocol.
+/// It handles both the broadcast version (BAM) and and the connection mode version.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 
-#include "can_lib_protocol.hpp"
+#ifndef CAN_TRANSPORT_PROTOCOL_HPP
+#define CAN_TRANSPORT_PROTOCOL_HPP
+
+#include "can_protocol.hpp"
 #include "can_control_function.hpp"
 #include "can_network_manager.hpp"
-#include "can_lib_badge.hpp"
+#include "can_badge.hpp"
 
 namespace isobus
 {
@@ -101,4 +112,6 @@ private:
     static std::vector<TransportProtocolSession *> activeSessions;
 };
 
-}
+} // namespace isobus
+
+#endif // CAN_TRANSPORT_PROTOCOL_HPP

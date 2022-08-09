@@ -1,4 +1,13 @@
-#include "can_lib_protocol.hpp"
+//================================================================================================
+/// @file can_protocol.cpp
+///
+/// @brief A base class for all protocol classes. Allows the network manager to update them
+/// in a generic, dynamic way.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+#include "can_protocol.hpp"
 
 #include <algorithm>
 

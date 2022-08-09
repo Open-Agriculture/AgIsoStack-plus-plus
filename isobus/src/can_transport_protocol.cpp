@@ -1,7 +1,17 @@
+//================================================================================================
+/// @file can_transport_protocol.cpp
+///
+/// @brief A protocol that handles the ISO11783/J1939 transport protocol.
+/// It handles both the broadcast version (BAM) and and the connection mode version.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
 #include "can_transport_protocol.hpp"
 
-#include "can_lib_parameter_group_numbers.hpp"
-#include "can_lib_configuration.hpp"
+#include "can_general_parameter_group_numbers.hpp"
+#include "can_network_configuration.hpp"
 #include "system_timing.hpp"
 
 #include <algorithm>
@@ -65,18 +75,53 @@ namespace isobus
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand):
 				{
-                    switch(message->get_data()[0])
-                    {
-                        case BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR:
-                        {
-							if (CAN_DATA_LENGTH == message->get_data_length())
+					switch(message->get_data()[0])
+					{
+							case BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR:
 							{
-								auto data = message->get_data();
+								if (CAN_DATA_LENGTH == message->get_data_length())
+								{
+									auto data = message->get_data();
+									TransportProtocolSession *session;
+									const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
+
+									if ((nullptr == message->get_destination_control_function()) &&
+										(activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+										(!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
+									{
+										TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive);
+										newSession->messageLengthBytes = (static_cast<std::uint16_t>(data[1]) | static_cast<std::uint16_t>(data[2] << 8));
+										newSession->source = message->get_source_control_function();
+										newSession->destination = nullptr;
+										newSession->packetCount = data[3];
+										newSession->parameterGroupNumber = pgn;
+										newSession->sessionData.resize(newSession->messageLengthBytes);
+										newSession->state = StateMachineState::RxDataSession;
+										newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
+										activeSessions.push_back(newSession);
+									}
+									else
+									{
+										// TODO: Not sure what to do, this can't happen, so log something?
+										// Don't send an abort, they're probably expecting a CTS so it'll timeout
+										// Or maybe if we already had a session they sent a second BAM? Also bad
+									}
+								}
+								else
+								{
+									// TODO: bad message length, log
+								}
+							}
+							break;
+							
+							case REQUEST_TO_SEND_MULTIPLEXOR:
+							{
 								TransportProtocolSession *session;
+								auto data = message->get_data();
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
-								if ((nullptr == message->get_destination_control_function()) &&
-									(activeSessions.size() < CANLibConfiguration::get_max_number_transport_protcol_sessions()) &&
+								if ((nullptr != message->get_destination_control_function()) &&
+									(activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
 									(!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
 								{
 									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive);
@@ -90,80 +135,45 @@ namespace isobus
 									newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 									activeSessions.push_back(newSession);
 								}
-								else
+								else if ((get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)) &&
+										(nullptr != message->get_destination_control_function()) &&
+										(ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 								{
-									// TODO: Not sure what to do, this can't happen, so log something?
-									// Don't send an abort, they're probably expecting a CTS so it'll timeout
-									// Or maybe if we already had a session they sent a second BAM? Also bad
+									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+								}
+								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+										(nullptr != message->get_destination_control_function()) &&
+										(ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								{
+									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 								}
 							}
-							else
+							break;
+
+							case CLEAR_TO_SEND_MULTIPLEXOR:
 							{
-								// TODO: bad message length, log
-							}
-                        }
-                        break;
-                        
-                        case REQUEST_TO_SEND_MULTIPLEXOR:
-                        {
-							TransportProtocolSession *session;
-							auto data = message->get_data();
-							const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
-							if ((nullptr != message->get_destination_control_function()) &&
-								(activeSessions.size() < CANLibConfiguration::get_max_number_transport_protcol_sessions()) &&
-								(!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
+							}
+							break;
+
+							case END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR:
 							{
-								TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive);
-								newSession->messageLengthBytes = (static_cast<std::uint16_t>(data[1]) | static_cast<std::uint16_t>(data[2] << 8));
-								newSession->source = message->get_source_control_function();
-								newSession->destination = nullptr;
-								newSession->packetCount = data[3];
-								newSession->parameterGroupNumber = pgn;
-								newSession->sessionData.resize(newSession->messageLengthBytes);
-								newSession->state = StateMachineState::RxDataSession;
-								newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
-								activeSessions.push_back(newSession);
+
 							}
-							else if ((get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)) &&
-									(nullptr != message->get_destination_control_function()) &&
-									(ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+							break;
+
+							case CONNECTION_ABORT_MULTIPLEXOR:
 							{
-								abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									
 							}
-							else if ((activeSessions.size() >= CANLibConfiguration::get_max_number_transport_protcol_sessions()) &&
-									 (nullptr != message->get_destination_control_function()) &&
-									 (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+							break;
+
+							default:
 							{
-								abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									// TODO Log bad mux, someone is misbehaving.
 							}
-                        }
-                        break;
-
-                        case CLEAR_TO_SEND_MULTIPLEXOR:
-                        {
-
-                        }
-                        break;
-
-                        case END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR:
-                        {
-
-                        }
-                        break;
-
-                        case CONNECTION_ABORT_MULTIPLEXOR:
-                        {
-                            
-                        }
-                        break;
-
-                        default:
-                        {
-                            // TODO Log bad mux, someone is misbehaving.
-                        }
-                        break;
-                    }
+							break;
+           }
 				}
 				break;
 

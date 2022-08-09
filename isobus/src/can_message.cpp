@@ -1,3 +1,11 @@
+//================================================================================================
+/// @file can_message.cpp
+///
+/// @brief An abstraction  of a CAN message, could be > 8 data bytes.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 #include "can_message.hpp"
 
 namespace isobus

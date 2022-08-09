@@ -1,4 +1,12 @@
-#include "can_lib_callbacks.hpp"
+//================================================================================================
+/// @file can_callbacks.cpp
+///
+/// @brief An object to represent common callbacks used within this CAN stack.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+#include "can_callbacks.hpp"
 
 namespace isobus
 {

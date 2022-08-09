@@ -1,6 +1,15 @@
+//================================================================================================
+/// @file can_partnered_control_function.cpp
+///
+/// @brief A class that describes a control function on the bus that the stack should communicate
+/// with. Use these to describe ECUs you want to send messages to.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 #include "can_partnered_control_function.hpp"
 
-#include "can_types.hpp"
+#include "can_constants.hpp"
 
 #include <algorithm>
 
@@ -32,6 +41,24 @@ namespace isobus
     std::uint32_t PartneredControlFunction::get_number_parameter_group_number_callbacks() const
 	{
 		return parameterGroupNumberCallbacks.size();
+	}
+
+	std::uint32_t PartneredControlFunction::get_number_name_filters() const
+	{
+		return NAMEFilterList.size();
+	}
+
+	bool PartneredControlFunction::get_name_filter_parameter(std::uint32_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const
+	{
+		bool retVal = false;
+
+		if (index < get_number_name_filters())
+		{
+			parameter = NAMEFilterList[index].get_parameter();
+			filterValue = NAMEFilterList[index].get_value();
+			retVal = true;
+		}
+		return retVal;
 	}
 
 	PartneredControlFunction *PartneredControlFunction::get_partnered_control_function(std::uint32_t index)

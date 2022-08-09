@@ -1,4 +1,14 @@
-#pragma once
+//================================================================================================
+/// @file can_control_function.hpp
+///
+/// @brief Defines a base class to represent a generic ISOBUS control function.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_CONTROL_FUNCTION_HPP
+#define CAN_CONTROL_FUNCTION_HPP
 
 #include "can_NAME.hpp"
 
@@ -36,3 +46,5 @@ protected:
 };
 
 } // namespace isobus
+
+#endif // CAN_CONTROL_FUNCTION_HPP
