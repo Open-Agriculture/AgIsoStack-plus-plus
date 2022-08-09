@@ -1,8 +1,19 @@
-#pragma once
+//================================================================================================
+/// @file can_protocol.hpp
+///
+/// @brief A base class for all protocol classes. Allows the network manager to update them
+/// in a generic, dynamic way.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_PROTOCOL_HPP
+#define CAN_PROTOCOL_HPP
 
 #include "can_control_function.hpp"
 #include "can_message.hpp"
-#include "can_lib_badge.hpp"
+#include "can_badge.hpp"
 
 #include <vector>
 
@@ -39,4 +50,6 @@ namespace isobus
 		bool initialized;
 	};
 
-}
+} // namespace isobus
+
+#endif // CAN_PROTOCOL_HPP

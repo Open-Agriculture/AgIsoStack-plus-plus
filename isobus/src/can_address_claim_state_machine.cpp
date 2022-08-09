@@ -1,7 +1,15 @@
+//================================================================================================
+/// @file can_address_claim_state_machine.cpp
+///
+/// @brief Defines a class for managing the address claiming process
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 #include "can_address_claim_state_machine.hpp"
-#include "can_lib_parameter_group_numbers.hpp"
+#include "can_general_parameter_group_numbers.hpp"
 #include "can_network_manager.hpp"
-#include "can_types.hpp"
+#include "can_constants.hpp"
 #include "system_timing.hpp"
 
 #include <cassert>

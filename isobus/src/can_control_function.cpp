@@ -1,6 +1,15 @@
+//================================================================================================
+/// @file can_control_function.cpp
+///
+/// @brief Defines a base class to represent a generic ISOBUS control function.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
 #include "can_control_function.hpp"
 
-#include "can_types.hpp"
+#include "can_constants.hpp"
 
 namespace isobus
 {

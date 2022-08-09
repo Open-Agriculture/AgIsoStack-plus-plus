@@ -1,10 +1,20 @@
+//================================================================================================
+/// @file can_network_manager.cpp
+///
+/// @brief The main class that manages the ISOBUS stack including: callbacks, Name to Address
+/// management, making control functions, and driving the various protocols.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
 #include "can_network_manager.hpp"
 #include "can_hardware_abstraction.hpp"
-#include "can_lib_managed_message.hpp"
-#include "can_lib_parameter_group_numbers.hpp"
-#include "can_lib_protocol.hpp"
+#include "can_managed_message.hpp"
+#include "can_general_parameter_group_numbers.hpp"
+#include "can_protocol.hpp"
 #include "can_message.hpp"
-#include "can_types.hpp"
+#include "can_constants.hpp"
 #include "can_partnered_control_function.hpp"
 
 #include <cstring>

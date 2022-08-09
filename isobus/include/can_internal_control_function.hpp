@@ -1,4 +1,15 @@
-#pragma once
+//================================================================================================
+/// @file can_internal_control_function.hpp
+///
+/// @brief A representation of an ISOBUS ECU that we can send from. Use this class
+/// when defining your own control functions that will claim an address within your program.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_INTERNAL_CONTROL_FUNCTION_HPP
+#define CAN_INTERNAL_CONTROL_FUNCTION_HPP
 
 #include "can_control_function.hpp"
 #include "can_address_claim_state_machine.hpp"
@@ -26,3 +37,5 @@ private:
 };
 
 } // namespace isobus
+
+#endif // CAN_INTERNAL_CONTROL_FUNCTION_HPP

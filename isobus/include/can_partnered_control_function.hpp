@@ -1,10 +1,21 @@
-#pragma once
+//================================================================================================
+/// @file can_partnered_control_function.hpp
+///
+/// @brief A class that describes a control function on the bus that the stack should communicate
+/// with. Use these to describe ECUs you want to send messages to.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_PARTNERED_CONTROL_FUNCTION_HPP
+#define CAN_PARTNERED_CONTROL_FUNCTION_HPP
 
 #include "can_control_function.hpp"
 #include "can_address_claim_state_machine.hpp"
 #include "can_NAME_filter.hpp"
-#include "can_lib_callbacks.hpp"
-#include "can_lib_badge.hpp"
+#include "can_callbacks.hpp"
+#include "can_badge.hpp"
 
 #include <vector>
 
@@ -21,6 +32,9 @@ public:
 
     std::uint32_t get_number_parameter_group_number_callbacks() const;
 
+    std::uint32_t get_number_name_filters() const;
+    bool get_name_filter_parameter(std::uint32_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const;
+
     static PartneredControlFunction *get_partnered_control_function(std::uint32_t index);
     static std::uint32_t get_number_partnered_control_functions();
 
@@ -35,3 +49,5 @@ private:
 };
 
 } // namespace isobus
+
+#endif // CAN_PARTNERED_CONTROL_FUNCTION

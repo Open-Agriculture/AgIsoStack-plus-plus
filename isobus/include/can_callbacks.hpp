@@ -1,4 +1,14 @@
-#pragma once
+//================================================================================================
+/// @file can_callbacks.hpp
+///
+/// @brief An object to represent common callbacks used within this CAN stack.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_CALLBACKS_HPP
+#define CAN_CALLBACKS_HPP
 
 #include "can_message.hpp"
 
@@ -22,3 +32,5 @@ namespace isobus
         std::uint32_t mParameterGroupNumber;
     };
 } // namespace isobus
+
+#endif // CAN_CALLBACKS_HPP

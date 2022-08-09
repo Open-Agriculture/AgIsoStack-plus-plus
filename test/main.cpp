@@ -2,7 +2,7 @@
 #include "socket_can_interface.hpp"
 #include "test_CAN_glue.hpp"
 #include "can_partnered_control_function.hpp"
-#include "can_lib_parameter_group_numbers.hpp"
+#include "can_general_parameter_group_numbers.hpp"
 
 #include <csignal>
 

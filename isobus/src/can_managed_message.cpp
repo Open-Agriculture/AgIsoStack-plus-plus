@@ -1,4 +1,14 @@
-#include "can_lib_managed_message.hpp"
+//================================================================================================
+/// @file can_managed_message.cpp
+///
+/// @brief A CAN message that allows setter access to private  data, to be used by the library
+/// itself internally under some circumstances.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#include "can_managed_message.hpp"
 
 namespace isobus
 {

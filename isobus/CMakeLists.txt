@@ -13,20 +13,20 @@ set(ISOBUS_INCLUDE_DIR "include")
 # Set source files 
 set(ISOBUS_SRC 
   "can_NAME.cpp"
-  "can_lib_protocol.cpp"
+  "can_protocol.cpp"
   "can_identifier.cpp"
   "can_control_function.cpp"
   "can_message.cpp"
   "can_network_manager.cpp"
   "can_address_claim_state_machine.cpp"
   "can_internal_control_function.cpp"
-  "can_lib_managed_message.cpp"
+  "can_managed_message.cpp"
   "can_partnered_control_function.cpp"
   "can_NAME_filter.cpp"
   "can_transport_protocol.cpp"
-  "can_lib_warning_logger.cpp"
-  "can_lib_configuration.cpp"
-  "can_lib_callbacks.cpp"
+  "can_warning_logger.cpp"
+  "can_network_configuration.cpp"
+  "can_callbacks.cpp"
 )
 
 # Prepend the source directory path to all the source files
@@ -35,20 +35,20 @@ PREPEND(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
 # Set the include files
 set(ISOBUS_INCLUDE 
   "can_NAME.hpp"
-  "can_lib_protocol.hpp"
-  "can_lib_badge.hpp"
+  "can_protocol.hpp"
+  "can_badge.hpp"
   "can_identifier.hpp"
   "can_control_function.hpp"
   "can_message.hpp"
-  "can_lib_parameter_group_numbers.hpp"
+  "can_general_parameter_group_numbers.hpp"
   "can_network_manager.hpp"
   "can_address_claim_state_machine.hpp"
-  "can_lib_managed_message.hpp"
+  "can_managed_message.hpp"
   "can_NAME_filter.hpp"
   "can_transport_protocol.hpp"
-  "can_lib_warning_logger.hpp"
-  "can_lib_configuration.hpp"
-  "can_lib_callbacks.hpp"
+  "can_warning_logger.hpp"
+  "can_network_configuration.hpp"
+  "can_callbacks.hpp"
 )
 
 # Prepend the include directory path to all the include files

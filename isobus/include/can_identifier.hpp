@@ -1,4 +1,15 @@
-#pragma once
+//================================================================================================
+/// @file can_identifier.hpp
+///
+/// @brief A representation of a classical CAN identifier with utility functions for ectracting
+/// values that are encoded inside, along with some helpful constants.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
+#ifndef CAN_IDENTIFIER_HPP
+#define CAN_IDENTIFIER_HPP
 
 #include <cstdint>
 
@@ -57,3 +68,5 @@ private:
 };
 
 } // namespace isobus
+
+#endif // CAN_IDENTIFIER_HPP

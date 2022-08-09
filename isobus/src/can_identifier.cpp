@@ -1,3 +1,12 @@
+//================================================================================================
+/// @file can_identifier.cpp
+///
+/// @brief A representation of a classical CAN identifier with utility functions for ectracting
+/// values that are encoded inside, along with some helpful constants.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 #include "can_identifier.hpp"
 
 namespace isobus

@@ -1,3 +1,11 @@
+//================================================================================================
+/// @file can_NAME.cpp
+///
+/// @brief A class that represents a control function's NAME
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 #include "can_NAME.hpp"
 
 namespace isobus

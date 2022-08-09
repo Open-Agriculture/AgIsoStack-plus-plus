@@ -1,4 +1,14 @@
-#pragma once
+//================================================================================================
+/// @file socket_can_interface.hpp
+///
+/// @brief An interface for using socket CAN on linux. Mostly for testing, but it could be
+/// used in any application to get the stack hooked up to the bus.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+#ifndef SOCKET_CAN_INTERFACE_HPP
+#define SOCKET_CAN_INTERFACE_HPP
 
 #include <condition_variable>
 #include <cstdint>
@@ -116,3 +126,5 @@ private:
   static bool threadsStarted;
   static bool canLibNeedsUpdate;
 };
+
+#endif // SOCKET_CAN_INTERFACE_HPP
