@@ -70,6 +70,7 @@ protected:
                               const void *data,
                               std::uint32_t size,
                               CANLibBadge<AddressClaimStateMachine>);
+    void protocol_message_callback(CANMessage *protocolMessage);
 
 private:
     struct CANLibProtocolPGNCallbackInfo
@@ -91,6 +92,7 @@ private:
                               const void *data,
                               std::uint32_t size);
     ControlFunction *get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress) const;
+    void process_can_message_for_callbacks(CANMessage *message);
     void process_rx_messages();
     bool send_can_message_raw(std::uint32_t portIndex,
                               std::uint8_t sourceAddress,
