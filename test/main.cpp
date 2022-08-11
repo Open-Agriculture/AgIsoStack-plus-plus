@@ -40,7 +40,7 @@ void setup()
     std::signal(SIGINT,signal_handler);
 }
 
-void testPropACallback(isobus::CANMessage *message, void *parentPointer)
+void testPropACallback(isobus::CANMessage *, void *)
 {
 
 }
