@@ -16,14 +16,50 @@ namespace isobus
 	{
 	}
 
+	CANIdentifier::CANIdentifier(Type identifierType,
+	                             std::uint32_t pgn,
+	                             CANPriority priority,
+	                             std::uint8_t destinationAddress,
+	                             std::uint8_t sourceAddress) :
+	  m_RawIdentifier(0)
+	{
+		if (Type::Extended == identifierType)
+		{
+			m_RawIdentifier = (static_cast<std::uint32_t>(priority) << PRIORITY_DATA_BIT_OFFSET);
+
+			if (((pgn << PARAMTER_GROUP_NUMBER_OFFSET) & PDU2_FORMAT_MASK) < PDU2_FORMAT_MASK)
+			{
+				pgn = (pgn & DESTINATION_SPECIFIC_PGN_MASK);
+				pgn = (pgn << PARAMTER_GROUP_NUMBER_OFFSET);
+				m_RawIdentifier |= pgn;
+				m_RawIdentifier |= (static_cast<std::uint32_t>(destinationAddress) << PARAMTER_GROUP_NUMBER_OFFSET);
+			}
+			else
+			{
+				m_RawIdentifier |= ((pgn << PARAMTER_GROUP_NUMBER_OFFSET) & BROADCAST_PGN_MASK);
+			}
+		}
+		m_RawIdentifier |= static_cast<std::uint32_t>(sourceAddress);
+	}
+
+	CANIdentifier::CANIdentifier(const CANIdentifier &copiedObject)
+	{
+		m_RawIdentifier = copiedObject.m_RawIdentifier;
+	}
+
 	CANIdentifier::~CANIdentifier()
 	{
+	}
+
+	CANIdentifier& CANIdentifier::operator= (const CANIdentifier &obj)
+	{
+		m_RawIdentifier = obj.m_RawIdentifier;
+		return *this;
 	}
 
 	CANIdentifier::CANPriority CANIdentifier::get_priority() const
 	{
 		const std::uint8_t EXTENDED_IDENTIFIER_MASK = 0x07;
-		const std::uint8_t PRIORITY_DATA_BIT_OFFSET = 26;
 
 		CANPriority retVal;
 
@@ -61,7 +97,6 @@ namespace isobus
 
 	std::uint32_t CANIdentifier::get_parameter_group_number() const
 	{
-		const std::uint8_t PARAMTER_GROUP_NUMBER_OFFSET = 8;
 		std::uint32_t retVal = UNDEFINED_PARAMETER_GROUP_NUMBER;
 
 		if (Type::Extended == get_identifier_type())

@@ -21,7 +21,10 @@ class CANLibManagedMessage : public CANMessage
 public:
     CANLibManagedMessage(std::uint8_t CANPort);
 
-    void set_data(std::uint8_t *dataBuffer);
+    void set_data(std::uint8_t *dataBuffer, std::uint32_t length);
+    void set_data(std::uint8_t dataByte, const std::uint32_t insertPosition);
+
+    void set_data_size(std::uint32_t length);
 
     void set_source_control_function(ControlFunction *value);
 

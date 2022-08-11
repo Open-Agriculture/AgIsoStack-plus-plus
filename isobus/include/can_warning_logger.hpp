@@ -14,10 +14,24 @@
 
 namespace isobus
 {
-    class CANLibWarningLogger
+    class CANStackLogger
     {
     public:
-        static void LogCANLibWarning(std::string warningText);
+        CANStackLogger();
+        ~CANStackLogger();
+
+        // Gets called from the CAN stack. Wraps LogCANLibWarning
+        static void CAN_stack_log(const std::string &warningText);
+
+        static void set_can_stack_logger_sink(CANStackLogger *logSink);
+
+        // Override this to make a log sink for your application
+        virtual void LogCANLibWarning(const std::string &warningText);
+
+    private:
+        static bool get_can_stack_logger(CANStackLogger *canStackLogger);
+
+        static CANStackLogger *logger;
     };
 } // namespace isobus
 

@@ -16,6 +16,7 @@
 #include "can_message.hpp"
 #include "can_constants.hpp"
 #include "can_partnered_control_function.hpp"
+#include "can_warning_logger.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -119,6 +120,8 @@ namespace isobus
 
 		process_rx_messages();
 
+		InternalControlFunction::update_address_claiming();
+
 		for (uint32_t i = 0; i <  CANLibProtocol::get_number_protocols(); i++)
 		{
 			CANLibProtocol *currentProtocol = nullptr;
@@ -132,8 +135,6 @@ namespace isobus
 				currentProtocol->update({});
 			}
 		}
-
-		InternalControlFunction::update_address_claiming();
 	}
 
 	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size, CANLibBadge<AddressClaimStateMachine>)
@@ -182,7 +183,7 @@ namespace isobus
 			tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_source_address()));
 			tempCANMessage.set_destination_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_destination_address()));
 		}
-		tempCANMessage.set_data(rxFrame.data);
+		tempCANMessage.set_data(rxFrame.data, rxFrame.dataLength);
 		
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
@@ -323,6 +324,7 @@ namespace isobus
 			{
 				// New device, need to start keeping track of it
 				activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
+				CANStackLogger::CAN_stack_log("NM: New Control function " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 			}
 			else
 			{
@@ -399,6 +401,58 @@ namespace isobus
 		return retVal;
 	}
 
+	void CANNetworkManager::process_can_message_for_callbacks(CANMessage *message)
+	{
+		if (nullptr != message)
+		{
+			ControlFunction *messageDestination = message->get_destination_control_function();
+			if ((nullptr == messageDestination) &&
+				(nullptr != message->get_source_control_function()))
+			{
+				// Message destined to global
+				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
+				{
+					if ((message->get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
+						(nullptr != get_global_parameter_group_number_callback(i).get_callback()))
+					{
+						// We have a callback that matches this PGN
+						get_global_parameter_group_number_callback(i).get_callback()(message, nullptr);
+					}
+				}
+			}
+			else
+			{
+				// Message is destination specific
+				for (std::uint32_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
+				{
+					if (messageDestination == InternalControlFunction::get_internal_control_function(i))
+					{
+						// Message is destined to us
+						for (std::uint32_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
+						{
+							PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
+
+							if ((nullptr != currentControlFunction) &&
+								(currentControlFunction->get_can_port() == message->get_can_port_index()))
+							{
+								// Message matches CAN port for a partnered control function
+								for (std::uint32_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
+								{
+									if ((message->get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
+										(nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
+									{
+										// We have a callback matching this message
+										currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, nullptr);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	void CANNetworkManager::process_rx_messages()
 	{
 		// Move this to a function
@@ -428,51 +482,7 @@ namespace isobus
 			protocolPGNCallbacksMutex.unlock();
 
 			// Update Others
-			ControlFunction *messageDestination = currentMessage.get_destination_control_function();
-			if ((nullptr == messageDestination) &&
-				(nullptr != currentMessage.get_source_control_function()))
-			{
-				// Message destined to global
-				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
-				{
-					if ((currentMessage.get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
-						(nullptr != get_global_parameter_group_number_callback(i).get_callback()))
-					{
-						// We have a callback that matches this PGN
-						get_global_parameter_group_number_callback(i).get_callback()(&currentMessage, nullptr);
-					}
-				}
-			}
-			else
-			{
-				// Message is destination specific
-				for (std::uint32_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
-				{
-					if (messageDestination == InternalControlFunction::get_internal_control_function(i))
-					{
-						// Message is destined to us
-						for (std::uint32_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
-						{
-							PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
-
-							if ((nullptr != currentControlFunction) &&
-								(currentControlFunction->get_can_port() == currentMessage.get_can_port_index()))
-							{
-								// Message matches CAN port for a partnered control function
-								for (std::uint32_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
-								{
-									if ((currentMessage.get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
-										(nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
-									{
-										// We have a callback matching this message
-
-									}
-								}
-							}
-						}
-					}
-				}
-			}
+			process_can_message_for_callbacks(&currentMessage);
 		}
 	}
 
@@ -487,6 +497,11 @@ namespace isobus
 			retVal = send_can_message_to_hardware(tempFrame);
 		}
 		return retVal;
+	}
+
+	void CANNetworkManager::protocol_message_callback(CANMessage *protocolMessage)
+	{
+		process_can_message_for_callbacks(protocolMessage);
 	}
 
 } // namespace isobus

@@ -15,6 +15,7 @@
 #include "can_control_function.hpp"
 #include "can_network_manager.hpp"
 #include "can_badge.hpp"
+#include "can_managed_message.hpp"
 
 namespace isobus
 {
@@ -45,17 +46,14 @@ class TransportProtocolManager : public CANLibProtocol
     private:
         friend class TransportProtocolManager;
 
-        TransportProtocolSession(Direction sessionDirection);
+        TransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex);
         ~TransportProtocolSession();
 
         StateMachineState state;
-        ControlFunction *source;
-        ControlFunction *destination;
-        std::uint32_t parameterGroupNumber;
+        CANLibManagedMessage sessionMessage;
         std::uint32_t timestamp_ms;
         std::uint16_t packetCount;
-        std::uint16_t messageLengthBytes;
-        std::vector<std::uint8_t> sessionData;
+        std::uint16_t lastPacketNumber;
         const Direction sessionDirection;
     };
 
@@ -74,14 +72,17 @@ class TransportProtocolManager : public CANLibProtocol
         AnyOtherError = 250 // 0xFE
     };
 
-    static const std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 0x10;
-    static const std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 0x11;
-    static const std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x13;
-    static const std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 0x20;
-    static const std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF;
-    static const std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 1785;
-    static const std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0;
-    static const std::uint8_t MESSAGE_TIMEOUT_MS = 200;
+    static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 0x10;
+    static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 0x11;
+    static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x13;
+    static constexpr std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 0x20;
+    static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF;
+    static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 1785;
+    static constexpr std::uint32_t T1_TIMEOUT_MS = 750;
+    static constexpr std::uint32_t T2_T3_TIMEOUT_MS = 1250;
+    static constexpr std::uint32_t T4_TIMEOUT_MS = 1050;
+    static constexpr std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0;
+    static constexpr std::uint8_t MESSAGE_TR_TIMEOUT_MS = 200;
 
     TransportProtocolManager();
     virtual ~TransportProtocolManager();
@@ -105,11 +106,12 @@ private:
     bool abort_session(TransportProtocolSession *session, ConnectionAbortReason reason);
     bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, InternalControlFunction *source, ControlFunction *destination);
     void close_session(TransportProtocolSession *session);
-    bool send_end_of_session_acknowledgement(TransportProtocolSession &session);
+    bool send_end_of_session_acknowledgement(TransportProtocolSession *session);
+    bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination);
     bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber);
     void update_state_machine(TransportProtocolSession *session);
 
-    static std::vector<TransportProtocolSession *> activeSessions;
+    std::vector<TransportProtocolSession *> activeSessions;
 };
 
 } // namespace isobus
