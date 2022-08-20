@@ -103,6 +103,7 @@ namespace isobus
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
 		friend class AddressClaimStateMachine; ///< Allows the network manager to work closely with the address claiming process
+		friend class ExtendedTransportProtocolManager; ///< Allows the network manager to access the ETP manager
 		friend class TransportProtocolManager; ///< Allows the network manager to work closely with the transport protocol manager object
 
 		/// @brief Adds a PGN callback for a protocol class
