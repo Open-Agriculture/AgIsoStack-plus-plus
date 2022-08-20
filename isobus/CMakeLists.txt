@@ -28,6 +28,7 @@ set(ISOBUS_SRC
   "can_network_configuration.cpp"
   "can_callbacks.cpp"
   "isobus_virtual_terminal_client.cpp"
+  "can_extended_transport_protocol.cpp"
 )
 
 # Prepend the source directory path to all the source files
@@ -51,6 +52,7 @@ set(ISOBUS_INCLUDE
   "can_network_configuration.hpp"
   "can_callbacks.hpp"
   "isobus_virtual_terminal_client.hpp"
+  "can_extended_transport_protocol.hpp"
 )
 
 # Prepend the include directory path to all the include files

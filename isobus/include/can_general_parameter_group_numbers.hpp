@@ -15,16 +15,18 @@ namespace isobus
 	/// @brief PGNs commonly used by the CAN stack
 	enum class CANLibParameterGroupNumber
 	{
-		Any = 0x0000, ///< A fake PGN used internally to denote the superset of all PGNs
-		WorkingSetMaster = 0xFE0D, ///< Working set master PGN
-		VirtualTerminalToECU = 0xE600, ///< VT to ECU PGN
-		ECUtoVirtualTerminal = 0xE700, ///< ECU to VT PGN
-		Acknowledge = 0xE800, ///< ACK PGN
-		ParameterGroupNumberRequest = 0xEA00, ///< PGN Request
-		TransportProtocolData = 0xEB00, ///< TP Data PGN
-		TransportProtocolCommand = 0xEC00, ///< TP Command PGN
-		AddressClaim = 0xEE00, ///< Address claim PGN
-		ProprietaryA = 0xEF00 ///< Proprietary A PGN
+		Any = 0x0000,
+		ExtendedTransportProtocolDataTransfer = 0xC700,
+		ExtendedTransportProtocolConnectionManagement = 0xC800,
+		WorkingSetMaster = 0xFE0D,
+		VirtualTerminalToECU = 0xE600,
+		ECUtoVirtualTerminal = 0xE700,
+		Acknowledge = 0xE800,
+		ParameterGroupNumberRequest = 0xEA00,
+		TransportProtocolData = 0xEB00,
+		TransportProtocolCommand = 0xEC00,
+		AddressClaim = 0xEE00,
+		ProprietaryA = 0xEF00
 	};
 
 } // namespace isobus
