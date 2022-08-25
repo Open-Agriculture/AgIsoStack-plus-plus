@@ -42,6 +42,7 @@ Makefile
 
 # Editor
 *.vscode
+.vs
 
 # build
 *build
