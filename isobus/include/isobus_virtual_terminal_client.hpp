@@ -318,6 +318,21 @@ namespace isobus
 		// Object Pool Managment
 		bool send_delete_object_pool();
 		bool send_working_set_maintenance(bool initializing, VTVersion workingSetVersion);
+		bool send_get_memory(std::uint32_t requiredMemory);
+		bool send_get_number_of_softkeys();
+		bool send_get_text_font_data();
+		bool send_get_hardware();
+		bool send_get_supported_widechars();
+		bool send_get_window_mask_data();
+		bool send_get_supported_objects();
+		bool send_get_versions();
+		bool send_store_version(std::array<std::uint8_t, 7> versionLabel);
+		bool send_load_version(std::array<std::uint8_t, 7> versionLabel);
+		bool send_delete_version(std::array<std::uint8_t, 7> versionLabel);
+		bool send_extended_get_versions();
+		bool send_extended_store_version(std::array<std::uint8_t, 32> versionLabel);
+		bool send_extended_load_version(std::array<std::uint8_t, 32> versionLabel);
+		bool send_extended_delete_version(std::array<std::uint8_t, 32> versionLabel);
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
