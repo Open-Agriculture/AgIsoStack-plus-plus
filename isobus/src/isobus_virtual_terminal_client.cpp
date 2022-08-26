@@ -12,6 +12,8 @@
 #include "can_network_manager.hpp"
 #include "can_warning_logger.hpp"
 
+#include <cstring>
+
 namespace isobus
 {
 
@@ -199,8 +201,8 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             color,
 			                                             0xFF,
-																									 0xFF,
-																									 0xFF,
+			                                             0xFF,
+			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -212,14 +214,16 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_numeric_value(std::uint16_t objectID, std::uint32_t value)
 	{
-		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangeNumericValueCommand),
-			                                             static_cast<std::uint8_t>(objectID & 0xFF),
-			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             0xFF,
-			                                             static_cast<std::uint8_t>(value & 0xFF),
-																									 static_cast<std::uint8_t>((value >> 8) & 0xFF),
-																									 static_cast<std::uint8_t>((value >> 16) & 0xFF),
-			                                             static_cast<std::uint8_t>((value >> 24) & 0xFF), };
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = {
+			static_cast<std::uint8_t>(Function::ChangeNumericValueCommand),
+			static_cast<std::uint8_t>(objectID & 0xFF),
+			static_cast<std::uint8_t>(objectID >> 8),
+			0xFF,
+			static_cast<std::uint8_t>(value & 0xFF),
+			static_cast<std::uint8_t>((value >> 8) & 0xFF),
+			static_cast<std::uint8_t>((value >> 16) & 0xFF),
+			static_cast<std::uint8_t>((value >> 24) & 0xFF),
+		};
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
 		                                                      CAN_DATA_LENGTH,
@@ -245,12 +249,12 @@ namespace isobus
 				buffer[5 + i] = value[i];
 			}
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer,
-		                                                      5 + stringLength,
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get(),
-		                                                      CANIdentifier::PriorityLowest7);
-			delete [] buffer;
+			                                                        buffer,
+			                                                        5 + stringLength,
+			                                                        myControlFunction.get(),
+			                                                        partnerControlFunction.get(),
+			                                                        CANIdentifier::PriorityLowest7);
+			delete[] buffer;
 		}
 		return retVal;
 	}
@@ -267,7 +271,7 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             static_cast<std::uint8_t>(width_px & 0xFF),
 			                                             static_cast<std::uint8_t>(width_px >> 8),
-																									 static_cast<std::uint8_t>(height_px & 0xFF),
+			                                             static_cast<std::uint8_t>(height_px & 0xFF),
 			                                             static_cast<std::uint8_t>(height_px >> 8),
 			                                             static_cast<std::uint8_t>(direction) };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
@@ -285,7 +289,7 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             color,
 			                                             static_cast<std::uint8_t>(size),
-																									 type,
+			                                             type,
 			                                             styleBitfield,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
@@ -303,7 +307,7 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             color,
 			                                             static_cast<std::uint8_t>(width),
-																									 static_cast<std::uint8_t>(lineArtBitmask & 0xFF),
+			                                             static_cast<std::uint8_t>(lineArtBitmask & 0xFF),
 			                                             static_cast<std::uint8_t>(lineArtBitmask >> 8),
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
@@ -321,7 +325,7 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             static_cast<std::uint8_t>(fillType),
 			                                             color,
-																									 static_cast<std::uint8_t>(fillPatternObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(fillPatternObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(fillPatternObjectID >> 8),
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
@@ -339,7 +343,7 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(workingSetObjectID >> 8),
 			                                             static_cast<std::uint8_t>(newActiveMaskObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(newActiveMaskObjectID >> 8),
-																									 0xFF,
+			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
@@ -375,8 +379,8 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             attributeID,
 			                                             static_cast<std::uint8_t>(value & 0xFF),
-																									 static_cast<std::uint8_t>((value >> 8) & 0xFF),
-																									 static_cast<std::uint8_t>((value >> 16) & 0xFF),
+			                                             static_cast<std::uint8_t>((value >> 8) & 0xFF),
+			                                             static_cast<std::uint8_t>((value >> 16) & 0xFF),
 			                                             static_cast<std::uint8_t>((value >> 24) & 0xFF) };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -393,8 +397,8 @@ namespace isobus
 			                                             static_cast<std::uint8_t>(alarmMaskObjectID >> 8),
 			                                             static_cast<std::uint8_t>(priority),
 			                                             0xFF,
-																									 0xFF,
-																									 0xFF,
+			                                             0xFF,
+			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -412,7 +416,7 @@ namespace isobus
 			                                             listIndex,
 			                                             static_cast<std::uint8_t>(newObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(newObjectID >> 8),
-																									 0xFF,
+			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -425,12 +429,12 @@ namespace isobus
 	bool VirtualTerminalClient::send_lock_unlock_mask(MaskLockState state, std::uint16_t objectID, std::uint16_t timeout_ms)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::LockUnlockMaskCommand),
-																									 static_cast<std::uint8_t>(state),
+			                                             static_cast<std::uint8_t>(state),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             static_cast<std::uint8_t>(timeout_ms & 0xFF),
 			                                             static_cast<std::uint8_t>(timeout_ms >> 8),
-																									 0xFF,
+			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -443,12 +447,12 @@ namespace isobus
 	bool VirtualTerminalClient::send_execute_macro(std::uint16_t objectID)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ExecuteMacroCommand),
-																									 static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
-																									 0xFF,
+			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -461,12 +465,12 @@ namespace isobus
 	bool VirtualTerminalClient::send_change_object_label(std::uint16_t objectID, std::uint16_t labelStringObjectID, std::uint8_t fontType, std::uint16_t graphicalDesignatorObjectID)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangeObjectLabelCommand),
-																									 static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             static_cast<std::uint8_t>(labelStringObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(labelStringObjectID >> 8),
 			                                             fontType,
-																									 static_cast<std::uint8_t>(graphicalDesignatorObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(graphicalDesignatorObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(graphicalDesignatorObjectID >> 8) };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -479,9 +483,9 @@ namespace isobus
 	bool VirtualTerminalClient::send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangePolygonPointCommand),
-																									 static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-																									 pointIndex,
+			                                             pointIndex,
 			                                             static_cast<std::uint8_t>(newXValue & 0xFF),
 			                                             static_cast<std::uint8_t>(newXValue >> 8),
 			                                             static_cast<std::uint8_t>(newYValue & 0xFF),
@@ -497,9 +501,9 @@ namespace isobus
 	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
-																									 static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-																									 static_cast<std::uint8_t>(widthAttribute & 0xFF),
+			                                             static_cast<std::uint8_t>(widthAttribute & 0xFF),
 			                                             static_cast<std::uint8_t>(widthAttribute >> 8),
 			                                             static_cast<std::uint8_t>(heightAttribute & 0xFF),
 			                                             static_cast<std::uint8_t>(heightAttribute >> 8),
@@ -515,9 +519,9 @@ namespace isobus
 	bool VirtualTerminalClient::send_select_color_map_or_palette(std::uint16_t objectID)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::SelectColourMapCommand),
-																									 0xFF,
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             0xFF,
-																									 0xFF,
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
@@ -533,9 +537,9 @@ namespace isobus
 	bool VirtualTerminalClient::send_execute_extended_macro(std::uint16_t objectID)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ExecuteExtendedMacroCommand),
-																									 static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-																									 0xFF,
+			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
@@ -551,14 +555,14 @@ namespace isobus
 	bool VirtualTerminalClient::send_select_active_working_set(std::uint64_t NAMEofWorkingSetMasterForDesiredWorkingSet)
 	{
 		const std::uint8_t buffer[9] = { static_cast<std::uint8_t>(Function::SelectActiveWorkingSet),
-																									 static_cast<std::uint8_t>(NAMEofWorkingSetMasterForDesiredWorkingSet & 0xFF),
-			                                             static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 8) & 0xFF),
-																									 static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 16) & 0xFF),
-			                                             static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 24) & 0xFF),
-			                                             static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 32) & 0xFF),
-			                                             static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 40) & 0xFF),
-			                                             static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 48) & 0xFF),
-																									 static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 56) & 0xFF) };
+			                               static_cast<std::uint8_t>(NAMEofWorkingSetMasterForDesiredWorkingSet & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 8) & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 16) & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 24) & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 32) & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 40) & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 48) & 0xFF),
+			                               static_cast<std::uint8_t>((NAMEofWorkingSetMasterForDesiredWorkingSet >> 56) & 0xFF) };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
 		                                                      9,
@@ -615,13 +619,13 @@ namespace isobus
 	bool VirtualTerminalClient::send_delete_object_pool()
 	{
 		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand),
-																									 0xFF,
-			                                             0xFF,
-			                                             0xFF,
-			                                             0xFF,
-			                                             0xFF,
-																									 0xFF,
-			                                             0xFF };
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
 		                                                      CAN_DATA_LENGTH,
@@ -669,12 +673,12 @@ namespace isobus
 		}
 
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage),
-																									 bitmask,
+			                                             bitmask,
 			                                             versionByte,
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
-																									 0xFF,
+			                                             0xFF,
 			                                             0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer,
@@ -682,6 +686,273 @@ namespace isobus
 		                                                      myControlFunction.get(),
 		                                                      partnerControlFunction.get(),
 		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_memory(std::uint32_t requiredMemory)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetMemoryMessage),
+			                                             0xFF,
+			                                             static_cast<std::uint8_t>(requiredMemory & 0xFF),
+			                                             static_cast<std::uint8_t>((requiredMemory >> 8) & 0xFF),
+			                                             static_cast<std::uint8_t>((requiredMemory >> 16) & 0xFF),
+			                                             static_cast<std::uint8_t>((requiredMemory >> 24) & 0xFF),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_number_of_softkeys()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetNumberOfSoftKeysMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_text_font_data()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetTextFontDataMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_hardware()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetHardwareMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_supported_widechars()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetSupportedWidecharsMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_window_mask_data()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetWindowMaskDataMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_supported_objects()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetSupportedObjectsMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_get_versions()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetVersionsMessage),
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_store_version(std::array<std::uint8_t, 7> versionLabel)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::StoreVersionCommand),
+			                                             versionLabel[0],
+			                                             versionLabel[1],
+			                                             versionLabel[2],
+			                                             versionLabel[3],
+			                                             versionLabel[4],
+			                                             versionLabel[5],
+			                                             versionLabel[6] };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_load_version(std::array<std::uint8_t, 7> versionLabel)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::LoadVersionCommand),
+			                                             versionLabel[0],
+			                                             versionLabel[1],
+			                                             versionLabel[2],
+			                                             versionLabel[3],
+			                                             versionLabel[4],
+			                                             versionLabel[5],
+			                                             versionLabel[6] };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_delete_version(std::array<std::uint8_t, 7> versionLabel)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::DeleteVersionCommand),
+			                                             versionLabel[0],
+			                                             versionLabel[1],
+			                                             versionLabel[2],
+			                                             versionLabel[3],
+			                                             versionLabel[4],
+			                                             versionLabel[5],
+			                                             versionLabel[6] };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_extended_get_versions()
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ExtendedDeleteVersionCommand),
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_extended_store_version(std::array<std::uint8_t, 32> versionLabel)
+	{
+		bool retVal;
+
+		std::uint8_t *buffer = new std::uint8_t[33];
+		buffer[0] = static_cast<std::uint8_t>(Function::ExtendedStoreVersionCommand);
+		memcpy(&buffer[1], versionLabel.data(), 32);
+		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                        buffer,
+		                                                        33,
+		                                                        myControlFunction.get(),
+		                                                        partnerControlFunction.get(),
+		                                                        CANIdentifier::PriorityLowest7);
+		delete [] buffer;
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::send_extended_load_version(std::array<std::uint8_t, 32> versionLabel)
+	{
+		bool retVal;
+
+		std::uint8_t *buffer = new std::uint8_t[33];
+		buffer[0] = static_cast<std::uint8_t>(Function::ExtendedLoadVersionCommand);
+		memcpy(&buffer[1], versionLabel.data(), 32);
+		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                        buffer,
+		                                                        33,
+		                                                        myControlFunction.get(),
+		                                                        partnerControlFunction.get(),
+		                                                        CANIdentifier::PriorityLowest7);
+		delete[] buffer;
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::send_extended_delete_version(std::array<std::uint8_t, 32> versionLabel)
+	{
+		bool retVal;
+
+		std::uint8_t *buffer = new std::uint8_t[33];
+		buffer[0] = static_cast<std::uint8_t>(Function::ExtendedDeleteVersionCommand);
+		memcpy(&buffer[1], versionLabel.data(), 32);
+		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                        buffer,
+		                                                        33,
+		                                                        myControlFunction.get(),
+		                                                        partnerControlFunction.get(),
+		                                                        CANIdentifier::PriorityLowest7);
+		delete[] buffer;
+		return retVal;
 	}
 
 } // namespace isobus
