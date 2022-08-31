@@ -11,6 +11,7 @@
 #include "can_general_parameter_group_numbers.hpp"
 #include "can_network_manager.hpp"
 #include "can_warning_logger.hpp"
+#include "system_timing.hpp"
 
 #include <cstring>
 
@@ -19,7 +20,18 @@ namespace isobus
 
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  partnerControlFunction(partner),
-	  myControlFunction(clientSource)
+	  myControlFunction(clientSource),
+	  lastVTStatusTimestamp_ms(0),
+	  activeWorkingSetDataMaskObjectID(NULL_OBJECT_ID),
+	  activeWorkingSetSoftkeyMaskObjectID(NULL_OBJECT_ID),
+	  activeWorkingSetMasterAddress(NULL_CAN_ADDRESS),
+	  busyCodesBitfield(0),
+	  currentCommandFunctionCode(0),
+	  connectedVTVersion(0),
+	  state(StateMachineState::Disconnected),
+	  stateMachineTimestamp_ms(0),
+	  objectPoolDataCallback(nullptr),
+	  objectPoolSize_bytes(0)
 	{
 	}
 
@@ -616,6 +628,146 @@ namespace isobus
 		return retVal;
 	}
 
+	void VirtualTerminalClient::update()
+	{
+		if (nullptr != partnerControlFunction)
+		{
+			switch (state)
+			{
+				case StateMachineState::Disconnected:
+				{
+					if (partnerControlFunction->get_address_valid())
+					{
+						set_state(StateMachineState::WaitForPartnerVTStatusMessage);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForPartnerVTStatusMessage:
+				{
+					if (0 != lastVTStatusTimestamp_ms)
+					{
+						set_state(StateMachineState::ReadyForObjectPool);
+					}
+				}
+				break;
+
+				case StateMachineState::ReadyForObjectPool:
+				{
+					// If we're in this state, we are ready to upload the
+					// object pool but no pool has been set to this class
+					// so the state machine cannot progress.
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Disconnected);
+					}
+				}
+				break;
+
+				case StateMachineState::SendGetMemory:
+				{
+					if (send_get_memory(objectPoolSize_bytes))
+					{
+						set_state(StateMachineState::WaitForGetMemoryResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForGetMemoryResponse:
+				{
+
+				}
+				break;
+
+				case StateMachineState::SendGetNumberSoftkeys:
+				{
+					if(send_get_number_of_softkeys())
+					{
+						set_state(StateMachineState::WaitForGetNumberSoftKeysResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForGetNumberSoftKeysResponse:
+				{
+
+				}
+				break;
+
+				case StateMachineState::SendGetTextFontData:
+				{
+					if (send_get_text_font_data())
+					{
+						set_state(StateMachineState::WaitForGetTextFontDataResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForGetTextFontDataResponse:
+				{
+
+				}
+				break;
+
+				case StateMachineState::SendGetHardware:
+				{
+					if (send_get_hardware())
+					{
+						set_state(StateMachineState::WaitForGetHardwareResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForGetHardwareResponse:
+				{
+
+				}
+				break;
+
+				case StateMachineState::UploadObjectPool:
+				{
+
+				}
+				break;
+
+				case StateMachineState::SendEndOfObjectPool:
+				{
+					//if (send_end_of_object_pool())
+					{
+						set_state(StateMachineState::WaitForEndOfObjectPoolResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForEndOfObjectPoolResponse:
+				{
+
+				}
+				break;
+
+				case StateMachineState::Connected:
+				{
+					// Check for timeouts
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Disconnected);
+					}
+				}
+				break;
+
+				default:
+				{
+
+				}
+				break;
+			}
+		}
+		else
+		{
+			set_state(StateMachineState::Disconnected);
+		}
+	}
+
 	bool VirtualTerminalClient::send_delete_object_pool()
 	{
 		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand),
@@ -953,6 +1105,12 @@ namespace isobus
 		                                                        CANIdentifier::PriorityLowest7);
 		delete[] buffer;
 		return retVal;
+	}
+
+	void VirtualTerminalClient::set_state(StateMachineState value)
+	{
+		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
+		state = value;
 	}
 
 } // namespace isobus
