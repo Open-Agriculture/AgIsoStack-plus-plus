@@ -13,6 +13,7 @@
 #include "can_internal_control_function.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace isobus
 {
@@ -127,13 +128,34 @@ namespace isobus
 			LockMask = 1
 		};
 
-		enum KeyActivationCode
+		enum class KeyActivationCode
 		{
 			ButtonUnlatchedOrReleased = 0,
 			ButtonPressedOrLatched = 1,
 			ButtonStillHeld = 2,
 			ButtonPressAborted = 3
 		};
+
+		enum class StateMachineState
+		{
+			Disconnected,
+			WaitForPartnerVTStatusMessage,
+			ReadyForObjectPool,
+			SendGetMemory,
+			WaitForGetMemoryResponse,
+			SendGetNumberSoftkeys,
+			WaitForGetNumberSoftKeysResponse,
+			SendGetTextFontData,
+			WaitForGetTextFontDataResponse,
+			SendGetHardware,
+			WaitForGetHardwareResponse,
+			UploadObjectPool,
+			SendEndOfObjectPool,
+			WaitForEndOfObjectPoolResponse,
+			Connected
+		};
+
+		static const std::uint16_t NULL_OBJECT_ID = 0xFFFF;
 
 		explicit VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource);
 
@@ -198,8 +220,24 @@ namespace isobus
 		// VT Querying
 		bool send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID);
 
-
 		VTVersion get_connected_vt_version() const;
+
+		// Object Pool
+
+		// These are the functions for specifying your pool to upload.
+		// You have a few options:
+		// 1. Upload in one blob of contigious memory 
+		// This is good for small pools or pools where you have all the data in memory.
+		// 2. Get a callback at some inteval to provide data in chunks
+		// This is probably better for huge pools if you are RAM constrained, or if your
+		// pool is stored on some external device that you need to get data from in pages.
+		// If using callbacks, The object pool and pointer MUST NOT be deleted or leave scope until upload is done.
+		void set_object_pool(const std::uint8_t *pool, std::uint32_t size);
+		void set_object_pool(const std::vector<std::uint8_t> *pool);
+		void register_object_pool_data_chunk_callback(DataChunkCallback value);
+
+		// Periodic Update Function (thread should call this)
+		void update();
 
 	private:
 		enum class Function
@@ -334,10 +372,15 @@ namespace isobus
 		bool send_extended_load_version(std::array<std::uint8_t, 32> versionLabel);
 		bool send_extended_delete_version(std::array<std::uint8_t, 32> versionLabel);
 
+		void set_state(StateMachineState value);
+
+		static const std::uint32_t VT_STATUS_TIMEOUT_MS = 750;
+
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
 
 		// Status message contents from the VT
+		std::uint32_t lastVTStatusTimestamp_ms;
 		std::uint16_t activeWorkingSetDataMaskObjectID;
 		std::uint16_t activeWorkingSetSoftkeyMaskObjectID;
 		std::uint8_t activeWorkingSetMasterAddress;
@@ -345,6 +388,13 @@ namespace isobus
 		std::uint8_t currentCommandFunctionCode;
 
 		std::uint8_t connectedVTVersion;
+		// Internal state
+		StateMachineState state;
+		std::uint32_t stateMachineTimestamp_ms;
+
+		// Object Pool info
+		DataChunkCallback objectPoolDataCallback;
+		std::uint32_t objectPoolSize_bytes;
 	};
 
 } // namespace isobus
