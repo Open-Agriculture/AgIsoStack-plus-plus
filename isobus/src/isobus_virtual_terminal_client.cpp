@@ -14,6 +14,7 @@
 #include "system_timing.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 namespace isobus
 {
@@ -33,6 +34,70 @@ namespace isobus
 	  objectPoolDataCallback(nullptr),
 	  objectPoolSize_bytes(0)
 	{
+		if (nullptr != partnerControlFunction)
+		{
+			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTSoftKeyEventCallback(VTKeyEventCallback value)
+	{
+		softKeyEventCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTSoftKeyEventCallback(VTKeyEventCallback value)
+	{
+		auto callbackLocation = find(softKeyEventCallbacks.begin(), softKeyEventCallbacks.end(), value);
+
+		if (softKeyEventCallbacks.end() != callbackLocation)
+		{
+			softKeyEventCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTButtonEventCallback(VTKeyEventCallback value)
+	{
+		buttonEventCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTButtonEventCallback(VTKeyEventCallback value)
+	{
+		auto callbackLocation = find(buttonEventCallbacks.begin(), buttonEventCallbacks.end(), value);
+
+		if (buttonEventCallbacks.end() != callbackLocation)
+		{
+			buttonEventCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTPointingEventCallback(VTPointingEventCallback value)
+	{
+		pointingEventCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTPointingEventCallback(VTPointingEventCallback value)
+	{
+		auto callbackLocation = find(pointingEventCallbacks.begin(), pointingEventCallbacks.end(), value);
+
+		if (pointingEventCallbacks.end() != callbackLocation)
+		{
+			pointingEventCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value)
+	{
+		selectInputObjectCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value)
+	{
+		auto callbackLocation = find(selectInputObjectCallbacks.begin(), selectInputObjectCallbacks.end(), value);
+
+		if (selectInputObjectCallbacks.end() != callbackLocation)
+		{
+			selectInputObjectCallbacks.erase(callbackLocation);
+		}
 	}
 
 	bool VirtualTerminalClient::send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command)
@@ -583,6 +648,435 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
+	bool VirtualTerminalClient::send_set_graphics_cursor(std::uint16_t objectID, std::int16_t xPosition, std::int16_t yPosition)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetGraphicsCursor),
+			                                             static_cast<std::uint8_t>(xPosition & 0xFF),
+			                                             static_cast<std::uint8_t>(xPosition >> 8),
+			                                             static_cast<std::uint8_t>(yPosition & 0xFF),
+			                                             static_cast<std::uint8_t>(yPosition >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_move_graphics_cursor(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::MoveGraphicsCursor),
+			                                             static_cast<std::uint8_t>(xOffset & 0xFF),
+			                                             static_cast<std::uint8_t>(xOffset >> 8),
+			                                             static_cast<std::uint8_t>(yOffset & 0xFF),
+			                                             static_cast<std::uint8_t>(yOffset >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_set_foreground_colour(std::uint16_t objectID, std::uint8_t color)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetForegroundColor),
+			                                             color,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_set_background_colour(std::uint16_t objectID, std::uint8_t color)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetBackgroundColor),
+			                                             color,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_set_line_attributes_object_id(std::uint16_t objectID, std::uint16_t lineAttributesObjectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetLineAttributesObjectID),
+			                                             static_cast<std::uint8_t>(lineAttributesObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(lineAttributesObjectID >> 8),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_set_fill_attributes_object_id(std::uint16_t objectID, std::uint16_t fillAttributesObjectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetFillAttributesObjectID),
+			                                             static_cast<std::uint8_t>(fillAttributesObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(fillAttributesObjectID >> 8),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_set_font_attributes_object_id(std::uint16_t objectID, std::uint16_t fontAttributesObjectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetFontAttributesObjectOD),
+			                                             static_cast<std::uint8_t>(fontAttributesObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(fontAttributesObjectID >> 8),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_erase_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::EraseRectangle),
+			                                             static_cast<std::uint8_t>(width & 0xFF),
+			                                             static_cast<std::uint8_t>(width >> 8),
+			                                             static_cast<std::uint8_t>(height & 0xFF),
+			                                             static_cast<std::uint8_t>(height >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_draw_point(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawPoint),
+			                                             static_cast<std::uint8_t>(xOffset & 0xFF),
+			                                             static_cast<std::uint8_t>(xOffset >> 8),
+			                                             static_cast<std::uint8_t>(yOffset & 0xFF),
+			                                             static_cast<std::uint8_t>(yOffset >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_draw_line(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawLine),
+			                                             static_cast<std::uint8_t>(xOffset & 0xFF),
+			                                             static_cast<std::uint8_t>(xOffset >> 8),
+			                                             static_cast<std::uint8_t>(yOffset & 0xFF),
+			                                             static_cast<std::uint8_t>(yOffset >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_draw_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawRectangle),
+			                                             static_cast<std::uint8_t>(width & 0xFF),
+			                                             static_cast<std::uint8_t>(width >> 8),
+			                                             static_cast<std::uint8_t>(height & 0xFF),
+			                                             static_cast<std::uint8_t>(height >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_draw_closed_ellipse(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawClosedEllipse),
+			                                             static_cast<std::uint8_t>(width & 0xFF),
+			                                             static_cast<std::uint8_t>(width >> 8),
+			                                             static_cast<std::uint8_t>(height & 0xFF),
+			                                             static_cast<std::uint8_t>(height >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_draw_polygon(std::uint16_t objectID, std::uint8_t numberOfPoints, std::int16_t *listOfXOffsetsRelativeToCursor, std::int16_t *listOfYOffsetsRelativeToCursor)
+	{
+		bool retVal = false;
+
+		if ((numberOfPoints > 0) && 
+			(nullptr != listOfXOffsetsRelativeToCursor) &&
+		    (nullptr != listOfYOffsetsRelativeToCursor))
+
+		{
+			const std::uint16_t messageLength = (9 + (4 * numberOfPoints));
+			std::uint8_t *buffer = new std::uint8_t[messageLength];
+			buffer[0] = static_cast<std::uint8_t>(Function::GraphicsContextCommand);
+			buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
+			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[3] = static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawPolygon);
+			buffer[4] = numberOfPoints;
+			for (uint8_t i = 0; i < numberOfPoints; i++)
+			{
+				buffer[5 + i] = static_cast<std::uint8_t>(listOfXOffsetsRelativeToCursor[0] & 0xFF);
+				buffer[6 + i] = static_cast<std::uint8_t>((listOfXOffsetsRelativeToCursor[0] >> 8) & 0xFF);
+				buffer[7 + i] = static_cast<std::uint8_t>(listOfYOffsetsRelativeToCursor[0] & 0xFF);
+				buffer[8 + i] = static_cast<std::uint8_t>((listOfYOffsetsRelativeToCursor[0] >> 8) & 0xFF);
+			}
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+			                                                        buffer,
+			                                                        messageLength,
+			                                                        myControlFunction.get(),
+			                                                        partnerControlFunction.get(),
+			                                                        CANIdentifier::PriorityLowest7);
+			delete[] buffer;
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::send_draw_text(std::uint16_t objectID, bool transparent, std::uint8_t textLength, const char *value)
+	{
+		bool retVal = false;
+
+		if ((nullptr != value) &&
+			(0 != textLength))
+		{
+			std::uint16_t messageLength = (6 + textLength);
+			std::uint8_t *buffer = new std::uint8_t[messageLength];
+			buffer[0] = static_cast<std::uint8_t>(Function::GraphicsContextCommand);
+			buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
+			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[3] = static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawText);
+			buffer[4] = static_cast<std::uint8_t>(transparent);
+			buffer[5] = textLength;
+			memcpy(buffer, value, textLength);
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+			                                                                 buffer,
+			                                                                 messageLength,
+			                                                                 myControlFunction.get(),
+			                                                                 partnerControlFunction.get(),
+			                                                                 CANIdentifier::PriorityLowest7);
+			delete[] buffer;
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::send_pan_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::PanViewport),
+			                                             static_cast<std::uint8_t>(xAttribute & 0xFF),
+			                                             static_cast<std::uint8_t>(xAttribute >> 8),
+			                                             static_cast<std::uint8_t>(yAttribute & 0xFF),
+			                                             static_cast<std::uint8_t>(yAttribute >> 8) };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_zoom_viewport(std::uint16_t objectID, float zoom)
+	{
+		std::uint8_t floatToBytesBuffer[sizeof(float)] = { 0 };
+
+		for (std::uint8_t i = 0; i < sizeof(float); i++)
+		{
+			floatToBytesBuffer[i] = reinterpret_cast<std::uint8_t *>(&zoom)[i]; // Endianness?
+		}
+
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::ZoomViewport),
+			                                             floatToBytesBuffer[0],
+			                                             floatToBytesBuffer[1],
+			                                             floatToBytesBuffer[2],
+			                                             floatToBytesBuffer[3] };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_pan_and_zoom_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute, float zoom)
+	{
+		std::uint8_t floatToBytesBuffer[sizeof(float)] = { 0 };
+
+		for (std::uint8_t i = 0; i < sizeof(float); i++)
+		{
+			floatToBytesBuffer[i] = reinterpret_cast<std::uint8_t *>(&zoom)[i]; // Endianness?
+		}
+
+		const std::uint8_t buffer[12] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                static_cast<std::uint8_t>(objectID & 0xFF),
+			                                static_cast<std::uint8_t>(objectID >> 8),
+			                                static_cast<std::uint8_t>(GraphicsContextSubCommandID::PanAndZoomViewport),
+			                                static_cast<std::uint8_t>(xAttribute & 0xFF),
+			                                static_cast<std::uint8_t>(xAttribute >> 8),
+			                                static_cast<std::uint8_t>(yAttribute & 0xFF),
+			                                static_cast<std::uint8_t>(yAttribute >> 8),
+			                                floatToBytesBuffer[0],
+			                                floatToBytesBuffer[1],
+			                                floatToBytesBuffer[2],
+			                                floatToBytesBuffer[3] };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      12,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_change_viewport_size(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
+	{
+		constexpr std::uint16_t MAX_WIDTH_HEIGHT = 32767;
+		bool retVal = false;
+
+		if ((width <= MAX_WIDTH_HEIGHT) && 
+			(height <= MAX_WIDTH_HEIGHT))
+		{
+			const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+				                                             static_cast<std::uint8_t>(objectID & 0xFF),
+				                                             static_cast<std::uint8_t>(objectID >> 8),
+				                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::ChangeViewportSize),
+				                                             static_cast<std::uint8_t>(width & 0xFF),
+				                                             static_cast<std::uint8_t>(width >> 8),
+				                                             static_cast<std::uint8_t>(height & 0xFF),
+				                                             static_cast<std::uint8_t>(height >> 8) };
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+			                                                        buffer,
+			                                                        CAN_DATA_LENGTH,
+			                                                        myControlFunction.get(),
+			                                                        partnerControlFunction.get(),
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::send_draw_vt_object(std::uint16_t graphicsContextObjectID, std::uint16_t objectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(graphicsContextObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(graphicsContextObjectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawVTObject),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_copy_canvas_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(graphicsContextObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(graphicsContextObjectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::CopyCanvasToPictureGraphic),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_copy_viewport_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
+			                                             static_cast<std::uint8_t>(graphicsContextObjectID & 0xFF),
+			                                             static_cast<std::uint8_t>(graphicsContextObjectID >> 8),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::CopyViewportToPictureGraphic),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
 	VirtualTerminalClient::VTVersion VirtualTerminalClient::get_connected_vt_version() const
 	{
 		VTVersion retVal;
@@ -1111,6 +1605,193 @@ namespace isobus
 	{
 		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 		state = value;
+	}
+
+	void VirtualTerminalClient::process_button_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->buttonEventCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->buttonEventCallbacks[i])
+			{
+				parentPointer->buttonEventCallbacks[i](keyEvent, keyNumber, objectID, parentObjectID, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_softkey_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->softKeyEventCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->softKeyEventCallbacks[i])
+			{
+				parentPointer->softKeyEventCallbacks[i](keyEvent, keyNumber, objectID, parentObjectID, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_pointing_event_callback(KeyActivationCode signal, std::uint16_t xPosition, std::uint16_t yPosition, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->pointingEventCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->pointingEventCallbacks[i])
+			{
+				parentPointer->pointingEventCallbacks[i](signal, xPosition, yPosition, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_select_input_object_callback(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->selectInputObjectCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->selectInputObjectCallbacks[i])
+			{
+				parentPointer->selectInputObjectCallbacks[i](objectID, objectSelected, objectOpenForInput, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_rx_message(CANMessage *message, void *parentPointer)
+	{
+		if ((nullptr != message) && 
+			(nullptr != parentPointer) &&
+		    (CAN_DATA_LENGTH == message->get_data_length()))
+		{
+			VirtualTerminalClient *parentVT = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+
+			switch (message->get_identifier().get_parameter_group_number())
+			{
+				//! @todo Handle NACK, any other PGNs needed as well
+				
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU):
+				{
+					switch (message->get_data().at(0))
+					{
+						case static_cast <std::uint8_t>(Function::SoftKeyActivationMessage):
+						{
+							std::uint8_t keyCode = message->get_data().at(1);
+							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
+							{
+								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode), 
+									static_cast<std::uint16_t>(message->get_data().at(6)), 
+									(static_cast<std::uint16_t>(message->get_data().at(2)) | static_cast<std::uint16_t>(message->get_data().at(3) << 8)), 
+									(static_cast<std::uint16_t>(message->get_data().at(4)) | static_cast<std::uint16_t>(message->get_data().at(5) << 8)), 
+									parentVT);
+							}
+						}
+						break;
+
+						case static_cast <std::uint8_t>(Function::ButtonActivationMessage):
+						{
+							std::uint8_t keyCode = message->get_data().at(1);
+							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
+							{
+								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode),
+								                                        static_cast<std::uint16_t>(message->get_data().at(6)),
+								                                        (static_cast<std::uint16_t>(message->get_data().at(2)) |
+								                                         static_cast<std::uint16_t>(message->get_data().at(3) << 8)),
+								                                        (static_cast<std::uint16_t>(message->get_data().at(4)) |
+								                                         static_cast<std::uint16_t>(message->get_data().at(5) << 8)),
+								                                        parentVT);
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::PointingEventMessage): 
+						{
+							std::uint16_t xPosition = (static_cast<std::uint16_t>(message->get_data().at(1)) &
+							                           ((static_cast<std::uint16_t>(message->get_data().at(2))) << 8));
+							std::uint16_t yPosition = (static_cast<std::uint16_t>(message->get_data().at(3)) &
+							                           ((static_cast<std::uint16_t>(message->get_data().at(4))) << 8));
+							std::uint8_t keyCode = message->get_data().at(5) & 0x0F;
+
+							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
+							{
+								//! @todo process TAN
+							}							
+
+							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
+							{
+								parentVT->process_pointing_event_callback(static_cast<KeyActivationCode>(keyCode), xPosition, yPosition, parentVT);
+							}
+						}
+						break;	
+
+						case static_cast<std::uint8_t>(Function::SelectInputObjectCommand):
+						{
+							std::uint16_t objectID = (static_cast<std::uint16_t>(message->get_data().at(1)) & 
+								((static_cast<std::uint16_t>(message->get_data().at(2))) << 8));
+							bool objectSelected = (0x01 == message->get_data().at(3));
+							bool objectOpenForInput = false;
+
+							if (parentVT->get_connected_vt_version() >= VTVersion::Version4)
+							{
+								objectOpenForInput = (0x01 == (message->get_data().at(4) & 0x01));
+							}
+
+							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
+							{
+								//! @todo process TAN
+							}	
+							parentVT->process_select_input_object_callback(objectID, objectSelected, objectOpenForInput, parentVT);
+						}
+						break;
+
+						case static_cast <std::uint8_t>(Function::EndOfObjectPoolMessage):
+						{
+							if (StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state)
+							{
+								bool anyErrorInPool =  (0 != (message->get_data().at(1) & 0x01));
+								bool vtRanOutOfMemory = (0 != (message->get_data().at(1) & 0x02));
+								bool otherErrors = (0 != (message->get_data().at(1) & 0x08));
+								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data().at(2)) &
+								                                        ((static_cast<std::uint16_t>(message->get_data().at(3))) << 8));
+								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data().at(4)) &
+								                                              ((static_cast<std::uint16_t>(message->get_data().at(5))) << 8));
+								std::uint8_t objectPoolErrorBitmask = message->get_data().at(6);
+
+								if ((!anyErrorInPool) &&
+									(0 == objectPoolErrorBitmask))
+								{
+									parentVT->set_state(StateMachineState::Connected);
+								}
+								else
+								{
+									parentVT->set_state(StateMachineState::Failed);
+									CANStackLogger::CAN_stack_log("Error in end of object pool message." +
+									                              std::string("Faulty Object ") +
+									                              std::to_string(static_cast<int>(objectIDOfFaultyObject)) +
+									                              std::string(" Faulty Object Parent ") +
+									                              std::to_string(static_cast<int>(parentObjectIDOfFaultyObject)) +
+									                              std::string(" Pool error bitmask value ") +
+																  std::to_string(static_cast<int>(objectPoolErrorBitmask)));
+									if (vtRanOutOfMemory)
+									{
+										CANStackLogger::CAN_stack_log("VT Ran out of memory");
+									}
+									if (otherErrors)
+									{
+										CANStackLogger::CAN_stack_log("VT Reported other errors in EOM response");
+									}
+								}
+							}
+						}
+						break;
+					}
+				}
+				break;
+
+				default:
+				{
+					CANStackLogger::CAN_stack_log("VT Client unknown message");
+				}
+				break;
+			}
+		}
+		else
+		{
+			CANStackLogger::CAN_stack_log("VT-ECU Client message invalid");
+		}
 	}
 
 } // namespace isobus

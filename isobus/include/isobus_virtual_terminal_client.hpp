@@ -152,7 +152,44 @@ namespace isobus
 			UploadObjectPool,
 			SendEndOfObjectPool,
 			WaitForEndOfObjectPoolResponse,
-			Connected
+			Connected,
+			Failed
+		};
+
+		enum class MacroEventID : std::uint8_t
+		{
+			Reserved = 0,
+			OnActivate = 1,
+			OnDeactivate = 2,
+			OnShow = 3,
+			OnHide = 4,
+			OnEnable = 5,
+			OnDisable = 6,
+			OnChangeActiveMask = 7,
+			OnChangeSoftKeyMask = 8,
+			OnChangeAttribute = 9,
+			OnChangeBackgroundColor = 10,
+			OnChangeFontAttributes = 11,
+			OnChangeLineAttributes = 12,
+			OnChangeFillAttributes = 13,
+			OnChangeChildLocation = 14,
+			OnChangeSize = 15,
+			OnChangeValue = 16,
+			OnChangePriority = 17,
+			OnChangeEndPoint = 18,
+			OnInputFieldSelection = 19,
+			OnInputFieldDeselection = 20,
+			OnESC = 21,
+			OnEntryOfValue = 22,
+			OnEntryOfNewValue = 23,
+			OnKeyPress = 24,
+			OnKeyRelease = 25,
+			OnChangeChildPosition = 26,
+			OnPointingEventPress = 27,
+			OnPointingEventRelease = 28,
+			ReservedBegin = 29,
+			ReservedEnd = 254,
+			UseExtendedMacroReference = 255
 		};
 
 		static const std::uint16_t NULL_OBJECT_ID = 0xFFFF;
@@ -160,7 +197,22 @@ namespace isobus
 		explicit VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource);
 
 		// Basic Interaction
-		void RegisterVTEventCallback();
+		typedef void (*VTKeyEventCallback)(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
+		typedef void (*VTPointingEventCallback)(KeyActivationCode keyEvent, std::uint16_t xPosition, std::uint16_t yPosition, VirtualTerminalClient *parentPointer);
+		typedef void (*VTSelectInputObjectCallback)(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer);
+
+		// Callbacks for events that happen on the VT
+		void RegisterVTSoftKeyEventCallback(VTKeyEventCallback value);
+		void RemoveVTSoftKeyEventCallback(VTKeyEventCallback value);
+
+		void RegisterVTButtonEventCallback(VTKeyEventCallback value);
+		void RemoveVTButtonEventCallback(VTKeyEventCallback value);
+
+		void RegisterVTPointingEventCallback(VTPointingEventCallback value);
+		void RemoveVTPointingEventCallback(VTPointingEventCallback value);
+
+		void RegisterVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value);
+		void RemoveVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value);
 
 		// Command Messages
 		bool send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command);
@@ -195,27 +247,27 @@ namespace isobus
 		bool send_select_active_working_set(std::uint64_t NAMEofWorkingSetMasterForDesiredWorkingSet);
 
 		// Graphics Context Commands
-		bool send_set_graphics_cursor(std::int16_t xPosition, std::int16_t yPosition);
-		bool send_move_graphics_cursor(std::int16_t xOffset, std::int16_t yOffset);
-		bool send_set_foreground_colour(std::uint8_t color);
-		bool send_set_background_colour(std::uint8_t color);
-		bool send_set_line_attributes_object_id(std::uint16_t objectID);
-		bool send_set_fill_attributes_object_id(std::uint16_t objectID);
-		bool send_set_font_attributes_object_id(std::uint16_t objectID);
-		bool send_erase_rectangle(std::uint16_t width, std::uint16_t height);
-		bool send_draw_point(std::int16_t xOffset, std::int16_t yOffset);
-		bool send_draw_line(std::int16_t xOffset, std::int16_t yOffset);
-		bool send_draw_rectangle(std::uint16_t width, std::uint16_t height);
-		bool send_draw_closed_ellipse(std::uint16_t width, std::uint16_t height);
-		bool send_draw_polygon(std::uint8_t numberOfPoints, std::int16_t *listOfXOffsetsRelativeToCursor, std::int16_t *listOfYOffsetsRelativeToCursor);
-		bool send_draw_text(bool transparent, std::uint8_t textLength, const char *value);
-		bool send_pan_viewport(std::int16_t xAttribute, std::int16_t yAttribute);
-		bool send_zoom_viewport(float zoom);
-		bool send_pan_and_zoom_viewport(std::int16_t xAttribute, std::int16_t yAttribute, float zoom);
-		bool send_change_viewport_size(std::uint16_t width, std::uint16_t height);
-		bool send_draw_vt_object(std::uint16_t objectID);
-		bool send_copy_canvas_to_picture_graphic(std::uint16_t objectID);
-		bool send_copy_viewport_to_picture_graphic(std::uint16_t objectID);
+		bool send_set_graphics_cursor(std::uint16_t objectID, std::int16_t xPosition, std::int16_t yPosition);
+		bool send_move_graphics_cursor(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
+		bool send_set_foreground_colour(std::uint16_t objectID, std::uint8_t color);
+		bool send_set_background_colour(std::uint16_t objectID, std::uint8_t color);
+		bool send_set_line_attributes_object_id(std::uint16_t objectID, std::uint16_t lineAttributeobjectID);
+		bool send_set_fill_attributes_object_id(std::uint16_t objectID, std::uint16_t fillAttributeobjectID);
+		bool send_set_font_attributes_object_id(std::uint16_t objectID, std::uint16_t fontAttributesObjectID);
+		bool send_erase_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
+		bool send_draw_point(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
+		bool send_draw_line(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
+		bool send_draw_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
+		bool send_draw_closed_ellipse(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
+		bool send_draw_polygon(std::uint16_t objectID, std::uint8_t numberOfPoints, std::int16_t *listOfXOffsetsRelativeToCursor, std::int16_t *listOfYOffsetsRelativeToCursor);
+		bool send_draw_text(std::uint16_t objectID, bool transparent, std::uint8_t textLength, const char *value);
+		bool send_pan_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute);
+		bool send_zoom_viewport(std::uint16_t objectID, float zoom);
+		bool send_pan_and_zoom_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute, float zoom);
+		bool send_change_viewport_size(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
+		bool send_draw_vt_object(std::uint16_t graphicsContextObjectID, std::uint16_t VTObjectID);
+		bool send_copy_canvas_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID);
+		bool send_copy_viewport_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID);
 
 		// VT Querying
 		bool send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID);
@@ -232,8 +284,8 @@ namespace isobus
 		// This is probably better for huge pools if you are RAM constrained, or if your
 		// pool is stored on some external device that you need to get data from in pages.
 		// If using callbacks, The object pool and pointer MUST NOT be deleted or leave scope until upload is done.
-		void set_object_pool(const std::uint8_t *pool, std::uint32_t size);
-		void set_object_pool(const std::vector<std::uint8_t> *pool);
+		void set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size);
+		void set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool);
 		void register_object_pool_data_chunk_callback(DataChunkCallback value);
 
 		// Periodic Update Function (thread should call this)
@@ -317,40 +369,29 @@ namespace isobus
 			WorkingSetMaintenanceMessage = 0xFF
 		};
 
-		enum class EventID : std::uint8_t
+		enum class GraphicsContextSubCommandID
 		{
-			Reserved = 0,
-			OnActivate = 1,
-			OnDeactivate = 2,
-			OnShow = 3,
-			OnHide = 4,
-			OnEnable = 5,
-			OnDisable = 6,
-			OnChangeActiveMask = 7,
-			OnChangeSoftKeyMask = 8,
-			OnChangeAttribute = 9,
-			OnChangeBackgroundColor = 10,
-			OnChangeFontAttributes = 11,
-			OnChangeLineAttributes = 12,
-			OnChangeFillAttributes = 13,
-			OnChangeChildLocation = 14,
-			OnChangeSize = 15,
-			OnChangeValue = 16,
-			OnChangePriority = 17,
-			OnChangeEndPoint = 18,
-			OnInputFieldSelection = 19, 
-			OnInputFieldDeselection = 20,
-			OnESC = 21,
-			OnEntryOfValue = 22, 
-			OnEntryOfNewValue = 23,
-			OnKeyPress = 24,
-			OnKeyRelease = 25,
-			OnChangeChildPosition = 26, 
-			OnPointingEventPress = 27,
-			OnPointingEventRelease = 28,
-			ReservedBegin = 29,
-			ReservedEnd = 254,
-			UseExtendedMacroReference = 255
+			SetGraphicsCursor = 0x00,
+			MoveGraphicsCursor = 0x01,
+			SetForegroundColor = 0x02,
+			SetBackgroundColor = 0x03,
+			SetLineAttributesObjectID = 0x04,
+			SetFillAttributesObjectID = 0x05,
+			SetFontAttributesObjectOD = 0x06,
+			EraseRectangle = 0x07,
+			DrawPoint = 0x08,
+			DrawLine = 0x09,
+			DrawRectangle = 0x0A,
+			DrawClosedEllipse = 0x0B,
+			DrawPolygon = 0x0C,
+			DrawText = 0x0D,
+			PanViewport = 0x0E,
+			ZoomViewport = 0x0F,
+			PanAndZoomViewport = 0x10,
+			ChangeViewportSize = 0x11,
+			DrawVTObject = 0x12,
+			CopyCanvasToPictureGraphic = 0x13,
+			CopyViewportToPictureGraphic = 0x14
 		};
 
 		// Object Pool Managment
@@ -374,7 +415,14 @@ namespace isobus
 
 		void set_state(StateMachineState value);
 
-		static const std::uint32_t VT_STATUS_TIMEOUT_MS = 750;
+		void process_button_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
+		void process_softkey_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
+		void process_pointing_event_callback(KeyActivationCode signal, std::uint16_t xPosition, std::uint16_t yPosition, VirtualTerminalClient *parentPointer);
+		void process_select_input_object_callback(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer);
+
+		static void process_rx_message(CANMessage *message, void *parentPointer);
+
+		static const std::uint32_t VT_STATUS_TIMEOUT_MS = 3000;
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
@@ -391,6 +439,10 @@ namespace isobus
 		// Internal state
 		StateMachineState state;
 		std::uint32_t stateMachineTimestamp_ms;
+		std::vector<VTKeyEventCallback> buttonEventCallbacks;
+		std::vector<VTKeyEventCallback> softKeyEventCallbacks;
+		std::vector<VTPointingEventCallback> pointingEventCallbacks;
+		std::vector<VTSelectInputObjectCallback> selectInputObjectCallbacks;
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback;
