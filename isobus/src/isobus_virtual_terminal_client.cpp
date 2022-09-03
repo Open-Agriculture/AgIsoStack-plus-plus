@@ -22,6 +22,7 @@ namespace isobus
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  partnerControlFunction(partner),
 	  myControlFunction(clientSource),
+	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this),
 	  lastVTStatusTimestamp_ms(0),
 	  activeWorkingSetDataMaskObjectID(NULL_OBJECT_ID),
 	  activeWorkingSetSoftkeyMaskObjectID(NULL_OBJECT_ID),
@@ -29,14 +30,72 @@ namespace isobus
 	  busyCodesBitfield(0),
 	  currentCommandFunctionCode(0),
 	  connectedVTVersion(0),
+	  softKeyXAxisPixels(0),
+	  softKeyYAxisPixels(0),
+	  numberVirtualSoftkeysPerSoftkeyMask(0),
+	  numberPhysicalSoftkeys(0),
+	  smallFontSizesBitfield(0),
+	  largeFontSizesBitfield(0),
+	  fontStylesBitfield(0),
+	  xPixels(0),
+	  yPixels(0),
+	  hardwareFeaturesBitfield(0),
 	  state(StateMachineState::Disconnected),
 	  stateMachineTimestamp_ms(0),
+	  lastWorkingSetMaintenanceTimestamp_ms(0),
+	  workerThread(nullptr),
+	  initialized(false),
+	  sendWorkingSetMaintenenace(false),
+	  shouldTerminate(false),
 	  objectPoolDataCallback(nullptr),
 	  objectPoolSize_bytes(0)
 	{
 		if (nullptr != partnerControlFunction)
 		{
 			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message);
+		}
+	}
+
+	VirtualTerminalClient::~VirtualTerminalClient()
+	{
+		terminate();
+	}
+
+	void VirtualTerminalClient::initialize(bool spawnThread)
+	{
+		if (shouldTerminate)
+		{
+			shouldTerminate = false;
+			initialized = false;
+		}
+
+		if (!initialized)
+		{
+			if (spawnThread)
+			{
+				workerThread = new std::thread([this]() { worker_thread_function(); });
+			}
+			initialized = true;
+		}
+	}
+
+	bool VirtualTerminalClient::get_is_initialized()
+	{
+		return initialized;
+	}
+
+	void VirtualTerminalClient::terminate()
+	{
+		if (initialized)
+		{
+			shouldTerminate = true;
+
+			if (nullptr != workerThread)
+			{
+				workerThread->join();
+				delete workerThread;
+				workerThread = nullptr;
+			}
 		}
 	}
 
@@ -1077,6 +1136,138 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
+	bool VirtualTerminalClient::send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GetAttributeValueMessage),
+			                                             static_cast<std::uint8_t>(objectID & 0xFF),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             attributeID,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	std::uint8_t VirtualTerminalClient::get_softkey_x_axis_pixels() const
+	{
+		return softKeyXAxisPixels;
+	}
+
+	std::uint8_t VirtualTerminalClient::get_softkey_y_axis_pixels() const
+	{
+		return softKeyYAxisPixels;
+	}
+
+	std::uint8_t VirtualTerminalClient::get_number_virtual_softkeys() const
+	{
+		return numberVirtualSoftkeysPerSoftkeyMask;
+	}
+
+	std::uint8_t VirtualTerminalClient::get_number_physical_softkeys() const
+	{
+		return numberPhysicalSoftkeys;
+	}
+
+	bool VirtualTerminalClient::get_font_size_supported(FontSize value) const
+	{
+		bool retVal = false;
+
+		switch (value)
+		{
+			case FontSize::Size6x8:
+			case FontSize::Size8x8:
+			case FontSize::Size8x12:
+			case FontSize::Size12x16:
+			case FontSize::Size16x16:
+			case FontSize::Size16x24:
+			case FontSize::Size24x32:
+			case FontSize::Size32x32:
+			{
+				retVal = (0 != (smallFontSizesBitfield & (1 << static_cast<std::uint8_t>(value))));
+			}
+			break;
+
+			case FontSize::Size32x48:
+			case FontSize::Size48x64:
+			case FontSize::Size64x64:
+			case FontSize::Size64x96:
+			case FontSize::Size96x128:
+			case FontSize::Size128x128:
+			case FontSize::Size128x192:
+			{
+				retVal = (0 != (largeFontSizesBitfield & (1 << (static_cast<std::uint8_t>(value) - static_cast<std::uint8_t>(FontSize::Size32x48) + 1))));
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::get_font_style_supported(FontStyleBits value) const
+	{
+		return (0 != (static_cast<std::uint8_t>(value) & fontStylesBitfield));
+	}
+
+	VirtualTerminalClient::GraphicMode VirtualTerminalClient::get_graphic_mode() const
+	{
+		return supportedGraphicsMode;
+	}
+
+	bool VirtualTerminalClient::get_support_touchscreen_with_pointing_message() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x01));
+	}
+
+	bool VirtualTerminalClient::get_support_pointing_device_with_pointing_message() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x02));
+	}
+
+	bool VirtualTerminalClient::get_multiple_frequency_audio_output() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x04));
+	}
+
+	bool VirtualTerminalClient::get_has_adjustable_volume_output() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x08));
+	}
+
+	bool VirtualTerminalClient::get_support_simultaneous_activation_physical_keys() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x10));
+	}
+
+	bool VirtualTerminalClient::get_support_simultaneous_activation_buttons_and_softkeys() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x20));
+	}
+
+	bool VirtualTerminalClient::get_support_drag_operation() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x40));
+	}
+
+	bool VirtualTerminalClient::get_support_intermediate_coordinates_during_drag_operations() const
+	{
+		return (0 != (hardwareFeaturesBitfield & 0x80));
+	}
+
+	std::uint16_t VirtualTerminalClient::get_number_x_pixels() const
+	{
+		return xPixels;
+	}
+
+	std::uint16_t VirtualTerminalClient::get_number_y_pixels() const
+	{
+		return yPixels;
+	}
+
 	VirtualTerminalClient::VTVersion VirtualTerminalClient::get_connected_vt_version() const
 	{
 		VTVersion retVal;
@@ -1122,6 +1313,84 @@ namespace isobus
 		return retVal;
 	}
 
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size)
+	{
+		if ((nullptr != pool) &&
+		    (0 != size))
+		{
+			ObjectPoolDataStruct tempData;
+
+			tempData.objectPoolDataPointer = pool;
+			tempData.objectPoolVectorPointer = nullptr;
+			tempData.dataCallback = nullptr;
+			tempData.objectPoolSize = size;
+			tempData.version = poolSupportedVTVersion;
+			tempData.useDataCallback = false;
+
+			if (poolIndex < objectPools.size())
+			{
+				objectPools[poolIndex] = tempData;
+			}
+			else
+			{
+				objectPools.resize(poolIndex + 1);
+				objectPools[poolIndex] = tempData;
+			}
+		}
+	}
+
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool)
+	{
+		if ((nullptr != pool) &&
+		    (0 != pool->size()))
+		{
+			ObjectPoolDataStruct tempData;
+
+			tempData.objectPoolDataPointer = nullptr;
+			tempData.objectPoolVectorPointer = pool;
+			tempData.dataCallback = nullptr;
+			tempData.objectPoolSize = pool->size();
+			tempData.version = poolSupportedVTVersion;
+			tempData.useDataCallback = false;
+
+			if (poolIndex < objectPools.size())
+			{
+				objectPools[poolIndex] = tempData;
+			}
+			else
+			{
+				objectPools.resize(poolIndex + 1);
+				objectPools[poolIndex] = tempData;
+			}
+		}
+	}
+
+	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value)
+	{
+		if ((nullptr != value) &&
+		    (0 != poolTotalSize))
+		{
+			ObjectPoolDataStruct tempData;
+
+			tempData.objectPoolDataPointer = nullptr;
+			tempData.objectPoolVectorPointer = nullptr;
+			tempData.dataCallback = value;
+			tempData.objectPoolSize = poolTotalSize;
+			tempData.version = poolSupportedVTVersion;
+			tempData.useDataCallback = true;
+
+			if (poolIndex < objectPools.size())
+			{
+				objectPools[poolIndex] = tempData;
+			}
+			else
+			{
+				objectPools.resize(poolIndex + 1);
+				objectPools[poolIndex] = tempData;
+			}
+		}
+	}
+
 	void VirtualTerminalClient::update()
 	{
 		if (nullptr != partnerControlFunction)
@@ -1130,6 +1399,7 @@ namespace isobus
 			{
 				case StateMachineState::Disconnected:
 				{
+					sendWorkingSetMaintenenace = false;
 					if (partnerControlFunction->get_address_valid())
 					{
 						set_state(StateMachineState::WaitForPartnerVTStatusMessage);
@@ -1155,6 +1425,14 @@ namespace isobus
 					{
 						set_state(StateMachineState::Disconnected);
 					}
+
+					if (0 != objectPools.size())
+					{
+						set_state(StateMachineState::SendGetMemory);
+						send_working_set_maintenance(true, objectPools[0].version);
+						lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
+						sendWorkingSetMaintenenace = true;
+					}
 				}
 				break;
 
@@ -1169,7 +1447,11 @@ namespace isobus
 
 				case StateMachineState::WaitForGetMemoryResponse:
 				{
-
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("VT Get Memory Response Timout");
+					}
 				}
 				break;
 
@@ -1184,7 +1466,11 @@ namespace isobus
 
 				case StateMachineState::WaitForGetNumberSoftKeysResponse:
 				{
-
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("VT Get Number Softkeys Response Timout");
+					}
 				}
 				break;
 
@@ -1199,7 +1485,11 @@ namespace isobus
 
 				case StateMachineState::WaitForGetTextFontDataResponse:
 				{
-
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("VT Get Text Font Data Response Timout");
+					}
 				}
 				break;
 
@@ -1214,7 +1504,11 @@ namespace isobus
 
 				case StateMachineState::WaitForGetHardwareResponse:
 				{
-
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("VT Get Hardware Response Timout");
+					}
 				}
 				break;
 
@@ -1235,7 +1529,11 @@ namespace isobus
 
 				case StateMachineState::WaitForEndOfObjectPoolResponse:
 				{
-
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("VT Get End of Object Pool Response Timout");
+					}
 				}
 				break;
 
@@ -1245,7 +1543,15 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Disconnected);
+						CANStackLogger::CAN_stack_log("VT Status Timout");
 					}
+				}
+				break;
+
+				case StateMachineState::Failed:
+				{
+					sendWorkingSetMaintenenace = false;
+					CANStackLogger::CAN_stack_log("VT Connection Failed");
 				}
 				break;
 
@@ -1260,6 +1566,13 @@ namespace isobus
 		{
 			set_state(StateMachineState::Disconnected);
 		}
+
+		if ((sendWorkingSetMaintenenace) &&
+			(SystemTiming::time_expired_ms(lastWorkingSetMaintenanceTimestamp_ms, WORKING_SET_MAINTENANCE_TIMEOUT_MS)))
+		{
+			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
+		}
+		txFlags.process_all_flags();
 	}
 
 	bool VirtualTerminalClient::send_delete_object_pool()
@@ -1651,6 +1964,40 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalClient::process_flags(std::uint32_t flag, void *parent)
+	{
+		if ((flag <= static_cast<std::uint32_t>(TransmitFlags::NumberFlags)) &&
+		    (nullptr != parent))
+		{
+			TransmitFlags flagToProcess = static_cast<TransmitFlags>(flag);
+			VirtualTerminalClient *vtClient = reinterpret_cast<VirtualTerminalClient *>(parent);
+			bool transmitSuccessful = false;
+
+			switch (flagToProcess)
+			{
+				case TransmitFlags::SendWorkingSetMaintenance:
+				{
+					if (vtClient->objectPools.size() > 0)
+					{
+						transmitSuccessful = vtClient->send_working_set_maintenance(false, vtClient->objectPools[0].version);
+					}
+				}
+				break;
+
+				case TransmitFlags::NumberFlags:
+				default:
+				{
+				}
+				break;
+			}
+
+			if (false == transmitSuccessful)
+			{
+				vtClient->txFlags.set_flag(flag);
+			}
+		}
+	}
+
 	void VirtualTerminalClient::process_rx_message(CANMessage *message, void *parentPointer)
 	{
 		if ((nullptr != message) && 
@@ -1719,14 +2066,14 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::SelectInputObjectCommand):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(message->get_data().at(1)) & 
-								((static_cast<std::uint16_t>(message->get_data().at(2))) << 8));
-							bool objectSelected = (0x01 == message->get_data().at(3));
+							std::uint16_t objectID = (static_cast<std::uint16_t>(message->get_data()[1]) & 
+								((static_cast<std::uint16_t>(message->get_data()[2])) << 8));
+							bool objectSelected = (0x01 == message->get_data()[3]);
 							bool objectOpenForInput = false;
 
 							if (parentVT->get_connected_vt_version() >= VTVersion::Version4)
 							{
-								objectOpenForInput = (0x01 == (message->get_data().at(4) & 0x01));
+								objectOpenForInput = (0x01 == (message->get_data()[4] & 0x01));
 							}
 
 							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
@@ -1737,18 +2084,98 @@ namespace isobus
 						}
 						break;
 
+						case static_cast<std::uint8_t>(Function::VTStatusMessage):
+						{
+							parentVT->lastVTStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
+							parentVT->activeWorkingSetMasterAddress = message->get_data()[1];
+							parentVT->activeWorkingSetDataMaskObjectID = (static_cast<std::uint16_t>(message->get_data()[2]) &
+							                                              ((static_cast<std::uint16_t>(message->get_data()[3])) << 8));
+							parentVT->activeWorkingSetSoftkeyMaskObjectID = (static_cast<std::uint16_t>(message->get_data()[4]) &
+							                                                 ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
+							parentVT->busyCodesBitfield = message->get_data()[6];
+							parentVT->currentCommandFunctionCode = message->get_data()[7];
+
+							if (StateMachineState::WaitForPartnerVTStatusMessage == parentVT->state)
+							{
+								parentVT->set_state(StateMachineState::ReadyForObjectPool);
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::GetMemoryMessage):
+						{
+							if (StateMachineState::WaitForGetMemoryResponse == parentVT->state)
+							{
+								parentVT->connectedVTVersion = message->get_data()[1];
+
+								if (0 == message->get_data()[2])
+								{
+									// There IS enough memory
+									parentVT->set_state(StateMachineState::SendGetNumberSoftkeys);
+								}
+								else
+								{
+									parentVT->set_state(StateMachineState::Failed);
+								}
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::GetNumberOfSoftKeysMessage):
+						{
+							if (StateMachineState::WaitForGetNumberSoftKeysResponse == parentVT->state)
+							{
+								parentVT->softKeyXAxisPixels = message->get_data()[4];
+								parentVT->softKeyYAxisPixels = message->get_data()[5];
+								parentVT->numberVirtualSoftkeysPerSoftkeyMask = message->get_data()[6];
+								parentVT->numberPhysicalSoftkeys = message->get_data()[7];
+								parentVT->set_state(StateMachineState::SendGetTextFontData);
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::GetTextFontDataMessage):
+						{
+							if (StateMachineState::WaitForGetTextFontDataResponse == parentVT->state)
+							{
+								parentVT->smallFontSizesBitfield = message->get_data()[5];
+								parentVT->largeFontSizesBitfield = message->get_data()[6];
+								parentVT->fontStylesBitfield = message->get_data()[7];
+								parentVT->set_state(StateMachineState::SendGetHardware);
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::GetHardwareMessage):
+						{
+							if (StateMachineState::WaitForGetHardwareResponse == parentVT->state)
+							{
+								if (message->get_data()[2] <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColor))
+								{
+									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(message->get_data()[2]);
+								}
+								parentVT->hardwareFeaturesBitfield = message->get_data()[3];
+								parentVT->xPixels = (static_cast<std::uint16_t>(message->get_data()[4]) &
+								                     ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
+								parentVT->yPixels = (static_cast<std::uint16_t>(message->get_data()[6]) &
+								                     ((static_cast<std::uint16_t>(message->get_data()[7])) << 8));
+								parentVT->set_state(StateMachineState::UploadObjectPool);
+							}
+						}
+						break;
+
 						case static_cast <std::uint8_t>(Function::EndOfObjectPoolMessage):
 						{
 							if (StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state)
 							{
-								bool anyErrorInPool =  (0 != (message->get_data().at(1) & 0x01));
-								bool vtRanOutOfMemory = (0 != (message->get_data().at(1) & 0x02));
-								bool otherErrors = (0 != (message->get_data().at(1) & 0x08));
-								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data().at(2)) &
-								                                        ((static_cast<std::uint16_t>(message->get_data().at(3))) << 8));
-								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data().at(4)) &
-								                                              ((static_cast<std::uint16_t>(message->get_data().at(5))) << 8));
-								std::uint8_t objectPoolErrorBitmask = message->get_data().at(6);
+								bool anyErrorInPool =  (0 != (message->get_data()[1] & 0x01));
+								bool vtRanOutOfMemory = (0 != (message->get_data()[1] & 0x02));
+								bool otherErrors = (0 != (message->get_data()[1] & 0x08));
+								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data()[2]) &
+								                                              ((static_cast<std::uint16_t>(message->get_data()[3])) << 8));
+								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data()[4]) &
+								                                        ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
+								std::uint8_t objectPoolErrorBitmask = message->get_data()[6];
 
 								if ((!anyErrorInPool) &&
 									(0 == objectPoolErrorBitmask))
@@ -1791,6 +2218,19 @@ namespace isobus
 		else
 		{
 			CANStackLogger::CAN_stack_log("VT-ECU Client message invalid");
+		}
+	}
+
+	void VirtualTerminalClient::worker_thread_function()
+	{
+		for (;;)
+		{
+			if (shouldTerminate)
+			{
+				break;
+			}
+			update();
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		}
 	}
 
