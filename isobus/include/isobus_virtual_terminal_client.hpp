@@ -11,9 +11,11 @@
 
 #include "can_partnered_control_function.hpp"
 #include "can_internal_control_function.hpp"
+#include "processing_flags.hpp"
 
 #include <memory>
 #include <vector>
+#include <thread>
 
 namespace isobus
 {
@@ -49,13 +51,13 @@ namespace isobus
 			ReservedOrUnknown,
 		};
 
-		enum class LineDirection
+		enum class LineDirection : std::uint8_t
 		{
 			TopLeftToBottomRightOfEnclosingVirtualRectangle = 0,
 			BottomLeftToTopRightOfEnclosingVirtualRectangle = 1
 		};
 
-		enum class FontSize
+		enum class FontSize : std::uint8_t
 		{
 			Size6x8 = 0,
 			Size8x8 = 1,
@@ -63,9 +65,9 @@ namespace isobus
 			Size12x16 = 3,
 			Size16x16 = 4,
 			Size16x24 = 5,
-			Size24x24 = 6,
-			Size24x32 = 7,
-			Size32x32 = 8,
+			Size24x32 = 6,
+			Size32x32 = 7,
+			Size32x48 = 8,
 			Size48x64 = 9,
 			Size64x64 = 10,
 			Size64x96 = 11,
@@ -74,7 +76,7 @@ namespace isobus
 			Size128x192 = 14
 		};
 
-		enum class FontStyleBits
+		enum class FontStyleBits : std::uint8_t
 		{
 			Bold = 0,
 			CrossedOut = 1,
@@ -86,7 +88,7 @@ namespace isobus
 			ProportionalFontRendering = 7
 		};
 
-		enum class FontType
+		enum class FontType : std::uint8_t
 		{
 			ISO8859_1 = 0, // ISO Latin 1
 			ISO8859_15 = 1, // ISO Latin 9
@@ -101,7 +103,7 @@ namespace isobus
 			ProprietaryEnd = 255
 		};
 
-		enum class FillType
+		enum class FillType : std::uint8_t
 		{
 			NoFill = 0,
 			FillWithLineColor = 1,
@@ -109,26 +111,26 @@ namespace isobus
 			FillWithPatternGivenByFillPatternAttribute = 3
 		};
 
-		enum class MaskType
+		enum class MaskType : std::uint8_t
 		{
 			DataMask = 1,
 			AlarmMask = 2
 		};
 
-		enum class AlarmMaskPriority
+		enum class AlarmMaskPriority : std::uint8_t
 		{
 			High = 0,
 			Medium = 1,
 			Low = 2
 		};
 
-		enum class MaskLockState
+		enum class MaskLockState : std::uint8_t
 		{
 			UnlockMask = 0,
 			LockMask = 1
 		};
 
-		enum class KeyActivationCode
+		enum class KeyActivationCode : std::uint8_t
 		{
 			ButtonUnlatchedOrReleased = 0,
 			ButtonPressedOrLatched = 1,
@@ -136,7 +138,7 @@ namespace isobus
 			ButtonPressAborted = 3
 		};
 
-		enum class StateMachineState
+		enum class StateMachineState : std::uint8_t
 		{
 			Disconnected,
 			WaitForPartnerVTStatusMessage,
@@ -192,9 +194,24 @@ namespace isobus
 			UseExtendedMacroReference = 255
 		};
 
+		enum class GraphicMode : std::uint8_t
+		{
+			Monochrome = 0,
+			SixteenColour = 1,
+			TwoHundredFiftySixColor = 2
+		};
+
 		static const std::uint16_t NULL_OBJECT_ID = 0xFFFF;
 
 		explicit VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource);
+		~VirtualTerminalClient();
+
+		// Setup
+		void initialize(bool spawnThread);
+		bool get_is_initialized();
+
+		// Calling this will stop the worker thread if it exists
+		void terminate();
 
 		// Basic Interaction
 		typedef void (*VTKeyEventCallback)(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
@@ -272,6 +289,29 @@ namespace isobus
 		// VT Querying
 		bool send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID);
 
+		// Get Softkeys Response
+		std::uint8_t get_softkey_x_axis_pixels() const;
+		std::uint8_t get_softkey_y_axis_pixels() const;
+		std::uint8_t get_number_virtual_softkeys() const;
+		std::uint8_t get_number_physical_softkeys() const;
+
+		// Get Text Font Data Response
+		bool get_font_size_supported(FontSize value) const;
+		bool get_font_style_supported(FontStyleBits value) const;
+
+		// Get Hardware Response
+		GraphicMode get_graphic_mode() const;
+		bool get_support_touchscreen_with_pointing_message() const;
+		bool get_support_pointing_device_with_pointing_message() const;
+		bool get_multiple_frequency_audio_output() const;
+		bool get_has_adjustable_volume_output() const;
+		bool get_support_simultaneous_activation_physical_keys() const;
+		bool get_support_simultaneous_activation_buttons_and_softkeys() const;
+		bool get_support_drag_operation() const;
+		bool get_support_intermediate_coordinates_during_drag_operations() const;
+		std::uint16_t get_number_x_pixels() const; // Specific to data mask area
+		std::uint16_t get_number_y_pixels() const; // Specific to data mask area
+
 		VTVersion get_connected_vt_version() const;
 
 		// Object Pool
@@ -284,15 +324,18 @@ namespace isobus
 		// This is probably better for huge pools if you are RAM constrained, or if your
 		// pool is stored on some external device that you need to get data from in pages.
 		// If using callbacks, The object pool and pointer MUST NOT be deleted or leave scope until upload is done.
-		void set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size);
-		void set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool);
-		void register_object_pool_data_chunk_callback(DataChunkCallback value);
+		// Version must be the same for all pools uploaded to this VT server!!!
+		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size);
+		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool);
+		void register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value);
 
 		// Periodic Update Function (thread should call this)
+		// This class can spawn a thread, or you can supply your own.
+		// To configure that behavior, see the initialize function.
 		void update();
 
 	private:
-		enum class Function
+		enum class Function : std::uint8_t
 		{
 			SoftKeyActivationMessage = 0x00,
 			ButtonActivationMessage = 0x01,
@@ -369,7 +412,7 @@ namespace isobus
 			WorkingSetMaintenanceMessage = 0xFF
 		};
 
-		enum class GraphicsContextSubCommandID
+		enum class GraphicsContextSubCommandID : std::uint8_t
 		{
 			SetGraphicsCursor = 0x00,
 			MoveGraphicsCursor = 0x01,
@@ -392,6 +435,23 @@ namespace isobus
 			DrawVTObject = 0x12,
 			CopyCanvasToPictureGraphic = 0x13,
 			CopyViewportToPictureGraphic = 0x14
+		};
+
+		enum class TransmitFlags : std::uint32_t
+		{
+			SendWorkingSetMaintenance = 0,
+
+			NumberFlags
+		};
+
+		struct ObjectPoolDataStruct
+		{
+			const std::uint8_t *objectPoolDataPointer;
+			const std::vector<std::uint8_t> *objectPoolVectorPointer;
+			DataChunkCallback dataCallback;
+			std::uint32_t objectPoolSize;
+			VTVersion version; // Must be the same for all pools!
+			bool useDataCallback;
 		};
 
 		// Object Pool Managment
@@ -420,12 +480,18 @@ namespace isobus
 		void process_pointing_event_callback(KeyActivationCode signal, std::uint16_t xPosition, std::uint16_t yPosition, VirtualTerminalClient *parentPointer);
 		void process_select_input_object_callback(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer);
 
+		static void process_flags(std::uint32_t flag, void *parent);
 		static void process_rx_message(CANMessage *message, void *parentPointer);
 
+		void worker_thread_function();
+
 		static const std::uint32_t VT_STATUS_TIMEOUT_MS = 3000;
+		static const std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000;
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
+
+		ProcessingFlags txFlags;
 
 		// Status message contents from the VT
 		std::uint32_t lastVTStatusTimestamp_ms;
@@ -436,13 +502,37 @@ namespace isobus
 		std::uint8_t currentCommandFunctionCode;
 
 		std::uint8_t connectedVTVersion;
+
+		// Softkey capabilities
+		std::uint8_t softKeyXAxisPixels;
+		std::uint8_t softKeyYAxisPixels;
+		std::uint8_t numberVirtualSoftkeysPerSoftkeyMask;
+		std::uint8_t numberPhysicalSoftkeys;
+
+		// Text Font Capabilities
+		std::uint8_t smallFontSizesBitfield;
+		std::uint8_t largeFontSizesBitfield;
+		std::uint8_t fontStylesBitfield;
+
+		// Hardware Capabilities
+		GraphicMode supportedGraphicsMode;
+		std::uint16_t xPixels;
+		std::uint16_t yPixels;
+		std::uint8_t hardwareFeaturesBitfield;
+
 		// Internal state
 		StateMachineState state;
 		std::uint32_t stateMachineTimestamp_ms;
+		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms;
 		std::vector<VTKeyEventCallback> buttonEventCallbacks;
 		std::vector<VTKeyEventCallback> softKeyEventCallbacks;
 		std::vector<VTPointingEventCallback> pointingEventCallbacks;
 		std::vector<VTSelectInputObjectCallback> selectInputObjectCallbacks;
+		std::vector<ObjectPoolDataStruct> objectPools;
+		std::thread *workerThread;
+		bool initialized;
+		bool sendWorkingSetMaintenenace;
+		bool shouldTerminate;
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback;
