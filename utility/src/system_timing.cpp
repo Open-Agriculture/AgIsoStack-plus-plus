@@ -1,3 +1,12 @@
+//================================================================================================
+/// @file system_timing.cpp
+///
+/// @brief Utility class for getting system time and handling u32 time rollover
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
+
 #include "system_timing.hpp"
 
 #include <chrono>
