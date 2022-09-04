@@ -26,8 +26,8 @@ namespace isobus
 	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
 	  timestamp_ms(0),
-	  packetCount(0),
 	  lastPacketNumber(0),
+	  packetCount(0),
 	  sessionDirection(sessionDirection)
 	{
 	}
@@ -173,7 +173,7 @@ namespace isobus
 									const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 									const std::uint8_t packetsToBeSent = data[1];
 
-									if (get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn))
+									if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
 									{
 										if (StateMachineState::WaitForClearToSend == session->state)
 										{
@@ -220,7 +220,7 @@ namespace isobus
 									auto data = message->get_data();
 									const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 									
-									if (get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn))
+									if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
 									{
 										if (StateMachineState::WaitForEndOfMessageAcknowledge == session->state)
 										{
@@ -325,22 +325,45 @@ namespace isobus
         }
     }
 
-	bool TransportProtocolManager::protocol_transmit_message(std::uint32_t ,
-		                               std::uint8_t *,
+	bool TransportProtocolManager::protocol_transmit_message(std::uint32_t parameterGroupNumber,
+		                               const std::uint8_t *dataBuffer,
 		                               std::uint32_t messageLength,
 		                               ControlFunction *source,
 		                               ControlFunction *destination)
 	{
+		TransportProtocolSession *session;
 		bool retVal = false;
 
 		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
 			(messageLength > 8) &&
+			(nullptr != dataBuffer) &&
 			(nullptr != source) &&
 			(true == source->get_address_valid()) &&
 			((nullptr == destination) || 
-			 (destination->get_address_valid())))
+			 (destination->get_address_valid())) &&
+			 (!get_session(session, source, destination, parameterGroupNumber)))
 		{
-			
+			TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Transmit,
+			                                                                    source->get_can_port());
+			newSession->sessionMessage.set_data(dataBuffer, messageLength);
+			newSession->sessionMessage.set_source_control_function(source);
+			newSession->sessionMessage.set_destination_control_function(destination);
+			newSession->packetCount = (messageLength / PROTOCOL_BYTES_PER_FRAME);
+			newSession->lastPacketNumber = 0;
+			if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
+			{
+				newSession->packetCount++;
+			}
+			CANIdentifier messageVirtualID(CANIdentifier::Type::Extended,
+			              parameterGroupNumber,
+			              CANIdentifier::CANPriority::PriorityDefault6,
+			              destination->get_address(),
+			              source->get_address());
+
+			newSession->sessionMessage.set_identifier(messageVirtualID);
+			set_state(newSession, StateMachineState::RequestToSend);
+			activeSessions.push_back(newSession);
+			CANStackLogger::CAN_stack_log("TP: New CM Tx Session. Dest: " + std::to_string(static_cast<int>(destination->get_address())));
 		}
 		return retVal;
 	}
@@ -427,6 +450,30 @@ namespace isobus
 		}
 	}
 
+	bool TransportProtocolManager::send_request_to_send(TransportProtocolSession *session)
+	{
+		bool retVal = false;
+
+		if (nullptr != session)
+		{
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { REQUEST_TO_SEND_MULTIPLEXOR,
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
+				                                                 session->packetCount,
+				                                                 0xFF,
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
+			                                                        dataBuffer,
+			                                                        CAN_DATA_LENGTH,
+			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                                        session->sessionMessage.get_destination_control_function(),
+			                                                        CANIdentifier::CANPriority::PriorityLowest7);
+		}
+		return retVal;
+	}
+
 	bool TransportProtocolManager::send_end_of_session_acknowledgement(TransportProtocolSession *session)
 	{
 		bool retVal = false;
@@ -462,6 +509,15 @@ namespace isobus
 			CANStackLogger::CAN_stack_log("TP: Attempted to send EOM to null session");
 		}
 		return retVal;
+	}
+
+	void TransportProtocolManager::set_state(TransportProtocolSession *session, StateMachineState value)
+	{
+		if (nullptr != session)
+		{
+			session->timestamp_ms = SystemTiming::get_timestamp_ms();
+			session->state = value;
+		}
 	}
 
 	bool TransportProtocolManager::get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination)
@@ -518,7 +574,54 @@ namespace isobus
 				}
 				break;
 
+				case StateMachineState::RequestToSend:
+				{
+					if (send_request_to_send(session))
+					{
+						set_state(session, StateMachineState::WaitForClearToSend);
+					}
+				}
+				break;
+
 				case StateMachineState::TxDataSession:
+				{
+					if (nullptr != session->sessionMessage.get_destination_control_function())
+					{
+						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
+						// Try and send packets
+						for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
+						{
+							dataBuffer[0] = session->lastPacketNumber + 1;
+							
+							for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
+							{
+								dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->lastPacketNumber)];
+							}
+							if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData),
+							                                                   dataBuffer,
+							                                                   CAN_DATA_LENGTH,
+							                                                   reinterpret_cast<InternalControlFunction*>(session->sessionMessage.get_source_control_function()),
+							                                                   session->sessionMessage.get_destination_control_function(),
+							                                                   CANIdentifier::CANPriority::PriorityLowest7))
+							{
+								session->lastPacketNumber++;
+								session->timestamp_ms = SystemTiming::get_timestamp_ms();
+							}
+							else
+							{
+								// Process more next time protocol is updated
+								break;
+							}
+						}
+
+						if (session->lastPacketNumber == (session->packetCount))
+						{
+							set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
+						}
+					}
+				}
+				break;
+
 				case StateMachineState::RxDataSession:
 				{
 					if (nullptr == session->sessionMessage.get_destination_control_function())
@@ -526,8 +629,7 @@ namespace isobus
 						// BAM Timeout check
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
 						{
-							CANStackLogger::CAN_stack_log("TP: Timeout");
-							abort_session(session, ConnectionAbortReason::Timeout);
+							CANStackLogger::CAN_stack_log("TP: BAM Rx Timeout");
 							close_session(session);
 						}
 					}
@@ -536,7 +638,7 @@ namespace isobus
 						// CM TP Timeout check
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, MESSAGE_TR_TIMEOUT_MS))
 						{
-							CANStackLogger::CAN_stack_log("TP: Timeout");
+							CANStackLogger::CAN_stack_log("TP: CM Rx Timeout");
 							abort_session(session, ConnectionAbortReason::Timeout);
 							close_session(session);
 						}

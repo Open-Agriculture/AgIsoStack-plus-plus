@@ -84,16 +84,44 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if ((nullptr != dataBuffer) && (dataLength > 0) && (dataLength <= CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH) && (nullptr != sourceControlFunction) && ((parameterGroupNumber == static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim)) || (sourceControlFunction->get_address_valid())))
+		if ((nullptr != dataBuffer) && 
+		(dataLength > 0) && 
+		(dataLength <= CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH) && 
+		(nullptr != sourceControlFunction) && 
+		((parameterGroupNumber == static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim)) || 
+		(sourceControlFunction->get_address_valid())))
 		{
-			if (nullptr == destinationControlFunction)
+			CANLibProtocol *currentProtocol;
+
+			// See if any transport layer protocol can handle this message
+			for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 			{
-				// Todo move binding of dest address to hardware layer
-				retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), 0xFF, parameterGroupNumber, priority, dataBuffer, dataLength);
+				if (CANLibProtocol::get_protocol(i, currentProtocol))
+				{
+					retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
+					dataBuffer, 
+					dataLength, 
+					sourceControlFunction, 
+					destinationControlFunction);
+
+					if (retVal)
+					{
+						break;
+					}
+				}
 			}
-			else if (destinationControlFunction->get_address_valid())
+
+			if (!retVal)
 			{
-				retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, priority, dataBuffer, dataLength);
+				if (nullptr == destinationControlFunction)
+				{
+					// Todo move binding of dest address to hardware layer
+					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), 0xFF, parameterGroupNumber, priority, dataBuffer, dataLength);
+				}
+				else if (destinationControlFunction->get_address_valid())
+				{
+					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, priority, dataBuffer, dataLength);
+				}
 			}
 		}
 		return retVal;
@@ -155,7 +183,14 @@ namespace isobus
 		}
 	}
 
-	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size, CANLibBadge<AddressClaimStateMachine>)
+	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex,
+	                                             std::uint8_t sourceAddress,
+	                                             std::uint8_t destAddress,
+	                                             std::uint32_t parameterGroupNumber,
+	                                             std::uint8_t priority,
+	                                             const void *data,
+	                                             std::uint32_t size,
+	                                             CANLibBadge<AddressClaimStateMachine>)
 	{
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 	}

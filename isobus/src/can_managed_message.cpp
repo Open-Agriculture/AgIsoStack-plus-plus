@@ -17,7 +17,7 @@ namespace isobus
 	{
 	}
 
-	void CANLibManagedMessage::set_data(std::uint8_t *dataBuffer, std::uint32_t length)
+	void CANLibManagedMessage::set_data(const std::uint8_t *dataBuffer, std::uint32_t length)
 	{
 		if (nullptr != dataBuffer)
 		{

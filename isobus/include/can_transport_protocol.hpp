@@ -27,6 +27,7 @@ class TransportProtocolManager : public CANLibProtocol
         None,
         ClearToSend,
         RxDataSession,
+        RequestToSend,
         WaitForClearToSend,
         TxDataSession,
         WaitForEndOfMessageAcknowledge
@@ -52,8 +53,8 @@ class TransportProtocolManager : public CANLibProtocol
         StateMachineState state;
         CANLibManagedMessage sessionMessage;
         std::uint32_t timestamp_ms;
-        std::uint16_t packetCount;
         std::uint16_t lastPacketNumber;
+        std::uint8_t packetCount;
         const Direction sessionDirection;
     };
 
@@ -83,6 +84,7 @@ class TransportProtocolManager : public CANLibProtocol
     static constexpr std::uint32_t T4_TIMEOUT_MS = 1050;
     static constexpr std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0;
     static constexpr std::uint8_t MESSAGE_TR_TIMEOUT_MS = 200;
+    static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7;
 
     TransportProtocolManager();
     virtual ~TransportProtocolManager();
@@ -95,7 +97,7 @@ class TransportProtocolManager : public CANLibProtocol
     static void process_message(CANMessage *const message, void *parent);
 
     bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
-		                               std::uint8_t *data,
+		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
 		                               ControlFunction *source,
 		                               ControlFunction *destination) override;
@@ -106,7 +108,9 @@ private:
     bool abort_session(TransportProtocolSession *session, ConnectionAbortReason reason);
     bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, InternalControlFunction *source, ControlFunction *destination);
     void close_session(TransportProtocolSession *session);
+    bool send_request_to_send(TransportProtocolSession *session);
     bool send_end_of_session_acknowledgement(TransportProtocolSession *session);
+    void set_state(TransportProtocolSession *session, StateMachineState value);
     bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination);
     bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber);
     void update_state_machine(TransportProtocolSession *session);
