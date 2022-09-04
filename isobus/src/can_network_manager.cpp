@@ -252,6 +252,7 @@ namespace isobus
 			{
 				// Someone is at that spot in the table, but their address was stolen
 				// Need to evict them from the table
+				controlFunctionTable[CANPort][messageSourceAddress]->address = NULL_CAN_ADDRESS;
 				controlFunctionTable[CANPort][messageSourceAddress] = nullptr;
 			}
 
@@ -265,6 +266,7 @@ namespace isobus
 					{
 						// ECU has claimed since the last update, add it to the table
 						controlFunctionTable[CANPort][messageSourceAddress] = currentControlFunction;
+						currentControlFunction->address = messageSourceAddress;
 						break;
 					}
 				}
@@ -280,15 +282,14 @@ namespace isobus
 			std::uint64_t claimedNAME;
 			ControlFunction *foundControlFunction = nullptr;
 
-			// TODO: Endianness?
 			claimedNAME = rxFrame.data[0];
-			claimedNAME |= (8 << rxFrame.data[1]);
-			claimedNAME |= (16 << rxFrame.data[2]);
-			claimedNAME |= (24 << rxFrame.data[3]);
-			claimedNAME |= (32 << rxFrame.data[4]);
-			claimedNAME |= (40 << rxFrame.data[5]);
-			claimedNAME |= (48 << rxFrame.data[6]);
-			claimedNAME |= (56 << rxFrame.data[7]);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[1]) << 8);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[2]) << 16);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[3]) << 24);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[4]) << 32);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[5]) << 40);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[6]) << 48);
+			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[7]) << 56);
 
 			for (std::uint32_t i = 0; i < activeControlFunctions.size(); i++)
 			{
@@ -322,11 +323,27 @@ namespace isobus
 
 			if (nullptr == foundControlFunction)
 			{
-				// New device, need to start keeping track of it
-				activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
-				CANStackLogger::CAN_stack_log("NM: New Control function " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+				// If we still haven't found it, it might be a partner. Check the list of partners.
+				for (auto partner : PartneredControlFunction::partneredControlFunctionList)
+				{
+					if (partner->check_matches_name(NAME(claimedNAME)))
+					{
+						activeControlFunctions.push_back(partner);
+						foundControlFunction = partner;
+						CANStackLogger::CAN_stack_log("NM: A Partner Has Claimed " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+						break;
+					}
+				}
+
+				if (nullptr == foundControlFunction)
+				{
+					// New device, need to start keeping track of it
+					activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
+					CANStackLogger::CAN_stack_log("NM: New Control function " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+				}
 			}
-			else
+
+			if (nullptr != foundControlFunction)
 			{
 				foundControlFunction->address = CANIdentifier(rxFrame.identifier).get_source_address();
 			}
