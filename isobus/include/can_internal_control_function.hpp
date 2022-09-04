@@ -13,12 +13,13 @@
 
 #include "can_control_function.hpp"
 #include "can_address_claim_state_machine.hpp"
+#include "can_badge.hpp"
 
 #include <list>
 
 namespace isobus
 {
-    
+class CANNetworkManager; 
 class InternalControlFunction : public ControlFunction
 {
 public:
@@ -28,12 +29,21 @@ public:
     static InternalControlFunction *get_internal_control_function(std::uint32_t index);
     static std::uint32_t get_number_internal_control_functions();
 
-    static void update_address_claiming();
-    void update();
+    // These tell the network manager when the address table needs to be explicitly
+    // updated for an internal control function claiming a new address.
+    // Other CF types are handled in Rx message processing.
+    static bool get_any_internal_control_function_changed_address(CANLibBadge<CANNetworkManager>);
+    bool get_changed_address_since_last_update(CANLibBadge<CANNetworkManager>) const;
+
+    static void update_address_claiming(CANLibBadge<CANNetworkManager>);
 
 private:
+    void update();
+
     static std::list<InternalControlFunction*> internalControlFunctionList;
+    static bool anyChangedAddress;
     AddressClaimStateMachine stateMachine;
+    bool objectChangedAddressSinceLastUpdate;
 };
 
 } // namespace isobus
