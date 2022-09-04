@@ -16,10 +16,12 @@
 namespace isobus
 {
 	std::list<InternalControlFunction *> InternalControlFunction::internalControlFunctionList;
+	bool InternalControlFunction::anyChangedAddress = false;
 
 	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort) :
 	  ControlFunction(desiredName, NULL_CAN_ADDRESS, CANPort),
-	  stateMachine(preferredAddress, desiredName, CANPort)
+	  stateMachine(preferredAddress, desiredName, CANPort),
+	  objectChangedAddressSinceLastUpdate(false)
 	{
 		internalControlFunctionList.push_back(this);
 	}
@@ -49,8 +51,20 @@ namespace isobus
 		return internalControlFunctionList.size();
 	}
 
-	void InternalControlFunction::update_address_claiming()
+	bool InternalControlFunction::get_any_internal_control_function_changed_address(CANLibBadge<CANNetworkManager>)
 	{
+		return anyChangedAddress;
+	}
+
+	bool InternalControlFunction::get_changed_address_since_last_update(CANLibBadge<CANNetworkManager>) const
+	{
+		return objectChangedAddressSinceLastUpdate;
+	}
+
+	void InternalControlFunction::update_address_claiming(CANLibBadge<CANNetworkManager>)
+	{
+		anyChangedAddress = false;
+
 		for (auto currentControlFunction : internalControlFunctionList)
 		{
 			if (nullptr != currentControlFunction)
@@ -62,8 +76,16 @@ namespace isobus
 
 	void InternalControlFunction::update()
 	{
+		std::uint8_t previousAddress = address;
+		objectChangedAddressSinceLastUpdate = false;
 		stateMachine.update();
 		address = stateMachine.get_claimed_address();
+
+		if (previousAddress != address)
+		{
+			anyChangedAddress = true;
+			objectChangedAddressSinceLastUpdate = true;
+		}
 	}
 
 } // namespace isobus

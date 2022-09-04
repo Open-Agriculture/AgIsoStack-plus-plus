@@ -82,6 +82,7 @@ private:
     };
 
     void update_address_table(CANMessage &message);
+    void update_address_table(std::uint8_t CANPort, std::uint8_t claimedAddress);
     void update_control_functions(HardwareInterfaceCANFrame &rxFrame);
 
     HardwareInterfaceCANFrame construct_frame(std::uint32_t portIndex,

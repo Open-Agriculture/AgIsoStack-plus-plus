@@ -120,7 +120,25 @@ namespace isobus
 
 		process_rx_messages();
 
-		InternalControlFunction::update_address_claiming();
+		InternalControlFunction::update_address_claiming({});
+
+		if (InternalControlFunction::get_any_internal_control_function_changed_address({}))
+		{
+			for (std::uint32_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
+			{
+				InternalControlFunction *currentInternalControlFunction = InternalControlFunction::get_internal_control_function(i);
+
+				if (activeControlFunctions.end() == std::find(activeControlFunctions.begin(), activeControlFunctions.end(), currentInternalControlFunction))
+				{
+					activeControlFunctions.push_back(currentInternalControlFunction);
+				}
+				if ((nullptr != currentInternalControlFunction) &&
+					(currentInternalControlFunction->get_changed_address_since_last_update({})))
+				{
+					update_address_table(currentInternalControlFunction->get_can_port(), currentInternalControlFunction->get_address());
+				}
+			}
+		}
 
 		for (uint32_t i = 0; i <  CANLibProtocol::get_number_protocols(); i++)
 		{
@@ -267,6 +285,37 @@ namespace isobus
 						// ECU has claimed since the last update, add it to the table
 						controlFunctionTable[CANPort][messageSourceAddress] = currentControlFunction;
 						currentControlFunction->address = messageSourceAddress;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	void CANNetworkManager::update_address_table(std::uint8_t CANPort, std::uint8_t claimedAddress)
+	{
+		if (CANPort < CAN_PORT_MAXIMUM)
+		{
+			if ((nullptr != controlFunctionTable[CANPort][claimedAddress]) &&
+				(CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][claimedAddress]->get_address()))
+			{
+				// Someone is at that spot in the table, but their address was stolen
+				// Need to evict them from the table
+				controlFunctionTable[CANPort][claimedAddress]->address = NULL_CAN_ADDRESS;
+				controlFunctionTable[CANPort][claimedAddress] = nullptr;
+			}
+
+			// Now, check for either a free spot in the table or recent eviction and populate if needed
+			if (nullptr == controlFunctionTable[CANPort][claimedAddress])
+			{
+				// Look through active CFs, maybe we've heard of this ECU before
+				for (auto currentControlFunction : activeControlFunctions)
+				{
+					if (currentControlFunction->get_address() == claimedAddress)
+					{
+						// ECU has claimed since the last update, add it to the table
+						controlFunctionTable[CANPort][claimedAddress] = currentControlFunction;
+						currentControlFunction->address = claimedAddress;
 						break;
 					}
 				}
