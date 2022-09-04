@@ -24,6 +24,7 @@ namespace isobus
 	  m_timestamp_ms(0),
 	  m_portIndex(portIndex),
 	  m_preferredAddress(preferredAddressValue),
+	  m_claimedAddress(NULL_CAN_ADDRESS),
 	  m_enabled(true)
 	{
 		assert(m_preferredAddress != BROADCAST_CAN_ADDRESS);
@@ -47,6 +48,11 @@ namespace isobus
 	bool AddressClaimStateMachine::get_enabled() const
 	{
 		return m_enabled;
+	}
+
+	std::uint8_t AddressClaimStateMachine::get_claimed_address() const
+	{
+		return m_claimedAddress;
 	}
 
 	void AddressClaimStateMachine::update()
@@ -236,6 +242,10 @@ namespace isobus
 			                                                            dataBuffer,
 			                                                            CAN_DATA_LENGTH,
 			                                                            {});
+			if (retVal)
+			{
+				m_claimedAddress = address;
+			}
 		}
 		return retVal;
 	}
