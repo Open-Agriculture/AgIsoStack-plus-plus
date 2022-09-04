@@ -37,6 +37,7 @@ public:
 
     void set_is_enabled(bool value);
     bool get_enabled() const;
+    std::uint8_t get_claimed_address() const;
 
     void update();
 private:
@@ -50,6 +51,7 @@ private:
     std::uint8_t m_portIndex;
     std::uint8_t m_preferredAddress;
     std::uint8_t m_randomClaimDelay_ms;
+    std::uint8_t m_claimedAddress;
     bool m_enabled;
 };
 

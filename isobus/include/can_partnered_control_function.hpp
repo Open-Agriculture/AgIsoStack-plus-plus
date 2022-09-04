@@ -26,6 +26,7 @@ class PartneredControlFunction : public ControlFunction
 {
 public:
     PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
+    ~PartneredControlFunction();
 
     void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
     void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
@@ -33,7 +34,10 @@ public:
     std::uint32_t get_number_parameter_group_number_callbacks() const;
 
     std::uint32_t get_number_name_filters() const;
+    std::uint32_t get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter);
     bool get_name_filter_parameter(std::uint32_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const;
+
+    bool check_matches_name(NAME NAMEToCheck) const;
 
     static PartneredControlFunction *get_partnered_control_function(std::uint32_t index);
     static std::uint32_t get_number_partnered_control_functions();
@@ -43,7 +47,7 @@ private:
 
     ParameterGroupNumberCallbackData get_parameter_group_number_callback(std::uint32_t index) const;
 
-    static std::vector<PartneredControlFunction> partneredControlFunctionList;
+    static std::vector<PartneredControlFunction*> partneredControlFunctionList;
     const std::vector<NAMEFilter> NAMEFilterList;
     std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks;
 };

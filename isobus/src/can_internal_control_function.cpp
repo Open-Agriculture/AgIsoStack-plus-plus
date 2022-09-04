@@ -63,6 +63,7 @@ namespace isobus
 	void InternalControlFunction::update()
 	{
 		stateMachine.update();
+		address = stateMachine.get_claimed_address();
 	}
 
 } // namespace isobus
