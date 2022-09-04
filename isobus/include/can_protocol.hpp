@@ -37,7 +37,7 @@ namespace isobus
 		virtual void process_message(CANMessage *const message) = 0;
 
         virtual bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
-		                               std::uint8_t *data,
+		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
 		                               ControlFunction *source,
 		                               ControlFunction *destination) = 0;
