@@ -36,8 +36,8 @@ public:
     ControlFunction *get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>) const;
     void add_control_function(std::uint8_t CANPort, ControlFunction *newControlFunction, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>);
 
-    void add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
-    void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
+    void add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+    void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
     std::uint32_t get_number_global_parameter_group_number_callbacks() const;
 

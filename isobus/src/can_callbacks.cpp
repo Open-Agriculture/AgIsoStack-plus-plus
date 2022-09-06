@@ -10,9 +10,10 @@
 
 namespace isobus
 {
-    ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback) :
+    ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer) :
 	  mCallback(callback),
-	  mParameterGroupNumber(parameterGroupNumber)
+	  mParameterGroupNumber(parameterGroupNumber),
+	  mParent(parentPointer)
 	{
 	}
 
@@ -20,17 +21,21 @@ namespace isobus
 	{
 		mCallback = oldObj.mCallback;
 		mParameterGroupNumber = oldObj.mParameterGroupNumber;
+		mParent = oldObj.mParent;
 	}
 
 	bool ParameterGroupNumberCallbackData::operator==(const ParameterGroupNumberCallbackData &obj)
 	{
-		return ((obj.mCallback == this->mCallback) && (obj.mParameterGroupNumber == this->mParameterGroupNumber));
+		return ((obj.mCallback == this->mCallback) && 
+			(obj.mParameterGroupNumber == this->mParameterGroupNumber) &&
+			(obj.mParent == this->mParent));
 	}
 
 	ParameterGroupNumberCallbackData& ParameterGroupNumberCallbackData::operator= (const ParameterGroupNumberCallbackData &obj)
 	{
 		mCallback = obj.mCallback;
 		mParameterGroupNumber = obj.mParameterGroupNumber;
+		mParent = obj.mParent;
 		return *this;
 	}
 
@@ -42,5 +47,10 @@ namespace isobus
     CANLibCallback ParameterGroupNumberCallbackData::get_callback() const
 	{
 		return mCallback;
+	}
+
+	void *ParameterGroupNumberCallbackData::get_parent() const
+	{
+		return mParent;
 	}
 } // namespace isobus

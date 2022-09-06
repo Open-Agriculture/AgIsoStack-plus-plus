@@ -17,6 +17,7 @@
 #include "can_constants.hpp"
 #include "can_partnered_control_function.hpp"
 #include "can_warning_logger.hpp"
+#include "system_timing.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -43,14 +44,14 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback)
+	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback));
+		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
 	}
 
-    void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback)
+    void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback);
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
 		auto callbackLocation = std::find(globalParameterGroupNumberCallbacks.begin(), globalParameterGroupNumberCallbacks.end(), tempObject);
 		if (globalParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -181,6 +182,7 @@ namespace isobus
 				currentProtocol->update({});
 			}
 		}
+		updateTimestamp_ms = SystemTiming::get_timestamp_ms();
 	}
 
 	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex,
@@ -197,7 +199,7 @@ namespace isobus
 
 	ParameterGroupNumberCallbackData CANNetworkManager::get_global_parameter_group_number_callback(std::uint32_t index) const
 	{
-		ParameterGroupNumberCallbackData retVal(0, nullptr);
+		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr);
 
 		if (index < get_number_global_parameter_group_number_callbacks())
 		{
@@ -382,7 +384,7 @@ namespace isobus
 					// Device already in the active list
 					foundControlFunction = activeControlFunctions[i];
 				}
-				else
+				else if (activeControlFunctions[i]->address == CANIdentifier(rxFrame.identifier).get_source_address())
 				{
 					// If this CF has the same address as the one claiming, we need set it to 0xFE (null address)
 					activeControlFunctions[i]->address = CANIdentifier::NULL_ADDRESS;
@@ -412,6 +414,7 @@ namespace isobus
 				{
 					if (partner->check_matches_name(NAME(claimedNAME)))
 					{
+						partner->address = CANIdentifier(rxFrame.identifier).get_source_address();
 						activeControlFunctions.push_back(partner);
 						foundControlFunction = partner;
 						CANStackLogger::CAN_stack_log("NM: A Partner Has Claimed " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
@@ -517,7 +520,7 @@ namespace isobus
 						(nullptr != get_global_parameter_group_number_callback(i).get_callback()))
 					{
 						// We have a callback that matches this PGN
-						get_global_parameter_group_number_callback(i).get_callback()(message, nullptr);
+						get_global_parameter_group_number_callback(i).get_callback()(message, get_global_parameter_group_number_callback(i).get_parent());
 					}
 				}
 			}
@@ -543,7 +546,7 @@ namespace isobus
 										(nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
 									{
 										// We have a callback matching this message
-										currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, nullptr);
+										currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, currentControlFunction->get_parameter_group_number_callback(k).get_parent());
 									}
 								}
 							}

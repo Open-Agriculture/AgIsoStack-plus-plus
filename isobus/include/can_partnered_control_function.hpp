@@ -28,8 +28,8 @@ public:
     PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
     ~PartneredControlFunction();
 
-    void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
-    void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback);
+    void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+    void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
     std::uint32_t get_number_parameter_group_number_callbacks() const;
 

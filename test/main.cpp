@@ -49,7 +49,7 @@ int main()
 {
     setup();
 
-    isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), &testPropACallback);
+    isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), &testPropACallback, nullptr);
 
     while (true)
     {
