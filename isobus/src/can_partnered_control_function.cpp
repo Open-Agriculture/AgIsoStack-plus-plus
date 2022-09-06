@@ -30,14 +30,14 @@ namespace isobus
 		partneredControlFunctionList.erase(thisObject);
 	}
 
-	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback)
+	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback));
+		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
 	}
 
-	void PartneredControlFunction::remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback)
+	void PartneredControlFunction::remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback);
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
 		if (parameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -189,7 +189,7 @@ namespace isobus
 
 	ParameterGroupNumberCallbackData PartneredControlFunction::get_parameter_group_number_callback(std::uint32_t index) const
 	{
-		ParameterGroupNumberCallbackData retVal(0, nullptr);
+		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr);
 
 		if (index < get_number_parameter_group_number_callbacks())
 		{

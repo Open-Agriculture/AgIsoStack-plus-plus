@@ -19,7 +19,7 @@ namespace isobus
     class ParameterGroupNumberCallbackData
     {
     public:
-        ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback);
+        ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
         ParameterGroupNumberCallbackData(const ParameterGroupNumberCallbackData &oldObj);
 
         bool operator==(const ParameterGroupNumberCallbackData& obj);
@@ -27,9 +27,11 @@ namespace isobus
 
         std::uint32_t get_parameter_group_number() const;
         CANLibCallback get_callback() const;
+		void *get_parent() const;
     private:
         CANLibCallback mCallback;
         std::uint32_t mParameterGroupNumber;
+		void *mParent;
     };
 } // namespace isobus
 
