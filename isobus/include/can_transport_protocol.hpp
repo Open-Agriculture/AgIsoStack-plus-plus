@@ -55,6 +55,7 @@ class TransportProtocolManager : public CANLibProtocol
         std::uint32_t timestamp_ms;
         std::uint16_t lastPacketNumber;
         std::uint8_t packetCount;
+	    std::uint8_t processedPacketsThisSession; // For the whole session
         const Direction sessionDirection;
     };
 

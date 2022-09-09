@@ -28,6 +28,7 @@ namespace isobus
 	  timestamp_ms(0),
 	  lastPacketNumber(0),
 	  packetCount(0),
+	  processedPacketsThisSession(0),
 	  sessionDirection(sessionDirection)
 	{
 	}
@@ -183,6 +184,7 @@ namespace isobus
 											// Just sit here in this state until we get a non-zero packet count
 											if (0 != packetsToBeSent)
 											{
+												session->lastPacketNumber = 0;
 												session->state = StateMachineState::TxDataSession;
 											}
 										}
@@ -282,6 +284,7 @@ namespace isobus
 							tempSession->sessionMessage.set_data(message->get_data()[SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
 						}
 						tempSession->lastPacketNumber++;
+						tempSession->processedPacketsThisSession++;
 						if ((tempSession->lastPacketNumber * 8) >= tempSession->sessionMessage.get_data_length())
 						{
 							// Send EOM Ack for CM sessions only
@@ -350,6 +353,7 @@ namespace isobus
 			newSession->sessionMessage.set_destination_control_function(destination);
 			newSession->packetCount = (messageLength / PROTOCOL_BYTES_PER_FRAME);
 			newSession->lastPacketNumber = 0;
+			newSession->processedPacketsThisSession = 0;
 			if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
 			{
 				newSession->packetCount++;
@@ -591,11 +595,19 @@ namespace isobus
 						// Try and send packets
 						for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
 						{
-							dataBuffer[0] = session->lastPacketNumber + 1;
+							dataBuffer[0] = session->processedPacketsThisSession + 1;
 							
 							for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
 							{
-								dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->lastPacketNumber)];
+								std::uint32_t index = (j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+								if (index < session->sessionMessage.get_data_length())
+								{
+									dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)];
+								}
+								else
+								{
+									dataBuffer[1 + j] = 0xFF;
+								}
 							}
 							if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData),
 							                                                   dataBuffer,
@@ -605,6 +617,7 @@ namespace isobus
 							                                                   CANIdentifier::CANPriority::PriorityLowest7))
 							{
 								session->lastPacketNumber++;
+								session->processedPacketsThisSession++;
 								session->timestamp_ms = SystemTiming::get_timestamp_ms();
 							}
 							else
@@ -614,9 +627,16 @@ namespace isobus
 							}
 						}
 
-						if (session->lastPacketNumber == (session->packetCount))
+						if ((session->lastPacketNumber == (session->packetCount)) && 
+							(session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
 						{
 							set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
+							session->timestamp_ms = SystemTiming::get_timestamp_ms();
+						}
+						else if (session->lastPacketNumber == session->packetCount)
+						{
+							set_state(session, StateMachineState::WaitForClearToSend);
+							session->timestamp_ms = SystemTiming::get_timestamp_ms();
 						}
 					}
 				}
