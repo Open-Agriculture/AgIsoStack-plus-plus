@@ -142,6 +142,7 @@ namespace isobus
 		{
 			Disconnected,
 			WaitForPartnerVTStatusMessage,
+			SendWorkingSetMasterMessage,
 			ReadyForObjectPool,
 			SendGetMemory,
 			WaitForGetMemoryResponse,
@@ -323,6 +324,7 @@ namespace isobus
 		// 2. Get a callback at some inteval to provide data in chunks
 		// This is probably better for huge pools if you are RAM constrained, or if your
 		// pool is stored on some external device that you need to get data from in pages.
+		// This is also the best way to load from IOP files!
 		// If using callbacks, The object pool and pointer MUST NOT be deleted or leave scope until upload is done.
 		// Version must be the same for all pools uploaded to this VT server!!!
 		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size);
@@ -452,6 +454,7 @@ namespace isobus
 			std::uint32_t objectPoolSize;
 			VTVersion version; // Must be the same for all pools!
 			bool useDataCallback;
+			bool uploaded;
 		};
 
 		// Object Pool Managment
@@ -472,6 +475,8 @@ namespace isobus
 		bool send_extended_store_version(std::array<std::uint8_t, 32> versionLabel);
 		bool send_extended_load_version(std::array<std::uint8_t, 32> versionLabel);
 		bool send_extended_delete_version(std::array<std::uint8_t, 32> versionLabel);
+		bool send_end_of_object_pool();
+		bool send_working_set_master();
 
 		void set_state(StateMachineState value);
 
@@ -537,6 +542,7 @@ namespace isobus
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback;
 		std::uint32_t objectPoolSize_bytes;
+		std::uint32_t lastObjectPoolIndex;
 	};
 
 } // namespace isobus

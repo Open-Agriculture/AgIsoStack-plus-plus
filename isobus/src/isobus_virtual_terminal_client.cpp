@@ -48,11 +48,12 @@ namespace isobus
 	  sendWorkingSetMaintenenace(false),
 	  shouldTerminate(false),
 	  objectPoolDataCallback(nullptr),
-	  objectPoolSize_bytes(0)
+	  lastObjectPoolIndex(0)
 	{
 		if (nullptr != partnerControlFunction)
 		{
-			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message);
+			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 		}
 	}
 
@@ -1326,6 +1327,7 @@ namespace isobus
 			tempData.objectPoolSize = size;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
+			tempData.uploaded = false;
 
 			if (poolIndex < objectPools.size())
 			{
@@ -1352,6 +1354,7 @@ namespace isobus
 			tempData.objectPoolSize = pool->size();
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
+			tempData.uploaded = false;
 
 			if (poolIndex < objectPools.size())
 			{
@@ -1378,6 +1381,7 @@ namespace isobus
 			tempData.objectPoolSize = poolTotalSize;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = true;
+			tempData.uploaded = false;
 
 			if (poolIndex < objectPools.size())
 			{
@@ -1411,6 +1415,15 @@ namespace isobus
 				{
 					if (0 != lastVTStatusTimestamp_ms)
 					{
+						set_state(StateMachineState::SendWorkingSetMasterMessage);
+					}
+				}
+				break;
+
+				case StateMachineState::SendWorkingSetMasterMessage:
+				{
+					if (send_working_set_master())
+					{
 						set_state(StateMachineState::ReadyForObjectPool);
 					}
 				}
@@ -1438,7 +1451,14 @@ namespace isobus
 
 				case StateMachineState::SendGetMemory:
 				{
-					if (send_get_memory(objectPoolSize_bytes))
+					std::uint32_t totalPoolSize = 0;
+
+					for (auto pool : objectPools)
+					{
+						totalPoolSize += pool.objectPoolSize; 
+					}
+
+					if (send_get_memory(totalPoolSize))
 					{
 						set_state(StateMachineState::WaitForGetMemoryResponse);
 					}
@@ -1514,13 +1534,41 @@ namespace isobus
 
 				case StateMachineState::UploadObjectPool:
 				{
+					//! @todo Support callback method with ETP
+					//! Right now only full TP sends are supported until I finish ETP
+					//! So this will fail if you have a pool > 1785 bytes unless you
+					//! split it up into subpools
 
+					for (std::uint32_t i = 0; i < objectPools.size(); i++)
+					{
+						if ((nullptr != objectPools[i].objectPoolDataPointer) &&
+						    (objectPools[i].objectPoolSize > 0) &&
+						    (!objectPools[i].useDataCallback) &&
+						    (!objectPools[i].uploaded))
+						{
+							bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                                                         objectPools[i].objectPoolDataPointer,
+							                                                                         objectPools[i].objectPoolSize,
+							                                                                         myControlFunction.get(),
+							                                                                         partnerControlFunction.get(),
+							                                                                         CANIdentifier::CANPriority::PriorityLowest7);
+							if (transmitSuccessful)
+							{
+								objectPools[i].uploaded = true;
+								if (i == (objectPools.size() - 1))
+								{
+									set_state(StateMachineState::SendEndOfObjectPool);
+								}
+							}
+						}
+
+					}
 				}
 				break;
 
 				case StateMachineState::SendEndOfObjectPool:
 				{
-					//if (send_end_of_object_pool())
+					if (send_end_of_object_pool())
 					{
 						set_state(StateMachineState::WaitForEndOfObjectPoolResponse);
 					}
@@ -1914,6 +1962,42 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalClient::send_end_of_object_pool()
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::EndOfObjectPoolMessage),
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_working_set_master()
+	{
+		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { 0x01,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF,
+			                                                 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      nullptr,
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
 	void VirtualTerminalClient::set_state(StateMachineState value)
 	{
 		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
@@ -2094,11 +2178,6 @@ namespace isobus
 							                                                 ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
 							parentVT->busyCodesBitfield = message->get_data()[6];
 							parentVT->currentCommandFunctionCode = message->get_data()[7];
-
-							if (StateMachineState::WaitForPartnerVTStatusMessage == parentVT->state)
-							{
-								parentVT->set_state(StateMachineState::ReadyForObjectPool);
-							}
 						}
 						break;
 
@@ -2159,6 +2238,7 @@ namespace isobus
 								                     ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
 								parentVT->yPixels = (static_cast<std::uint16_t>(message->get_data()[6]) &
 								                     ((static_cast<std::uint16_t>(message->get_data()[7])) << 8));
+								parentVT->lastObjectPoolIndex = 0;
 								parentVT->set_state(StateMachineState::UploadObjectPool);
 							}
 						}
