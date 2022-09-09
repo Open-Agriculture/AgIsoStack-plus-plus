@@ -16,6 +16,7 @@ namespace isobus
     enum class CANLibParameterGroupNumber
     {
 		Any = 0x0000,
+        WorkingSetMaster = 0xFE0D,
         VirtualTerminalToECU = 0xE600,
 		ECUtoVirtualTerminal = 0xE700,
         Acknowledge = 0xE800,
