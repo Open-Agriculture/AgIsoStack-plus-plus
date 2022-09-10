@@ -1,9 +1,21 @@
 # ISO11783 CAN Stack
 ## An MIT licensed, hardware agnostic, control-function-focused implementation of the major ISOBUS and J1939 protocols in C++
-This library is intended to eventually provide the following features:
+This is a work in progress.
+
+The state of the project is as follows...
+
+### Complete or in-progress:
 - ISO11783 Transport Protocol (BAM and Connection Mode)
+    - TP BAM Rx: Complete :white_check_mark:
+    - TP BAM Tx: Implemented, Needs Testing :white_check_mark::question:
+    - TP CM Tx: Implemented, Needs Testing :white_check_mark::question:
+    - TP CM Rx: Implemented, Needs Testing :white_check_mark::question:
 - ISO11783 Extended Transport Protocol
+    - Implementation Started :hourglass:
 - ISO11783 Virtual Terminal (Up to version 3 initially, maybe up to 6 later)
+    - Currently in-development, highest priority :hourglass:
+
+### Not yet started, but planned:
 - ISO11783 File Server
 - ISO11783 Task Controller (currently planned to be client only)
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
@@ -11,9 +23,14 @@ This library is intended to eventually provide the following features:
 - J1939 DM14
 - NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
+- Meta: Package this library as a debian package
+- Meta: Windows OS support via some common CAN driver layers (P-CAN, for example)
+
+### Maybe someday:
 - AEF's Tractor Implement Management Protocol (maybe)
 - More example hardware integrations (Right now only Socket CAN is provided out-of-the-box)
-- more???
+- Sequence control
+- A zero-heap implementation (static buffers only, for embedded platforms)
 
 The real limiting factor is my time, and my lack of a Vector CANoe setup. 
 I work full time and only develop on this project in my evenings.
@@ -41,5 +58,18 @@ This library is compiled with CMake. Currently, I am only testing on Ubuntu 20.0
 cmake -S . -B build
 cmake --build build
 ```
-You can add it to your own project with CMake if you want!
-More instructions coming soon.
+
+## Integrating this library
+You can this library to your own project with CMake if you want. Adding it as a submodule to your project is one of the easier ways to integrate it today.
+
+```
+git submodule add git@github.com:ad3154/ISO11783-CAN-Stack.git <destination_folder>
+git submodule update --init --recursive
+```
+Then, if you're using cmake, make sure to add the submodule to your project, and link it.
+
+```
+add_subdirectory(<path to this submodule>)
+
+target_link_libraries(<your executable name> Isobus SocketCANInterface)
+```
