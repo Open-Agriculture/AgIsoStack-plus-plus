@@ -41,6 +41,7 @@ namespace isobus
 	  yPixels(0),
 	  hardwareFeaturesBitfield(0),
 	  state(StateMachineState::Disconnected),
+	  currentObjectPoolState(CurrentObjectPoolUploadState::Uninitialized),
 	  stateMachineTimestamp_ms(0),
 	  lastWorkingSetMaintenanceTimestamp_ms(0),
 	  workerThread(nullptr),
@@ -1538,30 +1539,70 @@ namespace isobus
 					//! Right now only full TP sends are supported until I finish ETP
 					//! So this will fail if you have a pool > 1785 bytes unless you
 					//! split it up into subpools
+					
+					bool allPoolsProcessed = true;
 
 					for (std::uint32_t i = 0; i < objectPools.size(); i++)
 					{
 						if ((nullptr != objectPools[i].objectPoolDataPointer) &&
 						    (objectPools[i].objectPoolSize > 0) &&
-						    (!objectPools[i].useDataCallback) &&
-						    (!objectPools[i].uploaded))
+						    (!objectPools[i].useDataCallback))
 						{
-							bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                                                         objectPools[i].objectPoolDataPointer,
-							                                                                         objectPools[i].objectPoolSize,
-							                                                                         myControlFunction.get(),
-							                                                                         partnerControlFunction.get(),
-							                                                                         CANIdentifier::CANPriority::PriorityLowest7);
-							if (transmitSuccessful)
+							if (!objectPools[i].uploaded)
+							{
+								allPoolsProcessed = false;
+							}
+
+							if (CurrentObjectPoolUploadState::Uninitialized == currentObjectPoolState)
+							{
+								if (!objectPools[i].uploaded)
+								{
+									bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+									                                                                         objectPools[i].objectPoolDataPointer,
+									                                                                         objectPools[i].objectPoolSize,
+									                                                                         myControlFunction.get(),
+									                                                                         partnerControlFunction.get(),
+									                                                                         CANIdentifier::CANPriority::PriorityLowest7,
+									                                                                         process_callback,
+									                                                                         this);
+									if (transmitSuccessful)
+									{
+										objectPools[i].uploaded = true;
+										currentObjectPoolState = CurrentObjectPoolUploadState::InProgress;
+										if (i == (objectPools.size() - 1))
+										{
+											set_state(StateMachineState::SendEndOfObjectPool);
+										}
+									}
+								}
+								else
+								{
+									// Pool already uploaded, move on to the next one
+								}
+							}
+							else if (CurrentObjectPoolUploadState::Success == currentObjectPoolState)
 							{
 								objectPools[i].uploaded = true;
-								if (i == (objectPools.size() - 1))
-								{
-									set_state(StateMachineState::SendEndOfObjectPool);
-								}
+								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+							}
+							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
+							{
+								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+								// Retry this pool
+								//! @todo add a max number of retries
+							}
+							else
+							{
+								// Transfer is in progress. Nothing to do now.
+								break;
 							}
 						}
 
+					}
+
+					if (allPoolsProcessed)
+					{
+						set_state(StateMachineState::SendEndOfObjectPool);
 					}
 				}
 				break;
@@ -2064,6 +2105,11 @@ namespace isobus
 					if (vtClient->objectPools.size() > 0)
 					{
 						transmitSuccessful = vtClient->send_working_set_maintenance(false, vtClient->objectPools[0].version);
+
+						if (transmitSuccessful)
+						{
+							vtClient->lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
+						}
 					}
 				}
 				break;
@@ -2298,6 +2344,33 @@ namespace isobus
 		else
 		{
 			CANStackLogger::CAN_stack_log("VT-ECU Client message invalid");
+		}
+	}
+
+	void VirtualTerminalClient::process_callback(std::uint32_t parameterGroupNumber,
+	                                             std::uint32_t ,
+	                                             InternalControlFunction *,
+	                                             ControlFunction *destinationControlFunction,
+	                                             bool successful,
+	                                             void *parentPointer)
+	{
+		if ((nullptr != parentPointer) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == parameterGroupNumber) &&
+			(nullptr != destinationControlFunction))
+		{
+			VirtualTerminalClient *parent = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+
+			if (StateMachineState::UploadObjectPool == parent->state)
+			{
+				if (successful)
+				{
+					parent->currentObjectPoolState = CurrentObjectPoolUploadState::Success;
+				}
+				else
+				{
+					parent->currentObjectPoolState = CurrentObjectPoolUploadState::Failed;
+				}
+			}
 		}
 	}
 
