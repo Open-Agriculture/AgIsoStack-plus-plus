@@ -43,12 +43,19 @@ public:
 
     InternalControlFunction *get_internal_control_function(ControlFunction *controlFunction);
 
+    // This is the main way to send a CAN message of any length.
+    // It will automatically choose an appropriate transport protocol if needed.
+    // If you don't specify a destination (or use nullptr) you message will be sent as a broadcast
+    // if it is valid to do so.
+    // You can also get a callback on success or failure of the transmit.
     bool send_can_message(std::uint32_t parameterGroupNumber,
                           const std::uint8_t *dataBuffer,
                           std::uint32_t dataLength,
                           InternalControlFunction *sourceControlFunction,
                           ControlFunction *destinationControlFunction = nullptr,
-                          CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6);
+                          CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
+		                  TransmitCompleteCallback = nullptr,
+                          void *parentPointer = nullptr);
 
     void receive_can_message(CANMessage message);
 

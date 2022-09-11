@@ -23,6 +23,7 @@ namespace isobus
 	  stateMachine(preferredAddress, desiredName, CANPort),
 	  objectChangedAddressSinceLastUpdate(false)
 	{
+		controlFunctionType = Type::Internal;
 		internalControlFunctionList.push_back(this);
 	}
 

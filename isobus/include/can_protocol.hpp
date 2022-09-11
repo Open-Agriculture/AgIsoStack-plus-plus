@@ -14,6 +14,7 @@
 #include "can_control_function.hpp"
 #include "can_message.hpp"
 #include "can_badge.hpp"
+#include "can_callbacks.hpp"
 
 #include <vector>
 
@@ -37,10 +38,12 @@ namespace isobus
 		virtual void process_message(CANMessage *const message) = 0;
 
         virtual bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
-		                               const std::uint8_t *data,
-		                               std::uint32_t messageLength,
-		                               ControlFunction *source,
-		                               ControlFunction *destination) = 0;
+		                                       const std::uint8_t *data,
+		                                       std::uint32_t messageLength,
+		                                       ControlFunction *source,
+		                                       ControlFunction *destination,
+		                                       TransmitCompleteCallback transmitCompleteCallback,
+		                                       void *parentPointer) = 0;
 
 		virtual void update(CANLibBadge<CANNetworkManager>) = 0;
 

@@ -21,6 +21,7 @@ namespace isobus
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort),
 	  NAMEFilterList(NAMEFilters)
 	{
+		controlFunctionType = Type::Partnered;
 		partneredControlFunctionList.push_back(this);
 	}
 

@@ -25,6 +25,7 @@ namespace isobus
 	TransportProtocolManager::TransportProtocolSession::TransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
 	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
+	  sessionCompleteCallback(nullptr),
 	  timestamp_ms(0),
 	  lastPacketNumber(0),
 	  packetCount(0),
@@ -228,11 +229,14 @@ namespace isobus
 										{
 											// We completed our Tx session!
 											session->state = StateMachineState::None;
+											process_session_complete_callback(session, true);
 											close_session(session);
 										}
 										else
 										{
 											abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+											process_session_complete_callback(session, false);
+											close_session(session);
 											CANStackLogger::CAN_stack_log("TP: Abort EOM in wrong session state");
 										}
 									}
@@ -332,7 +336,9 @@ namespace isobus
 		                               const std::uint8_t *dataBuffer,
 		                               std::uint32_t messageLength,
 		                               ControlFunction *source,
-		                               ControlFunction *destination)
+		                               ControlFunction *destination,
+	                                   TransmitCompleteCallback sessionCompleteCallback,
+									   void *parentPointer)
 	{
 		TransportProtocolSession *session;
 		bool retVal = false;
@@ -354,15 +360,17 @@ namespace isobus
 			newSession->packetCount = (messageLength / PROTOCOL_BYTES_PER_FRAME);
 			newSession->lastPacketNumber = 0;
 			newSession->processedPacketsThisSession = 0;
+			newSession->sessionCompleteCallback = sessionCompleteCallback;
+			newSession->parent = parentPointer;
 			if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
 			{
 				newSession->packetCount++;
 			}
 			CANIdentifier messageVirtualID(CANIdentifier::Type::Extended,
-			              parameterGroupNumber,
-			              CANIdentifier::CANPriority::PriorityDefault6,
-			              destination->get_address(),
-			              source->get_address());
+			                               parameterGroupNumber,
+			                               CANIdentifier::CANPriority::PriorityDefault6,
+			                               destination->get_address(),
+			                               source->get_address());
 
 			newSession->sessionMessage.set_identifier(messageVirtualID);
 			set_state(newSession, StateMachineState::RequestToSend);
@@ -451,6 +459,22 @@ namespace isobus
 				delete session;
 				CANStackLogger::CAN_stack_log("TP: Session Closed");
 			}
+		}
+	}
+
+	void TransportProtocolManager::process_session_complete_callback(TransportProtocolSession *session, bool success)
+	{
+		if ((nullptr != session) &&
+		    (nullptr != session->sessionCompleteCallback) &&
+		    (nullptr != session->sessionMessage.get_source_control_function()) &&
+		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
+		{
+			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
+			                                 session->sessionMessage.get_data_length(),
+			                                 reinterpret_cast<InternalControlFunction*>(session->sessionMessage.get_source_control_function()),
+			                                 session->sessionMessage.get_destination_control_function(),
+			                                 success,
+			                                 session->parent);
 		}
 	}
 
@@ -573,6 +597,7 @@ namespace isobus
 					{
 						CANStackLogger::CAN_stack_log("TP: Timeout");
 						abort_session(session, ConnectionAbortReason::Timeout);
+						process_session_complete_callback(session, false);
 						close_session(session);
 					}
 				}

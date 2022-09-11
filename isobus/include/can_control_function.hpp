@@ -40,7 +40,7 @@ public:
 protected:
     friend class CANNetworkManager;
     NAME controlFunctionNAME;
-    const Type controlFunctionType;
+    Type controlFunctionType;
     std::uint8_t address;
     std::uint8_t canPortIndex;
 };

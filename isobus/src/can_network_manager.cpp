@@ -81,7 +81,9 @@ namespace isobus
 	                                         std::uint32_t dataLength,
 	                                         InternalControlFunction *sourceControlFunction,
 	                                         ControlFunction *destinationControlFunction,
-	                                         CANIdentifier::CANPriority priority)
+	                                         CANIdentifier::CANPriority priority,
+	                                         TransmitCompleteCallback transmitCompleteCallback,
+											 void *parentPointer)
 	{
 		bool retVal = false;
 
@@ -100,10 +102,12 @@ namespace isobus
 				if (CANLibProtocol::get_protocol(i, currentProtocol))
 				{
 					retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
-					dataBuffer, 
-					dataLength, 
-					sourceControlFunction, 
-					destinationControlFunction);
+					                                                    dataBuffer,
+					                                                    dataLength,
+					                                                    sourceControlFunction,
+					                                                    destinationControlFunction,
+					                                                    transmitCompleteCallback,
+					                                                    parentPointer);
 
 					if (retVal)
 					{
@@ -122,6 +126,13 @@ namespace isobus
 				else if (destinationControlFunction->get_address_valid())
 				{
 					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, priority, dataBuffer, dataLength);
+				}
+
+				if ((retVal) && 
+					(nullptr != transmitCompleteCallback))
+				{
+					// Message was not sent via a protocol, so handle the tx callback now
+					transmitCompleteCallback(parameterGroupNumber, dataLength, sourceControlFunction, destinationControlFunction, retVal, parentPointer);
 				}
 			}
 		}

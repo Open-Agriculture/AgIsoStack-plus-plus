@@ -52,6 +52,8 @@ class TransportProtocolManager : public CANLibProtocol
 
         StateMachineState state;
         CANLibManagedMessage sessionMessage;
+	    TransmitCompleteCallback sessionCompleteCallback;
+		void *parent;
         std::uint32_t timestamp_ms;
         std::uint16_t lastPacketNumber;
         std::uint8_t packetCount;
@@ -101,7 +103,9 @@ class TransportProtocolManager : public CANLibProtocol
 		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
 		                               ControlFunction *source,
-		                               ControlFunction *destination) override;
+		                               ControlFunction *destination,
+		                               TransmitCompleteCallback transmitCompleteCallback,
+		                               void *parentPointer) override;
 
     void update(CANLibBadge<CANNetworkManager>) override;
 
@@ -109,6 +113,7 @@ private:
     bool abort_session(TransportProtocolSession *session, ConnectionAbortReason reason);
     bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, InternalControlFunction *source, ControlFunction *destination);
     void close_session(TransportProtocolSession *session);
+	void process_session_complete_callback(TransportProtocolSession *session, bool success);
     bool send_request_to_send(TransportProtocolSession *session);
     bool send_end_of_session_acknowledgement(TransportProtocolSession *session);
     void set_state(TransportProtocolSession *session, StateMachineState value);
