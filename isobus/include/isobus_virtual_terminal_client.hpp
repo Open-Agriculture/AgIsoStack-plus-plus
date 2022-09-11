@@ -446,6 +446,14 @@ namespace isobus
 			NumberFlags
 		};
 
+		enum class CurrentObjectPoolUploadState : std::uint8_t
+		{
+			Uninitialized,
+			InProgress,
+			Success,
+			Failed
+		};
+
 		struct ObjectPoolDataStruct
 		{
 			const std::uint8_t *objectPoolDataPointer;
@@ -487,6 +495,12 @@ namespace isobus
 
 		static void process_flags(std::uint32_t flag, void *parent);
 		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_callback(std::uint32_t parameterGroupNumber,
+		                             std::uint32_t dataLength,
+		                             InternalControlFunction *sourceControlFunction,
+		                             ControlFunction *destinationControlFunction,
+		                             bool successful,
+		                             void *parentPointer);
 
 		void worker_thread_function();
 
@@ -527,6 +541,7 @@ namespace isobus
 
 		// Internal state
 		StateMachineState state;
+		CurrentObjectPoolUploadState currentObjectPoolState;
 		std::uint32_t stateMachineTimestamp_ms;
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms;
 		std::vector<VTKeyEventCallback> buttonEventCallbacks;
