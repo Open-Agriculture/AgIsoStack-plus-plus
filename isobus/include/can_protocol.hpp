@@ -43,7 +43,8 @@ namespace isobus
 		                                       ControlFunction *source,
 		                                       ControlFunction *destination,
 		                                       TransmitCompleteCallback transmitCompleteCallback,
-		                                       void *parentPointer) = 0;
+		                                       void *parentPointer,
+		                                       DataChunkCallback frameChunkCallback) = 0;
 
 		virtual void update(CANLibBadge<CANNetworkManager>) = 0;
 

@@ -17,11 +17,11 @@ namespace isobus
 	class InternalControlFunction;
 	class ControlFunction;
 	typedef void (*CANLibCallback)(CANMessage *message, void *parentPointer);
-	typedef bool (*DataChunkCallback)(std::uint8_t poolIndex,
-	                                  std::uint32_t callbackIndex,
+	typedef bool (*DataChunkCallback)(std::uint32_t callbackIndex,
 	                                  std::uint32_t bytesOffset,
-	                                  std::uint8_t *&chunkBuffer,
-	                                  std::uint32_t &chunkSize);
+	                                  std::uint32_t numberOfBytesNeeded,
+	                                  std::uint8_t *chunkBuffer,
+	                                  void *parentPointer);
 	typedef void (*TransmitCompleteCallback)(std::uint32_t parameterGroupNumber,
 	                                         std::uint32_t dataLength,
 	                                         InternalControlFunction *sourceControlFunction,

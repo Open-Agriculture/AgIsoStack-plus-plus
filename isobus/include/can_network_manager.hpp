@@ -54,8 +54,9 @@ public:
                           InternalControlFunction *sourceControlFunction,
                           ControlFunction *destinationControlFunction = nullptr,
                           CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
-		                  TransmitCompleteCallback = nullptr,
-                          void *parentPointer = nullptr);
+		                  TransmitCompleteCallback txCompleteCallback = nullptr,
+                          void *parentPointer = nullptr,
+		                  DataChunkCallback frameChunkCallback = nullptr);
 
     void receive_can_message(CANMessage message);
 

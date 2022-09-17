@@ -83,11 +83,13 @@ namespace isobus
 	                                         ControlFunction *destinationControlFunction,
 	                                         CANIdentifier::CANPriority priority,
 	                                         TransmitCompleteCallback transmitCompleteCallback,
-											 void *parentPointer)
+											 void *parentPointer,
+	                                         DataChunkCallback frameChunkCallback)
 	{
 		bool retVal = false;
 
-		if ((nullptr != dataBuffer) && 
+		if (((nullptr != dataBuffer) || 
+		(nullptr != frameChunkCallback)) && 
 		(dataLength > 0) && 
 		(dataLength <= CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH) && 
 		(nullptr != sourceControlFunction) && 
@@ -107,7 +109,8 @@ namespace isobus
 					                                                    sourceControlFunction,
 					                                                    destinationControlFunction,
 					                                                    transmitCompleteCallback,
-					                                                    parentPointer);
+					                                                    parentPointer,
+					                                                    frameChunkCallback);
 
 					if (retVal)
 					{
@@ -116,7 +119,9 @@ namespace isobus
 				}
 			}
 
-			if (!retVal)
+			//! @todo Allow sending 8 byte message with the frameChunkCallback
+			if ((!retVal) &&
+			    (nullptr != dataBuffer))
 			{
 				if (nullptr == destinationControlFunction)
 				{
@@ -428,7 +433,7 @@ namespace isobus
 						partner->address = CANIdentifier(rxFrame.identifier).get_source_address();
 						activeControlFunctions.push_back(partner);
 						foundControlFunction = partner;
-						CANStackLogger::CAN_stack_log("NM: A Partner Has Claimed " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+						CANStackLogger::CAN_stack_log("[NM]: A Partner Has Claimed " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 						break;
 					}
 				}
@@ -437,7 +442,7 @@ namespace isobus
 				{
 					// New device, need to start keeping track of it
 					activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
-					CANStackLogger::CAN_stack_log("NM: New Control function " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+					CANStackLogger::CAN_stack_log("[NM]: New Control function " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 				}
 			}
 

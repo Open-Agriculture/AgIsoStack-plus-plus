@@ -26,6 +26,7 @@ namespace isobus
 	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
 	  sessionCompleteCallback(nullptr),
+	  frameChunkCallback(nullptr),
 	  timestamp_ms(0),
 	  lastPacketNumber(0),
 	  packetCount(0),
@@ -101,18 +102,18 @@ namespace isobus
 										newSession->state = StateMachineState::RxDataSession;
 										newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 										activeSessions.push_back(newSession);
-										CANStackLogger::CAN_stack_log("TP: New BAM Session. Source: " + std::to_string(static_cast<int>(newSession->sessionMessage.get_source_control_function()->get_address())));
+										CANStackLogger::CAN_stack_log("[TP]: New BAM Session. Source: " + std::to_string(static_cast<int>(newSession->sessionMessage.get_source_control_function()->get_address())));
 									}
 									else
 									{
 										// Don't send an abort, they're probably expecting a CTS so it'll timeout
 										// Or maybe if we already had a session they sent a second BAM? Also bad
-										CANStackLogger::CAN_stack_log("TP: Can't Create BAM session");
+										CANStackLogger::CAN_stack_log("[TP]: Can't Create BAM session");
 									}
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("TP: Bad BAM Message Length");
+									CANStackLogger::CAN_stack_log("[TP]: Bad BAM Message Length");
 								}
 							}
 							break;
@@ -145,20 +146,20 @@ namespace isobus
 											(ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 									{
 										abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										CANStackLogger::CAN_stack_log("TP: Abort RTS when already in CM session");
+										CANStackLogger::CAN_stack_log("[TP]: Abort RTS when already in CM session");
 									}
 									else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
 											(nullptr != message->get_destination_control_function()) &&
 											(ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 									{
 										abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										CANStackLogger::CAN_stack_log("TP: Abort No Sessions Available");
+										CANStackLogger::CAN_stack_log("[TP]: Abort No Sessions Available");
 									}
 								}
 								else
 								{
 									// Bad RTS message length. Can't really abort? Not sure what the PGN is if length < 8
-									CANStackLogger::CAN_stack_log("TP: Bad Message Length");
+									CANStackLogger::CAN_stack_log("[TP]: Bad Message Length");
 								}
 							}
 							break;
@@ -194,7 +195,7 @@ namespace isobus
 											// The session exists, but we're probably already in the TxDataSession state. Need to abort
 											// In the case of Rx'ing a CTS, we're the source in the session
 											abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-											CANStackLogger::CAN_stack_log("TP: Abort CTS while in data session");
+											CANStackLogger::CAN_stack_log("[TP]: Abort CTS while in data session");
 										}
 									}
 									else
@@ -202,12 +203,12 @@ namespace isobus
 										// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
 										// In the case of Rx'ing a CTS, we're the source in the session
 										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										CANStackLogger::CAN_stack_log("TP: Abort CTS With no matching session");
+										CANStackLogger::CAN_stack_log("[TP]: Abort CTS With no matching session");
 									}
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("TP: Invalid CTS");
+									CANStackLogger::CAN_stack_log("[TP]: Invalid CTS");
 								}
 							}
 							break;
@@ -237,31 +238,31 @@ namespace isobus
 											abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 											process_session_complete_callback(session, false);
 											close_session(session);
-											CANStackLogger::CAN_stack_log("TP: Abort EOM in wrong session state");
+											CANStackLogger::CAN_stack_log("[TP]: Abort EOM in wrong session state");
 										}
 									}
 									else
 									{
 										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										CANStackLogger::CAN_stack_log("TP: Abort EOM without matching session");
+										CANStackLogger::CAN_stack_log("[TP]: Abort EOM without matching session");
 									}
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("TP: Bad EOM received");
+									CANStackLogger::CAN_stack_log("[TP]: Bad EOM received");
 								}
 							}
 							break;
 
 							case CONNECTION_ABORT_MULTIPLEXOR:
 							{
-								CANStackLogger::CAN_stack_log("TP: Received an abort");
+								CANStackLogger::CAN_stack_log("[TP]: Received an abort");
 							}
 							break;
 
 							default:
 							{
-								CANStackLogger::CAN_stack_log("TP: Bad Mux in Transport Protocol Command");
+								CANStackLogger::CAN_stack_log("[TP]: Bad Mux in Transport Protocol Command");
 							}
 							break;
            }
@@ -274,7 +275,7 @@ namespace isobus
 
 					if (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function()))
 					{
-						CANStackLogger::CAN_stack_log("TP: Matched Session");
+						CANStackLogger::CAN_stack_log("[TP]: Matched Session");
 					}
 
 					if ((CAN_DATA_LENGTH == message->get_data_length()) &&
@@ -303,7 +304,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("TP: Invalid BAM TP Data Received");
+						CANStackLogger::CAN_stack_log("[TP]: Invalid BAM TP Data Received");
 						if (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function()))
 						{
 							// If a session matches and ther was an error, get rid of the session
@@ -317,7 +318,7 @@ namespace isobus
 				{
                     // This is not a runtime error, should never happen.
                     // Bad PGN passed to protocol. Check PGN registrations.
-					CANStackLogger::CAN_stack_log("TP: Received an unexpected PGN");
+					CANStackLogger::CAN_stack_log("[TP]: Received an unexpected PGN");
 				}
 				break;
 			}
@@ -338,14 +339,16 @@ namespace isobus
 		                               ControlFunction *source,
 		                               ControlFunction *destination,
 	                                   TransmitCompleteCallback sessionCompleteCallback,
-									   void *parentPointer)
+									   void *parentPointer,
+	                                   DataChunkCallback frameChunkCallback)
 	{
 		TransportProtocolSession *session;
 		bool retVal = false;
 
 		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
 			(messageLength > 8) &&
-			(nullptr != dataBuffer) &&
+		    ((nullptr != dataBuffer) || 
+			(nullptr != frameChunkCallback)) &&
 			(nullptr != source) &&
 			(true == source->get_address_valid()) &&
 			((nullptr == destination) || 
@@ -354,6 +357,7 @@ namespace isobus
 		{
 			TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Transmit,
 			                                                                    source->get_can_port());
+
 			newSession->sessionMessage.set_data(dataBuffer, messageLength);
 			newSession->sessionMessage.set_source_control_function(source);
 			newSession->sessionMessage.set_destination_control_function(destination);
@@ -361,6 +365,7 @@ namespace isobus
 			newSession->lastPacketNumber = 0;
 			newSession->processedPacketsThisSession = 0;
 			newSession->sessionCompleteCallback = sessionCompleteCallback;
+			newSession->frameChunkCallback = frameChunkCallback;
 			newSession->parent = parentPointer;
 			if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
 			{
@@ -375,7 +380,7 @@ namespace isobus
 			newSession->sessionMessage.set_identifier(messageVirtualID);
 			set_state(newSession, StateMachineState::RequestToSend);
 			activeSessions.push_back(newSession);
-			CANStackLogger::CAN_stack_log("TP: New CM Tx Session. Dest: " + std::to_string(static_cast<int>(destination->get_address())));
+			CANStackLogger::CAN_stack_log("[TP]: New CM Tx Session. Dest: " + std::to_string(static_cast<int>(destination->get_address())));
 		}
 		return retVal;
 	}
@@ -396,7 +401,7 @@ namespace isobus
 		{
 			InternalControlFunction *myControlFunction;
 			ControlFunction *partnerControlFunction;
-			std::array<std::uint8_t, 8> data;
+			std::array<std::uint8_t, CAN_DATA_LENGTH> data;
 			std::uint32_t pgn = session->sessionMessage.get_identifier().get_parameter_group_number();
 
 			if (TransportProtocolSession::Direction::Transmit == session->sessionDirection)
@@ -457,7 +462,7 @@ namespace isobus
 			{
 				activeSessions.erase(sessionLocation);
 				delete session;
-				CANStackLogger::CAN_stack_log("TP: Session Closed");
+				CANStackLogger::CAN_stack_log("[TP]: Session Closed");
 			}
 		}
 	}
@@ -534,7 +539,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::CAN_stack_log("TP: Attempted to send EOM to null session");
+			CANStackLogger::CAN_stack_log("[TP]: Attempted to send EOM to null session");
 		}
 		return retVal;
 	}
@@ -595,7 +600,7 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_T3_TIMEOUT_MS))
 					{
-						CANStackLogger::CAN_stack_log("TP: Timeout");
+						CANStackLogger::CAN_stack_log("[TP]: Timeout");
 						abort_session(session, ConnectionAbortReason::Timeout);
 						process_session_complete_callback(session, false);
 						close_session(session);
@@ -620,20 +625,60 @@ namespace isobus
 						// Try and send packets
 						for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
 						{
-							dataBuffer[0] = session->processedPacketsThisSession + 1;
+							dataBuffer[0] = (session->processedPacketsThisSession + 1);
 							
-							for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
+							if (nullptr != session->frameChunkCallback)
 							{
-								std::uint32_t index = (j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
-								if (index < session->sessionMessage.get_data_length())
+								// Use the callback to get this frame's data
+								std::uint8_t callbackBuffer[7] = {
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF
+								};
+								std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+
+								if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
 								{
-									dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)];
+									numberBytesLeft = PROTOCOL_BYTES_PER_FRAME;
+								}
+
+								bool callbackSuccessful = session->frameChunkCallback(dataBuffer[0], (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession), numberBytesLeft, callbackBuffer, session->parent);
+
+								if (callbackSuccessful)
+								{
+									for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
+									{
+										dataBuffer[1 + j] = callbackBuffer[j];
+									}
 								}
 								else
 								{
-									dataBuffer[1 + j] = 0xFF;
+									abort_session(session, ConnectionAbortReason::AnyOtherError);
+									close_session(session);
+									break;
 								}
 							}
+							else
+							{
+								// Use the data buffer to get the data for this frame
+								for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
+								{
+									std::uint32_t index = (j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+									if (index < session->sessionMessage.get_data_length())
+									{
+										dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)];
+									}
+									else
+									{
+										dataBuffer[1 + j] = 0xFF;
+									}
+								}
+							}
+							
 							if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData),
 							                                                   dataBuffer,
 							                                                   CAN_DATA_LENGTH,
@@ -674,7 +719,7 @@ namespace isobus
 						// BAM Timeout check
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
 						{
-							CANStackLogger::CAN_stack_log("TP: BAM Rx Timeout");
+							CANStackLogger::CAN_stack_log("[TP]: BAM Rx Timeout");
 							close_session(session);
 						}
 					}
@@ -683,7 +728,7 @@ namespace isobus
 						// CM TP Timeout check
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, MESSAGE_TR_TIMEOUT_MS))
 						{
-							CANStackLogger::CAN_stack_log("TP: CM Rx Timeout");
+							CANStackLogger::CAN_stack_log("[TP]: CM Rx Timeout");
 							abort_session(session, ConnectionAbortReason::Timeout);
 							close_session(session);
 						}
