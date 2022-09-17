@@ -35,7 +35,7 @@ public:
 
     std::vector<std::uint8_t> &get_data();
     
-    std::uint32_t get_data_length() const;
+    virtual std::uint32_t get_data_length() const;
 
     ControlFunction *get_source_control_function() const;
 

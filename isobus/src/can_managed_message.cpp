@@ -13,7 +13,8 @@
 namespace isobus
 {
 	CANLibManagedMessage::CANLibManagedMessage(std::uint8_t CANPort) :
-	  CANMessage(CANPort)
+	  CANMessage(CANPort),
+	  callbackMessageSize(0)
 	{
 	}
 
@@ -22,6 +23,10 @@ namespace isobus
 		if (nullptr != dataBuffer)
 		{
 			data.insert(data.end(), dataBuffer, dataBuffer + length);
+		}
+		else
+		{
+			callbackMessageSize = length;
 		}
 	}
 
@@ -38,6 +43,21 @@ namespace isobus
 		data.resize(length);
 	}
 
+	std::uint32_t CANLibManagedMessage::get_data_length() const
+	{
+		std::uint32_t retVal;
+
+		if (0 != callbackMessageSize)
+		{
+			retVal = callbackMessageSize;
+		}
+		else
+		{
+			retVal = CANMessage::get_data_length();		
+		}
+		return retVal;
+	}
+
 	void CANLibManagedMessage::set_source_control_function(ControlFunction *value)
 	{
 		source = value;
@@ -51,6 +71,11 @@ namespace isobus
 	void CANLibManagedMessage::set_identifier(CANIdentifier value)
 	{
 		identifier = value;
+	}
+
+	std::uint32_t CANLibManagedMessage::get_callback_message_size() const
+	{
+		return callbackMessageSize;
 	}
 
 } // namespace isobus

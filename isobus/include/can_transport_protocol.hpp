@@ -53,6 +53,7 @@ class TransportProtocolManager : public CANLibProtocol
         StateMachineState state;
         CANLibManagedMessage sessionMessage;
 	    TransmitCompleteCallback sessionCompleteCallback;
+	    DataChunkCallback frameChunkCallback;
 		void *parent;
         std::uint32_t timestamp_ms;
         std::uint16_t lastPacketNumber;
@@ -69,7 +70,7 @@ class TransportProtocolManager : public CANLibProtocol
         Timeout = 3,
         ClearToSendReceivedWhileTransferInProgress = 4,
         MaximumRetransmitRequestLimitReached = 5,
-        UnexpedtedDataTransferPacketReceived = 6,
+        UnexpectedDataTransferPacketReceived = 6,
         BadSequenceNumber = 7,
         DuplicateSequenceNumber = 8,
         TotalMessageSizeTooBig = 9,
@@ -105,7 +106,8 @@ class TransportProtocolManager : public CANLibProtocol
 		                               ControlFunction *source,
 		                               ControlFunction *destination,
 		                               TransmitCompleteCallback transmitCompleteCallback,
-		                               void *parentPointer) override;
+		                               void *parentPointer,
+		                               DataChunkCallback frameChunkCallback) override;
 
     void update(CANLibBadge<CANNetworkManager>) override;
 
