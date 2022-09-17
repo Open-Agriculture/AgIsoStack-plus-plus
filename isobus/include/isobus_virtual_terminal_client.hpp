@@ -9,13 +9,13 @@
 #ifndef ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP
 
-#include "can_partnered_control_function.hpp"
 #include "can_internal_control_function.hpp"
+#include "can_partnered_control_function.hpp"
 #include "processing_flags.hpp"
 
 #include <memory>
-#include <vector>
 #include <thread>
+#include <vector>
 
 namespace isobus
 {
@@ -319,7 +319,7 @@ namespace isobus
 
 		// These are the functions for specifying your pool to upload.
 		// You have a few options:
-		// 1. Upload in one blob of contigious memory 
+		// 1. Upload in one blob of contigious memory
 		// This is good for small pools or pools where you have all the data in memory.
 		// 2. Get a callback at some inteval to provide data in chunks
 		// This is probably better for huge pools if you are RAM constrained, or if your
@@ -501,6 +501,11 @@ namespace isobus
 		                             ControlFunction *destinationControlFunction,
 		                             bool successful,
 		                             void *parentPointer);
+		static bool process_internal_object_pool_upload_callback(std::uint32_t callbackIndex,
+		                                                         std::uint32_t bytesOffset,
+		                                                         std::uint32_t numberOfBytesNeeded,
+		                                                         std::uint8_t *chunkBuffer,
+		                                                         void *parentPointer);
 
 		void worker_thread_function();
 

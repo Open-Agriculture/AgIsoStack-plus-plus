@@ -13,8 +13,8 @@
 #include "can_warning_logger.hpp"
 #include "system_timing.hpp"
 
-#include <cstring>
 #include <algorithm>
+#include <cstring>
 
 namespace isobus
 {
@@ -929,8 +929,8 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if ((numberOfPoints > 0) && 
-			(nullptr != listOfXOffsetsRelativeToCursor) &&
+		if ((numberOfPoints > 0) &&
+		    (nullptr != listOfXOffsetsRelativeToCursor) &&
 		    (nullptr != listOfYOffsetsRelativeToCursor))
 
 		{
@@ -964,7 +964,7 @@ namespace isobus
 		bool retVal = false;
 
 		if ((nullptr != value) &&
-			(0 != textLength))
+		    (0 != textLength))
 		{
 			std::uint16_t messageLength = (6 + textLength);
 			std::uint8_t *buffer = new std::uint8_t[messageLength];
@@ -976,11 +976,11 @@ namespace isobus
 			buffer[5] = textLength;
 			memcpy(buffer, value, textLength);
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-			                                                                 buffer,
-			                                                                 messageLength,
-			                                                                 myControlFunction.get(),
-			                                                                 partnerControlFunction.get(),
-			                                                                 CANIdentifier::PriorityLowest7);
+			                                                        buffer,
+			                                                        messageLength,
+			                                                        myControlFunction.get(),
+			                                                        partnerControlFunction.get(),
+			                                                        CANIdentifier::PriorityLowest7);
 			delete[] buffer;
 		}
 		return retVal;
@@ -1063,8 +1063,8 @@ namespace isobus
 		constexpr std::uint16_t MAX_WIDTH_HEIGHT = 32767;
 		bool retVal = false;
 
-		if ((width <= MAX_WIDTH_HEIGHT) && 
-			(height <= MAX_WIDTH_HEIGHT))
+		if ((width <= MAX_WIDTH_HEIGHT) &&
+		    (height <= MAX_WIDTH_HEIGHT))
 		{
 			const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
 				                                             static_cast<std::uint8_t>(objectID & 0xFF),
@@ -1456,7 +1456,7 @@ namespace isobus
 
 					for (auto pool : objectPools)
 					{
-						totalPoolSize += pool.objectPoolSize; 
+						totalPoolSize += pool.objectPoolSize;
 					}
 
 					if (send_get_memory(totalPoolSize))
@@ -1471,14 +1471,14 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("VT Get Memory Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Memory Response Timout");
 					}
 				}
 				break;
 
 				case StateMachineState::SendGetNumberSoftkeys:
 				{
-					if(send_get_number_of_softkeys())
+					if (send_get_number_of_softkeys())
 					{
 						set_state(StateMachineState::WaitForGetNumberSoftKeysResponse);
 					}
@@ -1490,7 +1490,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("VT Get Number Softkeys Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Number Softkeys Response Timout");
 					}
 				}
 				break;
@@ -1509,7 +1509,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("VT Get Text Font Data Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Text Font Data Response Timout");
 					}
 				}
 				break;
@@ -1528,7 +1528,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("VT Get Hardware Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Hardware Response Timout");
 					}
 				}
 				break;
@@ -1539,7 +1539,7 @@ namespace isobus
 					//! Right now only full TP sends are supported until I finish ETP
 					//! So this will fail if you have a pool > 1785 bytes unless you
 					//! split it up into subpools
-					
+
 					bool allPoolsProcessed = true;
 
 					for (std::uint32_t i = 0; i < objectPools.size(); i++)
@@ -1558,21 +1558,17 @@ namespace isobus
 								if (!objectPools[i].uploaded)
 								{
 									bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-									                                                                         objectPools[i].objectPoolDataPointer,
-									                                                                         objectPools[i].objectPoolSize,
+									                                                                         nullptr,
+									                                                                         objectPools[i].objectPoolSize + 1, // Account for Mux byte
 									                                                                         myControlFunction.get(),
 									                                                                         partnerControlFunction.get(),
 									                                                                         CANIdentifier::CANPriority::PriorityLowest7,
 									                                                                         process_callback,
-									                                                                         this);
+									                                                                         this,
+									                                                                         process_internal_object_pool_upload_callback);
 									if (transmitSuccessful)
 									{
-										objectPools[i].uploaded = true;
 										currentObjectPoolState = CurrentObjectPoolUploadState::InProgress;
-										if (i == (objectPools.size() - 1))
-										{
-											set_state(StateMachineState::SendEndOfObjectPool);
-										}
 									}
 								}
 								else
@@ -1597,7 +1593,6 @@ namespace isobus
 								break;
 							}
 						}
-
 					}
 
 					if (allPoolsProcessed)
@@ -1621,7 +1616,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("VT Get End of Object Pool Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get End of Object Pool Response Timout");
 					}
 				}
 				break;
@@ -1632,7 +1627,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Disconnected);
-						CANStackLogger::CAN_stack_log("VT Status Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Status Timout");
 					}
 				}
 				break;
@@ -1640,13 +1635,11 @@ namespace isobus
 				case StateMachineState::Failed:
 				{
 					sendWorkingSetMaintenenace = false;
-					CANStackLogger::CAN_stack_log("VT Connection Failed");
 				}
 				break;
 
 				default:
 				{
-
 				}
 				break;
 			}
@@ -1657,7 +1650,7 @@ namespace isobus
 		}
 
 		if ((sendWorkingSetMaintenenace) &&
-			(SystemTiming::time_expired_ms(lastWorkingSetMaintenanceTimestamp_ms, WORKING_SET_MAINTENANCE_TIMEOUT_MS)))
+		    (SystemTiming::time_expired_ms(lastWorkingSetMaintenanceTimestamp_ms, WORKING_SET_MAINTENANCE_TIMEOUT_MS)))
 		{
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
 		}
@@ -1965,7 +1958,7 @@ namespace isobus
 		                                                        myControlFunction.get(),
 		                                                        partnerControlFunction.get(),
 		                                                        CANIdentifier::PriorityLowest7);
-		delete [] buffer;
+		delete[] buffer;
 		return retVal;
 	}
 
@@ -2130,35 +2123,35 @@ namespace isobus
 
 	void VirtualTerminalClient::process_rx_message(CANMessage *message, void *parentPointer)
 	{
-		if ((nullptr != message) && 
-			(nullptr != parentPointer) &&
+		if ((nullptr != message) &&
+		    (nullptr != parentPointer) &&
 		    (CAN_DATA_LENGTH == message->get_data_length()))
 		{
 			VirtualTerminalClient *parentVT = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
 
 			switch (message->get_identifier().get_parameter_group_number())
 			{
-				//! @todo Handle NACK, any other PGNs needed as well
-				
+					//! @todo Handle NACK, any other PGNs needed as well
+
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU):
 				{
 					switch (message->get_data().at(0))
 					{
-						case static_cast <std::uint8_t>(Function::SoftKeyActivationMessage):
+						case static_cast<std::uint8_t>(Function::SoftKeyActivationMessage):
 						{
 							std::uint8_t keyCode = message->get_data().at(1);
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
-								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode), 
-									static_cast<std::uint16_t>(message->get_data().at(6)), 
-									(static_cast<std::uint16_t>(message->get_data().at(2)) | static_cast<std::uint16_t>(message->get_data().at(3) << 8)), 
-									(static_cast<std::uint16_t>(message->get_data().at(4)) | static_cast<std::uint16_t>(message->get_data().at(5) << 8)), 
-									parentVT);
+								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode),
+								                                         static_cast<std::uint16_t>(message->get_data().at(6)),
+								                                         (static_cast<std::uint16_t>(message->get_data().at(2)) | static_cast<std::uint16_t>(message->get_data().at(3) << 8)),
+								                                         (static_cast<std::uint16_t>(message->get_data().at(4)) | static_cast<std::uint16_t>(message->get_data().at(5) << 8)),
+								                                         parentVT);
 							}
 						}
 						break;
 
-						case static_cast <std::uint8_t>(Function::ButtonActivationMessage):
+						case static_cast<std::uint8_t>(Function::ButtonActivationMessage):
 						{
 							std::uint8_t keyCode = message->get_data().at(1);
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
@@ -2174,7 +2167,7 @@ namespace isobus
 						}
 						break;
 
-						case static_cast<std::uint8_t>(Function::PointingEventMessage): 
+						case static_cast<std::uint8_t>(Function::PointingEventMessage):
 						{
 							std::uint16_t xPosition = (static_cast<std::uint16_t>(message->get_data().at(1)) &
 							                           ((static_cast<std::uint16_t>(message->get_data().at(2))) << 8));
@@ -2185,19 +2178,19 @@ namespace isobus
 							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
 							{
 								//! @todo process TAN
-							}							
+							}
 
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
 								parentVT->process_pointing_event_callback(static_cast<KeyActivationCode>(keyCode), xPosition, yPosition, parentVT);
 							}
 						}
-						break;	
+						break;
 
 						case static_cast<std::uint8_t>(Function::SelectInputObjectCommand):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(message->get_data()[1]) & 
-								((static_cast<std::uint16_t>(message->get_data()[2])) << 8));
+							std::uint16_t objectID = (static_cast<std::uint16_t>(message->get_data()[1]) &
+							                          ((static_cast<std::uint16_t>(message->get_data()[2])) << 8));
 							bool objectSelected = (0x01 == message->get_data()[3]);
 							bool objectOpenForInput = false;
 
@@ -2209,7 +2202,7 @@ namespace isobus
 							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
 							{
 								//! @todo process TAN
-							}	
+							}
 							parentVT->process_select_input_object_callback(objectID, objectSelected, objectOpenForInput, parentVT);
 						}
 						break;
@@ -2241,6 +2234,7 @@ namespace isobus
 								else
 								{
 									parentVT->set_state(StateMachineState::Failed);
+									CANStackLogger::CAN_stack_log("[VT]: Connection Failed Not Enough Memory");
 								}
 							}
 						}
@@ -2290,11 +2284,11 @@ namespace isobus
 						}
 						break;
 
-						case static_cast <std::uint8_t>(Function::EndOfObjectPoolMessage):
+						case static_cast<std::uint8_t>(Function::EndOfObjectPoolMessage):
 						{
 							if (StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state)
 							{
-								bool anyErrorInPool =  (0 != (message->get_data()[1] & 0x01));
+								bool anyErrorInPool = (0 != (message->get_data()[1] & 0x01));
 								bool vtRanOutOfMemory = (0 != (message->get_data()[1] & 0x02));
 								bool otherErrors = (0 != (message->get_data()[1] & 0x08));
 								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data()[2]) &
@@ -2304,27 +2298,27 @@ namespace isobus
 								std::uint8_t objectPoolErrorBitmask = message->get_data()[6];
 
 								if ((!anyErrorInPool) &&
-									(0 == objectPoolErrorBitmask))
+								    (0 == objectPoolErrorBitmask))
 								{
 									parentVT->set_state(StateMachineState::Connected);
 								}
 								else
 								{
 									parentVT->set_state(StateMachineState::Failed);
-									CANStackLogger::CAN_stack_log("Error in end of object pool message." +
+									CANStackLogger::CAN_stack_log("[VT]: Error in end of object pool message." +
 									                              std::string("Faulty Object ") +
 									                              std::to_string(static_cast<int>(objectIDOfFaultyObject)) +
 									                              std::string(" Faulty Object Parent ") +
 									                              std::to_string(static_cast<int>(parentObjectIDOfFaultyObject)) +
 									                              std::string(" Pool error bitmask value ") +
-																  std::to_string(static_cast<int>(objectPoolErrorBitmask)));
+									                              std::to_string(static_cast<int>(objectPoolErrorBitmask)));
 									if (vtRanOutOfMemory)
 									{
-										CANStackLogger::CAN_stack_log("VT Ran out of memory");
+										CANStackLogger::CAN_stack_log("[VT]: Ran out of memory");
 									}
 									if (otherErrors)
 									{
-										CANStackLogger::CAN_stack_log("VT Reported other errors in EOM response");
+										CANStackLogger::CAN_stack_log("[VT]: Reported other errors in EOM response");
 									}
 								}
 							}
@@ -2336,19 +2330,19 @@ namespace isobus
 
 				default:
 				{
-					CANStackLogger::CAN_stack_log("VT Client unknown message");
+					CANStackLogger::CAN_stack_log("[VT]: Client unknown message");
 				}
 				break;
 			}
 		}
 		else
 		{
-			CANStackLogger::CAN_stack_log("VT-ECU Client message invalid");
+			CANStackLogger::CAN_stack_log("[VT]: VT-ECU Client message invalid");
 		}
 	}
 
 	void VirtualTerminalClient::process_callback(std::uint32_t parameterGroupNumber,
-	                                             std::uint32_t ,
+	                                             std::uint32_t,
 	                                             InternalControlFunction *,
 	                                             ControlFunction *destinationControlFunction,
 	                                             bool successful,
@@ -2356,7 +2350,7 @@ namespace isobus
 	{
 		if ((nullptr != parentPointer) &&
 		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == parameterGroupNumber) &&
-			(nullptr != destinationControlFunction))
+		    (nullptr != destinationControlFunction))
 		{
 			VirtualTerminalClient *parent = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
 
@@ -2372,6 +2366,60 @@ namespace isobus
 				}
 			}
 		}
+	}
+
+	bool VirtualTerminalClient::process_internal_object_pool_upload_callback(std::uint32_t,
+	                                                                         std::uint32_t bytesOffset,
+	                                                                         std::uint32_t numberOfBytesNeeded,
+	                                                                         std::uint8_t *chunkBuffer,
+	                                                                         void *parentPointer)
+	{
+		bool retVal = false;
+
+		if ((nullptr != parentPointer) &&
+		    (nullptr != chunkBuffer) &&
+		    (0 != numberOfBytesNeeded))
+		{
+			VirtualTerminalClient *parentVTClient = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+			std::uint32_t poolIndex;
+
+			// Need to figure out which pool we're currently uploading
+			for (std::uint32_t i = 0; i < parentVTClient->objectPools.size(); i++)
+			{
+				if (!parentVTClient->objectPools[i].uploaded)
+				{
+					poolIndex = i;
+					break;
+				}
+			}
+
+			if (poolIndex < parentVTClient->objectPools.size())
+			{
+				if ((bytesOffset + numberOfBytesNeeded) < parentVTClient->objectPools[poolIndex].objectPoolSize)
+				{
+					// We've got more data to transfer
+					retVal = true;
+					if (0 == bytesOffset)
+					{
+						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+						memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
+					}
+					else
+					{
+						// Subtract off 1 to account for the mux in the first byte of the message
+						memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+					}
+				}
+				else if ((bytesOffset + numberOfBytesNeeded) == parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
+				{
+					// We have a final non-aligned amount to transfer
+					retVal = true;
+					// Subtract off 1 to account for the mux in the first byte of the message
+					memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+				}
+			}
+		}
+		return retVal;
 	}
 
 	void VirtualTerminalClient::worker_thread_function()
