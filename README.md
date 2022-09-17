@@ -11,9 +11,8 @@ The state of the project is as follows...
     - TP CM Tx: Implemented, Needs Testing :white_check_mark::question:
     - TP CM Rx: Implemented, Needs Testing :white_check_mark::question:
 - ISO11783 Extended Transport Protocol
-    - Implementation Started :hourglass:
-- ISO11783 Virtual Terminal (Up to version 3 initially, maybe up to 6 later)
-    - Currently in-development, highest priority :hourglass:
+    - In Development :hourglass:
+- ISO11783 Virtual Terminal: Implemented, Needs testing :white_check_mark: :question:
 
 ### Not yet started, but planned:
 - ISO11783 File Server
