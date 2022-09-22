@@ -150,7 +150,7 @@ namespace isobus
 
 				case NAME::NAMEParameters::ArbitraryAddressCapable:
 				{
-					retVal = (currentFilterValue == NAMEToCheck.get_arbitrary_address_capable());
+					retVal = ((0 != currentFilterValue) == NAMEToCheck.get_arbitrary_address_capable());
 				}
 				break;
 
