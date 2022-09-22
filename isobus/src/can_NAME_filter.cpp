@@ -83,7 +83,7 @@ namespace isobus
 
 			case NAME::NAMEParameters::ArbitraryAddressCapable:
 			{
-				retVal = (nameToCompare.get_arbitrary_address_capable() == value);
+				retVal = (nameToCompare.get_arbitrary_address_capable() == (0 != value));
 			}
 			break;
 
