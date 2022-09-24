@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file isobus_virtual_terminal.cpp
+/// @file isobus_virtual_terminal_client.cpp
 ///
 /// @brief Implements the client for a virtual terminal
 /// @author Adrian Del Grosso
@@ -822,7 +822,7 @@ namespace isobus
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetFontAttributesObjectOD),
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetFontAttributesObjectID),
 			                                             static_cast<std::uint8_t>(fontAttributesObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(fontAttributesObjectID >> 8),
 			                                             0xFF,
