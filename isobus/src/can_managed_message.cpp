@@ -53,7 +53,7 @@ namespace isobus
 		}
 		else
 		{
-			retVal = CANMessage::get_data_length();		
+			retVal = CANMessage::get_data_length();
 		}
 		return retVal;
 	}

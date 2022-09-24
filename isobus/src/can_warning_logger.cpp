@@ -13,41 +13,39 @@
 
 namespace isobus
 {
-    CANStackLogger *CANStackLogger::logger = nullptr;
+	CANStackLogger *CANStackLogger::logger = nullptr;
 
-    CANStackLogger::CANStackLogger()
-    {
+	CANStackLogger::CANStackLogger()
+	{
+	}
 
-    }
+	CANStackLogger::~CANStackLogger()
+	{
+	}
 
-    CANStackLogger::~CANStackLogger()
-    {
+	void CANStackLogger::CAN_stack_log(const std::string &warningText)
+	{
+		CANStackLogger *canStackLogger = nullptr;
 
-    }
+		if (get_can_stack_logger(canStackLogger))
+		{
+			canStackLogger->LogCANLibWarning(warningText);
+		}
+	}
 
-    void CANStackLogger::CAN_stack_log(const std::string &warningText)
-    {
-        CANStackLogger *canStackLogger = nullptr;
+	void CANStackLogger::set_can_stack_logger_sink(CANStackLogger *logSink)
+	{
+		logger = logSink;
+	}
 
-        if (get_can_stack_logger(canStackLogger))
-        {
-            canStackLogger->LogCANLibWarning(warningText);
-        }
-    }
+	void CANStackLogger::LogCANLibWarning(const std::string &)
+	{
+		// Override this function to use the log sink
+	}
 
-    void CANStackLogger::set_can_stack_logger_sink(CANStackLogger *logSink)
-    {
-        logger = logSink;
-    }
-
-    void CANStackLogger::LogCANLibWarning(const std::string &)
-    {
-        // Override this function to use the log sink
-    }
-
-    bool CANStackLogger::get_can_stack_logger(CANStackLogger *canStackLogger)
-    {
-        canStackLogger = logger;
-        return (nullptr != canStackLogger);
-    }
+	bool CANStackLogger::get_can_stack_logger(CANStackLogger *canStackLogger)
+	{
+		canStackLogger = logger;
+		return (nullptr != canStackLogger);
+	}
 } // namespace isobus

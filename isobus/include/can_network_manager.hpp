@@ -54,7 +54,7 @@ namespace isobus
 
 		/// @brief This is how you register a callback for any PGN destined for the global address (0xFF)
 		/// @param[in] parameterGroupNumber The PGN you want to register for
-		/// @param[in] callback The callback that will be called when parameterGroupNumber is recieved from the global address (0xFF) 
+		/// @param[in] callback The callback that will be called when parameterGroupNumber is recieved from the global address (0xFF)
 		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.
 		void add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
@@ -139,13 +139,12 @@ namespace isobus
 		void protocol_message_callback(CANMessage *protocolMessage);
 
 	private:
-
 		/// @brief A structure to hold PGN callback data to provide parent back to the reigistrar of the callback
 		struct CANLibProtocolPGNCallbackInfo
 		{
 			bool operator==(const CANLibProtocolPGNCallbackInfo &obj); ///< A function to compare the other structure member variables
 			CANLibCallback callback; ///< The callback itself
-			void *parent; ///< A generic context variable that helps identify what object the callback was destined for 
+			void *parent; ///< A generic context variable that helps identify what object the callback was destined for
 			std::uint32_t parameterGroupNumber; ///< The PGN associated with the callback
 		};
 
@@ -169,7 +168,7 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN to use when sending the message
 		/// @param[in] priority The CAN priority of the message being sent
 		/// @param[in] data A pointer to the data buffer to send from
-		/// @param[in] size The size of the messgage to send 
+		/// @param[in] size The size of the messgage to send
 		/// @returns The constucted frame based on the inputs
 		HardwareInterfaceCANFrame construct_frame(std::uint32_t portIndex,
 		                                          std::uint8_t sourceAddress,

@@ -7,9 +7,9 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "can_address_claim_state_machine.hpp"
+#include "can_constants.hpp"
 #include "can_general_parameter_group_numbers.hpp"
 #include "can_network_manager.hpp"
-#include "can_constants.hpp"
 #include "system_timing.hpp"
 
 #include <cassert>

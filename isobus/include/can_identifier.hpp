@@ -23,7 +23,6 @@ namespace isobus
 	class CANIdentifier
 	{
 	public:
-
 		/// @brief Defines all the CAN frame priorities that can be encoded in a frame ID
 		enum CANPriority
 		{
@@ -101,7 +100,7 @@ namespace isobus
 
 		static constexpr std::uint32_t IDENTIFIER_TYPE_BIT_MASK = 0x80000000; ///< This bit denotes if the frame is standard or extended format
 		static constexpr std::uint32_t UNDEFINED_PARAMETER_GROUP_NUMBER = 0xFFFFFFFF; ///< A fake PGN used internally to denote a NULL PGN
-		static constexpr std::uint8_t GLOBAL_ADDRESS = 0xFF;  ///< The broadcast CAN address
+		static constexpr std::uint8_t GLOBAL_ADDRESS = 0xFF; ///< The broadcast CAN address
 		static constexpr std::uint8_t NULL_ADDRESS = 0xFE; ///< The NULL CAN address as defined by ISO11783
 
 	private:

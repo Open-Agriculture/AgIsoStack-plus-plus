@@ -36,7 +36,6 @@ namespace isobus
 	class PartneredControlFunction : public ControlFunction
 	{
 	public:
-
 		/// @brief the constructor for a PartneredControlFunction
 		/// @param[in] CANPort The CAN channel associated with this control function definition
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
@@ -61,12 +60,12 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN associated with the callback being removed
 		/// @param[in] callback The callback function being removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
- 		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Returns the number of parameter group number callbacks associated with this control function
 		/// @returns The number of parameter group number callbacks associated with this control function
 		std::uint32_t get_number_parameter_group_number_callbacks() const;
-		
+
 		/// @brief Returns the number of NAME filter objects that describe the identity of this control function
 		/// @returns The number of NAME filter objects that describe the identity of this control function
 		std::uint32_t get_number_name_filters() const;

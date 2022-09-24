@@ -295,7 +295,7 @@ namespace isobus
 		// Command Messages
 		/// @brief Sends a hide/show object command
 		/// @details This command is used to hide or show a Container object.
-		/// This pertains to the visibility of the object as well as its 
+		/// This pertains to the visibility of the object as well as its
 		/// remembered state.If the object cannot be displayed due to references to missing
 		/// objects, the VT generates an error in the response.
 		/// @param[in] objectID The ID of the target object
@@ -304,7 +304,7 @@ namespace isobus
 		bool send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command);
 
 		/// @brief Sends an enable/disable object command
-		/// @details This command is used to enable or disable an input field object 
+		/// @details This command is used to enable or disable an input field object
 		/// or a Button object and pertains to the accessibility of an input field
 		/// object or Button object.This command is also used to enable or disable an Animation object.
 		/// It is allowed to enable already enabled objects and to disable already disabled objects.
@@ -325,8 +325,8 @@ namespace isobus
 		bool send_ESC();
 
 		/// @brief Sends the control audio signal command
-		/// @details This command may be used to control the audio on the VT. 
-		/// When received this message shall terminate any audio in process from 
+		/// @details This command may be used to control the audio on the VT.
+		/// When received this message shall terminate any audio in process from
 		/// the originating ECU and replace the previous command with the new command.
 		/// @param[in] activations Number of times to activate the signal
 		/// @param[in] frequency_hz The audio frequency to command in Hz
@@ -337,8 +337,8 @@ namespace isobus
 
 		/// @brief Sends the set audio volume command
 		/// @details This command applies to subsequent Control Audio Signal commands.
-		/// VTs that are not able to modify the volume of the currently playing tone shall set 
-		/// the Audio device is busy bit in the response.This command should not affect in any way 
+		/// VTs that are not able to modify the volume of the currently playing tone shall set
+		/// the Audio device is busy bit in the response.This command should not affect in any way
 		/// the volume settings of other Working Sets and shall not affect the volume of Alarm Masks.
 		/// @param[in] volume_percent The volume percentage to set the VT server to
 		/// @returns true if the message was sent successfully
@@ -346,12 +346,12 @@ namespace isobus
 
 		/// @brief Sends the change child location command
 		/// @details The Change Child Location command is used to change the position of an object. The new position is set
-		/// relative to the object's current position. Since the object can be included in many 
-		/// parent objects, the parent Object ID is also included. If a parent object includes 
-		/// the child object multiple times, then each instance will be moved. 
+		/// relative to the object's current position. Since the object can be included in many
+		/// parent objects, the parent Object ID is also included. If a parent object includes
+		/// the child object multiple times, then each instance will be moved.
 		/// The position attributes given in the message have an offset of -127, so
 		/// a value of 255 results in a +128 px move.
-		/// Positive values indicate a position change down or to the right. Negative values 
+		/// Positive values indicate a position change down or to the right. Negative values
 		/// indicate a position change up or to the left.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] parentObjectID The ID of the object's parent object
@@ -361,15 +361,15 @@ namespace isobus
 		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange);
 
 		/// @brief Sends the change child position command
-		/// @details The new position is set relative to the parent object's position. 
-		/// Since the object can be included in many parent objects, the parent Object ID 
-		/// is also included.If a parent object includes the child object multiples times, 
-		/// then each instance will be moved to the same location(the designer may want to 
-		/// use Change Child Location command to move all instances in a relative motion). 
+		/// @details The new position is set relative to the parent object's position.
+		/// Since the object can be included in many parent objects, the parent Object ID
+		/// is also included.If a parent object includes the child object multiples times,
+		/// then each instance will be moved to the same location(the designer may want to
+		/// use Change Child Location command to move all instances in a relative motion).
 		/// When the object is moved, the parent object shall be refreshed.
 		/// The position attributes given in the message are signed integer.
-		/// Positive values indicate a position below(Y) or to the right of(X) the top left 
-		/// corner of the parent object.Negative values indicate a position above(Y) or to the 
+		/// Positive values indicate a position below(Y) or to the right of(X) the top left
+		/// corner of the parent object.Negative values indicate a position above(Y) or to the
 		/// left of(X) the top left corner of the parent object.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] parentObjectID The ID of the object's parent object
@@ -459,7 +459,7 @@ namespace isobus
 		bool send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t color, std::uint16_t fillPatternObjectID);
 
 		/// @brief Sends the change active mask command
-		/// @details This command is used to change the active mask of a Working Set 
+		/// @details This command is used to change the active mask of a Working Set
 		/// to either a Data Mask object or an Alarm Mask object.
 		/// @param[in] workingSetObjectID The ID of the working set
 		/// @param[in] newActiveMaskObjectID The object ID of the new active mask
@@ -467,7 +467,7 @@ namespace isobus
 		bool send_change_active_mask(std::uint16_t workingSetObjectID, std::uint16_t newActiveMaskObjectID);
 
 		/// @brief Sends the change softkey mask command
-		/// @details This command is used to change the Soft Key Mask associated with a 
+		/// @details This command is used to change the Soft Key Mask associated with a
 		/// Data Mask object or an Alarm Mask object.
 		/// @param[in] type The mask type, alarm or data
 		/// @param[in] dataOrAlarmMaskObjectID The object ID of the target mask
@@ -476,7 +476,7 @@ namespace isobus
 		bool send_change_softkey_mask(MaskType type, std::uint16_t dataOrAlarmMaskObjectID, std::uint16_t newSoftKeyMaskObjectID);
 
 		/// @brief Sends the change attribute command
-		/// @details This command is used to change any attribute with an assigned Attribute ID. 
+		/// @details This command is used to change any attribute with an assigned Attribute ID.
 		/// This message cannot be used to change strings.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] attributeID The attribute ID of the attribute being changed
@@ -485,8 +485,8 @@ namespace isobus
 		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, std::uint32_t value);
 
 		/// @brief Sends the change priority command
-		/// @details This command is used to change the priority of an Alarm Mask. 
-		/// This command causes the VT to evaluate the priority of all active masks and 
+		/// @details This command is used to change the priority of an Alarm Mask.
+		/// This command causes the VT to evaluate the priority of all active masks and
 		/// may cause a change to a different mask if the Alarm Mask being changed
 		/// should either become the active Working Set and mask,
 		/// or should no longer be the active Working Set and mask.
@@ -496,7 +496,7 @@ namespace isobus
 		bool send_change_priority(std::uint16_t alarmMaskObjectID, AlarmMaskPriority priority);
 
 		/// @brief Sends the change list item command
-		/// @details This command is used to change a list item in an Input List object, 
+		/// @details This command is used to change a list item in an Input List object,
 		/// Output List object, animation object, or external object definition object.
 		/// NULL_OBJECT_ID will result in the list item being removed, but will not change the index
 		/// order of the other list items.
@@ -507,8 +507,8 @@ namespace isobus
 		bool send_change_list_item(std::uint16_t objectID, std::uint8_t listIndex, std::uint16_t newObjectID);
 
 		/// @brief Sends the lock unlock mask command
-		/// @details This command is used by a Working Set to disallow or allow 
-		/// screen refreshes at the VT for the visible Data Mask or User Layout Data Mask 
+		/// @details This command is used by a Working Set to disallow or allow
+		/// screen refreshes at the VT for the visible Data Mask or User Layout Data Mask
 		/// owned by the requesting Working Set.
 		/// This message would be used when a series of changes need to be synchronized or made visually atomic.
 		/// The mask may be unlocked if a a timeout occurs based on the timeout attribute of this message, or by
@@ -634,8 +634,8 @@ namespace isobus
 
 		/// @brief Sends the erase rectangle command
 		/// @details Fills the rectangle at the graphics cursor using the
-		/// current background colour.For this command, the Fill Attributes Object is 
-		/// not used regardless of the state of Options bit 1 The graphics cursor is 
+		/// current background colour.For this command, the Fill Attributes Object is
+		/// not used regardless of the state of Options bit 1 The graphics cursor is
 		/// moved to the bottom right pixel inside of the rectangle.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] width The width of the rectangle
@@ -791,7 +791,7 @@ namespace isobus
 		// VT Querying
 		/// @brief Sends the get attribute value message
 		/// @param[in] objectID The object ID to query
-		/// @param[in] attributeID The attribute object to query 
+		/// @param[in] attributeID The attribute object to query
 		/// @returns true if the message was sent successfully
 		bool send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID);
 
@@ -1037,13 +1037,13 @@ namespace isobus
 			Success, ///< The object pool was uploaded
 			Failed ///< The pool upload has failed
 		};
-		
+
 		/// @brief An object for storing information regarding an object pool upload
 		struct ObjectPoolDataStruct
 		{
 			const std::uint8_t *objectPoolDataPointer; ///< A pointer to an object pool
 			const std::vector<std::uint8_t> *objectPoolVectorPointer; ///< A pointer to an object pool (vector format)
-			DataChunkCallback dataCallback; ///< A callback used to get data in chunks as an alternative to loading the whole pool at once 
+			DataChunkCallback dataCallback; ///< A callback used to get data in chunks as an alternative to loading the whole pool at once
 			std::uint32_t objectPoolSize; ///< The size of the object pool
 			VTVersion version; ///< The version of the object pool. Must be the same for all pools!
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
@@ -1216,7 +1216,7 @@ namespace isobus
 		ProcessingFlags txFlags; ///< A retry mechanism for internal Tx messages
 
 		// Status message contents from the VT
-		std::uint32_t lastVTStatusTimestamp_ms; ///< The timestamp of the last VT status message 
+		std::uint32_t lastVTStatusTimestamp_ms; ///< The timestamp of the last VT status message
 		std::uint16_t activeWorkingSetDataMaskObjectID; ///< The active working set data mask object ID
 		std::uint16_t activeWorkingSetSoftkeyMaskObjectID; ///< The active working set's softkey mask object ID
 		std::uint8_t activeWorkingSetMasterAddress; ///< The active working set master address

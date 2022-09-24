@@ -51,7 +51,7 @@ namespace isobus
 	{
 	}
 
-	CANIdentifier& CANIdentifier::operator= (const CANIdentifier &obj)
+	CANIdentifier &CANIdentifier::operator=(const CANIdentifier &obj)
 	{
 		m_RawIdentifier = obj.m_RawIdentifier;
 		return *this;

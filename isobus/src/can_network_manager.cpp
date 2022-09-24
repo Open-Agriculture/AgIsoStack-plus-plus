@@ -9,18 +9,18 @@
 //================================================================================================
 
 #include "can_network_manager.hpp"
+#include "can_constants.hpp"
+#include "can_general_parameter_group_numbers.hpp"
 #include "can_hardware_abstraction.hpp"
 #include "can_managed_message.hpp"
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_protocol.hpp"
 #include "can_message.hpp"
-#include "can_constants.hpp"
 #include "can_partnered_control_function.hpp"
+#include "can_protocol.hpp"
 #include "can_warning_logger.hpp"
 #include "system_timing.hpp"
 
-#include <cstring>
 #include <algorithm>
+#include <cstring>
 namespace isobus
 {
 	CANNetworkManager CANNetworkManager::CANNetwork;
@@ -49,7 +49,7 @@ namespace isobus
 		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
 	}
 
-    void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
 		auto callbackLocation = std::find(globalParameterGroupNumberCallbacks.begin(), globalParameterGroupNumberCallbacks.end(), tempObject);
@@ -68,8 +68,8 @@ namespace isobus
 	{
 		InternalControlFunction *retVal = nullptr;
 
-		if ((nullptr != controlFunction) && 
-			(ControlFunction::Type::Internal == controlFunction->get_type()))
+		if ((nullptr != controlFunction) &&
+		    (ControlFunction::Type::Internal == controlFunction->get_type()))
 		{
 			retVal = static_cast<InternalControlFunction *>(controlFunction);
 		}
@@ -83,18 +83,18 @@ namespace isobus
 	                                         ControlFunction *destinationControlFunction,
 	                                         CANIdentifier::CANPriority priority,
 	                                         TransmitCompleteCallback transmitCompleteCallback,
-											 void *parentPointer,
+	                                         void *parentPointer,
 	                                         DataChunkCallback frameChunkCallback)
 	{
 		bool retVal = false;
 
-		if (((nullptr != dataBuffer) || 
-		(nullptr != frameChunkCallback)) && 
-		(dataLength > 0) && 
-		(dataLength <= CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH) && 
-		(nullptr != sourceControlFunction) && 
-		((parameterGroupNumber == static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim)) || 
-		(sourceControlFunction->get_address_valid())))
+		if (((nullptr != dataBuffer) ||
+		     (nullptr != frameChunkCallback)) &&
+		    (dataLength > 0) &&
+		    (dataLength <= CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH) &&
+		    (nullptr != sourceControlFunction) &&
+		    ((parameterGroupNumber == static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim)) ||
+		     (sourceControlFunction->get_address_valid())))
 		{
 			CANLibProtocol *currentProtocol;
 
@@ -133,8 +133,8 @@ namespace isobus
 					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, priority, dataBuffer, dataLength);
 				}
 
-				if ((retVal) && 
-					(nullptr != transmitCompleteCallback))
+				if ((retVal) &&
+				    (nullptr != transmitCompleteCallback))
 				{
 					// Message was not sent via a protocol, so handle the tx callback now
 					transmitCompleteCallback(parameterGroupNumber, dataLength, sourceControlFunction, destinationControlFunction, retVal, parentPointer);
@@ -178,14 +178,14 @@ namespace isobus
 					activeControlFunctions.push_back(currentInternalControlFunction);
 				}
 				if ((nullptr != currentInternalControlFunction) &&
-					(currentInternalControlFunction->get_changed_address_since_last_update({})))
+				    (currentInternalControlFunction->get_changed_address_since_last_update({})))
 				{
 					update_address_table(currentInternalControlFunction->get_can_port(), currentInternalControlFunction->get_address());
 				}
 			}
 		}
 
-		for (uint32_t i = 0; i <  CANLibProtocol::get_number_protocols(); i++)
+		for (uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 		{
 			CANLibProtocol *currentProtocol = nullptr;
 
@@ -231,7 +231,7 @@ namespace isobus
 		CANNetworkManager::CANNetwork.update_control_functions(rxFrame);
 
 		tempCANMessage.set_identifier(CANIdentifier(rxFrame.identifier));
-		
+
 		// Note, if this is an address claim message, the address to CF table might be stale.
 		// We don't want to update that here though, as we're maybe in some other thread in this callback.
 		// So for now, manually search all of them to line up the appropriate CF. A bit unfortunate in that we may have a lot of CFs, but saves pain later so we don't have to
@@ -242,7 +242,7 @@ namespace isobus
 			for (std::uint32_t i = 0; i < CANNetworkManager::CANNetwork.activeControlFunctions.size(); i++)
 			{
 				if ((CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_can_port() == tempCANMessage.get_can_port_index()) &&
-					(CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_address() == tempCANMessage.get_identifier().get_source_address()))
+				    (CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_address() == tempCANMessage.get_identifier().get_source_address()))
 				{
 					tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.activeControlFunctions[i]);
 					break;
@@ -255,7 +255,7 @@ namespace isobus
 			tempCANMessage.set_destination_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_destination_address()));
 		}
 		tempCANMessage.set_data(rxFrame.data, rxFrame.dataLength);
-		
+
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
 
@@ -314,12 +314,12 @@ namespace isobus
 		std::uint8_t CANPort = message.get_can_port_index();
 
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
-			(CANPort < CAN_PORT_MAXIMUM))
+		    (CANPort < CAN_PORT_MAXIMUM))
 		{
 			std::uint8_t messageSourceAddress = message.get_identifier().get_source_address();
 
 			if ((nullptr != controlFunctionTable[CANPort][messageSourceAddress]) &&
-				(CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][messageSourceAddress]->get_address()))
+			    (CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][messageSourceAddress]->get_address()))
 			{
 				// Someone is at that spot in the table, but their address was stolen
 				// Need to evict them from the table
@@ -350,7 +350,7 @@ namespace isobus
 		if (CANPort < CAN_PORT_MAXIMUM)
 		{
 			if ((nullptr != controlFunctionTable[CANPort][claimedAddress]) &&
-				(CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][claimedAddress]->get_address()))
+			    (CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][claimedAddress]->get_address()))
 			{
 				// Someone is at that spot in the table, but their address was stolen
 				// Need to evict them from the table
@@ -379,7 +379,7 @@ namespace isobus
 	void CANNetworkManager::update_control_functions(HardwareInterfaceCANFrame &rxFrame)
 	{
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
-			(CAN_DATA_LENGTH == rxFrame.dataLength))
+		    (CAN_DATA_LENGTH == rxFrame.dataLength))
 		{
 			std::uint64_t claimedNAME;
 			ControlFunction *foundControlFunction = nullptr;
@@ -395,7 +395,7 @@ namespace isobus
 
 			for (std::uint32_t i = 0; i < activeControlFunctions.size(); i++)
 			{
-				if (claimedNAME ==  activeControlFunctions[i]->controlFunctionNAME.get_full_name())
+				if (claimedNAME == activeControlFunctions[i]->controlFunctionNAME.get_full_name())
 				{
 					// Device already in the active list
 					foundControlFunction = activeControlFunctions[i];
@@ -411,7 +411,7 @@ namespace isobus
 			// Alwas have to iterate the list to check for duplicate addresses
 			for (std::uint32_t i = 0; i < inactiveControlFunctions.size(); i++)
 			{
-				if (claimedNAME ==  inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
+				if (claimedNAME == inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
 				{
 					// Device already in the inactive list
 					foundControlFunction = inactiveControlFunctions[i];
@@ -527,13 +527,13 @@ namespace isobus
 		{
 			ControlFunction *messageDestination = message->get_destination_control_function();
 			if ((nullptr == messageDestination) &&
-				(nullptr != message->get_source_control_function()))
+			    (nullptr != message->get_source_control_function()))
 			{
 				// Message destined to global
 				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
 				{
 					if ((message->get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
-						(nullptr != get_global_parameter_group_number_callback(i).get_callback()))
+					    (nullptr != get_global_parameter_group_number_callback(i).get_callback()))
 					{
 						// We have a callback that matches this PGN
 						get_global_parameter_group_number_callback(i).get_callback()(message, get_global_parameter_group_number_callback(i).get_parent());
@@ -553,13 +553,13 @@ namespace isobus
 							PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
 
 							if ((nullptr != currentControlFunction) &&
-								(currentControlFunction->get_can_port() == message->get_can_port_index()))
+							    (currentControlFunction->get_can_port() == message->get_can_port_index()))
 							{
 								// Message matches CAN port for a partnered control function
 								for (std::uint32_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
 								{
 									if ((message->get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
-										(nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
+									    (nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
 									{
 										// We have a callback matching this message
 										currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, currentControlFunction->get_parameter_group_number_callback(k).get_parent());

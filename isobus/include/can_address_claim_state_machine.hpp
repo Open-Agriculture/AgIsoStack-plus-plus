@@ -80,9 +80,9 @@ namespace isobus
 		State m_currentState; ///< The address claim state machine state
 		std::uint32_t m_timestamp_ms; ///< A generic timestamp in milliseconds used to find timeouts
 		std::uint8_t m_portIndex; ///< The CAN channel index to claim on
-		std::uint8_t m_preferredAddress;  ///< The address we'd prefer to claim as (we may not get it)
-		std::uint8_t m_randomClaimDelay_ms;  ///< The random delay as required by the ISO11783 standard
-		std::uint8_t m_claimedAddress;  ///< The actual address we ended up claiming
+		std::uint8_t m_preferredAddress; ///< The address we'd prefer to claim as (we may not get it)
+		std::uint8_t m_randomClaimDelay_ms; ///< The random delay as required by the ISO11783 standard
+		std::uint8_t m_claimedAddress; ///< The actual address we ended up claiming
 		bool m_enabled; ///<  Enable/disable state for this state machine
 	};
 

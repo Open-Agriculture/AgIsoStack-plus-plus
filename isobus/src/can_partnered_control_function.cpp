@@ -15,7 +15,7 @@
 
 namespace isobus
 {
-	std::vector<PartneredControlFunction*> PartneredControlFunction::partneredControlFunctionList;
+	std::vector<PartneredControlFunction *> PartneredControlFunction::partneredControlFunctionList;
 
 	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters) :
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort),
@@ -46,7 +46,7 @@ namespace isobus
 		}
 	}
 
-    std::uint32_t PartneredControlFunction::get_number_parameter_group_number_callbacks() const
+	std::uint32_t PartneredControlFunction::get_number_parameter_group_number_callbacks() const
 	{
 		return parameterGroupNumberCallbacks.size();
 	}

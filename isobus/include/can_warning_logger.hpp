@@ -25,7 +25,6 @@ namespace isobus
 	class CANStackLogger
 	{
 	public:
-
 		/// @brief The constructor for a CANStackLogger
 		CANStackLogger();
 

@@ -13,7 +13,7 @@
 
 namespace isobus
 {
-	std::vector<CANLibProtocol*> CANLibProtocol::protocolList;
+	std::vector<CANLibProtocol *> CANLibProtocol::protocolList;
 
 	CANLibProtocol::CANLibProtocol() :
 	  initialized(false)

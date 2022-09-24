@@ -19,7 +19,7 @@ namespace isobus
 	/// @class NAMEFilter
 	///
 	/// @brief A class that associates a NAME parameter with a value of that parameter.
-	/// @details This class is used to match a partner control function with specific criteria that 
+	/// @details This class is used to match a partner control function with specific criteria that
 	/// defines it. Use these to define what device you want to talk to.
 	//================================================================================================
 	class NAMEFilter

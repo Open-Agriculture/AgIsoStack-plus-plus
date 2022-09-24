@@ -11,24 +11,24 @@
 #ifndef CAN_PROTOCOL_HPP
 #define CAN_PROTOCOL_HPP
 
-#include "can_control_function.hpp"
-#include "can_message.hpp"
 #include "can_badge.hpp"
 #include "can_callbacks.hpp"
+#include "can_control_function.hpp"
+#include "can_message.hpp"
 
 #include <vector>
 
 namespace isobus
 {
-    class CANNetworkManager;
+	class CANNetworkManager;
 
 	//================================================================================================
-	  /// @class CANLibProtocol
-	  ///
-	  /// @brief A base class for a CAN protocol
-	  /// @details CANLibProtocols are objects that manage different statful CAN protocols defined by
-	  /// ISO11783 and/or J1939. They could also be used for abitrary processing inside the CAN stack.
-	  //================================================================================================
+	/// @class CANLibProtocol
+	///
+	/// @brief A base class for a CAN protocol
+	/// @details CANLibProtocols are objects that manage different statful CAN protocols defined by
+	/// ISO11783 and/or J1939. They could also be used for abitrary processing inside the CAN stack.
+	//================================================================================================
 	class CANLibProtocol
 	{
 	public:
@@ -50,7 +50,7 @@ namespace isobus
 
 		/// @brief Returns the number of all created protocols
 		/// @returns The number of all created protocols
-        static std::uint32_t get_number_protocols();
+		static std::uint32_t get_number_protocols();
 
 		/// @brief A generic way to initialize a protocol
 		/// @details The network manager will call a protocol's initialize function
@@ -61,17 +61,17 @@ namespace isobus
 		/// @param[in] message A received CAN message
 		virtual void process_message(CANMessage *const message) = 0;
 
-        /// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
-        /// @param[in] parameterGroupNumber The PGN of the message
-        /// @param[in] data The data to be sent
-        /// @param[in] messageLength The length of the data to be sent
-        /// @param[in] source The source control function
-        /// @param[in] destination The destination control function
-        /// @param[in] transmitCompleteCallback A callback for when the protocol completes its work
-        /// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
-        /// @param[in] frameChunkCallback A callback to get some data to send
-        /// @returns true if the message was accepted by the protocol for processing
-        virtual bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
+		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
+		/// @param[in] parameterGroupNumber The PGN of the message
+		/// @param[in] data The data to be sent
+		/// @param[in] messageLength The length of the data to be sent
+		/// @param[in] source The source control function
+		/// @param[in] destination The destination control function
+		/// @param[in] transmitCompleteCallback A callback for when the protocol completes its work
+		/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
+		/// @param[in] frameChunkCallback A callback to get some data to send
+		/// @returns true if the message was accepted by the protocol for processing
+		virtual bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
 		                                       const std::uint8_t *data,
 		                                       std::uint32_t messageLength,
 		                                       ControlFunction *source,
@@ -84,7 +84,7 @@ namespace isobus
 		virtual void update(CANLibBadge<CANNetworkManager>) = 0;
 
 	protected:
-		static std::vector<CANLibProtocol*> protocolList; ///< A list of all created protocol classes
+		static std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
 
 		bool initialized; ///< Keeps track of if the protocol has been initialized by the network manager
 	};

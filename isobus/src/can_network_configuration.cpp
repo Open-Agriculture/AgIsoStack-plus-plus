@@ -11,7 +11,7 @@
 
 namespace isobus
 {
-    std::uint32_t CANNetworkConfiguration::maxNumberTransportProtocolSessions = 4;
+	std::uint32_t CANNetworkConfiguration::maxNumberTransportProtocolSessions = 4;
 
 	CANNetworkConfiguration::CANNetworkConfiguration()
 	{
