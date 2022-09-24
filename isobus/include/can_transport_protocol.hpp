@@ -129,7 +129,7 @@ namespace isobus
 		void initialize(CANLibBadge<CANNetworkManager>) override;
 
 		/// @brief A generic way for a protocol to process a received message
-		/// @param[in] message A received CAN message 
+		/// @param[in] message A received CAN message
 		void process_message(CANMessage *const message) override;
 
 		/// @brief A generic way for a protocol to process a received message
