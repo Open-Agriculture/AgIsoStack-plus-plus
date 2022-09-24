@@ -31,6 +31,7 @@ namespace isobus
 	  lastPacketNumber(0),
 	  packetCount(0),
 	  processedPacketsThisSession(0),
+	  clearToSendPacketMax(0),
 	  sessionDirection(sessionDirection)
 	{
 	}
@@ -136,8 +137,9 @@ namespace isobus
 										newSession->sessionMessage.set_source_control_function(message->get_source_control_function());
 										newSession->sessionMessage.set_destination_control_function(message->get_destination_control_function());
 										newSession->packetCount = data[3];
+									newSession->clearToSendPacketMax = data[4];
 										newSession->sessionMessage.set_identifier(tempIdentifierData);
-										newSession->state = StateMachineState::RxDataSession;
+									newSession->state = StateMachineState::ClearToSend;
 										newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 										activeSessions.push_back(newSession);
 									}
@@ -290,7 +292,7 @@ namespace isobus
 						}
 						tempSession->lastPacketNumber++;
 						tempSession->processedPacketsThisSession++;
-						if ((tempSession->lastPacketNumber * 8) >= tempSession->sessionMessage.get_data_length())
+						if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
 						{
 							// Send EOM Ack for CM sessions only
 							if (nullptr != tempSession->sessionMessage.get_destination_control_function())
@@ -483,6 +485,42 @@ namespace isobus
 		}
 	}
 
+	bool TransportProtocolManager::send_clear_to_send(TransportProtocolSession *session)
+	{
+		bool retVal = false;
+
+		if (nullptr != session)
+		{
+			std::uint8_t packetsRemaining = (session->packetCount - session->processedPacketsThisSession);
+			std::uint8_t packetsThisSegment;
+
+			if (session->clearToSendPacketMax < packetsRemaining)
+			{
+				packetsThisSegment = session->clearToSendPacketMax;
+			}
+			else
+			{
+				packetsThisSegment = packetsRemaining;
+			}
+
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { CLEAR_TO_SEND_MULTIPLEXOR,
+				                                                 packetsThisSegment,
+				                                                 static_cast<std::uint8_t>(session->processedPacketsThisSession + 1),
+				                                                 0xFF,
+				                                                 0xFF,
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
+			                                                        dataBuffer,
+			                                                        CAN_DATA_LENGTH,
+			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_destination_control_function()),
+			                                                        session->sessionMessage.get_source_control_function(),
+			                                                        CANIdentifier::CANPriority::PriorityDefault6);
+		}
+		return retVal;
+	}
+
 	bool TransportProtocolManager::send_request_to_send(TransportProtocolSession *session)
 	{
 		bool retVal = false;
@@ -502,7 +540,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
 			                                                        session->sessionMessage.get_destination_control_function(),
-			                                                        CANIdentifier::CANPriority::PriorityLowest7);
+			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
 		return retVal;
 	}
@@ -589,9 +627,16 @@ namespace isobus
 			switch (session->state)
 			{
 				case StateMachineState::None:
+				{
+				}
+				break;
+
 				case StateMachineState::ClearToSend:
 				{
-
+					if (send_clear_to_send(session))
+					{
+						set_state(session, StateMachineState::RxDataSession);
+					}
 				}
 				break;
 

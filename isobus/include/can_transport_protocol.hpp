@@ -84,6 +84,7 @@ namespace isobus
 			std::uint16_t lastPacketNumber; ///< The last processed sequence number for this set of packets
 			std::uint8_t packetCount; ///< The total number of packets to receive or send in this session
 			std::uint8_t processedPacketsThisSession; ///< The total processed packet count for the whole session so far
+			std::uint8_t clearToSendPacketMax; ///< The max packets that can be sent per CTS as indicated by the RTS message
 			const Direction sessionDirection; ///< Represents Tx or Rx session
 		};
 
@@ -181,6 +182,11 @@ namespace isobus
 		/// @param[in] session The session we've just completed
 		/// @param[in] success Denotes if the session was successful
 		void process_session_complete_callback(TransportProtocolSession *session, bool success);
+
+		/// @brief Sends the "clear to send" message
+		/// @param[in] session The session for which we're sending the CTS
+		/// @returns true if the CTS was sent, false if sending was not successful
+		bool send_clear_to_send(TransportProtocolSession *session);
 
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
