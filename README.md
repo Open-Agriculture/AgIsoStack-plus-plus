@@ -72,3 +72,19 @@ add_subdirectory(<path to this submodule>)
 
 target_link_libraries(<your executable name> Isobus SocketCANInterface)
 ```
+
+## Documentation
+You can view the pre-compiled doxygen here https://delgrossoengineering.com/isobus-docs
+
+You can also generate the doxygen documentation yourself by running the `doxygen` command inside this repo's folder.
+
+Make sure you have the prerequisites installed:
+```
+sudo apt install doxygen graphviz
+```
+Then, generate the docs:
+```
+doxygen
+```
+
+The documentation will appear in the docs/html folder. Open `index.html` in a web browser to start browsing the docs.
