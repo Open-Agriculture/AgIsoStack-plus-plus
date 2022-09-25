@@ -14,6 +14,7 @@
 #include "processing_flags.hpp"
 
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
