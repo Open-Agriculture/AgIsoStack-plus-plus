@@ -527,7 +527,9 @@ namespace isobus
 		{
 			ControlFunction *messageDestination = message->get_destination_control_function();
 			if ((nullptr == messageDestination) &&
-			    (nullptr != message->get_source_control_function()))
+			    ((nullptr != message->get_source_control_function()) ||
+			     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message->get_identifier().get_parameter_group_number()) &&
+			      (NULL_CAN_ADDRESS == message->get_identifier().get_source_address()))))
 			{
 				// Message destined to global
 				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
