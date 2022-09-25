@@ -5,11 +5,12 @@ This is a work in progress.
 The state of the project is as follows...
 
 ### Complete or in-progress:
+- Address Claiming: Complete :white_check_mark:
 - ISO11783 Transport Protocol (BAM and Connection Mode)
     - TP BAM Rx: Complete :white_check_mark:
-    - TP BAM Tx: Implemented, Needs Testing :white_check_mark::question:
-    - TP CM Tx: Implemented, Needs Testing :white_check_mark::question:
-    - TP CM Rx: Implemented, Needs Testing :white_check_mark::question:
+    - TP BAM Tx: Implemented, Needs Testing :white_check_mark: :question:
+    - TP CM Tx: Implemented, Needs Testing :white_check_mark: :question:
+    - TP CM Rx: Complete :white_check_mark:
 - ISO11783 Extended Transport Protocol
     - In Development :hourglass:
 - ISO11783 Virtual Terminal: Implemented, Needs testing :white_check_mark: :question:
