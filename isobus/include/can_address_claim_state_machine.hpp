@@ -14,6 +14,7 @@
 
 namespace isobus
 {
+	class CANMessage; ///< Forward declare CANMessage
 
 	//================================================================================================
 	/// @class AddressClaimStateMachine
@@ -36,6 +37,7 @@ namespace isobus
 			SendPreferredAddressClaim, ///< State machine is claiming the prefferred address
 			ContendForPreferredAddress, ///< State machine is contending the prefferred address
 			SendArbitraryAddressClaim, ///< State machine is claiming an address
+			SendReclaimAddressOnRequest, ///< An ECU requested address claim, inform the bus of our current address
 			UnableToClaim, ///< State machine could not claim an address
 			AddressClaimingComplete ///< Address claiming is complete and we have an address
 		};
@@ -45,6 +47,9 @@ namespace isobus
 		/// @param[in] ControlFunctionNAME The NAME you want to claim
 		/// @param[in] portIndex The CAN channel index to claim on
 		AddressClaimStateMachine(std::uint8_t preferredAddressValue, NAME ControlFunctionNAME, std::uint8_t portIndex);
+
+		/// @brief The destructor for the address claim state machine
+		~AddressClaimStateMachine();
 
 		/// @brief Returns the current state of the state machine
 		/// @returns The current state of the state machine
@@ -66,6 +71,11 @@ namespace isobus
 		void update();
 
 	private:
+		/// @brief Processes a CAN message
+		/// @param[in] message The CAN message being received
+		/// @param[in] parentPointer A context variable to find the relevant address claimer
+		static void process_rx_message(CANMessage *message, void *parentPointer);
+
 		/// @brief Sets the current state machine state
 		void set_current_state(State value);
 

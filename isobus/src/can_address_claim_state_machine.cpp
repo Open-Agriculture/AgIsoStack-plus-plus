@@ -33,6 +33,14 @@ namespace isobus
 		std::default_random_engine generator;
 		std::uniform_int_distribution<std::uint8_t> distribution(0, 255);
 		m_randomClaimDelay_ms = distribution(generator) * 0.6f; // Defined by ISO part 5
+		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_rx_message, this);
+		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim), process_rx_message, this);
+	}
+
+	AddressClaimStateMachine ::~AddressClaimStateMachine()
+	{
+		CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_rx_message, this);
+		CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim), process_rx_message, this);
 	}
 
 	AddressClaimStateMachine::State AddressClaimStateMachine::get_current_state() const
@@ -164,6 +172,15 @@ namespace isobus
 				}
 				break;
 
+				case State::SendReclaimAddressOnRequest:
+				{
+					if (send_address_claim(m_claimedAddress))
+					{
+						set_current_state(State::AddressClaimingComplete);
+					}
+				}
+				break;
+
 				case State::ContendForPreferredAddress:
 				{
 					// TODO
@@ -181,6 +198,70 @@ namespace isobus
 		else
 		{
 			set_current_state(State::None);
+		}
+	}
+
+	void AddressClaimStateMachine::process_rx_message(CANMessage *message, void *parentPointer)
+	{
+		if ((nullptr != parentPointer) &&
+		    (nullptr != message))
+		{
+			AddressClaimStateMachine *parent = reinterpret_cast<AddressClaimStateMachine *>(parentPointer);
+
+			if ((message->get_can_port_index() == parent->m_portIndex) &&
+			    (parent->get_enabled()))
+			{
+				switch (message->get_identifier().get_parameter_group_number())
+				{
+					case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest):
+					{
+						std::vector<std::uint8_t> messageData = message->get_data();
+						std::uint32_t requestedPGN = messageData.at(0);
+						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(1)) << 8);
+						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(2)) << 16);
+
+						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN) &&
+						    (State::AddressClaimingComplete == parent->get_current_state()))
+						{
+							parent->set_current_state(State::SendReclaimAddressOnRequest);
+						}
+					}
+					break;
+
+					case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim):
+					{
+						if (parent->m_claimedAddress == message->get_identifier().get_source_address())
+						{
+							std::vector<std::uint8_t> messageData = message->get_data();
+							std::uint64_t NAMEClaimed = messageData.at(0);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(1)) << 8);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(2)) << 16);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(3)) << 24);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(4)) << 32);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(5)) << 40);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(6)) << 48);
+							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(7)) << 56);
+
+							// Check to see if another ECU is hijacking our address
+							// This is not really a needed check, as we can be pretty sure that our address
+							// has been stolen if we're running this logic. But, you never know, someone could be
+							// spoofing us I guess, or we could be getting an echo? CAN Bridge from another channel?
+							// Seemed safest to just confirm.
+							if (NAMEClaimed != parent->m_isoname.get_full_name())
+							{
+								// Wait for things to shake out a bit, then claim a new address.
+								parent->set_current_state(State::WaitForRequestContentionPeriod);
+							}
+						}
+					}
+					break;
+
+					default:
+					{
+					}
+					break;
+				}
+			}
 		}
 	}
 
