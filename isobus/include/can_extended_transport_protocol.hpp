@@ -51,6 +51,7 @@ namespace isobus
 			WaitForClearToSend,
 			RxDataSession,
 			ClearToSend,
+			WaitForExtendedDataPacketOffset,
 			TxDataSession,
 			WaitForEndOfMessageAcknowledge
 		};
@@ -107,22 +108,38 @@ namespace isobus
 
 	private:
 		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH;
+		static constexpr std::uint32_t TR_TIMEOUT_MS = 200;
+		static constexpr std::uint32_t T1_TIMEOUT_MS = 750;
+		static constexpr std::uint32_t T2_3_TIMEOUT_MS = 1250;
+		static constexpr std::uint32_t TH_TIMEOUT_MS = 500;
 		static constexpr std::uint8_t EXTENDED_REQUEST_TO_SEND_MULTIPLEXOR = 0x14;
 		static constexpr std::uint8_t EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR = 0x15;
 		static constexpr std::uint8_t EXTENDED_DATA_PACKET_OFFSET_MULTIPLEXOR = 0x16;
 		static constexpr std::uint8_t EXTENDED_END_OF_MESSAGE_ACKNOWLEDGEMENT = 0x17;
 		static constexpr std::uint8_t EXTENDED_CONNECTION_ABORT_MULTIPLEXOR = 0xFF;
 		static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7;
+		static constexpr std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0; ///< The index of the sequence number in a frame
 
 		bool abort_session(ExtendedTransportProtocolSession *session, ConnectionAbortReason reason);
 		bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, InternalControlFunction *source, ControlFunction *destination);
 		void close_session(ExtendedTransportProtocolSession *session);
 		bool get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination);
 		bool get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber);
+
+		/// @brief Processes end of session callbacks
+		/// @param[in] session The session we've just completed
+		/// @param[in] success Denotes if the session was successful
+		void process_session_complete_callback(ExtendedTransportProtocolSession *session, bool success);
+
 		bool send_end_of_session_acknowledgement(ExtendedTransportProtocolSession *session); // ETP.CM_EOMA
+		bool send_extended_connection_mode_clear_to_send(ExtendedTransportProtocolSession *session); // ETP.CM_CTS
 		bool send_extended_connection_mode_request_to_send(const ExtendedTransportProtocolSession *session); // ETP.CM_RTS
 		bool send_extended_connection_mode_data_packet_offset(const ExtendedTransportProtocolSession *session); // ETP.CM_DPO
 		void set_state(ExtendedTransportProtocolSession *session, StateMachineState value);
+
+		/// @brief Updates the state machine of a ETP session
+		/// @param[in] session The session to update
+		void update_state_machine(ExtendedTransportProtocolSession *session);
 
 		std::vector<ExtendedTransportProtocolSession *> activeSessions;
 	};
