@@ -274,34 +274,45 @@ namespace isobus
 				{
 					TransportProtocolSession *tempSession = nullptr;
 
-					if (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function()))
-					{
-						CANStackLogger::CAN_stack_log("[TP]: Matched Session");
-					}
-
 					if ((CAN_DATA_LENGTH == message->get_data_length()) &&
 					    (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function())) &&
-					    (StateMachineState::RxDataSession == tempSession->state) &&
-					    (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1)))
+					    (StateMachineState::RxDataSession == tempSession->state))
 					{
-						for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < CAN_DATA_LENGTH; i++)
+						// Check for valid sequence number
+						if (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1))
 						{
-							std::uint16_t currentDataIndex = (8 * tempSession->lastPacketNumber) + i;
-							tempSession->sessionMessage.set_data(message->get_data()[SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
-						}
-						tempSession->lastPacketNumber++;
-						tempSession->processedPacketsThisSession++;
-						if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
-						{
-							// Send EOM Ack for CM sessions only
-							if (nullptr != tempSession->sessionMessage.get_destination_control_function())
+							for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < CAN_DATA_LENGTH; i++)
 							{
-								send_end_of_session_acknowledgement(tempSession);
+								std::uint16_t currentDataIndex = (CAN_DATA_LENGTH * tempSession->lastPacketNumber) + i;
+								tempSession->sessionMessage.set_data(message->get_data()[SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
 							}
-							CANNetworkManager::CANNetwork.protocol_message_callback(&tempSession->sessionMessage);
+							tempSession->lastPacketNumber++;
+							tempSession->processedPacketsThisSession++;
+							if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
+							{
+								// Send EOM Ack for CM sessions only
+								if (nullptr != tempSession->sessionMessage.get_destination_control_function())
+								{
+									send_end_of_session_acknowledgement(tempSession);
+								}
+								CANNetworkManager::CANNetwork.protocol_message_callback(&tempSession->sessionMessage);
+								close_session(tempSession);
+							}
+							tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
+						}
+						else if (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber))
+						{
+							// Sequence number is duplicate of the last one
+							CANStackLogger::CAN_stack_log("[TP]: Aborting session due to duplciate sequence number");
+							abort_session(tempSession, ConnectionAbortReason::DuplicateSequenceNumber);
 							close_session(tempSession);
 						}
-						tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
+						else
+						{
+							CANStackLogger::CAN_stack_log("[TP]: Aborting session due to bad sequence number");
+							abort_session(tempSession, ConnectionAbortReason::BadSequenceNumber);
+							close_session(tempSession);
+						}
 					}
 					else
 					{
@@ -347,7 +358,7 @@ namespace isobus
 		bool retVal = false;
 
 		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
-		    (messageLength > 8) &&
+		    (messageLength > CAN_DATA_LENGTH) &&
 		    ((nullptr != dataBuffer) ||
 		     (nullptr != frameChunkCallback)) &&
 		    (nullptr != source) &&
