@@ -76,11 +76,208 @@ namespace isobus
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement):
 				{
+					if (CAN_DATA_LENGTH == message->get_data_length())
+					{
+						switch (message->get_data()[0])
+						{
+							case EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR:
+							{
+								ExtendedTransportProtocolSession *session;
+								auto data = message->get_data();
+								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
+								const std::uint8_t packetsToBeSent = data[1];
+
+								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+								{
+									if (StateMachineState::WaitForClearToSend == session->state)
+									{
+										session->packetCount = packetsToBeSent;
+										session->timestamp_ms = SystemTiming::get_timestamp_ms();
+										// If 0 was sent as the packet number, they want us to wait.
+										// Just sit here in this state until we get a non-zero packet count
+										if (0 != packetsToBeSent)
+										{
+											session->lastPacketNumber = 0;
+											session->state = StateMachineState::TxDataSession;
+										}
+									}
+									else
+									{
+										// The session exists, but we're probably already in the TxDataSession state. Need to abort
+										// In the case of Rx'ing a CTS, we're the source in the session
+										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhenDataTransferInProgress, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+										CANStackLogger::CAN_stack_log("[ETP]: Abort CTS while in data session");
+									}
+								}
+								else
+								{
+									// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
+									// In the case of Rx'ing a CTS, we're the source in the session
+									abort_session(pgn, ConnectionAbortReason::AnyOtherReason, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									CANStackLogger::CAN_stack_log("[ETP]: Abort CTS With no matching session");
+								}
+							}
+							break;
+
+							case EXTENDED_DATA_PACKET_OFFSET_MULTIPLEXOR:
+							{
+								ExtendedTransportProtocolSession *session;
+								auto data = message->get_data();
+								const std::uint32_t dataPacketOffset = (static_cast<std::uint32_t>(data[2]) | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16));
+								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
+
+								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+								{
+									const std::uint8_t packetsToBeSent = data[1];
+
+									if (packetsToBeSent != session->packetCount)
+									{
+										/// @note If byte 2 is less than byte 2 of the ETP.CM_CTS message, then the receiver shall make 
+										/// necessary adjustments to its session to accept the data block defined by the 
+										/// ETP.CM_DPO message and the subsequent ETP.DT packets. 
+										CANStackLogger::CAN_stack_log("[ETP]: DPO packet count disagrees with CTS. Using DPO value.");
+										session->packetCount = packetsToBeSent;
+									}
+
+									if (dataPacketOffset != session->processedPacketsThisSession)
+									{
+										// All is good. Proceed with message.
+										session->lastPacketNumber = 0;
+									}
+									else
+									{
+										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, DPO packet offset is not valid");
+										abort_session(session, ConnectionAbortReason::BadEDPOOffset);
+										close_session(session);
+									}
+								}
+								else
+								{
+									bool anySessionMatched = false;
+									// Do we have any session that matches except for PGN?
+									for (auto currentSession : activeSessions)
+									{
+										if ((currentSession->sessionMessage.get_source_control_function() == message->get_source_control_function()) &&
+										    (currentSession->sessionMessage.get_destination_control_function() == message->get_destination_control_function()))
+										{
+											// Sending EDPO for this session with mismatched PGN is not allowed
+											abort_session(currentSession, ConnectionAbortReason::UnexpectedEDPOPgn);
+											close_session(currentSession);
+											anySessionMatched = true;
+											break;
+										}
+									}
+
+									if (!anySessionMatched)
+									{
+										abort_session(pgn, ConnectionAbortReason::UnexpectedEDPOPacket, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									}
+								}
+							}
+							break;
+
+							case EXTENDED_END_OF_MESSAGE_ACKNOWLEDGEMENT:
+							{
+								if ((nullptr != message->get_destination_control_function()) &&
+								    (nullptr != message->get_source_control_function()))
+								{
+									ExtendedTransportProtocolSession *session;
+									auto data = message->get_data();
+									const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
+
+									if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+									{
+										if (StateMachineState::WaitForEndOfMessageAcknowledge == session->state)
+										{
+											// We completed our Tx session!
+											session->state = StateMachineState::None;
+											process_session_complete_callback(session, true);
+											close_session(session);
+										}
+										else
+										{
+											abort_session(pgn, ConnectionAbortReason::AnyOtherReason, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+											process_session_complete_callback(session, false);
+											close_session(session);
+											CANStackLogger::CAN_stack_log("[ETP]: Abort EOM in wrong session state");
+										}
+									}
+									else
+									{
+										abort_session(pgn, ConnectionAbortReason::AnyOtherReason, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+										CANStackLogger::CAN_stack_log("[ETP]: Abort EOM without matching session");
+									}
+								}
+								else
+								{
+									CANStackLogger::CAN_stack_log("[ETP]: Bad EOM received, sent to or from an invalid control function");
+								}
+							}
+							break;
+
+							case EXTENDED_CONNECTION_ABORT_MULTIPLEXOR:
+							{
+								ExtendedTransportProtocolSession *session;
+								auto data = message->get_data();
+								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
+
+								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+								{
+									CANStackLogger::CAN_stack_log("[ETP]: Received an abort for an session with PGN: " + std::to_string(pgn));
+									close_session(session);
+								}
+								else
+								{
+									CANStackLogger::CAN_stack_log("[ETP]: Received an abort with no matching session with PGN: " + std::to_string(pgn));
+								}
+							}
+							break;
+
+							default:
+							{
+							
+							}
+							break;
+						}
+					}
+					else
+					{
+						CANStackLogger::CAN_stack_log("[ETP]: Received an invalid ETP CM frame");
+					}
 				}
 				break;
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolDataTransfer):
 				{
+					ExtendedTransportProtocolSession *tempSession = nullptr;
+
+					if ((CAN_DATA_LENGTH == message->get_data_length()) &&
+					    (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function())) &&
+					    (StateMachineState::RxDataSession == tempSession->state) &&
+					    (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1)))
+					{
+						for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < CAN_DATA_LENGTH; i++)
+						{
+							std::uint32_t currentDataIndex = (CAN_DATA_LENGTH * tempSession->lastPacketNumber) + i;
+							tempSession->sessionMessage.set_data(message->get_data()[SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
+						}
+						tempSession->lastPacketNumber++;
+						tempSession->processedPacketsThisSession++;
+						if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
+						{
+							if (nullptr != tempSession->sessionMessage.get_destination_control_function())
+							{
+								send_end_of_session_acknowledgement(tempSession);
+							}
+							CANNetworkManager::CANNetwork.protocol_message_callback(&tempSession->sessionMessage);
+							close_session(tempSession);
+						}
+						tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+					else
+					{
+						CANStackLogger::CAN_stack_log("[ETP]: Received an unexpected or invalid data transfer frame");
+					}
 				}
 				break;
 			}
@@ -108,7 +305,7 @@ namespace isobus
 		bool retVal = false;
 
 		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
-		    (messageLength > 8) &&
+		    (messageLength > CAN_DATA_LENGTH) &&
 		    ((nullptr != dataBuffer) ||
 		     (nullptr != frameChunkCallback)) &&
 		    (nullptr != source) &&
@@ -149,6 +346,10 @@ namespace isobus
 
 	void ExtendedTransportProtocolManager::update(CANLibBadge<CANNetworkManager>)
 	{
+		for (auto i : activeSessions)
+		{
+			update_state_machine(i);
+		}
 	}
 
 	bool ExtendedTransportProtocolManager::abort_session(ExtendedTransportProtocolSession *session, ConnectionAbortReason reason)
@@ -254,6 +455,22 @@ namespace isobus
 		return retVal;
 	}
 
+	void ExtendedTransportProtocolManager::process_session_complete_callback(ExtendedTransportProtocolSession *session, bool success)
+	{
+		if ((nullptr != session) &&
+		    (nullptr != session->sessionCompleteCallback) &&
+		    (nullptr != session->sessionMessage.get_source_control_function()) &&
+		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
+		{
+			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
+			                                 session->sessionMessage.get_data_length(),
+			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                 session->sessionMessage.get_destination_control_function(),
+			                                 success,
+			                                 session->parent);
+		}
+	}
+
 	bool ExtendedTransportProtocolManager::send_end_of_session_acknowledgement(ExtendedTransportProtocolSession *session)
 	{
 		bool retVal = false;
@@ -261,14 +478,38 @@ namespace isobus
 		if (nullptr != session)
 		{
 			std::uint32_t totalBytesTransferred = (session->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME);
-			const std::uint8_t dataBuffer[8] = { EXTENDED_END_OF_MESSAGE_ACKNOWLEDGEMENT,
-				                                   static_cast<std::uint8_t>(totalBytesTransferred & 0xFF),
-				                                   static_cast<std::uint8_t>((totalBytesTransferred >> 8) & 0xFF),
-				                                   static_cast<std::uint8_t>((totalBytesTransferred >> 16) & 0xFF),
-				                                   static_cast<std::uint8_t>((totalBytesTransferred >> 24) & 0xFF),
-				                                   static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
-				                                   static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
-				                                   static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_END_OF_MESSAGE_ACKNOWLEDGEMENT,
+				                                                 static_cast<std::uint8_t>(totalBytesTransferred & 0xFF),
+				                                                 static_cast<std::uint8_t>((totalBytesTransferred >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((totalBytesTransferred >> 16) & 0xFF),
+				                                                 static_cast<std::uint8_t>((totalBytesTransferred >> 24) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement),
+			                                                        dataBuffer,
+			                                                        CAN_DATA_LENGTH,
+			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                                        session->sessionMessage.get_destination_control_function(),
+			                                                        CANIdentifier::CANPriority::PriorityDefault6);
+		}
+		return retVal;
+	}
+
+	bool ExtendedTransportProtocolManager::send_extended_connection_mode_clear_to_send(ExtendedTransportProtocolSession *session)
+	{
+		bool retVal = false;
+
+		if (nullptr != session)
+		{
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR,
+				                                                 0xFF, /// @todo Make CTS Max user configurable
+				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession + 1) & 0xFF),
+				                                                 static_cast<std::uint8_t>(((session->processedPacketsThisSession + 1) >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>(((session->processedPacketsThisSession + 1) >> 16) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
@@ -285,14 +526,14 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			const std::uint8_t dataBuffer[8] = { EXTENDED_REQUEST_TO_SEND_MULTIPLEXOR,
-				                         static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
-				                         static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
-				                         static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 16) & 0xFF),
-				                         static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 24) & 0xFF),
-				                         static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
-				                         static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
-				                         static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_REQUEST_TO_SEND_MULTIPLEXOR,
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 16) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 24) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
@@ -309,14 +550,14 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			const std::uint8_t dataBuffer[8] = { EXTENDED_DATA_PACKET_OFFSET_MULTIPLEXOR,
-				                                   static_cast<std::uint8_t>(session->packetCount & 0xFF),
-				                                   static_cast<std::uint8_t>((session->processedPacketsThisSession) & 0xFF),
-				                                   static_cast<std::uint8_t>((session->processedPacketsThisSession >> 8) & 0xFF),
-				                                   static_cast<std::uint8_t>((session->processedPacketsThisSession >> 16) & 0xFF),
-				                                   static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
-				                                   static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
-				                                   static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_DATA_PACKET_OFFSET_MULTIPLEXOR,
+				                                                 static_cast<std::uint8_t>(session->packetCount & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession >> 16) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
@@ -333,6 +574,80 @@ namespace isobus
 		{
 			session->timestamp_ms = SystemTiming::get_timestamp_ms();
 			session->state = value;
+		}
+	}
+
+	void ExtendedTransportProtocolManager::update_state_machine(ExtendedTransportProtocolSession *session)
+	{
+		if (nullptr != session)
+		{
+			switch (session->state)
+			{
+				case StateMachineState::RequestToSend:
+				{
+					if (send_extended_connection_mode_request_to_send(session))
+					{
+						set_state(session, StateMachineState::WaitForClearToSend);
+					}
+					else
+					{
+						if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_3_TIMEOUT_MS))
+						{
+							abort_session(session, ConnectionAbortReason::Timeout);
+							close_session(session);
+						}
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForEndOfMessageAcknowledge:
+				case StateMachineState::WaitForExtendedDataPacketOffset:
+				case StateMachineState::WaitForClearToSend:
+				{
+					if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_3_TIMEOUT_MS))
+					{
+						abort_session(session, ConnectionAbortReason::Timeout);
+						close_session(session);
+					}
+				}
+				break;
+
+				case StateMachineState::TxDataSession:
+				{
+					
+				}
+				break;
+
+				case StateMachineState::RxDataSession:
+				{
+					if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
+					{
+						abort_session(session, ConnectionAbortReason::Timeout);
+						close_session(session);
+					}
+				}
+				break;
+
+				case StateMachineState::ClearToSend:
+				{
+					if (send_extended_connection_mode_clear_to_send(session))
+					{
+						set_state(session, StateMachineState::WaitForExtendedDataPacketOffset);
+					}
+					else if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_3_TIMEOUT_MS))
+					{
+						abort_session(session, ConnectionAbortReason::Timeout);
+						close_session(session);
+					}
+				}
+				break;
+
+				case StateMachineState::None:
+				default:
+				{
+				}
+				break;
+			}
 		}
 	}
 
