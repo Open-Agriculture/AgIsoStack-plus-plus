@@ -132,11 +132,20 @@ namespace isobus
 
 									if (packetsToBeSent != session->packetCount)
 									{
-										/// @note If byte 2 is less than byte 2 of the ETP.CM_CTS message, then the receiver shall make 
-										/// necessary adjustments to its session to accept the data block defined by the 
-										/// ETP.CM_DPO message and the subsequent ETP.DT packets. 
-										CANStackLogger::CAN_stack_log("[ETP]: DPO packet count disagrees with CTS. Using DPO value.");
-										session->packetCount = packetsToBeSent;
+										if (packetsToBeSent > session->packetCount)
+										{
+											CANStackLogger::CAN_stack_log("[ETP]: Aborting session, DPO packet count is greater than CTS");
+											abort_session(session, ConnectionAbortReason::EDPONumberOfPacketsGreaterThanClearToSend);
+											close_session(session);
+										}
+										else
+										{
+											/// @note If byte 2 is less than byte 2 of the ETP.CM_CTS message, then the receiver shall make
+											/// necessary adjustments to its session to accept the data block defined by the
+											/// ETP.CM_DPO message and the subsequent ETP.DT packets.
+											CANStackLogger::CAN_stack_log("[ETP]: DPO packet count disagrees with CTS. Using DPO value.");
+											session->packetCount = packetsToBeSent;
+										}
 									}
 
 									if (dataPacketOffset != session->processedPacketsThisSession)
