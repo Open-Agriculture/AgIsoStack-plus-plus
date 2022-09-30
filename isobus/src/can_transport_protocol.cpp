@@ -357,7 +357,7 @@ namespace isobus
 		TransportProtocolSession *session;
 		bool retVal = false;
 
-		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
+		if ((messageLength <= MAX_PROTOCOL_DATA_LENGTH) &&
 		    (messageLength > CAN_DATA_LENGTH) &&
 		    ((nullptr != dataBuffer) ||
 		     (nullptr != frameChunkCallback)) &&
