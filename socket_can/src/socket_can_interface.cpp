@@ -593,7 +593,7 @@ void CANHardwareInterface::can_thread_function()
 					pCANHardware->receivedMessagesMutex.unlock();
 
 					rxCallbackMutex.lock();
-					for (uint32_t j = 0; j < rxCallbacks.size(); j++)
+					for (std::uint32_t j = 0; j < rxCallbacks.size(); j++)
 					{
 						if (nullptr != rxCallbacks[j].callback)
 						{
@@ -607,7 +607,7 @@ void CANHardwareInterface::can_thread_function()
 			if (get_clear_can_lib_needs_update())
 			{
 				canLibUpdateCallbacksMutex.lock();
-				for (uint32_t j = 0; j < canLibUpdateCallbacks.size(); j++)
+				for (std::uint32_t j = 0; j < canLibUpdateCallbacks.size(); j++)
 				{
 					if (nullptr != canLibUpdateCallbacks[j].callback)
 					{
@@ -624,22 +624,30 @@ void CANHardwareInterface::can_thread_function()
 				isobus::HardwareInterfaceCANFrame packet;
 				bool sendPacket = false;
 
-				if (0 != pCANHardware->messagesToBeTransmitted.size())
+				for (std::uint32_t j = 0; j < pCANHardware->messagesToBeTransmitted.size(); j++)
 				{
-					packet = pCANHardware->messagesToBeTransmitted.front();
-					sendPacket = true;
-				}
-				pCANHardware->messagesToBeTransmittedMutex.unlock();
+					sendPacket = false;
 
-				if (sendPacket)
-				{
-					if (transmit_can_message_from_buffer(packet))
+					if (0 != pCANHardware->messagesToBeTransmitted.size())
 					{
-						pCANHardware->messagesToBeTransmitted.pop_front();
+						packet = pCANHardware->messagesToBeTransmitted.front();
+						sendPacket = true;
 					}
 
-					// Todo, notify CAN lib that we sent, or did not send, each packet
+					if (sendPacket)
+					{
+						if (transmit_can_message_from_buffer(packet))
+						{
+							pCANHardware->messagesToBeTransmitted.pop_front();
+						}
+						else
+						{
+							break;
+						}
+						// Todo, notify CAN lib that we sent, or did not send, each packet
+					}
 				}
+				pCANHardware->messagesToBeTransmittedMutex.unlock();
 			}
 		}
 	}
