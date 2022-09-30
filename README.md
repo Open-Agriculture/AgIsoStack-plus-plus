@@ -9,17 +9,19 @@ The state of the project is as follows...
 - ISO11783 Transport Protocol (BAM and Connection Mode)
     - TP BAM Rx: Complete :white_check_mark:
     - TP BAM Tx: Implemented, Needs Testing :white_check_mark: :question:
-    - TP CM Tx: Implemented, Needs Testing :white_check_mark:
+    - TP CM Tx: Complete :white_check_mark:
     - TP CM Rx: Complete :white_check_mark:
 - ISO11783 Extended Transport Protocol
     - In Development :hourglass:
 - ISO11783 Virtual Terminal: Implemented, Needs testing :white_check_mark: :question:
+- J1939/ISO11783 Diagnostic Message 1 (DM1)
+    - In Development :hourglass:
 
 ### Not yet started, but planned:
 - ISO11783 File Server
 - ISO11783 Task Controller (currently planned to be client only)
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
-- J1939 DM1/2
+- J1939 DM2
 - J1939 DM14
 - NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
