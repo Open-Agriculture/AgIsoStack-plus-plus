@@ -12,7 +12,7 @@ The state of the project is as follows...
     - TP CM Tx: Complete :white_check_mark:
     - TP CM Rx: Complete :white_check_mark:
 - ISO11783 Extended Transport Protocol
-    - In Development :hourglass:
+    - Implemented, Needs Testing :white_check_mark: :question:
 - ISO11783 Virtual Terminal: Implemented, Needs testing :white_check_mark: :question:
 - J1939/ISO11783 Diagnostic Message 1 (DM1)
     - In Development :hourglass:
