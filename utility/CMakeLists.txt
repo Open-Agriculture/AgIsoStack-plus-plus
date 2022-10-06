@@ -11,6 +11,7 @@ set(SYSTEM_TIMING_INCLUDE_DIR "include")
 set(SYSTEM_TIMING_SRC 
   "system_timing.cpp"
   "processing_flags.cpp"
+  "iop_file_interface.cpp"
 )
 
 # Prepend the source directory path to all the source files
@@ -20,6 +21,7 @@ PREPEND(SYSTEM_TIMING_SRC ${SYSTEM_TIMING_SRC_DIR} ${SYSTEM_TIMING_SRC})
 set(SYSTEM_TIMING_INCLUDE 
   "system_timing.hpp"
   "processing_flags.hpp"
+  "iop_file_interface.hpp"
 )
 
 # Prepend the include directory path to all the include files
