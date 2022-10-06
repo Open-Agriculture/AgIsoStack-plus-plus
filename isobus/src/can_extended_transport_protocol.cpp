@@ -80,6 +80,44 @@ namespace isobus
 					{
 						switch (message->get_data()[0])
 						{
+							case EXTENDED_REQUEST_TO_SEND_MULTIPLEXOR:
+							{
+								ExtendedTransportProtocolSession *session;
+								auto data = message->get_data();
+								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
+
+								if ((nullptr != message->get_destination_control_function()) &&
+									(activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+									(!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
+								{
+									ExtendedTransportProtocolSession *newSession = new ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Receive, message->get_can_port_index());
+									CANIdentifier tempIdentifierData(CANIdentifier::Type::Extended, pgn, CANIdentifier::CANPriority::PriorityLowest7, message->get_destination_control_function()->get_address(), message->get_source_control_function()->get_address());
+									newSession->sessionMessage.set_data_size(static_cast<std::uint32_t>(data[1]) | static_cast<std::uint32_t>(data[2] << 8) | static_cast<std::uint32_t>(data[3] << 16) | static_cast<std::uint32_t>(data[4] << 24));
+									newSession->sessionMessage.set_source_control_function(message->get_source_control_function());
+									newSession->sessionMessage.set_destination_control_function(message->get_destination_control_function());
+									newSession->packetCount = 0xFF;
+									newSession->sessionMessage.set_identifier(tempIdentifierData);
+									newSession->state = StateMachineState::ClearToSend;
+									newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
+									activeSessions.push_back(newSession);
+								}
+								else if ((get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)) &&
+									        (nullptr != message->get_destination_control_function()) &&
+									        (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								{
+									abort_session(pgn, ConnectionAbortReason::AlreadyInConnectionManagedSessionAndCannotSupportAnother, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									CANStackLogger::CAN_stack_log("[ETP]: Abort RTS when already in session");
+								}
+								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+									        (nullptr != message->get_destination_control_function()) &&
+									        (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								{
+									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeededForAnotherTask, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									CANStackLogger::CAN_stack_log("[ETP]: Abort No Sessions Available");
+								}
+							}
+							break;
+
 							case EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR:
 							{
 								ExtendedTransportProtocolSession *session;
@@ -126,7 +164,7 @@ namespace isobus
 								const std::uint32_t dataPacketOffset = (static_cast<std::uint32_t>(data[2]) | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16));
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
-								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+								if (get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn))
 								{
 									const std::uint8_t packetsToBeSent = data[1];
 
@@ -148,10 +186,11 @@ namespace isobus
 										}
 									}
 
-									if (dataPacketOffset != session->processedPacketsThisSession)
+									if (dataPacketOffset == session->processedPacketsThisSession)
 									{
 										// All is good. Proceed with message.
 										session->lastPacketNumber = 0;
+										set_state(session, StateMachineState::RxDataSession);
 									}
 									else
 									{
@@ -272,7 +311,7 @@ namespace isobus
 						}
 						tempSession->lastPacketNumber++;
 						tempSession->processedPacketsThisSession++;
-						if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
+						if ((tempSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
 						{
 							if (nullptr != tempSession->sessionMessage.get_destination_control_function())
 							{
@@ -486,7 +525,7 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			std::uint32_t totalBytesTransferred = (session->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME);
+			std::uint32_t totalBytesTransferred = (session->sessionMessage.get_data_length());
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_END_OF_MESSAGE_ACKNOWLEDGEMENT,
 				                                                 static_cast<std::uint8_t>(totalBytesTransferred & 0xFF),
 				                                                 static_cast<std::uint8_t>((totalBytesTransferred >> 8) & 0xFF),
@@ -498,8 +537,8 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
-			                                                        session->sessionMessage.get_destination_control_function(),
+			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_destination_control_function()),
+			                                                        session->sessionMessage.get_source_control_function(),
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
 		return retVal;
@@ -511,8 +550,15 @@ namespace isobus
 
 		if (nullptr != session)
 		{
+			std::uint32_t packetMax = ((((session->sessionMessage.get_data_length() - 1) / 7) + 1)  - session->processedPacketsThisSession);
+
+			if (packetMax > 0xFF)
+			{
+				packetMax = 0xFF;
+			}
+
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR,
-				                                                 0xFF, /// @todo Make CTS Max user configurable
+					                                             static_cast<std::uint8_t>(packetMax), /// @todo Make CTS Max user configurable
 				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession + 1) & 0xFF),
 				                                                 static_cast<std::uint8_t>(((session->processedPacketsThisSession + 1) >> 8) & 0xFF),
 				                                                 static_cast<std::uint8_t>(((session->processedPacketsThisSession + 1) >> 16) & 0xFF),
@@ -522,8 +568,8 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
-			                                                        session->sessionMessage.get_destination_control_function(),
+			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_destination_control_function()),
+			                                                        session->sessionMessage.get_source_control_function(),
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
 		return retVal;
@@ -728,7 +774,11 @@ namespace isobus
 
 				case StateMachineState::RxDataSession:
 				{
-					if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
+					if (session->packetCount == session->lastPacketNumber)
+					{
+						set_state(session, StateMachineState::ClearToSend);
+					}
+					else if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
 					{
 						abort_session(session, ConnectionAbortReason::Timeout);
 						close_session(session);
