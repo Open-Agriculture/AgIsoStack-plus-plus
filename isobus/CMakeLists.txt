@@ -74,7 +74,7 @@ target_link_libraries(Isobus PRIVATE SystemTiming)
 # Add install instructions
 set_target_properties(Isobus PROPERTIES PUBLIC_HEADER "${ISOBUS_INCLUDE}")
 
-install(TARGETS Isobus EXPORT OdinTargets
+install(TARGETS Isobus EXPORT IsobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin

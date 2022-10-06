@@ -56,15 +56,10 @@ ENDFUNCTION(PREPEND)
 add_subdirectory("utility")
 add_subdirectory("isobus")
 add_subdirectory("socket_can")
+add_subdirectory("examples/vt_version_3_object_pool")
 
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
 target_link_libraries(unit_tests gtest_main Isobus SocketCANInterface)
 
-add_executable(integration_test_app test/main.cpp test/test_CAN_glue.cpp)
-target_link_libraries(integration_test_app Isobus SocketCANInterface Threads::Threads)
-
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
-
-
-
