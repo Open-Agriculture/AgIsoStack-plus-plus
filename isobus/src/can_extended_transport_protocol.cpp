@@ -623,7 +623,106 @@ namespace isobus
 
 				case StateMachineState::TxDataSession:
 				{
-					
+					if (nullptr != session->sessionMessage.get_destination_control_function())
+					{
+						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
+						bool proceedToSendDataPackets = true;
+
+						if (0 == session->lastPacketNumber)
+						{
+							proceedToSendDataPackets = send_extended_connection_mode_data_packet_offset(session);
+						}
+
+						if (proceedToSendDataPackets)
+						{
+							// Try and send packets
+							for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
+							{
+								dataBuffer[0] = (session->lastPacketNumber + 1);
+
+								if (nullptr != session->frameChunkCallback)
+								{
+									// Use the callback to get this frame's data
+									std::uint8_t callbackBuffer[7] = {
+										0xFF,
+										0xFF,
+										0xFF,
+										0xFF,
+										0xFF,
+										0xFF,
+										0xFF
+									};
+									std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+
+									if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
+									{
+										numberBytesLeft = PROTOCOL_BYTES_PER_FRAME;
+									}
+
+									bool callbackSuccessful = session->frameChunkCallback(dataBuffer[0], (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession), numberBytesLeft, callbackBuffer, session->parent);
+
+									if (callbackSuccessful)
+									{
+										for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
+										{
+											dataBuffer[1 + j] = callbackBuffer[j];
+										}
+									}
+									else
+									{
+										abort_session(session, ConnectionAbortReason::AnyOtherReason);
+										close_session(session);
+										break;
+									}
+								}
+								else
+								{
+									// Use the data buffer to get the data for this frame
+									for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
+									{
+										std::uint32_t index = (j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+										if (index < session->sessionMessage.get_data_length())
+										{
+											dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)];
+										}
+										else
+										{
+											dataBuffer[1 + j] = 0xFF;
+										}
+									}
+								}
+
+								if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolDataTransfer),
+								                                                   dataBuffer,
+								                                                   CAN_DATA_LENGTH,
+								                                                   reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+								                                                   session->sessionMessage.get_destination_control_function(),
+								                                                   CANIdentifier::CANPriority::PriorityLowest7))
+								{
+									session->lastPacketNumber++;
+									session->processedPacketsThisSession++;
+									session->timestamp_ms = SystemTiming::get_timestamp_ms();
+								}
+								else
+								{
+									// Process more next time protocol is updated
+									break;
+								}
+							}
+						}
+						
+						if ((session->lastPacketNumber == (session->packetCount)) &&
+						    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+						{
+							set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
+							session->timestamp_ms = SystemTiming::get_timestamp_ms();
+						}
+						else if (session->lastPacketNumber == session->packetCount)
+						{
+							set_state(session, StateMachineState::WaitForClearToSend);
+							session->timestamp_ms = SystemTiming::get_timestamp_ms();
+						}
+					}
 				}
 				break;
 
