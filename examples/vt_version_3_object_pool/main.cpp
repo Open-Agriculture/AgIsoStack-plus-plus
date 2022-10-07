@@ -8,6 +8,7 @@
 #include <csignal>
 #include <memory>
 #include <iterator>
+#include <iostream>
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
 static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = nullptr;
@@ -65,6 +66,15 @@ void setup()
 	vtNameFilters.push_back(testFilter);
 
 	testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
+
+	if (0 != testPool.size())
+	{
+		std::cout << "Loaded object pool from VT3TestPool.iop" << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
+	}
 
 	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
 	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
