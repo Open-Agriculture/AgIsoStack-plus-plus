@@ -682,7 +682,7 @@ namespace isobus
 						if (proceedToSendDataPackets)
 						{
 							// Try and send packets
-							for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
+							for (std::uint32_t i = session->lastPacketNumber; i < session->packetCount; i++)
 							{
 								dataBuffer[0] = (session->lastPacketNumber + 1);
 
