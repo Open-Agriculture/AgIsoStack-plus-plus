@@ -18,7 +18,6 @@ namespace isobus
 		Any = 0x0000,
 		ExtendedTransportProtocolDataTransfer = 0xC700,
 		ExtendedTransportProtocolConnectionManagement = 0xC800,
-		WorkingSetMaster = 0xFE0D,
 		VirtualTerminalToECU = 0xE600,
 		ECUtoVirtualTerminal = 0xE700,
 		Acknowledge = 0xE800,
@@ -26,7 +25,12 @@ namespace isobus
 		TransportProtocolData = 0xEB00,
 		TransportProtocolCommand = 0xEC00,
 		AddressClaim = 0xEE00,
-		ProprietaryA = 0xEF00
+		ProprietaryA = 0xEF00,
+		DiagnosticProtocolIdentification = 0xFD32,
+		WorkingSetMaster = 0xFE0D,
+		DiagnosticMessage1 = 0xFECA,
+		DiagnosticMessage2 = 0xFECB,
+		DiagnosticMessage3 = 0xFECC
 	};
 
 } // namespace isobus
