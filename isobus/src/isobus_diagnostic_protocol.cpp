@@ -24,6 +24,8 @@
 
 namespace isobus
 {
+	std::list<DiagnosticProtocol *> DiagnosticProtocol::diagnosticProtocolList;
+
 	DiagnosticProtocol::DiagnosticTroubleCode::DiagnosticTroubleCode() :
 	  suspectParameterNumber(0xFFFFFFFF),
 	  failureModeIdentifier(static_cast<std::uint8_t>(FailureModeIdentifier::ConditionExists)),
@@ -50,22 +52,75 @@ namespace isobus
 		return occuranceCount;
 	}
 
-	DiagnosticProtocol::DiagnosticProtocol() :
-	  myControlFunction(nullptr),
+	DiagnosticProtocol::DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
+	  myControlFunction(internalControlFunction),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
 	  lastDM1SentTimestamp(0),
 	  lastDM2SentTimestamp(0),
 	  j1939Mode(false)
 	{
+		diagnosticProtocolList.push_back(this);
 	}
 
 	DiagnosticProtocol::~DiagnosticProtocol()
 	{
+		auto protocolLocation = find(diagnosticProtocolList.begin(), diagnosticProtocolList.end(), this);
+
+		if (diagnosticProtocolList.end() != protocolLocation)
+		{
+			diagnosticProtocolList.erase(protocolLocation);
+		}
+
+		if (initialized)
+		{
+			initialized = false;
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+		}
 	}
 
-	void DiagnosticProtocol::set_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
+	bool DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
-		myControlFunction = internalControlFunction;
+		bool retVal = true;
+
+		for (auto protocol : diagnosticProtocolList)
+		{
+			if (protocol->myControlFunction == internalControlFunction)
+			{
+				retVal = false;
+				break;
+			}
+		}
+
+		if (retVal)
+		{
+		
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::deassign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
+	{
+		bool retVal = false;
+
+		for (auto protocol : diagnosticProtocolList)
+		{
+			if (protocol->myControlFunction == internalControlFunction)
+			{
+				retVal = true;
+				delete protocol;
+				break;
+			}
+		}
+		return retVal;
+	}
+
+	void DiagnosticProtocol::initialize(CANLibBadge<CANNetworkManager>)
+	{
+		if (!initialized)
+		{
+			initialized = true;
+			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+		}
 	}
 
 	void DiagnosticProtocol::set_j1939_mode(bool value)

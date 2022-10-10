@@ -58,6 +58,7 @@ add_subdirectory("isobus")
 add_subdirectory("socket_can")
 add_subdirectory("examples/vt_version_3_object_pool")
 add_subdirectory("examples/transport_layer")
+add_subdirectory("examples/diagnostic_protocol")
 
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
 target_link_libraries(unit_tests gtest_main Isobus SocketCANInterface)
