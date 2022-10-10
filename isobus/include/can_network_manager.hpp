@@ -77,6 +77,7 @@ namespace isobus
 		/// If you don't specify a destination (or use nullptr) you message will be sent as a broadcast
 		/// if it is valid to do so.
 		/// You can also get a callback on success or failure of the transmit.
+		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_can_message(std::uint32_t parameterGroupNumber,
 		                      const std::uint8_t *dataBuffer,
 		                      std::uint32_t dataLength,
@@ -105,17 +106,20 @@ namespace isobus
 		friend class AddressClaimStateMachine; ///< Allows the network manager to work closely with the address claiming process
 		friend class ExtendedTransportProtocolManager; ///< Allows the network manager to access the ETP manager
 		friend class TransportProtocolManager; ///< Allows the network manager to work closely with the transport protocol manager object
+		friend class DiagnosticProtocol; ///< Allows the diagnostic protocol to access the protected functions on the network manager
 
 		/// @brief Adds a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for
 		/// @param[in] callback The callback to call when the PGN is received
 		/// @param[in] parentPointer A generic context variable that helps identify what object the callback was destined for
+		/// @returns `true` if the callback was added, otherwise `false`
 		bool add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
 
 		/// @brief Removes a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for
 		/// @param[in] callback The callback to call when the PGN is received
 		/// @param[in] parentPointer A generic context variable that helps identify what object the callback was destined for
+		/// @returns `true` if the callback was removed, otherwise `false`
 		bool remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
 
 		/// @brief Sends a CAN message using raw addresses. Used only by the stack.
@@ -126,6 +130,7 @@ namespace isobus
 		/// @param[in] priority The CAN priority of the message being sent
 		/// @param[in] data A pointer to the data buffer to send from
 		/// @param[in] size The size of the messgage to send
+		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_can_message_raw(std::uint32_t portIndex,
 		                          std::uint8_t sourceAddress,
 		                          std::uint8_t destAddress,
@@ -182,6 +187,7 @@ namespace isobus
 		/// @brief Returns a control function based on a CAN address and channel index
 		/// @param[in] CANPort The CAN channel index of the CAN message being processed
 		/// @param[in] CFAddress The CAN address associated with a control function
+		/// @returns A control function matching the address and CAN port passed in
 		ControlFunction *get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress) const;
 
 		/// @brief Matches a CAN message to any matching PGN callback, and calls that callback
@@ -199,6 +205,7 @@ namespace isobus
 		/// @param[in] priority The CAN priority of the message being sent
 		/// @param[in] data A pointer to the data buffer to send from
 		/// @param[in] size The size of the messgage to send
+		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_can_message_raw(std::uint32_t portIndex,
 		                          std::uint8_t sourceAddress,
 		                          std::uint8_t destAddress,
