@@ -22,6 +22,7 @@
 #include "processing_flags.hpp"
 
 #include <memory>
+#include <list>
 
 namespace isobus
 {
@@ -75,11 +76,11 @@ namespace isobus
 
 		enum class TransmitFlags
 		{
-			DM1 = 0,
-			DM2,
-			DiagnosticProtocolID,
+			DM1 = 0, ///< A flag to manage sending the DM1 message
+			DM2, ///< A flag to manage sending the DM2 message
+			DiagnosticProtocolID, ///< A flag to manage sending the Diagnostic protocol ID message
 
-			NumberOfFlags
+			NumberOfFlags ///< The number of flags in the enum
 		};
 
 		//================================================================================================
@@ -90,6 +91,7 @@ namespace isobus
 		{
 		public:
 			/// @brief Constructor for a DTC, sets default values at construction time
+			/// @param[in] internalControlFunction The internal control function to use for sending messages
 			DiagnosticTroubleCode();
 
 			/// @brief Constructor for a DTC, sets all values explicitly
@@ -99,6 +101,7 @@ namespace isobus
 			DiagnosticTroubleCode(std::uint32_t spn, FailureModeIdentifier fmi, LampStatus lamp);
 
 			/// @brief A useful way to compare DTC objects to each other for equality
+			/// @param[in] obj The "rhs" of the comparison
 			/// @returns `true` if the objects were equal
 			bool operator==(const DiagnosticTroubleCode &obj);
 
@@ -113,16 +116,18 @@ namespace isobus
 			std::uint8_t occuranceCount; ///< Number of times the DTC has been active (0 to 126 with 127 being not available)
 		};
 
-		/// @brief The constructor for this protocol
-		explicit DiagnosticProtocol();
+		/// @brief Used to tell the CAN stack that diagnostic messages should be sent from the specified internal control function
+		/// @details This will allocate an instance of this protocol
+		/// @returns `true` If the protocol instance was created OK with the passed in ICF
+		static bool assign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
-		/// @brief The destructor for this protocol
-		~DiagnosticProtocol();
+		/// @brief Used to tell the CAN stack that diagnostic messages should no longer be sent from the specified internal control function
+		/// @details This will delete an instance of this protocol
+		/// @returns `true` If the protocol instance was deleted OK according to the passed in ICF
+		static bool deassign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
-		/// @brief Sets the internal control function that this protocol will use to send messages
-		/// @details This is required for the protocol to function!
-		/// @param[in] internalControlFunction The internal control function to use for sending messages
-		void set_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
+		/// @brief The protocol's initializer function
+		void initialize(CANLibBadge<CANNetworkManager>) override;
 
 		/// @brief Enables the protocol to run in J1939 mode instead of ISO11783 mode
 		/// @details See ISO11783-12 and J1939-73 for a complete explanation of the differences
@@ -160,6 +165,12 @@ namespace isobus
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 
+		/// @brief The constructor for this protocol
+		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
+
+		/// @brief The destructor for this protocol
+		~DiagnosticProtocol();
+
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_1();
@@ -185,6 +196,8 @@ namespace isobus
 		/// @param[in] flag The flag to process
 		/// @param[in] parentPointer A generic context pointer to reference a specific instance of this protocol in the callback
 		static void process_flags(std::uint32_t flag, void *parentPointer);
+
+		static std::list<DiagnosticProtocol *> diagnosticProtocolList;
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
