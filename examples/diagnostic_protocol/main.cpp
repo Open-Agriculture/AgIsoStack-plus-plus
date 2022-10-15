@@ -1,11 +1,11 @@
-#include "can_network_manager.hpp"
-#include "socket_can_interface.hpp"
 #include "can_general_parameter_group_numbers.hpp"
+#include "can_network_manager.hpp"
 #include "isobus_diagnostic_protocol.hpp"
+#include "socket_can_interface.hpp"
 
 #include <csignal>
-#include <memory>
 #include <iterator>
+#include <memory>
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
 
@@ -14,8 +14,8 @@ using namespace std;
 void signal_handler(int signum)
 {
 	isobus::DiagnosticProtocol::deassign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
-    CANHardwareInterface::stop();
-    exit(signum);
+	CANHardwareInterface::stop();
+	exit(signum);
 }
 
 void update_CAN_network()
@@ -30,7 +30,7 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 
 void setup()
 {
-    CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
 	CANHardwareInterface::start();
 
@@ -57,19 +57,47 @@ void setup()
 
 	isobus::DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
 
-    std::signal(SIGINT,signal_handler);
+	std::signal(SIGINT, signal_handler);
 }
 
 int main()
 {
-    setup();
+	isobus::DiagnosticProtocol *diagnosticProtocol;
 
-    while (true)
-    {
+	setup();
+
+	diagnosticProtocol = isobus::DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(TestInternalECU);
+
+	// Make a few test DTCs
+	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC1(1234, isobus::DiagnosticProtocol::FailureModeIdentifier::ConditionExists, isobus::DiagnosticProtocol::LampStatus::None);
+	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC2(567, isobus::DiagnosticProtocol::FailureModeIdentifier::DataErratic, isobus::DiagnosticProtocol::LampStatus::AmberWarningLampSlowFlash);
+	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC3(8910, isobus::DiagnosticProtocol::FailureModeIdentifier::BadIntellegentDevice, isobus::DiagnosticProtocol::LampStatus::RedStopLampSolid);
+
+	if (nullptr != diagnosticProtocol)
+	{
+		// Set the DTCs active. This should put them in the DM1 message
+		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC1, true);
+		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC2, true);
+		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC3, true);
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // Send the DM1 for a while
+
+		// Set the DTCs inactive. This should put them in the DM2 message
+		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC1, false);
+		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC2, false);
+		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC3, false);
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // Send the DM2 for a while
+
+		diagnosticProtocol->clear_inactive_diagnostic_trouble_codes(); // All messages should now be clear!
+	}
+
+	while (true)
+	{
 		// CAN stack runs in other threads. Do nothing forever.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	}
 
-    CANHardwareInterface::stop();
-    return 0;
+	CANHardwareInterface::stop();
+	return 0;
 }
