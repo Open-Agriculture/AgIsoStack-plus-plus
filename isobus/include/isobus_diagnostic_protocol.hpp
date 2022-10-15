@@ -21,8 +21,8 @@
 #include "can_protocol.hpp"
 #include "processing_flags.hpp"
 
-#include <memory>
 #include <list>
+#include <memory>
 
 namespace isobus
 {
@@ -126,6 +126,11 @@ namespace isobus
 		/// @returns `true` If the protocol instance was deleted OK according to the passed in ICF
 		static bool deassign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
+		/// @brief Retuns the diagnostic protocol assigned to an internal control function, if any
+		/// @param internalControlFunction The internal control function to search against
+		/// @returns The protocol object associated to the passed in ICF, or `nullptr` if none found that match the passed in ICF
+		static DiagnosticProtocol *get_diagnostic_protocol_by_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
+
 		/// @brief The protocol's initializer function
 		void initialize(CANLibBadge<CANNetworkManager>) override;
 
@@ -170,6 +175,26 @@ namespace isobus
 
 		/// @brief The destructor for this protocol
 		~DiagnosticProtocol();
+
+		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
+		/// @note In this protocol, we do not accept messages from the network manager for transmission
+		/// @param[in] parameterGroupNumber The PGN of the message
+		/// @param[in] data The data to be sent
+		/// @param[in] messageLength The length of the data to be sent
+		/// @param[in] source The source control function
+		/// @param[in] destination The destination control function
+		/// @param[in] transmitCompleteCallback A callback for when the protocol completes its work
+		/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
+		/// @param[in] frameChunkCallback A callback to get some data to send
+		/// @returns true if the message was accepted by the protocol for processing
+		bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
+		                               const std::uint8_t *data,
+		                               std::uint32_t messageLength,
+		                               ControlFunction *source,
+		                               ControlFunction *destination,
+		                               TransmitCompleteCallback transmitCompleteCallback,
+		                               void *parentPointer,
+		                               DataChunkCallback frameChunkCallback) override;
 
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false

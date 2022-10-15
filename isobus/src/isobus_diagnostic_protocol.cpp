@@ -82,9 +82,9 @@ namespace isobus
 	{
 		bool retVal = true;
 
-		for (auto protocol : diagnosticProtocolList)
+		for (auto protocolLocation : diagnosticProtocolList)
 		{
-			if (protocol->myControlFunction == internalControlFunction)
+			if (protocolLocation->myControlFunction == internalControlFunction)
 			{
 				retVal = false;
 				break;
@@ -93,7 +93,8 @@ namespace isobus
 
 		if (retVal)
 		{
-		
+			DiagnosticProtocol *newProtocol = new DiagnosticProtocol(internalControlFunction);
+			diagnosticProtocolList.push_back(newProtocol);
 		}
 		return retVal;
 	}
@@ -102,12 +103,27 @@ namespace isobus
 	{
 		bool retVal = false;
 
+		for (auto protocolLocation = diagnosticProtocolList.begin(); protocolLocation != diagnosticProtocolList.end(); protocolLocation++)
+		{
+			if ((*protocolLocation)->myControlFunction == internalControlFunction)
+			{
+				retVal = true;
+				delete *protocolLocation;
+				diagnosticProtocolList.erase(protocolLocation);
+				break;
+			}
+		}
+		return retVal;
+	}
+
+	DiagnosticProtocol *DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
+	{
+		DiagnosticProtocol *retVal = nullptr;
 		for (auto protocol : diagnosticProtocolList)
 		{
 			if (protocol->myControlFunction == internalControlFunction)
 			{
-				retVal = true;
-				delete protocol;
+				retVal = protocol;
 				break;
 			}
 		}
@@ -153,7 +169,7 @@ namespace isobus
 			// First check to see if it's already active
 			auto activeLocation = std::find(activeDTCList.begin(), activeDTCList.end(), dtc);
 
-			if (activeDTCList.end() != activeLocation)
+			if (activeDTCList.end() == activeLocation)
 			{
 				// Not already active. This is valid
 				auto inactiveLocation = std::find(inactiveDTCList.begin(), inactiveDTCList.end(), dtc);
@@ -239,6 +255,18 @@ namespace isobus
 			}
 		}
 		txFlags.process_all_flags();
+	}
+
+	bool DiagnosticProtocol::protocol_transmit_message(std::uint32_t ,
+	                               const std::uint8_t *,
+	                               std::uint32_t ,
+	                               ControlFunction *,
+	                               ControlFunction *,
+	                               TransmitCompleteCallback ,
+	                               void *,
+	                               DataChunkCallback)
+	{
+		return false;
 	}
 
 	bool DiagnosticProtocol::send_diagnostic_message_1()
