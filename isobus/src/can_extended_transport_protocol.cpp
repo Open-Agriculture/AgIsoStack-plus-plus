@@ -354,12 +354,12 @@ namespace isobus
 
 		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
 		    (messageLength > CAN_DATA_LENGTH) &&
+		    (nullptr != destination) &&
 		    ((nullptr != dataBuffer) ||
 		     (nullptr != frameChunkCallback)) &&
 		    (nullptr != source) &&
 		    (true == source->get_address_valid()) &&
-		    ((nullptr == destination) ||
-		     (destination->get_address_valid())) &&
+		    (destination->get_address_valid()) &&
 		    (!get_session(session, source, destination, parameterGroupNumber)))
 		{
 			ExtendedTransportProtocolSession *newSession = new ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Transmit,
