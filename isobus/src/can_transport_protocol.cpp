@@ -369,6 +369,8 @@ namespace isobus
 		{
 			TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Transmit,
 			                                                                    source->get_can_port());
+			// Set the destination to global by default. If destination specific, we'll override this later.
+			std::uint8_t destinationAddress = BROADCAST_CAN_ADDRESS;
 
 			newSession->sessionMessage.set_data(dataBuffer, messageLength);
 			newSession->sessionMessage.set_source_control_function(source);
@@ -383,16 +385,22 @@ namespace isobus
 			{
 				newSession->packetCount++;
 			}
+
+			// Override global destination if this is a CM session rather than BAM
+			if (nullptr != destination)
+			{
+				destinationAddress = destination->get_address();
+			}
+
 			CANIdentifier messageVirtualID(CANIdentifier::Type::Extended,
 			                               parameterGroupNumber,
 			                               CANIdentifier::CANPriority::PriorityDefault6,
-			                               destination->get_address(),
+			                               destinationAddress,
 			                               source->get_address());
 
 			newSession->sessionMessage.set_identifier(messageVirtualID);
 			set_state(newSession, StateMachineState::RequestToSend);
 			activeSessions.push_back(newSession);
-			CANStackLogger::CAN_stack_log("[TP]: New CM Tx Session. Dest: " + std::to_string(static_cast<int>(destination->get_address())));
 		}
 		return retVal;
 	}
