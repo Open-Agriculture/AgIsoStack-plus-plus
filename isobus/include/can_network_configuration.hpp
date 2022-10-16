@@ -50,6 +50,8 @@ namespace isobus
 		static std::uint32_t get_minimum_time_between_transport_protocol_bam_frames();
 
 	private:
+		static constexpr std::uint8_t DEFAULT_BAM_PACKET_DELAY_TIME_MS = 50; ///< The default time between BAM frames, as defined by J1939
+
 		static std::uint32_t maxNumberTransportProtocolSessions; ///< The max number of TP sessions allowed
 		static std::uint32_t minimumTimeBetweenTransportProtocolBAMFrames; ///< The configurable time between BAM frames
 	};

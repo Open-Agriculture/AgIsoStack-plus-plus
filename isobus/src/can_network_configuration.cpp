@@ -12,7 +12,7 @@
 namespace isobus
 {
 	std::uint32_t CANNetworkConfiguration::maxNumberTransportProtocolSessions = 4;
-	std::uint32_t CANNetworkConfiguration::minimumTimeBetweenTransportProtocolBAMFrames = 50;
+	std::uint32_t CANNetworkConfiguration::minimumTimeBetweenTransportProtocolBAMFrames = DEFAULT_BAM_PACKET_DELAY_TIME_MS;
 
 	CANNetworkConfiguration::CANNetworkConfiguration()
 	{

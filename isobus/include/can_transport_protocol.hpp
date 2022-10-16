@@ -117,7 +117,6 @@ namespace isobus
 		static constexpr std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0; ///< The index of the sequence number in a frame
 		static constexpr std::uint8_t MESSAGE_TR_TIMEOUT_MS = 200; ///< The Tr Timeout as defined by the standard
 		static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7; ///< The number of payload bytes per frame minus overhead of sequence number
-		static constexpr std::uint8_t DEFAULT_BAM_PACKET_DELAY_TIME_MS = 50; ///< The default time between BAM frames, as defined by J1939
 
 		/// @brief The constructor for the TransportProtocolManager
 		TransportProtocolManager();
