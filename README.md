@@ -1,5 +1,5 @@
-# ISO11783 CAN Stack
-## An MIT licensed, hardware agnostic, control-function-focused implementation of the major ISOBUS and J1939 protocols in C++
+# ISO 11783 CAN Stack
+## An MIT licensed, hardware agnostic, control-function-focused implementation of the major ISOBUS (ISO 11783) and SAE J1939 protocols in C++
 This is a work in progress.
 
 The state of the project is as follows...
@@ -8,27 +8,26 @@ The state of the project is as follows...
 - Address Claiming: Complete :white_check_mark:
 - ISO11783 Transport Protocol (BAM and Connection Mode)
     - TP BAM Rx: Complete :white_check_mark:
-    - TP BAM Tx: Implemented, Needs Testing :white_check_mark: :question:
+    - TP BAM Tx: Complete :white_check_mark:
     - TP CM Tx: Complete :white_check_mark:
     - TP CM Rx: Complete :white_check_mark:
 - ISO11783 Extended Transport Protocol
-    - Implemented, Needs Testing :white_check_mark: :question:
+    - Complete :white_check_mark:
 - ISO11783 Virtual Terminal: Implemented, Needs testing :white_check_mark: :question:
-- J1939/ISO11783 Diagnostic Message 1 (DM1)
+- J1939/ISO11783 Diagnostic Protocol (Diagnostic Message 1 and 2 DM1/DM2)
     - In Development :hourglass:
 
-### Not yet started, but planned:
+### Planned Features (in no particular order):
 - ISO11783 File Server
 - ISO11783 Task Controller (currently planned to be client only)
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
-- J1939 DM2
 - J1939 DM14
 - NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
 - Meta: Package this library as a debian package
 - Meta: Windows OS support via some common CAN driver layers (P-CAN, for example)
 
-### Maybe someday:
+### Stretch Goals:
 - AEF's Tractor Implement Management Protocol (maybe)
 - More example hardware integrations (Right now only Socket CAN is provided out-of-the-box)
 - Sequence control
@@ -38,11 +37,6 @@ The real limiting factor is my time, and my lack of a Vector CANoe setup.
 I work full time and only develop on this project in my evenings.
 I have limited resources - no fancy VTs to test with or anything like that.
 You can help by becoming a github sponsor! Help me buy a Vector CANoe license so I can iterate faster!
-
-## IMPORTANT NOTE
-This project is currently in its infancy, and is *very much* a work in progress.
-I mean it! I would not use it yet until I finish the basic transport layer, add a bunch of docs and a bunch of testing!
-But... I do appreciate you stopping by and any feedback or PRs you might want to provide.
 
 ## Why does this project exist?
 As an engineer working on fully autonomous vehicles, one thing I often see developers and companies struggle with is using J1939 and ISO11783 CAN networks. Many vehicle OEMs have home-brewed "stacks" that are fragile and/or don't fully support basic things like address claiming and dynamic address arbitration, let alone a robust transport layer. Many commercial stacks can be very expensive, or don't have a favorable license for you to do your product integration. Even some open-source C++ J1939 stacks that I've seen take a very "non-ISO11783" approach to things, which makes layering things like the virtual terminal layer on top of them very difficult or inefficient.
