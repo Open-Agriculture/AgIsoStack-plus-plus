@@ -42,6 +42,7 @@ namespace isobus
 			RxDataSession, ///< Rx data session is in progress
 			RequestToSend, ///< We are sending the request to send message
 			WaitForClearToSend, ///< We are waiting for a clear to send message
+			BroadcastAnnounce, ///< We are sending the broadcast announce message (BAM)
 			TxDataSession, ///< A Tx data session is in progress
 			WaitForEndOfMessageAcknowledge ///< We are waiting for an end of message acknowledgement
 		};
@@ -116,6 +117,7 @@ namespace isobus
 		static constexpr std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0; ///< The index of the sequence number in a frame
 		static constexpr std::uint8_t MESSAGE_TR_TIMEOUT_MS = 200; ///< The Tr Timeout as defined by the standard
 		static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7; ///< The number of payload bytes per frame minus overhead of sequence number
+		static constexpr std::uint8_t DEFAULT_BAM_PACKET_DELAY_TIME_MS = 50; ///< The default time between BAM frames, as defined by J1939
 
 		/// @brief The constructor for the TransportProtocolManager
 		TransportProtocolManager();
@@ -183,6 +185,11 @@ namespace isobus
 		/// @param[in] success Denotes if the session was successful
 		void process_session_complete_callback(TransportProtocolSession *session, bool success);
 
+		/// @brief Sends the "broadcast announce" message
+		/// @param[in] session The session for which we're sending the BAM
+		/// @returns true if the BAM was sent, false if sending was not successful
+		bool send_broadcast_announce_message(TransportProtocolSession *session);
+
 		/// @brief Sends the "clear to send" message
 		/// @param[in] session The session for which we're sending the CTS
 		/// @returns true if the CTS was sent, false if sending was not successful
@@ -221,6 +228,7 @@ namespace isobus
 		void update_state_machine(TransportProtocolSession *session);
 
 		std::vector<TransportProtocolSession *> activeSessions; ///< A list of all active TP sessions
+		std::uint32_t BAMSessionPacketDelayTime_ms;
 	};
 
 } // namespace isobus

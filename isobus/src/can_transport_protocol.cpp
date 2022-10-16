@@ -47,7 +47,8 @@ namespace isobus
 	{
 	}
 
-	TransportProtocolManager::TransportProtocolManager()
+	TransportProtocolManager::TransportProtocolManager() :
+	  BAMSessionPacketDelayTime_ms(DEFAULT_BAM_PACKET_DELAY_TIME_MS)
 	{
 	}
 
@@ -369,8 +370,7 @@ namespace isobus
 		{
 			TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Transmit,
 			                                                                    source->get_can_port());
-			// Set the destination to global by default. If destination specific, we'll override this later.
-			std::uint8_t destinationAddress = BROADCAST_CAN_ADDRESS;
+			std::uint8_t destinationAddress;
 
 			newSession->sessionMessage.set_data(dataBuffer, messageLength);
 			newSession->sessionMessage.set_source_control_function(source);
@@ -386,10 +386,17 @@ namespace isobus
 				newSession->packetCount++;
 			}
 
-			// Override global destination if this is a CM session rather than BAM
 			if (nullptr != destination)
 			{
+				// CM Message
 				destinationAddress = destination->get_address();
+				set_state(newSession, StateMachineState::RequestToSend);
+			}
+			else
+			{
+				// BAM message
+				destinationAddress = BROADCAST_CAN_ADDRESS;
+				set_state(newSession, StateMachineState::BroadcastAnnounce);
 			}
 
 			CANIdentifier messageVirtualID(CANIdentifier::Type::Extended,
@@ -399,8 +406,9 @@ namespace isobus
 			                               source->get_address());
 
 			newSession->sessionMessage.set_identifier(messageVirtualID);
-			set_state(newSession, StateMachineState::RequestToSend);
+
 			activeSessions.push_back(newSession);
+			retVal = true;
 		}
 		return retVal;
 	}
@@ -501,6 +509,30 @@ namespace isobus
 			                                 success,
 			                                 session->parent);
 		}
+	}
+
+	bool TransportProtocolManager::send_broadcast_announce_message(TransportProtocolSession *session)
+	{
+		bool retVal = false;
+
+		if (nullptr != session)
+		{
+			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR,
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
+				                                                 session->packetCount,
+				                                                 0xFF,
+				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
+			                                                        dataBuffer,
+			                                                        CAN_DATA_LENGTH,
+			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                                        nullptr,
+			                                                        CANIdentifier::CANPriority::PriorityDefault6);
+		}
+		return retVal;
 	}
 
 	bool TransportProtocolManager::send_clear_to_send(TransportProtocolSession *session)
@@ -680,11 +712,21 @@ namespace isobus
 				}
 				break;
 
+				case StateMachineState::BroadcastAnnounce:
+				{
+					if (send_broadcast_announce_message(session))
+					{
+						set_state(session, StateMachineState::TxDataSession);
+					}
+				}
+				break;
+
 				case StateMachineState::TxDataSession:
 				{
-					if (nullptr != session->sessionMessage.get_destination_control_function())
+					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, BAMSessionPacketDelayTime_ms)))
 					{
 						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
+
 						// Try and send packets
 						for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
 						{
@@ -752,6 +794,12 @@ namespace isobus
 								session->lastPacketNumber++;
 								session->processedPacketsThisSession++;
 								session->timestamp_ms = SystemTiming::get_timestamp_ms();
+
+								if (nullptr == session->sessionMessage.get_destination_control_function())
+								{
+									// Need to wait for the frame delay time before continuing BAM session
+									break;
+								}
 							}
 							else
 							{
@@ -759,18 +807,26 @@ namespace isobus
 								break;
 							}
 						}
+					}
 
-						if ((session->lastPacketNumber == (session->packetCount)) &&
-						    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+					if ((session->lastPacketNumber == (session->packetCount)) &&
+					    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+					{
+						if (nullptr == session->sessionMessage.get_destination_control_function())
+						{
+							// BAM is complete
+							close_session(session);
+						}
+						else
 						{
 							set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
 							session->timestamp_ms = SystemTiming::get_timestamp_ms();
 						}
-						else if (session->lastPacketNumber == session->packetCount)
-						{
-							set_state(session, StateMachineState::WaitForClearToSend);
-							session->timestamp_ms = SystemTiming::get_timestamp_ms();
-						}
+					}
+					else if (session->lastPacketNumber == session->packetCount)
+					{
+						set_state(session, StateMachineState::WaitForClearToSend);
+						session->timestamp_ms = SystemTiming::get_timestamp_ms();
 					}
 				}
 				break;
