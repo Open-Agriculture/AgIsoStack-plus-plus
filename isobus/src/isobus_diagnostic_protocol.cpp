@@ -188,6 +188,7 @@ namespace isobus
 					if (SystemTiming::get_time_elapsed_ms(lastDM1SentTimestamp) > DM_MAX_FREQUENCY_MS)
 					{
 						txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+						lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
 					}
 				}
 			}
@@ -214,6 +215,7 @@ namespace isobus
 					if (SystemTiming::get_time_elapsed_ms(lastDM2SentTimestamp) > DM_MAX_FREQUENCY_MS)
 					{
 						txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
+						lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
 					}
 				}
 			}
@@ -233,38 +235,42 @@ namespace isobus
 			if (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS))
 			{
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+				lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
 			}
 
 			if (SystemTiming::time_expired_ms(lastDM2SentTimestamp, DM_MAX_FREQUENCY_MS))
 			{
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
+				lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
 			}
 		}
 		else
 		{
 			if ((0 != activeDTCList.size()) &&
-				(SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
+			    (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
 			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));			
+				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+				lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
 			}
 
 			if ((0 != inactiveDTCList.size()) &&
 			    (SystemTiming::time_expired_ms(lastDM2SentTimestamp, DM_MAX_FREQUENCY_MS)))
 			{
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
+				lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
 			}
 		}
 		txFlags.process_all_flags();
 	}
 
-	bool DiagnosticProtocol::protocol_transmit_message(std::uint32_t ,
-	                               const std::uint8_t *,
-	                               std::uint32_t ,
-	                               ControlFunction *,
-	                               ControlFunction *,
-	                               TransmitCompleteCallback ,
-	                               void *,
-	                               DataChunkCallback)
+	bool DiagnosticProtocol::protocol_transmit_message(std::uint32_t,
+	                                                   const std::uint8_t *,
+	                                                   std::uint32_t,
+	                                                   ControlFunction *,
+	                                                   ControlFunction *,
+	                                                   TransmitCompleteCallback,
+	                                                   void *,
+	                                                   DataChunkCallback)
 	{
 		return false;
 	}
@@ -441,7 +447,6 @@ namespace isobus
 
 				default:
 				{
-				
 				}
 				break;
 			}
