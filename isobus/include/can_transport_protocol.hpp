@@ -228,7 +228,6 @@ namespace isobus
 		void update_state_machine(TransportProtocolSession *session);
 
 		std::vector<TransportProtocolSession *> activeSessions; ///< A list of all active TP sessions
-		std::uint32_t BAMSessionPacketDelayTime_ms;
 	};
 
 } // namespace isobus

@@ -8,7 +8,7 @@
 //================================================================================================
 
 #ifndef CAN_NETWORK_CONFIGURATION_HPP
-#define CAN_NETWORK_CONFIGURAION_HPP
+#define CAN_NETWORK_CONFIGURATION_HPP
 
 #include <cstdint>
 
@@ -37,8 +37,21 @@ namespace isobus
 		/// @returns The max number of concurrent TP sessions
 		static std::uint32_t get_max_number_transport_protcol_sessions();
 
+		/// @brief Sets the minimum time to wait between sending BAM frames
+		/// @details The acceptable range as defined by ISO-11783 is 10 to 200 ms.
+		/// This is a minumum time, so if you set it to some value, like 10 ms, the
+		/// stack will attempt to transmit it as close to that time as it can, but it is
+		/// not possible to 100% ensure it.
+		/// @param[in] value The minimum time to wait between sending BAM frames
+		static void set_minimum_time_between_transport_protocol_bam_frames(std::uint32_t value);
+
+		/// @brief Returns the minimum time to wait between sending BAM frames
+		/// @returns The minimum time to wait between sending BAM frames
+		static std::uint32_t get_minimum_time_between_transport_protocol_bam_frames();
+
 	private:
 		static std::uint32_t maxNumberTransportProtocolSessions; ///< The max number of TP sessions allowed
+		static std::uint32_t minimumTimeBetweenTransportProtocolBAMFrames; ///< The configurable time between BAM frames
 	};
 } // namespace isobus
 
