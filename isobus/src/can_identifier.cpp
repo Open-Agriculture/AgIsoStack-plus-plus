@@ -36,7 +36,7 @@ namespace isobus
 			}
 			else
 			{
-				m_RawIdentifier |= ((pgn << PARAMTER_GROUP_NUMBER_OFFSET) & BROADCAST_PGN_MASK);
+				m_RawIdentifier |= ((pgn & BROADCAST_PGN_MASK) << PARAMTER_GROUP_NUMBER_OFFSET);
 			}
 		}
 		m_RawIdentifier |= static_cast<std::uint32_t>(sourceAddress);
