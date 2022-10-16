@@ -388,6 +388,7 @@ namespace isobus
 			set_state(newSession, StateMachineState::RequestToSend);
 			activeSessions.push_back(newSession);
 			CANStackLogger::CAN_stack_log("[ETP]: New ETP Session. Dest: " + std::to_string(static_cast<int>(destination->get_address())));
+			retVal = true;
 		}
 		return retVal;
 	}
