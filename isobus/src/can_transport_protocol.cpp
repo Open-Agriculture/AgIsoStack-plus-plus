@@ -47,8 +47,7 @@ namespace isobus
 	{
 	}
 
-	TransportProtocolManager::TransportProtocolManager() :
-	  BAMSessionPacketDelayTime_ms(DEFAULT_BAM_PACKET_DELAY_TIME_MS)
+	TransportProtocolManager::TransportProtocolManager()
 	{
 	}
 
@@ -723,7 +722,7 @@ namespace isobus
 
 				case StateMachineState::TxDataSession:
 				{
-					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, BAMSessionPacketDelayTime_ms)))
+					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames())))
 					{
 						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
 
