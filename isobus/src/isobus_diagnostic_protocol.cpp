@@ -203,7 +203,7 @@ namespace isobus
 			/// First check to see if it's already in the inactive list
 			auto inactiveLocation = std::find(inactiveDTCList.begin(), inactiveDTCList.end(), dtc);
 
-			if (inactiveDTCList.end() != inactiveLocation)
+			if (inactiveDTCList.end() == inactiveLocation)
 			{
 				auto activeLocation = std::find(activeDTCList.begin(), activeDTCList.end(), dtc);
 
