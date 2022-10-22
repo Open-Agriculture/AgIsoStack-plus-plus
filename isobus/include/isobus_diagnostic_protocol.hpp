@@ -45,7 +45,10 @@ namespace isobus
 			RedStopLampFastFlash, ///< This lamp is used to relay trouble code information that is of a severe-enough condition that it warrants stopping the vehicle
 			AmberWarningLampSolid, ///< This lamp is used to relay trouble code information that is reporting a problem with the vehicle system but the vehicle need not be immediately stopped.
 			AmberWarningLampSlowFlash, ///< This lamp is used to relay trouble code information that is reporting a problem with the vehicle system but the vehicle need not be immediately stopped.
-			AmberWarningLampFastFlash ///< This lamp is used to relay trouble code information that is reporting a problem with the vehicle system but the vehicle need not be immediately stopped.
+			AmberWarningLampFastFlash, ///< This lamp is used to relay trouble code information that is reporting a problem with the vehicle system but the vehicle need not be immediately stopped.
+			EngineProtectLampSolid, ///< This lamp is used to relay trouble code information that is reporting a problem with a vehicle system that is most probably not electronic sub-system related
+			EngineProtectLampSlowFlash, ///< This lamp is used to relay trouble code information that is reporting a problem with a vehicle system that is most probably not electronic sub-system related
+			EngineProtectLampFastFlash ///< This lamp is used to relay trouble code information that is reporting a problem with a vehicle system that is most probably not electronic sub-system related
 		};
 
 		/// @brief FMI as defined in ISO11783-12 Annex E
@@ -74,6 +77,7 @@ namespace isobus
 			ConditionExists = 31 ///< The condition that is identified by the SPN exists when no applicable FMI exists (any other error)
 		};
 
+		/// @brief A set of transmit flags to manage sending DM1, DM2, and protocol ID
 		enum class TransmitFlags
 		{
 			DM1 = 0, ///< A flag to manage sending the DM1 message
@@ -167,6 +171,23 @@ namespace isobus
 		void update(CANLibBadge<CANNetworkManager>) override;
 
 	private:
+		/// @brief Lists the different lamps in J1939-73
+		enum class Lamps
+		{
+			MalfunctionIndicatorLamp, ///< The "MIL"
+			RedStopLamp, ///< The "RSL"
+			AmberWarningLamp, ///< The "AWL"
+			ProtectLamp ///< The engine protect lamp
+		};
+
+		/// @brief Enumerates lamp flash states in J1939
+		enum class FlashState
+		{
+			Solid, ///< Solid / no flash
+			Slow, ///< Slow flash
+			Fast ///< Fast flash
+		};
+
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 
@@ -175,6 +196,27 @@ namespace isobus
 
 		/// @brief The destructor for this protocol
 		~DiagnosticProtocol();
+
+		/// @brief A utility function to get the CAN representation of a FlashState
+		/// @param flash The flash state to convert
+		/// @returns The two bit lamp state for CAN
+		std::uint8_t convert_flash_state_to_byte(FlashState flash);
+
+		/// @brief This is a way to find the overall lamp states to report
+		/// @details This searches the active DTC list to find if a lamp is on or off, and to find the overall flash state for that lamp.
+		/// Basically, since the lamp states are global to the CAN message, we need a way to resolve the "total" lamp state from the list.
+		/// @param[in] targetLamp The lamp to find the status of
+		/// @param[out] flash How the lamp should be flashing
+		/// @param[out] lampOn If the lamp state is on for any DTC
+		void get_active_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn);
+
+		/// @brief This is a way to find the overall lamp states to report
+		/// @details This searches the inactive DTC list to find if a lamp is on or off, and to find the overall flash state for that lamp.
+		/// Basically, since the lamp states are global to the CAN message, we need a way to resolve the "total" lamp state from the list.
+		/// @param[in] targetLamp The lamp to find the status of
+		/// @param[out] flash How the lamp should be flashing
+		/// @param[out] lampOn If the lamp state is on for any DTC
+		void get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn);
 
 		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
 		/// @note In this protocol, we do not accept messages from the network manager for transmission
@@ -204,6 +246,12 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_2();
 
+		/// @brief Sends an ACK (pgn E800) for clearing inactive DTCs via DM3
+		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
+		/// @param destination The destination control function for the ACK
+		/// @returns true if te message was sent, otherwise false
+		bool send_diagnostic_message_3_ack(ControlFunction *destination);
+
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
@@ -222,7 +270,7 @@ namespace isobus
 		/// @param[in] parentPointer A generic context pointer to reference a specific instance of this protocol in the callback
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
-		static std::list<DiagnosticProtocol *> diagnosticProtocolList;
+		static std::list<DiagnosticProtocol *> diagnosticProtocolList; ///< List of all diagnostic protocol instances (one per ICF)
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs

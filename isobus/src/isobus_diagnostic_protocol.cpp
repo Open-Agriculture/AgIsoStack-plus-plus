@@ -177,7 +177,7 @@ namespace isobus
 				if (inactiveDTCList.end() != inactiveLocation)
 				{
 					inactiveLocation->occuranceCount++;
-					activeDTCList.insert(inactiveDTCList.end(), std::make_move_iterator(inactiveLocation), std::make_move_iterator(activeDTCList.end()));
+					activeDTCList.push_back(*inactiveLocation);
 					inactiveDTCList.erase(inactiveLocation);
 				}
 				else
@@ -209,7 +209,7 @@ namespace isobus
 
 				if (activeDTCList.end() != activeLocation)
 				{
-					inactiveDTCList.insert(activeDTCList.end(), std::make_move_iterator(activeLocation), std::make_move_iterator(inactiveDTCList.end()));
+					inactiveDTCList.push_back(*activeLocation);
 					activeDTCList.erase(activeLocation);
 
 					if (SystemTiming::get_time_elapsed_ms(lastDM2SentTimestamp) > DM_MAX_FREQUENCY_MS)
@@ -263,6 +263,244 @@ namespace isobus
 		txFlags.process_all_flags();
 	}
 
+	std::uint8_t DiagnosticProtocol::convert_flash_state_to_byte(FlashState flash)
+	{
+		std::uint8_t retVal = 0;
+
+		switch (flash)
+		{
+			case FlashState::Slow:
+			{
+				retVal = 0x00;
+			}
+			break;
+
+			case FlashState::Fast:
+			{
+				retVal = 0x01;
+			}
+			break;
+
+			case FlashState::Solid:
+			default:
+			{
+				retVal = 0x03;
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	void DiagnosticProtocol::get_active_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn)
+	{
+		flash = FlashState::Solid;
+		lampOn = false;
+
+		for (auto dtc : activeDTCList)
+		{
+			switch (targetLamp)
+			{
+				case Lamps::AmberWarningLamp:
+				{
+					if (dtc.lampState == LampStatus::AmberWarningLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::AmberWarningLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::AmberWarningLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				case Lamps::MalfunctionIndicatorLamp:
+				{
+					if (dtc.lampState == LampStatus::MalfunctionIndicatorLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::MalfuctionIndicatorLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::MalfunctionIndicatorLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				case Lamps::ProtectLamp:
+				{
+					if (dtc.lampState == LampStatus::EngineProtectLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::EngineProtectLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::EngineProtectLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				case Lamps::RedStopLamp:
+				{
+					if (dtc.lampState == LampStatus::RedStopLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::RedStopLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::RedStopLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				default:
+				{
+				}
+				break;
+			}
+		}
+	}
+
+	void DiagnosticProtocol::get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn)
+	{
+		flash = FlashState::Solid;
+		lampOn = false;
+
+		for (auto dtc : inactiveDTCList)
+		{
+			switch (targetLamp)
+			{
+				case Lamps::AmberWarningLamp:
+				{
+					if (dtc.lampState == LampStatus::AmberWarningLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::AmberWarningLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::AmberWarningLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				case Lamps::MalfunctionIndicatorLamp:
+				{
+					if (dtc.lampState == LampStatus::MalfunctionIndicatorLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::MalfuctionIndicatorLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::MalfunctionIndicatorLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				case Lamps::ProtectLamp:
+				{
+					if (dtc.lampState == LampStatus::EngineProtectLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::EngineProtectLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::EngineProtectLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				case Lamps::RedStopLamp:
+				{
+					if (dtc.lampState == LampStatus::RedStopLampSolid)
+					{
+						lampOn = true;
+					}
+					else if (dtc.lampState == LampStatus::RedStopLampSlowFlash)
+					{
+						lampOn = true;
+						if (flash != FlashState::Fast)
+						{
+							flash = FlashState::Slow;
+						}
+					}
+					else if (dtc.lampState == LampStatus::RedStopLampFastFlash)
+					{
+						lampOn = true;
+						flash = FlashState::Fast;
+					}
+				}
+				break;
+
+				default:
+				{
+				}
+				break;
+			}
+		}
+	}
+
 	bool DiagnosticProtocol::protocol_transmit_message(std::uint32_t,
 	                                                   const std::uint8_t *,
 	                                                   std::uint32_t,
@@ -285,18 +523,53 @@ namespace isobus
 			std::vector<std::uint8_t> buffer;
 
 			buffer.resize(payloadSize);
-			buffer[0] = 0xFF;
-			buffer[1] = 0xFF;
+
+			if (get_j1939_mode())
+			{
+				bool tempLampState = false;
+				FlashState tempLampFlashState = FlashState::Solid;
+				get_active_list_lamp_state_and_flash_state(Lamps::ProtectLamp, tempLampFlashState, tempLampState);
+
+				/// Encode Protect state and flash
+				buffer[0] = tempLampState;
+				buffer[1] = convert_flash_state_to_byte(tempLampFlashState);
+
+				get_active_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
+
+				/// Encode amber warning lamp state and flash
+				buffer[0] |= (tempLampState << 2);
+				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
+
+				get_active_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
+
+				/// Encode red stop lamp state and flash
+				buffer[0] |= (tempLampState << 4);
+				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
+
+				get_active_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
+
+				/// Encode malfunction indicator lamp state and flash
+				buffer[0] |= (tempLampState << 6);
+				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
+			}
+			else
+			{
+				// ISO 11783 does not use lamp state or lamp flash bytes
+				buffer[0] = 0xFF;
+				buffer[1] = 0xFF;
+			}
 
 			if (0 == activeDTCList.size())
 			{
-				buffer[2] = 0xFF;
-				buffer[3] = 0xFF;
-				buffer[4] = 0xFF;
-				buffer[5] = 0xFF;
+				buffer[2] = 0x00;
+				buffer[3] = 0x00;
+				buffer[4] = 0x00;
+				buffer[5] = 0x00;
+				buffer[6] = 0xFF;
+				buffer[7] = 0xFF;
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
 				                                                        buffer.data(),
-				                                                        (DM_PAYLOAD_BYTES_PER_DTC + 2),
+				                                                        CAN_DATA_LENGTH,
 				                                                        myControlFunction.get());
 			}
 			else
@@ -323,22 +596,57 @@ namespace isobus
 
 		if (nullptr != myControlFunction)
 		{
-			std::uint16_t payloadSize = (inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
+			std::uint16_t payloadSize = (inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 			std::vector<std::uint8_t> buffer;
 
 			buffer.resize(payloadSize);
-			buffer[0] = 0xFF;
-			buffer[1] = 0xFF;
+
+			if (get_j1939_mode())
+			{
+				bool tempLampState = false;
+				FlashState tempLampFlashState = FlashState::Solid;
+				get_inactive_list_lamp_state_and_flash_state(Lamps::ProtectLamp, tempLampFlashState, tempLampState);
+
+				/// Encode Protect state and flash
+				buffer[0] = tempLampState;
+				buffer[1] = convert_flash_state_to_byte(tempLampFlashState);
+
+				get_inactive_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
+
+				/// Encode amber warning lamp state and flash
+				buffer[0] |= (tempLampState << 2);
+				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
+
+				get_inactive_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
+
+				/// Encode red stop lamp state and flash
+				buffer[0] |= (tempLampState << 4);
+				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
+
+				get_inactive_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
+
+				/// Encode malfunction indicator lamp state and flash
+				buffer[0] |= (tempLampState << 6);
+				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
+			}
+			else
+			{
+				// ISO 11783 does not use lamp state or lamp flash bytes
+				buffer[0] = 0xFF;
+				buffer[1] = 0xFF;
+			}
 
 			if (0 == inactiveDTCList.size())
 			{
-				buffer[2] = 0xFF;
-				buffer[3] = 0xFF;
-				buffer[4] = 0xFF;
-				buffer[5] = 0xFF;
+				buffer[2] = 0x00;
+				buffer[3] = 0x00;
+				buffer[4] = 0x00;
+				buffer[5] = 0x00;
+				buffer[6] = 0xFF;
+				buffer[7] = 0xFF;
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
 				                                                        buffer.data(),
-				                                                        (DM_PAYLOAD_BYTES_PER_DTC + 2),
+				                                                        CAN_DATA_LENGTH,
 				                                                        myControlFunction.get());
 			}
 			else
@@ -355,6 +663,34 @@ namespace isobus
 				                                                        payloadSize,
 				                                                        myControlFunction.get());
 			}
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::send_diagnostic_message_3_ack(ControlFunction *destination)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+		bool retVal = false;
+
+		// "A positive or negative acknowledgement is not required in response to a global request."
+		if (nullptr != destination)
+		{
+			constexpr std::uint32_t DM3PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3);
+
+			buffer[0] = 0x00; // Positive acknowledgement
+			buffer[1] = 0xFF; // Group function value
+			buffer[2] = 0xFF; // Reserved
+			buffer[3] = 0xFF; // Reserved
+			buffer[4] = destination->get_address(); // Address acknowledged
+			buffer[5] = (DM3PGN & 0xFF); // PGN LSB
+			buffer[6] = ((DM3PGN >> 8) & 0xFF); // PGN middle byte
+			buffer[7] = ((DM3PGN >> 16) & 0xFF); // PGN MSB
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        myControlFunction.get(),
+			                                                        nullptr);
 		}
 		return retVal;
 	}
@@ -385,10 +721,21 @@ namespace isobus
 		{
 			switch (message->get_identifier().get_parameter_group_number())
 			{
-				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3):
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest):
 				{
-					clear_inactive_diagnostic_trouble_codes();
-					/// @todo ACK
+					if (3 == message->get_data_length()) /// PGN requests DLC is 3
+					{
+						std::vector<std::uint8_t> messageData = message->get_data();
+						std::uint32_t requestedPGN =  static_cast<std::uint32_t>(messageData.at(0));
+						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(1)) << 8);
+						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(2)) << 16);
+
+						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3) == requestedPGN)
+						{
+							clear_inactive_diagnostic_trouble_codes();
+							send_diagnostic_message_3_ack(message->get_source_control_function());
+						}
+					}
 				}
 				break;
 
