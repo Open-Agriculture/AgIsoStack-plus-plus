@@ -252,6 +252,12 @@ namespace isobus
 		/// @returns true if te message was sent, otherwise false
 		bool send_diagnostic_message_3_ack(ControlFunction *destination);
 
+		/// @brief Sends an ACK (pgn E800) for clearing active DTCs via DM11
+		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
+		/// @param destination The destination control function for the ACK
+		/// @returns true if te message was sent, otherwise false
+		bool send_diagnostic_message_11_ack(ControlFunction *destination);
+
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
