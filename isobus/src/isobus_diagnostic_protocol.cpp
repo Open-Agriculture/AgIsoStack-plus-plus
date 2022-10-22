@@ -222,6 +222,54 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::get_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc)
+	{
+		auto activeLocation = std::find(activeDTCList.begin(), activeDTCList.end(), dtc);
+		bool retVal = false;
+
+		if (activeDTCList.end() != activeLocation)
+		{
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::set_product_identification_code(std::string value)
+	{
+		bool retVal = false;
+
+		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		{
+			productIdentificationCode = value;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::set_product_identification_brand(std::string value)
+	{
+		bool retVal = false;
+
+		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		{
+			productIdentificationBrand = value;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::set_product_identification_model(std::string value)
+	{
+		bool retVal = false;
+
+		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		{
+			productIdentificationModel = value;
+			retVal = true;
+		}
+		return retVal;
+	}
+
 	void DiagnosticProtocol::update(CANLibBadge<CANNetworkManager>)
 	{
 		if (j1939Mode)
@@ -648,34 +696,6 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_message_2_ack(ControlFunction *destination)
-	{
-		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
-		bool retVal = false;
-
-		// "A positive or negative acknowledgement is not required in response to a global request."
-		if (nullptr != destination)
-		{
-			constexpr std::uint32_t DM2PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2);
-
-			buffer[0] = 0x00; // Positive acknowledgement
-			buffer[1] = 0xFF; // Group function value
-			buffer[2] = 0xFF; // Reserved
-			buffer[3] = 0xFF; // Reserved
-			buffer[4] = destination->get_address(); // Address acknowledged
-			buffer[5] = (DM2PGN & 0xFF); // PGN LSB
-			buffer[6] = ((DM2PGN >> 8) & 0xFF); // PGN middle byte
-			buffer[7] = ((DM2PGN >> 16) & 0xFF); // PGN MSB
-
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
-			                                                        buffer.data(),
-			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction.get(),
-			                                                        nullptr);
-		}
-		return retVal;
-	}
-
 	bool DiagnosticProtocol::send_diagnostic_message_3_ack(ControlFunction *destination)
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
@@ -752,6 +772,17 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::send_product_identification()
+	{
+		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
+		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
+		                                                      buffer.data(),
+		                                                      buffer.size(),
+		                                                      myControlFunction.get());
+	}
+
 	void DiagnosticProtocol::process_message(CANMessage *const message)
 	{
 		if (nullptr != message)
@@ -767,20 +798,39 @@ namespace isobus
 						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(1)) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(2)) << 16);
 
-						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2) == requestedPGN)
+						switch (requestedPGN)
 						{
-							send_diagnostic_message_2_ack(message->get_source_control_function());
-							txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
-						}
-						else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3) == requestedPGN)
-						{
-							clear_inactive_diagnostic_trouble_codes();
-							send_diagnostic_message_3_ack(message->get_source_control_function());
-						}
-						else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11) == requestedPGN)
-						{
-							clear_active_diagnostic_trouble_codes();
-							send_diagnostic_message_11_ack(message->get_source_control_function());
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2):
+							{
+								txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
+							}
+							break;
+
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3):
+							{
+								clear_inactive_diagnostic_trouble_codes();
+								send_diagnostic_message_3_ack(message->get_source_control_function());
+							}
+							break;
+
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11):
+							{
+								clear_active_diagnostic_trouble_codes();
+								send_diagnostic_message_11_ack(message->get_source_control_function());
+							}
+							break;
+
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification):
+							{
+								txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ProductIdentification));
+							}
+							break;
+
+							default:
+							{
+								// This PGN request is not handled by the diagnostic protocol
+							}
+							break;
 						}
 					}
 				}
@@ -831,6 +881,12 @@ namespace isobus
 				case static_cast<std::uint32_t>(TransmitFlags::DiagnosticProtocolID):
 				{
 					transmitSuccessful = parent->send_diagnostic_protocol_identification();
+				}
+				break;
+
+				case static_cast<std::uint32_t>(TransmitFlags::ProductIdentification):
+				{
+					transmitSuccessful = parent->send_product_identification();
 				}
 				break;
 
