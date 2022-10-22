@@ -14,18 +14,27 @@ The state of the project is as follows...
 - ISO11783 Extended Transport Protocol
     - Complete :white_check_mark:
 - ISO11783 Virtual Terminal: Implemented, Needs testing :white_check_mark: :question:
-- J1939/ISO11783 Diagnostic Protocol (Diagnostic Message 1 and 2 DM1/DM2)
-    - In Development :hourglass:
-
+- J1939/ISO11783 Diagnostic Protocol
+    - Diagnostic Message 1: Complete :white_check_mark:
+    - Diagnostic Message 2: Complete :white_check_mark:
+    - Diagnostic Message 3: Complete :white_check_mark:
+    - Diagnostic Message 11: Complete :white_check_mark:
+    - Diagnostic Message 22: Complete :white_check_mark:
+    - Product Identification: Complete :white_check_mark:
+    - Diagnostic Protocol message Complete :white_check_mark:
+    - Control Function Functionalities Message: Not yet supported :x:
+        - Submit an issue please if this is a priority for your project!
 ### Planned Features (in no particular order):
+- Tutorial
 - ISO11783 File Server
 - ISO11783 Task Controller (currently planned to be client only)
+- PGN Request interface
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
-- J1939 DM14
+- J1939 DM13 (Stop/Start Broadcast)
 - NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
 - Meta: Package this library as a debian package
-- Meta: Windows OS support via some common CAN driver layers (P-CAN, for example)
+- Meta: Windows OS support via some common CAN driver layers (PEAK P-CAN, for example)
 
 ### Stretch Goals:
 - AEF's Tractor Implement Management Protocol (maybe)
