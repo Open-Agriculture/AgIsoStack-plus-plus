@@ -245,6 +245,7 @@ namespace isobus
 		};
 
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
+		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785;
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
 
