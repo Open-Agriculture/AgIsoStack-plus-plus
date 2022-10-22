@@ -83,6 +83,7 @@ namespace isobus
 			DM1 = 0, ///< A flag to manage sending the DM1 message
 			DM2, ///< A flag to manage sending the DM2 message
 			DiagnosticProtocolID, ///< A flag to manage sending the Diagnostic protocol ID message
+			ProductIdentification, ///< A flag to manage sending the product identification message
 
 			NumberOfFlags ///< The number of flags in the enum
 		};
@@ -165,7 +166,27 @@ namespace isobus
 		/// @brief Returns if a DTC is active
 		/// @param[in] dtc A diagnostic trouble code whose state should be altered
 		/// @returns `true` if the DTC was in the active list
-		bool get_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc) const;
+		bool get_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc);
+
+		/// @brief Sets the product ID code used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
+		/// @details The product identification code, as assigned by the manufacturer, corresponds with the number on the
+		/// type plate of a product. For vehicles, this number can be the same as the VIN. For stand-alone systems, such as VTs,
+		/// this number can be the same as the ECU ID number. The combination of the product identification code and brand shall
+		/// make the product globally unique.
+		/// @param The ascii product identification code, up to 50 characters long
+		/// @returns true if the value was set, false if the string is too long
+		bool set_product_identification_code(std::string value);
+
+		/// @brief Sets the product identification brand used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
+		/// @details The product identification brand specifies the brand of a product. The combination of the product ID code and brand
+		/// shall make the product unique in the world.
+		/// @param value The ascii product brand, up to 50 characters long
+		bool set_product_identification_brand(std::string value);
+
+		/// @brief Sets the product identification model used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
+		/// @details The product identification model specifies a unique product within a brand.
+		/// @param value The ascii model string, up to 50 characters
+		bool set_product_identification_model(std::string value);
 
 		/// @brief Updates the protocol cyclically
 		void update(CANLibBadge<CANNetworkManager>) override;
@@ -190,6 +211,7 @@ namespace isobus
 
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
+		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
 
 		/// @brief The constructor for this protocol
 		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
@@ -246,12 +268,6 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_2();
 
-		/// @brief Sends an ACK (pgn E800) for DM2
-		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
-		/// @param destination The destination control function for the ACK
-		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_2_ack(ControlFunction *destination);
-
 		/// @brief Sends an ACK (pgn E800) for clearing inactive DTCs via DM3
 		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
 		/// @param destination The destination control function for the ACK
@@ -267,6 +283,10 @@ namespace isobus
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
+
+		/// @brief Sends the product identification message (PGN 0xFC8D)
+		/// @returns true if the message was sent, otherwise false
+		bool send_product_identification();
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -288,6 +308,9 @@ namespace isobus
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
 		ProcessingFlags txFlags; ///< An instance of the processing flags to handle retries of some messages
+		std::string productIdentificationCode;
+		std::string productIdentificationBrand;
+		std::string productIdentificationModel;
 		std::uint32_t lastDM1SentTimestamp; ///< A timestamp in milliseconds of the last time a DM1 was sent
 		bool j1939Mode; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 	};

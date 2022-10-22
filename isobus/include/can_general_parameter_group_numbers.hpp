@@ -26,6 +26,7 @@ namespace isobus
 		TransportProtocolCommand = 0xEC00,
 		AddressClaim = 0xEE00,
 		ProprietaryA = 0xEF00,
+		ProductIdentification = 0xFC8D,
 		DiagnosticProtocolIdentification = 0xFD32,
 		WorkingSetMaster = 0xFE0D,
 		DiagnosticMessage1 = 0xFECA,
