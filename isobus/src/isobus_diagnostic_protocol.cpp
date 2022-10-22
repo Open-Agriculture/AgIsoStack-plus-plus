@@ -695,6 +695,34 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::send_diagnostic_message_11_ack(ControlFunction *destination)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+		bool retVal = false;
+
+		// "A positive or negative acknowledgement is not required in response to a global request."
+		if (nullptr != destination)
+		{
+			constexpr std::uint32_t DM3PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11);
+
+			buffer[0] = 0x00; // Positive acknowledgement
+			buffer[1] = 0xFF; // Group function value
+			buffer[2] = 0xFF; // Reserved
+			buffer[3] = 0xFF; // Reserved
+			buffer[4] = destination->get_address(); // Address acknowledged
+			buffer[5] = (DM3PGN & 0xFF); // PGN LSB
+			buffer[6] = ((DM3PGN >> 8) & 0xFF); // PGN middle byte
+			buffer[7] = ((DM3PGN >> 16) & 0xFF); // PGN MSB
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        myControlFunction.get(),
+			                                                        nullptr);
+		}
+		return retVal;
+	}
+
 	bool DiagnosticProtocol::send_diagnostic_protocol_identification()
 	{
 		bool retVal = false;
@@ -734,6 +762,11 @@ namespace isobus
 						{
 							clear_inactive_diagnostic_trouble_codes();
 							send_diagnostic_message_3_ack(message->get_source_control_function());
+						}
+						else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11) == requestedPGN)
+						{
+							clear_active_diagnostic_trouble_codes();
+							send_diagnostic_message_11_ack(message->get_source_control_function());
 						}
 					}
 				}

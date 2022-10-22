@@ -30,7 +30,8 @@ namespace isobus
 		WorkingSetMaster = 0xFE0D,
 		DiagnosticMessage1 = 0xFECA,
 		DiagnosticMessage2 = 0xFECB,
-		DiagnosticMessage3 = 0xFECC
+		DiagnosticMessage3 = 0xFECC,
+		DiagnosticMessage11 = 0xFED3
 	};
 
 } // namespace isobus
