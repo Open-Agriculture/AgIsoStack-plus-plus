@@ -174,7 +174,7 @@ namespace isobus
 		/// type plate of a product. For vehicles, this number can be the same as the VIN. For stand-alone systems, such as VTs,
 		/// this number can be the same as the ECU ID number. The combination of the product identification code and brand shall
 		/// make the product globally unique.
-		/// @param The ascii product identification code, up to 50 characters long
+		/// @param value The ascii product identification code, up to 50 characters long
 		/// @returns true if the value was set, false if the string is too long
 		bool set_product_identification_code(std::string value);
 
@@ -182,11 +182,13 @@ namespace isobus
 		/// @details The product identification brand specifies the brand of a product. The combination of the product ID code and brand
 		/// shall make the product unique in the world.
 		/// @param value The ascii product brand, up to 50 characters long
+		/// @returns true if the value was set, false if the string is too long
 		bool set_product_identification_brand(std::string value);
 
 		/// @brief Sets the product identification model used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification model specifies a unique product within a brand.
 		/// @param value The ascii model string, up to 50 characters
+		/// @returns true if the value was set, false if the string is too long
 		bool set_product_identification_model(std::string value);
 
 		/// @brief Updates the protocol cyclically
@@ -221,6 +223,7 @@ namespace isobus
 			NegativeAcknowledgeOfActiveDTCClear = 0x13 ///< NACK clearing an active DTC
 		};
 
+		/// @brief The negative acknowledge (NACK) reasons for a DM22 message
 		enum class DM22NegativeAcknowledgeIndicator : std::uint8_t
 		{
 			General = 0x00, ///< General negative acknowledge
@@ -233,12 +236,12 @@ namespace isobus
 		/// @brief A structure to hold data about DM22 responses we need to send
 		struct DM22Data
 		{
-			ControlFunction *destination;
-			std::uint32_t suspectParameterNumber;
-			std::uint8_t failureModeIdentifier;
-			std::uint8_t nackIndicator;
-			bool clearActive;
-			bool nack;
+			ControlFunction *destination; ///< Destination for the DM22 message
+			std::uint32_t suspectParameterNumber; ///< SPN of the DTC for the DM22
+			std::uint8_t failureModeIdentifier; ///< FMI of the DTC for the DM22
+			std::uint8_t nackIndicator; ///< The NACK reason, if applicable
+			bool clearActive; ///< true if the DM22 was for an active DTC, false for previously active
+			bool nack; ///< true if we are sending a NACK instead of PACK. Determines if we use nackIndicator
 		};
 
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
@@ -351,9 +354,9 @@ namespace isobus
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
 		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
 		ProcessingFlags txFlags; ///< An instance of the processing flags to handle retries of some messages
-		std::string productIdentificationCode;
-		std::string productIdentificationBrand;
-		std::string productIdentificationModel;
+		std::string productIdentificationCode; ///< The product identification code for sending the product identification message
+		std::string productIdentificationBrand; ///< The product identification brand for sending the product identification message
+		std::string productIdentificationModel; ///< The product identification model name for sending the product identification message
 		std::uint32_t lastDM1SentTimestamp; ///< A timestamp in milliseconds of the last time a DM1 was sent
 		bool j1939Mode; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 	};
