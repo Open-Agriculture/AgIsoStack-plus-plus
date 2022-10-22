@@ -84,6 +84,7 @@ namespace isobus
 			DM2, ///< A flag to manage sending the DM2 message
 			DiagnosticProtocolID, ///< A flag to manage sending the Diagnostic protocol ID message
 			ProductIdentification, ///< A flag to manage sending the product identification message
+			DM22, ///< Process queued up DM22 responses
 
 			NumberOfFlags ///< The number of flags in the enum
 		};
@@ -209,6 +210,37 @@ namespace isobus
 			Fast ///< Fast flash
 		};
 
+		/// @brief The DM22 multiplexor bytes. All bytes not given a value here are reserved by SAE
+		enum class DM22ControlByte : std::uint8_t
+		{
+			RequestToClearPreviouslyActiveDTC = 0x01, ///< Clear a previously active DTC
+			PositiveAcknowledgeOfPreviouslyActiveDTCClear = 0x02, ///< ACK for clearing a previously active DTC
+			NegativeAcknowledgeOfPreviouslyActiveDTCClear = 0x03, ///< NACK for clearing a previously active DTC
+			RequestToClearActiveDTC = 0x11, ///< Clear an active DTC
+			PositiveAcknowledgeOfActiveDTCClear = 0x12, ///< ACK clearing an active DTC
+			NegativeAcknowledgeOfActiveDTCClear = 0x13 ///< NACK clearing an active DTC
+		};
+
+		enum class DM22NegativeAcknowledgeIndicator : std::uint8_t
+		{
+			General = 0x00, ///< General negative acknowledge
+			AccessDenied = 0x01, ///< Security denied access
+			UnknownOrDoesNotExist = 0x02, ///< The DTC is unknown or does not exist
+			DTCUNoLongerPreviouslyActive = 0x03, ///< The DTC in in the active list but it was requested to clear from inactive list
+			DTCNoLongerActive = 0x04 ///< DTC is inactive, not active, but active was requested to be cleared
+		};
+
+		/// @brief A structure to hold data about DM22 responses we need to send
+		struct DM22Data
+		{
+			ControlFunction *destination;
+			std::uint32_t suspectParameterNumber;
+			std::uint8_t failureModeIdentifier;
+			std::uint8_t nackIndicator;
+			bool clearActive;
+			bool nack;
+		};
+
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
@@ -280,6 +312,11 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_11_ack(ControlFunction *destination);
 
+		/// @brief Sends a DM22 response message
+		/// @param data The components of the DM22 response
+		/// @returns true if the message was sent
+		bool send_diagnostic_message_22_response(DM22Data data);
+
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
@@ -287,6 +324,11 @@ namespace isobus
 		/// @brief Sends the product identification message (PGN 0xFC8D)
 		/// @returns true if the message was sent, otherwise false
 		bool send_product_identification();
+
+		/// @brief Processes any DM22 responses from the queue
+		/// @details We queue responses so that we can do Tx retries if needed
+		/// @returns true if queue was completely processed, false if messages remain that could not be sent
+		bool process_all_dm22_responses();
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -307,6 +349,7 @@ namespace isobus
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
+		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
 		ProcessingFlags txFlags; ///< An instance of the processing flags to handle retries of some messages
 		std::string productIdentificationCode;
 		std::string productIdentificationBrand;

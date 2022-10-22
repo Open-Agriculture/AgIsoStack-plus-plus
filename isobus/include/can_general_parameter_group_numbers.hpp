@@ -16,6 +16,7 @@ namespace isobus
 	enum class CANLibParameterGroupNumber
 	{
 		Any = 0x0000,
+		DiagnosticMessage22 = 0xC300,
 		ExtendedTransportProtocolDataTransfer = 0xC700,
 		ExtendedTransportProtocolConnectionManagement = 0xC800,
 		VirtualTerminalToECU = 0xE600,
