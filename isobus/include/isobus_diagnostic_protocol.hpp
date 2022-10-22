@@ -246,16 +246,22 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_2();
 
+		/// @brief Sends an ACK (pgn E800) for DM2
+		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
+		/// @param destination The destination control function for the ACK
+		/// @returns true if the message was sent, otherwise false
+		bool send_diagnostic_message_2_ack(ControlFunction *destination);
+
 		/// @brief Sends an ACK (pgn E800) for clearing inactive DTCs via DM3
 		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
 		/// @param destination The destination control function for the ACK
-		/// @returns true if te message was sent, otherwise false
+		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_3_ack(ControlFunction *destination);
 
 		/// @brief Sends an ACK (pgn E800) for clearing active DTCs via DM11
 		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
 		/// @param destination The destination control function for the ACK
-		/// @returns true if te message was sent, otherwise false
+		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_11_ack(ControlFunction *destination);
 
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
@@ -283,7 +289,6 @@ namespace isobus
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
 		ProcessingFlags txFlags; ///< An instance of the processing flags to handle retries of some messages
 		std::uint32_t lastDM1SentTimestamp; ///< A timestamp in milliseconds of the last time a DM1 was sent
-		std::uint32_t lastDM2SentTimestamp; ///< A timestamp in milliseconds of the last time a DM2 was sent
 		bool j1939Mode; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 	};
 }
