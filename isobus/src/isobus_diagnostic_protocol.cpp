@@ -553,77 +553,80 @@ namespace isobus
 			std::uint16_t payloadSize = (activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 			std::vector<std::uint8_t> buffer;
 
-			buffer.resize(payloadSize);
-
-			if (get_j1939_mode())
+			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
-				bool tempLampState = false;
-				FlashState tempLampFlashState = FlashState::Solid;
-				get_active_list_lamp_state_and_flash_state(Lamps::ProtectLamp, tempLampFlashState, tempLampState);
+				buffer.resize(payloadSize);
 
-				/// Encode Protect state and flash
-				buffer[0] = tempLampState;
-				buffer[1] = convert_flash_state_to_byte(tempLampFlashState);
-
-				get_active_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
-
-				/// Encode amber warning lamp state and flash
-				buffer[0] |= (tempLampState << 2);
-				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
-
-				get_active_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
-
-				/// Encode red stop lamp state and flash
-				buffer[0] |= (tempLampState << 4);
-				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
-
-				get_active_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
-
-				/// Encode malfunction indicator lamp state and flash
-				buffer[0] |= (tempLampState << 6);
-				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
-			}
-			else
-			{
-				// ISO 11783 does not use lamp state or lamp flash bytes
-				buffer[0] = 0xFF;
-				buffer[1] = 0xFF;
-			}
-
-			if (0 == activeDTCList.size())
-			{
-				buffer[2] = 0x00;
-				buffer[3] = 0x00;
-				buffer[4] = 0x00;
-				buffer[5] = 0x00;
-				buffer[6] = 0xFF;
-				buffer[7] = 0xFF;
-				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
-				                                                        buffer.data(),
-				                                                        CAN_DATA_LENGTH,
-				                                                        myControlFunction.get());
-			}
-			else
-			{
-				for (std::uint16_t i = 0; i < activeDTCList.size(); i++)
+				if (get_j1939_mode())
 				{
-					buffer[2 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>(activeDTCList[i].suspectParameterNumber & 0xFF);
-					buffer[3 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 8) & 0xFF);
-					buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | static_cast<std::uint8_t>(activeDTCList[i].failureModeIdentifier & 0x1F));
-					buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (activeDTCList[i].occuranceCount & 0x7F);
+					bool tempLampState = false;
+					FlashState tempLampFlashState = FlashState::Solid;
+					get_active_list_lamp_state_and_flash_state(Lamps::ProtectLamp, tempLampFlashState, tempLampState);
+
+					/// Encode Protect state and flash
+					buffer[0] = tempLampState;
+					buffer[1] = convert_flash_state_to_byte(tempLampFlashState);
+
+					get_active_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
+
+					/// Encode amber warning lamp state and flash
+					buffer[0] |= (tempLampState << 2);
+					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
+
+					get_active_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
+
+					/// Encode red stop lamp state and flash
+					buffer[0] |= (tempLampState << 4);
+					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
+
+					get_active_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
+
+					/// Encode malfunction indicator lamp state and flash
+					buffer[0] |= (tempLampState << 6);
+					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
+				}
+				else
+				{
+					// ISO 11783 does not use lamp state or lamp flash bytes
+					buffer[0] = 0xFF;
+					buffer[1] = 0xFF;
 				}
 
-				if (payloadSize < CAN_DATA_LENGTH)
+				if (0 == activeDTCList.size())
 				{
+					buffer[2] = 0x00;
+					buffer[3] = 0x00;
+					buffer[4] = 0x00;
+					buffer[5] = 0x00;
 					buffer[6] = 0xFF;
 					buffer[7] = 0xFF;
-					payloadSize = CAN_DATA_LENGTH;
+					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
+					                                                        buffer.data(),
+					                                                        CAN_DATA_LENGTH,
+					                                                        myControlFunction.get());
 				}
+				else
+				{
+					for (std::size_t i = 0; i < activeDTCList.size(); i++)
+					{
+						buffer[2 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>(activeDTCList[i].suspectParameterNumber & 0xFF);
+						buffer[3 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 8) & 0xFF);
+						buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | static_cast<std::uint8_t>(activeDTCList[i].failureModeIdentifier & 0x1F));
+						buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (activeDTCList[i].occuranceCount & 0x7F);
+					}
 
-				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
-				                                                        buffer.data(),
-				                                                        payloadSize,
-				                                                        myControlFunction.get());
+					if (payloadSize < CAN_DATA_LENGTH)
+					{
+						buffer[6] = 0xFF;
+						buffer[7] = 0xFF;
+						payloadSize = CAN_DATA_LENGTH;
+					}
+
+					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
+					                                                        buffer.data(),
+					                                                        payloadSize,
+					                                                        myControlFunction.get());
+				}
 			}
 		}
 		return retVal;
@@ -638,77 +641,80 @@ namespace isobus
 			std::uint16_t payloadSize = (inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 			std::vector<std::uint8_t> buffer;
 
-			buffer.resize(payloadSize);
-
-			if (get_j1939_mode())
+			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
-				bool tempLampState = false;
-				FlashState tempLampFlashState = FlashState::Solid;
-				get_inactive_list_lamp_state_and_flash_state(Lamps::ProtectLamp, tempLampFlashState, tempLampState);
+				buffer.resize(payloadSize);
 
-				/// Encode Protect state and flash
-				buffer[0] = tempLampState;
-				buffer[1] = convert_flash_state_to_byte(tempLampFlashState);
-
-				get_inactive_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
-
-				/// Encode amber warning lamp state and flash
-				buffer[0] |= (tempLampState << 2);
-				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
-
-				get_inactive_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
-
-				/// Encode red stop lamp state and flash
-				buffer[0] |= (tempLampState << 4);
-				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
-
-				get_inactive_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
-
-				/// Encode malfunction indicator lamp state and flash
-				buffer[0] |= (tempLampState << 6);
-				buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
-			}
-			else
-			{
-				// ISO 11783 does not use lamp state or lamp flash bytes
-				buffer[0] = 0xFF;
-				buffer[1] = 0xFF;
-			}
-
-			if (0 == inactiveDTCList.size())
-			{
-				buffer[2] = 0x00;
-				buffer[3] = 0x00;
-				buffer[4] = 0x00;
-				buffer[5] = 0x00;
-				buffer[6] = 0xFF;
-				buffer[7] = 0xFF;
-				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
-				                                                        buffer.data(),
-				                                                        CAN_DATA_LENGTH,
-				                                                        myControlFunction.get());
-			}
-			else
-			{
-				for (std::uint16_t i = 0; i < inactiveDTCList.size(); i++)
+				if (get_j1939_mode())
 				{
-					buffer[2 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>(inactiveDTCList[i].suspectParameterNumber & 0xFF);
-					buffer[3 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 8) & 0xFF);
-					buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | static_cast<std::uint8_t>(inactiveDTCList[i].failureModeIdentifier & 0x1F));
-					buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (inactiveDTCList[i].occuranceCount & 0x7F);
+					bool tempLampState = false;
+					FlashState tempLampFlashState = FlashState::Solid;
+					get_inactive_list_lamp_state_and_flash_state(Lamps::ProtectLamp, tempLampFlashState, tempLampState);
+
+					/// Encode Protect state and flash
+					buffer[0] = tempLampState;
+					buffer[1] = convert_flash_state_to_byte(tempLampFlashState);
+
+					get_inactive_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
+
+					/// Encode amber warning lamp state and flash
+					buffer[0] |= (tempLampState << 2);
+					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
+
+					get_inactive_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
+
+					/// Encode red stop lamp state and flash
+					buffer[0] |= (tempLampState << 4);
+					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
+
+					get_inactive_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
+
+					/// Encode malfunction indicator lamp state and flash
+					buffer[0] |= (tempLampState << 6);
+					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
+				}
+				else
+				{
+					// ISO 11783 does not use lamp state or lamp flash bytes
+					buffer[0] = 0xFF;
+					buffer[1] = 0xFF;
 				}
 
-				if (payloadSize < CAN_DATA_LENGTH)
+				if (0 == inactiveDTCList.size())
 				{
+					buffer[2] = 0x00;
+					buffer[3] = 0x00;
+					buffer[4] = 0x00;
+					buffer[5] = 0x00;
 					buffer[6] = 0xFF;
 					buffer[7] = 0xFF;
-					payloadSize = CAN_DATA_LENGTH;
+					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
+					                                                        buffer.data(),
+					                                                        CAN_DATA_LENGTH,
+					                                                        myControlFunction.get());
 				}
+				else
+				{
+					for (std::size_t i = 0; i < inactiveDTCList.size(); i++)
+					{
+						buffer[2 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>(inactiveDTCList[i].suspectParameterNumber & 0xFF);
+						buffer[3 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 8) & 0xFF);
+						buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | static_cast<std::uint8_t>(inactiveDTCList[i].failureModeIdentifier & 0x1F));
+						buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (inactiveDTCList[i].occuranceCount & 0x7F);
+					}
 
-				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
-				                                                        buffer.data(),
-				                                                        payloadSize,
-				                                                        myControlFunction.get());
+					if (payloadSize < CAN_DATA_LENGTH)
+					{
+						buffer[6] = 0xFF;
+						buffer[7] = 0xFF;
+						payloadSize = CAN_DATA_LENGTH;
+					}
+
+					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
+					                                                        buffer.data(),
+					                                                        payloadSize,
+					                                                        myControlFunction.get());
+				}
 			}
 		}
 		return retVal;
