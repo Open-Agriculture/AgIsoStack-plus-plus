@@ -826,6 +826,12 @@ namespace isobus
 							}
 							break;
 
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification):
+							{
+								txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DiagnosticProtocolID));
+							}
+							break;
+
 							default:
 							{
 								// This PGN request is not handled by the diagnostic protocol
