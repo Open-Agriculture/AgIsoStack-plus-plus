@@ -74,6 +74,7 @@ namespace isobus
 		{
 			initialized = false;
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
 		}
 	}
 
@@ -135,6 +136,7 @@ namespace isobus
 		{
 			initialized = true;
 			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
 		}
 	}
 
@@ -610,6 +612,14 @@ namespace isobus
 					buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | static_cast<std::uint8_t>(activeDTCList[i].failureModeIdentifier & 0x1F));
 					buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (activeDTCList[i].occuranceCount & 0x7F);
 				}
+
+				if (payloadSize < CAN_DATA_LENGTH)
+				{
+					buffer[6] = 0xFF;
+					buffer[7] = 0xFF;
+					payloadSize = CAN_DATA_LENGTH;
+				}
+
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
 				                                                        buffer.data(),
 				                                                        payloadSize,
@@ -687,6 +697,14 @@ namespace isobus
 					buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | static_cast<std::uint8_t>(inactiveDTCList[i].failureModeIdentifier & 0x1F));
 					buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (inactiveDTCList[i].occuranceCount & 0x7F);
 				}
+
+				if (payloadSize < CAN_DATA_LENGTH)
+				{
+					buffer[6] = 0xFF;
+					buffer[7] = 0xFF;
+					payloadSize = CAN_DATA_LENGTH;
+				}
+
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
 				                                                        buffer.data(),
 				                                                        payloadSize,
@@ -783,6 +801,68 @@ namespace isobus
 		                                                      myControlFunction.get());
 	}
 
+	bool DiagnosticProtocol::process_all_dm22_responses()
+	{
+		bool retVal = false;
+
+		if (0 != dm22ResponseQueue.size())
+		{
+			std::size_t numberOfMessage = dm22ResponseQueue.size();
+
+			for (std::size_t i = 0; i < numberOfMessage; i++)
+			{
+				std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+				DM22Data currentMessageData = dm22ResponseQueue.back();
+
+				if (currentMessageData.nack)
+				{
+					if (currentMessageData.clearActive)
+					{
+						buffer[0] = static_cast<std::uint8_t>(DM22ControlByte::NegativeAcknowledgeOfActiveDTCClear);
+						buffer[1] = currentMessageData.nackIndicator;
+					}
+					else
+					{
+						buffer[0] = static_cast<std::uint8_t>(DM22ControlByte::NegativeAcknowledgeOfPreviouslyActiveDTCClear);
+						buffer[1] = currentMessageData.nackIndicator;
+					}
+				}
+				else
+				{
+					if (currentMessageData.clearActive)
+					{
+						buffer[0] = static_cast<std::uint8_t>(DM22ControlByte::PositiveAcknowledgeOfActiveDTCClear);
+						buffer[1] = 0xFF;
+					}
+					else
+					{
+						buffer[0] = static_cast<std::uint8_t>(DM22ControlByte::PositiveAcknowledgeOfPreviouslyActiveDTCClear);
+						buffer[1] = 0xFF;
+					}
+				}
+
+				buffer[2] = 0xFF;
+				buffer[3] = 0xFF;
+				buffer[4] = 0xFF;
+				buffer[5] = (currentMessageData.suspectParameterNumber & 0xFF);
+				buffer[6] = ((currentMessageData.suspectParameterNumber >> 8) & 0xFF);
+				buffer[7] = (((currentMessageData.suspectParameterNumber >> 16) << 5) & 0xFF);
+				buffer[7] |= (currentMessageData.failureModeIdentifier & 0x07);
+
+				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22),
+				                                                        buffer.data(),
+				                                                        buffer.size(),
+				                                                        myControlFunction.get(),
+				                                                        currentMessageData.destination);
+				if (retVal)
+				{
+					dm22ResponseQueue.pop_back();
+				}
+			}
+		}
+		return retVal;
+	}
+
 	void DiagnosticProtocol::process_message(CANMessage *const message)
 	{
 		if (nullptr != message)
@@ -842,6 +922,126 @@ namespace isobus
 				}
 				break;
 
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22):
+				{
+					if (CAN_DATA_LENGTH == message->get_data_length())
+					{
+						auto messageData = message->get_data();
+
+						DM22Data tempDM22Data;
+						bool wasDTCCleared = false;
+
+						tempDM22Data.suspectParameterNumber = messageData.at(5);
+						tempDM22Data.suspectParameterNumber |= (messageData.at(6) << 8);
+						tempDM22Data.suspectParameterNumber |= (((messageData.at(7) & 0xE0) >> 5) << 16);
+						tempDM22Data.failureModeIdentifier = (messageData.at(7) & 0x1F);
+						tempDM22Data.destination = message->get_source_control_function();
+						tempDM22Data.nackIndicator = 0;
+						tempDM22Data.clearActive = false;
+
+						switch (messageData.at(0))
+						{
+							case static_cast<std::uint8_t>(DM22ControlByte::RequestToClearActiveDTC):
+							{
+								tempDM22Data.clearActive = true;
+
+								for (auto dtc = activeDTCList.begin(); dtc != activeDTCList.end(); dtc++)
+								{
+									if ((tempDM22Data.suspectParameterNumber == dtc->suspectParameterNumber) && 
+										(tempDM22Data.failureModeIdentifier == dtc->failureModeIdentifier))
+									{
+										inactiveDTCList.push_back(*dtc);
+										activeDTCList.erase(dtc);
+										wasDTCCleared = true;
+										tempDM22Data.nack = false;
+										
+										dm22ResponseQueue.push_back(tempDM22Data);
+										txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM22));
+										break;
+									}
+								}
+
+								if (!wasDTCCleared)
+								{
+									tempDM22Data.nack = true;
+
+									// Since we didn't find the DTC in the active list, we check the inactive to determine the proper NACK reason
+									for (auto dtc : inactiveDTCList)
+									{
+										if ((tempDM22Data.suspectParameterNumber == dtc.suspectParameterNumber) &&
+										    (tempDM22Data.failureModeIdentifier == dtc.failureModeIdentifier))
+										{
+											// The DTC was active, but is inactive now, so we NACK with the proper reason
+											tempDM22Data.nackIndicator = static_cast<std::uint8_t>(DM22NegativeAcknowledgeIndicator::DTCNoLongerActive);
+											break;
+										}
+									}
+
+
+									if (0 != tempDM22Data.nackIndicator)
+									{
+										// DTC is in neither list. NACK with the reason that we don't know anything about it
+										tempDM22Data.nackIndicator = static_cast<std::uint8_t>(DM22NegativeAcknowledgeIndicator::UnknownOrDoesNotExist);
+									}
+									dm22ResponseQueue.push_back(tempDM22Data);
+									txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM22));
+								}
+							}
+							break;
+
+							case static_cast<std::uint8_t>(DM22ControlByte::RequestToClearPreviouslyActiveDTC):
+							{
+								for (auto dtc = inactiveDTCList.begin(); dtc != inactiveDTCList.end(); dtc++)
+								{
+									if ((tempDM22Data.suspectParameterNumber == dtc->suspectParameterNumber) &&
+									    (tempDM22Data.failureModeIdentifier == dtc->failureModeIdentifier))
+									{
+										inactiveDTCList.erase(dtc);
+										wasDTCCleared = true;
+										tempDM22Data.nack = false;
+
+										dm22ResponseQueue.push_back(tempDM22Data);
+										txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM22));
+										break;
+									}
+								}
+
+								if (!wasDTCCleared)
+								{
+									tempDM22Data.nack = true;
+
+									// Since we didn't find the DTC in the inactive list, we check the active to determine the proper NACK reason
+									for (auto dtc : activeDTCList)
+									{
+										if ((tempDM22Data.suspectParameterNumber == dtc.suspectParameterNumber) &&
+										    (tempDM22Data.failureModeIdentifier == dtc.failureModeIdentifier))
+										{
+											// The DTC was inactive, but is active now, so we NACK with the proper reason
+											tempDM22Data.nackIndicator = static_cast<std::uint8_t>(DM22NegativeAcknowledgeIndicator::DTCUNoLongerPreviouslyActive);
+											break;
+										}
+									}
+
+									if (0 != tempDM22Data.nackIndicator)
+									{
+										// DTC is in neither list. NACK with the reason that we don't know anything about it
+										tempDM22Data.nackIndicator = static_cast<std::uint8_t>(DM22NegativeAcknowledgeIndicator::UnknownOrDoesNotExist);
+									}
+									dm22ResponseQueue.push_back(tempDM22Data);
+									txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM22));
+								}
+							}
+							break;
+
+							default:
+							{
+							}
+							break;
+						}
+					}
+				}
+				break;
+
 				default:
 				{
 				}
@@ -893,6 +1093,12 @@ namespace isobus
 				case static_cast<std::uint32_t>(TransmitFlags::ProductIdentification):
 				{
 					transmitSuccessful = parent->send_product_identification();
+				}
+				break;
+
+				case static_cast<std::uint32_t>(TransmitFlags::DM22):
+				{
+					transmitSuccessful = parent->process_all_dm22_responses();
 				}
 				break;
 
