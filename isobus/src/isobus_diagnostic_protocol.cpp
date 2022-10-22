@@ -56,7 +56,6 @@ namespace isobus
 	  myControlFunction(internalControlFunction),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
 	  lastDM1SentTimestamp(0),
-	  lastDM2SentTimestamp(0),
 	  j1939Mode(false)
 	{
 		diagnosticProtocolList.push_back(this);
@@ -153,6 +152,7 @@ namespace isobus
 	{
 		inactiveDTCList.insert(std::end(inactiveDTCList), std::begin(activeDTCList), std::end(activeDTCList));
 		activeDTCList.clear();
+		txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
 	}
 
 	void DiagnosticProtocol::clear_inactive_diagnostic_trouble_codes()
@@ -211,12 +211,6 @@ namespace isobus
 				{
 					inactiveDTCList.push_back(*activeLocation);
 					activeDTCList.erase(activeLocation);
-
-					if (SystemTiming::get_time_elapsed_ms(lastDM2SentTimestamp) > DM_MAX_FREQUENCY_MS)
-					{
-						txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
-						lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
-					}
 				}
 			}
 			else
@@ -237,12 +231,6 @@ namespace isobus
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
 				lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
 			}
-
-			if (SystemTiming::time_expired_ms(lastDM2SentTimestamp, DM_MAX_FREQUENCY_MS))
-			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
-				lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
-			}
 		}
 		else
 		{
@@ -251,13 +239,6 @@ namespace isobus
 			{
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
 				lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
-			}
-
-			if ((0 != inactiveDTCList.size()) &&
-			    (SystemTiming::time_expired_ms(lastDM2SentTimestamp, DM_MAX_FREQUENCY_MS)))
-			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
-				lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
 			}
 		}
 		txFlags.process_all_flags();
@@ -667,6 +648,34 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::send_diagnostic_message_2_ack(ControlFunction *destination)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+		bool retVal = false;
+
+		// "A positive or negative acknowledgement is not required in response to a global request."
+		if (nullptr != destination)
+		{
+			constexpr std::uint32_t DM2PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2);
+
+			buffer[0] = 0x00; // Positive acknowledgement
+			buffer[1] = 0xFF; // Group function value
+			buffer[2] = 0xFF; // Reserved
+			buffer[3] = 0xFF; // Reserved
+			buffer[4] = destination->get_address(); // Address acknowledged
+			buffer[5] = (DM2PGN & 0xFF); // PGN LSB
+			buffer[6] = ((DM2PGN >> 8) & 0xFF); // PGN middle byte
+			buffer[7] = ((DM2PGN >> 16) & 0xFF); // PGN MSB
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        myControlFunction.get(),
+			                                                        nullptr);
+		}
+		return retVal;
+	}
+
 	bool DiagnosticProtocol::send_diagnostic_message_3_ack(ControlFunction *destination)
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
@@ -703,16 +712,16 @@ namespace isobus
 		// "A positive or negative acknowledgement is not required in response to a global request."
 		if (nullptr != destination)
 		{
-			constexpr std::uint32_t DM3PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11);
+			constexpr std::uint32_t DM11PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11);
 
 			buffer[0] = 0x00; // Positive acknowledgement
 			buffer[1] = 0xFF; // Group function value
 			buffer[2] = 0xFF; // Reserved
 			buffer[3] = 0xFF; // Reserved
 			buffer[4] = destination->get_address(); // Address acknowledged
-			buffer[5] = (DM3PGN & 0xFF); // PGN LSB
-			buffer[6] = ((DM3PGN >> 8) & 0xFF); // PGN middle byte
-			buffer[7] = ((DM3PGN >> 16) & 0xFF); // PGN MSB
+			buffer[5] = (DM11PGN & 0xFF); // PGN LSB
+			buffer[6] = ((DM11PGN >> 8) & 0xFF); // PGN middle byte
+			buffer[7] = ((DM11PGN >> 16) & 0xFF); // PGN MSB
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
@@ -754,11 +763,16 @@ namespace isobus
 					if (3 == message->get_data_length()) /// PGN requests DLC is 3
 					{
 						std::vector<std::uint8_t> messageData = message->get_data();
-						std::uint32_t requestedPGN =  static_cast<std::uint32_t>(messageData.at(0));
+						std::uint32_t requestedPGN = static_cast<std::uint32_t>(messageData.at(0));
 						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(1)) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(2)) << 16);
 
-						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3) == requestedPGN)
+						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2) == requestedPGN)
+						{
+							send_diagnostic_message_2_ack(message->get_source_control_function());
+							txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
+						}
+						else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3) == requestedPGN)
 						{
 							clear_inactive_diagnostic_trouble_codes();
 							send_diagnostic_message_3_ack(message->get_source_control_function());
@@ -811,11 +825,6 @@ namespace isobus
 				case static_cast<std::uint32_t>(TransmitFlags::DM2):
 				{
 					transmitSuccessful = parent->send_diagnostic_message_2();
-
-					if (transmitSuccessful)
-					{
-						parent->lastDM2SentTimestamp = SystemTiming::get_timestamp_ms();
-					}
 				}
 				break;
 
