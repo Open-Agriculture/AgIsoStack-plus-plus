@@ -2,13 +2,17 @@
 /// @file isobus_diagnostic_protocol.cpp
 ///
 /// @brief A protocol that handles the ISO-11783 Active DTC Protocol.
-/// @details The ISO-11783 definition of DM1 is based on the J1939 definition with some tweaks.
-/// This protocol reports active diagnostic trouble codes as defined by
-/// SAE J1939-73. The message this protocol sends is sent via BAM, which has some
-/// implications to your application, as only 1 BAM can be active at a time. This message
-/// is sent at 1 Hz. Unlike in J1939, the message is discontinued when no DTCs are active to
+/// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol.
+/// @details This protocol manages many of the messages defined in ISO 11783-12
+/// and a subset of the messages defined in SAE J1939-73.
+/// The ISO-11783 definition of some of these is based on the J1939 definition with some tweaks.
+/// You can select if you want the protocol to behave like J1939 by calling set_j1939_mode.
+/// One of the messages this protocol supports is the DM1 message.
+/// The DM1 is sent via BAM, which has some implications to your application,
+/// as only 1 BAM can be active at a time. This message
+/// is sent at 1 Hz. In ISOBUS mode, unlike in J1939, the message is discontinued when no DTCs are active to
 /// minimize bus load. Also, ISO-11783 does not utilize or support lamp status.
-/// You can revert to the standard J1939 behavior though if you want.
+/// Other messages this protocol supports include: DM2, DM3, DM11, DM22, software ID, and Product ID.
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso
@@ -59,6 +63,12 @@ namespace isobus
 	  j1939Mode(false)
 	{
 		diagnosticProtocolList.push_back(this);
+		ecuIdentificationFields.resize(static_cast<std::size_t>(ECUIdentificationFields::NumberOfFields));
+
+		for (auto ecuIDField : ecuIdentificationFields)
+		{
+			ecuIDField = "*";
+		}
 	}
 
 	DiagnosticProtocol::~DiagnosticProtocol()
@@ -160,6 +170,19 @@ namespace isobus
 	void DiagnosticProtocol::clear_inactive_diagnostic_trouble_codes()
 	{
 		inactiveDTCList.clear();
+	}
+
+	void DiagnosticProtocol::clear_software_id_fields()
+	{
+		softwareIdentificationFields.clear();
+	}
+
+	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, std::string value)
+	{
+		if (field <= ECUIdentificationFields::NumberOfFields)
+		{
+			ecuIdentificationFields[static_cast<std::size_t>(field)] = value + "*";
+		}
 	}
 
 	bool DiagnosticProtocol::set_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc, bool active)
@@ -270,6 +293,22 @@ namespace isobus
 			retVal = true;
 		}
 		return retVal;
+	}
+
+	void DiagnosticProtocol::set_software_id_field(std::uint32_t index, std::string value)
+	{
+		if (index >= softwareIdentificationFields.size())
+		{
+			softwareIdentificationFields.resize(index + 1);
+		}
+		else if ("" == value)
+		{
+			if (index == softwareIdentificationFields.size())
+			{
+				softwareIdentificationFields.pop_back();
+			}
+		}
+		softwareIdentificationFields[index] = value;
 	}
 
 	void DiagnosticProtocol::update(CANLibBadge<CANNetworkManager>)
@@ -796,6 +835,22 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::send_ecu_identification()
+	{
+		std::string ecuIdString = "";
+
+		for (auto stringComponent : ecuIdentificationFields)
+		{
+			ecuIdString.append(stringComponent);
+		}
+
+		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
+		                                                      buffer.data(),
+		                                                      buffer.size(),
+		                                                      myControlFunction.get());
+	}
+
 	bool DiagnosticProtocol::send_product_identification()
 	{
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
@@ -805,6 +860,29 @@ namespace isobus
 		                                                      buffer.data(),
 		                                                      buffer.size(),
 		                                                      myControlFunction.get());
+	}
+
+	bool DiagnosticProtocol::send_software_identification()
+	{
+		bool retVal = false;
+
+		if (0 != softwareIdentificationFields.size())
+		{
+			std::string softIDString = "";
+
+			for (auto softIdString = softwareIdentificationFields.begin(); softIdString != softwareIdentificationFields.end(); softIdString++)
+			{
+				softIDString.append(*softIdString);
+				softIDString.append("*");
+			}
+
+			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
+			                                                        buffer.data(),
+			                                                        buffer.size(),
+			                                                        myControlFunction.get());
+		}
+		return retVal;
 	}
 
 	bool DiagnosticProtocol::process_all_dm22_responses()
@@ -917,6 +995,18 @@ namespace isobus
 								txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DiagnosticProtocolID));
 							}
 							break;
+
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification):
+							{
+								send_software_identification();
+							}
+							break;
+
+							case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation):
+							{
+								send_ecu_identification();
+							}
+							break; 
 
 							default:
 							{

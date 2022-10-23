@@ -30,10 +30,12 @@ namespace isobus
 		ProductIdentification = 0xFC8D,
 		DiagnosticProtocolIdentification = 0xFD32,
 		WorkingSetMaster = 0xFE0D,
+		ECUIdentificationInformation = 0xFDC5,
 		DiagnosticMessage1 = 0xFECA,
 		DiagnosticMessage2 = 0xFECB,
 		DiagnosticMessage3 = 0xFECC,
-		DiagnosticMessage11 = 0xFED3
+		DiagnosticMessage11 = 0xFED3,
+		SoftwareIdentification = 0xFEDA
 	};
 
 } // namespace isobus

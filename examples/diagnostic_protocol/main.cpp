@@ -73,6 +73,22 @@ int main()
 	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC2(567, isobus::DiagnosticProtocol::FailureModeIdentifier::DataErratic, isobus::DiagnosticProtocol::LampStatus::AmberWarningLampSlowFlash);
 	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC3(8910, isobus::DiagnosticProtocol::FailureModeIdentifier::BadIntellegentDevice, isobus::DiagnosticProtocol::LampStatus::RedStopLampSolid);
 
+	// Set a product identification string (in case someone requests it)
+	diagnosticProtocol->set_product_identification_code("1234567890ABC");
+	diagnosticProtocol->set_product_identification_brand("Del Grosso Engineering");
+	diagnosticProtocol->set_product_identification_model("ISO 11783 CAN Stack DP Example");
+	
+	// Set a software ID string (This is what tells other ECUs what version your software is)
+	diagnosticProtocol->set_software_id_field(0, "Diagnostic Protocol Example 1.0.0");
+	diagnosticProtocol->set_software_id_field(1, "Another version string x.x.x.x");
+
+	// Set an ECU ID (This is what tells other ECUs more details about your specific physical ECU)
+	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::HardwareID, "Hardware ID");
+	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Location, "The Aether");
+	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "None");
+	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
+	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1");
+
 	if (nullptr != diagnosticProtocol)
 	{
 		// Set the DTCs active. This should put them in the DM1 message

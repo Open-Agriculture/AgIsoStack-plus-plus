@@ -22,6 +22,7 @@ The state of the project is as follows...
     - Diagnostic Message 22: Complete :white_check_mark:
     - Product Identification: Complete :white_check_mark:
     - Diagnostic Protocol message Complete :white_check_mark:
+    - Software and ECU Identification Complete :white_check_mark:
     - Control Function Functionalities Message: Not yet supported :x:
         - Submit an issue please if this is a priority for your project!
 ### Planned Features (in no particular order):

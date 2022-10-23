@@ -1,14 +1,18 @@
 //================================================================================================
 /// @file isobus_diagnostic_protocol.hpp
 ///
-/// @brief A protocol that handles the ISO-11783 Active DTC Protocol.
-/// @details The ISO-11783 definition of DM1 is based on the J1939 definition with some tweaks.
-/// This protocol reports active diagnostic trouble codes as defined by
-/// SAE J1939-73. The message this protocol sends is sent via BAM, which has some
-/// implications to your application, as only 1 BAM can be active at a time. This message
-/// is sent at 1 Hz. Unlike in J1939, the message is discontinued when no DTCs are active to
+/// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol.
+/// @details This protocol manages many of the messages defined in ISO 11783-12
+/// and a subset of the messages defined in SAE J1939-73.
+/// The ISO-11783 definition of some of these is based on the J1939 definition with some tweaks.
+/// You can select if you want the protocol to behave like J1939 by calling set_j1939_mode.
+/// One of the messages this protocol supports is the DM1 message.
+/// The DM1 is sent via BAM, which has some implications to your application, 
+/// as only 1 BAM can be active at a time. This message
+/// is sent at 1 Hz. In ISOBUS mode, unlike in J1939, the message is discontinued when no DTCs are active to
 /// minimize bus load. Also, ISO-11783 does not utilize or support lamp status.
-/// You can revert to the standard J1939 behavior though if you want.
+/// Other messages this protocol supports include: DM2, DM3, DM11, DM22, software ID, and Product ID.
+/// 
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso
@@ -33,6 +37,18 @@ namespace isobus
 	class DiagnosticProtocol : public CANLibProtocol
 	{
 	public:
+		/// @brief Enumerates the different fields in the ECU identification message
+		enum class ECUIdentificationFields : std::uint8_t
+		{
+			PartNumber = 0, ///< The part number of the physical ECU
+			SerialNumber, ///< The serial number of the physical ECU
+			Location, ///< The location of the ECU within a network
+			Type, ///< The type of ECU. One example of a use of the ECU type could be for classifying ECU capabilities, such as I/O.
+			ManufacturerName, ///< Manufacturer name string
+			HardwareID, ///< ISO 11783 only, This parameter is used to associate the hardware version of an ECU connected to the ISO 11783 network to a conformance test report of that hardware
+			NumberOfFields ///< The number of fields currently defined in the ISO standard
+		};
+
 		/// @brief The DTC lamp status as defined in J1939-73. Not used when in ISO11783 mode
 		enum class LampStatus
 		{
@@ -155,6 +171,18 @@ namespace isobus
 		/// @brief Clears the list of inactive DTCs and clears occurance counts
 		void clear_inactive_diagnostic_trouble_codes();
 
+		/// @brief Clears all previously configured software ID fields set with set_software_id_field
+		void clear_software_id_fields();
+
+		/// @brief Sets one of the ECU identification strings for the ECU ID message
+		/// @details See ECUIdentificationFields for a brief description of the fields
+		/// @note The fields in this message are optional and separated by an ASCII “*”. It is not necessary to include parametric
+        /// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
+		/// @attention Do not include the "*" character in your field values
+		/// @param[in] field The field to set
+		/// @param[in] value The string value associated with the ECU ID field
+		void set_ecu_id_field(ECUIdentificationFields field, std::string value);
+
 		/// @brief Adds a DTC to the active list, or removes one from the active list
 		/// @details When you call this function with a DTC and `true`, it will be added to the DM1 message.
 		/// When you call it with a DTC and `false` it will be moved to the inactive list.
@@ -190,6 +218,18 @@ namespace isobus
 		/// @param value The ascii model string, up to 50 characters
 		/// @returns true if the value was set, false if the string is too long
 		bool set_product_identification_model(std::string value);
+
+		/// @brief Adds an ascii string to this internal control function's software ID
+		/// @details Use this to identify the software version of your application.
+		/// Seperate fields will be transmitted with a `*` delimeter.
+		/// For example, if your main application's version is 1.00, and you have a bootloader
+		/// that is version 2.00, you could set field `0` to be "App v1.00" and
+		/// field `1` to be "Bootloader v2.00", and it will be transmitted on request as:
+		/// "App v1.00*Bootloader v2.00*" in accordance with ISO 11783-12
+		/// You can remove a field by setting it to ""
+		/// @param[in] index The field index to set
+		/// @param[in] value The software ID string to add
+		void set_software_id_field(std::uint32_t index, std::string value);
 
 		/// @brief Updates the protocol cyclically
 		void update(CANLibBadge<CANNetworkManager>) override;
@@ -245,7 +285,7 @@ namespace isobus
 		};
 
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
-		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785;
+		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785; ///< DM 1 and 2 are limited to the BAM message max, becuase ETP does not allow global destinations
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
 
@@ -325,9 +365,17 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
 
+		/// @brief Sends the ECU ID message
+		/// @returns true if the message was sent
+		bool send_ecu_identification();
+
 		/// @brief Sends the product identification message (PGN 0xFC8D)
 		/// @returns true if the message was sent, otherwise false
 		bool send_product_identification();
+
+		/// @brief Sends the software ID message
+		/// @returns true if the message was sent, otherwise false
+		bool send_software_identification();
 
 		/// @brief Processes any DM22 responses from the queue
 		/// @details We queue responses so that we can do Tx retries if needed
@@ -354,6 +402,8 @@ namespace isobus
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
 		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
+		std::vector<std::string> ecuIdentificationFields; ///< Stores the ECU ID fields so we can transmit them when ECUID's PGN is requested
+		std::vector<std::string> softwareIdentificationFields; ///< Stores the Software ID fields so we can transmit them when the PGN is requested
 		ProcessingFlags txFlags; ///< An instance of the processing flags to handle retries of some messages
 		std::string productIdentificationCode; ///< The product identification code for sending the product identification message
 		std::string productIdentificationBrand; ///< The product identification brand for sending the product identification message
