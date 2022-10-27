@@ -1,14 +1,14 @@
-#include "can_network_manager.hpp"
-#include "socket_can_interface.hpp"
-#include "can_partnered_control_function.hpp"
 #include "can_general_parameter_group_numbers.hpp"
-#include "isobus_virtual_terminal_client.hpp"
+#include "can_network_manager.hpp"
+#include "can_partnered_control_function.hpp"
 #include "iop_file_interface.hpp"
+#include "isobus_virtual_terminal_client.hpp"
+#include "socket_can_interface.hpp"
 
 #include <csignal>
-#include <memory>
-#include <iterator>
 #include <iostream>
+#include <iterator>
+#include <memory>
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
 static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = nullptr;
@@ -21,12 +21,12 @@ using namespace std;
 
 void signal_handler(int signum)
 {
-    CANHardwareInterface::stop();
+	CANHardwareInterface::stop();
 	if (nullptr != TestVirtualTerminalClient)
 	{
 		TestVirtualTerminalClient->terminate();
 	}
-    exit(signum);
+	exit(signum);
 }
 
 void update_CAN_network()
@@ -41,7 +41,7 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 
 void setup()
 {
-    CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
 	CANHardwareInterface::start();
 
@@ -80,20 +80,20 @@ void setup()
 	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
-    std::signal(SIGINT,signal_handler);
+	std::signal(SIGINT, signal_handler);
 }
 
 int main()
 {
-    setup();
+	setup();
 	TestVirtualTerminalClient->initialize(true);
 
-    while (true)
-    {
+	while (true)
+	{
 		// CAN stack runs in other threads. Do nothing forever.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	}
 
-    CANHardwareInterface::stop();
-    return 0;
+	CANHardwareInterface::stop();
+	return 0;
 }

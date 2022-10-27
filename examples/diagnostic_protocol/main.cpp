@@ -77,7 +77,7 @@ int main()
 	diagnosticProtocol->set_product_identification_code("1234567890ABC");
 	diagnosticProtocol->set_product_identification_brand("Del Grosso Engineering");
 	diagnosticProtocol->set_product_identification_model("ISO 11783 CAN Stack DP Example");
-	
+
 	// Set a software ID string (This is what tells other ECUs what version your software is)
 	diagnosticProtocol->set_software_id_field(0, "Diagnostic Protocol Example 1.0.0");
 	diagnosticProtocol->set_software_id_field(1, "Another version string x.x.x.x");

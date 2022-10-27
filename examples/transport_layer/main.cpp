@@ -1,9 +1,9 @@
 #include "can_general_parameter_group_numbers.hpp"
+#include "can_network_configuration.hpp"
 #include "can_network_manager.hpp"
 #include "can_partnered_control_function.hpp"
 #include "can_transport_protocol.hpp"
 #include "socket_can_interface.hpp"
-#include "can_network_configuration.hpp"
 
 #include <csignal>
 #include <iostream>
@@ -11,7 +11,7 @@
 #include <memory>
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-static isobus::PartneredControlFunction* TestPartner = nullptr;
+static isobus::PartneredControlFunction *TestPartner = nullptr;
 std::vector<isobus::NAMEFilter> vtNameFilters;
 const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 std::uint8_t *TPTestBuffer = nullptr;
@@ -31,12 +31,12 @@ void cleanup()
 	}
 	if (nullptr != TPTestBuffer)
 	{
-		delete [] TPTestBuffer;
+		delete[] TPTestBuffer;
 		TPTestBuffer = nullptr;
 	}
 	if (nullptr != ETPTestBuffer)
 	{
-		delete [] ETPTestBuffer;
+		delete[] ETPTestBuffer;
 		ETPTestBuffer = nullptr;
 	}
 }
@@ -140,7 +140,7 @@ int main()
 		// This sleep value is arbitrary
 		std::this_thread::sleep_for(std::chrono::milliseconds(i * 2));
 	}
-	
+
 	// BAM Tx Exmaple
 	// This loop sends all possible BAM message sizes
 	// This will take a very long time
