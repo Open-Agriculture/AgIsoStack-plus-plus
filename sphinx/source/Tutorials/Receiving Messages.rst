@@ -36,7 +36,7 @@ In this example, we'll define a function that will process all received propriet
 
 This callback isn't particularly useful, but it does illustrate how to use the callback system.
 
-Basically, whenever a PROPA messsage is received that was sent to the broadcast address, it will print out the length of that message to the console.
+Basically, whenever a PROPA message is received that was sent to the broadcast address, it will print out the length of that message to the console.
 
 Now, we just need to tell the CAN stack to call that callback when an appropriate message is received.
 
@@ -164,7 +164,7 @@ So, our updated tutorial program now should look like this:
     return 0;
    }
 
-This will be tricky to test, as you would need another valid ISO 11783 device on the bus *that has properly address claimed* and is also sending this message in order for the stack to recieve it and pass it to your callback.
+This will be tricky to test, as you would need another valid ISO 11783 device on the bus *that has properly address claimed* and is also sending this message in order for the stack to receive it and pass it to your callback.
 
 The point is, you will want to adapt this to meet your own needs, and receive messages you care about!
 

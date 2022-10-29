@@ -79,7 +79,7 @@ namespace isobus
 		Type get_identifier_type() const;
 
 		/// @brief Returns the PGN encoded in the identifier
-		/// @returns The PGN encoded in the identifer
+		/// @returns The PGN encoded in the identifier
 		std::uint32_t get_parameter_group_number() const;
 
 		/// @brief Returns the priority of the frame encoded in the identifier

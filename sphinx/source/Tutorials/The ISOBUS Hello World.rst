@@ -17,7 +17,7 @@ Let's get started by setting up a new C++ project to use this library.
 
 We'll assume you followed the instructions in the :doc:`installation section <../Installation>`, so if you haven't, be sure to go back and check those instructions out.
 
-We'll also assume you've reviewd the :doc:`concepts section <../Concepts>`, and are famillier with things like a NAME, and the idea of a control function.
+We'll also assume you've reviewed the :doc:`concepts section <../Concepts>`, and are familiar with things like a NAME, and the idea of a control function.
 
 First Steps
 ------------
@@ -47,13 +47,13 @@ Tell the stack who you are (NAME)
 
 Before you can communicate on the CAN bus, you need to come up with a `NAME <https://delgrossoengineering.com/isobus-docs/classisobus_1_1NAME.html>`_.
 
-A NAME is what uniquely identifes your device on the bus.
+A NAME is what uniquely identifies your device on the bus.
 
 Check out the :doc:`concepts section <../Concepts>`, if you need to brush up on NAMEs.
 
 Let's create a `NAME <https://delgrossoengineering.com/isobus-docs/classisobus_1_1NAME.html>`_ in our program.
 
-NOTE: Eveything that is part of the stack is in the namespace `"isobus" <https://delgrossoengineering.com/isobus-docs/namespaceisobus.html>`_!
+NOTE: Everything that is part of the stack is in the namespace `"isobus" <https://delgrossoengineering.com/isobus-docs/namespaceisobus.html>`_!
 
 .. code-block:: c++
 
@@ -94,9 +94,9 @@ Now we have a NAME instantiated. We still need to populate it with our control f
     return 0;
    }
 
-So now, we have a NAME with actual information encoded in it. In this example, we are an on-highway steering controller, our serial number is 2, we support address arbitration, and we claim to be manufacturerd by manufacturer 64, which is currently an unused code (but was formerly "SpectraPhysics").
+So now, we have a NAME with actual information encoded in it. In this example, we are an on-highway steering controller, our serial number is 2, we support address arbitration, and we claim to be manufactured by manufacturer 64, which is currently an unused code (but was formerly "SpectraPhysics").
 
-Make sure to change these values to match your device's identity. Use `"isobus.net" <https://www.isobus.net/isobus/>`_ as a resouce if you need to figure out all these values.\
+Make sure to change these values to match your device's identity. Use `"isobus.net" <https://www.isobus.net/isobus/>`_ as a resource if you need to figure out all these values.\
 
 As a note, some functions have been pre-defined for convenience, as you can see by the use of `isobus::NAME::Function::SteeringControl` here, but you can use value defined in the standard.
 
