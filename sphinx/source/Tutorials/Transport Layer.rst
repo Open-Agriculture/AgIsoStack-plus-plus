@@ -16,7 +16,7 @@ This tutorial covers how to send and receive multi-frame messages. It is assumed
 Sending More Than 8 Bytes
 --------------------------
 
-As you know by know, a CAN frame can only contain 8 bytes of data payload.
+As you know by now, a CAN frame can only contain 8 bytes of data payload.
 Sometimes though, we need to send more than that. Those situations are when a *transport protocol* must be employed.
 
 The CAN stack has been designed to make transport protocols invisible to you, the user, and easy to use.
@@ -33,7 +33,7 @@ That's it!
 
 There are some things to keep in mind though.
 
-* You cannot send more then 1785 bytes to the broadcast address. This is because the Extended Transport Protocol (ETP) explicitly does not allow broadcasts.
+* You cannot send more than 1785 bytes to the broadcast address. This is because the Extended Transport Protocol (ETP) explicitly does not allow broadcasts.
 
 * You can only send up to 117440505 as an absolute max. This is because ETP cannot send more than this.
 

@@ -20,7 +20,7 @@ No. All transmits are asynchronous.
 What do I do if I see "undefined reference to `pthread_create`"
 ----------------------------------------------------------------
 
-If you are seeing soemthing similar to this error:
+If you are seeing something similar to this error:
 
 .. code-block:: text
 

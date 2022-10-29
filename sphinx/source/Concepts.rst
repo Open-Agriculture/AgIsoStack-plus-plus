@@ -11,7 +11,7 @@ Concepts
    :depth: 2
    :local:
 
-This page goes over the basic ISOBUS concepts you will need to be successful with this library. It is highly suggested that you read this section, even if you are familliar with ISO11783.
+This page goes over the basic ISOBUS concepts you will need to be successful with this library. It is highly suggested that you read this section, even if you are familiar with ISO11783.
 
 The Basics
 -----------
@@ -23,20 +23,20 @@ Lets discuss some of the basics you'll need to know to use this library.
 
 An ISOBUS network is a 250000 baud CAN bus that follows the AEF's ISO 11783 standard of communication, which itself is based on SAE's J1939. The ISOBUS standards are designed for agricultural vehicles and forestry.
 
-As far as this library is concerned, CAN frames contain at most 8 bytes of data, along with a 32 bit identifer.
+As far as this library is concerned, CAN frames contain at most 8 bytes of data, along with a 32 bit identifier.
 This identifier contains a number of important things.
 
-The identifer contains:
+The identifier contains:
 
 * The parameter group number (PGN)
 
-   * This is what identifies what's in the data paylod, like the subject line of an email
+   * This is what identifies what's in the data payload, like the subject line of an email
    * You will need to know some of these (or create some) to communicate with most devices
    * Some standard ones can be found here: https://www.isobus.net/isobus/pGNAndSPN/?type=PGN
 
 * The source address
 
-   * These describes who is sending the message, like the return address on a peice of mail
+   * These describes who is sending the message, like the return address on a piece of mail.
 
 * The destination address
 
@@ -46,11 +46,11 @@ The identifer contains:
 
 * A priority
 
-   * This determines, when messages collide on the bus, which one "wins" and which transmitter has to re-transmit their message later
-   * This is handled by hardware, not software generally, so we usually only care about this when transmitting messages, not receiveing them
+   * This determines, when messages collide on the bus, which one "wins" and which transmitter has to re-transmit their message later.
+   * This is handled by hardware, not software generally, so we usually only care about this when transmitting messages, not receiving them.
 
-In order to send messages on a J1939 or ISO bus, you need a 1 byte address, which identifes you on the bus.
-Likewise, you need to know the address of who you're sending a mesage to (unless you are sending a broadcast).
+In order to send messages on a J1939 or ISO bus, you need a 1 byte address, which identifies you on the bus.
+Likewise, you need to know the address of who you're sending a message to (unless you are sending a broadcast).
 Broadcasts are always sent to the broadcast address, which is 255 (0xFF).
 There's also something called the NULL address (0xFE), which is the address you use when you have no address (or are in the process of getting one, though all this is handled automatically by the stack).
 
@@ -86,7 +86,7 @@ A NAME has the following components in it:
 * ECU Instance
 
    * Usually increments in NAME order with similar control functions
-   * Basically if you have multiple devices with similar names, this can be used to establish a heierarchy within the ISO NAME amongst them
+   * Basically if you have multiple devices with similar names, this can be used to establish a hierarchy within the ISO NAME amongst them
 
 * Function
 
@@ -105,7 +105,7 @@ A NAME has the following components in it:
 * Device Class Instance
 
    * The instance number of this device class, similar to ECU instance
-   * Used to establish a heierarchy between similar NAMEs if needed.
+   * Used to establish a hierarchy between similar NAMEs if needed.
 
 * Industry Group
 
@@ -125,11 +125,11 @@ The library will handle this for you completely, but it's important to know it e
 
 Review
 ^^^^^^^
-So, to review, a control function is permentantly identified by its NAME.
+So, to review, a control function is permanently identified by its NAME.
 This NAME is used during *address claiming* to assign the control function an *address*.
-This address is not permenant, and may change at any time if address claming occurs again for some reason.
+This address is not permanent, and may change at any time if address claiming occurs again for some reason.
 
-Now that you understand these concepts, you can create your first control function and send some basic messges!
+Now that you understand these concepts, you can create your first control function and send some basic messages!
 Check out the :doc:`basic tutorial <Tutorials/The ISOBUS Hello World>` now if you'd like to practice this, or keep reading to learn more.
 
 Transport Layer
@@ -151,7 +151,7 @@ Here are the different transport layers this library provides, along with a shor
 
    * This protocol handles sending more than 8 bytes, but less than or equal to 1785 bytes to a specific destination address
    * This protocol can be very fast, as there are no delays needed between packets.
-   * Either side can abort the the session if there's an issue.
+   * Either side can abort the session if there's an issue.
    * Multiple sessions can be on-going at once, as long as they are to different destinations.
 
 * Extended Transport Protocol (ETP)
