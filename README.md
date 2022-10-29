@@ -69,7 +69,7 @@ Of course, legacy stuff exists. Some folks do really only want to send 8 bytes f
 
 ## Compilation
 
-This library is compiled with CMake. Currently, I am only testing on Ubuntu 20.04, and the built in Socket CAN integration (if you choose to use it) only works on Linux.
+This library is compiled with CMake. Currently, I am testing on Ubuntu 20.04 and RHEL 9, and the built in Socket CAN integration (if you choose to use it) only works on Linux.
 ```
 cmake -S . -B build
 cmake --build build
