@@ -50,13 +50,16 @@ CMake:
 
 If your project is already using CMake to build your project, or this is a new project, the suggested way to get the library compiling is to add the 'ISO11783-CAN-Stack' folder we just created to your CMake as a subdirectory.
 
-.. code-block:: cmake
+.. code-block:: text
+
+   set(THREADS_PREFER_PTHREAD_FLAG ON)
+   find_package(Threads REQUIRED)
 
    add_subdirectory("ISO11783-CAN-Stack")
 
    ...
 
-   target_link_libraries(<your target> Isobus SocketCANInterface)
+   target_link_libraries(<your target> Isobus SocketCANInterface ${CMAKE_THREAD_LIBS_INIT})
 
 Using CMake has a lot of advantages, such as if the library is updated with additional files, or the file names change, it will not break your compilation.
    

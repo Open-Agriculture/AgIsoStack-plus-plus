@@ -1,9 +1,13 @@
 # ISO 11783 CAN Stack
 ## An MIT licensed, hardware agnostic, control-function-focused implementation of the major ISOBUS (ISO 11783) and SAE J1939 protocols in C++
 
-This is a work in progress.
+## Getting Started
 
-The state of the project is as follows...
+Check out the [tutorial website](https://delgrossoengineering.com/isobus-tutorial/index.html) for information on ISOBUS basics, how to download this library, and how to use it. The tutorials contain in-depth examples and explanations to help get your ISOBUS or J1939 project going quickly.
+
+## Project Status
+
+This is a work in progress.
 
 ### Complete or in-progress:
 
@@ -28,7 +32,7 @@ The state of the project is as follows...
     - Control Function Functionalities Message: Not yet supported :x:
         - Submit an issue please if this is a priority for your project!
 - PGN Requests and Requests for Repetition Rate: Complete :white_check_mark:
-- Tutorial [in review](https://github.com/ad3154/ISO11783-CAN-Stack/pull/35)
+- Tutorial [Complete](https://delgrossoengineering.com/isobus-tutorial/index.html) :white_check_mark:
 - Debian Packaging: Complete :white_check_mark: but no official package has been released yet
 - ISO11783 File Server (Client-side): In progress :hourglass:
 ### Planned Features (in no particular order):
@@ -50,10 +54,6 @@ The real limiting factor is my time, and my lack of a Vector CANoe setup.
 I work full time and only develop on this project in my evenings.
 I have limited resources - no fancy VTs to test with or anything like that.
 You can help by becoming a github sponsor! Help me buy a Vector CANoe license so I can iterate faster!
-
-## Getting Started
-
-Check out the [tutorial website]() for in-depth examples and explanations, as well as a brief introduction to CAN and ISOBUS.
 
 ## Why does this project exist?
 

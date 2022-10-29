@@ -11,6 +11,8 @@ Concepts
    :depth: 2
    :local:
 
+This page goes over the basic ISOBUS concepts you will need to be successful with this library. It is highly suggested that you read this section, even if you are familliar with ISO11783.
+
 The Basics
 -----------
 
@@ -26,7 +28,7 @@ This identifier contains a number of important things.
 
 The identifer contains:
 
-* The Parameter group number (PGN)
+* The parameter group number (PGN)
 
    * This is what identifies what's in the data paylod, like the subject line of an email
    * You will need to know some of these (or create some) to communicate with most devices
@@ -36,13 +38,13 @@ The identifer contains:
 
    * These describes who is sending the message, like the return address on a peice of mail
 
-* The Destination address
+* The destination address
 
    * Some messages allow you to specify a Destination
    * Some messages are meant to be received by everyone (a broadcast)
    * The Parameter group number determines if a message is a broadcast or destined for a specific address.
 
-* A Priority
+* A priority
 
    * This determines, when messages collide on the bus, which one "wins" and which transmitter has to re-transmit their message later
    * This is handled by hardware, not software generally, so we usually only care about this when transmitting messages, not receiveing them
@@ -50,7 +52,7 @@ The identifer contains:
 In order to send messages on a J1939 or ISO bus, you need a 1 byte address, which identifes you on the bus.
 Likewise, you need to know the address of who you're sending a mesage to (unless you are sending a broadcast).
 Broadcasts are always sent to the broadcast address, which is 255 (0xFF).
-There's also something called the NULL address, which is the address you use when you have no address (or are in the process of getting one - we'll talk about that later).
+There's also something called the NULL address (0xFE), which is the address you use when you have no address (or are in the process of getting one, though all this is handled automatically by the stack).
 
 Control Functions
 --------------------
@@ -128,7 +130,7 @@ This NAME is used during *address claiming* to assign the control function an *a
 This address is not permenant, and may change at any time if address claming occurs again for some reason.
 
 Now that you understand these concepts, you can create your first control function and send some basic messges!
-Check out the Basic Tutorial now if you'd like to practice this.
+Check out the :doc:`basic tutorial <Tutorials/The ISOBUS Hello World>` now if you'd like to practice this, or keep reading to learn more.
 
 Transport Layer
 ----------------
@@ -161,7 +163,5 @@ Here are the different transport layers this library provides, along with a shor
 
 The CAN stack library will take care of choosing which protocol to use automatically!
 
-Now that you understand these concepts, check out the Transport Layer Tutorial and example.
+Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/examples/transport_layer>`_.
 
-Diagnostic Protocol
---------------------
