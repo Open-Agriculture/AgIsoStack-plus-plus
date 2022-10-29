@@ -7,11 +7,15 @@ Concepts
    :hidden:
    :glob:
 
+.. contents:: Contents
+   :depth: 2
+   :local:
+
 The Basics
 -----------
 
 If you've found this project, you probably already know a few things about ISO 11783 (ISOBUS) or J1939.
-It's OK if you haven't heard of those before, but this tutorial assumes you know a bit about CAN already.
+It's OK if you haven't heard of those before, but this concepts overview assumes you know a bit about CAN already.
 
 Lets discuss some of the basics you'll need to know to use this library.
 
@@ -127,7 +131,7 @@ Now that you understand these concepts, you can create your first control functi
 Check out the Basic Tutorial now if you'd like to practice this.
 
 Transport Layer
-================
+----------------
 
 As we discussed before, a CAN frame hold only 8 bytes of data. But sometimes, you want to send more than that!
 
@@ -160,4 +164,4 @@ The CAN stack library will take care of choosing which protocol to use automatic
 Now that you understand these concepts, check out the Transport Layer Tutorial and example.
 
 Diagnostic Protocol
-====================
+--------------------

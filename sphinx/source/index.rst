@@ -5,14 +5,15 @@ Welcome to the ISO 11783 CAN Stack's documentation!
 
 .. toctree::
    :titlesonly:
-   :maxdepth: 1
+   :maxdepth: 2
    :hidden:
 
+   Concepts
    Installation
    Tutorials
    API Documentation
-   Concepts
    Releases
+   License
 
 
 
@@ -24,6 +25,8 @@ Overview
 Getting started
 ----------------
 
-* :doc:`Installation <Installation>`
-* :doc:`API Documentation <API Documentation>`
 * :doc:`Concepts <Concepts>`
+* :doc:`Installation <Installation>`
+* :doc:`Tutorials <Tutorials>`
+* :doc:`API Documentation <API Documentation>`
+* :doc:`License <License>`

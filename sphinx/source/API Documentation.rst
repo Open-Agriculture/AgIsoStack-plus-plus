@@ -7,8 +7,9 @@ API Documentation
    :hidden:
    :glob:
 
-Overview
----------
+.. contents:: Contents
+   :depth: 2
+   :local:
 
 This project uses Doxygen to automatically generate up-to-date API docs.
 
@@ -30,9 +31,20 @@ From your project, change directory into the 'ISO11783-CAN-Stack' folder.
 
 Make sure you have Doxygen installed.
 
+Ubuntu:
+
 .. code-block:: bash
 
    sudo apt install doxygen graphviz
+
+RHEL:
+
+.. code-block:: bash
+
+   sudo subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms
+
+   sudo dnf install doxygen graphviz
+
 
 Then, generate the docs.
 

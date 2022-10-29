@@ -3,9 +3,9 @@
 Installation
 ============
 
-.. toctree::
-   :hidden:
-   :glob:
+.. contents:: Contents
+   :depth: 2
+   :local:
 
 Supported Platforms
 --------------------
