@@ -30,6 +30,7 @@ set(ISOBUS_SRC
   "isobus_virtual_terminal_client.cpp"
   "can_extended_transport_protocol.cpp"
   "isobus_diagnostic_protocol.cpp"
+  "can_parameter_group_number_request_protocol.cpp"
 )
 
 # Prepend the source directory path to all the source files
@@ -55,6 +56,7 @@ set(ISOBUS_INCLUDE
   "isobus_virtual_terminal_client.hpp"
   "can_extended_transport_protocol.hpp"
   "isobus_diagnostic_protocol.hpp"
+  "can_parameter_group_number_request_protocol.hpp"
 )
 
 # Prepend the include directory path to all the include files
