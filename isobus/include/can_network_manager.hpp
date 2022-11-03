@@ -107,6 +107,7 @@ namespace isobus
 		friend class ExtendedTransportProtocolManager; ///< Allows the network manager to access the ETP manager
 		friend class TransportProtocolManager; ///< Allows the network manager to work closely with the transport protocol manager object
 		friend class DiagnosticProtocol; ///< Allows the diagnostic protocol to access the protected functions on the network manager
+		friend class ParameterGroupNumberRequestProtocol; ///< Allows the PGN request protocol to access the network manager protected functions
 
 		/// @brief Adds a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for

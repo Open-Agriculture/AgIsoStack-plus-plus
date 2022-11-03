@@ -31,6 +31,13 @@ namespace isobus
 	                                         ControlFunction *destinationControlFunction,
 	                                         bool successful,
 	                                         void *parentPointer);
+	typedef bool (*PGNRequestCallback)(std::uint32_t parameterGroupNumber,
+	                                   const ControlFunction *requestingControlFunction,
+	                                   bool &acknowledge);
+
+	typedef bool (*PGNRequestForRepetitionRateCallback)(std::uint32_t parameterGroupNumber,
+	                                                    const ControlFunction *requestingControlFunction,
+	                                                    std::uint32_t repetitionRate);
 
 	//================================================================================================
 	/// @class ParameterGroupNumberCallbackData
