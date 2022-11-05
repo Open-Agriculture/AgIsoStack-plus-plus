@@ -14,8 +14,19 @@
 
 namespace isobus
 {
+	// Forward declare some classes
 	class InternalControlFunction;
 	class ControlFunction;
+
+	/// @brief The types of acknowldegement that can be sent in the Ack PGN
+	enum class AcknowledgementType : std::uint8_t
+	{
+		Positive = 0, ///< "ACK" Indicates that the request was completed
+		Negative = 1, ///< "NACK" Indicates the request was not completed or we do not support the PGN
+		AccessDenied = 2, ///< Signals to the requestor that their CF is not allowed to request this PGN
+		CannotRespond = 3 ///< Signals to the requestor that we are unable to accept the request for some reason
+	};
+
 	/// @brief A callback for control functions to get CAN messages
 	typedef void (*CANLibCallback)(CANMessage *message, void *parentPointer);
 	/// @brief A callback to get chunks of data for transfer by a protocol
@@ -33,12 +44,15 @@ namespace isobus
 	                                         void *parentPointer);
 	/// @brief A callback for handling a PGN request
 	typedef bool (*PGNRequestCallback)(std::uint32_t parameterGroupNumber,
-	                                   const ControlFunction *requestingControlFunction,
-	                                   bool &acknowledge);
+	                                   ControlFunction *requestingControlFunction,
+	                                   bool &acknowledge,
+	                                   AcknowledgementType &acknowledgeType,
+	                                   void *parentPointer);
 	/// @brief A callback for handling a request for repetition rate for a specific PGN
 	typedef bool (*PGNRequestForRepetitionRateCallback)(std::uint32_t parameterGroupNumber,
-	                                                    const ControlFunction *requestingControlFunction,
-	                                                    std::uint32_t repetitionRate);
+	                                                    ControlFunction *requestingControlFunction,
+	                                                    std::uint32_t repetitionRate,
+	                                                    void *parentPointer);
 
 	//================================================================================================
 	/// @class ParameterGroupNumberCallbackData
