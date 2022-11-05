@@ -1,3 +1,13 @@
+//================================================================================================
+/// @file can_parameter_group_number_request_protocol.cpp
+///
+/// @brief A protocol that handles PGN requests
+/// @details The purpose of this protocol is to simplify and standardize how PGN requests
+/// are made and responded to.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2022 Adrian Del Grosso
+//================================================================================================
 #include "can_parameter_group_number_request_protocol.hpp"
 #include "can_general_parameter_group_numbers.hpp"
 #include "can_warning_logger.hpp"
@@ -6,19 +16,7 @@
 
 namespace isobus
 {
-	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol()
-	{
-	
-	}
-
-	ParameterGroupNumberRequestProtocol ::~ParameterGroupNumberRequestProtocol()
-	{
-		if (initialized)
-		{
-			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
-			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepititionRate), process_message, this);
-		}
-	}
+	std::list<ParameterGroupNumberRequestProtocol *> ParameterGroupNumberRequestProtocol::pgnRequestProtocolList;
 
 	void ParameterGroupNumberRequestProtocol::initialize(CANLibBadge<CANNetworkManager>)
 	{
@@ -30,10 +28,48 @@ namespace isobus
 		}
 	}
 
+	bool ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
+	{
+		bool retVal = true;
+
+		for (auto protocolLocation : pgnRequestProtocolList)
+		{
+			if (protocolLocation->myControlFunction == internalControlFunction)
+			{
+				retVal = false;
+				break;
+			}
+		}
+
+		if (retVal)
+		{
+			ParameterGroupNumberRequestProtocol *newProtocol = new ParameterGroupNumberRequestProtocol(internalControlFunction);
+			pgnRequestProtocolList.push_back(newProtocol);
+		}
+		return retVal;
+	}
+
+	bool ParameterGroupNumberRequestProtocol::deassign_pgn_request_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
+	{
+		bool retVal = false;
+
+		for (auto protocolLocation = pgnRequestProtocolList.begin(); protocolLocation != pgnRequestProtocolList.end(); protocolLocation++)
+		{
+			if ((*protocolLocation)->myControlFunction == internalControlFunction)
+			{
+				retVal = true;
+				delete *protocolLocation;
+				pgnRequestProtocolList.erase(protocolLocation);
+				break;
+			}
+		}
+		return retVal;
+	}
+
 	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, InternalControlFunction *source, ControlFunction *destination)
 	{
 		std::array<std::uint8_t, PGN_REQUEST_LENGTH> buffer;
-		
+
 		buffer[0] = static_cast<std::uint8_t>(pgn & 0xFF);
 		buffer[1] = static_cast<std::uint8_t>((pgn >> 8) & 0xFF);
 		buffer[2] = static_cast<std::uint8_t>((pgn >> 16) & 0xFF);
@@ -93,11 +129,14 @@ namespace isobus
 		return retVal;
 	}
 
+	void ParameterGroupNumberRequestProtocol::update(CANLibBadge<CANNetworkManager>)
+	{
+	}
+
 	ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::PGNRequestCallbackInfo(PGNRequestCallback callback, std::uint32_t parameterGroupNumber) :
 	  callbackFunction(callback),
 	  pgn(parameterGroupNumber)
 	{
-		
 	}
 
 	bool ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::operator==(const PGNRequestCallbackInfo &obj)
@@ -206,12 +245,38 @@ namespace isobus
 		}
 	}
 
+	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
+	  myControlFunction(internalControlFunction)
+	{
+	}
+
+	ParameterGroupNumberRequestProtocol ::~ParameterGroupNumberRequestProtocol()
+	{
+		if (initialized)
+		{
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepititionRate), process_message, this);
+		}
+	}
+
 	void ParameterGroupNumberRequestProtocol::process_message(CANMessage *const message, void *parent)
 	{
 		if (nullptr != parent)
 		{
 			reinterpret_cast<ParameterGroupNumberRequestProtocol *>(parent)->process_message(message);
 		}
+	}
+
+	bool ParameterGroupNumberRequestProtocol::protocol_transmit_message(std::uint32_t,
+	                                                                    const std::uint8_t *,
+	                                                                    std::uint32_t,
+	                                                                    ControlFunction *,
+	                                                                    ControlFunction *,
+	                                                                    TransmitCompleteCallback,
+	                                                                    void *,
+	                                                                    DataChunkCallback)
+	{
+		return false; // This protocol is not a transport layer, so just return false
 	}
 
 	bool ParameterGroupNumberRequestProtocol::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, InternalControlFunction *source, ControlFunction *destination)
