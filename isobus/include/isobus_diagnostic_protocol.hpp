@@ -141,11 +141,16 @@ namespace isobus
 
 		/// @brief Used to tell the CAN stack that diagnostic messages should be sent from the specified internal control function
 		/// @details This will allocate an instance of this protocol
+		/// @note Assigning the diagnostic protocol to an ICF will automatically create an instance of the PGN request protocol if needed
+		/// as this protocol uses that protocol to abstract away PGN request implementation details. That protocol instance will
+		/// only be deleted if you call deassign_diagnostic_protocol_to_internal_control_function and the DP PGNs were the only registered PGNs in
+		/// the protocol OR if you manually deassign the PGN request protocol.
+		/// Most people will not need to worry about this detail.
 		/// @returns `true` If the protocol instance was created OK with the passed in ICF
 		static bool assign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
 		/// @brief Used to tell the CAN stack that diagnostic messages should no longer be sent from the specified internal control function
-		/// @details This will delete an instance of this protocol
+		/// @details This will delete an instance of this protocol and may delete an associated but unused instance of the PGN request protocol.
 		/// @returns `true` If the protocol instance was deleted OK according to the passed in ICF
 		static bool deassign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
@@ -301,6 +306,9 @@ namespace isobus
 		/// @returns The two bit lamp state for CAN
 		std::uint8_t convert_flash_state_to_byte(FlashState flash);
 
+		/// @brief A utility function that will clean up PGN registrations
+		void deregister_all_pgns();
+
 		/// @brief This is a way to find the overall lamp states to report
 		/// @details This searches the active DTC list to find if a lamp is on or off, and to find the overall flash state for that lamp.
 		/// Basically, since the lamp states are global to the CAN message, we need a way to resolve the "total" lamp state from the list.
@@ -345,18 +353,6 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_2();
 
-		/// @brief Sends an ACK (pgn E800) for clearing inactive DTCs via DM3
-		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
-		/// @param destination The destination control function for the ACK
-		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_3_ack(ControlFunction *destination);
-
-		/// @brief Sends an ACK (pgn E800) for clearing active DTCs via DM11
-		/// @todo Replace manual ACK with a PGN request protocol to simplify ACK/NACK
-		/// @param destination The destination control function for the ACK
-		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_11_ack(ControlFunction *destination);
-
 		/// @brief Sends a DM22 response message
 		/// @param data The components of the DM22 response
 		/// @returns true if the message was sent
@@ -391,6 +387,30 @@ namespace isobus
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual TP manager object
 		static void process_message(CANMessage *const message, void *parent);
+
+		/// @brief Handles PGN requests for the diagnostic protocol
+		/// @param[in] parameterGroupNumber The PGN being requested
+		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
+		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
+		/// @returns true if any callback was able to handle the PGN request
+		bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
+		                                            ControlFunction *requestingControlFunction,
+		                                            bool &acknowledge,
+		                                            AcknowledgementType &acknowledgementType);
+
+		// @brief Handles PGN requests for the diagnostic protocol
+		/// @param[in] parameterGroupNumber The PGN being requested
+		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
+		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
+		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registed for
+		/// @returns true if any callback was able to handle the PGN request
+		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
+		                                                   ControlFunction *requestingControlFunction,
+		                                                   bool &acknowledge,
+		                                                   AcknowledgementType &acknowledgementType,
+		                                                   void *parentPointer);
 
 		/// @brief A generic callback for a the class to process flags from the `ProcessingFlags`
 		/// @param[in] flag The flag to process
