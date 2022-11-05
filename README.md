@@ -91,7 +91,7 @@ sudo apt install doxygen graphviz
 ```
 Then, generate the docs:
 ```
-doxygen
+doxygen doxyfile
 ```
 
 The documentation will appear in the docs/html folder. Open `index.html` in a web browser to start browsing the docs.
