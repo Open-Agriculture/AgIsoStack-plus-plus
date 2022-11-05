@@ -254,6 +254,7 @@ CANHardwareInterface::CANHardwareInterface()
 
 CANHardwareInterface::~CANHardwareInterface()
 {
+	set_number_of_can_channels(0);
 }
 
 bool CANHardwareInterface::assign_can_channel_frame_handler(std::uint8_t aCANChannel, std::string deviceName)
@@ -314,6 +315,15 @@ bool CANHardwareInterface::set_number_of_can_channels(uint8_t aValue)
 			{
 				pCANHardware = hardwareChannels.back();
 				hardwareChannels.pop_back();
+
+				if (nullptr != pCANHardware->frameHandler)
+				{
+					if (pCANHardware->frameHandler->get_is_valid())
+					{
+						pCANHardware->frameHandler->close();
+					}
+					delete pCANHardware->frameHandler;
+				}
 
 				delete pCANHardware;
 			}
