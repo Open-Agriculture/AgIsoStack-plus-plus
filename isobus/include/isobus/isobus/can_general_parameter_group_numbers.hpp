@@ -16,6 +16,8 @@ namespace isobus
 	enum class CANLibParameterGroupNumber
 	{
 		Any = 0x0000,
+		ClientToFileServer = 0xAA00,
+		FileServerToClient = 0xAB00,
 		AgriculturalGuidanceMachineInfo = 0xAC00,
 		AgriculturalGuidanceSystemCommand = 0xAD00,
 		DiagnosticMessage22 = 0xC300,
