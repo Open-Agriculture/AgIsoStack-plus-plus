@@ -216,7 +216,10 @@ namespace isobus
 
 	void ParameterGroupNumberRequestProtocol::process_message(CANMessage *const message)
 	{
-		if (nullptr != message)
+		if ((nullptr != message) &&
+		    (((nullptr == message->get_destination_control_function()) &&
+		      (BROADCAST_CAN_ADDRESS == message->get_identifier().get_destination_address())) ||
+		     (message->get_destination_control_function() == myControlFunction.get())))
 		{
 			switch (message->get_identifier().get_parameter_group_number())
 			{
