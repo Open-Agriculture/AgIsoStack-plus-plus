@@ -12,15 +12,32 @@
 #include "can_protocol.hpp"
 #include "can_network_manager.hpp"
 #include "can_partnered_control_function.hpp"
+#include "processing_flags.hpp"
 
 #include <memory>
+#include <thread>
 
 namespace isobus
 {
 	/// @brief A client interface for communicating with an ISOBUS file server
-	class FileServerClient : public CANLibProtocol
+	class FileServerClient
 	{
 	public:
+		/// @brief Enumerates the state machine states for talking to a file server
+		enum class StateMachineState
+		{
+			Disconnected, ///< Waiting for a server status message
+			SendGetFileServerProperties, ///< Transmitting the Get File Server Properties message
+			WaitForGetFileServerPropertiesResponse, ///< Waiting for a response to the Get File Server Properties message
+			ChangeToManufacturerDirectory, ///< Attempting to change directory into "~\"
+			WaitForChangeToManufaacturerDirectoryResponse, ///< Waiting for the response to the change directory request for "~\"
+			Connected, ///< FS is connected. You can use public functions on this class to interact further from this point!
+			SendWriteFile, ///< If the write file function is called, this state sends the appropriate message
+			WaitForWriteFileResponse, ///< Waiting for a response to our last write file request
+			SendReadFile, ///< If the read file function is called, this state sends the appropriate message
+			WaitForReadFileResponse ///< Waiting for a response to our last read file request
+		};
+
 		/// @brief The constructor for a file server client
 		/// @param[in] partner The file server control function to communicate with
 		/// @param[in] clientSource The internal control function to use when communicating with the file server
@@ -29,9 +46,30 @@ namespace isobus
 		// @brief Destructor for a FileServerClient
 		~FileServerClient();
 
+		// Setup Functions
+		/// @brief This function starts the state machine. Call this once you have supplied 1 or more object pool and are ready to connect.
+		/// @param[in] spawnThread The client will start a thread to manage itself if this parameter is true. Otherwise you must update it cyclically.
+		bool initialize(bool spawnThread);
+
+		/// @brief Returns if the client has been initialized
+		/// @returns true if the client has been initialized
+		bool get_is_initialized() const;
+
+		/// @brief Terminates the client and joins the worker thread if applicable
+		void terminate();
+
+		/// @brief Returns the current state machine state
+		/// @returns The current state machine state
+		StateMachineState get_state() const;
+
+		/// @brief Periodic Update Function (worker thread may call this)
+		/// @details This class can spawn a thread, or you can supply your own to run this function.
+		/// To configure that behavior, see the initialize function.
+		void update();
+
 	private:
 		// @brief The number of the edition or version of ISO 11783-13 with which the FS or client is compliant
-		enum class VersionNumber
+		enum class VersionNumber : std::uint8_t
 		{
 			DraftEdition = 0, ///< Draft edition of the International Standard
 			FinalDraftEdition = 1, ///< Final draft edition of the International Standard
@@ -64,7 +102,7 @@ namespace isobus
 		};
 
 		/// @brief Enumerates the different ways a file or directory can be opened
-		enum class FileOpenMode
+		enum class FileOpenMode : std::uint8_t
 		{
 			OpenFileForReadingOnly = 0, ///< Open a file in read only mode
 			OpenFileForWritingOnly = 1, ///< Open a file in write only mode
@@ -73,14 +111,14 @@ namespace isobus
 		};
 
 		/// @brief Enumerates options for where you want the file pointer set when opening a file
-		enum class FilePointerMode
+		enum class FilePointerMode : std::uint8_t
 		{
 			RandomAccess = 0, ///< File pointer set to the start of the file
 			AppendMode = 1 ///< File pointer set to the end of the file
 		};
 
 		/// @brief The position mode specifies the location from which the offset value is used to determine the file pointer position.
-		enum class PositionMode
+		enum class PositionMode : std::uint8_t
 		{
 			FromTheBeginningOfTheFile = 0, ///< From the beginning of the file
 			FromTheCurrentPointerPosition = 1, ///< From the current pointer position
@@ -129,18 +167,60 @@ namespace isobus
 			InitializeVolumeRequest = 0x40 ///< Prepare the volume to accept files and directories. All data is lost upon completion
 		};
 
-		/// @brief The protocol's initializer function
-		void initialize(CANLibBadge<CANNetworkManager>) override;
+		/// @brief Enuerates the transmit flags (CAN messages that support non-state-machine-driven retries)
+		enum class TransmitFlags
+		{
+			ClientToServerStatus = 0, ///< Flag to send the maintenance message to the file server
+			
+			NumberFlags ///< The number of flags in this enumeration
+		};
+
+		/// @brief Takes an error code and converts it to a human readable string for logging
+		/// @param[in] errorCode The error code to convert to string
+		/// @returns The human readable error code, or "Undefined" if some other value is passed in
+		std::string error_code_to_string(ErrorCode errorCode) const;
+
+		/// @brief Processes the internal Tx flags
+		/// @param[in] flag The flag to process
+		/// @param[in] parent A context variable to find the relevant VT client class
+		static void process_flags(std::uint32_t flag, void *parent);
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
+		void process_message(CANMessage *const message);
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual TP manager object
 		static void process_message(CANMessage *const message, void *parent);
 
+		/// @brief Sends the change current directory request message
+		/// @param[in] path The new path to change to
+		/// @returns `true` if the message was sent, otherwise false
+		bool send_change_current_directory_request(std::string path);
+
+		// @brief sends the Client Connection Maintenance message
+		/// @details The Client Connection Maintenance message is sent by a client in order to maintain a connection with the FS.
+		/// The client sends this message when actively interacting with the FS.
+		/// When this message is no longer received by the FS for 6 s, the open files are closed and all Handles for that client become invalid.
+		/// The client's working directory is also lost and set back to the default.
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_client_connection_maintenance();
+
+		/// @brief Sends the get file server properties request message
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_get_file_server_properties();
+
+		/// @brief Sets the current state machine state and a transition timestamp
+		/// @param[in] state The new state
+		void set_state(StateMachineState state);
+
+		/// @brief The worker thread will execute this function when it runs, if applicable
+		void worker_thread_function();
+
+		static constexpr std::uint32_t SERVER_STATUS_MESSAGE_TIMEOUT_MS = 6000; ///< The max time to wait for a server status message. After this time, we can assume it has shutdown.
+		static constexpr std::uint32_t CLIENT_STATUS_MESSAGE_REPETITION_RATE_MS = 2000; ///< The time interval to use when sending the client maintenance message
+		static constexpr std::uint32_t GENERAL_OPERATION_TIMEOUT = 1250; ///< The standard says that the timouts should be "rasonable" and to use the timeouts from TP and ETP, so I selected the t2/t3 timeout
 		static constexpr std::uint8_t FILE_SERVER_BUSY_READING_BIT_MASK = 0x01; ///< A bitmask for reading the "busy reading" bit out of fileServerStatusBitfield
 		static constexpr std::uint8_t FILE_SERVER_BUSY_WRITING_BIT_MASK = 0x02; ///< A bitmask for reading the "busy writing" bit out of fileServerStatusBitfield
 		static constexpr std::uint8_t FILE_SERVER_CAPABILITIES_BIT_MASK = 0x01; ///< A bitmask for the multiple volume support bit in fileServerCapabilitiesBitfield
@@ -149,10 +229,20 @@ namespace isobus
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 
+		std::thread *workerThread; ///< The worker thread that updates this interface
+		ProcessingFlags txFlags; ///< A retry mechanism for internal Tx messages
+		StateMachineState currentState; ///< The current state machine state
+
+		std::uint32_t stateMachineTimestamp_ms; ///< The timestamp for when the state machine state was last updated
+		std::uint32_t lastServerStatusTimestamp_ms; ///< The timstamp when we last got a status message from the server
 		std::uint8_t fileServerStatusBitfield; ///< The current status of the FS. Can be 0, or have bits set for busy either reading or writing
 		std::uint8_t numberFilesOpen; ///< The number of files that are currently open at the FS.
 		std::uint8_t maxNumberSimultaneouslyOpenFiles; ///< The maximum number of files that can be opened simultaneously on the FS
 		std::uint8_t fileServerCapabilitiesBitfield; ///< If the server supports only 1 volume or multiple volumes
+		std::uint8_t fileServerVersion; ///< The version of the standard that the file server complies to
+		std::uint8_t transactionNumber; ///< The TAN as specified in ISO 11783-13
+		bool initialized; ///< Stores the client initialization state
+		bool shouldTerminate; ///< Used to determine if the client should exit and join the worker thread
 	};
 } // namespace isobus
 
