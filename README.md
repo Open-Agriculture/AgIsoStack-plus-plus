@@ -73,7 +73,7 @@ ctest
 ```
 
 ## Integrating this library
-You can this library to your own project with CMake if you want. Adding it as a submodule to your project is one of the easier ways to integrate it today.
+You can integrate this library to your own project with CMake if you want. Adding it as a submodule to your project is one of the easier ways to integrate it today.
 
 ```
 git submodule add git@github.com:ad3154/ISO11783-CAN-Stack.git <destination_folder>
