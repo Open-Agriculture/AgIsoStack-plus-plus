@@ -27,14 +27,14 @@ The state of the project is as follows...
         - Submit an issue please if this is a priority for your project!
 - PGN Requests and Requests for Repetition Rate: Complete :white_check_mark:
 - Tutorial [in review](https://github.com/ad3154/ISO11783-CAN-Stack/pull/35)
+- Debian Packaging: Complete :white_check_mark: but no official package has been released yet
+- ISO11783 File Server (Client-side): In progress :hourglass:
 ### Planned Features (in no particular order):
-- ISO11783 File Server
 - ISO11783 Task Controller (currently planned to be client only)
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
 - J1939 DM13 (Stop/Start Broadcast)
 - NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
-- Meta: Package this library as a debian package
 - Meta: Windows OS support via some common CAN driver layers (PEAK P-CAN, for example)
 
 ### Stretch Goals:
