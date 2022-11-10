@@ -65,6 +65,13 @@ cmake -S . -B build
 cmake --build build
 ```
 
+## Tests
+Tests are run with GTest. They can be invoked through ctest. Once the library is compiled (see above), navigate to the build directory to run tests.
+```
+cd build
+ctest
+```
+
 ## Integrating this library
 You can this library to your own project with CMake if you want. Adding it as a submodule to your project is one of the easier ways to integrate it today.
 

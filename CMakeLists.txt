@@ -26,19 +26,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Link GoogleTest
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-# Enable testing
-enable_testing()
-
 # Find packages required for Socket CAN
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
@@ -61,8 +48,22 @@ add_subdirectory("examples/transport_layer")
 add_subdirectory("examples/diagnostic_protocol")
 add_subdirectory("examples/pgn_requests")
 
+# Make CTest available which adds the option BUILD_TESTING
+include(CTest)
+if(BUILD_TESTING)
+# Link GoogleTest
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
 target_link_libraries(unit_tests gtest_main Isobus SocketCANInterface)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
+endif()
