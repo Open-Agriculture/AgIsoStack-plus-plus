@@ -20,6 +20,7 @@
 #include <chrono>
 #include <cstdint>
 #include <limits>
+#include <sys/time.h>
 
 std::thread *CANHardwareInterface::can_thread = nullptr;
 std::thread *CANHardwareInterface::updateCANLibPeriodicThread = nullptr;
