@@ -11,7 +11,6 @@
 
 namespace isobus
 {
-
 	constexpr std::uint64_t DEFAULT_NAME = 0xFFFFFFFFFFFFFFFF; ///< An invalid NAME used as a default
 	constexpr std::uint32_t DEFAULT_IDENTIFIER = 0xFFFFFFFF; ///< An invalid identifier used as a default
 	constexpr std::uint8_t NULL_CAN_ADDRESS = 0xFE; ///< The NULL CAN address defined by J1939 and ISO11783

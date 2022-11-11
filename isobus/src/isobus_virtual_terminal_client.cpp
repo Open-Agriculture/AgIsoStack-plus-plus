@@ -18,7 +18,6 @@
 
 namespace isobus
 {
-
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  partnerControlFunction(partner),
 	  myControlFunction(clientSource),

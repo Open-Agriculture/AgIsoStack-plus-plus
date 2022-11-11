@@ -22,9 +22,9 @@
 
 #include "can_general_parameter_group_numbers.hpp"
 #include "can_network_manager.hpp"
-#include "system_timing.hpp"
 #include "can_parameter_group_number_request_protocol.hpp"
 #include "can_warning_logger.hpp"
+#include "system_timing.hpp"
 
 #include <algorithm>
 
@@ -967,14 +967,14 @@ namespace isobus
 
 								for (auto dtc = activeDTCList.begin(); dtc != activeDTCList.end(); dtc++)
 								{
-									if ((tempDM22Data.suspectParameterNumber == dtc->suspectParameterNumber) && 
-										(tempDM22Data.failureModeIdentifier == dtc->failureModeIdentifier))
+									if ((tempDM22Data.suspectParameterNumber == dtc->suspectParameterNumber) &&
+									    (tempDM22Data.failureModeIdentifier == dtc->failureModeIdentifier))
 									{
 										inactiveDTCList.push_back(*dtc);
 										activeDTCList.erase(dtc);
 										wasDTCCleared = true;
 										tempDM22Data.nack = false;
-										
+
 										dm22ResponseQueue.push_back(tempDM22Data);
 										txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM22));
 										break;
@@ -996,7 +996,6 @@ namespace isobus
 											break;
 										}
 									}
-
 
 									if (0 != tempDM22Data.nackIndicator)
 									{
