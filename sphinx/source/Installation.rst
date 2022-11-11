@@ -36,9 +36,10 @@ In your project that you want to add the CAN stack to, add the CAN stack as a su
 
 .. code-block:: bash
 
-   git clone git@github.com:ad3154/ISO11783-CAN-Stack.git
+   git submodule add https://github.com/ad3154/ISO11783-CAN-Stack.git
+   git submodule update --init --recursive
 
-This will place the CAN stack in a folder within your project called 'ISO11783-CAN-Stack'
+This will place the CAN stack in a folder within your project called 'ISO11783-CAN-Stack'.
 
 Building the CAN Stack
 -----------------------
@@ -67,4 +68,6 @@ Non-CMake:
 ^^^^^^^^^^
 
 If you are not using CMake, just make sure to add all the files from the 'ISO11783-CAN-Stack/isobus' folder to your project so they all get compiled. You'll want to make sure the 'ISO11783-CAN-Stack/isobus/include' folder is part of your include path.
+
+If you're using socket CAN, make sure 'socket_can/include' is also in your include path.
 

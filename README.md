@@ -101,7 +101,7 @@ sudo dnf install cmake
 Then, submodule the repository into your project:
 
 ```
-git submodule add git@github.com:ad3154/ISO11783-CAN-Stack.git <destination_folder>
+git submodule add https://github.com/ad3154/ISO11783-CAN-Stack.git <destination_folder>
 git submodule update --init --recursive
 ```
 Then, if you're using cmake, make sure to add the submodule to your project, and link it.
