@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
+#include "can_constants.hpp"
 #include "can_internal_control_function.hpp"
 #include "can_network_manager.hpp"
-#include "can_constants.hpp"
 #include "socket_can_interface.hpp"
 #include "test_CAN_glue.hpp"
 

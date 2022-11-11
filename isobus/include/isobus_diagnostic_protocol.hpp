@@ -7,12 +7,12 @@
 /// The ISO-11783 definition of some of these is based on the J1939 definition with some tweaks.
 /// You can select if you want the protocol to behave like J1939 by calling set_j1939_mode.
 /// One of the messages this protocol supports is the DM1 message.
-/// The DM1 is sent via BAM, which has some implications to your application, 
+/// The DM1 is sent via BAM, which has some implications to your application,
 /// as only 1 BAM can be active at a time. This message
 /// is sent at 1 Hz. In ISOBUS mode, unlike in J1939, the message is discontinued when no DTCs are active to
 /// minimize bus load. Also, ISO-11783 does not utilize or support lamp status.
 /// Other messages this protocol supports include: DM2, DM3, DM11, DM22, software ID, and Product ID.
-/// 
+///
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso
@@ -183,7 +183,7 @@ namespace isobus
 		/// @brief Sets one of the ECU identification strings for the ECU ID message
 		/// @details See ECUIdentificationFields for a brief description of the fields
 		/// @note The fields in this message are optional and separated by an ASCII “*”. It is not necessary to include parametric
-        /// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
+		/// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
 		/// @attention Do not include the "*" character in your field values
 		/// @param[in] field The field to set
 		/// @param[in] value The string value associated with the ECU ID field

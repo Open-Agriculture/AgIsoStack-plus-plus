@@ -18,7 +18,6 @@
 
 namespace isobus
 {
-
 	ExtendedTransportProtocolManager ExtendedTransportProtocolManager::Protocol;
 
 	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::ExtendedTransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
@@ -87,8 +86,8 @@ namespace isobus
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
 								if ((nullptr != message->get_destination_control_function()) &&
-									(activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
-									(!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
+								    (activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+								    (!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
 								{
 									ExtendedTransportProtocolSession *newSession = new ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Receive, message->get_can_port_index());
 									CANIdentifier tempIdentifierData(CANIdentifier::Type::Extended, pgn, CANIdentifier::CANPriority::PriorityLowest7, message->get_destination_control_function()->get_address(), message->get_source_control_function()->get_address());
@@ -102,15 +101,15 @@ namespace isobus
 									activeSessions.push_back(newSession);
 								}
 								else if ((get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)) &&
-									        (nullptr != message->get_destination_control_function()) &&
-									        (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								         (nullptr != message->get_destination_control_function()) &&
+								         (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 								{
 									abort_session(pgn, ConnectionAbortReason::AlreadyInConnectionManagedSessionAndCannotSupportAnother, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 									CANStackLogger::CAN_stack_log("[ETP]: Abort RTS when already in session");
 								}
 								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
-									        (nullptr != message->get_destination_control_function()) &&
-									        (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								         (nullptr != message->get_destination_control_function()) &&
+								         (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 								{
 									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeededForAnotherTask, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 									CANStackLogger::CAN_stack_log("[ETP]: Abort No Sessions Available");
@@ -283,7 +282,6 @@ namespace isobus
 
 							default:
 							{
-							
 							}
 							break;
 						}
@@ -551,7 +549,7 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			std::uint32_t packetMax = ((((session->sessionMessage.get_data_length() - 1) / 7) + 1)  - session->processedPacketsThisSession);
+			std::uint32_t packetMax = ((((session->sessionMessage.get_data_length() - 1) / 7) + 1) - session->processedPacketsThisSession);
 
 			if (packetMax > 0xFF)
 			{
@@ -559,7 +557,7 @@ namespace isobus
 			}
 
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR,
-					                                             static_cast<std::uint8_t>(packetMax), /// @todo Make CTS Max user configurable
+				                                                 static_cast<std::uint8_t>(packetMax), /// @todo Make CTS Max user configurable
 				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession + 1) & 0xFF),
 				                                                 static_cast<std::uint8_t>(((session->processedPacketsThisSession + 1) >> 8) & 0xFF),
 				                                                 static_cast<std::uint8_t>(((session->processedPacketsThisSession + 1) >> 16) & 0xFF),
@@ -757,7 +755,7 @@ namespace isobus
 								}
 							}
 						}
-						
+
 						if ((session->lastPacketNumber == (session->packetCount)) &&
 						    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
 						{

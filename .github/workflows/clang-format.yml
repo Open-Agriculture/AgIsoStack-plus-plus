@@ -9,6 +9,7 @@ jobs:
         path:
           - 'isobus'
           - 'socket_can'
+          - 'examples'
     steps:
     - uses: actions/checkout@v3
     - name: Run clang-format style check for C/C++/Protobuf programs.

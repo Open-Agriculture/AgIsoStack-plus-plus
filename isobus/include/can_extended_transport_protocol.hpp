@@ -11,11 +11,11 @@
 #ifndef CAN_EXTENDED_TRANSPORT_PROTOCOL_HPP
 #define CAN_EXTENDED_TRANSPORT_PROTOCOL_HPP
 
-#include "can_protocol.hpp"
-#include "can_control_function.hpp"
-#include "can_network_manager.hpp"
 #include "can_badge.hpp"
+#include "can_control_function.hpp"
 #include "can_managed_message.hpp"
+#include "can_network_manager.hpp"
+#include "can_protocol.hpp"
 
 namespace isobus
 {
@@ -24,13 +24,12 @@ namespace isobus
 	///
 	/// @brief A class that handles the ISO11783 extended transport protocol.
 	/// @details This class handles transmission and reception of CAN messages more than 1785 bytes.
-	/// Simply call send_can_message on the network manager with an appropriate data length, 
+	/// Simply call send_can_message on the network manager with an appropriate data length,
 	/// and the protocol will be automatically selected to be used.
 	//================================================================================================
 	class ExtendedTransportProtocolManager : public CANLibProtocol
 	{
 	public:
-
 		///  @brief A list of all defined abort reasons in ISO11783
 		enum class ConnectionAbortReason
 		{

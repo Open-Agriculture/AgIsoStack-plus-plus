@@ -1,8 +1,8 @@
 #include "can_general_parameter_group_numbers.hpp"
 #include "can_network_configuration.hpp"
 #include "can_network_manager.hpp"
-#include "socket_can_interface.hpp"
 #include "can_parameter_group_number_request_protocol.hpp"
+#include "socket_can_interface.hpp"
 
 #include <csignal>
 #include <iostream>
@@ -79,7 +79,7 @@ bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t par
 		// your application must handle the actual processing and sending of those messages at the requested rate
 		// since the stack has no idea what your application actually does with most PGNs.
 
-		// In this example, I'll handle it by saving the repetition rate in a global variable and have 
+		// In this example, I'll handle it by saving the repetition rate in a global variable and have
 		// main() service it at the desired rate.
 		repetitionRateRequestor = requestingControlFunction;
 		propARepetitionRate_ms = repetitionRate;

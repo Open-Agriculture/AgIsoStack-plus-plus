@@ -19,7 +19,6 @@
 
 namespace isobus
 {
-
 	TransportProtocolManager TransportProtocolManager::Protocol;
 
 	TransportProtocolManager::TransportProtocolSession::TransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :

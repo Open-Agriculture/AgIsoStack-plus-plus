@@ -201,7 +201,6 @@ namespace isobus
 	  pgn(parameterGroupNumber),
 	  parent(parentPointer)
 	{
-	
 	}
 
 	bool ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::operator==(const PGNRequestCallbackInfo &obj)

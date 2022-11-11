@@ -10,9 +10,9 @@
 #ifndef IOP_FILE_INTERFACE_HPP
 #define IOP_FILE_INTERFACE_HPP
 
-#include <vector>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace isobus
 {

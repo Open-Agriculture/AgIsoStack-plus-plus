@@ -11,7 +11,6 @@
 
 namespace isobus
 {
-
 	class SystemTiming
 	{
 	public:

@@ -15,12 +15,12 @@
 #include <net/if.h>
 #include <poll.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <limits>
-#include <sys/time.h>
 
 std::thread *CANHardwareInterface::can_thread = nullptr;
 std::thread *CANHardwareInterface::updateCANLibPeriodicThread = nullptr;
