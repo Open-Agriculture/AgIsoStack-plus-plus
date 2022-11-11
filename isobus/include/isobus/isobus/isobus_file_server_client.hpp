@@ -9,10 +9,10 @@
 #ifndef ISOBUS_FILE_SERVER_CLIENT_HPP
 #define ISOBUS_FILE_SERVER_CLIENT_HPP
 
-#include "can_protocol.hpp"
-#include "can_network_manager.hpp"
-#include "can_partnered_control_function.hpp"
-#include "processing_flags.hpp"
+#include "isobus/isobus/can_protocol.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/utility/processing_flags.hpp"
 
 #include <memory>
 #include <thread>
@@ -20,6 +20,9 @@
 namespace isobus
 {
 	/// @brief A client interface for communicating with an ISOBUS file server
+	/// @note Although one instance of this client interface can manage multiple files at a time, you can
+	/// only write or read from one at a time. Part of the reason for this is to avoid trying to send two
+	/// transport sessions at the same time with the same PGN to the same partner, which is not supported in general.
 	class FileServerClient
 	{
 	public:
@@ -30,21 +33,105 @@ namespace isobus
 			SendGetFileServerProperties, ///< Transmitting the Get File Server Properties message
 			WaitForGetFileServerPropertiesResponse, ///< Waiting for a response to the Get File Server Properties message
 			ChangeToManufacturerDirectory, ///< Attempting to change directory into "~\"
-			WaitForChangeToManufaacturerDirectoryResponse, ///< Waiting for the response to the change directory request for "~\"
+			WaitForChangeToManufacturerDirectoryResponse, ///< Waiting for the response to the change directory request for "~\"
 			Connected, ///< FS is connected. You can use public functions on this class to interact further from this point!
+			SendChangeDirectoryRequest, ///< Changing directory
+			WaitForChangeDirectoryResponse ///< Waiting for a response to a directory change. Opening files is not allowed until this operation succeeds or fails.
+		};
+
+		/// @brief Enumerates the state a file can be in
+		enum class FileState
+		{
+			Uninitialized, ///< The initial state
+			SendOpenFile, ///< The client is sending the open file message. File is not interactable yet
+			WaitForOpenFileResponse, ///< Client is waiting for a response to the open file message. File is not interactable yet
+			FileOpen, ///< The file is currently open and can be interacted with
+			FileOpenFailed, ///< Could not open the file! Close the file, or try and re-open it
 			SendWriteFile, ///< If the write file function is called, this state sends the appropriate message
 			WaitForWriteFileResponse, ///< Waiting for a response to our last write file request
 			SendReadFile, ///< If the read file function is called, this state sends the appropriate message
-			WaitForReadFileResponse ///< Waiting for a response to our last read file request
+			WaitForReadFileResponse, ///< Waiting for a response to our last read file request
+			SendCloseFile, ///< Try to close the file
+			WaitForCloseFileResponse ///< Waiting for a response to our request to close a file
 		};
+		
+		/// @brief Enumerates the different ways a file or directory can be opened
+		enum class FileOpenMode : std::uint8_t
+		{
+			OpenFileForReadingOnly = 0, ///< Open a file in read only mode
+			OpenFileForWritingOnly = 1, ///< Open a file in write only mode
+			OpenFileForReadingAndWriting = 2, ///< Open a file for both read and write mode
+			OpenDirectory = 3 ///< Opens a directory
+		};
+
+		/// @brief Enumerates options for where you want the file pointer set when opening a file
+		enum class FilePointerMode : std::uint8_t
+		{
+			RandomAccess = 0, ///< File pointer set to the start of the file
+			AppendMode = 1 ///< File pointer set to the end of the file
+		};
+
+		/// @brief The different file attribute bits that can be associated with a file handle
+		enum class FileHandleAttributesBit : std::uint8_t
+		{
+			ReadOnly = 0,
+			Hidden = 1,
+			VolumeSupportsHiddenAttribute = 2,
+			HandleSpecifiesAVolume = 3,
+			HandleSpecifiesADirectory = 4,
+			VolumeSupportsLongFileNames = 5,
+			VolumeIsRemovable = 6,
+			VolumeIsCaseSensitive = 7
+		};
+
+		/// @brief The different read-only states you can request for a file
+		enum class ReadOnlyAttributeCommand : std::uint8_t 
+		{
+			ClearReadOnly = 0, ///< Clears the read only attribute
+			SetReadOnly = 1, ///< Sets the read only attribute
+			DontCare = 3 ///< Leave the read only attribute alone as it is now
+		};
+
+		static constexpr std::uint8_t INVALID_FILE_HANDLE = 0xFF; ///< Used to represent an invalid file handle
 
 		/// @brief The constructor for a file server client
 		/// @param[in] partner The file server control function to communicate with
 		/// @param[in] clientSource The internal control function to use when communicating with the file server
 		FileServerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource);
 
-		// @brief Destructor for a FileServerClient
+		/// @brief Destructor for a FileServerClient
 		~FileServerClient();
+
+		bool change_directory(std::string &path);
+
+		std::string get_current_directory() const;
+
+		bool get_file_attribute(std::uint8_t handle, FileHandleAttributesBit attributeToGet);
+
+		bool set_file_attribute(std::string filePath, bool hidden, ReadOnlyAttributeCommand readOnly);
+
+		/// @brief Returns the file handle (if any) is accociated with a file path
+		/// @param[in] filePath The file path to try and match with a handle
+		/// @returns The handle associated with the file path, or INVALID_FILE_HANDLE if no match was found
+		std::uint8_t get_file_handle(std::string filePath);
+
+		FileState get_file_state(std::uint8_t handle);
+
+		/// @brief Opens a file for interaction
+		/// @param[in] fileName The file to open
+		/// @param[in] createIfNotPresent If the server should create the file if the file specified does not exist
+		/// @param[in] exclusiveAccess If you want an exclusive lock on the file
+		/// @param[in] openMode The mode to open the file in (read only, write only, etc)
+		/// @param[in] pointerMode Where you want the file pointer placed in the file (beginning or end of the file)
+		/// @returns `true` If the command was accepted and the interface will attempt to open the file as specified
+		bool open_file(std::string &fileName, bool createIfNotPresent, bool exclusiveAccess, FileOpenMode openMode, FilePointerMode pointerMode);
+
+		/// @brief Closes a file identified by a file handle
+		/// @param[in] handle The file handle to close
+		/// @returns `true` if the command was accepted and the interface will send the close file message
+		bool close_file(std::uint8_t handle);
+
+		bool write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize);
 
 		// Setup Functions
 		/// @brief This function starts the state machine. Call this once you have supplied 1 or more object pool and are ready to connect.
@@ -99,22 +186,6 @@ namespace isobus
 			OutOfMemory = 43, ///< used by FS to indicate out of resources at this time and cannot complete request
 			AnyOtherError = 44,
 			FilePointerAtEndOfFile = 45
-		};
-
-		/// @brief Enumerates the different ways a file or directory can be opened
-		enum class FileOpenMode : std::uint8_t
-		{
-			OpenFileForReadingOnly = 0, ///< Open a file in read only mode
-			OpenFileForWritingOnly = 1, ///< Open a file in write only mode
-			OpenFileForReadingAndWriting = 2, ///< Open a file for both read and write mode
-			OpenDirectory = 3 ///< Opens a directory
-		};
-
-		/// @brief Enumerates options for where you want the file pointer set when opening a file
-		enum class FilePointerMode : std::uint8_t
-		{
-			RandomAccess = 0, ///< File pointer set to the start of the file
-			AppendMode = 1 ///< File pointer set to the end of the file
 		};
 
 		/// @brief The position mode specifies the location from which the offset value is used to determine the file pointer position.
@@ -175,6 +246,28 @@ namespace isobus
 			NumberFlags ///< The number of flags in this enumeration
 		};
 
+		// @brief A storage class to keep track of file metadata that the interface is managing
+		class FileInfo
+		{
+		public:
+			/// @brief Constructor for file info, sets default values
+			FileInfo();
+
+			std::string fileName; ///< The file name/path of this file
+			FileState state; ///< A sub-state-machine state for the file
+			FileOpenMode openMode; ///< The file open mode (read only, write only, etc)
+			FilePointerMode pointerMode; ///< Where the file pointer should be set for this file
+			std::uint32_t timstamp_ms; ///< A timestamp to track when file operations take too long
+			std::uint8_t attributesBitField; ///< The reported file attributes
+			std::uint8_t transactionNumberForRequest; ///< The TAN for the latest request corresponding to this file
+			std::uint8_t handle; ///< The file handle associated with this file
+			bool createIfNotPresent; ///< If the interface should create the file when opening it, if it does not exist
+			bool exclusiveAccess; ///< If exclusive access was requested for the file
+		};
+
+		/// @brief Cleans up all open file's metadata, used when disconnected from the server
+		void clear_all_file_metadata();
+
 		/// @brief Takes an error code and converts it to a human readable string for logging
 		/// @param[in] errorCode The error code to convert to string
 		/// @returns The human readable error code, or "Undefined" if some other value is passed in
@@ -194,6 +287,21 @@ namespace isobus
 		/// @param[in] parent Provides the context to the actual TP manager object
 		static void process_message(CANMessage *const message, void *parent);
 
+		/// @brief The data callback passed to the network manger's send function for the transport layer messages
+		/// @details We upload the data with callbacks to avoid making a complete copy of the data to
+		/// accommodate the multiplexor that needs to get passed to the transport layer message's first byte.
+		/// @param[in] callbackIndex The number of times the callback has been called
+		/// @param[in] bytesOffset The byte offset at which to get pool data
+		/// @param[in] numberOfBytesNeeded The number of bytes the protocol needs to send another frame (usually 7)
+		/// @param[out] chunkBuffer A pointer through which the data should be returned to the protocol
+		/// @param[in] parentPointer A context variable that is passed back through the callback
+		/// @returns true if the data was successfully returned via the callback
+		static bool process_internal_file_write_callback(std::uint32_t callbackIndex,
+		                                                         std::uint32_t bytesOffset,
+		                                                         std::uint32_t numberOfBytesNeeded,
+		                                                         std::uint8_t *chunkBuffer,
+		                                                         void *parentPointer);
+
 		/// @brief Sends the change current directory request message
 		/// @param[in] path The new path to change to
 		/// @returns `true` if the message was sent, otherwise false
@@ -207,13 +315,30 @@ namespace isobus
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_client_connection_maintenance();
 
+		/// @brief Sends the close file request message
+		/// @param[in] fileMetadata The file meta data structure used to send the message
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_close_file(FileInfo *fileMetadata);
+
 		/// @brief Sends the get file server properties request message
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_get_file_server_properties();
 
-		/// @brief Sets the current state machine state and a transition timestamp
+		/// @brief Sends the open file request message
+		/// @param[in] fileMetadata The file meta data structure used to send the message
+		/// @returns `true` if the message is sent, otherwise `false`
+		bool send_open_file(FileInfo *fileMetadata);
+
+		/// @brief Sets the current file state and a transition timestamp
 		/// @param[in] state The new state
 		void set_state(StateMachineState state);
+
+		/// @brief Sets the current state machine state and a transition timestamp
+		/// @param[in] state The new state
+		void set_file_state(FileInfo *fileMetadata, FileState state);
+
+		/// @brief Updates the sub-state-machines of each managed file
+		void update_open_files();
 
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
@@ -230,9 +355,14 @@ namespace isobus
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 
 		std::thread *workerThread; ///< The worker thread that updates this interface
+		std::mutex metadataMutex; ///< Protects the TAN and file metadata list
+		std::list<FileInfo *> fileInfoList; ///< List of files the client interface knows about and is managing
 		ProcessingFlags txFlags; ///< A retry mechanism for internal Tx messages
 		StateMachineState currentState; ///< The current state machine state
+		std::string currentDirectory; ///< Maintatains our current working directory location
+		const std::uint8_t *currentFileWriteData; ///< A pointer to the data for any in-progress file write
 
+		std::uint32_t currentFileWriteSize; ///< The size of any in-progress file write
 		std::uint32_t stateMachineTimestamp_ms; ///< The timestamp for when the state machine state was last updated
 		std::uint32_t lastServerStatusTimestamp_ms; ///< The timstamp when we last got a status message from the server
 		std::uint8_t fileServerStatusBitfield; ///< The current status of the FS. Can be 0, or have bits set for busy either reading or writing
@@ -241,6 +371,7 @@ namespace isobus
 		std::uint8_t fileServerCapabilitiesBitfield; ///< If the server supports only 1 volume or multiple volumes
 		std::uint8_t fileServerVersion; ///< The version of the standard that the file server complies to
 		std::uint8_t transactionNumber; ///< The TAN as specified in ISO 11783-13
+		std::uint8_t currentFileWriteHandle; ///< Used to keep track of if we're currently writing a file, and which file is being written.
 		bool initialized; ///< Stores the client initialization state
 		bool shouldTerminate; ///< Used to determine if the client should exit and join the worker thread
 	};
