@@ -1,4 +1,5 @@
 #include "can_general_parameter_group_numbers.hpp"
+#include "can_hardware_interface.hpp"
 #include "can_network_configuration.hpp"
 #include "can_network_manager.hpp"
 #include "can_parameter_group_number_request_protocol.hpp"
@@ -11,6 +12,7 @@
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
 static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;
 static isobus::ControlFunction *repetitionRateRequestor = nullptr;
+static SocketCANInterface canDriver("can0");
 
 using namespace std;
 
@@ -96,7 +98,7 @@ bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t par
 void setup()
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
 	CANHardwareInterface::start();
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
