@@ -1,0 +1,10 @@
+build-project:
+  stage : build
+  script:
+    - cmake -S . -B build
+    - cmake --build build
+    - cd build
+    - cpack -G DEB
+  artifacts:
+    paths:
+      - ./build/isobus-*-Linux.deb
