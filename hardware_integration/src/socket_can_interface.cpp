@@ -1,8 +1,7 @@
 //================================================================================================
 /// @file socket_can_interface.cpp
 ///
-/// @brief An interface for using socket CAN on linux. Mostly for testing, but it could be
-/// used in any application to get the stack hooked up to the bus.
+/// @brief An CAN driver for socket CAN on linux.
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso
