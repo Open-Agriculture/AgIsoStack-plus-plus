@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file socket_can_interface.cpp
+/// @file can_hardware_interface.cpp
 ///
 /// @brief An interface for using socket CAN on linux. Mostly for testing, but it could be
 /// used in any application to get the stack hooked up to the bus.
