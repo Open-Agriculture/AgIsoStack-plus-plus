@@ -4,40 +4,46 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set library public name
-set(SOCKET_CAN_INTERFACE_PUBLIC_NAME "SocketCANInterface")
+set(HARDWARE_INTEGRATION_PUBLIC_NAME "HardwareIntegration")
 
 # Set source and include directories
-set(SOCKET_CAN_SRC_DIR "src")
-set(SOCKET_CAN_INCLUDE_DIR "include")
+set(HARDWARE_INTEGRATION_SRC_DIR "src")
+set(HARDWARE_INTEGRATION_INCLUDE_DIR "include")
 
-# Set source files 
-set(SOCKET_CAN_SRC 
-  "can_hardware_interface.cpp"
-  "socket_can_interface.cpp"
-)
+if(NOT CAN_DRIVER)
+  message(AUTHOR_WARNING "No CAN driver specified, choosing Linux socket CAN by default. Use -DCAN_DRIVER=socketCAN to avoid this, or choose another driver and set it explicitly.")
+  set(CAN_DRIVER "socketCAN")
+endif()
+
+if(CAN_DRIVER AND CAN_DRIVER MATCHES "socketCAN") 
+	set(HARDWARE_INTEGRATION_SRC 
+	  "can_hardware_interface.cpp"
+	  "socket_can_interface.cpp"
+	)
+
+	# Set the include files
+	set(HARDWARE_INTEGRATION_INCLUDE
+	  "can_hardware_interface.hpp"
+	  "can_hardware_plugin.hpp"
+	  "socket_can_interface.hpp"
+	)
+endif()
 
 # Prepend the source directory path to all the source files
-PREPEND(SOCKET_CAN_SRC ${SOCKET_CAN_SRC_DIR} ${SOCKET_CAN_SRC})
-
-# Set the include files
-set(SOCKET_CAN_INCLUDE
-  "can_hardware_interface.hpp"
-  "can_hardware_plugin.hpp"
-  "socket_can_interface.hpp"
-)
+PREPEND(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR} ${HARDWARE_INTEGRATION_SRC})
 
 # Prepend the include directory path to all the include files
-PREPEND(SOCKET_CAN_INCLUDE ${SOCKET_CAN_INCLUDE_DIR} ${SOCKET_CAN_INCLUDE})
+PREPEND(HARDWARE_INTEGRATION_INCLUDE ${HARDWARE_INTEGRATION_INCLUDE_DIR} ${HARDWARE_INTEGRATION_INCLUDE})
 
 # Create the library from the source and include files
-add_library(SocketCANInterface SHARED ${SOCKET_CAN_SRC} ${SOCKET_CAN_INCLUDE})
+add_library(HardwareIntegration SHARED ${HARDWARE_INTEGRATION_SRC} ${HARDWARE_INTEGRATION_INCLUDE})
 
-target_link_libraries(SocketCANInterface PRIVATE SystemTiming Isobus)
+target_link_libraries(HardwareIntegration PRIVATE SystemTiming Isobus)
 
 # Specify the include directory to be exported for other moduels to use. The 
 # PUBLIC keyword here allows other libraries or exectuables to link to this
 # library and use its functionality.
-target_include_directories(SocketCANInterface PUBLIC
+target_include_directories(HardwareIntegration PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${SOCKET_CAN_PUBLIC_NAME}/include>
  ) 
