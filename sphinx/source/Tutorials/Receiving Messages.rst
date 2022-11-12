@@ -70,6 +70,7 @@ So, our updated tutorial program now should look like this:
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
 
    #include <memory>
@@ -105,6 +106,7 @@ So, our updated tutorial program now should look like this:
     isobus::NAME myNAME(0); // Create an empty NAME
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
     std::shared_ptr<isobus::PartneredControlFunction> myPartner = nullptr; // A pointer to hold a partner
+    SocketCANInterface canDriver("can0"); // The CAN driver to use for this program. In this case, we're using socket CAN.
 
     // Define a NAME filter for our partner
     std::vector<isobus::NAMEFilter> myPartnerFilter;
@@ -113,7 +115,7 @@ So, our updated tutorial program now should look like this:
 
     // Set up the hardware layer to use "can0"
     CANHardwareInterface::set_number_of_can_channels(1);
-    CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+    CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
     CANHardwareInterface::start();
 
     // Handle control+c

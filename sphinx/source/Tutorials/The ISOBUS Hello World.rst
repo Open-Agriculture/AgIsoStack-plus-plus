@@ -28,6 +28,7 @@ Let's set up a standard, empty C++ program in a file called "main.cpp", and incl
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
    
    int main()
@@ -59,6 +60,7 @@ NOTE: Everything that is part of the stack is in the namespace `"isobus" <https:
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
    
    int main()
@@ -74,6 +76,7 @@ Now we have a NAME instantiated. We still need to populate it with our control f
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
    
    int main()
@@ -113,6 +116,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
 
    #include <memory>
@@ -171,8 +175,9 @@ There are a few lines we'll need to add:
 
 .. code-block:: c++
 
+   SocketCANInterface canDriver("can0");
    CANHardwareInterface::set_number_of_can_channels(1);
-   CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+   CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
    CANHardwareInterface::start();
 
 The "CANHardwareInterface" is an independent component that is not actually directly tied to the CAN stack. It serves as a way for the stack to abstract away whatever hardware is being used.
@@ -222,6 +227,7 @@ Let's see what we've got so far:
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
 
    #include <memory>
@@ -242,8 +248,9 @@ Let's see what we've got so far:
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
     // Set up the hardware layer to use "can0"
+    SocketCANInterface canDriver("can0");
     CANHardwareInterface::set_number_of_can_channels(1);
-    CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+    CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
     CANHardwareInterface::start();
 
     CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -281,6 +288,7 @@ Make sure to include `csignal`.
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
 
    #include <memory>
@@ -308,8 +316,9 @@ Make sure to include `csignal`.
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
     // Set up the hardware layer to use "can0"
+    SocketCANInterface canDriver("can0");
     CANHardwareInterface::set_number_of_can_channels(1);
-    CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+    CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
     CANHardwareInterface::start();
 
     // Handle control+c
@@ -353,6 +362,7 @@ The total result:
 
    #include "can_network_manager.hpp"
    #include "socket_can_interface.hpp"
+   #include "can_hardware_interface.hpp"
    #include "can_partnered_control_function.hpp"
 
    #include <memory>
@@ -380,8 +390,9 @@ The total result:
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
     // Set up the hardware layer to use "can0"
+    SocketCANInterface canDriver("can0");
     CANHardwareInterface::set_number_of_can_channels(1);
-    CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+    CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
     CANHardwareInterface::start();
 
     // Handle control+c
