@@ -1,14 +1,13 @@
 //================================================================================================
-/// @file socket_can_interface.hpp
+/// @file can_hardware_interface.hpp
 ///
-/// @brief An interface for using socket CAN on linux. Mostly for testing, but it could be
-/// used in any application to get the stack hooked up to the bus.
+/// @brief The hardware abstraction layer that separates the stack from the underlying CAN driver
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#ifndef SOCKET_CAN_INTERFACE_HPP
-#define SOCKET_CAN_INTERFACE_HPP
+#ifndef CAN_HARDWARE_INTERFACE_HPP
+#define CAN_HARDWARE_INTERFACE_HPP
 
 #include <condition_variable>
 #include <cstdint>
@@ -20,29 +19,20 @@
 
 #include "can_frame.hpp"
 #include "can_hardware_abstraction.hpp"
+#include "can_hardware_plugin.hpp"
 
 class CANHardwareInterface
 {
 public:
-	class SocketCANFrameHandler
+	class CanLibUpdateCallbackInfo
 	{
 	public:
-		explicit SocketCANFrameHandler(const std::string deviceName);
-		~SocketCANFrameHandler();
+		CanLibUpdateCallbackInfo();
 
-		bool get_is_valid() const;
+		bool operator==(const CanLibUpdateCallbackInfo &obj);
 
-		std::string get_device_name() const;
-
-		void close();
-		void open();
-		bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame);
-		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame);
-
-	private:
-		struct sockaddr_can *pCANDevice;
-		const std::string name;
-		int fileDescriptor;
+		void (*callback)();
+		void *parent;
 	};
 
 	class RawCanMessageCallbackInfo
@@ -56,23 +46,12 @@ public:
 		void *parent;
 	};
 
-	class CanLibUpdateCallbackInfo
-	{
-	public:
-		CanLibUpdateCallbackInfo();
-
-		bool operator==(const CanLibUpdateCallbackInfo &obj);
-
-		void (*callback)();
-		void *parent;
-	};
-
 	static CANHardwareInterface CAN_HARDWARE_INTERFACE;
 
 	static std::uint8_t get_number_of_can_channels();
 	static bool set_number_of_can_channels(std::uint8_t value);
 
-	static bool assign_can_channel_frame_handler(std::uint8_t aCANChannel, std::string deviceName);
+	static bool assign_can_channel_frame_handler(std::uint8_t aCANChannel, CANHardwarePlugin *deviceName);
 
 	static bool start();
 	static bool stop();
@@ -98,7 +77,7 @@ private:
 
 		std::thread *receiveMessageThread;
 
-		SocketCANFrameHandler *frameHandler;
+		CANHardwarePlugin *frameHandler;
 	};
 
 	static const std::uint32_t CANLIB_UPDATE_RATE = 4;
@@ -127,4 +106,4 @@ private:
 	static bool canLibNeedsUpdate;
 };
 
-#endif // SOCKET_CAN_INTERFACE_HPP
+#endif // CAN_HARDWARE_INTERFACE_HPP

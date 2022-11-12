@@ -12,6 +12,7 @@ set(SOCKET_CAN_INCLUDE_DIR "include")
 
 # Set source files 
 set(SOCKET_CAN_SRC 
+  "can_hardware_interface.cpp"
   "socket_can_interface.cpp"
 )
 
@@ -19,7 +20,9 @@ set(SOCKET_CAN_SRC
 PREPEND(SOCKET_CAN_SRC ${SOCKET_CAN_SRC_DIR} ${SOCKET_CAN_SRC})
 
 # Set the include files
-set(SOCKET_CAN_INCLUDE 
+set(SOCKET_CAN_INCLUDE
+  "can_hardware_interface.hpp"
+  "can_hardware_plugin.hpp"
   "socket_can_interface.hpp"
 )
 

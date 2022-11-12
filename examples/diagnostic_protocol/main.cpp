@@ -1,4 +1,5 @@
 #include "can_general_parameter_group_numbers.hpp"
+#include "can_hardware_interface.hpp"
 #include "can_network_manager.hpp"
 #include "isobus_diagnostic_protocol.hpp"
 #include "socket_can_interface.hpp"
@@ -8,6 +9,7 @@
 #include <memory>
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
+static SocketCANInterface canDriver("can0");
 
 using namespace std;
 
@@ -31,7 +33,7 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 void setup()
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
 	CANHardwareInterface::start();
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);

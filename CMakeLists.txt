@@ -42,11 +42,14 @@ ENDFUNCTION(PREPEND)
 # Add subdirectories
 add_subdirectory("utility")
 add_subdirectory("isobus")
-add_subdirectory("socket_can")
-add_subdirectory("examples/vt_version_3_object_pool")
-add_subdirectory("examples/transport_layer")
-add_subdirectory("examples/diagnostic_protocol")
-add_subdirectory("examples/pgn_requests")
+add_subdirectory("hardware_integration")
+
+if(NOT NO_EXAMPLES)
+    add_subdirectory("examples/vt_version_3_object_pool")
+    add_subdirectory("examples/transport_layer")
+    add_subdirectory("examples/diagnostic_protocol")
+    add_subdirectory("examples/pgn_requests")
+endif()
 
 # Make CTest available which adds the option BUILD_TESTING
 include(CTest)

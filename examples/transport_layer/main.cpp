@@ -1,4 +1,5 @@
 #include "can_general_parameter_group_numbers.hpp"
+#include "can_hardware_interface.hpp"
 #include "can_network_configuration.hpp"
 #include "can_network_manager.hpp"
 #include "can_partnered_control_function.hpp"
@@ -18,6 +19,7 @@ std::uint8_t *TPTestBuffer = nullptr;
 std::uint8_t *ETPTestBuffer = nullptr;
 constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
 constexpr std::uint32_t ETP_TEST_SIZE = 2048;
+static SocketCANInterface canDriver("vcan0");
 
 using namespace std;
 
@@ -60,7 +62,7 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 void setup()
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
 	CANHardwareInterface::start();
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
