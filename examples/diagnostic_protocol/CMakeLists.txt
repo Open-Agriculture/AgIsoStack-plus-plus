@@ -4,4 +4,4 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(DiagnosticProtocolExampleTarget main.cpp)
-target_link_libraries(DiagnosticProtocolExampleTarget Isobus SocketCANInterface Threads::Threads SystemTiming)
+target_link_libraries(DiagnosticProtocolExampleTarget Isobus HardwareIntegration Threads::Threads SystemTiming)

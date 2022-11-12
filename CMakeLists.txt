@@ -65,7 +65,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
-target_link_libraries(unit_tests gtest_main Isobus SocketCANInterface)
+target_link_libraries(unit_tests gtest_main Isobus HardwareIntegration)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
