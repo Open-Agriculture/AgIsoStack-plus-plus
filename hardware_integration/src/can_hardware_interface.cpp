@@ -121,15 +121,6 @@ bool CANHardwareInterface::set_number_of_can_channels(uint8_t aValue)
 			{
 				pCANHardware = hardwareChannels.back();
 				hardwareChannels.pop_back();
-
-				if (nullptr != pCANHardware->frameHandler)
-				{
-					if (pCANHardware->frameHandler->get_is_valid())
-					{
-						pCANHardware->frameHandler->close();
-					}
-				}
-
 				delete pCANHardware;
 			}
 			retVal = true;
