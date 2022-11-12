@@ -111,7 +111,7 @@ find_package(Threads)
 
 add_subdirectory(<path to this submodule>)
 
-target_link_libraries(<your executable name> Isobus SocketCANInterface ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(<your executable name> Isobus HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
 ```
 
 A full example CMakeLists.txt file can be found on the tutorial website.
