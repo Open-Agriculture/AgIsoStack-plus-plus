@@ -14,6 +14,7 @@
 #include "can_network_configuration.hpp"
 #include "can_warning_logger.hpp"
 #include "system_timing.hpp"
+#include "to_string.hpp"
 
 #include <algorithm>
 
@@ -101,7 +102,7 @@ namespace isobus
 									newSession->state = StateMachineState::RxDataSession;
 									newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 									activeSessions.push_back(newSession);
-									CANStackLogger::CAN_stack_log("[TP]: New BAM Session. Source: " + std::to_string(static_cast<int>(newSession->sessionMessage.get_source_control_function()->get_address())));
+									CANStackLogger::CAN_stack_log("[TP]: New BAM Session. Source: " + isobus::to_string(static_cast<int>(newSession->sessionMessage.get_source_control_function()->get_address())));
 								}
 								else
 								{

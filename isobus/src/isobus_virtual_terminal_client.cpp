@@ -12,6 +12,7 @@
 #include "can_network_manager.hpp"
 #include "can_warning_logger.hpp"
 #include "system_timing.hpp"
+#include "to_string.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -2306,11 +2307,11 @@ namespace isobus
 									parentVT->set_state(StateMachineState::Failed);
 									CANStackLogger::CAN_stack_log("[VT]: Error in end of object pool message." +
 									                              std::string("Faulty Object ") +
-									                              std::to_string(static_cast<int>(objectIDOfFaultyObject)) +
+									                              isobus::to_string(static_cast<int>(objectIDOfFaultyObject)) +
 									                              std::string(" Faulty Object Parent ") +
-									                              std::to_string(static_cast<int>(parentObjectIDOfFaultyObject)) +
+									                              isobus::to_string(static_cast<int>(parentObjectIDOfFaultyObject)) +
 									                              std::string(" Pool error bitmask value ") +
-									                              std::to_string(static_cast<int>(objectPoolErrorBitmask)));
+									                              isobus::to_string(static_cast<int>(objectPoolErrorBitmask)));
 									if (vtRanOutOfMemory)
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Ran out of memory");

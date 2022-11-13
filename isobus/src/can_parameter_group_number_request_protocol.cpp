@@ -11,6 +11,7 @@
 #include "can_parameter_group_number_request_protocol.hpp"
 #include "can_general_parameter_group_numbers.hpp"
 #include "can_warning_logger.hpp"
+#include "to_string.hpp"
 
 #include <algorithm>
 
@@ -303,7 +304,7 @@ namespace isobus
 							                     requestedPGN,
 							                     reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()),
 							                     message->get_source_control_function());
-							CANStackLogger::CAN_stack_log("[PR]: NACK-ing PGN request for PGN " + std::to_string(requestedPGN) + " because no callback could handle it.");
+							CANStackLogger::CAN_stack_log("[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
 						}
 					}
 					else

@@ -22,6 +22,7 @@ set(SYSTEM_TIMING_INCLUDE
   "system_timing.hpp"
   "processing_flags.hpp"
   "iop_file_interface.hpp"
+  "to_string.hpp"
 )
 
 # Prepend the include directory path to all the include files
