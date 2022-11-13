@@ -18,6 +18,7 @@
 #include "can_protocol.hpp"
 #include "can_warning_logger.hpp"
 #include "system_timing.hpp"
+#include "to_string.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -433,7 +434,7 @@ namespace isobus
 						partner->address = CANIdentifier(rxFrame.identifier).get_source_address();
 						activeControlFunctions.push_back(partner);
 						foundControlFunction = partner;
-						CANStackLogger::CAN_stack_log("[NM]: A Partner Has Claimed " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+						CANStackLogger::CAN_stack_log("[NM]: A Partner Has Claimed " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 						break;
 					}
 				}
@@ -442,7 +443,7 @@ namespace isobus
 				{
 					// New device, need to start keeping track of it
 					activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
-					CANStackLogger::CAN_stack_log("[NM]: New Control function " + std::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+					CANStackLogger::CAN_stack_log("[NM]: New Control function " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 				}
 			}
 

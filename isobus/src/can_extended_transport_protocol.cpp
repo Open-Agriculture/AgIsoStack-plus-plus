@@ -13,6 +13,7 @@
 #include "can_network_configuration.hpp"
 #include "can_warning_logger.hpp"
 #include "system_timing.hpp"
+#include "to_string.hpp"
 
 #include <algorithm>
 
@@ -270,12 +271,12 @@ namespace isobus
 
 								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
 								{
-									CANStackLogger::CAN_stack_log("[ETP]: Received an abort for an session with PGN: " + std::to_string(pgn));
+									CANStackLogger::CAN_stack_log("[ETP]: Received an abort for an session with PGN: " + isobus::to_string(pgn));
 									close_session(session);
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("[ETP]: Received an abort with no matching session with PGN: " + std::to_string(pgn));
+									CANStackLogger::CAN_stack_log("[ETP]: Received an abort with no matching session with PGN: " + isobus::to_string(pgn));
 								}
 							}
 							break;
@@ -385,7 +386,7 @@ namespace isobus
 			newSession->sessionMessage.set_identifier(messageVirtualID);
 			set_state(newSession, StateMachineState::RequestToSend);
 			activeSessions.push_back(newSession);
-			CANStackLogger::CAN_stack_log("[ETP]: New ETP Session. Dest: " + std::to_string(static_cast<int>(destination->get_address())));
+			CANStackLogger::CAN_stack_log("[ETP]: New ETP Session. Dest: " + isobus::to_string(static_cast<int>(destination->get_address())));
 			retVal = true;
 		}
 		return retVal;
