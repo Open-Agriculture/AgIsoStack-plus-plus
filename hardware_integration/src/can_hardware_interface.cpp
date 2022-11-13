@@ -10,17 +10,7 @@
 #include "can_hardware_interface.hpp"
 #include "system_timing.hpp"
 
-#include <linux/can.h>
-#include <linux/can/raw.h>
-#include <net/if.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <unistd.h>
 #include <algorithm>
-#include <chrono>
-#include <cstdint>
-#include <limits>
 
 std::thread *CANHardwareInterface::can_thread = nullptr;
 std::thread *CANHardwareInterface::updateCANLibPeriodicThread = nullptr;
