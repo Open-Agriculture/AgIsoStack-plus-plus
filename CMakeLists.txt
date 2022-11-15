@@ -86,3 +86,16 @@ target_link_libraries(unit_tests GTest::gtest_main ${PROJECT_NAME}::Isobus ${PRO
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
 endif()
+
+install( EXPORT IsobusTargets
+         FILE IsobusTargets.cmake
+         NAMESPACE Isobus::
+         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+)
+
+set(CPACK_PACKAGE_CONTACT "delgrossoengineering@protonmail.com")
+set(CPACK_DEBIAN_FILENAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ad3154/ISO11783-CAN-Stack")
+set(CPACK_PACKAGE_VENDOR "https://github.com/ad3154/ISO11783-CAN-Stack")
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+include(CPack)
