@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set library public name
+set(SYSTEM_TIMING_PUBLIC_NAME "SystemTiming")
+
 # Set source and include directories
 set(SYSTEM_TIMING_SRC_DIR "src")
 set(SYSTEM_TIMING_INCLUDE_DIR "include")
@@ -39,3 +42,10 @@ target_include_directories(SystemTiming PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${SYSTEM_TIMING_PUBLIC_NAME}/include>
  ) 
+
+ install(TARGETS SystemTiming EXPORT IsobusTargets
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/${SYSTEM_TIMING_PUBLIC_NAME}/${SYSTEM_TIMING_INCLUDE_DIR}
+)
