@@ -37,8 +37,8 @@ PREPEND(HARDWARE_INTEGRATION_INCLUDE ${HARDWARE_INTEGRATION_INCLUDE_DIR} ${HARDW
 
 # Create the library from the source and include files
 add_library(HardwareIntegration SHARED ${HARDWARE_INTEGRATION_SRC} ${HARDWARE_INTEGRATION_INCLUDE})
-
-target_link_libraries(HardwareIntegration PRIVATE SystemTiming Isobus)
+add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
+target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::SystemTiming ${PROJECT_NAME}::Isobus)
 
 # Specify the include directory to be exported for other moduels to use. The 
 # PUBLIC keyword here allows other libraries or exectuables to link to this

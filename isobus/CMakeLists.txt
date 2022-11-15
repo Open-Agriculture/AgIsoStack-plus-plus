@@ -64,6 +64,7 @@ PREPEND(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 
 # Create the library from the source and include files
 add_library(Isobus SHARED ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
+add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
 
 # Specify the include directory to be exported for other moduels to use. The 
 # PUBLIC keyword here allows other libraries or exectuables to link to this
@@ -73,7 +74,7 @@ target_include_directories(Isobus PUBLIC
   $<INSTALL_INTERFACE:${ISOBUS_PUBLIC_NAME}/include>
  ) 
  
-target_link_libraries(Isobus PRIVATE SystemTiming)
+target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::SystemTiming)
 
 # Add install instructions
 set_target_properties(Isobus PROPERTIES PUBLIC_HEADER "${ISOBUS_INCLUDE}")

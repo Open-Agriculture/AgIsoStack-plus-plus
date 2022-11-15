@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(VT3ExampleTarget main.cpp)
-target_link_libraries(VT3ExampleTarget Isobus HardwareIntegration Threads::Threads SystemTiming)
+target_link_libraries(VT3ExampleTarget ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration Threads::Threads ${PROJECT_NAME}::SystemTiming)
 
 add_custom_command(
         TARGET VT3ExampleTarget POST_BUILD
