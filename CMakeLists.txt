@@ -45,10 +45,10 @@ add_subdirectory("isobus")
 add_subdirectory("hardware_integration")
 
 if(NOT NO_EXAMPLES)
-    add_subdirectory("examples/vt_version_3_object_pool")
-    add_subdirectory("examples/transport_layer")
-    add_subdirectory("examples/diagnostic_protocol")
-    add_subdirectory("examples/pgn_requests")
+    #add_subdirectory("examples/vt_version_3_object_pool")
+    #add_subdirectory("examples/transport_layer")
+    #add_subdirectory("examples/diagnostic_protocol")
+    #add_subdirectory("examples/pgn_requests")
 endif()
 
 # Make CTest available which adds the option BUILD_TESTING
@@ -87,18 +87,28 @@ include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
 endif()
 
-install( EXPORT IsobusTargets
-         FILE IsobusTargets.cmake
-         NAMESPACE isobus::
-         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+install( TARGETS Isobus SystemTiming HardwareIntegration
+         EXPORT isobusTargets
+         LIBRARY DESTINATION lib
+         ARCHIVE DESTINATION lib
+         RUNTIME DESTINATION bin
+         INCLUDES DESTINATION include
 )
 
-write_basic_package_version_file( ${CMAKE_CURRENT_SOURCE_DIR}/cmake/isobusConfig.cmake VERSION ${PROJECT_VERSION} 
+install(EXPORT isobusTargets
+        FILE isobusTargets.cmake
+        NAMESPACE isobus::
+        DESTINATION lib/cmake/isobus
+         )
+configure_file(cmake/isobusConfig.cmake.in isobusConfig.cmake @ONLY)
+
+write_basic_package_version_file(isobusConfigVersion.cmake
 COMPATIBILITY SameMajorVersion)
 
-install(FILES
-${CMAKE_CURRENT_SOURCE_DIR}/cmake/isobusConfig.cmake
-DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/isobusConfig.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/isobusConfigVersion.cmake"
+        DESTINATION lib/cmake/isobus
+        )
 
 set(CPACK_PACKAGE_CONTACT "delgrossoengineering@protonmail.com")
 set(CPACK_DEBIAN_FILENAME DEB-DEFAULT)
