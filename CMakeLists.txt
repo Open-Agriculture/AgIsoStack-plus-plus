@@ -89,9 +89,16 @@ endif()
 
 install( EXPORT IsobusTargets
          FILE IsobusTargets.cmake
-         NAMESPACE Isobus::
+         NAMESPACE isobus::
          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
 )
+
+write_basic_package_version_file( ${CMAKE_CURRENT_SOURCE_DIR}/cmake/isobusConfig.cmake VERSION ${PROJECT_VERSION} 
+COMPATIBILITY SameMajorVersion)
+
+install(FILES
+${CMAKE_CURRENT_SOURCE_DIR}/cmake/isobusConfig.cmake
+DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
 set(CPACK_PACKAGE_CONTACT "delgrossoengineering@protonmail.com")
 set(CPACK_DEBIAN_FILENAME DEB-DEFAULT)
