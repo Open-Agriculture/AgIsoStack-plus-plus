@@ -54,18 +54,28 @@ endif()
 # Make CTest available which adds the option BUILD_TESTING
 include(CTest)
 if(BUILD_TESTING)
-# Link GoogleTest
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+find_package(GTest QUIET)
+if(NOT GTest_FOUND)
+  # Find GoogleTest
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG release-1.12.1
+  )
+  # For Windows: Prevent overriding the parent project's compiler/linker settings
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+
+  # For before CMAKE 3.20, GTest::gtest_main didn't exist, so add it in
+  # All linking to gtest should be done using the new GTest::gtest_main library for forward compatability
+  if(NOT TARGET GTest::gtest_main)
+    add_library(GTest::gtest_main ALIAS GTest::Main)
+  endif()
+endif()
 
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
-target_link_libraries(unit_tests gtest_main Isobus HardwareIntegration)
+target_link_libraries(unit_tests GTest::gtest_main ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)

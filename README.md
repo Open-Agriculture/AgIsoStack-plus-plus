@@ -105,13 +105,14 @@ git submodule add https://github.com/ad3154/ISO11783-CAN-Stack.git <destination_
 git submodule update --init --recursive
 ```
 Then, if you're using cmake, make sure to add the submodule to your project, and link it.
+It is recommended to use the ALIAS targets exposed, which all follow the name `isobus::<target_name>`.
 
 ```
 find_package(Threads)
 
 add_subdirectory(<path to this submodule>)
 
-target_link_libraries(<your executable name> Isobus HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(<your executable name> isobus::Isobus isobus::HardwareIntegration isobus::SocketCANInterface)
 ```
 
 A full example CMakeLists.txt file can be found on the tutorial website.
