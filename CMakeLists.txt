@@ -74,6 +74,12 @@ if(NOT GTest_FOUND)
   endif()
 endif()
 
+# For cmake<3.20 and older GTest
+if(NOT TARGET GTest::gtest_main)
+  set_target_properties(GTest::Main PROPERTIES IMPORTED_GLOBAL TRUE)
+  add_library(GTest::gtest_main ALIAS GTest::Main)
+endif()
+
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
 target_link_libraries(unit_tests GTest::gtest_main ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration)
 
