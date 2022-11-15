@@ -76,9 +76,6 @@ target_include_directories(Isobus PUBLIC
  
 target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::SystemTiming)
 
-# Add install instructions
-set_target_properties(Isobus PROPERTIES PUBLIC_HEADER "${ISOBUS_INCLUDE}")
-
 install(TARGETS Isobus EXPORT IsobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
