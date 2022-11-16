@@ -3,9 +3,6 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Set library public name
-set(HARDWARE_INTEGRATION_PUBLIC_NAME "HardwareIntegration")
-
 # Set source and include directories
 set(HARDWARE_INTEGRATION_SRC_DIR "src")
 set(HARDWARE_INTEGRATION_INCLUDE_DIR "include")
@@ -45,12 +42,12 @@ target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::SystemTiming 
 # library and use its functionality.
 target_include_directories(HardwareIntegration PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:${SOCKET_CAN_PUBLIC_NAME}/include>
- )
+  $<INSTALL_INTERFACE:include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/hardware_integration>
+ ) 
 
  install(TARGETS HardwareIntegration EXPORT IsobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/${HARDWARE_INTEGRATION_PUBLIC_NAME}/${HARDWARE_INTEGRATION_INCLUDE_DIR}
 )
