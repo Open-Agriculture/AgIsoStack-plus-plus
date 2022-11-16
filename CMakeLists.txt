@@ -81,7 +81,7 @@ if(NOT TARGET GTest::gtest_main)
 endif()
 
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp)
-target_link_libraries(unit_tests GTest::gtest_main ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration)
+target_link_libraries(unit_tests PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
@@ -92,8 +92,21 @@ install( TARGETS Isobus SystemTiming HardwareIntegration
          LIBRARY DESTINATION lib
          ARCHIVE DESTINATION lib
          RUNTIME DESTINATION bin
-         INCLUDES DESTINATION include
 )
+
+# Install all the header files for all the libraries
+install(DIRECTORY isobus/include/
+        DESTINATION include/${PROJECT_NAME}/isobus
+        FILES_MATCHING PATTERN "*.hpp"
+      )
+install(DIRECTORY hardware_integration/include/
+        DESTINATION include/${PROJECT_NAME}/hardware_integration
+        FILES_MATCHING PATTERN "*.hpp"
+      )
+install(DIRECTORY utility/include/
+        DESTINATION include/${PROJECT_NAME}/utility
+        FILES_MATCHING PATTERN "*.hpp"
+      )
 
 install(EXPORT isobusTargets
         FILE isobusTargets.cmake

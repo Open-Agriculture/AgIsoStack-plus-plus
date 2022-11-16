@@ -71,7 +71,8 @@ add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
 # library and use its functionality.
 target_include_directories(Isobus PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:${ISOBUS_PUBLIC_NAME}/include>
+  $<INSTALL_INTERFACE:include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/isobus>
  ) 
  
 target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::SystemTiming)
@@ -80,6 +81,4 @@ install(TARGETS Isobus EXPORT IsobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/${ISOBUS_PUBLIC_NAME}/${ISOBUS_INCLUDE_DIR}
 )
-
