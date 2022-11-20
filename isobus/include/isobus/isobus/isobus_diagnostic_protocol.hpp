@@ -1,7 +1,7 @@
 //================================================================================================
 /// @file isobus_diagnostic_protocol.hpp
 ///
-/// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol.
+/// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol and some J1939 DMs.
 /// @details This protocol manages many of the messages defined in ISO 11783-12
 /// and a subset of the messages defined in SAE J1939-73.
 /// The ISO-11783 definition of some of these is based on the J1939 definition with some tweaks.
@@ -11,7 +11,22 @@
 /// as only 1 BAM can be active at a time. This message
 /// is sent at 1 Hz. In ISOBUS mode, unlike in J1939, the message is discontinued when no DTCs are active to
 /// minimize bus load. Also, ISO-11783 does not utilize or support lamp status.
-/// Other messages this protocol supports include: DM2, DM3, DM11, DM22, software ID, and Product ID.
+/// Other messages this protocol supports include: DM2, DM3, DM11, DM13, DM22, software ID, and Product ID.
+///
+/// @note DM13 has two primary functions. It may be used as a command, from either a tool or an
+/// ECU, directed to a single controller or to all controllers to request the receiving
+/// controller(s) to stop or start broadcast messages. Additionally, it may be used by an ECU
+/// to inform other nodes that the sender is about to suspend its normal broadcast due to
+/// commands other than a SAE J1939 DM13 command received on that same network segment.
+/// The broadcast messages stopped, started, or suspended may be on networks other than SAE J1939.
+/// This is not a message to ignore all communications. It is a message to minimize network traffic.
+///
+/// @attention It is recognized that some network messages may be required to continue even during
+/// the "stop broadcast" condition. You MUST handle this in your application, as the stack cannot
+/// decide what messages are required without context. In other words, you must opt-in to make
+/// your application layer messages adhere to DM13 requests by explicitly calling the functions
+/// on this protocol (using get_diagnostic_protocol_by_internal_control_function)
+/// to check if you should send it.
 ///
 /// @author Adrian Del Grosso
 ///
@@ -106,6 +121,51 @@ namespace isobus
 			NumberOfFlags ///< The number of flags in the enum
 		};
 
+		/// @brief Enumerates the different networks in the DM13
+		enum class Network : std::uint8_t
+		{
+			SAEJ1939Network1PrimaryVehicleNetwork = 0,
+			SAEJ1922Network = 1,
+			SAEJ1587Network = 2,
+			CurrentDataLink = 3,
+			OtherManufacturerSpecifiedPort = 4,
+			SAEJ1850Network = 5,
+			ISO9141Network = 6,
+			SAEJ1939Network2 = 7,
+			SAEJ1939Network4 = 8,
+			ProprietaryNetwork2 = 9,
+			ProprietaryNetwork1 = 10,
+			SAEJ1939Network3 = 11,
+			SAEJ1939Network5 = 25,
+			SAEJ1939Network6 = 26,
+			SAEJ1939Network7 = 27,
+			SAEJ1939Network8 = 28,
+			SAEJ1939Network11 = 29,
+			SAEJ1939Network10 = 30,
+			SAEJ1939Network9 = 31,
+			Reserved = 32
+		};
+
+		/// @brief Enumerates the commands in the DM13
+		enum class StopStartCommand : std::uint8_t
+		{
+			StopBroadcast = 0, ///< Stop broadcast
+			StartBroadcast = 1, ///< Start broadcast
+			Reserved = 2, ///< SAE Reserved
+			DontCareNoAction = 3 ///< Don’t Care/take no action (leave as is)
+		};
+
+		/// @brief Enumerates the different suspend signals for DM13
+		enum class SuspendSignalState : std::uint8_t
+		{
+			IndefiniteSuspension = 0, ///< Indefinite suspension of all broadcasts
+			PartialIndefiniteSuspension = 1, ///< Indefinite suspension of some messages
+			TemporarySuspension = 2, ///< Temporary suspension of all broadcasts
+			PartialTemporarySuspension = 3, ///< Temporary suspension of some messages
+			Resuming = 4, ///< Resuming normal broadcast pattern
+			NotAvailable = 15 /// < N/A
+		};
+
 		//================================================================================================
 		/// @class DiagnosticTroubleCode
 		/// @brief A storage class for describing a complete DTC
@@ -135,7 +195,7 @@ namespace isobus
 			std::uint8_t failureModeIdentifier; ///< The FMI defines the type of failure detected in the sub-system identified by an SPN
 			LampStatus lampState; ///< The J1939 lamp state for this DTC
 		private:
-			friend class DiagnosticProtocol;
+			friend class DiagnosticProtocol; ///< Allow the protocol to have write access the occurance but require other to use getter only
 			std::uint8_t occuranceCount; ///< Number of times the DTC has been active (0 to 126 with 127 being not available)
 		};
 
@@ -159,6 +219,12 @@ namespace isobus
 		/// @returns The protocol object associated to the passed in ICF, or `nullptr` if none found that match the passed in ICF
 		static DiagnosticProtocol *get_diagnostic_protocol_by_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
+		/// @brief Parses out the DM13 J1939 network states from a CAN message
+		/// @param[in] message The message to parse from
+		/// @param[in] networkStates The returned network state bitfield based on the message contents
+		/// @returns `true` if the message was parsed, `false` if the message was invalid
+		static bool parse_j1939_network_states(CANMessage *const message, std::uint32_t &networkStates);
+
 		/// @brief The protocol's initializer function
 		void initialize(CANLibBadge<CANNetworkManager>) override;
 
@@ -179,6 +245,11 @@ namespace isobus
 
 		/// @brief Clears all previously configured software ID fields set with set_software_id_field
 		void clear_software_id_fields();
+
+		/// @brief Returns if broadcasts are suspended for the specified CAN channel (requested by DM13)
+		/// @param[in] canChannelIndex The CAN channel to check for suspended broadcasts
+		/// @returns `true` if broadcasts should are suspended for the specified channel
+		bool get_are_broadcasts_stopped_for_channel(std::uint8_t canChannelIndex) const;
 
 		/// @brief Sets one of the ECU identification strings for the ECU ID message
 		/// @details See ECUIdentificationFields for a brief description of the fields
@@ -237,6 +308,13 @@ namespace isobus
 		/// @param[in] value The software ID string to add
 		void set_software_id_field(std::uint32_t index, std::string value);
 
+		/// @brief Informs the network that you are going to suspend broadcasts
+		/// @param[in] canChannelIndex The CAN channel you will suspend broadcasts on. Will be converted to the proper message `Network` by the stack
+		/// @param[in] sourceControlFunction The internal control function to send the DM13 from
+		/// @param[in] suspendTime_seconds If you know the time for which broadcasts will be suspended, put it here, otherwise 0xFFFF
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool suspend_broadcasts(std::uint8_t canChannelIndex, InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds = 0xFFFF);
+
 		/// @brief Updates the protocol cyclically
 		void update(CANLibBadge<CANNetworkManager>) override;
 
@@ -291,9 +369,27 @@ namespace isobus
 		};
 
 		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
+		static constexpr std::uint32_t DM13_HOLD_SIGNAL_TRANSMIT_INTERVAL_MS = 5000; ///< Defined in 5.7.13.13 SPN 1236
+		static constexpr std::uint32_t DM13_TIMEOUT_MS = 6000; ///< The timout in 5.7.13 after which nodes shall revert back to the normal broadcast state
 		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785; ///< DM 1 and 2 are limited to the BAM message max, becuase ETP does not allow global destinations
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
+		static constexpr std::uint8_t DM13_NUMBER_OF_J1939_NETWORKS = 11; ///< The number of networks in DM13 that are set aside for J1939
+		static constexpr std::uint8_t DM13_NETWORK_BITMASK = 0x03; ///< Used to mask the network SPN values
+		static constexpr std::uint8_t DM13_BITS_PER_NETWORK = 2; ///< Number of bits for the network SPNs
+
+		/// @brief Lists the J1939 networks by index rather than by definition in J1939-73 5.7.13
+		static constexpr Network J1939NetworkIndicies[DM13_NUMBER_OF_J1939_NETWORKS] = { Network::SAEJ1939Network1PrimaryVehicleNetwork,
+			                                                                               Network::SAEJ1939Network2,
+			                                                                               Network::SAEJ1939Network3,
+			                                                                               Network::SAEJ1939Network4,
+			                                                                               Network::SAEJ1939Network5,
+			                                                                               Network::SAEJ1939Network6,
+			                                                                               Network::SAEJ1939Network7,
+			                                                                               Network::SAEJ1939Network8,
+			                                                                               Network::SAEJ1939Network9,
+			                                                                               Network::SAEJ1939Network10,
+			                                                                               Network::SAEJ1939Network11 };
 
 		/// @brief The constructor for this protocol
 		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
@@ -361,6 +457,10 @@ namespace isobus
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
+
+		/// @brief Sends the DM13 to alert network devices of impending suspended broadcasts
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_dm13_announce_suspension(InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds);
 
 		/// @brief Sends the ECU ID message
 		/// @returns true if the message was sent
@@ -430,6 +530,8 @@ namespace isobus
 		std::string productIdentificationBrand; ///< The product identification brand for sending the product identification message
 		std::string productIdentificationModel; ///< The product identification model name for sending the product identification message
 		std::uint32_t lastDM1SentTimestamp; ///< A timestamp in milliseconds of the last time a DM1 was sent
+		std::uint32_t stopBroadcastNetworkBitfield; ///< Bitfield for tracking the network broadcast states for DM13
+		std::uint32_t lastDM13ReceivedTimestamp; ///< A timestamp in milliseconds when we last got a DM13 message
 		bool j1939Mode; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 	};
 }

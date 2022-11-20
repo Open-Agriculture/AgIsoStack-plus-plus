@@ -20,6 +20,7 @@ namespace isobus
 		ExtendedTransportProtocolDataTransfer = 0xC700,
 		ExtendedTransportProtocolConnectionManagement = 0xC800,
 		RequestForRepetitionRate = 0xCC00,
+		DiagnosticMessage13 = 0xDF00,
 		VirtualTerminalToECU = 0xE600,
 		ECUtoVirtualTerminal = 0xE700,
 		Acknowledge = 0xE800,
