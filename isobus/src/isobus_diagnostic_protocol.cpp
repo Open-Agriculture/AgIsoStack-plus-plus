@@ -1,8 +1,7 @@
 //================================================================================================
 /// @file isobus_diagnostic_protocol.cpp
 ///
-/// @brief A protocol that handles the ISO-11783 Active DTC Protocol.
-/// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol.
+/// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol and some J1939 DMs.
 /// @details This protocol manages many of the messages defined in ISO 11783-12
 /// and a subset of the messages defined in SAE J1939-73.
 /// The ISO-11783 definition of some of these is based on the J1939 definition with some tweaks.
@@ -12,7 +11,23 @@
 /// as only 1 BAM can be active at a time. This message
 /// is sent at 1 Hz. In ISOBUS mode, unlike in J1939, the message is discontinued when no DTCs are active to
 /// minimize bus load. Also, ISO-11783 does not utilize or support lamp status.
-/// Other messages this protocol supports include: DM2, DM3, DM11, DM22, software ID, and Product ID.
+/// Other messages this protocol supports include: DM2, DM3, DM11, DM13, DM22, software ID, and Product ID.
+///
+/// @note DM13 has two primary functions. It may be used as a command, from either a tool or an
+/// ECU, directed to a single controller or to all controllers to request the receiving
+/// controller(s) to stop or start broadcast messages. Additionally, it may be used by an ECU
+/// to inform other nodes that the sender is about to suspend its normal broadcast due to
+/// commands other than a SAE J1939 DM13 command received on that same network segment.
+/// The broadcast messages stopped, started, or suspended may be on networks other than SAE J1939.
+/// This is not a message to ignore all communications. It is a message to minimize network traffic.
+///
+/// @attention It is recognized that some network messages may be required to continue even during
+/// the "stop broadcast" condition. You MUST handle this in your application, as the stack cannot
+/// decide what messages are required without context. In other words, you must opt-in to make
+/// your application layer messages adhere to DM13 requests by explicitly calling the functions
+/// on this protocol (using get_diagnostic_protocol_by_internal_control_function)
+/// to check if you should send it.
+///
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso
@@ -31,6 +46,7 @@
 namespace isobus
 {
 	std::list<DiagnosticProtocol *> DiagnosticProtocol::diagnosticProtocolList;
+	constexpr DiagnosticProtocol::Network DiagnosticProtocol::J1939NetworkIndicies[DM13_NUMBER_OF_J1939_NETWORKS];
 
 	DiagnosticProtocol::DiagnosticTroubleCode::DiagnosticTroubleCode() :
 	  suspectParameterNumber(0xFFFFFFFF),
@@ -62,6 +78,8 @@ namespace isobus
 	  myControlFunction(internalControlFunction),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
 	  lastDM1SentTimestamp(0),
+	  stopBroadcastNetworkBitfield(0),
+	  lastDM13ReceivedTimestamp(0),
 	  j1939Mode(false)
 	{
 		diagnosticProtocolList.push_back(this);
@@ -94,6 +112,8 @@ namespace isobus
 		{
 			initialized = false;
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
+			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 		}
 	}
 
@@ -162,12 +182,78 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::parse_j1939_network_states(CANMessage *const message, std::uint32_t &networkStates)
+	{
+		bool retVal = false;
+
+		if ((nullptr != message) &&
+		    (CAN_DATA_LENGTH == message->get_data_length()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13) == message->get_identifier().get_parameter_group_number()))
+		{
+			auto messageData = message->get_data();
+
+			for (std::uint8_t i = 0; i < DM13_NUMBER_OF_J1939_NETWORKS; i++)
+			{
+				StopStartCommand command = static_cast<StopStartCommand>(messageData[0] & (DM13_NETWORK_BITMASK << (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(J1939NetworkIndicies[i]))));
+				switch (command)
+				{
+					case StopStartCommand::StopBroadcast:
+					{
+						networkStates |= (1 << i);
+					}
+					break;
+
+					case StopStartCommand::StartBroadcast:
+					{
+						networkStates &= ~(1 << i);
+					}
+					break;
+
+					default:
+					case StopStartCommand::DontCareNoAction:
+					case StopStartCommand::Reserved:
+					{
+					}
+					break;
+				}
+			}
+
+			// Check current data link
+			StopStartCommand currentLinkCommand = static_cast<StopStartCommand>(messageData[0] & (DM13_NETWORK_BITMASK << (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(Network::CurrentDataLink))));
+			switch (currentLinkCommand)
+			{
+				case StopStartCommand::StopBroadcast:
+				{
+					networkStates |= (1 << message->get_can_port_index());
+				}
+				break;
+
+				case StopStartCommand::StartBroadcast:
+				{
+					networkStates &= ~(1 << message->get_can_port_index());
+				}
+				break;
+
+				default:
+				case StopStartCommand::DontCareNoAction:
+				case StopStartCommand::Reserved:
+				{
+				}
+				break;
+			}
+			retVal = true;
+		}
+		return retVal;
+	}
+
 	void DiagnosticProtocol::initialize(CANLibBadge<CANNetworkManager>)
 	{
 		if (!initialized)
 		{
 			initialized = true;
 			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
+			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
+			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 		}
 	}
 
@@ -185,7 +271,11 @@ namespace isobus
 	{
 		inactiveDTCList.insert(std::end(inactiveDTCList), std::begin(activeDTCList), std::end(activeDTCList));
 		activeDTCList.clear();
-		txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+
+		if (!get_are_broadcasts_stopped_for_channel(myControlFunction->get_can_port()))
+		{
+			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+		}
 	}
 
 	void DiagnosticProtocol::clear_inactive_diagnostic_trouble_codes()
@@ -196,6 +286,17 @@ namespace isobus
 	void DiagnosticProtocol::clear_software_id_fields()
 	{
 		softwareIdentificationFields.clear();
+	}
+
+	bool DiagnosticProtocol::get_are_broadcasts_stopped_for_channel(std::uint8_t canChannelIndex) const
+	{
+		bool retVal = false;
+
+		if ((canChannelIndex < CAN_PORT_MAXIMUM) && (canChannelIndex < DM13_NUMBER_OF_J1939_NETWORKS))
+		{
+			retVal = (0 != (static_cast<std::uint32_t>(1 << canChannelIndex) & stopBroadcastNetworkBitfield));
+		}
+		return retVal;
 	}
 
 	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, std::string value)
@@ -231,7 +332,8 @@ namespace isobus
 					activeDTCList.push_back(dtc);
 					activeDTCList[activeDTCList.size() - 1].occuranceCount = 1;
 
-					if (SystemTiming::get_time_elapsed_ms(lastDM1SentTimestamp) > DM_MAX_FREQUENCY_MS)
+					if ((SystemTiming::get_time_elapsed_ms(lastDM1SentTimestamp) > DM_MAX_FREQUENCY_MS) &&
+					    (!get_are_broadcasts_stopped_for_channel(myControlFunction->get_can_port())))
 					{
 						txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
 						lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
@@ -332,23 +434,42 @@ namespace isobus
 		softwareIdentificationFields[index] = value;
 	}
 
+	bool DiagnosticProtocol::suspend_broadcasts(std::uint8_t canChannelIndex, InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds)
+	{
+		bool retVal = false;
+
+		if ((nullptr != sourceControlFunction) &&
+		    (canChannelIndex == sourceControlFunction->get_can_port()))
+		{
+			retVal = send_dm13_announce_suspension(sourceControlFunction, suspendTime_seconds);
+		}
+		return retVal;
+	}
+
 	void DiagnosticProtocol::update(CANLibBadge<CANNetworkManager>)
 	{
-		if (j1939Mode)
+		if (SystemTiming::time_expired_ms(lastDM13ReceivedTimestamp, DM13_TIMEOUT_MS))
 		{
-			if (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS))
-			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
-				lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
-			}
+			stopBroadcastNetworkBitfield = 0;
 		}
-		else
+		if (!get_are_broadcasts_stopped_for_channel(myControlFunction->get_can_port()))
 		{
-			if ((0 != activeDTCList.size()) &&
-			    (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
+			if (j1939Mode)
 			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
-				lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
+				if (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS))
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+					lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
+				}
+			}
+			else
+			{
+				if ((0 != activeDTCList.size()) &&
+				    (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+					lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
+				}
 			}
 		}
 		txFlags.process_all_flags();
@@ -821,6 +942,24 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DiagnosticProtocol::send_dm13_announce_suspension(InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds)
+	{
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+			0xFF,
+			0xFF,
+			0xFF,
+			0xFF,
+			static_cast<std::uint8_t>(suspendTime_seconds & 0xFF),
+			static_cast<std::uint8_t>(suspendTime_seconds >> 8),
+			0xFF,
+			0xFF
+		};
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13),
+		                                                      buffer.data(),
+		                                                      8,
+		                                                      sourceControlFunction);
+	}
+
 	bool DiagnosticProtocol::send_ecu_identification()
 	{
 		std::string ecuIdString = "";
@@ -942,6 +1081,15 @@ namespace isobus
 		{
 			switch (message->get_identifier().get_parameter_group_number())
 			{
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13):
+				{
+					if (parse_j1939_network_states(message, stopBroadcastNetworkBitfield))
+					{
+						lastDM13ReceivedTimestamp = SystemTiming::get_timestamp_ms();
+					}
+				}
+				break;
+
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22):
 				{
 					if (CAN_DATA_LENGTH == message->get_data_length())
