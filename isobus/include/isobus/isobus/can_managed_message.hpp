@@ -11,7 +11,7 @@
 #ifndef CAN_MANAGED_MESSAGE_HPP
 #define CAN_MANAGED_MESSAGE_HPP
 
-#include "can_message.hpp"
+#include "isobus/isobus/can_message.hpp"
 
 namespace isobus
 {

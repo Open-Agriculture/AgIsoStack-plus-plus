@@ -17,9 +17,9 @@
 #include <thread>
 #include <vector>
 
-#include "can_frame.hpp"
-#include "can_hardware_abstraction.hpp"
-#include "can_hardware_plugin.hpp"
+#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_hardware_abstraction.hpp"
+#include "isobus/hardware_integration/can_hardware_plugin.hpp"
 
 //================================================================================================
 /// @class CANHardwareInterface

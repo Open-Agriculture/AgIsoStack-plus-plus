@@ -7,7 +7,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "processing_flags.hpp"
+#include "isobus/utility/processing_flags.hpp"
 
 #include <cstring>
 

@@ -6,8 +6,8 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "socket_can_interface.hpp"
-#include "system_timing.hpp"
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 #include <linux/can.h>
 #include <linux/can/raw.h>

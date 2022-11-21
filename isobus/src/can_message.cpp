@@ -6,7 +6,7 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_message.hpp"
+#include "isobus/isobus/can_message.hpp"
 
 namespace isobus
 {

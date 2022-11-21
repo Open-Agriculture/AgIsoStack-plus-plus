@@ -8,7 +8,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "can_managed_message.hpp"
+#include "isobus/isobus/can_managed_message.hpp"
 
 namespace isobus
 {

@@ -6,7 +6,7 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_NAME.hpp"
+#include "isobus/isobus/can_NAME.hpp"
 
 namespace isobus
 {

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set source and include directories
 set(SYSTEM_TIMING_SRC_DIR "src")
-set(SYSTEM_TIMING_INCLUDE_DIR "include")
+set(SYSTEM_TIMING_INCLUDE_DIR "include/isobus/utility")
 
 # Set source files 
 set(SYSTEM_TIMING_SRC 
@@ -37,9 +37,8 @@ add_library(${PROJECT_NAME}::SystemTiming ALIAS SystemTiming)
 # library and use its functionality.
 target_include_directories(SystemTiming PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-    $<INSTALL_INTERFACE:include/${PROJECT_NAME}/utility>
- ) 
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
  install(TARGETS SystemTiming EXPORT IsobusTargets
   LIBRARY DESTINATION lib

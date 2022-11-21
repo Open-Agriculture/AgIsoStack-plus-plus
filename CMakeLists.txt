@@ -44,11 +44,12 @@ add_subdirectory("utility")
 add_subdirectory("isobus")
 add_subdirectory("hardware_integration")
 
-if(NOT NO_EXAMPLES)
-    #add_subdirectory("examples/vt_version_3_object_pool")
-    #add_subdirectory("examples/transport_layer")
-    #add_subdirectory("examples/diagnostic_protocol")
-    #add_subdirectory("examples/pgn_requests")
+option(BUILD_EXAMPLES "Set to ON to enable building of examples from top level" OFF)
+if(BUILD_EXAMPLES)
+  add_subdirectory("examples/vt_version_3_object_pool")
+  add_subdirectory("examples/transport_layer")
+  add_subdirectory("examples/diagnostic_protocol")
+  add_subdirectory("examples/pgn_requests")
 endif()
 
 # Make CTest available which adds the option BUILD_TESTING
@@ -96,15 +97,15 @@ install( TARGETS Isobus SystemTiming HardwareIntegration
 
 # Install all the header files for all the libraries
 install(DIRECTORY isobus/include/
-        DESTINATION include/${PROJECT_NAME}/isobus
+        DESTINATION include
         FILES_MATCHING PATTERN "*.hpp"
       )
 install(DIRECTORY hardware_integration/include/
-        DESTINATION include/${PROJECT_NAME}/hardware_integration
+        DESTINATION include
         FILES_MATCHING PATTERN "*.hpp"
       )
 install(DIRECTORY utility/include/
-        DESTINATION include/${PROJECT_NAME}/utility
+        DESTINATION include
         FILES_MATCHING PATTERN "*.hpp"
       )
 

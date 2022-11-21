@@ -11,7 +11,7 @@
 #ifndef CAN_NAME_FILTER_HPP
 #define CAN_NAME_FILTER_HPP
 
-#include "can_NAME.hpp"
+#include "isobus/isobus/can_NAME.hpp"
 
 namespace isobus
 {

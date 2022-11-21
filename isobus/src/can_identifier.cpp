@@ -7,7 +7,7 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_identifier.hpp"
+#include "isobus/isobus/can_identifier.hpp"
 
 namespace isobus
 {

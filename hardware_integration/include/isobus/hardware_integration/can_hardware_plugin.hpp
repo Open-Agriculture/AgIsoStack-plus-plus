@@ -9,7 +9,7 @@
 #ifndef CAN_HARDEWARE_PLUGIN_HPP
 #define CAN_HARDEWARE_PLUGIN_HPP
 
-#include "can_frame.hpp"
+#include "isobus/isobus/can_frame.hpp"
 
 //================================================================================================
 /// @class CANHardwarePlugin

@@ -11,14 +11,14 @@
 #ifndef CAN_NETWORK_MANAGER
 #define CAN_NETWORK_MANAGER
 
-#include "can_address_claim_state_machine.hpp"
-#include "can_badge.hpp"
-#include "can_callbacks.hpp"
-#include "can_constants.hpp"
-#include "can_frame.hpp"
-#include "can_identifier.hpp"
-#include "can_internal_control_function.hpp"
-#include "can_message.hpp"
+#include "isobus/isobus/can_address_claim_state_machine.hpp"
+#include "isobus/isobus/can_badge.hpp"
+#include "isobus/isobus/can_callbacks.hpp"
+#include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_identifier.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_message.hpp"
 
 #include <array>
 #include <mutex>

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set source and include directories
 set(HARDWARE_INTEGRATION_SRC_DIR "src")
-set(HARDWARE_INTEGRATION_INCLUDE_DIR "include")
+set(HARDWARE_INTEGRATION_INCLUDE_DIR "include/isobus/hardware_integration")
 
 if(NOT CAN_DRIVER)
   message(AUTHOR_WARNING "No CAN driver specified, choosing Linux socket CAN by default. Use -DCAN_DRIVER=socketCAN to avoid this, or choose another driver and set it explicitly.")
@@ -42,9 +42,8 @@ target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::SystemTiming 
 # library and use its functionality.
 target_include_directories(HardwareIntegration PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/hardware_integration>
- ) 
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
  install(TARGETS HardwareIntegration EXPORT IsobusTargets
   LIBRARY DESTINATION lib
