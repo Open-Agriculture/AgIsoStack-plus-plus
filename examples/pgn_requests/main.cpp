@@ -1,9 +1,9 @@
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_hardware_interface.hpp"
-#include "can_network_configuration.hpp"
-#include "can_network_manager.hpp"
-#include "can_parameter_group_number_request_protocol.hpp"
-#include "socket_can_interface.hpp"
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 
 #include <csignal>
 #include <iostream>

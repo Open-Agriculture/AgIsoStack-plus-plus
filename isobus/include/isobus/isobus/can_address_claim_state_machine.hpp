@@ -10,7 +10,7 @@
 #ifndef CAN_ADDRESS_CLAIM_STATE_MACHINE_HPP
 #define CAN_ADDRESS_CLAIM_STATE_MACHINE_HPP
 
-#include "can_NAME.hpp"
+#include "isobus/isobus/can_NAME.hpp"
 
 namespace isobus
 {

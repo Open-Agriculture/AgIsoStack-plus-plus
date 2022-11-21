@@ -1,10 +1,11 @@
 #include <gtest/gtest.h>
 
-#include "can_constants.hpp"
-#include "can_hardware_interface.hpp"
-#include "can_internal_control_function.hpp"
-#include "can_network_manager.hpp"
-#include "socket_can_interface.hpp"
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+
 #include "test_CAN_glue.hpp"
 
 #include <chrono>

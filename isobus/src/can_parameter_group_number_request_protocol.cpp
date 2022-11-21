@@ -8,10 +8,10 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_parameter_group_number_request_protocol.hpp"
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_warning_logger.hpp"
-#include "to_string.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 

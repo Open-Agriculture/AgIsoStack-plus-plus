@@ -21,9 +21,9 @@
 #ifndef ISOBUS_DIAGNOSTIC_PROTOCOL_HPP
 #define ISOBUS_DIAGNOSTIC_PROTOCOL_HPP
 
-#include "can_internal_control_function.hpp"
-#include "can_protocol.hpp"
-#include "processing_flags.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_protocol.hpp"
+#include "isobus/utility/processing_flags.hpp"
 
 #include <list>
 #include <memory>
@@ -90,7 +90,7 @@ namespace isobus
 			DataValidAboveNormalModeratelySevere = 16, ///< Condition is above what would be considered normal as determined by the predefined moderately severe level limits for that particular measure of the condition
 			DataValidBelowNormalLeastSevere = 17, ///< Condition is below what would be considered normal as determined by the predefined least severe level limits for that particular measure of the condition
 			DataValidBelowNormalModeratelySevere = 18, ///< Condition is below what would be considered normal as determined by the predefined moderately severe level limits for that particular measure of the condition
-			ReceivedNetworkDataInError = 19, ///< Any failure that is detected when the data received through the network are found replaced by the “error indicator” value 0xFE
+			ReceivedNetworkDataInError = 19, ///< Any failure that is detected when the data received through the network are found replaced by the ï¿½error indicatorï¿½ value 0xFE
 			ConditionExists = 31 ///< The condition that is identified by the SPN exists when no applicable FMI exists (any other error)
 		};
 
@@ -182,7 +182,7 @@ namespace isobus
 
 		/// @brief Sets one of the ECU identification strings for the ECU ID message
 		/// @details See ECUIdentificationFields for a brief description of the fields
-		/// @note The fields in this message are optional and separated by an ASCII “*”. It is not necessary to include parametric
+		/// @note The fields in this message are optional and separated by an ASCII ï¿½*ï¿½. It is not necessary to include parametric
 		/// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
 		/// @attention Do not include the "*" character in your field values
 		/// @param[in] field The field to set

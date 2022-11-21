@@ -7,7 +7,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "can_network_configuration.hpp"
+#include "isobus/isobus/can_network_configuration.hpp"
 
 namespace isobus
 {

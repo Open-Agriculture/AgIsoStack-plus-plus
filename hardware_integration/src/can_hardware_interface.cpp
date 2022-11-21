@@ -7,8 +7,8 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_hardware_interface.hpp"
-#include "system_timing.hpp"
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
 

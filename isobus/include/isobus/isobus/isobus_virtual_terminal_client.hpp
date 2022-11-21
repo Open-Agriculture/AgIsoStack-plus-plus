@@ -9,9 +9,9 @@
 #ifndef ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP
 
-#include "can_internal_control_function.hpp"
-#include "can_partnered_control_function.hpp"
-#include "processing_flags.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/utility/processing_flags.hpp"
 
 #include <memory>
 #include <string>
@@ -729,7 +729,7 @@ namespace isobus
 		/// @brief Sends the pan viewport command
 		/// @details This command modifies the viewport X and Y
 		/// attributes and forces a redraw of the object.This
-		/// allows “panning” of the underlying object contents.
+		/// allows ï¿½panningï¿½ of the underlying object contents.
 		/// The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] xAttribute The viewport X attribute

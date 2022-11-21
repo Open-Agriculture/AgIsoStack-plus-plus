@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
+project(vt3_version_3_object_pool_example)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(isobus CONFIG)
+find_package(Threads REQUIRED)
 
 add_executable(VT3ExampleTarget main.cpp)
-target_link_libraries(VT3ExampleTarget ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration Threads::Threads ${PROJECT_NAME}::SystemTiming)
+target_link_libraries(VT3ExampleTarget isobus::Isobus isobus::HardwareIntegration Threads::Threads isobus::SystemTiming)
 
 add_custom_command(
         TARGET VT3ExampleTarget POST_BUILD

@@ -8,17 +8,17 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "can_network_manager.hpp"
-#include "can_constants.hpp"
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_hardware_abstraction.hpp"
-#include "can_managed_message.hpp"
-#include "can_message.hpp"
-#include "can_partnered_control_function.hpp"
-#include "can_protocol.hpp"
-#include "can_warning_logger.hpp"
-#include "system_timing.hpp"
-#include "to_string.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_hardware_abstraction.hpp"
+#include "isobus/isobus/can_managed_message.hpp"
+#include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/can_protocol.hpp"
+#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <cstring>

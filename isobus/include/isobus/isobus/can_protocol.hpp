@@ -11,10 +11,10 @@
 #ifndef CAN_PROTOCOL_HPP
 #define CAN_PROTOCOL_HPP
 
-#include "can_badge.hpp"
-#include "can_callbacks.hpp"
-#include "can_control_function.hpp"
-#include "can_message.hpp"
+#include "isobus/isobus/can_badge.hpp"
+#include "isobus/isobus/can_callbacks.hpp"
+#include "isobus/isobus/can_control_function.hpp"
+#include "isobus/isobus/can_message.hpp"
 
 #include <vector>
 

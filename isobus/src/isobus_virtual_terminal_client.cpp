@@ -7,12 +7,12 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "isobus_virtual_terminal_client.hpp"
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_network_manager.hpp"
-#include "can_warning_logger.hpp"
-#include "system_timing.hpp"
-#include "to_string.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <cstring>

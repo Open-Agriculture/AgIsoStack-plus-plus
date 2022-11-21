@@ -6,11 +6,11 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_address_claim_state_machine.hpp"
-#include "can_constants.hpp"
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_network_manager.hpp"
-#include "system_timing.hpp"
+#include "isobus/isobus/can_address_claim_state_machine.hpp"
+#include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 #include <cassert>
 #include <limits>

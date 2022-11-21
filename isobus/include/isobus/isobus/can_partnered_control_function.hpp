@@ -11,11 +11,11 @@
 #ifndef CAN_PARTNERED_CONTROL_FUNCTION_HPP
 #define CAN_PARTNERED_CONTROL_FUNCTION_HPP
 
-#include "can_NAME_filter.hpp"
-#include "can_address_claim_state_machine.hpp"
-#include "can_badge.hpp"
-#include "can_callbacks.hpp"
-#include "can_control_function.hpp"
+#include "isobus/isobus/can_NAME_filter.hpp"
+#include "isobus/isobus/can_address_claim_state_machine.hpp"
+#include "isobus/isobus/can_badge.hpp"
+#include "isobus/isobus/can_callbacks.hpp"
+#include "isobus/isobus/can_control_function.hpp"
 
 #include <vector>
 

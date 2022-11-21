@@ -8,7 +8,7 @@ set(ISOBUS_PUBLIC_NAME "ISOBUS")
 
 # Set source and include directories
 set(ISOBUS_SRC_DIR "src")
-set(ISOBUS_INCLUDE_DIR "include")
+set(ISOBUS_INCLUDE_DIR "include/isobus/isobus")
 
 # Set source files 
 set(ISOBUS_SRC 
@@ -71,9 +71,8 @@ add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
 # library and use its functionality.
 target_include_directories(Isobus PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}/isobus>
- ) 
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
  
 target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::SystemTiming)
 

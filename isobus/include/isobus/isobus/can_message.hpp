@@ -10,8 +10,8 @@
 #ifndef CAN_MESSAGE_HPP
 #define CAN_MESSAGE_HPP
 
-#include "can_control_function.hpp"
-#include "can_identifier.hpp"
+#include "isobus/isobus/can_control_function.hpp"
+#include "isobus/isobus/can_identifier.hpp"
 
 #include <vector>
 

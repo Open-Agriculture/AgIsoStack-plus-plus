@@ -10,7 +10,7 @@
 #ifndef CAN_CALLBACKS_HPP
 #define CAN_CALLBACKS_HPP
 
-#include "can_message.hpp"
+#include "isobus/isobus/can_message.hpp"
 
 namespace isobus
 {

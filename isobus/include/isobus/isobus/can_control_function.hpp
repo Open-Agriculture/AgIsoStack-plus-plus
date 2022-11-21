@@ -10,7 +10,7 @@
 #ifndef CAN_CONTROL_FUNCTION_HPP
 #define CAN_CONTROL_FUNCTION_HPP
 
-#include "can_NAME.hpp"
+#include "isobus/isobus/can_NAME.hpp"
 
 namespace isobus
 {

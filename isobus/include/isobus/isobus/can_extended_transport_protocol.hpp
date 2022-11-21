@@ -11,11 +11,11 @@
 #ifndef CAN_EXTENDED_TRANSPORT_PROTOCOL_HPP
 #define CAN_EXTENDED_TRANSPORT_PROTOCOL_HPP
 
-#include "can_badge.hpp"
-#include "can_control_function.hpp"
-#include "can_managed_message.hpp"
-#include "can_network_manager.hpp"
-#include "can_protocol.hpp"
+#include "isobus/isobus/can_badge.hpp"
+#include "isobus/isobus/can_control_function.hpp"
+#include "isobus/isobus/can_managed_message.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_protocol.hpp"
 
 namespace isobus
 {

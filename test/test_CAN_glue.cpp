@@ -1,6 +1,6 @@
 #include "test_CAN_glue.hpp"
 
-#include "can_network_manager.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 
 void update_CAN_network()
 {

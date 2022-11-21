@@ -10,7 +10,7 @@
 #ifndef CAN_HARDWARE_ABSTRACTION
 #define CAN_HARDWARE_ABSTRACTION
 
-#include "can_frame.hpp"
+#include "isobus/isobus/can_frame.hpp"
 
 #include <cstdint>
 

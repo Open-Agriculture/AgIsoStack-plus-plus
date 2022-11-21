@@ -7,7 +7,7 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "can_protocol.hpp"
+#include "isobus/isobus/can_protocol.hpp"
 
 #include <algorithm>
 

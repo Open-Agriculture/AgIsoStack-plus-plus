@@ -7,9 +7,9 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "can_control_function.hpp"
+#include "isobus/isobus/can_control_function.hpp"
 
-#include "can_constants.hpp"
+#include "isobus/isobus/can_constants.hpp"
 
 namespace isobus
 {

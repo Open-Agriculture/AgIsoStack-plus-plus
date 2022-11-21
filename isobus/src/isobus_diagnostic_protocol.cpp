@@ -18,13 +18,13 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#include "isobus_diagnostic_protocol.hpp"
+#include "isobus/isobus/isobus_diagnostic_protocol.hpp"
 
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_network_manager.hpp"
-#include "can_parameter_group_number_request_protocol.hpp"
-#include "can_warning_logger.hpp"
-#include "system_timing.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
+#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
 
