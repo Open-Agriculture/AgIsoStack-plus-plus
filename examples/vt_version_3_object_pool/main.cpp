@@ -9,7 +9,6 @@
 
 #include <csignal>
 #include <iostream>
-#include <iterator>
 #include <memory>
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
@@ -130,13 +129,13 @@ void setup()
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
 	TestVirtualTerminalClient->RegisterVTButtonEventCallback(handleVTButton);
 	TestVirtualTerminalClient->RegisterVTSoftKeyEventCallback(handleVTButton);
+	TestVirtualTerminalClient->initialize(true);
 	std::signal(SIGINT, signal_handler);
 }
 
 int main()
 {
 	setup();
-	TestVirtualTerminalClient->initialize(true);
 
 	while (true)
 	{

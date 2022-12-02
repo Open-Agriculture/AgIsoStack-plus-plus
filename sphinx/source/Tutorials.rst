@@ -9,3 +9,4 @@ Tutorials
    Tutorials/Adding a Destination
    Tutorials/Receiving Messages
    Tutorials/Transport Layer
+   Tutorials/Virtual Terminal Basics
