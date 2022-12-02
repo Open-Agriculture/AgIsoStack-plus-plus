@@ -50,7 +50,7 @@ This is a work in progress.
 - Sequence control
 - A zero-heap implementation (static buffers only, for embedded platforms)
 
-The real limiting factor is my time, and my lack of a Vector CANoe setup. 
+The real limiting factor is my time, and my lack of a Vector CANoe setup.
 I work full time and only develop on this project in my evenings.
 I have limited resources - no fancy VTs to test with or anything like that.
 You can help by becoming a github sponsor! Help me buy a Vector CANoe license so I can iterate faster!
@@ -75,7 +75,17 @@ cmake -S . -B build
 cmake --build build
 ```
 
+## Examples
+
+There are build in examples. By default, examples are not built.
+The easiest way to build them is from the top level.
+```
+cmake -S . -B build -DBUILD_EXAMPLES=ON
+cmake --build build
+```
+
 ## Tests
+
 Tests are run with GTest. They can be invoked through ctest. Once the library is compiled (see above), navigate to the build directory to run tests.
 ```
 cd build
