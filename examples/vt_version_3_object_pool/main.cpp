@@ -5,6 +5,7 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
+#include "objectPoolObjects.h"
 
 #include <csignal>
 #include <iostream>
@@ -18,6 +19,7 @@ std::vector<isobus::NAMEFilter> vtNameFilters;
 const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 static std::vector<std::uint8_t> testPool;
 static SocketCANInterface canDriver("can0");
+static std::uint32_t exampleNumberOutput = 214748364;
 
 using namespace std;
 
@@ -39,6 +41,50 @@ void update_CAN_network()
 void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
 {
 	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
+}
+
+// This callback will provide us with event driven notifications of button presses from the stack
+void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, std::uint8_t, std::uint16_t objectID, std::uint16_t, isobus::VirtualTerminalClient *)
+{
+	switch (keyEvent)
+	{
+		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+		{
+			switch (objectID)
+			{
+				case Plus_Button:
+				{
+					TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, ++exampleNumberOutput);
+				}
+				break;
+
+				case Minus_Button:
+				{
+					TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, --exampleNumberOutput);
+				}
+				break;
+
+				case alarm_SoftKey:
+				{
+					TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, example_AlarmMask);
+				}
+				break;
+
+				case acknowledgeAlarm_SoftKey:
+				{
+					TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
+				}
+				break;
+			}
+		}
+		break;
+
+		default:
+		{
+		
+		}
+		break;
+	}
 }
 
 void setup()
@@ -82,6 +128,8 @@ void setup()
 	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
+	TestVirtualTerminalClient->RegisterVTButtonEventCallback(handleVTButton);
+	TestVirtualTerminalClient->RegisterVTSoftKeyEventCallback(handleVTButton);
 	std::signal(SIGINT, signal_handler);
 }
 
