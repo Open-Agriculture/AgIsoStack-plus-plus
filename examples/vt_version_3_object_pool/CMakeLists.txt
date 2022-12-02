@@ -3,7 +3,7 @@ project(vt3_version_3_object_pool_example)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-find_package(isobus CONFIG)
+find_package(isobus CONFIG)  # Normally, you set REQUIRED, however if building from top level, it already exists
 find_package(Threads REQUIRED)
 
 add_executable(VT3ExampleTarget main.cpp)
