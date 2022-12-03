@@ -18,7 +18,6 @@ std::vector<isobus::NAMEFilter> vtNameFilters;
 const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 static std::vector<std::uint8_t> testPool;
 static SocketCANInterface canDriver("can0");
-static std::uint32_t exampleNumberOutput = 214748364;
 
 using namespace std;
 
@@ -45,6 +44,8 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 // This callback will provide us with event driven notifications of button presses from the stack
 void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, std::uint8_t, std::uint16_t objectID, std::uint16_t, isobus::VirtualTerminalClient *)
 {
+	static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
+
 	switch (keyEvent)
 	{
 		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
@@ -80,7 +81,6 @@ void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, s
 
 		default:
 		{
-		
 		}
 		break;
 	}
