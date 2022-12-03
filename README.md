@@ -25,6 +25,7 @@ This is a work in progress.
     - Diagnostic Message 2: Complete :white_check_mark:
     - Diagnostic Message 3: Complete :white_check_mark:
     - Diagnostic Message 11: Complete :white_check_mark:
+    - Diagnostic Message 13: Complete :white_check_mark:
     - Diagnostic Message 22: Complete :white_check_mark:
     - Product Identification: Complete :white_check_mark:
     - Diagnostic Protocol message Complete :white_check_mark:
@@ -37,8 +38,8 @@ This is a work in progress.
 - ISO11783 File Server (Client-side): In progress :hourglass:
 ### Planned Features (in no particular order):
 - ISO11783 Task Controller (currently planned to be client only)
+- ISO11783 File Server (Server-side)
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
-- J1939 DM13 (Stop/Start Broadcast)
 - NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
 - Meta: Windows OS support via some common CAN driver layers (PEAK P-CAN, for example)
