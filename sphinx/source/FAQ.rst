@@ -37,7 +37,7 @@ Make sure your CMake links these to your executable:
    set(THREADS_PREFER_PTHREAD_FLAG ON)
    find_package(Threads)
 
-   target_link_libraries(<your executable name> Isobus HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
+   target_link_libraries(<your executable name> PRIVATE -Wl,--whole-archive isobus::Isobus -Wl,--no-whole-archive isobus::HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
 
 I have some other issue!
 -------------------------
