@@ -7,7 +7,14 @@ find_package(isobus CONFIG)  # Normally, you set REQUIRED, however if building f
 find_package(Threads REQUIRED)
 
 add_executable(VT3ExampleTarget main.cpp objectPoolObjects.h)
-target_link_libraries(VT3ExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads isobus::SystemTiming)
+target_link_libraries(VT3ExampleTarget PRIVATE 
+    -Wl,--whole-archive
+    isobus::Isobus
+    -Wl,--no-whole-archive
+    isobus::HardwareIntegration
+    Threads::Threads
+    isobus::SystemTiming
+)
 
 add_custom_command(
         TARGET VT3ExampleTarget POST_BUILD

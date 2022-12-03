@@ -7,4 +7,11 @@ find_package(isobus CONFIG)  # Normally, you set REQUIRED, however if building f
 find_package(Threads REQUIRED)
 
 add_executable(PGNRequestExampleTarget main.cpp)
-target_link_libraries(PGNRequestExampleTarget isobus::Isobus isobus::HardwareIntegration Threads::Threads isobus::SystemTiming)
+target_link_libraries(PGNRequestExampleTarget PRIVATE
+	-Wl,--whole-archive
+	isobus::Isobus
+	-Wl,--no-whole-archive
+	isobus::HardwareIntegration
+	Threads::Threads
+	isobus::SystemTiming
+)

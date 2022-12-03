@@ -7,8 +7,11 @@ find_package(Threads REQUIRED)
 
 add_executable(DiagnosticProtocolExampleTarget main.cpp)
 
-target_link_libraries(DiagnosticProtocolExampleTarget PRIVATE
+target_link_libraries(DiagnosticProtocolExampleTarget PRIVATE 
 	-Wl,--whole-archive
-	isobus::Isobus 
+	isobus::Isobus
 	-Wl,--no-whole-archive
-	isobus::HardwareIntegration Threads::Threads isobus::SystemTiming)
+	isobus::HardwareIntegration
+	Threads::Threads
+	isobus::SystemTiming
+)

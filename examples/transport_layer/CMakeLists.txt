@@ -7,4 +7,11 @@ find_package(isobus CONFIG)  # Normally, you set REQUIRED, however if building f
 find_package(Threads REQUIRED)
 
 add_executable(TransportLayerExampleTarget main.cpp)
-target_link_libraries(TransportLayerExampleTarget isobus::Isobus isobus::HardwareIntegration Threads::Threads isobus::SystemTiming)
+target_link_libraries(TransportLayerExampleTarget PRIVATE 
+	-Wl,--whole-archive
+	isobus::Isobus
+	-Wl,--no-whole-archive
+	isobus::HardwareIntegration
+	Threads::Threads
+	isobus::SystemTiming
+)

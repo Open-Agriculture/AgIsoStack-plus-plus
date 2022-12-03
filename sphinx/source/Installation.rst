@@ -60,7 +60,9 @@ If your project is already using CMake to build your project, or this is a new p
 
    ...
 
-   target_link_libraries(<your target> Isobus HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
+   target_link_libraries(<your target> PRIVATE -Wl,--whole-archive isobus::Isobus -Wl,--no-whole-archive isobus::HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
+
+:code:`-Wl,--whole-archive` is required to ensure that some static singleton objects, such as the :code:`TransportProtocolManager` don't get optimized out of your executable by your linker.
 
 Using CMake has a lot of advantages, such as if the library is updated with additional files, or the file names change, it will not break your compilation.
    
