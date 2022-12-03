@@ -33,7 +33,7 @@ PREPEND(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR} ${HARDWARE_INTE
 PREPEND(HARDWARE_INTEGRATION_INCLUDE ${HARDWARE_INTEGRATION_INCLUDE_DIR} ${HARDWARE_INTEGRATION_INCLUDE})
 
 # Create the library from the source and include files
-add_library(HardwareIntegration SHARED ${HARDWARE_INTEGRATION_SRC} ${HARDWARE_INTEGRATION_INCLUDE})
+add_library(HardwareIntegration ${HARDWARE_INTEGRATION_SRC} ${HARDWARE_INTEGRATION_INCLUDE})
 add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
 target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::SystemTiming ${PROJECT_NAME}::Isobus)
 

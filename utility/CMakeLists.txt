@@ -29,7 +29,7 @@ set(SYSTEM_TIMING_INCLUDE
 PREPEND(SYSTEM_TIMING_INCLUDE ${SYSTEM_TIMING_INCLUDE_DIR} ${SYSTEM_TIMING_INCLUDE})
 
 # Create the library from the source and include files
-add_library(SystemTiming SHARED ${SYSTEM_TIMING_SRC} ${SYSTEM_TIMING_INCLUDE})
+add_library(SystemTiming ${SYSTEM_TIMING_SRC} ${SYSTEM_TIMING_INCLUDE})
 add_library(${PROJECT_NAME}::SystemTiming ALIAS SystemTiming)
 
 # Specify the include directory to be exported for other moduels to use. The 

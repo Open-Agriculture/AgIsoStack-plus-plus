@@ -63,7 +63,7 @@ set(ISOBUS_INCLUDE
 PREPEND(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 
 # Create the library from the source and include files
-add_library(Isobus SHARED ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
+add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
 add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
 
 # Specify the include directory to be exported for other moduels to use. The 
