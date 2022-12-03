@@ -41,7 +41,7 @@ namespace isobus
 		enum class Function
 		{
 			Engine = 0, ///< The typical mechanical power source of the machine
-			AuxiliaryPowerUnit = 1, ///< Power source for operating systems without the use of the prime “drive” engine
+			AuxiliaryPowerUnit = 1, ///< Power source for operating systems without the use of the prime drive engine
 			ElectricPropulsionControl = 2, ///< Control system which operates the drive mechanism when it is electrically powered
 			Transmission = 3, ///< Mechanical system for altering the speed vs. torque output of the engine
 			BatteryPackMonitor = 4, ///< Monitors the condition of a battery pack
@@ -54,7 +54,7 @@ namespace isobus
 			DriveAxleControlBrakes = 11, ///< Control for actuating the service brakes on a drive axle
 			EnginerRetarder = 12, ///< Controller for the retarder capabilities of the engine
 			DrivelineRetarder = 13, ///< Controller for the retarder capabilities of the driveline
-			CruiseControl = 14, ///< Control system for maintaining the vehicle’s speed at a fixed operator selectable value
+			CruiseControl = 14, ///< Control system for maintaining the vehicle's speed at a fixed operator selectable value
 			FuelSystem = 15, ///< Controls fuel flow from the tank to the filter to the water removal/separator to the engine and then back to the tank
 			SteeringControl = 16, ///< Controls steering in steer-by-wire
 			SteerAxleSuspensionControl = 17, ///< Control system for the suspension of a steered axle
@@ -69,7 +69,7 @@ namespace isobus
 			BodyControl = 26, ///< Can handle suspension control for the body sections independent from the axle sections
 			PowerTakeOffFrontOrSecondary = 27, ///< System that controls the mechanical power derived from a prime engine and used to operate auxiliary items
 			OffVehicleGateway = 28, ///< ECU for connecting between vehicle network(s) and an off-vehicle system or network
-			VirtualTerminal = 29, ///< General-purpose “intelligent” display with a specific message set defined in ISO 11783-6
+			VirtualTerminal = 29, ///< General-purpose intelligent display with a specific message set defined in ISO 11783-6
 			ManagementComputerOne = 30, ///< Manages vehicle systems, i.e. powertrain
 			PropulsionBatteryCharger = 31, ///< Unit used to charge propulsion batteries in an electric vehicle
 			HeadwayControl = 32, ///< Forward-looking collision avoidance, collision warning, speed controller, or speed control
@@ -87,13 +87,13 @@ namespace isobus
 			ExhaustEmissionControl = 44, ///< Emissions controller
 			VehicleDynamicStabilityControl = 45, ///< Stability controller
 			OilSystemMonitor = 46, ///< Monitors oil level, life, temperature
-			InformationSystemControl = 47, ///< Information management for a vehicle’s application, such as cargo management
-			RampControl = 48, ///< Loading unloading — chairlift, ramps, lifts or tailgates
-			ClutchConverterControl = 49, ///< When transmission is distributed this handles torque converter lock-up or engine — transmission connection
+			InformationSystemControl = 47, ///< Information management for a vehicle's application, such as cargo management
+			RampControl = 48, ///< Loading unloading chairlift, ramps, lifts or tailgates
+			ClutchConverterControl = 49, ///< When transmission is distributed this handles torque converter lock-up or engine-transmission connection
 			AuxiliaryHeater = 50, ///< Primary heat typically being taken from the engine coolant
 			ForwardLookingCollisionWarningSystem = 51, ///< System which detects and warns of impending collision
 			ChassisControl = 52, ///< Controls the chassis (not body or cab) components
-			AlternatorElectricalChargingSystem = 53, ///< Vehicle’s primary on-board charging controller
+			AlternatorElectricalChargingSystem = 53, ///< Vehicle's primary on-board charging controller
 			CommunicationsCellular = 54, ///< Radio communications unit designed to communicate via the cellular telephone system
 			CommunicationsSatellite = 55, ///< Radio communications unit designed specifically to communicate via some satellite system
 			CommunicationsRadio = 56, ///< Radio unit designed specifically to communicate via a terrestrial p2p system
