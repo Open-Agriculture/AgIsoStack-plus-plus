@@ -1,8 +1,8 @@
-#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"
-#include "isobus/hardware_integration/socket_can_interface.hpp"
 
 #include <csignal>
 #include <iterator>
