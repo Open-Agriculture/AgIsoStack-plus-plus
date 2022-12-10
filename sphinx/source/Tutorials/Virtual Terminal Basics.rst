@@ -18,9 +18,9 @@ It is assumed you have completed all the other tutorials, as this tutorial cover
 The Virtual Terminal Client
 ----------------------------
 
-The first step in communicating with a VT is creating an object called `VirtualTerminalClient`. 
+The first step in communicating with a VT is creating an object called :code:`VirtualTerminalClient`. 
 This object will act as your interface for all VT communication. 
-The client requires two things to instantiate, a `PartneredControlFunction` and a `InternalControlFunction`. 
+The client requires two things to instantiate, a :code:`PartneredControlFunction` and a :code:`InternalControlFunction`. 
 This is so that it can send messages on your behalf needed to maintain the connection and simplify the API over sending raw CAN messages to the VT.
 
 Let's start our program similarly to the other tutorials, complete with the requisite control functions.
@@ -66,7 +66,11 @@ Let's start our program similarly to the other tutorials, complete with the requ
 	{
 		CANHardwareInterface::set_number_of_can_channels(1);
 		CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-		CANHardwareInterface::start();
+
+		if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+		{
+			std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		}
 
 		CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
 		CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
@@ -387,7 +391,11 @@ Here's the final code for this example:
 	{
 		CANHardwareInterface::set_number_of_can_channels(1);
 		CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-		CANHardwareInterface::start();
+
+		if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+		{
+			std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		}
 
 		CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
 		CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
