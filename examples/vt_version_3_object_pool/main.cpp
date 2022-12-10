@@ -90,7 +90,11 @@ void setup()
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-	CANHardwareInterface::start();
+
+	if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+	{
+		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+	}
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
 	CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);

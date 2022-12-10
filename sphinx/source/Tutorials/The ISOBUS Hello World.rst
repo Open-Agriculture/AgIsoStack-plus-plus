@@ -101,7 +101,7 @@ So now, we have a NAME with actual information encoded in it. In this example, w
 
 Make sure to change these values to match your device's identity. Use `"isobus.net" <https://www.isobus.net/isobus/>`_ as a resource if you need to figure out all these values.\
 
-As a note, some functions have been pre-defined for convenience, as you can see by the use of `isobus::NAME::Function::SteeringControl` here, but you can use value defined in the standard.
+As a note, some functions have been pre-defined for convenience, as you can see by the use of :code:`isobus::NAME::Function::SteeringControl` here, but you can use value defined in the standard.
 
 Making an Internal Control Function
 ------------------------------------
@@ -178,17 +178,22 @@ There are a few lines we'll need to add:
    SocketCANInterface canDriver("can0");
    CANHardwareInterface::set_number_of_can_channels(1);
    CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-   CANHardwareInterface::start();
+
+   if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+   {
+	   std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+   }
 
 The "CANHardwareInterface" is an independent component that is not actually directly tied to the CAN stack. It serves as a way for the stack to abstract away whatever hardware is being used.
 
 So, lets talk about what's happening here.
 
-`CANHardwareInterface::set_number_of_can_channels(1)` Is telling the hardware layer (socket CAN in our case) that we will use 1 CAN adapter.
+:code:`CANHardwareInterface::set_number_of_can_channels(1)` Is telling the hardware layer (socket CAN in our case) that we will use 1 CAN adapter.
 
-`CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");` Tells the hardware layer to use "can0" for CAN channel 0.
+:code:`CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");` Tells the hardware layer to use "can0" for CAN channel 0.
 
-`CANHardwareInterface::start();` Kicks off a number of threads that will manage the socket and issue callbacks for when messages are received. It also provides callbacks to 'tick' the stack cyclically.
+:code:`CANHardwareInterface::start();` Kicks off a number of threads that will manage the socket and issue callbacks for when messages are received. It also provides callbacks to 'tick' the stack cyclically.
+Checking its return value and :code:`get_is_valid` will tell you if the underlying CAN driver is connected to the hardware. In this case, since we're using socket CAN, it tells us if we bound to the socket.
 
 There's still one more step before the plumbing is done. Like we discussed earlier, the "CANHardwareInterface" is an independent component that is not actually directly tied to the CAN stack. This is so that anybody could implement their own hardware layer for their specific needs! But, that also means that we need to do a tiny bit of manual routing for the callbacks coming from the CANHardwareInterface.
 
@@ -217,9 +222,9 @@ Let's register our two functions as callbacks from the CANHardwareInterface.
    CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
    CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
-So, now whenever "can0" receives a CAN message, the hardware layer will call the function `raw_can_glue`, which will send that message to the stack! 
+So, now whenever "can0" receives a CAN message, the hardware layer will call the function :code:`raw_can_glue`, which will send that message to the stack! 
 
-Likewise, the hardware layer will call `update_CAN_network` at some interval which will update all the internals of the stack.
+Likewise, the hardware layer will call :code:`update_CAN_network` at some interval which will update all the internals of the stack.
 
 Let's see what we've got so far:
 
@@ -231,6 +236,7 @@ Let's see what we've got so far:
    #include "can_partnered_control_function.hpp"
 
    #include <memory>
+   #include <iostream>
 
    void update_CAN_network()
    {
@@ -251,7 +257,11 @@ Let's see what we've got so far:
     SocketCANInterface canDriver("can0");
     CANHardwareInterface::set_number_of_can_channels(1);
     CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-    CANHardwareInterface::start();
+    
+    if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+	{
+		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+	}
 
     CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
     CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
@@ -278,9 +288,9 @@ Sweet! We're almost ready to send a message. Let's just add a few more things to
 Cleaning up
 ------------
 
-Whenever the program ends, we want to call `CANHardwareInterface::stop();` to clean up the hardware layer and stop the threads we started with `CANHardwareInterface::start();`.
+Whenever the program ends, we want to call :code:`CANHardwareInterface::stop();` to clean up the hardware layer and stop the threads we started with :code:`CANHardwareInterface::start();`.
 
-Additionally, we want to call `CANHardwareInterface::stop();` if the user presses control+c (user sends a SIGINT signal to our program). So let's add a little signal handler that'll gracefully clean up if that happens.
+Additionally, we want to call :code:`CANHardwareInterface::stop();` if the user presses control+c (user sends a SIGINT signal to our program). So let's add a little signal handler that'll gracefully clean up if that happens.
 
 Make sure to include `csignal`.
 
@@ -293,6 +303,7 @@ Make sure to include `csignal`.
 
    #include <memory>
    #include <csignal>
+   #include <iostream>
 
    void signal_handler(int signum)
    {
@@ -319,7 +330,11 @@ Make sure to include `csignal`.
     SocketCANInterface canDriver("can0");
     CANHardwareInterface::set_number_of_can_channels(1);
     CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-    CANHardwareInterface::start();
+
+    if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+	{
+		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+	}
 
     // Handle control+c
     std::signal(SIGINT, signal_handler);
@@ -350,7 +365,7 @@ Make sure to include `csignal`.
 Hurry Up And Wait
 ------------------
 
-One last thing before we send a message: address claiming takes time for the stack to complete. So, lets add a short delay to our `main` thread that will allow us to wait till address claiming is done before doing anything.
+One last thing before we send a message: address claiming takes time for the stack to complete. So, lets add a short delay to our :code:`main` thread that will allow us to wait till address claiming is done before doing anything.
 
 .. code-block:: c++
 
@@ -367,6 +382,7 @@ The total result:
 
    #include <memory>
    #include <csignal>
+   #include <iostream>
 
    void signal_handler(int signum)
    {
@@ -393,7 +409,11 @@ The total result:
     SocketCANInterface canDriver("can0");
     CANHardwareInterface::set_number_of_can_channels(1);
     CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-    CANHardwareInterface::start();
+    
+    if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+	{
+		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+	}
 
     // Handle control+c
     std::signal(SIGINT, signal_handler);
@@ -432,7 +452,7 @@ In this example, we'll send a proprietary A message (PGN 0xEF00) to the global/b
 
 If you need to brush up on what a PGN is, check out the :doc:`concepts section <../Concepts>`.
 
-The most basic way to send a CAN message is to call the `send_can_message` function on the CANNetworkManager's interface.
+The most basic way to send a CAN message is to call the :code:`send_can_message` function on the CANNetworkManager's interface.
 
 Let's do that now! We'll create an 8 byte message, fill it with data, and send it.
 

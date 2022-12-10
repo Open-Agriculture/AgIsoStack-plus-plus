@@ -59,7 +59,7 @@ Above, we've just instantiated a partner *on CAN channel 0* using the filter we 
 
 Whenever a device comes onto the bus matching that filter, the CAN stack will associate it with our `PartneredControlFunction <https://delgrossoengineering.com/isobus-docs/classisobus_1_1PartneredControlFunction.html>`_.
 
-Think of this as the "destination" for your messages. When you send a destination specific message, you must provide a `PartneredControlFunction` to the `send_can_message` function.
+Think of this as the "destination" for your messages. When you send a destination specific message, you must provide a :code:`PartneredControlFunction` to the :code:`send_can_message` function.
 
 Now let's send the message!
 
@@ -74,9 +74,9 @@ In this step, we will construct and send a proprietary A message to our partner.
 
    isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get(), myPartner.get());
 
-As you can see, the call to the network manager to send the message is nearly identical to the one to send it to the broadcast address, but with the addition of our partner `myPartner`.
+As you can see, the call to the network manager to send the message is nearly identical to the one to send it to the broadcast address, but with the addition of our partner :code:`myPartner`.
 
-It is highly recommended that you review all possible parameters for `send_can_message` so you know what options are available.
+It is highly recommended that you review all possible parameters for :code:`send_can_message` so you know what options are available.
 
 Check out the documentation for it `here <https://delgrossoengineering.com/isobus-docs/classisobus_1_1CANNetworkManager.html>`_.
 
@@ -132,7 +132,11 @@ The final program for this tutorial (including the code from the previous Hello 
     // Set up the hardware layer to use "can0"
     CANHardwareInterface::set_number_of_can_channels(1);
     CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-    CANHardwareInterface::start();
+    
+    if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+    {
+	    std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+    }
 
     // Handle control+c
     std::signal(SIGINT, signal_handler);
@@ -175,6 +179,6 @@ The final program for this tutorial (including the code from the previous Hello 
     return 0;
    }
   
-Like before, you can compile it with `cmake --build build` and run it!
+Like before, you can compile it with :code:`cmake --build build` and run it!
 
 In our next tutorial, we'll cover receiving messages.

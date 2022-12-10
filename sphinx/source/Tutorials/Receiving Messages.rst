@@ -44,7 +44,7 @@ Now, we just need to tell the CAN stack to call that callback when an appropriat
 
    isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xEF00, propa_callback, nullptr);
 
-So in the above code, we're telling the stack that for any broadcasts with PGN 0xEF00 to call that function. The `nullptr` variable is a generic context variable. Whatever you pass in for that variable will be passed into broadcast_propa_callback when it is called later. 
+So in the above code, we're telling the stack that for any broadcasts with PGN 0xEF00 to call that function. The :code:`nullptr` variable is a generic context variable. Whatever you pass in for that variable will be passed into broadcast_propa_callback when it is called later. 
 This can be useful for figuring out what object wanted the callback. For example, if we were registering this callback for a particular class, that class could pass in `this` as that argument to have its own pointer passed back to it in the callback.
 
 It's OK if you don't understand that last variable's usage for now. In our example, we're just ignoring it.
@@ -116,7 +116,11 @@ So, our updated tutorial program now should look like this:
     // Set up the hardware layer to use "can0"
     CANHardwareInterface::set_number_of_can_channels(1);
     CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-    CANHardwareInterface::start();
+    
+    if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+    {
+	    std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+    }
 
     // Handle control+c
     std::signal(SIGINT, signal_handler);
