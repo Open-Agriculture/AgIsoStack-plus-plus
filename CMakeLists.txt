@@ -50,6 +50,7 @@ if(BUILD_EXAMPLES)
   add_subdirectory("examples/transport_layer")
   add_subdirectory("examples/diagnostic_protocol")
   add_subdirectory("examples/pgn_requests")
+  add_subdirectory("examples/nmea2000")
 endif()
 
 # Make CTest available which adds the option BUILD_TESTING
