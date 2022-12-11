@@ -149,7 +149,6 @@ namespace isobus
 		bool retVal = false;
 
 		if ((nullptr != source) &&
-		    (source->get_address_valid()) &&
 		    (parameterGroupNumber >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
 		    (parameterGroupNumber <= FP_MAX_PARAMETER_GROUP_NUMBER) &&
 		    (messageLength <= MAX_PROTOCOL_MESSAGE_LENGTH) &&
@@ -171,6 +170,7 @@ namespace isobus
 				tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 				tempSession->processedPacketsThisSession = 0;
 				tempSession->sessionCompleteCallback = txCompleteCallback;
+				tempSession->sequenceNumber = get_new_sequence_number(tempSession);
 
 				if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
 				{
@@ -197,9 +197,41 @@ namespace isobus
 
 	void FastPacketProtocol::update(CANLibBadge<CANNetworkManager>)
 	{
+		std::unique_lock<std::mutex> lock(sessionMutex);
+
 		for (auto i : activeSessions)
 		{
 			update_state_machine(i);
+		}
+	}
+
+	void FastPacketProtocol::add_session_history(FastPacketProtocolSession *session)
+	{
+		if (nullptr != session)
+		{
+			bool formerSessionMatched = false;
+
+			for (std::size_t i = 0; i < sessionHistory.size(); i++)
+			{
+				if ((sessionHistory[i].isoName == session->sessionMessage.get_source_control_function()->get_NAME()) &&
+				    (sessionHistory[i].parameterGroupNumber == session->sessionMessage.get_identifier().get_parameter_group_number()))
+				{
+					sessionHistory[i].sequenceNumber++;
+					formerSessionMatched = true;
+					break;
+				}
+			}
+
+			if (!formerSessionMatched)
+			{
+				FastPacketHistory history{
+					session->sessionMessage.get_source_control_function()->get_NAME(),
+					session->sessionMessage.get_identifier().get_parameter_group_number(),
+					session->sequenceNumber
+				};
+				history.sequenceNumber++;
+				sessionHistory.push_back(history);
+			}
 		}
 	}
 
@@ -207,8 +239,6 @@ namespace isobus
 	{
 		if (nullptr != session)
 		{
-			std::unique_lock<std::mutex> lock(sessionMutex);
-
 			for (auto currentSession = activeSessions.begin(); currentSession != activeSessions.end(); currentSession++)
 			{
 				if (session == *currentSession)
@@ -219,6 +249,25 @@ namespace isobus
 				}
 			}
 		}
+	}
+
+	std::uint8_t FastPacketProtocol::get_new_sequence_number(FastPacketProtocolSession *session)
+	{
+		std::uint8_t retVal = 0;
+
+		if (nullptr != session)
+		{
+			for (auto formerSessions : sessionHistory)
+			{
+				if ((formerSessions.isoName == session->sessionMessage.get_source_control_function()->get_NAME()) &&
+				    (formerSessions.parameterGroupNumber == session->sessionMessage.get_identifier().get_parameter_group_number()))
+				{
+					retVal = formerSessions.sequenceNumber;
+					break;
+				}
+			}
+		}
+		return retVal;
 	}
 
 	bool FastPacketProtocol::get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, ControlFunction *source, ControlFunction *destination)
@@ -259,6 +308,11 @@ namespace isobus
 			{
 				case FastPacketProtocolSession::Direction::Receive:
 				{
+					if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
+					{
+						CANStackLogger::CAN_stack_log("[FP]: Rx session timed out.");
+						close_session(session);
+					}
 				}
 				break;
 
@@ -266,22 +320,23 @@ namespace isobus
 				{
 					std::array<std::uint8_t, CAN_DATA_LENGTH> dataBuffer;
 					std::vector<std::uint8_t> messageData;
-					std::uint8_t bytesProcessedSoFar = (session->processedPacketsThisSession > 0 ? 6 : 0);
 
-					if (0 != bytesProcessedSoFar)
+					for (std::uint8_t i = session->processedPacketsThisSession; i <= session->packetCount; i++)
 					{
-						bytesProcessedSoFar += (PROTOCOL_BYTES_PER_FRAME * (session->processedPacketsThisSession - 1));
-					}
+						std::uint8_t bytesProcessedSoFar = (session->processedPacketsThisSession > 0 ? 6 : 0);
 
-					std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - bytesProcessedSoFar);
+						if (0 != bytesProcessedSoFar)
+						{
+							bytesProcessedSoFar += (PROTOCOL_BYTES_PER_FRAME * (session->processedPacketsThisSession - 1));
+						}
 
-					if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
-					{
-						numberBytesLeft = PROTOCOL_BYTES_PER_FRAME;
-					}
+						std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - bytesProcessedSoFar);
 
-					for (std::uint8_t i = session->processedPacketsThisSession; i < session->packetCount; i++)
-					{
+						if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
+						{
+							numberBytesLeft = PROTOCOL_BYTES_PER_FRAME;
+						}
+
 						if (nullptr != session->frameChunkCallback)
 						{
 							std::uint8_t callbackBuffer[CAN_DATA_LENGTH] = { 0 }; // Only need 7 but give them 8 in case they make a mistake
@@ -318,9 +373,22 @@ namespace isobus
 							else
 							{
 								dataBuffer[0] = session->processedPacketsThisSession;
+								dataBuffer[0] |= (session->sequenceNumber << SEQUENCE_NUMBER_BIT_OFFSET);
+
+								if (numberBytesLeft < PROTOCOL_BYTES_PER_FRAME)
+								{
+									dataBuffer[1] = 0xFF;
+									dataBuffer[2] = 0xFF;
+									dataBuffer[3] = 0xFF;
+									dataBuffer[4] = 0xFF;
+									dataBuffer[5] = 0xFF;
+									dataBuffer[6] = 0xFF;
+									dataBuffer[7] = 0xFF;
+								}
+
 								for (std::uint8_t j = 0; j < numberBytesLeft; j++)
 								{
-									dataBuffer[1 + j] = messageData[bytesProcessedSoFar];
+									dataBuffer[1 + j] = messageData[6 + ((i - 1) * PROTOCOL_BYTES_PER_FRAME) + j];
 								}
 							}
 						}
@@ -334,7 +402,18 @@ namespace isobus
 						                                                   nullptr))
 						{
 							session->processedPacketsThisSession++;
+							session->timestamp_ms = SystemTiming::get_timestamp_ms();
 						}
+						else
+						{
+							break;
+						}
+					}
+
+					if (session->processedPacketsThisSession >= session->packetCount)
+					{
+						add_session_history(session);
+						close_session(session); // Session is done!
 					}
 				}
 				break;
