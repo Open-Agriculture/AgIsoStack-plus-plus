@@ -15,6 +15,11 @@ namespace isobus
 	{
 	}
 
+	bool NAME::operator == (const NAME &obj)
+	{
+		return this->rawName == obj.rawName;
+	}
+
 	bool NAME::get_arbitrary_address_capable() const
 	{
 		return (0 != (rawName >> 63));
