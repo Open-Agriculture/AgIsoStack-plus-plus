@@ -112,6 +112,11 @@ namespace isobus
 			MaxFunctionCode = 127 ///< Max allocated function code
 		};
 
+		/// @brief A useful way to compare sesson objects to each other for equality
+		/// @param[in] obj The rhs of the operator
+		/// @returns `true` if the objects are "equal"
+		bool operator==(const NAME &obj);
+
 		/// @brief A structure that tracks the pair of a NAME parameter and associated value
 		typedef std::pair<const NAMEParameters, const std::uint32_t> NameParameterFilter;
 
