@@ -36,11 +36,13 @@ This is a work in progress.
 - Tutorial [Complete](https://delgrossoengineering.com/isobus-tutorial/index.html) :white_check_mark:
 - Debian Packaging: Complete :white_check_mark: but no official package has been released yet
 - ISO11783 File Server (Client-side): In progress :hourglass:
+- NMEA2000 Fast Packet Protocol: Complete :white_check_mark:
+
 ### Planned Features (in no particular order):
+
 - ISO11783 Task Controller (currently planned to be client only)
 - ISO11783 File Server (Server-side)
 - Common ISO11783-5 Messages (guidance command, machine selected speed, etc.)
-- NMEA2000 Fast Packet Protocol
 - NMEA2000 ISOBUS messages (GNSS)
 - Meta: Windows OS support via some common CAN driver layers (PEAK P-CAN, for example)
 
