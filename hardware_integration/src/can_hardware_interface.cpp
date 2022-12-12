@@ -476,10 +476,6 @@ void CANHardwareInterface::receive_message_thread_function(uint8_t aCANChannel)
 					threadConditionVariable.notify_all();
 				}
 			}
-			else
-			{
-				pCANHardware->frameHandler->open();
-			}
 		}
 	}
 }
