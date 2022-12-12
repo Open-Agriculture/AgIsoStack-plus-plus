@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <isobus/isobus/can_warning_logger.hpp>
 
 SocketCANInterface::SocketCANInterface(const std::string deviceName) :
   pCANDevice(new sockaddr_can),
@@ -89,20 +90,17 @@ void SocketCANInterface::open()
 
 			if (bind(fileDescriptor, (struct sockaddr *)pCANDevice, sizeof(struct sockaddr)) < 0)
 			{
-				::close(fileDescriptor);
-				fileDescriptor = -1;
+				close();
 			}
 		}
 		else
 		{
-			::close(fileDescriptor);
-			fileDescriptor = -1;
+			close();
 		}
 	}
 	else
 	{
-		::close(fileDescriptor);
-		fileDescriptor = -1;
+		close();
 	}
 }
 
@@ -178,6 +176,11 @@ bool SocketCANInterface::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 				retVal = true;
 			}
 		}
+		else if (errno == ENETDOWN)
+		{
+			isobus::CANStackLogger::CAN_stack_log("[SocketCAN] " + get_device_name() + " interface is down.");
+			close();
+		}
 	}
 	else if (pollingFileDescriptor.revents & (POLLERR | POLLHUP))
 	{
@@ -203,6 +206,11 @@ bool SocketCANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &ca
 	if (write(fileDescriptor, &txFrame, sizeof(struct can_frame)) > 0)
 	{
 		retVal = true;
+	}
+	else if (errno == ENETDOWN)
+	{
+		isobus::CANStackLogger::CAN_stack_log("[SocketCAN] " + get_device_name() + " interface is down.");
+		close();
 	}
 	return retVal;
 }
