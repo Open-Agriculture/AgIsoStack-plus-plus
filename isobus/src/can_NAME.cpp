@@ -15,7 +15,7 @@ namespace isobus
 	{
 	}
 
-	bool NAME::operator == (const NAME &obj)
+	bool NAME::operator==(const NAME &obj)
 	{
 		return this->rawName == obj.rawName;
 	}

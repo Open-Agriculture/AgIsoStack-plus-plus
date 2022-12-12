@@ -15,6 +15,8 @@
 #include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include <algorithm>
+
 namespace isobus
 {
 	FastPacketProtocol FastPacketProtocol::Protocol;
@@ -51,89 +53,21 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::process_message(CANMessage *const message)
+	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		if ((nullptr != message) &&
-		    (CAN_DATA_LENGTH == message->get_data_length()) &&
-		    (message->get_identifier().get_parameter_group_number() >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
-		    (message->get_identifier().get_parameter_group_number() <= FP_MAX_PARAMETER_GROUP_NUMBER))
+		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
+	}
+
+	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	{
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
+		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
+		if (parameterGroupNumberCallbacks.end() != callbackLocation)
 		{
-			FastPacketProtocolSession *currentSession = nullptr;
-			std::vector<std::uint8_t> messageData = message->get_data();
-			std::uint8_t frameCount = (messageData[0] & FRAME_COUNTER_BIT_MASK);
-
-			// Check for a valid session
-			if (get_session(currentSession, message->get_identifier().get_parameter_group_number(), message->get_source_control_function(), message->get_destination_control_function()))
-			{
-				// Matched a session
-				for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
-				{
-					currentSession->sessionMessage.set_data(messageData[1 + i], i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME));
-				}
-				currentSession->processedPacketsThisSession++;
-
-				if (0 != frameCount)
-				{
-					// Continue processing the message
-				}
-				else
-				{
-					CANStackLogger::CAN_stack_log("[FP]: Existing session matched new frame counter, aborting the matching session.");
-					close_session(currentSession);
-				}
-			}
-			else
-			{
-				// No matching session. See if we need to start a new session
-				if (0 == frameCount)
-				{
-					if (messageData[1] <= MAX_PROTOCOL_MESSAGE_LENGTH)
-					{
-						// This is the beginning of a new message
-						currentSession = new FastPacketProtocolSession(FastPacketProtocolSession::Direction::Receive, message->get_can_port_index());
-						currentSession->frameChunkCallback = nullptr;
-						if (messageData[1] >= PROTOCOL_BYTES_PER_FRAME - 1)
-						{
-							currentSession->packetCount = ((messageData[1] - 6) / PROTOCOL_BYTES_PER_FRAME);
-						}
-						else
-						{
-							currentSession->packetCount = 1;
-						}
-						currentSession->lastPacketNumber = ((messageData[0] >> SEQUENCE_NUMBER_BIT_OFFSET) & SEQUENCE_NUMBER_BIT_MASK);
-						currentSession->processedPacketsThisSession = 1;
-						currentSession->sessionMessage.set_data_size(messageData[1]);
-						currentSession->sessionMessage.set_identifier(message->get_identifier());
-						currentSession->timestamp_ms = SystemTiming::get_timestamp_ms();
-
-						if (0 != (messageData[1] % PROTOCOL_BYTES_PER_FRAME))
-						{
-							currentSession->packetCount++;
-						}
-
-						// Save the 6 bytes of payload in this first message
-						for (std::uint8_t i = 0; i < (PROTOCOL_BYTES_PER_FRAME - 1); i++)
-						{
-							currentSession->sessionMessage.set_data(messageData[2 + i], i);
-						}
-
-						std::unique_lock<std::mutex> lock(sessionMutex);
-
-						activeSessions.push_back(currentSession);
-					}
-					else
-					{
-						CANStackLogger::CAN_stack_log("[FP]: Ignoring possible new FP session with advertised length > 233.");
-					}
-				}
-				else
-				{
-					// This is the middle of some message that we have no context for.
-					// Ignore the message.
-					CANStackLogger::CAN_stack_log("[FP]: Ignoring FP message, no context available.");
-				}
-			}
+			parameterGroupNumberCallbacks.erase(callbackLocation);
 		}
+		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
 	}
 
 	bool FastPacketProtocol::send_multipacket_message(std::uint32_t parameterGroupNumber,
@@ -288,6 +222,149 @@ namespace isobus
 		return (nullptr != returnedSession);
 	}
 
+	void FastPacketProtocol::process_message(CANMessage *const message, void *parent)
+	{
+		if (nullptr != parent)
+		{
+			reinterpret_cast<FastPacketProtocol *>(parent)->process_message(message);
+		}
+	}
+
+	void FastPacketProtocol::process_message(CANMessage *const message)
+	{
+		if ((nullptr != message) &&
+		    (CAN_DATA_LENGTH == message->get_data_length()) &&
+		    (message->get_identifier().get_parameter_group_number() >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
+		    (message->get_identifier().get_parameter_group_number() <= FP_MAX_PARAMETER_GROUP_NUMBER))
+		{
+			// See if we care about parsing this message
+			if (parameterGroupNumberCallbacks.size() > 0)
+			{
+				bool pgnNeedsParsing = false;
+
+				for (auto callback : parameterGroupNumberCallbacks)
+				{
+					if (callback.get_parameter_group_number() == message->get_identifier().get_parameter_group_number())
+					{
+						pgnNeedsParsing = true;
+						break;
+					}
+				}
+
+				if (pgnNeedsParsing)
+				{
+					FastPacketProtocolSession *currentSession = nullptr;
+					std::vector<std::uint8_t> messageData = message->get_data();
+					std::uint8_t frameCount = (messageData[0] & FRAME_COUNTER_BIT_MASK);
+
+					// Check for a valid session
+					if (get_session(currentSession, message->get_identifier().get_parameter_group_number(), message->get_source_control_function(), message->get_destination_control_function()))
+					{
+						// Matched a session
+						if (0 != frameCount)
+						{
+							// Continue processing the message
+							for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
+							{
+								currentSession->sessionMessage.set_data(messageData[1 + i], i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1);
+							}
+							currentSession->processedPacketsThisSession++;
+
+							// Currently counting one by index and one by value, so add 1 to expected packet count
+							if (currentSession->processedPacketsThisSession >= currentSession->packetCount + 1)
+							{
+								// Complete
+								// Find the appropriate callback and let them know
+								for (auto callback : parameterGroupNumberCallbacks)
+								{
+									if (callback.get_parameter_group_number() == currentSession->sessionMessage.get_identifier().get_parameter_group_number())
+									{
+										callback.get_callback()(&currentSession->sessionMessage, callback.get_parent());
+									}
+								}
+								close_session(currentSession); // All done
+							}
+						}
+						else
+						{
+							CANStackLogger::CAN_stack_log("[FP]: Existing session matched new frame counter, aborting the matching session.");
+							close_session(currentSession);
+						}
+					}
+					else
+					{
+						// No matching session. See if we need to start a new session
+						if (0 == frameCount)
+						{
+							if (messageData[1] <= MAX_PROTOCOL_MESSAGE_LENGTH)
+							{
+								// This is the beginning of a new message
+								currentSession = new FastPacketProtocolSession(FastPacketProtocolSession::Direction::Receive, message->get_can_port_index());
+								currentSession->frameChunkCallback = nullptr;
+								if (messageData[1] >= PROTOCOL_BYTES_PER_FRAME - 1)
+								{
+									currentSession->packetCount = ((messageData[1] - 6) / PROTOCOL_BYTES_PER_FRAME);
+								}
+								else
+								{
+									currentSession->packetCount = 1;
+								}
+								currentSession->lastPacketNumber = ((messageData[0] >> SEQUENCE_NUMBER_BIT_OFFSET) & SEQUENCE_NUMBER_BIT_MASK);
+								currentSession->processedPacketsThisSession = 1;
+								currentSession->sessionMessage.set_data_size(messageData[1]);
+								currentSession->sessionMessage.set_identifier(message->get_identifier());
+								currentSession->sessionMessage.set_source_control_function(message->get_source_control_function());
+								currentSession->sessionMessage.set_destination_control_function(message->get_destination_control_function());
+								currentSession->timestamp_ms = SystemTiming::get_timestamp_ms();
+
+								if (0 != (messageData[1] % PROTOCOL_BYTES_PER_FRAME))
+								{
+									currentSession->packetCount++;
+								}
+
+								// Save the 6 bytes of payload in this first message
+								for (std::uint8_t i = 0; i < (PROTOCOL_BYTES_PER_FRAME - 1); i++)
+								{
+									currentSession->sessionMessage.set_data(messageData[2 + i], i);
+								}
+
+								std::unique_lock<std::mutex> lock(sessionMutex);
+
+								activeSessions.push_back(currentSession);
+							}
+							else
+							{
+								CANStackLogger::CAN_stack_log("[FP]: Ignoring possible new FP session with advertised length > 233.");
+							}
+						}
+						else
+						{
+							// This is the middle of some message that we have no context for.
+							// Ignore the message.
+							CANStackLogger::CAN_stack_log("[FP]: Ignoring FP message, no context available.");
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void FastPacketProtocol::process_session_complete_callback(FastPacketProtocolSession *session, bool success)
+	{
+		if ((nullptr != session) &&
+		    (nullptr != session->sessionCompleteCallback) &&
+		    (nullptr != session->sessionMessage.get_source_control_function()) &&
+		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
+		{
+			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
+			                                 session->sessionMessage.get_data_length(),
+			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                 session->sessionMessage.get_destination_control_function(),
+			                                 success,
+			                                 session->parent);
+		}
+	}
+
 	bool FastPacketProtocol::protocol_transmit_message(std::uint32_t,
 	                                                   const std::uint8_t *,
 	                                                   std::uint32_t,
@@ -320,6 +397,7 @@ namespace isobus
 				{
 					std::array<std::uint8_t, CAN_DATA_LENGTH> dataBuffer;
 					std::vector<std::uint8_t> messageData;
+					bool txSessionCancelled = false;
 
 					for (std::uint8_t i = session->processedPacketsThisSession; i <= session->packetCount; i++)
 					{
@@ -351,6 +429,7 @@ namespace isobus
 							}
 							else
 							{
+								process_session_complete_callback(session, false);
 								close_session(session);
 								break;
 							}
@@ -406,13 +485,22 @@ namespace isobus
 						}
 						else
 						{
+							if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
+							{
+								CANStackLogger::CAN_stack_log("[FP]: Tx session timed out.");
+								process_session_complete_callback(session, false);
+								close_session(session);
+								txSessionCancelled = true;
+							}
 							break;
 						}
 					}
 
-					if (session->processedPacketsThisSession >= session->packetCount)
+					if ((!txSessionCancelled) &&
+					    (session->processedPacketsThisSession >= session->packetCount))
 					{
 						add_session_history(session);
+						process_session_complete_callback(session, true);
 						close_session(session); // Session is done!
 					}
 				}

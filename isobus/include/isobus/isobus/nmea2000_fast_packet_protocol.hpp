@@ -1,7 +1,22 @@
 //================================================================================================
 /// @file nmea2000_fast_packet_protocol.hpp
 ///
-/// @brief A protocol that handles the NMEA 2000 fast packet protocol.
+/// @brief A protocol that handles the NMEA 2000 (IEC 61162-3) fast packet protocol.
+///
+/// @details This higher layer protocol is used primarily on boats and ships to connect
+/// equipment such as GPS, auto pilots, depth sounders, navigation instruments, engines, etc.
+/// The Fast Packet protocol provides a means to stream up to 223 bytes of data, with the
+/// advantage that each frame retains the parameter group number and priority.
+/// The first frame transmitted uses 2 bytes to identify sequential Fast Packet parameter groups
+/// and sequential frames within a single parameter group transmission.
+/// The first byte contains a sequence counter to distinguish consecutive transmission
+/// of the same parameter groups and a frame counter set to frame zero.
+/// The second byte in the first frame identifies the total size of the
+/// parameter group to follow. Successive frames use just single data byte for the
+/// sequence counter and the frame counter.
+///
+/// @note This library and its authors are not affiliated with the National Marine
+/// Electronics Association in any way.
 ///
 /// @author Adrian Del Grosso
 ///
@@ -12,13 +27,14 @@
 #define NMEA2000_FAST_PACKET_PROTOCOL_HPP
 
 #include "isobus/isobus/can_internal_control_function.hpp"
-#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/isobus/can_managed_message.hpp"
+#include "isobus/isobus/can_protocol.hpp"
 
 #include <mutex>
 
 namespace isobus
 {
+	/// @brief A protocol that handles the NMEA 2000 fast packet protocol.
 	class FastPacketProtocol : public CANLibProtocol
 	{
 	public:
@@ -29,9 +45,17 @@ namespace isobus
 		/// when it is first updated, if it has yet to be initialized.
 		void initialize(CANLibBadge<CANNetworkManager>) override;
 
-		/// @brief A generic way for a protocol to process a received message
-		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
+		/// @brief Similar to add_parameter_group_number_callback but tells the stack to parse those PGNs as Fast Packet
+		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
+		/// @param[in] callback The callback that the stack will call when a matching message is received
+		/// @param[in] parent Generic context variable
+		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+
+		// @brief Removes a callback previously added with register_multipacket_message_callback
+		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
+		/// @param[in] callback The callback that the stack will call when a matching message is received
+		/// @param[in] parent Generic context variable
+		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Used to send CAN messages using fast packet
 		/// @details You have to use this function instead of the network manager
@@ -43,7 +67,7 @@ namespace isobus
 		/// @param[in] source The source control function
 		/// @param[in] destination The destination control function
 		/// @param[in] priority The priority to encode in the IDs of the component CAN messages
-		/// @param[in] transmitCompleteCallback A callback for when the protocol completes its work
+		/// @param[in] txCompleteCallback A callback for when the protocol completes its work
 		/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
 		/// @param[in] frameChunkCallback A callback to get some data to send
 		/// @returns true if the message was accepted by the protocol for processing
@@ -98,11 +122,12 @@ namespace isobus
 			const Direction sessionDirection; ///< Represents Tx or Rx session
 		};
 
+		/// @brief A structure for keeping track of past sessions so we can resume with the right session number
 		struct FastPacketHistory
 		{
-			NAME isoName;
-			std::uint32_t parameterGroupNumber;
-			std::uint8_t sequenceNumber;
+			NAME isoName; ///< The ISO name of the internal control function used in a session
+			std::uint32_t parameterGroupNumber; ///< The PGN of the session being saved
+			std::uint8_t sequenceNumber; ///< The sequence number to use in the next matching session
 		};
 
 		/// @brief Adds a session's info to the history so that we can continue the sequence number later
@@ -119,12 +144,26 @@ namespace isobus
 		std::uint8_t get_new_sequence_number(FastPacketProtocolSession *session);
 
 		/// @brief Returns a session that matches the parameters, if one exists
-		/// @param[in,out] session The returned session
+		/// @param[in,out] returnedSession The returned session
 		/// @param[in] parameterGroupNumber The PGN
 		/// @param[in] source The session source control function
 		/// @param[in] destination The sesssion destination control function
 		/// @returns `true` if a session was found that matches, otherwise `false`
 		bool get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, ControlFunction *source, ControlFunction *destination);
+
+		/// @brief A generic way for a protocol to process a received message
+		/// @param[in] message A received CAN message
+		void process_message(CANMessage *const message) override;
+
+		/// @brief A generic way for a protocol to process a received message
+		/// @param[in] message A received CAN message
+		/// @param[in] parent Provides the context to the actual FP manager object
+		static void process_message(CANMessage *const message, void *parent);
+
+		/// @brief Processes end of session callbacks
+		/// @param[in] session The session we've just completed
+		/// @param[in] success Denotes if the session was successful
+		void process_session_complete_callback(FastPacketProtocolSession *session, bool success);
 
 		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
 		/// @param[in] parameterGroupNumber The PGN of the message
@@ -160,6 +199,7 @@ namespace isobus
 
 		std::vector<FastPacketProtocolSession *> activeSessions; ///< A list of all active TP sessions
 		std::vector<FastPacketHistory> sessionHistory; ///< Used to keep track of sequence numbers for future sessions
+		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks that will be parsed as fast packet messages
 		std::mutex sessionMutex; ///< A mutex to lock the sessions list in case someone starts a Tx while the stack is processing sessions
 	};
 

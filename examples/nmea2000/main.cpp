@@ -14,9 +14,32 @@ static SocketCANInterface canDriver("vcan0");
 
 using namespace std;
 
+void nmea2k_callback(isobus::CANMessage *message, void *)
+{
+	std::cout << "Received a NMEA2K fast packet PGN " << message->get_identifier().get_parameter_group_number() << " message with length " << message->get_data_length() << std::endl;
+}
+
+void nmea2k_transmit_complete_callback(std::uint32_t parameterGroupNumber,
+                                       std::uint32_t dataLength,
+                                       isobus::InternalControlFunction *,
+                                       isobus::ControlFunction *,
+                                       bool successful,
+                                       void *)
+{
+	if (successful)
+	{
+		std::cout << "Successfully sent a NMEA2K Fast Packet PGN " << parameterGroupNumber << " message with length " << dataLength << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed sending a NMEA2K Fast Packet PGN " << parameterGroupNumber << " message with length " << dataLength << std::endl;
+	}
+}
+
 void signal_handler(int signum)
 {
 	CANHardwareInterface::stop();
+	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 	exit(signum);
 }
 
@@ -61,6 +84,8 @@ void setup()
 
 	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
 
+	isobus::FastPacketProtocol::Protocol.register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(250)); // Wait to make sure our address was claimed
 
 	std::signal(SIGINT, signal_handler);
@@ -82,7 +107,7 @@ int main()
 	while (true)
 	{
 		// Send a fast packet message
-		isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, TestInternalECU.get(), nullptr);
+		isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, TestInternalECU.get(), nullptr, isobus::CANIdentifier::PriorityLowest7, nmea2k_transmit_complete_callback);
 
 		// Sleep for a while
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
