@@ -7,6 +7,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/hardware_integration/socket_can_interface.hpp"
+#include <isobus/isobus/can_warning_logger.hpp>
 #include "isobus/utility/system_timing.hpp"
 
 #include <linux/can.h>
@@ -21,7 +22,6 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <isobus/isobus/can_warning_logger.hpp>
 
 SocketCANInterface::SocketCANInterface(const std::string deviceName) :
   pCANDevice(new sockaddr_can),
