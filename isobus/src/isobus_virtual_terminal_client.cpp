@@ -2393,27 +2393,17 @@ namespace isobus
 				}
 			}
 
-			if (poolIndex < parentVTClient->objectPools.size())
+			if ((bytesOffset + numberOfBytesNeeded) <= parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
 			{
-				if ((bytesOffset + numberOfBytesNeeded) < parentVTClient->objectPools[poolIndex].objectPoolSize)
+				// We've got more data to transfer
+				retVal = true;
+				if (0 == bytesOffset)
 				{
-					// We've got more data to transfer
-					retVal = true;
-					if (0 == bytesOffset)
-					{
-						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
-						memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
-					}
-					else
-					{
-						// Subtract off 1 to account for the mux in the first byte of the message
-						memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
-					}
+					chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+					memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
 				}
-				else if ((bytesOffset + numberOfBytesNeeded) == parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
+				else
 				{
-					// We have a final non-aligned amount to transfer
-					retVal = true;
 					// Subtract off 1 to account for the mux in the first byte of the message
 					memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
 				}
