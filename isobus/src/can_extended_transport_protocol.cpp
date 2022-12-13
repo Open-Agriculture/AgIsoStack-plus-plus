@@ -209,6 +209,7 @@ namespace isobus
 										    (currentSession->sessionMessage.get_destination_control_function() == message->get_destination_control_function()))
 										{
 											// Sending EDPO for this session with mismatched PGN is not allowed
+											CANStackLogger::CAN_stack_log("[ETP]: Aborting session, EDPO for this session with mismatched PGN is not allowed");
 											abort_session(currentSession, ConnectionAbortReason::UnexpectedEDPOPgn);
 											close_session(currentSession);
 											anySessionMatched = true;
@@ -648,6 +649,7 @@ namespace isobus
 					{
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_3_TIMEOUT_MS))
 						{
+							CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while in RTS state");
 							abort_session(session, ConnectionAbortReason::Timeout);
 							close_session(session);
 						}
@@ -661,6 +663,7 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_3_TIMEOUT_MS))
 					{
+						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while waiting for CTS");
 						abort_session(session, ConnectionAbortReason::Timeout);
 						close_session(session);
 					}
@@ -716,6 +719,7 @@ namespace isobus
 									}
 									else
 									{
+										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, unable to transfer chunk of data (numberBytesLeft=" + to_string(numberBytesLeft) + ")");
 										abort_session(session, ConnectionAbortReason::AnyOtherReason);
 										close_session(session);
 										break;
@@ -780,6 +784,7 @@ namespace isobus
 					}
 					else if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
 					{
+						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, RX T1 timeout reached");
 						abort_session(session, ConnectionAbortReason::Timeout);
 						close_session(session);
 					}
@@ -794,6 +799,7 @@ namespace isobus
 					}
 					else if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_3_TIMEOUT_MS))
 					{
+						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while in CTS state");
 						abort_session(session, ConnectionAbortReason::Timeout);
 						close_session(session);
 					}
