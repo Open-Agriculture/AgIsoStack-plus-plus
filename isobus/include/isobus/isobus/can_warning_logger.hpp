@@ -47,7 +47,7 @@ namespace isobus
 		/// @brief Provides a pointer to the static instance of the logger, and returns if the pointer is valid
 		/// @param[out] canStackLogger The static logger instance
 		/// @returns true if the logger is not `nullptr` or false if it is `nullptr`
-		static bool get_can_stack_logger(CANStackLogger *canStackLogger);
+		static bool get_can_stack_logger(CANStackLogger *&canStackLogger);
 
 		static CANStackLogger *logger; ///< A static pointer to an instance of a logger
 	};
