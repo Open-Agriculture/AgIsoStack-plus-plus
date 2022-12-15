@@ -1584,8 +1584,8 @@ namespace isobus
 							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
 							{
 								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
-								// Retry this pool
-								//! @todo add a max number of retries
+								CANStackLogger::CAN_stack_log("[VT]: An object pool failed to upload. Resetting connection to VT.");
+								set_state(StateMachineState::Disconnected);
 							}
 							else
 							{
@@ -1634,7 +1634,15 @@ namespace isobus
 
 				case StateMachineState::Failed:
 				{
+					constexpr std::uint32_t VT_STATE_MACHINE_RETRY_TIMEOUT_MS = 5000;
 					sendWorkingSetMaintenenace = false;
+
+					// Retry connecting after a while
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS))
+					{
+						CANStackLogger::CAN_stack_log("[VT]: Resetting Failed VT Connection");
+						set_state(StateMachineState::Disconnected);
+					}
 				}
 				break;
 
@@ -2036,6 +2044,15 @@ namespace isobus
 	{
 		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 		state = value;
+
+		if (StateMachineState::Disconnected == value)
+		{
+			lastVTStatusTimestamp_ms = 0;
+			for (std::size_t i = 0; i < objectPools.size(); i++)
+			{
+				objectPools[i].uploaded = false;
+			}
+		}
 	}
 
 	void VirtualTerminalClient::process_button_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
