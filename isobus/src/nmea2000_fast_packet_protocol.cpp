@@ -83,6 +83,7 @@ namespace isobus
 		bool retVal = false;
 
 		if ((nullptr != source) &&
+		    (source->get_address_valid()) &&
 		    (parameterGroupNumber >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
 		    (parameterGroupNumber <= FP_MAX_PARAMETER_GROUP_NUMBER) &&
 		    (messageLength <= MAX_PROTOCOL_MESSAGE_LENGTH) &&
