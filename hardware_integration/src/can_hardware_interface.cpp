@@ -8,7 +8,9 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include <isobus/isobus/can_warning_logger.hpp>
 #include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 
@@ -246,7 +248,9 @@ bool CANHardwareInterface::transmit_can_message(isobus::HardwareInterfaceCANFram
 	bool retVal = false;
 
 	if ((lChannel < hardwareChannels.size()) &&
-	    (threadsStarted))
+	    (threadsStarted) &&
+	    (nullptr != hardwareChannels[lChannel]->frameHandler) &&
+	    (hardwareChannels[lChannel]->frameHandler->get_is_valid()))
 	{
 		hardwareChannels[lChannel]->messagesToBeTransmittedMutex.lock();
 		hardwareChannels[lChannel]->messagesToBeTransmitted.push_back(packet);
@@ -466,7 +470,7 @@ void CANHardwareInterface::receive_message_thread_function(uint8_t aCANChannel)
 		{
 			if (pCANHardware->frameHandler->get_is_valid())
 			{
-				// Socker or other hardware still open
+				// Socket or other hardware still open
 				if (pCANHardware->frameHandler->read_frame(tempCanFrame))
 				{
 					tempCanFrame.channel = aCANChannel;
@@ -475,6 +479,11 @@ void CANHardwareInterface::receive_message_thread_function(uint8_t aCANChannel)
 					pCANHardware->receivedMessagesMutex.unlock();
 					threadConditionVariable.notify_all();
 				}
+			}
+			else
+			{
+				isobus::CANStackLogger::CAN_stack_log("[CAN Rx Thread]: CAN Channel " + isobus::to_string(aCANChannel) + " appears to be invalid.");
+				std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Arbitrary, but don't want to infinite loop on the validity check.
 			}
 		}
 	}
