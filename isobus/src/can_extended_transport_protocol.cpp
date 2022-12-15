@@ -638,6 +638,7 @@ namespace isobus
 						{
 							CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while in RTS state");
 							abort_session(session, ConnectionAbortReason::Timeout);
+							process_session_complete_callback(session, false);
 							close_session(session);
 						}
 					}
@@ -652,6 +653,7 @@ namespace isobus
 					{
 						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while waiting for CTS");
 						abort_session(session, ConnectionAbortReason::Timeout);
+						process_session_complete_callback(session, false);
 						close_session(session);
 					}
 				}
@@ -708,6 +710,7 @@ namespace isobus
 									{
 										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, unable to transfer chunk of data (numberBytesLeft=" + to_string(numberBytesLeft) + ")");
 										abort_session(session, ConnectionAbortReason::AnyOtherReason);
+										process_session_complete_callback(session, false);
 										close_session(session);
 										break;
 									}
