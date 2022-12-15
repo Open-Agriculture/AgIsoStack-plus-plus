@@ -3,6 +3,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 #include "objectPoolObjects.h"
@@ -20,6 +21,18 @@ static std::vector<std::uint8_t> testPool;
 static SocketCANInterface canDriver("can0");
 
 using namespace std;
+
+// A log sink for the CAN stack
+class CustomLogger : public isobus::CANStackLogger
+{
+public:
+	void LogCANLibWarning(const std::string &text) override
+	{
+		std::cout << text << std::endl; // Write the text to stdout
+	}
+};
+
+static CustomLogger logger;
 
 void signal_handler(int signum)
 {
@@ -88,6 +101,7 @@ void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, s
 
 void setup()
 {
+	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
 
