@@ -43,7 +43,7 @@ namespace isobus
 		// Override this function to use the log sink
 	}
 
-	bool CANStackLogger::get_can_stack_logger(CANStackLogger *canStackLogger)
+	bool CANStackLogger::get_can_stack_logger(CANStackLogger *&canStackLogger)
 	{
 		canStackLogger = logger;
 		return (nullptr != canStackLogger);
