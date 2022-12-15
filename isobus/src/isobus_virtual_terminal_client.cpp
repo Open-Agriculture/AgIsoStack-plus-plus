@@ -54,6 +54,7 @@ namespace isobus
 		if (nullptr != partnerControlFunction)
 		{
 			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 		}
 	}
@@ -90,6 +91,13 @@ namespace isobus
 	{
 		if (initialized)
 		{
+			if (nullptr != partnerControlFunction)
+			{
+				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
+				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+			}
+
 			shouldTerminate = true;
 
 			if (nullptr != workerThread)
@@ -1405,6 +1413,7 @@ namespace isobus
 				case StateMachineState::Disconnected:
 				{
 					sendWorkingSetMaintenenace = false;
+
 					if (partnerControlFunction->get_address_valid())
 					{
 						set_state(StateMachineState::WaitForPartnerVTStatusMessage);
@@ -1437,6 +1446,7 @@ namespace isobus
 					// so the state machine cannot progress.
 					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
+						CANStackLogger::CAN_stack_log("[VT]: Ready to upload pool, but VT server has timed out. Disconnecting.");
 						set_state(StateMachineState::Disconnected);
 					}
 
@@ -1471,7 +1481,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("[VT]: Get Memory Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Memory Response Timeout");
 					}
 				}
 				break;
@@ -1490,7 +1500,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("[VT]: Get Number Softkeys Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Number Softkeys Response Timeout");
 					}
 				}
 				break;
@@ -1509,7 +1519,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("[VT]: Get Text Font Data Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Text Font Data Response Timeout");
 					}
 				}
 				break;
@@ -1528,7 +1538,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("[VT]: Get Hardware Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get Hardware Response Timeout");
 					}
 				}
 				break;
@@ -1616,7 +1626,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
-						CANStackLogger::CAN_stack_log("[VT]: Get End of Object Pool Response Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Get End of Object Pool Response Timeout");
 					}
 				}
 				break;
@@ -1627,7 +1637,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Disconnected);
-						CANStackLogger::CAN_stack_log("[VT]: Status Timout");
+						CANStackLogger::CAN_stack_log("[VT]: Status Timeout");
 					}
 				}
 				break;
@@ -2148,7 +2158,23 @@ namespace isobus
 
 			switch (message->get_identifier().get_parameter_group_number())
 			{
-					//! @todo Handle NACK, any other PGNs needed as well
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
+				{
+					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message->get_data().at(0)))
+					{
+						std::uint32_t targetParameterGroupNumber = ((static_cast<std::uint32_t>(message->get_data().at(5)) << 16) |
+						                                            (static_cast<std::uint32_t>(message->get_data().at(6)) << 8) |
+						                                            (static_cast<std::uint32_t>(message->get_data().at(7))));
+
+						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber) &&
+						    (StateMachineState::Connected == parentVT->state))
+						{
+							CANStackLogger::CAN_stack_log("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");
+							parentVT->set_state(StateMachineState::Disconnected);
+						}
+					}
+				}
+				break;
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU):
 				{
