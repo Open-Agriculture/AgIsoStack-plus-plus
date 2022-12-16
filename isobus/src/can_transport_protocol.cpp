@@ -198,7 +198,7 @@ namespace isobus
 										// The session exists, but we're probably already in the TxDataSession state. Need to abort
 										// In the case of Rx'ing a CTS, we're the source in the session
 										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										CANStackLogger::CAN_stack_log("[TP]: Abort CTS while in data session");
+										CANStackLogger::CAN_stack_log("[TP]: Abort CTS while in data session, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
@@ -206,7 +206,7 @@ namespace isobus
 									// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
 									// In the case of Rx'ing a CTS, we're the source in the session
 									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-									CANStackLogger::CAN_stack_log("[TP]: Abort CTS With no matching session");
+									CANStackLogger::CAN_stack_log("[TP]: Abort CTS With no matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
 							else
@@ -241,13 +241,13 @@ namespace isobus
 										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 										process_session_complete_callback(session, false);
 										close_session(session);
-										CANStackLogger::CAN_stack_log("[TP]: Abort EOM in wrong session state");
+										CANStackLogger::CAN_stack_log("[TP]: Abort EOM in wrong session state, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
 								{
 									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-									CANStackLogger::CAN_stack_log("[TP]: Abort EOM without matching session");
+									CANStackLogger::CAN_stack_log("[TP]: Abort EOM without matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
 							else
