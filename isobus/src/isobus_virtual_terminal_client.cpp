@@ -2424,7 +2424,7 @@ namespace isobus
 		    (0 != numberOfBytesNeeded))
 		{
 			VirtualTerminalClient *parentVTClient = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
-			std::uint32_t poolIndex;
+			std::uint32_t poolIndex = std::numeric_limits<std::uint32_t>::max();
 
 			// Need to figure out which pool we're currently uploading
 			for (std::uint32_t i = 0; i < parentVTClient->objectPools.size(); i++)
@@ -2436,7 +2436,9 @@ namespace isobus
 				}
 			}
 
-			if ((bytesOffset + numberOfBytesNeeded) <= parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
+			// If pool index is FFs, something is wrong with the state machine state, return false.
+			if ((std::numeric_limits<std::uint32_t>::max() != poolIndex) &&
+			    (bytesOffset + numberOfBytesNeeded) <= parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
 			{
 				// We've got more data to transfer
 				retVal = true;
