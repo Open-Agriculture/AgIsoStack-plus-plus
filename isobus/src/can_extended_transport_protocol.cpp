@@ -70,7 +70,8 @@ namespace isobus
 
 	void ExtendedTransportProtocolManager::process_message(CANMessage *const message)
 	{
-		if (nullptr == message)
+		if ((nullptr == message) ||
+		    (nullptr == CANNetworkManager::CANNetwork.get_internal_control_function(message->get_destination_control_function())))
 		{
 			return;
 		}
