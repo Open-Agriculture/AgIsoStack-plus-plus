@@ -496,7 +496,7 @@ namespace isobus
 			}
 
 			txFrame.channel = portIndex;
-			memcpy((void *)txFrame.data, data, size);
+			memcpy(reinterpret_cast<void *>(txFrame.data), data, size);
 			txFrame.dataLength = size;
 			txFrame.isExtendedFrame = true;
 			txFrame.identifier = identifier & 0x1FFFFFFF;
