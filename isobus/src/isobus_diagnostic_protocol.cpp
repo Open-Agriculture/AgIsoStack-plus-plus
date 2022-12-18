@@ -753,10 +753,10 @@ namespace isobus
 		if (nullptr != myControlFunction)
 		{
 			std::uint16_t payloadSize = (activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
-			std::vector<std::uint8_t> buffer;
 
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
+				std::vector<std::uint8_t> buffer;
 				buffer.resize(payloadSize);
 
 				if (get_j1939_mode())
@@ -841,10 +841,10 @@ namespace isobus
 		if (nullptr != myControlFunction)
 		{
 			std::uint16_t payloadSize = (inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
-			std::vector<std::uint8_t> buffer;
 
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
+				std::vector<std::uint8_t> buffer;
 				buffer.resize(payloadSize);
 
 				if (get_j1939_mode())
