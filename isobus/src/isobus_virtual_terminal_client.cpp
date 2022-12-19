@@ -109,12 +109,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTSoftKeyEventCallback(VTKeyEventCallback value)
+	void VirtualTerminalClient::register_vt_soft_key_event_callback(VTKeyEventCallback value)
 	{
 		softKeyEventCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTSoftKeyEventCallback(VTKeyEventCallback value)
+	void VirtualTerminalClient::remove_vt_soft_key_event_callback(VTKeyEventCallback value)
 	{
 		auto callbackLocation = find(softKeyEventCallbacks.begin(), softKeyEventCallbacks.end(), value);
 
@@ -124,12 +124,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTButtonEventCallback(VTKeyEventCallback value)
+	void VirtualTerminalClient::register_vt_button_event_callback(VTKeyEventCallback value)
 	{
 		buttonEventCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTButtonEventCallback(VTKeyEventCallback value)
+	void VirtualTerminalClient::remove_vt_button_event_callback(VTKeyEventCallback value)
 	{
 		auto callbackLocation = find(buttonEventCallbacks.begin(), buttonEventCallbacks.end(), value);
 
@@ -139,12 +139,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTPointingEventCallback(VTPointingEventCallback value)
+	void VirtualTerminalClient::register_vt_pointing_event_callback(VTPointingEventCallback value)
 	{
 		pointingEventCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTPointingEventCallback(VTPointingEventCallback value)
+	void VirtualTerminalClient::remove_vt_pointing_event_callback(VTPointingEventCallback value)
 	{
 		auto callbackLocation = find(pointingEventCallbacks.begin(), pointingEventCallbacks.end(), value);
 
@@ -154,12 +154,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value)
+	void VirtualTerminalClient::register_vt_select_input_object_event_callback(VTSelectInputObjectCallback value)
 	{
 		selectInputObjectCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value)
+	void VirtualTerminalClient::remove_vt_selection_input_object_event_callback(VTSelectInputObjectCallback value)
 	{
 		auto callbackLocation = find(selectInputObjectCallbacks.begin(), selectInputObjectCallbacks.end(), value);
 
@@ -169,12 +169,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTESCMessageEventCallback(VTESCMessageCallback value)
+	void VirtualTerminalClient::register_vt_esc_message_event_callback(VTESCMessageCallback value)
 	{
 		escMessageCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTESCMessageEventCallback(VTESCMessageCallback value)
+	void VirtualTerminalClient::remove_vt_esc_message_event_callback(VTESCMessageCallback value)
 	{
 		auto callbackLocation = find(escMessageCallbacks.begin(), escMessageCallbacks.end(), value);
 
@@ -184,12 +184,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTChangeNumericValueEventCallback(VTChangeNumericValueCallback value)
+	void VirtualTerminalClient::register_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value)
 	{
 		changeNumericValueCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTChangeNumericValueEventCallback(VTChangeNumericValueCallback value)
+	void VirtualTerminalClient::remove_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value)
 	{
 		auto callbackLocation = find(changeNumericValueCallbacks.begin(), changeNumericValueCallbacks.end(), value);
 
@@ -199,12 +199,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTChangeActiveMaskEventCallback(VTChangeActiveMaskCallback value)
+	void VirtualTerminalClient::register_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value)
 	{
 		changeActiveMaskCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTChangeActiveMaskEventCallback(VTChangeActiveMaskCallback value)
+	void VirtualTerminalClient::remove_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value)
 	{
 		auto callbackLocation = find(changeActiveMaskCallbacks.begin(), changeActiveMaskCallbacks.end(), value);
 
@@ -214,12 +214,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTChangeSoftKeyMaskEventCallback(VTChangeSoftKeyMaskCallback value)
+	void VirtualTerminalClient::register_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value)
 	{
 		changeSoftKeyMaskCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTChangeSoftKeyMaskEventCallback(VTChangeSoftKeyMaskCallback value)
+	void VirtualTerminalClient::remove_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value)
 	{
 		auto callbackLocation = find(changeSoftKeyMaskCallbacks.begin(), changeSoftKeyMaskCallbacks.end(), value);
 
@@ -229,12 +229,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTChangeStringValueEventCallback(VTChangeStringValueCallback value)
+	void VirtualTerminalClient::register_vt_change_string_value_event_callback(VTChangeStringValueCallback value)
 	{
 		changeStringValueCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTChangeStringValueEventCallback(VTChangeStringValueCallback value)
+	void VirtualTerminalClient::remove_vt_change_string_value_event_callback(VTChangeStringValueCallback value)
 	{
 		auto callbackLocation = find(changeStringValueCallbacks.begin(), changeStringValueCallbacks.end(), value);
 
@@ -244,12 +244,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTUserLayoutHideShowEventCallback(VTUserLayoutHideShowCallback value)
+	void VirtualTerminalClient::register_vt_user_layout_hide_show_event_callback(VTUserLayoutHideShowCallback value)
 	{
 		userLayoutHideShowCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTUserLayoutHideShowEventCallback(VTUserLayoutHideShowCallback value)
+	void VirtualTerminalClient::remove_vt_user_layout_hide_show_callback(VTUserLayoutHideShowCallback value)
 	{
 		auto callbackLocation = find(userLayoutHideShowCallbacks.begin(), userLayoutHideShowCallbacks.end(), value);
 
@@ -259,12 +259,12 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::RegisterVTControlAudioSignalTerminationEventCallback(VTAudioSignalTerminationCallback value)
+	void VirtualTerminalClient::register_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value)
 	{
 		audioSignalTerminationCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::RemoveVTControlAudioSignalTerminationEventCallback(VTAudioSignalTerminationCallback value)
+	void VirtualTerminalClient::remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value)
 	{
 		auto callbackLocation = find(audioSignalTerminationCallbacks.begin(), audioSignalTerminationCallbacks.end(), value);
 
@@ -1428,7 +1428,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::get_vt_version_supported(VTVersion minimumVersion)
+	bool VirtualTerminalClient::get_vt_version_supported(VTVersion minimumVersion) const
 	{
 		bool retVal = false;
 

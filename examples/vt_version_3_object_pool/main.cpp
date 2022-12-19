@@ -145,8 +145,8 @@ void setup()
 	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
-	TestVirtualTerminalClient->RegisterVTButtonEventCallback(handleVTButton);
-	TestVirtualTerminalClient->RegisterVTSoftKeyEventCallback(handleVTButton);
+	TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
+	TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
 	TestVirtualTerminalClient->initialize(true);
 	std::signal(SIGINT, signal_handler);
 }
