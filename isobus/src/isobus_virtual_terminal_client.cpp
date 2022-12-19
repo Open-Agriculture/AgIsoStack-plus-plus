@@ -2457,7 +2457,7 @@ namespace isobus
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
 								// VT version is at least 6
-								touchState = data.at(5) & 0x08;
+								touchState = data.at(5) & 0x0F;
 								partenMaskObjectID = (static_cast<std::uint16_t>(data.at(6)) &
 								                      ((static_cast<std::uint16_t>(data.at(7))) << 8));
 								//! @todo process TAN
@@ -2504,7 +2504,7 @@ namespace isobus
 						{
 							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool errorCode = data.at(3) & 0x0F;
+							bool errorCode = data.at(3) & 0x1F;
 							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
 							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
 							{
