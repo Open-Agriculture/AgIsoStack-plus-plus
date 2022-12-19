@@ -82,7 +82,7 @@ namespace isobus
 				if (CAN_DATA_LENGTH == message->get_data_length())
 				{
 					ExtendedTransportProtocolSession *session;
-					auto &data = message->get_data();
+					std::vector<std::uint8_t> &data = message->get_data();
 					const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
 					switch (message->get_data()[0])
