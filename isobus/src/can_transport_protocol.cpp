@@ -86,7 +86,7 @@ namespace isobus
 						{
 							if (CAN_DATA_LENGTH == message->get_data_length())
 							{
-								auto data = message->get_data();
+								std::vector<std::uint8_t> &data = message->get_data();
 								TransportProtocolSession *session;
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
@@ -125,7 +125,7 @@ namespace isobus
 							if (CAN_DATA_LENGTH == message->get_data_length())
 							{
 								TransportProtocolSession *session;
-								auto data = message->get_data();
+								std::vector<std::uint8_t> &data = message->get_data();
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
 								if ((nullptr != message->get_destination_control_function()) &&
@@ -175,7 +175,7 @@ namespace isobus
 							    (nullptr != message->get_source_control_function()))
 							{
 								TransportProtocolSession *session;
-								auto data = message->get_data();
+								std::vector<std::uint8_t> &data = message->get_data();
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 								const std::uint8_t packetsToBeSent = data[1];
 
@@ -224,7 +224,7 @@ namespace isobus
 							    (nullptr != message->get_source_control_function()))
 							{
 								TransportProtocolSession *session;
-								auto data = message->get_data();
+								std::vector<std::uint8_t> &data = message->get_data();
 								const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 
 								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))

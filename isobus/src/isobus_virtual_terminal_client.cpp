@@ -116,7 +116,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_soft_key_event_callback(VTKeyEventCallback value)
 	{
-		auto callbackLocation = find(softKeyEventCallbacks.begin(), softKeyEventCallbacks.end(), value);
+		auto callbackLocation = std::find(softKeyEventCallbacks.begin(), softKeyEventCallbacks.end(), value);
 
 		if (softKeyEventCallbacks.end() != callbackLocation)
 		{
@@ -131,7 +131,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_button_event_callback(VTKeyEventCallback value)
 	{
-		auto callbackLocation = find(buttonEventCallbacks.begin(), buttonEventCallbacks.end(), value);
+		auto callbackLocation = std::find(buttonEventCallbacks.begin(), buttonEventCallbacks.end(), value);
 
 		if (buttonEventCallbacks.end() != callbackLocation)
 		{
@@ -146,7 +146,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_pointing_event_callback(VTPointingEventCallback value)
 	{
-		auto callbackLocation = find(pointingEventCallbacks.begin(), pointingEventCallbacks.end(), value);
+		auto callbackLocation = std::find(pointingEventCallbacks.begin(), pointingEventCallbacks.end(), value);
 
 		if (pointingEventCallbacks.end() != callbackLocation)
 		{
@@ -161,7 +161,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_selection_input_object_event_callback(VTSelectInputObjectCallback value)
 	{
-		auto callbackLocation = find(selectInputObjectCallbacks.begin(), selectInputObjectCallbacks.end(), value);
+		auto callbackLocation = std::find(selectInputObjectCallbacks.begin(), selectInputObjectCallbacks.end(), value);
 
 		if (selectInputObjectCallbacks.end() != callbackLocation)
 		{
@@ -176,7 +176,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_esc_message_event_callback(VTESCMessageCallback value)
 	{
-		auto callbackLocation = find(escMessageCallbacks.begin(), escMessageCallbacks.end(), value);
+		auto callbackLocation = std::find(escMessageCallbacks.begin(), escMessageCallbacks.end(), value);
 
 		if (escMessageCallbacks.end() != callbackLocation)
 		{
@@ -191,7 +191,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value)
 	{
-		auto callbackLocation = find(changeNumericValueCallbacks.begin(), changeNumericValueCallbacks.end(), value);
+		auto callbackLocation = std::find(changeNumericValueCallbacks.begin(), changeNumericValueCallbacks.end(), value);
 
 		if (changeNumericValueCallbacks.end() != callbackLocation)
 		{
@@ -206,7 +206,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value)
 	{
-		auto callbackLocation = find(changeActiveMaskCallbacks.begin(), changeActiveMaskCallbacks.end(), value);
+		auto callbackLocation = std::find(changeActiveMaskCallbacks.begin(), changeActiveMaskCallbacks.end(), value);
 
 		if (changeActiveMaskCallbacks.end() != callbackLocation)
 		{
@@ -221,7 +221,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value)
 	{
-		auto callbackLocation = find(changeSoftKeyMaskCallbacks.begin(), changeSoftKeyMaskCallbacks.end(), value);
+		auto callbackLocation = std::find(changeSoftKeyMaskCallbacks.begin(), changeSoftKeyMaskCallbacks.end(), value);
 
 		if (changeSoftKeyMaskCallbacks.end() != callbackLocation)
 		{
@@ -236,7 +236,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_change_string_value_event_callback(VTChangeStringValueCallback value)
 	{
-		auto callbackLocation = find(changeStringValueCallbacks.begin(), changeStringValueCallbacks.end(), value);
+		auto callbackLocation = std::find(changeStringValueCallbacks.begin(), changeStringValueCallbacks.end(), value);
 
 		if (changeStringValueCallbacks.end() != callbackLocation)
 		{
@@ -251,7 +251,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_user_layout_hide_show_callback(VTUserLayoutHideShowCallback value)
 	{
-		auto callbackLocation = find(userLayoutHideShowCallbacks.begin(), userLayoutHideShowCallbacks.end(), value);
+		auto callbackLocation = std::find(userLayoutHideShowCallbacks.begin(), userLayoutHideShowCallbacks.end(), value);
 
 		if (userLayoutHideShowCallbacks.end() != callbackLocation)
 		{
@@ -266,7 +266,7 @@ namespace isobus
 
 	void VirtualTerminalClient::remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value)
 	{
-		auto callbackLocation = find(audioSignalTerminationCallbacks.begin(), audioSignalTerminationCallbacks.end(), value);
+		auto callbackLocation = std::find(audioSignalTerminationCallbacks.begin(), audioSignalTerminationCallbacks.end(), value);
 
 		if (audioSignalTerminationCallbacks.end() != callbackLocation)
 		{
@@ -2184,7 +2184,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_button_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->buttonEventCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->buttonEventCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->buttonEventCallbacks[i])
 			{
@@ -2195,7 +2195,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_softkey_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->softKeyEventCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->softKeyEventCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->softKeyEventCallbacks[i])
 			{
@@ -2210,7 +2210,7 @@ namespace isobus
 	                                                            std::uint16_t parentMaskObjectID,
 	                                                            VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->pointingEventCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->pointingEventCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->pointingEventCallbacks[i])
 			{
@@ -2221,7 +2221,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_select_input_object_callback(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->selectInputObjectCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->selectInputObjectCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->selectInputObjectCallbacks[i])
 			{
@@ -2232,7 +2232,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_esc_message_callback(std::uint16_t objectID, ESCMessageErrorCode errorCode, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->escMessageCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->escMessageCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->escMessageCallbacks[i])
 			{
@@ -2243,7 +2243,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_change_numeric_value_callback(std::uint16_t objectID, std::uint32_t value, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->changeNumericValueCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->changeNumericValueCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->changeNumericValueCallbacks[i])
 			{
@@ -2261,7 +2261,7 @@ namespace isobus
 	                                                                bool poolDeleted,
 	                                                                VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->changeActiveMaskCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->changeActiveMaskCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->changeActiveMaskCallbacks[i])
 			{
@@ -2285,7 +2285,7 @@ namespace isobus
 	                                                                  bool poolDeleted,
 	                                                                  VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->changeSoftKeyMaskCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->changeSoftKeyMaskCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->changeSoftKeyMaskCallbacks[i])
 			{
@@ -2302,7 +2302,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_change_string_value_callback(std::uint16_t objectID, std::string value, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->changeStringValueCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->changeStringValueCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->changeStringValueCallbacks[i])
 			{
@@ -2313,7 +2313,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_user_layout_hide_show_callback(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->userLayoutHideShowCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->userLayoutHideShowCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->userLayoutHideShowCallbacks[i])
 			{
@@ -2324,7 +2324,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_audio_signal_termination_callback(bool isTerminated, VirtualTerminalClient *parentPointer)
 	{
-		for (uint32_t i = 0; i < parentPointer->audioSignalTerminationCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->audioSignalTerminationCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->audioSignalTerminationCallbacks[i])
 			{
@@ -2379,7 +2379,7 @@ namespace isobus
 		    (CAN_DATA_LENGTH == message->get_data_length()))
 		{
 			VirtualTerminalClient *parentVT = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
-			auto &data = message->get_data();
+			std::vector<std::uint8_t> &data = message->get_data();
 
 			switch (message->get_identifier().get_parameter_group_number())
 			{
@@ -2579,6 +2579,7 @@ namespace isobus
 							                                                poolDeleted,
 							                                                parentVT);
 						}
+						break;
 
 						case static_cast<std::uint8_t>(Function::VTChangeStringValueMessage):
 						{
@@ -2627,6 +2628,7 @@ namespace isobus
 								//! @todo process TAN
 							}
 						}
+						break;
 
 						case static_cast<std::uint8_t>(Function::VTStatusMessage):
 						{

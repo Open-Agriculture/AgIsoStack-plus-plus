@@ -228,7 +228,7 @@ namespace isobus
 					// Can't send this request to global, and must be 8 bytes. Ignore illegal message formats
 					if ((CAN_DATA_LENGTH == message->get_data_length()) && (nullptr != message->get_destination_control_function()))
 					{
-						auto data = message->get_data();
+						std::vector<std::uint8_t> &data = message->get_data();
 						std::uint32_t requestedPGN = data[0];
 						requestedPGN |= (static_cast<std::uint32_t>(data[1]) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(data[2]) << 8);
@@ -267,7 +267,7 @@ namespace isobus
 						bool shouldAck = false;
 						AcknowledgementType ackType = AcknowledgementType::Negative;
 						bool anyCallbackProcessed = false;
-						auto data = message->get_data();
+						std::vector<std::uint8_t> &data = message->get_data();
 						std::uint32_t requestedPGN = data[0];
 						requestedPGN |= (static_cast<std::uint32_t>(data[1]) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(data[2]) << 8);
