@@ -301,94 +301,94 @@ namespace isobus
 		// Callbacks for events that happen on the VT
 		/// @brief Allows you to register for a callback when a softkey is pressed or released
 		/// @param[in] value The callback to register
-		void RegisterVTSoftKeyEventCallback(VTKeyEventCallback value);
+		void register_vt_soft_key_event_callback(VTKeyEventCallback value);
 
 		/// @brief Allows you to remove a callback for when a softkey is pressed or released
 		/// @param[in] value The callback to remove
-		void RemoveVTSoftKeyEventCallback(VTKeyEventCallback value);
+		void remove_vt_soft_key_event_callback(VTKeyEventCallback value);
 
 		/// @brief Allows you to register for a callback when a button is pressed or released
 		/// @param[in] value The callback to register
-		void RegisterVTButtonEventCallback(VTKeyEventCallback value);
+		void register_vt_button_event_callback(VTKeyEventCallback value);
 
 		/// @brief Allows you to remove a callback when a button is pressed or released
 		/// @param[in] value The callback to remove
-		void RemoveVTButtonEventCallback(VTKeyEventCallback value);
+		void remove_vt_button_event_callback(VTKeyEventCallback value);
 
 		/// @brief Allows you to register for a callback when a pointing event is "pressed or released"
 		/// @param[in] value The callback to register
-		void RegisterVTPointingEventCallback(VTPointingEventCallback value);
+		void register_vt_pointing_event_callback(VTPointingEventCallback value);
 
 		/// @brief Allows you to remove a callback when a pointing event is "pressed or released"
 		/// @param[in] value The callback to remove
-		void RemoveVTPointingEventCallback(VTPointingEventCallback value);
+		void remove_vt_pointing_event_callback(VTPointingEventCallback value);
 
 		/// @brief Allows you to register for a callback when an input object event is triggered
 		/// @param[in] value The callback to register
-		void RegisterVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value);
+		void register_vt_select_input_object_event_callback(VTSelectInputObjectCallback value);
 
 		/// @brief Allows you to remove an input object event callback
 		/// @param[in] value The callback to remove
-		void RemoveVTSelectInputObjectEventCallback(VTSelectInputObjectCallback value);
+		void remove_vt_selection_input_object_event_callback(VTSelectInputObjectCallback value);
 
 		/// @brief Allows you to register for a callback when an ESC message is received, e.g. an open object input is closed
 		/// @param[in] value The callback to register
-		void RegisterVTESCMessageEventCallback(VTESCMessageCallback value);
+		void register_vt_esc_message_event_callback(VTESCMessageCallback value);
 
 		/// @brief Allows you to remove an ESC message callback
 		/// @param[in] value The callback to remove
-		void RemoveVTESCMessageEventCallback(VTESCMessageCallback value);
+		void remove_vt_esc_message_event_callback(VTESCMessageCallback value);
 
 		/// @brief Allows you to register for a callback when a numeric value is changed in an input object
 		/// @param[in] value The callback to register
-		void RegisterVTChangeNumericValueEventCallback(VTChangeNumericValueCallback value);
+		void register_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value);
 
 		/// @brief Allows you to remove a numeric value change callback
 		/// @param[in] value The callback to remove
-		void RemoveVTChangeNumericValueEventCallback(VTChangeNumericValueCallback value);
+		void remove_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value);
 
 		/// @brief Allows you to register for a callback when the active mask is changed
 		/// @details The VT sends this whenever there are missing object references or errors in the mask.
 		/// @param[in] value The callback to register
-		void RegisterVTChangeActiveMaskEventCallback(VTChangeActiveMaskCallback value);
+		void register_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value);
 
 		/// @brief Allows you to remove a callback when the active mask is changed
 		/// @param[in] value The callback to remove
-		void RemoveVTChangeActiveMaskEventCallback(VTChangeActiveMaskCallback value);
+		void remove_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value);
 
 		/// @brief Allows you to register for a callback when the soft key mask is changed
 		/// @details The VT sends this whenever there are missing object references or errors in the mask.
 		/// @param[in] value The callback to register
-		void RegisterVTChangeSoftKeyMaskEventCallback(VTChangeSoftKeyMaskCallback value);
+		void register_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value);
 
 		/// @brief Allows you to remove a callback when the soft key mask is changed
 		/// @param[in] value The callback to remove
-		void RemoveVTChangeSoftKeyMaskEventCallback(VTChangeSoftKeyMaskCallback value);
+		void remove_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value);
 
 		/// @brief Allows you to register for a callback when a string value is changed
 		/// @details The object could be either the input string object or the referenced string variable object.
 		/// @param[in] value The callback to register
-		void RegisterVTChangeStringValueEventCallback(VTChangeStringValueCallback value);
+		void register_vt_change_string_value_event_callback(VTChangeStringValueCallback value);
 
 		/// @brief Allows you to remove a callback when a string value is changed
 		/// @param[in] value The callback to remove
-		void RemoveVTChangeStringValueEventCallback(VTChangeStringValueCallback value);
+		void remove_vt_change_string_value_event_callback(VTChangeStringValueCallback value);
 
 		/// @brief Allows you to register for a callback when a user-layout object is hidden or shown
 		/// @param[in] value The callback to register
-		void RegisterVTUserLayoutHideShowEventCallback(VTUserLayoutHideShowCallback value);
+		void register_vt_user_layout_hide_show_event_callback(VTUserLayoutHideShowCallback value);
 
 		/// @brief Allows you to remove a callback when a user-layout object is hidden or shown
 		/// @param[in] value The callback to remove
-		void RemoveVTUserLayoutHideShowEventCallback(VTUserLayoutHideShowCallback value);
+		void remove_vt_user_layout_hide_show_callback(VTUserLayoutHideShowCallback value);
 
 		/// @brief Allows you to register for a callback when an audio signal is terminated
 		/// @param[in] value The callback to register
-		void RegisterVTControlAudioSignalTerminationEventCallback(VTAudioSignalTerminationCallback value);
+		void register_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value);
 
 		/// @brief Allows you to remove a callback when an audio signal is terminated
 		/// @param[in] value The callback to remove
-		void RemoveVTControlAudioSignalTerminationEventCallback(VTAudioSignalTerminationCallback value);
+		void remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value);
 
 		// Command Messages
 		/// @brief Sends a hide/show object command
@@ -973,7 +973,7 @@ namespace isobus
 		/// @brief Returns if the VT version is supported by the VT server
 		/// @param[in] value The VT version to check against
 		/// @returns true if the VT version is supported by the VT server
-		bool get_vt_version_supported(VTVersion value);
+		bool get_vt_version_supported(VTVersion value) const;
 
 		// ************************************************
 		// Object Pool Interface
