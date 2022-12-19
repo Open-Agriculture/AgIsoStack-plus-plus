@@ -169,6 +169,111 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalClient::RegisterVTESCMessageEventCallback(VTESCMessageCallback value)
+	{
+		escMessageCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTESCMessageEventCallback(VTESCMessageCallback value)
+	{
+		auto callbackLocation = find(escMessageCallbacks.begin(), escMessageCallbacks.end(), value);
+
+		if (escMessageCallbacks.end() != callbackLocation)
+		{
+			escMessageCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTChangeNumericValueEventCallback(VTChangeNumericValueCallback value)
+	{
+		changeNumericValueCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTChangeNumericValueEventCallback(VTChangeNumericValueCallback value)
+	{
+		auto callbackLocation = find(changeNumericValueCallbacks.begin(), changeNumericValueCallbacks.end(), value);
+
+		if (changeNumericValueCallbacks.end() != callbackLocation)
+		{
+			changeNumericValueCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTChangeActiveMaskEventCallback(VTChangeActiveMaskCallback value)
+	{
+		changeActiveMaskCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTChangeActiveMaskEventCallback(VTChangeActiveMaskCallback value)
+	{
+		auto callbackLocation = find(changeActiveMaskCallbacks.begin(), changeActiveMaskCallbacks.end(), value);
+
+		if (changeActiveMaskCallbacks.end() != callbackLocation)
+		{
+			changeActiveMaskCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTChangeSoftKeyMaskEventCallback(VTChangeSoftKeyMaskCallback value)
+	{
+		changeSoftKeyMaskCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTChangeSoftKeyMaskEventCallback(VTChangeSoftKeyMaskCallback value)
+	{
+		auto callbackLocation = find(changeSoftKeyMaskCallbacks.begin(), changeSoftKeyMaskCallbacks.end(), value);
+
+		if (changeSoftKeyMaskCallbacks.end() != callbackLocation)
+		{
+			changeSoftKeyMaskCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTChangeStringValueEventCallback(VTChangeStringValueCallback value)
+	{
+		changeStringValueCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTChangeStringValueEventCallback(VTChangeStringValueCallback value)
+	{
+		auto callbackLocation = find(changeStringValueCallbacks.begin(), changeStringValueCallbacks.end(), value);
+
+		if (changeStringValueCallbacks.end() != callbackLocation)
+		{
+			changeStringValueCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTUserLayoutHideShowEventCallback(VTUserLayoutHideShowCallback value)
+	{
+		userLayoutHideShowCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTUserLayoutHideShowEventCallback(VTUserLayoutHideShowCallback value)
+	{
+		auto callbackLocation = find(userLayoutHideShowCallbacks.begin(), userLayoutHideShowCallbacks.end(), value);
+
+		if (userLayoutHideShowCallbacks.end() != callbackLocation)
+		{
+			userLayoutHideShowCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::RegisterVTControlAudioSignalTerminationEventCallback(VTAudioSignalTerminationCallback value)
+	{
+		audioSignalTerminationCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::RemoveVTControlAudioSignalTerminationEventCallback(VTAudioSignalTerminationCallback value)
+	{
+		auto callbackLocation = find(audioSignalTerminationCallbacks.begin(), audioSignalTerminationCallbacks.end(), value);
+
+		if (audioSignalTerminationCallbacks.end() != callbackLocation)
+		{
+			audioSignalTerminationCallbacks.erase(callbackLocation);
+		}
+	}
+
 	bool VirtualTerminalClient::send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::HideShowObjectCommand),
@@ -1323,6 +1428,18 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalClient::get_vt_version_supported(VTVersion minimumVersion)
+	{
+		bool retVal = false;
+
+		if (get_connected_vt_version() != VTVersion::ReservedOrUnknown)
+		{
+			retVal = get_connected_vt_version() >= minimumVersion;
+		}
+
+		return retVal;
+	}
+
 	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size)
 	{
 		if ((nullptr != pool) &&
@@ -2087,13 +2204,17 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::process_pointing_event_callback(KeyActivationCode signal, std::uint16_t xPosition, std::uint16_t yPosition, VirtualTerminalClient *parentPointer)
+	void VirtualTerminalClient::process_pointing_event_callback(KeyActivationCode keyEvent,
+	                                                            std::uint16_t xPosition,
+	                                                            std::uint16_t yPosition,
+	                                                            std::uint16_t parentMaskObjectID,
+	                                                            VirtualTerminalClient *parentPointer)
 	{
 		for (uint32_t i = 0; i < parentPointer->pointingEventCallbacks.size(); i++)
 		{
 			if (nullptr != parentPointer->pointingEventCallbacks[i])
 			{
-				parentPointer->pointingEventCallbacks[i](signal, xPosition, yPosition, parentPointer);
+				parentPointer->pointingEventCallbacks[i](keyEvent, xPosition, yPosition, parentMaskObjectID, parentPointer);
 			}
 		}
 	}
@@ -2105,6 +2226,109 @@ namespace isobus
 			if (nullptr != parentPointer->selectInputObjectCallbacks[i])
 			{
 				parentPointer->selectInputObjectCallbacks[i](objectID, objectSelected, objectOpenForInput, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_esc_message_callback(std::uint16_t objectID, ESCMessageErrorCode errorCode, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->escMessageCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->escMessageCallbacks[i])
+			{
+				parentPointer->escMessageCallbacks[i](objectID, errorCode, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_change_numeric_value_callback(std::uint16_t objectID, std::uint32_t value, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->changeNumericValueCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->changeNumericValueCallbacks[i])
+			{
+				parentPointer->changeNumericValueCallbacks[i](objectID, value, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_change_active_mask_callback(std::uint16_t maskObjectID,
+	                                                                std::uint16_t errorObjectID,
+	                                                                std::uint16_t parentObjectID,
+	                                                                bool missingObjects,
+	                                                                bool maskOrChildHasErrors,
+	                                                                bool anyOtherEror,
+	                                                                bool poolDeleted,
+	                                                                VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->changeActiveMaskCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->changeActiveMaskCallbacks[i])
+			{
+				parentPointer->changeActiveMaskCallbacks[i](maskObjectID,
+				                                            errorObjectID,
+				                                            parentObjectID,
+				                                            missingObjects,
+				                                            maskOrChildHasErrors,
+				                                            anyOtherEror,
+				                                            poolDeleted,
+				                                            parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_change_soft_key_mask_callback(std::uint16_t dataOrAlarmMaskObjectID,
+	                                                                  std::uint16_t softKeyMaskObjectID,
+	                                                                  bool missingObjects,
+	                                                                  bool maskOrChildHasErrors,
+	                                                                  bool anyOtherEror,
+	                                                                  bool poolDeleted,
+	                                                                  VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->changeSoftKeyMaskCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->changeSoftKeyMaskCallbacks[i])
+			{
+				parentPointer->changeSoftKeyMaskCallbacks[i](dataOrAlarmMaskObjectID,
+				                                             softKeyMaskObjectID,
+				                                             missingObjects,
+				                                             maskOrChildHasErrors,
+				                                             anyOtherEror,
+				                                             poolDeleted,
+				                                             parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_change_string_value_callback(std::uint16_t objectID, std::string value, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->changeStringValueCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->changeStringValueCallbacks[i])
+			{
+				parentPointer->changeStringValueCallbacks[i](objectID, value, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_user_layout_hide_show_callback(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->userLayoutHideShowCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->userLayoutHideShowCallbacks[i])
+			{
+				parentPointer->userLayoutHideShowCallbacks[i](objectID, isHidden, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_audio_signal_termination_callback(bool isTerminated, VirtualTerminalClient *parentPointer)
+	{
+		for (uint32_t i = 0; i < parentPointer->audioSignalTerminationCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->audioSignalTerminationCallbacks[i])
+			{
+				parentPointer->audioSignalTerminationCallbacks[i](isTerminated, parentPointer);
 			}
 		}
 	}
@@ -2155,16 +2379,17 @@ namespace isobus
 		    (CAN_DATA_LENGTH == message->get_data_length()))
 		{
 			VirtualTerminalClient *parentVT = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+			auto &data = message->get_data();
 
 			switch (message->get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
 				{
-					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message->get_data().at(0)))
+					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(data.at(0)))
 					{
-						std::uint32_t targetParameterGroupNumber = ((static_cast<std::uint32_t>(message->get_data().at(5)) << 16) |
-						                                            (static_cast<std::uint32_t>(message->get_data().at(6)) << 8) |
-						                                            (static_cast<std::uint32_t>(message->get_data().at(7))));
+						std::uint32_t targetParameterGroupNumber = ((static_cast<std::uint32_t>(data.at(5)) << 16) |
+						                                            (static_cast<std::uint32_t>(data.at(6)) << 8) |
+						                                            (static_cast<std::uint32_t>(data.at(7))));
 
 						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber) &&
 						    (StateMachineState::Connected == parentVT->state))
@@ -2178,17 +2403,22 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU):
 				{
-					switch (message->get_data().at(0))
+					switch (data.at(0))
 					{
 						case static_cast<std::uint8_t>(Function::SoftKeyActivationMessage):
 						{
-							std::uint8_t keyCode = message->get_data().at(1);
+							std::uint8_t keyCode = data.at(1);
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
+								if (parentVT->get_vt_version_supported(VTVersion::Version6))
+								{
+									//! @todo process TAN
+								}
+
 								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode),
-								                                         static_cast<std::uint16_t>(message->get_data().at(6)),
-								                                         (static_cast<std::uint16_t>(message->get_data().at(2)) | static_cast<std::uint16_t>(message->get_data().at(3) << 8)),
-								                                         (static_cast<std::uint16_t>(message->get_data().at(4)) | static_cast<std::uint16_t>(message->get_data().at(5) << 8)),
+								                                         static_cast<std::uint16_t>(data.at(6)),
+								                                         (static_cast<std::uint16_t>(data.at(2)) | static_cast<std::uint16_t>(data.at(3) << 8)),
+								                                         (static_cast<std::uint16_t>(data.at(4)) | static_cast<std::uint16_t>(data.at(5) << 8)),
 								                                         parentVT);
 							}
 						}
@@ -2196,15 +2426,20 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::ButtonActivationMessage):
 						{
-							std::uint8_t keyCode = message->get_data().at(1);
+							std::uint8_t keyCode = data.at(1);
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
+								if (parentVT->get_vt_version_supported(VTVersion::Version6))
+								{
+									//! @todo process TAN
+								}
+
 								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode),
-								                                        static_cast<std::uint16_t>(message->get_data().at(6)),
-								                                        (static_cast<std::uint16_t>(message->get_data().at(2)) |
-								                                         static_cast<std::uint16_t>(message->get_data().at(3) << 8)),
-								                                        (static_cast<std::uint16_t>(message->get_data().at(4)) |
-								                                         static_cast<std::uint16_t>(message->get_data().at(5) << 8)),
+								                                        static_cast<std::uint16_t>(data.at(6)),
+								                                        (static_cast<std::uint16_t>(data.at(2)) |
+								                                         static_cast<std::uint16_t>(data.at(3) << 8)),
+								                                        (static_cast<std::uint16_t>(data.at(4)) |
+								                                         static_cast<std::uint16_t>(data.at(5) << 8)),
 								                                        parentVT);
 							}
 						}
@@ -2212,54 +2447,197 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::PointingEventMessage):
 						{
-							std::uint16_t xPosition = (static_cast<std::uint16_t>(message->get_data().at(1)) &
-							                           ((static_cast<std::uint16_t>(message->get_data().at(2))) << 8));
-							std::uint16_t yPosition = (static_cast<std::uint16_t>(message->get_data().at(3)) &
-							                           ((static_cast<std::uint16_t>(message->get_data().at(4))) << 8));
-							std::uint8_t keyCode = message->get_data().at(5) & 0x0F;
+							std::uint16_t xPosition = (static_cast<std::uint16_t>(data.at(1)) &
+							                           ((static_cast<std::uint16_t>(data.at(2))) << 8));
+							std::uint16_t yPosition = (static_cast<std::uint16_t>(data.at(3)) &
+							                           ((static_cast<std::uint16_t>(data.at(4))) << 8));
 
-							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
+							std::uint8_t touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
+							std::uint16_t partenMaskObjectID = NULL_OBJECT_ID;
+							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
+								// VT version is at least 6
+								touchState = data.at(5) & 0x08;
+								partenMaskObjectID = (static_cast<std::uint16_t>(data.at(6)) &
+								                      ((static_cast<std::uint16_t>(data.at(7))) << 8));
 								//! @todo process TAN
 							}
-
-							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
+							else if (parentVT->get_vt_version_supported(VTVersion::Version4))
 							{
-								parentVT->process_pointing_event_callback(static_cast<KeyActivationCode>(keyCode), xPosition, yPosition, parentVT);
+								// VT version is either 4 or 5
+								touchState = data.at(5);
+							}
+
+							if (touchState <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
+							{
+								parentVT->process_pointing_event_callback(static_cast<KeyActivationCode>(touchState),
+								                                          xPosition,
+								                                          yPosition,
+								                                          partenMaskObjectID,
+								                                          parentVT);
 							}
 						}
 						break;
 
-						case static_cast<std::uint8_t>(Function::SelectInputObjectCommand):
+						case static_cast<std::uint8_t>(Function::VTSelectInputObjectMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(message->get_data()[1]) &
-							                          ((static_cast<std::uint16_t>(message->get_data()[2])) << 8));
-							bool objectSelected = (0x01 == message->get_data()[3]);
-							bool objectOpenForInput = false;
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							                          ((static_cast<std::uint16_t>(data[2])) << 8));
+							bool objectSelected = (0x01 == data[3]);
+							bool objectOpenForInput = true;
 
-							if (parentVT->get_connected_vt_version() >= VTVersion::Version4)
+							if (parentVT->get_vt_version_supported(VTVersion::Version4))
 							{
-								objectOpenForInput = (0x01 == (message->get_data()[4] & 0x01));
+								objectOpenForInput = (0x01 == (data[4] & 0x01));
 							}
 
-							if (VTVersion::Version6 == parentVT->get_connected_vt_version())
+							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
 								//! @todo process TAN
 							}
+
 							parentVT->process_select_input_object_callback(objectID, objectSelected, objectOpenForInput, parentVT);
 						}
 						break;
 
+						case static_cast<std::uint8_t>(Function::VTESCMessage):
+						{
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							                          ((static_cast<std::uint16_t>(data[2])) << 8));
+							bool errorCode = data.at(3) & 0x0F;
+							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
+							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							{
+								if (parentVT->get_vt_version_supported(VTVersion::Version6))
+								{
+									//! @todo process TAN
+								}
+
+								parentVT->process_esc_message_callback(objectID, static_cast<ESCMessageErrorCode>(errorCode), parentVT);
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::VTChangeNumericValueMessage):
+						{
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							                          ((static_cast<std::uint16_t>(data[2])) << 8));
+							std::uint32_t value = (static_cast<std::uint32_t>(data[4]) &
+							                       ((static_cast<std::uint32_t>(data[5])) << 8) &
+							                       ((static_cast<std::uint32_t>(data[6])) << 16) &
+							                       ((static_cast<std::uint32_t>(data[7])) << 24));
+
+							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							{
+								//! @todo process TAN
+							}
+							parentVT->process_change_numeric_value_callback(objectID, value, parentVT);
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::VTChangeActiveMaskMessage):
+						{
+							std::uint16_t maskObjectID = (static_cast<std::uint16_t>(data[1]) &
+							                              ((static_cast<std::uint16_t>(data[2])) << 8));
+							std::uint16_t errorObjectID = (static_cast<std::uint16_t>(data[4]) &
+							                               ((static_cast<std::uint16_t>(data[5])) << 8));
+							bool missingObjects = (0x04 == (data[3] & 0x04));
+							bool maskOrChildHasErrors = (0x02 == (data[3] & 0x08));
+							bool anyOtherError = (0x01 == (data[3] & 0x010));
+							bool poolDeleted = (0x01 == (data[3] & 0x020));
+
+							std::uint16_t parentObjectID = (static_cast<std::uint16_t>(data[6]) &
+							                                ((static_cast<std::uint16_t>(data[7])) << 8));
+
+							parentVT->process_change_active_mask_callback(maskObjectID,
+							                                              errorObjectID,
+							                                              parentObjectID,
+							                                              missingObjects,
+							                                              maskOrChildHasErrors,
+							                                              anyOtherError,
+							                                              poolDeleted,
+							                                              parentVT);
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::VTChangeSoftKeyMaskMessage):
+						{
+							std::uint16_t dataOrAlarmMaskID = (static_cast<std::uint16_t>(data[1]) &
+							                                   ((static_cast<std::uint16_t>(data[2])) << 8));
+							std::uint16_t softKeyMaskID = (static_cast<std::uint16_t>(data[3]) &
+							                               ((static_cast<std::uint16_t>(data[4])) << 8));
+							bool missingObjects = (0x04 == (data[5] & 0x04));
+							bool maskOrChildHasErrors = (0x02 == (data[5] & 0x08));
+							bool anyOtherError = (0x01 == (data[5] & 0x010));
+							bool poolDeleted = (0x01 == (data[5] & 0x020));
+
+							parentVT->process_change_soft_key_mask_callback(dataOrAlarmMaskID,
+							                                                softKeyMaskID,
+							                                                missingObjects,
+							                                                maskOrChildHasErrors,
+							                                                anyOtherError,
+							                                                poolDeleted,
+							                                                parentVT);
+						}
+
+						case static_cast<std::uint8_t>(Function::VTChangeStringValueMessage):
+						{
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							                          ((static_cast<std::uint16_t>(data[2])) << 8));
+							std::uint8_t stringLength = data[3];
+							std::string value = std::string(data.begin() + 4, data.begin() + 4 + stringLength);
+
+							parentVT->process_change_string_value_callback(objectID, value, parentVT);
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::VTOnUserLayoutHideShowMessage):
+						{
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							                          ((static_cast<std::uint16_t>(data[2])) << 8));
+							bool hidden = (0x00 == (data[3] & 0x01));
+
+							parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
+
+							// There could be two layout messages in one packet
+							objectID = static_cast<std::uint16_t>(data[4]) &
+							  ((static_cast<std::uint16_t>(data[5])) << 8);
+							if (objectID != NULL_OBJECT_ID)
+							{
+								hidden = (0x00 == (data[6] & 0x01));
+
+								parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
+							}
+
+							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							{
+								//! @todo process TAN
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::VTControlAudioSignalTerminationMessage):
+						{
+							bool terminated = (0x01 == (data[1] & 0x01));
+
+							parentVT->process_audio_signal_termination_callback(terminated, parentVT);
+
+							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							{
+								//! @todo process TAN
+							}
+						}
+
 						case static_cast<std::uint8_t>(Function::VTStatusMessage):
 						{
 							parentVT->lastVTStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
-							parentVT->activeWorkingSetMasterAddress = message->get_data()[1];
-							parentVT->activeWorkingSetDataMaskObjectID = (static_cast<std::uint16_t>(message->get_data()[2]) &
-							                                              ((static_cast<std::uint16_t>(message->get_data()[3])) << 8));
-							parentVT->activeWorkingSetSoftkeyMaskObjectID = (static_cast<std::uint16_t>(message->get_data()[4]) &
-							                                                 ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
-							parentVT->busyCodesBitfield = message->get_data()[6];
-							parentVT->currentCommandFunctionCode = message->get_data()[7];
+							parentVT->activeWorkingSetMasterAddress = data[1];
+							parentVT->activeWorkingSetDataMaskObjectID = (static_cast<std::uint16_t>(data[2]) &
+							                                              ((static_cast<std::uint16_t>(data[3])) << 8));
+							parentVT->activeWorkingSetSoftkeyMaskObjectID = (static_cast<std::uint16_t>(data[4]) &
+							                                                 ((static_cast<std::uint16_t>(data[5])) << 8));
+							parentVT->busyCodesBitfield = data[6];
+							parentVT->currentCommandFunctionCode = data[7];
 						}
 						break;
 
@@ -2267,9 +2645,9 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetMemoryResponse == parentVT->state)
 							{
-								parentVT->connectedVTVersion = message->get_data()[1];
+								parentVT->connectedVTVersion = data[1];
 
-								if (0 == message->get_data()[2])
+								if (0 == data[2])
 								{
 									// There IS enough memory
 									parentVT->set_state(StateMachineState::SendGetNumberSoftkeys);
@@ -2287,10 +2665,10 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetNumberSoftKeysResponse == parentVT->state)
 							{
-								parentVT->softKeyXAxisPixels = message->get_data()[4];
-								parentVT->softKeyYAxisPixels = message->get_data()[5];
-								parentVT->numberVirtualSoftkeysPerSoftkeyMask = message->get_data()[6];
-								parentVT->numberPhysicalSoftkeys = message->get_data()[7];
+								parentVT->softKeyXAxisPixels = data[4];
+								parentVT->softKeyYAxisPixels = data[5];
+								parentVT->numberVirtualSoftkeysPerSoftkeyMask = data[6];
+								parentVT->numberPhysicalSoftkeys = data[7];
 								parentVT->set_state(StateMachineState::SendGetTextFontData);
 							}
 						}
@@ -2300,9 +2678,9 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetTextFontDataResponse == parentVT->state)
 							{
-								parentVT->smallFontSizesBitfield = message->get_data()[5];
-								parentVT->largeFontSizesBitfield = message->get_data()[6];
-								parentVT->fontStylesBitfield = message->get_data()[7];
+								parentVT->smallFontSizesBitfield = data[5];
+								parentVT->largeFontSizesBitfield = data[6];
+								parentVT->fontStylesBitfield = data[7];
 								parentVT->set_state(StateMachineState::SendGetHardware);
 							}
 						}
@@ -2312,15 +2690,15 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetHardwareResponse == parentVT->state)
 							{
-								if (message->get_data()[2] <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColor))
+								if (data[2] <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColor))
 								{
-									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(message->get_data()[2]);
+									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(data[2]);
 								}
-								parentVT->hardwareFeaturesBitfield = message->get_data()[3];
-								parentVT->xPixels = (static_cast<std::uint16_t>(message->get_data()[4]) &
-								                     ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
-								parentVT->yPixels = (static_cast<std::uint16_t>(message->get_data()[6]) &
-								                     ((static_cast<std::uint16_t>(message->get_data()[7])) << 8));
+								parentVT->hardwareFeaturesBitfield = data[3];
+								parentVT->xPixels = (static_cast<std::uint16_t>(data[4]) &
+								                     ((static_cast<std::uint16_t>(data[5])) << 8));
+								parentVT->yPixels = (static_cast<std::uint16_t>(data[6]) &
+								                     ((static_cast<std::uint16_t>(data[7])) << 8));
 								parentVT->lastObjectPoolIndex = 0;
 								parentVT->set_state(StateMachineState::UploadObjectPool);
 							}
@@ -2331,14 +2709,14 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state)
 							{
-								bool anyErrorInPool = (0 != (message->get_data()[1] & 0x01));
-								bool vtRanOutOfMemory = (0 != (message->get_data()[1] & 0x02));
-								bool otherErrors = (0 != (message->get_data()[1] & 0x08));
-								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data()[2]) &
-								                                              ((static_cast<std::uint16_t>(message->get_data()[3])) << 8));
-								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(message->get_data()[4]) &
-								                                        ((static_cast<std::uint16_t>(message->get_data()[5])) << 8));
-								std::uint8_t objectPoolErrorBitmask = message->get_data()[6];
+								bool anyErrorInPool = (0 != (data[1] & 0x01));
+								bool vtRanOutOfMemory = (0 != (data[1] & 0x02));
+								bool otherErrors = (0 != (data[1] & 0x08));
+								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(data[2]) &
+								                                              ((static_cast<std::uint16_t>(data[3])) << 8));
+								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(data[4]) &
+								                                        ((static_cast<std::uint16_t>(data[5])) << 8));
+								std::uint8_t objectPoolErrorBitmask = data[6];
 
 								if ((!anyErrorInPool) &&
 								    (0 == objectPoolErrorBitmask))
