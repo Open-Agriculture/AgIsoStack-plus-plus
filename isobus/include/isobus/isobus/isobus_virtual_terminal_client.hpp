@@ -166,7 +166,7 @@ namespace isobus
 		{
 			NoError = 0, ///< No error occurred
 			NoInputFieldOpen = 1, ///< No input field is open
-			OtherError = 5, ///< Error is not one of the above
+			OtherError = 5 ///< Error is not one of the above
 		};
 
 		/// @brief The internal state machine state of the VT client
