@@ -2436,10 +2436,8 @@ namespace isobus
 
 								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode),
 								                                        static_cast<std::uint16_t>(data.at(6)),
-								                                        (static_cast<std::uint16_t>(data.at(2)) |
-								                                         static_cast<std::uint16_t>(data.at(3) << 8)),
-								                                        (static_cast<std::uint16_t>(data.at(4)) |
-								                                         static_cast<std::uint16_t>(data.at(5) << 8)),
+								                                        (static_cast<std::uint16_t>(data.at(2)) | static_cast<std::uint16_t>(data.at(3) << 8)),
+								                                        (static_cast<std::uint16_t>(data.at(4)) | static_cast<std::uint16_t>(data.at(5) << 8)),
 								                                        parentVT);
 							}
 						}
@@ -2447,9 +2445,9 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::PointingEventMessage):
 						{
-							std::uint16_t xPosition = (static_cast<std::uint16_t>(data.at(1)) &
+							std::uint16_t xPosition = (static_cast<std::uint16_t>(data.at(1)) |
 							                           ((static_cast<std::uint16_t>(data.at(2))) << 8));
-							std::uint16_t yPosition = (static_cast<std::uint16_t>(data.at(3)) &
+							std::uint16_t yPosition = (static_cast<std::uint16_t>(data.at(3)) |
 							                           ((static_cast<std::uint16_t>(data.at(4))) << 8));
 
 							std::uint8_t touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
@@ -2458,7 +2456,7 @@ namespace isobus
 							{
 								// VT version is at least 6
 								touchState = data.at(5) & 0x0F;
-								partenMaskObjectID = (static_cast<std::uint16_t>(data.at(6)) &
+								partenMaskObjectID = (static_cast<std::uint16_t>(data.at(6)) |
 								                      ((static_cast<std::uint16_t>(data.at(7))) << 8));
 								//! @todo process TAN
 							}
@@ -2481,7 +2479,7 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTSelectInputObjectMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
 							bool objectSelected = (0x01 == data[3]);
 							bool objectOpenForInput = true;
@@ -2502,7 +2500,7 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTESCMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
 							bool errorCode = data.at(3) & 0x1F;
 							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
@@ -2520,11 +2518,11 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeNumericValueMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint32_t value = (static_cast<std::uint32_t>(data[4]) &
-							                       ((static_cast<std::uint32_t>(data[5])) << 8) &
-							                       ((static_cast<std::uint32_t>(data[6])) << 16) &
+							std::uint32_t value = (static_cast<std::uint32_t>(data[4]) |
+							                       ((static_cast<std::uint32_t>(data[5])) << 8) |
+							                       ((static_cast<std::uint32_t>(data[6])) << 16) |
 							                       ((static_cast<std::uint32_t>(data[7])) << 24));
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
@@ -2537,16 +2535,17 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeActiveMaskMessage):
 						{
-							std::uint16_t maskObjectID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t maskObjectID = (static_cast<std::uint16_t>(data[1]) |
 							                              ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint16_t errorObjectID = (static_cast<std::uint16_t>(data[4]) &
-							                               ((static_cast<std::uint16_t>(data[5])) << 8));
-							bool missingObjects = (0x04 == (data[3] & 0x04));
-							bool maskOrChildHasErrors = (0x02 == (data[3] & 0x08));
-							bool anyOtherError = (0x01 == (data[3] & 0x010));
-							bool poolDeleted = (0x01 == (data[3] & 0x020));
 
-							std::uint16_t parentObjectID = (static_cast<std::uint16_t>(data[6]) &
+							bool missingObjects = (0x04 == (data[3] & 0x04));
+							bool maskOrChildHasErrors = (0x08 == (data[3] & 0x08));
+							bool anyOtherError = (0x010 == (data[3] & 0x010));
+							bool poolDeleted = (0x020 == (data[3] & 0x020));
+
+							std::uint16_t errorObjectID = (static_cast<std::uint16_t>(data[4]) |
+							                               ((static_cast<std::uint16_t>(data[5])) << 8));
+							std::uint16_t parentObjectID = (static_cast<std::uint16_t>(data[6]) |
 							                                ((static_cast<std::uint16_t>(data[7])) << 8));
 
 							parentVT->process_change_active_mask_callback(maskObjectID,
@@ -2562,14 +2561,14 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeSoftKeyMaskMessage):
 						{
-							std::uint16_t dataOrAlarmMaskID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t dataOrAlarmMaskID = (static_cast<std::uint16_t>(data[1]) |
 							                                   ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint16_t softKeyMaskID = (static_cast<std::uint16_t>(data[3]) &
+							std::uint16_t softKeyMaskID = (static_cast<std::uint16_t>(data[3]) |
 							                               ((static_cast<std::uint16_t>(data[4])) << 8));
 							bool missingObjects = (0x04 == (data[5] & 0x04));
-							bool maskOrChildHasErrors = (0x02 == (data[5] & 0x08));
-							bool anyOtherError = (0x01 == (data[5] & 0x010));
-							bool poolDeleted = (0x01 == (data[5] & 0x020));
+							bool maskOrChildHasErrors = (0x08 == (data[5] & 0x08));
+							bool anyOtherError = (0x010 == (data[5] & 0x010));
+							bool poolDeleted = (0x020 == (data[5] & 0x020));
 
 							parentVT->process_change_soft_key_mask_callback(dataOrAlarmMaskID,
 							                                                softKeyMaskID,
@@ -2583,7 +2582,7 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeStringValueMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
 							std::uint8_t stringLength = data[3];
 							std::string value = std::string(data.begin() + 4, data.begin() + 4 + stringLength);
@@ -2594,18 +2593,17 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTOnUserLayoutHideShowMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) &
+							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool hidden = (0x00 == (data[3] & 0x01));
+							bool hidden = (0 == (data[3] & 0x01));
 
 							parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
 
 							// There could be two layout messages in one packet
-							objectID = static_cast<std::uint16_t>(data[4]) &
-							  ((static_cast<std::uint16_t>(data[5])) << 8);
+							objectID = static_cast<std::uint16_t>(data[4]) | ((static_cast<std::uint16_t>(data[5])) << 8);
 							if (objectID != NULL_OBJECT_ID)
 							{
-								hidden = (0x00 == (data[6] & 0x01));
+								hidden = (0 == (data[6] & 0x01));
 
 								parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
 							}
@@ -2634,9 +2632,9 @@ namespace isobus
 						{
 							parentVT->lastVTStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
 							parentVT->activeWorkingSetMasterAddress = data[1];
-							parentVT->activeWorkingSetDataMaskObjectID = (static_cast<std::uint16_t>(data[2]) &
+							parentVT->activeWorkingSetDataMaskObjectID = (static_cast<std::uint16_t>(data[2]) |
 							                                              ((static_cast<std::uint16_t>(data[3])) << 8));
-							parentVT->activeWorkingSetSoftkeyMaskObjectID = (static_cast<std::uint16_t>(data[4]) &
+							parentVT->activeWorkingSetSoftkeyMaskObjectID = (static_cast<std::uint16_t>(data[4]) |
 							                                                 ((static_cast<std::uint16_t>(data[5])) << 8));
 							parentVT->busyCodesBitfield = data[6];
 							parentVT->currentCommandFunctionCode = data[7];
@@ -2697,9 +2695,9 @@ namespace isobus
 									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(data[2]);
 								}
 								parentVT->hardwareFeaturesBitfield = data[3];
-								parentVT->xPixels = (static_cast<std::uint16_t>(data[4]) &
+								parentVT->xPixels = (static_cast<std::uint16_t>(data[4]) |
 								                     ((static_cast<std::uint16_t>(data[5])) << 8));
-								parentVT->yPixels = (static_cast<std::uint16_t>(data[6]) &
+								parentVT->yPixels = (static_cast<std::uint16_t>(data[6]) |
 								                     ((static_cast<std::uint16_t>(data[7])) << 8));
 								parentVT->lastObjectPoolIndex = 0;
 								parentVT->set_state(StateMachineState::UploadObjectPool);
@@ -2714,9 +2712,9 @@ namespace isobus
 								bool anyErrorInPool = (0 != (data[1] & 0x01));
 								bool vtRanOutOfMemory = (0 != (data[1] & 0x02));
 								bool otherErrors = (0 != (data[1] & 0x08));
-								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(data[2]) &
+								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(data[2]) |
 								                                              ((static_cast<std::uint16_t>(data[3])) << 8));
-								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(data[4]) &
+								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(data[4]) |
 								                                        ((static_cast<std::uint16_t>(data[5])) << 8));
 								std::uint8_t objectPoolErrorBitmask = data[6];
 
