@@ -2417,8 +2417,8 @@ namespace isobus
 
 								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode),
 								                                         static_cast<std::uint16_t>(data.at(6)),
-								                                         (static_cast<std::uint16_t>(data.at(2)) | static_cast<std::uint16_t>(data.at(3) << 8)),
-								                                         (static_cast<std::uint16_t>(data.at(4)) | static_cast<std::uint16_t>(data.at(5) << 8)),
+								                                         (static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8)),
+								                                         (static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8)),
 								                                         parentVT);
 							}
 						}
@@ -2436,8 +2436,8 @@ namespace isobus
 
 								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode),
 								                                        static_cast<std::uint16_t>(data.at(6)),
-								                                        (static_cast<std::uint16_t>(data.at(2)) | static_cast<std::uint16_t>(data.at(3) << 8)),
-								                                        (static_cast<std::uint16_t>(data.at(4)) | static_cast<std::uint16_t>(data.at(5) << 8)),
+								                                        (static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8)),
+								                                        (static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8)),
 								                                        parentVT);
 							}
 						}
