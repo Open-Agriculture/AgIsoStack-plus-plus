@@ -162,6 +162,7 @@ namespace isobus
 			ButtonPressAborted = 3 ///< Press was aborted (user navigated away from the button and did not release it)
 		};
 
+		/// @brief Enumerates the errors that can be present in an ESC message
 		enum class ESCMessageErrorCode : std::uint8_t
 		{
 			NoError = 0, ///< No error occurred
@@ -1261,9 +1262,10 @@ namespace isobus
 		void process_softkey_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
 
 		/// @brief Calls all registered callbacks for pointing events
-		/// @param[in] signal The event's signal
+		/// @param[in] keyEvent The event's signal
 		/// @param[in] xPosition The pointing event X position
 		/// @param[in] yPosition The pointing event Y position
+		/// @param[in] parentMaskObjectID Object ID of the parent mask
 		/// @param[in] parentPointer A context variable that is passed back through the callback
 		void process_pointing_event_callback(KeyActivationCode keyEvent,
 		                                     std::uint16_t xPosition,
@@ -1294,7 +1296,7 @@ namespace isobus
 		/// @param[in] maskObjectID The object ID of the mask object
 		/// @param[in] errorObjectID The object ID of the error object
 		/// @param[in] parentObjectID The object ID of the parent object
-		/// @param[in] isMissingObjects Denotes if the mask object is missing objects
+		/// @param[in] missingObjects Denotes if the mask object is missing objects
 		/// @param[in] maskOrChildHasErrors Denotes if the mask object or a child has errors
 		/// @param[in] anyOtherEror Denotes if any other error exists
 		/// @param[in] poolDeleted Denotes if the pool is deleted
@@ -1311,7 +1313,7 @@ namespace isobus
 		/// @brief Calls all registered callbacks for change soft key mask events
 		/// @param[in] dataOrAlarmMaskObjectID The object ID of the data or alarm mask object
 		/// @param[in] softKeyMaskObjectID The object ID of the soft key mask object
-		/// @param[in] isMissingObjects Denotes if the mask object is missing objects
+		/// @param[in] missingObjects Denotes if the mask object is missing objects
 		/// @param[in] maskOrChildHasErrors Denotes if the mask object or a child has errors
 		/// @param[in] anyOtherEror Denotes if any other error exists
 		/// @param[in] poolDeleted Denotes if the pool is deleted
