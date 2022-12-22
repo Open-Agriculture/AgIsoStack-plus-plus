@@ -10,15 +10,20 @@ Installation
 Supported Platforms
 --------------------
 
-We support building the ISO 11783 CAN stack from source on the following platforms:
+We officially support building ISOBUS++ from source on the following platforms:
    * Ubuntu Linux (Non-WSL)
+   * Raspian
    * RHEL
 
-Make sure you are using a supported platform in order to receive the best support for any issues you may encounter.
+.. note::
 
-WSL is not supported due to the WSL kernel not supporting socket CAN by default.
+	ISOBUS++ may also work on other platforms, and has been designed to accomodate different underlying hardware, but the ones listed above are the officially supported platforms. Additional platform support may be added if there is demand for it.
 
-Currently, building from source is the only supported integration method.
+	Using a supported platform will get you the best support for any issues you may encounter.
+
+	WSL is not supported due to the WSL kernel not supporting socket CAN by default. It may be possible to recompile the WSL kernel to support socket CAN, but we do not officially support that use case.
+
+	Currently, building from source is the only supported integration method.
 
 Environment Setup
 --------------------
@@ -29,8 +34,8 @@ First, lets prepare the dependencies we'll need to compile the CAN stack. These 
 
    sudo apt install build-essential cmake git
 
-Downloading the CAN Stack
---------------------------
+Downloading ISOBUS++
+----------------------
 
 In your project that you want to add the CAN stack to, add the CAN stack as a submodule.
 
@@ -69,7 +74,6 @@ Using CMake has a lot of advantages, such as if the library is updated with addi
 Non-CMake:
 ^^^^^^^^^^
 
-If you are not using CMake, just make sure to add all the files from the 'ISO11783-CAN-Stack/isobus' folder to your project so they all get compiled. You'll want to make sure the 'ISO11783-CAN-Stack/isobus/include' folder is part of your include path.
+If you are not using CMake, just make sure to add all the files from the 'ISO11783-CAN-Stack/isobus' folder, the 'ISO11783-CAN-Stack/hardware_integration' folder, and the 'ISO11783-CAN-Stack/utility' folder to your project so they all get compiled. 
 
-If you're using socket CAN, make sure 'socket_can/include' is also in your include path.
-
+You'll want to make sure the 'ISO11783-CAN-Stack/isobus/include/isobus/isobus' folder is part of your include pathm as well as 'ISO11783-CAN-Stack/utility/include/isobus/utility' and 'ISO11783-CAN-Stack/hardware_integration/include/isobus/hardware_integration'.
