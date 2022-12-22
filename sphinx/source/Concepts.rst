@@ -49,7 +49,7 @@ The identifier contains:
    * This determines, when messages collide on the bus, which one "wins" and which transmitter has to re-transmit their message later.
    * This is handled by hardware, not software generally, so we usually only care about this when transmitting messages, not receiving them.
 
-In order to send messages on a J1939 or ISO bus, you need a 1 byte address, which identifies you on the bus.
+In order to send messages on a J1939 bus or ISOBUS, you need a 1 byte address, which identifies you on the bus.
 Likewise, you need to know the address of who you're sending a message to (unless you are sending a broadcast).
 Broadcasts are always sent to the broadcast address, which is 255 (0xFF).
 There's also something called the NULL address (0xFE), which is the address you use when you have no address (or are in the process of getting one, though all this is handled automatically by the stack).
@@ -61,7 +61,7 @@ In reality, addresses are useless for most things other than filling in or decod
 They tell you nothing about the identity of that device, what it does, who made it, or if it even cares that you are talking to it.
 It's not even reliable for sending messages, as J1939 and ISOBUS devices can change address at any time.
 
-Thus, J1939 and ISO 11783 defined the basic component of a network as a *control function*.
+Thus, J1939 and ISO 11783 define the basic component of a CAN network as a *control function*.
 
 A control function has an address, but is first and foremost identified by its NAME.
 
@@ -153,15 +153,17 @@ Here are the different transport layers this library provides, along with a shor
    * This protocol can be very fast, as there are no delays needed between packets.
    * Either side can abort the session if there's an issue.
    * Multiple sessions can be on-going at once, as long as they are to different destinations.
+   * There is some overhead, as each protocol session requires a "Request to Send", a "Clear to Send" message, and an "End of Message Acknowledgement". If you want to send 9 bytes of information (as an example) this creates a lot overhead relative to your payload size, so try to keep messages to 8 bytes where possible.
 
 * Extended Transport Protocol (ETP)
 
    * Used for sending more than 1785 bytes, but less than or equal to 117440505 bytes.
-   * Does not support broadcasts of any length - must be destination specific.
-   * This protocol supports the most data of any ISOBUS transport protocols.
+   * Does not support broadcasts of any length - all messages must be destination specific.
+   * This protocol supports the most data of any of the ISOBUS transport protocols.
    * Can be very, very, very slow (many minutes) depending on the amount of data transferred, but there are no delays between messages, so the delay mostly comes from the number of bytes you need to send overall.
+   * ETP has similar overhead to transport protocol. Additional handshake messages are used to control the data flow while the session is active.
 
-The CAN stack library will take care of choosing which protocol to use automatically!
+The ISOBUS++ library will take care of choosing which protocol to use automatically!
 
 Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/examples/transport_layer>`_.
 

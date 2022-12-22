@@ -40,4 +40,4 @@ It is claimed that compliance with ISO 11783 may involve the use of a patent con
 
 Neither Adrian Del Grosso nor any other contributor to this project takes any position concerning the evidence, validity, and scope of said patent.
 
-Some elements of ISO 11783 and J1939 may be subject to patent rights other than the one identified above. No member this project shall be held responsible for identifying any or all such patent rights.
+Some elements of ISO 11783 and J1939 may be subject to patent rights other than the one identified above. No member of this project shall be held responsible for identifying any or all such patent rights.

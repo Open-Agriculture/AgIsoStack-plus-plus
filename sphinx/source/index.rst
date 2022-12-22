@@ -1,7 +1,8 @@
 .. ISO 11783 CAN Stack documentation master file
 
-ISO 11783 CAN Stack Tutorial
-==============================
+.. image:: ../../docs/images/wideLogoTransparent.png
+  :width: 400
+  :alt: Alternative text
 
 .. toctree::
    :titlesonly:
@@ -16,16 +17,16 @@ ISO 11783 CAN Stack Tutorial
    License
    FAQ
 
-
-
 Overview
 ==========
 
-**The ISO 11783 CAN stack is a library that provides easy and robust ISO 11783 and J1939 CAN communication functionality in C++**
+**ISOBUS++ is a free and open source library that provides easy and robust ISO 11783 and J1939 CAN communication functionality using C++**
 
-Before diving into the stack and how to use it, it is highly recommended to review some :doc:`ISOBUS concepts <Concepts>`.
+.. note::
 
-After that, this getting started guide will walk you through getting the CAN stack installed, and getting you up and running with an example program.
+	Before diving into the stack and how to use it, it is highly recommended to review some :doc:`ISOBUS concepts <Concepts>`.
+
+This getting started guide will walk you through getting the CAN stack installed, and getting you up and running with an example program.
 
 Table of Contents:
 -------------------
