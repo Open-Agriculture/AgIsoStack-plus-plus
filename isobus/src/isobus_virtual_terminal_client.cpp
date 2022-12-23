@@ -2502,7 +2502,7 @@ namespace isobus
 						{
 							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
 							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool errorCode = data.at(3) & 0x1F;
+							std::uint8_t errorCode = data.at(3) & 0x1F;
 							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
 							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
 							{
