@@ -1,0 +1,11 @@
+{
+    "name": "Isobus++",
+    "version": "1.0.0",
+    "build": {
+        "flags": [
+            "-Ihardware_integration/include",
+            "-Iisobus/include",
+            "-Iutility/include"
+        ]
+    }
+}
