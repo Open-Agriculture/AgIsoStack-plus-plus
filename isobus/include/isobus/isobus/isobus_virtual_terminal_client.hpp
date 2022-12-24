@@ -185,6 +185,12 @@ namespace isobus
 			WaitForGetTextFontDataResponse, ///< Client is waiting for a response to the "get text font data" message
 			SendGetHardware, ///< Client is sending the "get hardware" message
 			WaitForGetHardwareResponse, ///< Client is waiting for a response to the "get hardware" message
+			SendGetVersions, ///< If a version label was specified, check to see if the VT has that version already
+			WaitForGetVersionsResponse, ///< Client is waiting for a response to the "get versions" message
+			SendStoreVersion, ///< Sending the store version command
+			WaitForStoreVersionResponse, ///< Client is waiting for a response to the store version command
+			SendLoadVersion, ///< Sending the load version command
+			WaitForLoadVersionResponse, ///< Client is waiting for the VT to respond to the "Load Version" command
 			UploadObjectPool, ///< Client is uploading the object pool
 			SendEndOfObjectPool, ///< Client is sending the end of object pool message
 			WaitForEndOfObjectPoolResponse, ///< Client is waiting for the end of object pool response message
@@ -996,14 +1002,14 @@ namespace isobus
 		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] pool A pointer to the object pool. Must remain valid until client is connected!
 		/// @param[in] size The object pool size
-		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size);
+		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version = "");
 
 		/// @brief Assigns an object pool to the client using a vector.
 		/// @details This is good for small pools or pools where you have all the data in memory.
 		/// @param[in] poolIndex The index of the pool you are assigning
 		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] pool A pointer to the object pool. Must remain valid until client is connected!
-		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool);
+		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version = "");
 
 		/// @brief Assigns an object pool to the client where the client will get data in chunks during upload.
 		/// @details This is probably better for huge pools if you are RAM constrained, or if your
@@ -1148,6 +1154,7 @@ namespace isobus
 			const std::uint8_t *objectPoolDataPointer; ///< A pointer to an object pool
 			const std::vector<std::uint8_t> *objectPoolVectorPointer; ///< A pointer to an object pool (vector format)
 			DataChunkCallback dataCallback; ///< A callback used to get data in chunks as an alternative to loading the whole pool at once
+			std::string versionLabel; ///< An optional version label that will be used to load/store the pool to the VT. 7 character max!
 			std::uint32_t objectPoolSize; ///< The size of the object pool
 			VTVersion version; ///< The version of the object pool. Must be the same for all pools!
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
