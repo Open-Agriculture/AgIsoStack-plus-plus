@@ -1440,7 +1440,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != size))
@@ -1454,6 +1454,7 @@ namespace isobus
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
+			tempData.versionLabel = version;
 
 			if (poolIndex < objectPools.size())
 			{
@@ -1467,7 +1468,7 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != pool->size()))
@@ -1481,6 +1482,7 @@ namespace isobus
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
+			tempData.versionLabel = version;
 
 			if (poolIndex < objectPools.size())
 			{
@@ -1660,13 +1662,79 @@ namespace isobus
 				}
 				break;
 
+				case StateMachineState::SendGetVersions:
+				{
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("[VT]: Get Versions Timeout");
+					}
+					else if ((!objectPools.empty())&&
+					         (!objectPools[0].versionLabel.empty()) &&
+							 (send_get_versions()))
+					{
+						set_state(StateMachineState::WaitForGetVersionsResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForGetVersionsResponse:
+				{
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("[VT]: Get Versions Response Timeout");
+					}
+				}
+				break;
+
+				case StateMachineState::SendLoadVersion:
+				{
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("[VT]: Send Load Version Timeout");
+					}
+					else
+					{
+						constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
+						std::array<std::uint8_t, VERSION_LABEL_LENGTH> tempVersionBuffer;
+
+						// Unused bytes filled with spaces
+						tempVersionBuffer[0] = ' ';
+						tempVersionBuffer[1] = ' ';
+						tempVersionBuffer[2] = ' ';
+						tempVersionBuffer[3] = ' ';
+						tempVersionBuffer[4] = ' ';
+						tempVersionBuffer[5] = ' ';
+						tempVersionBuffer[6] = ' ';
+						tempVersionBuffer[7] = ' ';
+
+						for (std::uint8_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
+						{
+							tempVersionBuffer[i] = objectPools[0].versionLabel[i];
+						}
+
+						if (send_store_version(tempVersionBuffer))
+						{
+							set_state(StateMachineState::WaitForStoreVersionResponse);
+						}
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForStoreVersionResponse:
+				{
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("[VT]: Store Version Response Timeout");
+					}
+				}
+				break;
+
 				case StateMachineState::UploadObjectPool:
 				{
-					//! @todo Support callback method with ETP
-					//! Right now only full TP sends are supported until I finish ETP
-					//! So this will fail if you have a pool > 1785 bytes unless you
-					//! split it up into subpools
-
 					bool allPoolsProcessed = true;
 
 					for (std::uint32_t i = 0; i < objectPools.size(); i++)
@@ -2700,7 +2768,113 @@ namespace isobus
 								parentVT->yPixels = (static_cast<std::uint16_t>(data[6]) |
 								                     ((static_cast<std::uint16_t>(data[7])) << 8));
 								parentVT->lastObjectPoolIndex = 0;
-								parentVT->set_state(StateMachineState::UploadObjectPool);
+
+								// Check if we need to ask for pool versions
+								// Ony check the first pool, all pools are labeled the same per working set.
+								if ((!parentVT->objectPools.empty()) &&
+								    (!parentVT->objectPools[0].versionLabel.empty()))
+								{
+									parentVT->set_state(StateMachineState::SendGetVersions);
+								}
+								else
+								{
+									parentVT->set_state(StateMachineState::UploadObjectPool);
+								}
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::GetVersionsResponse):
+						{
+							if (StateMachineState::WaitForGetVersionsResponse == parentVT->state)
+							{
+								// See if the server returned any labels
+								const std::uint8_t numberOfLabels = data[1];
+								constexpr std::size_t LABEL_LENGTH = 7;
+
+								if (numberOfLabels > 0)
+								{
+									// Check for label match
+									bool labelMatched = false;
+									const std::size_t remainingLength = (2 + (LABEL_LENGTH * numberOfLabels));
+
+									if (data.size() >= remainingLength)
+									{
+										for (std::uint_fast8_t i = 0; i < numberOfLabels; i++)
+										{
+											char tempStringLabel[8] = { 0 };
+											tempStringLabel[0] = data[2 + (LABEL_LENGTH * i)];
+											tempStringLabel[1] = data[3 + (LABEL_LENGTH * i)];
+											tempStringLabel[2] = data[4 + (LABEL_LENGTH * i)];
+											tempStringLabel[3] = data[5 + (LABEL_LENGTH * i)];
+											tempStringLabel[4] = data[6 + (LABEL_LENGTH * i)];
+											tempStringLabel[5] = data[7 + (LABEL_LENGTH * i)];
+											tempStringLabel[6] = data[8 + (LABEL_LENGTH * i)];
+											tempStringLabel[7] = '\0';
+											std::string labelDecoded(tempStringLabel);
+
+											if (labelDecoded == parentVT->objectPools[0].versionLabel)
+											{
+												labelMatched = true;
+												parentVT->set_state(StateMachineState::SendLoadVersion);
+												CANStackLogger::CAN_stack_log("[VT]: VT Server has a matching label for " + isobus::to_string(labelDecoded) + ". It will be loaded and upload will be skipped.");
+												break;
+											}
+										}
+										if (!labelMatched)
+										{
+											CANStackLogger::CAN_stack_log("[VT]: No version label from the VT matched. Client will upload the pool and store it instead.");
+											parentVT->set_state(StateMachineState::UploadObjectPool);
+										}
+									}
+									else
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Get Versions Response length is not long enough. Message ignored.");
+									}
+								}
+								else
+								{
+									CANStackLogger::CAN_stack_log("[VT]: No version label from the VT matched. Client will upload the pool and store it instead.");
+									parentVT->set_state(StateMachineState::UploadObjectPool);
+								}
+							}
+							else
+							{
+								CANStackLogger::CAN_stack_log("[VT]: Get Versions Response ignored!");
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::StoreVersionCommand):
+						{
+							if (StateMachineState::WaitForStoreVersionResponse == parentVT->state)
+							{
+								if (0 == data[5])
+								{
+									// Stored with no error
+									parentVT->set_state(StateMachineState::Connected);
+									CANStackLogger::CAN_stack_log("[VT]: Stored object pool with no error.");
+								}
+								else
+								{
+									// At least one error is set
+									if (data[5] & 0x01)
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Store Versions Response error: Version label is not correct.");
+									}
+									if (data[5] & 0x02)
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Store Versions Response error: Insufficient memory.");
+									}
+									if (data[5] & 0x04)
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Store Versions Response error: Any other error.");
+									}
+								}
+							}
+							else
+							{
+								CANStackLogger::CAN_stack_log("[VT]: Store Versions Response ignored!");
 							}
 						}
 						break;
@@ -2721,7 +2895,15 @@ namespace isobus
 								if ((!anyErrorInPool) &&
 								    (0 == objectPoolErrorBitmask))
 								{
-									parentVT->set_state(StateMachineState::Connected);
+									// Check if we need to store this pool
+									if (!parentVT->objectPools[0].versionLabel.empty())
+									{
+										parentVT->set_state(StateMachineState::SendStoreVersion);
+									}
+									else
+									{
+										parentVT->set_state(StateMachineState::Connected);
+									}
 								}
 								else
 								{
