@@ -145,7 +145,7 @@ private:
 	};
 
 	/// @brief A hard-coded update interval for the CAN stack. Mostly arbitrary
-	static const std::uint32_t CANLIB_UPDATE_RATE = 4;
+	static const std::uint32_t CANLIB_UPDATE_RATE = 10;
 
 	/// @brief The main CAN thread executes this function. Does most of the work of this class
 	static void can_thread_function();
