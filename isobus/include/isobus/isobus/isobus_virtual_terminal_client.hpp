@@ -1002,6 +1002,7 @@ namespace isobus
 		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] pool A pointer to the object pool. Must remain valid until client is connected!
 		/// @param[in] size The object pool size
+		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
 		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version = "");
 
 		/// @brief Assigns an object pool to the client using a vector.
@@ -1009,6 +1010,7 @@ namespace isobus
 		/// @param[in] poolIndex The index of the pool you are assigning
 		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] pool A pointer to the object pool. Must remain valid until client is connected!
+		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
 		void set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version = "");
 
 		/// @brief Assigns an object pool to the client where the client will get data in chunks during upload.

@@ -1669,9 +1669,9 @@ namespace isobus
 						set_state(StateMachineState::Failed);
 						CANStackLogger::CAN_stack_log("[VT]: Get Versions Timeout");
 					}
-					else if ((!objectPools.empty())&&
+					else if ((!objectPools.empty()) &&
 					         (!objectPools[0].versionLabel.empty()) &&
-							 (send_get_versions()))
+					         (send_get_versions()))
 					{
 						set_state(StateMachineState::WaitForGetVersionsResponse);
 					}
@@ -1710,7 +1710,52 @@ namespace isobus
 						tempVersionBuffer[6] = ' ';
 						tempVersionBuffer[7] = ' ';
 
-						for (std::uint8_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
+						for (std::size_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
+						{
+							tempVersionBuffer[i] = objectPools[0].versionLabel[i];
+						}
+
+						if (send_load_version(tempVersionBuffer))
+						{
+							set_state(StateMachineState::WaitForLoadVersionResponse);
+						}
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForLoadVersionResponse:
+				{
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("[VT]: Load Version Response Timeout");
+					}
+				}
+				break;
+
+				case StateMachineState::SendStoreVersion:
+				{
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						CANStackLogger::CAN_stack_log("[VT]: Send Store Version Timeout");
+					}
+					else
+					{
+						constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
+						std::array<std::uint8_t, VERSION_LABEL_LENGTH> tempVersionBuffer;
+
+						// Unused bytes filled with spaces
+						tempVersionBuffer[0] = ' ';
+						tempVersionBuffer[1] = ' ';
+						tempVersionBuffer[2] = ' ';
+						tempVersionBuffer[3] = ' ';
+						tempVersionBuffer[4] = ' ';
+						tempVersionBuffer[5] = ' ';
+						tempVersionBuffer[6] = ' ';
+						tempVersionBuffer[7] = ' ';
+
+						for (std::size_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
 						{
 							tempVersionBuffer[i] = objectPools[0].versionLabel[i];
 						}
@@ -2444,7 +2489,7 @@ namespace isobus
 	{
 		if ((nullptr != message) &&
 		    (nullptr != parentPointer) &&
-		    (CAN_DATA_LENGTH == message->get_data_length()))
+		    (CAN_DATA_LENGTH <= message->get_data_length()))
 		{
 			VirtualTerminalClient *parentVT = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
 			std::vector<std::uint8_t> &data = message->get_data();
@@ -2812,8 +2857,20 @@ namespace isobus
 											tempStringLabel[6] = data[8 + (LABEL_LENGTH * i)];
 											tempStringLabel[7] = '\0';
 											std::string labelDecoded(tempStringLabel);
+											std::string tempActualLabel(parentVT->objectPools[0].versionLabel);
 
-											if (labelDecoded == parentVT->objectPools[0].versionLabel)
+											// Check if we need to manipulate the passed in label by padding with spaces
+											while (tempActualLabel.size() < LABEL_LENGTH)
+											{
+												tempActualLabel.push_back(' ');
+											}
+
+											if (tempActualLabel.size() > LABEL_LENGTH)
+											{
+												tempActualLabel.resize(LABEL_LENGTH);
+											}
+
+											if (tempActualLabel == labelDecoded)
 											{
 												labelMatched = true;
 												parentVT->set_state(StateMachineState::SendLoadVersion);
@@ -2841,6 +2898,43 @@ namespace isobus
 							else
 							{
 								CANStackLogger::CAN_stack_log("[VT]: Get Versions Response ignored!");
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::LoadVersionCommand):
+						{
+							if (StateMachineState::WaitForLoadVersionResponse == parentVT->state)
+							{
+								if (0 == data[5])
+								{
+									CANStackLogger::CAN_stack_log("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
+									parentVT->set_state(StateMachineState::Connected);
+								}
+								else
+								{
+									// At least one error is set
+									if (data[5] & 0x01)
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Load Versions Response error: File system error or corruption.");
+									}
+									if (data[5] & 0x02)
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Load Versions Response error: Insufficient memory.");
+									}
+									if (data[5] & 0x04)
+									{
+										CANStackLogger::CAN_stack_log("[VT]: Load Versions Response error: Any other error.");
+									}
+
+									// Not sure what happened here... should be mostly impossible. Try to upload instead.
+									CANStackLogger::CAN_stack_log("[VT]: Switching to pool upload instead.");
+									parentVT->set_state(StateMachineState::UploadObjectPool);
+								}
+							}
+							else
+							{
+								CANStackLogger::CAN_stack_log("[VT]: Load Versions Response ignored!");
 							}
 						}
 						break;

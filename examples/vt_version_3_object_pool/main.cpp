@@ -141,10 +141,13 @@ void setup()
 		std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
 	}
 
+	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
+	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
+
 	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
 	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
+	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
 	TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
 	TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
 	TestVirtualTerminalClient->initialize(true);

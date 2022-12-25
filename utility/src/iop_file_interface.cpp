@@ -9,7 +9,9 @@
 #include "isobus/utility/iop_file_interface.hpp"
 
 #include <fstream>
+#include <iomanip>
 #include <iterator>
+#include <sstream>
 
 namespace isobus
 {
@@ -35,5 +37,21 @@ namespace isobus
 			retVal.insert(retVal.begin(), std::istream_iterator<std::uint8_t>(file), std::istream_iterator<std::uint8_t>());
 		}
 		return retVal;
+	}
+
+	std::string IOPFileInterface::hash_object_pool_to_version(std::vector<std::uint8_t> &iopData)
+	{
+		std::size_t seed = iopData.size();
+		std::stringstream stream;
+
+		for (auto x : iopData)
+		{
+			x = ((x >> 16) ^ x) * 0x45d9f3b;
+			x = ((x >> 16) ^ x) * 0x45d9f3b;
+			x = (x >> 16) ^ x;
+			seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		}
+		stream << std::hex << seed;
+		return stream.str();
 	}
 }
