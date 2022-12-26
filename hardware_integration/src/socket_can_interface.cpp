@@ -6,6 +6,7 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
+#ifdef __linux__
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #include <isobus/isobus/can_warning_logger.hpp>
 #include "isobus/utility/system_timing.hpp"
@@ -214,3 +215,4 @@ bool SocketCANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &ca
 	}
 	return retVal;
 }
+#endif // __linux__

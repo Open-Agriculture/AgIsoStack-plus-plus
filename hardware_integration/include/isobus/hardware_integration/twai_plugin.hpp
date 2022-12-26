@@ -8,6 +8,7 @@
 //================================================================================================
 #ifndef TWAI_PLUGIN_HPP
 #define TWAI_PLUGIN_HPP
+#ifdef ESP_PLATFORM
 
 #include <driver/twai.h>
 #include <string>
@@ -59,4 +60,5 @@ private:
 	twai_filter_config_t filterConfig;
 };
 
+#endif // ESP_PLATFORM
 #endif // TWAI_PLUGIN_HPP

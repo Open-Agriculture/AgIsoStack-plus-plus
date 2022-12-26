@@ -9,6 +9,7 @@
 //================================================================================================
 #ifndef SOCKET_CAN_INTERFACE_HPP
 #define SOCKET_CAN_INTERFACE_HPP
+#ifdef __linux__
 
 #include <string>
 
@@ -61,4 +62,5 @@ private:
 	int fileDescriptor; ///< File descriptor for the socket
 };
 
+#endif // __linux__
 #endif // SOCKET_CAN_INTERFACE_HPP
