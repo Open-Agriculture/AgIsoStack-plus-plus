@@ -6,6 +6,7 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
+#ifdef ESP_PLATFORM
 #include <isobus/hardware_integration/twai_plugin.hpp>
 #include <isobus/isobus/can_warning_logger.hpp>
 #include "isobus/utility/system_timing.hpp"
@@ -89,3 +90,4 @@ bool TWAIPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 	}
 	return retVal;
 }
+#endif // ESP_PLATFORM

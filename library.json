@@ -6,12 +6,6 @@
             "-Ihardware_integration/include",
             "-Iisobus/include",
             "-Iutility/include"
-        ],
-        "srcFilter": [
-            "+<isobus/src/*>",
-            "+<utility/src/*>",
-            "+<hardware_integration/src/can_hardware_interface.cpp>",
-            "+<hardware_integration/src/twai_plugin.cpp>"
         ]
     }
 }
