@@ -198,19 +198,10 @@ private:
 		POWERUP = 0xE0
 	};
 
-	constexpr static std::uint8_t NUM_WRITE_BUFFERS = 3; ///< The number of write buffers in the MCP2515
-	constexpr static std::uint8_t NUM_READ_BUFFERS = 2; ///< The number of read buffers in the MCP2515
+	static constexpr std::uint32_t RECEIVE_MESSAGE_READ_RATE = 10; ///< Hardcoded time in ms between polling the MCP2515 module for new messages, mostly arbitrary
 
-	constexpr static TXBRegister TXB[NUM_WRITE_BUFFERS] = {
-		{ MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH, MCPRegister::TXB0DATA },
-		{ MCPRegister::TXB1CTRL, MCPRegister::TXB1SIDH, MCPRegister::TXB1DATA },
-		{ MCPRegister::TXB2CTRL, MCPRegister::TXB2SIDH, MCPRegister::TXB2DATA }
-	}; ///< The registers of the TX buffers
-
-	constexpr static RXBRegister RXB[NUM_READ_BUFFERS] = {
-		{ MCPRegister::RXB0CTRL, MCPRegister::RXB0DATA, 0x01 },
-		{ MCPRegister::RXB1CTRL, MCPRegister::RXB1DATA, 0x02 }
-	}; ///< The registers of the RX buffers
+	static constexpr std::size_t NUM_WRITE_BUFFERS = 3; ///< The number of write buffers in the MCP2515
+	static constexpr std::size_t NUM_READ_BUFFERS = 2; ///< The number of read buffers in the MCP2515
 
 	/// @brief Get the RX status
 	/// @returns The RX status
@@ -227,20 +218,18 @@ private:
 	/// @param[in, out] data The data that was read
 	/// @param[in] length The length of the data to read
 	/// @returns If the read was successfull
-	bool read_register(const MCPRegister address, std::uint8_t data[], const std::size_t length);
+	bool read_register(const MCPRegister address, std::vector<std::uint8_t> &data, const std::size_t length);
 
 	/// @brief writes an instruction with single data to the mcp2515
 	/// @param[in] instruction The instruction to write
-	/// @param[in] data The data to write
 	/// @returns If the write was successfull
-	bool write_instruction(const MCPInstruction instruction, const std::uint8_t data);
+	bool write_instruction(const MCPInstruction instruction);
 
 	/// @brief writes an instruction with data array to the mcp2515
 	/// @param[in] instruction The instruction to write
 	/// @param[in] data The data to write
-	/// @param[in] length The length of the data to write
 	/// @returns If the write was successfull
-	bool write_instruction(const MCPInstruction instruction, const std::uint8_t data[], const std::size_t length);
+	bool write_instruction(const MCPInstruction instruction, const std::vector<std::uint8_t> data);
 
 	/// @brief modify a register of the mcp2515
 	/// @param[in] address The address of the register to modify
@@ -258,9 +247,8 @@ private:
 	/// @brief write multiple byte register of the mcp2515
 	/// @param[in] address The address of the register to write
 	/// @param[in] data The data to write to the register
-	/// @param[in] length The length of the data to write
 	/// @returns If the write was successfull
-	bool write_register(const MCPRegister address, const std::uint8_t data[], const std::size_t length);
+	bool write_register(const MCPRegister address, const std::vector<std::uint8_t> data);
 
 	/// @brief set the mode of the mcp2515
 	/// @param[in] mode The mode to set the mcp2515 to
