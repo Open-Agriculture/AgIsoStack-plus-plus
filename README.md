@@ -98,3 +98,11 @@ The documentation will appear in the docs/html folder. Open `index.html` in a we
 ## Road Map
 
 ![RoadMap](docs/images/comingSoon.png)
+
+## Special Thanks
+
+This project's sponsors are a big part of making this project successful. Their support helps fund new hardware and software tools to test against, which drives up quality.
+
+Thank you:
+
+* Franz Höpfinger [franz-ms-muc](https://github.com/franz-ms-muc)
