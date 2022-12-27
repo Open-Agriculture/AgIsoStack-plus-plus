@@ -1,11 +1,26 @@
 {
     "name": "Isobus++",
     "version": "1.0.0",
+    "description": "The Free ISO11783 & J1939 CAN Stack",
+    "keywords": "can, isobus, j1939, agritech, smart-farming, iso11783",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ad3154/ISO11783-CAN-Stack.git"
+    },
+    "license": "MIT",
+    "homepage": "https://isobusplusplus.com/",
     "build": {
         "flags": [
             "-Ihardware_integration/include",
             "-Iisobus/include",
             "-Iutility/include"
+        ],
+        "srcFilter": [
+            "+<isobus/src/*>",
+            "+<utility/src/*>",
+            "+<hardware_integration/src/can_hardware_interface.cpp>",
+            "+<hardware_integration/src/twai_plugin.cpp>",
+            "+<hardware_integration/src/mcp2515_can_interface.cpp>"
         ]
     }
 }
