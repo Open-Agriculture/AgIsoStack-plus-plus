@@ -111,6 +111,11 @@ public:
 	/// @returns `true` if the callback was removed, `false` if no callback matched the two parameters
 	static bool remove_raw_can_message_rx_callback(void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer), void *parentPointer);
 
+	/// @brief Set the period between calls to the can lib update callback in milliseconds
+	/// @param[in] value The period between update calls in milliseconds
+	/// @note All changes to the update delay will be ignored if `start` has been called and the threads are running
+	static void set_can_driver_update_period(std::uint32_t value);
+
 	/// @brief Adds a periodic udpate callback
 	/// @param[in] callback The callback to add
 	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
@@ -144,8 +149,8 @@ private:
 		CANHardwarePlugin *frameHandler; ///< The CAN driver to use for a CAN channel
 	};
 
-	/// @brief A hard-coded update interval for the CAN stack. Mostly arbitrary
-	static const std::uint32_t CANLIB_UPDATE_RATE = 10;
+	/// @brief The default update interval for the CAN stack. Mostly arbitrary
+	static constexpr std::uint32_t CANLIB_UPDATE_RATE = 4;
 
 	/// @brief The main CAN thread executes this function. Does most of the work of this class
 	static void can_thread_function();
@@ -183,6 +188,7 @@ private:
 	static std::condition_variable threadConditionVariable; ///< A condition variable to allow for signaling the CAN thread from `updateCANLibPeriodicThread`
 	static bool threadsStarted; ///< Stores if `start` has been called yet
 	static bool canLibNeedsUpdate; ///< Stores if the CAN thread needs to update the CAN stack this iteration
+	static std::uint32_t canLibUpdatePeriod; ///< The period between calls to the CAN stack update function in milliseconds
 };
 
 #endif // CAN_HARDWARE_INTERFACE_HPP

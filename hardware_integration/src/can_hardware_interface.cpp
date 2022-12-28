@@ -8,7 +8,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
-#include <isobus/isobus/can_warning_logger.hpp>
+#include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -27,6 +27,7 @@ std::mutex CANHardwareInterface::canLibNeedsUpdateMutex;
 std::mutex CANHardwareInterface::canLibUpdateCallbacksMutex;
 bool CANHardwareInterface::threadsStarted = false;
 bool CANHardwareInterface::canLibNeedsUpdate = false;
+std::uint32_t CANHardwareInterface::canLibUpdatePeriod = CANLIB_UPDATE_RATE;
 CANHardwareInterface CANHardwareInterface::CAN_HARDWARE_INTERFACE;
 
 bool isobus::send_can_message_to_hardware(HardwareInterfaceCANFrame frame)
@@ -310,6 +311,10 @@ bool CANHardwareInterface::remove_raw_can_message_rx_callback(void (*callback)(i
 
 	return retVal;
 }
+void CANHardwareInterface::set_can_driver_update_period(std::uint32_t value)
+{
+	canLibUpdatePeriod = value;
+}
 
 bool CANHardwareInterface::add_can_lib_update_callback(void (*callback)(), void *parentPointer)
 {
@@ -504,7 +509,7 @@ bool CANHardwareInterface::transmit_can_message_from_buffer(isobus::HardwareInte
 
 void CANHardwareInterface::update_can_lib_periodic_function()
 {
-	const std::uint32_t UPDATE_RATE = CANLIB_UPDATE_RATE;
+	const std::uint32_t UPDATE_RATE = canLibUpdatePeriod;
 	hardwareChannelsMutex.lock();
 	hardwareChannelsMutex.unlock();
 
