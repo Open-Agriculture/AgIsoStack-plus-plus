@@ -29,7 +29,9 @@ endif()
 
 # Find packages required for Socket CAN
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+if(NOT ESP_PLATFORM) # ESP-IDF doesn't implement find_package(Threads) correctly (dec 2022)
+  find_package(Threads REQUIRED)
+endif()
 
 # A handy function to PREPEND text to all elements in a list (useful for
 # subdirectories)
