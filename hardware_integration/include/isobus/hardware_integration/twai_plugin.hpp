@@ -26,13 +26,13 @@ class TWAIPlugin : public CANHardwarePlugin
 {
 public:
 	/// @brief Constructor for the socket CAN driver
-	/// @param[in] filterConfig The filter configuration for the TWAI driver
-	/// @param[in] timingConfig The timing configuration for the TWAI driver
-	/// @param[in] generalConfig The general configuration for the TWAI driver
-	explicit TWAIPlugin(const twai_general_config_t generalConfig, const twai_timing_config_t timingConfig, const twai_filter_config_t filterConfig);
+	/// @param[in] filterConfig A reference to the filter configuration for the TWAI driver
+	/// @param[in] timingConfig A reference to the timing configuration for the TWAI driver
+	/// @param[in] generalConfig A reference to the general configuration for the TWAI driver
+	explicit TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig);
 
 	/// @brief The destructor for TWAIPlugin
-	~TWAIPlugin();
+	virtual ~TWAIPlugin();
 
 	/// @brief Returns if the socket connection is valid
 	/// @returns `true` if connected, `false` if not connected
@@ -55,9 +55,9 @@ public:
 	bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
 
 private:
-	twai_general_config_t generalConfig;
-	twai_timing_config_t timingConfig;
-	twai_filter_config_t filterConfig;
+	const twai_general_config_t *generalConfig;
+	const twai_timing_config_t *timingConfig;
+	const twai_filter_config_t *filterConfig;
 };
 
 #endif // ESP_PLATFORM

@@ -7,9 +7,11 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #ifdef ESP_PLATFORM
-#include <isobus/hardware_integration/twai_plugin.hpp>
-#include <isobus/isobus/can_warning_logger.hpp>
+#include "isobus/hardware_integration/twai_plugin.hpp"
+#include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -17,7 +19,7 @@
 #include <cstring>
 #include <limits>
 
-TWAIPlugin::TWAIPlugin(const twai_general_config_t generalConfig, const twai_timing_config_t timingConfig, const twai_filter_config_t filterConfig) :
+TWAIPlugin::TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig) :
   generalConfig(generalConfig),
   timingConfig(timingConfig),
   filterConfig(filterConfig)
@@ -32,23 +34,44 @@ TWAIPlugin::~TWAIPlugin()
 bool TWAIPlugin::get_is_valid() const
 {
 	twai_status_info_t status;
-	if (twai_get_status_info(&status) == ESP_OK)
+	esp_err_t error = twai_get_status_info(&status);
+	if (error == ESP_OK)
 	{
 		return status.state == TWAI_STATE_RUNNING;
+	}
+	else
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error getting status: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	return false;
 }
 
 void TWAIPlugin::close()
 {
-	twai_stop();
-	twai_driver_uninstall();
+	esp_err_t error = twai_stop();
+	if (error != ESP_OK)
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error stopping driver: " + isobus::to_string(esp_err_to_name(error)));
+	}
+	error = twai_driver_uninstall();
+	if (error != ESP_OK)
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error uninstalling driver: " + isobus::to_string(esp_err_to_name(error)));
+	}
 }
 
 void TWAIPlugin::open()
 {
-	twai_driver_install(&generalConfig, &timingConfig, &filterConfig);
-	twai_start();
+	esp_err_t error = twai_driver_install(generalConfig, timingConfig, filterConfig);
+	if (error != ESP_OK)
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error installing driver: " + isobus::to_string(esp_err_to_name(error)));
+	}
+	error = twai_start();
+	if (error != ESP_OK)
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error starting driver: " + isobus::to_string(esp_err_to_name(error)));
+	}
 }
 
 bool TWAIPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
@@ -57,7 +80,8 @@ bool TWAIPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 
 	//Wait for message to be received
 	twai_message_t message;
-	if (twai_receive(&message, portMAX_DELAY) == ESP_OK)
+	esp_err_t error = twai_receive(&message, portMAX_DELAY);
+	if (error == ESP_OK)
 	{
 		// Process received message
 		if (!(message.rtr))
@@ -65,10 +89,17 @@ bool TWAIPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 			canFrame.identifier = message.identifier;
 			canFrame.isExtendedFrame = message.extd;
 			canFrame.dataLength = message.data_length_code;
-			memset(canFrame.data, 0, sizeof(canFrame.data));
-			memcpy(canFrame.data, message.data, canFrame.dataLength);
-			retVal = true;
+			if (isobus::CAN_DATA_LENGTH >= canFrame.dataLength)
+			{
+				memset(canFrame.data, 0, sizeof(canFrame.data));
+				memcpy(canFrame.data, message.data, canFrame.dataLength);
+				retVal = true;
+			}
 		}
+	}
+	else
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error receiving message: " + isobus::to_string(esp_err_to_name(error)));
 	}
 
 	return retVal;
@@ -84,9 +115,14 @@ bool TWAIPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 	message.data_length_code = canFrame.dataLength;
 	memcpy(message.data, canFrame.data, canFrame.dataLength);
 
-	if (twai_transmit(&message, portMAX_DELAY) == ESP_OK)
+	esp_err_t error = twai_transmit(&message, portMAX_DELAY);
+	if (error == ESP_OK)
 	{
 		retVal = true;
+	}
+	else
+	{
+		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error sending message: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	return retVal;
 }

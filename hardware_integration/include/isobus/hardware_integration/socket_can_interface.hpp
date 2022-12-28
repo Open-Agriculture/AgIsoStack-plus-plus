@@ -29,7 +29,7 @@ public:
 	explicit SocketCANInterface(const std::string deviceName);
 
 	/// @brief The destructor for SocketCANInterface
-	~SocketCANInterface();
+	virtual ~SocketCANInterface();
 
 	/// @brief Returns if the socket connection is valid
 	/// @returns `true` if connected, `false` if not connected
