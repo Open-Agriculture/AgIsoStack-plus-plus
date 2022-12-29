@@ -400,6 +400,7 @@ namespace isobus
 				{
 					// Device already in the active list
 					foundControlFunction = activeControlFunctions[i];
+					break;
 				}
 				else if (activeControlFunctions[i]->address == CANIdentifier(rxFrame.identifier).get_source_address())
 				{
@@ -409,7 +410,7 @@ namespace isobus
 			}
 
 			// Maybe it's in the inactive list (device reconnected)
-			// Alwas have to iterate the list to check for duplicate addresses
+			// Always have to iterate the list to check for duplicate addresses
 			for (std::uint32_t i = 0; i < inactiveControlFunctions.size(); i++)
 			{
 				if (claimedNAME == inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
@@ -427,13 +428,14 @@ namespace isobus
 			if (nullptr == foundControlFunction)
 			{
 				// If we still haven't found it, it might be a partner. Check the list of partners.
-				for (auto partner : PartneredControlFunction::partneredControlFunctionList)
+				for (std::uint32_t i = 0; i < PartneredControlFunction::partneredControlFunctionList.size(); i++)
 				{
-					if (partner->check_matches_name(NAME(claimedNAME)))
+					if (PartneredControlFunction::partneredControlFunctionList[i]->check_matches_name(NAME(claimedNAME)))
 					{
-						partner->address = CANIdentifier(rxFrame.identifier).get_source_address();
-						activeControlFunctions.push_back(partner);
-						foundControlFunction = partner;
+						PartneredControlFunction::partneredControlFunctionList[i]->address = CANIdentifier(rxFrame.identifier).get_source_address();
+						PartneredControlFunction::partneredControlFunctionList[i]->controlFunctionNAME = NAME(claimedNAME);
+						activeControlFunctions.push_back(PartneredControlFunction::partneredControlFunctionList[i]);
+						foundControlFunction = PartneredControlFunction::partneredControlFunctionList[i];
 						CANStackLogger::CAN_stack_log("[NM]: A Partner Has Claimed " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 						break;
 					}
