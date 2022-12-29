@@ -1753,7 +1753,6 @@ namespace isobus
 						tempVersionBuffer[4] = ' ';
 						tempVersionBuffer[5] = ' ';
 						tempVersionBuffer[6] = ' ';
-						tempVersionBuffer[7] = ' ';
 
 						for (std::size_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
 						{
