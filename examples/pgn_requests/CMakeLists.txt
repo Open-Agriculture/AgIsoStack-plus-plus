@@ -8,9 +8,7 @@ find_package(Threads REQUIRED)
 
 add_executable(PGNRequestExampleTarget main.cpp)
 target_link_libraries(PGNRequestExampleTarget PRIVATE
-	-Wl,--whole-archive
 	isobus::Isobus
-	-Wl,--no-whole-archive
 	isobus::HardwareIntegration
 	Threads::Threads
 	isobus::SystemTiming

@@ -12,6 +12,7 @@
 
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -20,8 +21,6 @@
 
 namespace isobus
 {
-	TransportProtocolManager TransportProtocolManager::Protocol;
-
 	TransportProtocolManager::TransportProtocolSession::TransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
 	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
@@ -53,11 +52,8 @@ namespace isobus
 
 	TransportProtocolManager::~TransportProtocolManager()
 	{
-		if (initialized)
-		{
-			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand), process_message, this);
-			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData), process_message, this);
-		}
+		// No need to clean up, as this object is a member of the network manager
+		// so its callbacks will be cleared at destruction time
 	}
 
 	void TransportProtocolManager::initialize(CANLibBadge<CANNetworkManager>)

@@ -14,7 +14,6 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_managed_message.hpp"
-#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_protocol.hpp"
 
 namespace isobus
@@ -34,6 +33,7 @@ namespace isobus
 	//================================================================================================
 	class TransportProtocolManager : public CANLibProtocol
 	{
+	public:
 		/// @brief The states that a TP session could be in. Used for the internal state machine.
 		enum class StateMachineState
 		{
@@ -123,8 +123,6 @@ namespace isobus
 
 		/// @brief The destructor for the TransportProtocolManager
 		virtual ~TransportProtocolManager();
-
-		static TransportProtocolManager Protocol; ///< Static instance of the protocol manager
 
 		/// @brief The protocol's initializer function
 		void initialize(CANLibBadge<CANNetworkManager>) override;

@@ -61,12 +61,10 @@ find_package(Threads)
 
 add_subdirectory(<path to this submodule>)
 
-target_link_libraries(<your executable name> PRIVATE -Wl,--whole-archive isobus::Isobus -Wl,--no-whole-archive isobus::HardwareIntegration isobus::SocketCANInterface)
+target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::SocketCANInterface)
 ```
 
 A full example CMakeLists.txt file can be found on the tutorial website.
-
-`-Wl,--whole-archive` is required to ensure that some static singleton objects, such as the `TransportProtocolManager` don't get optimized out of your executable by your linker.
 
 ## Documentation
 
