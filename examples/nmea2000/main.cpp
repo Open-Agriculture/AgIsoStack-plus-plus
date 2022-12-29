@@ -9,8 +9,15 @@
 #include <iterator>
 #include <memory>
 
+#ifdef WIN32
+#include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
+static PCANBasicWindowsPlugin canDriver(PCAN_USBBUS1);
+#else
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+static SocketCANInterface canDriver("can0");
+#endif
+
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-static SocketCANInterface canDriver("vcan0");
 
 using namespace std;
 

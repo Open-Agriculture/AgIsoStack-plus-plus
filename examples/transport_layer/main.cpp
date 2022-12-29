@@ -11,6 +11,14 @@
 #include <iterator>
 #include <memory>
 
+#ifdef WIN32
+#include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
+static PCANBasicWindowsPlugin canDriver(PCAN_USBBUS1);
+#else
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+static SocketCANInterface canDriver("can0");
+#endif
+
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
 static isobus::PartneredControlFunction *TestPartner = nullptr;
 std::vector<isobus::NAMEFilter> vtNameFilters;
@@ -19,7 +27,6 @@ std::uint8_t *TPTestBuffer = nullptr;
 std::uint8_t *ETPTestBuffer = nullptr;
 constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
 constexpr std::uint32_t ETP_TEST_SIZE = 2048;
-static SocketCANInterface canDriver("vcan0");
 
 using namespace std;
 

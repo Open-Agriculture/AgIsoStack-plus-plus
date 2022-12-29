@@ -1,5 +1,4 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
-#include "isobus/hardware_integration/socket_can_interface.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
@@ -7,6 +6,14 @@
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 #include "objectPoolObjects.h"
+
+#ifdef WIN32
+#include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
+static PCANBasicWindowsPlugin canDriver(PCAN_USBBUS1);
+#else
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+static SocketCANInterface canDriver("can0");
+#endif
 
 #include <csignal>
 #include <iostream>
@@ -18,7 +25,6 @@ static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient 
 std::vector<isobus::NAMEFilter> vtNameFilters;
 const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 static std::vector<std::uint8_t> testPool;
-static SocketCANInterface canDriver("can0");
 
 using namespace std;
 

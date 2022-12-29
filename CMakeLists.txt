@@ -82,11 +82,13 @@ if(NOT TARGET GTest::gtest_main)
   add_library(GTest::gtest_main ALIAS GTest::Main)
 endif()
 
+if ("SocketCAN" IN_LIST CAN_DRIVER)
 add_executable(unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp test/identifier_tests.cpp test/dm_13_tests.cpp)
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus ${PROJECT_NAME}::HardwareIntegration ${PROJECT_NAME}::SystemTiming)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)
+endif()
 endif()
 
 install( TARGETS Isobus SystemTiming HardwareIntegration

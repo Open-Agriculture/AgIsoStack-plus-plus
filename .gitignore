@@ -46,6 +46,7 @@ Makefile
 
 # build
 *build
+*out
 
 # Doxygen
 *docs
