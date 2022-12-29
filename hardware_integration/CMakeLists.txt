@@ -51,7 +51,7 @@ if ("WindowsPCANBasic" IN_LIST CAN_DRIVER)
 	endif()
 
 	message(STATUS "Target Arch: ${CMAKE_SYSTEM_PROCESSOR}")
-	if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
+	if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "x64")
 		message(STATUS "Detected AMD64, linking to PCAN x64 Library")
 			target_link_libraries(HardwareIntegration PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_x64.lib)
 			add_custom_command(
