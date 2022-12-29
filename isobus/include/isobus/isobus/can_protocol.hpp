@@ -84,8 +84,6 @@ namespace isobus
 		virtual void update(CANLibBadge<CANNetworkManager>) = 0;
 
 	protected:
-		static std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
-
 		bool initialized; ///< Keeps track of if the protocol has been initialized by the network manager
 	};
 

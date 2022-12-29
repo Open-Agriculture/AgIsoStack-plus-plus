@@ -15,10 +15,12 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_extended_transport_protocol.hpp"
 #include "isobus/isobus/can_frame.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_transport_protocol.hpp"
 
 #include <array>
 #include <mutex>
@@ -109,6 +111,7 @@ namespace isobus
 		friend class DiagnosticProtocol; ///< Allows the diagnostic protocol to access the protected functions on the network manager
 		friend class ParameterGroupNumberRequestProtocol; ///< Allows the PGN request protocol to access the network manager protected functions
 		friend class FastPacketProtocol; ///< Allows the FP protocol to access the network manager protected functions
+		friend class CANLibProtocol;
 
 		/// @brief Adds a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for
@@ -145,6 +148,8 @@ namespace isobus
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
 		/// @param[in] protocolMessage The completed protocol message
 		void protocol_message_callback(CANMessage *protocolMessage);
+
+		std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
 
 	private:
 		/// @brief A structure to hold PGN callback data to provide parent back to the reigistrar of the callback
@@ -220,6 +225,9 @@ namespace isobus
 		/// @param[in] index The index of the callback to get
 		/// @returns A structure containing the global PGN callback data
 		ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::uint32_t index) const;
+
+		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Static instance of the protocol manager
+		TransportProtocolManager transportProtocol; ///< Static instance of the transport protocol manager
 
 		std::array<std::array<ControlFunction *, 256>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::vector<ControlFunction *> activeControlFunctions; ///< A list of active control function used to track connected devices

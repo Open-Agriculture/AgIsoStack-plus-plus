@@ -9,25 +9,25 @@
 //================================================================================================
 #include "isobus/isobus/can_protocol.hpp"
 
+#include "isobus/isobus/can_network_manager.hpp"
+
 #include <algorithm>
 
 namespace isobus
 {
-	std::vector<CANLibProtocol *> CANLibProtocol::protocolList;
-
 	CANLibProtocol::CANLibProtocol() :
 	  initialized(false)
 	{
-		protocolList.push_back(this);
+		CANNetworkManager::CANNetwork.protocolList.push_back(this);
 	}
 
 	CANLibProtocol::~CANLibProtocol()
 	{
-		auto protocolLocation = find(protocolList.begin(), protocolList.end(), this);
+		auto protocolLocation = find(CANNetworkManager::CANNetwork.protocolList.begin(), CANNetworkManager::CANNetwork.protocolList.end(), this);
 
-		if (protocolList.end() != protocolLocation)
+		if (CANNetworkManager::CANNetwork.protocolList.end() != protocolLocation)
 		{
-			protocolList.erase(protocolLocation);
+			CANNetworkManager::CANNetwork.protocolList.erase(protocolLocation);
 		}
 	}
 
@@ -40,16 +40,16 @@ namespace isobus
 	{
 		returnedProtocol = nullptr;
 
-		if (index < protocolList.size())
+		if (index < CANNetworkManager::CANNetwork.protocolList.size())
 		{
-			returnedProtocol = protocolList[index];
+			returnedProtocol = CANNetworkManager::CANNetwork.protocolList[index];
 		}
 		return (nullptr != returnedProtocol);
 	}
 
 	std::uint32_t CANLibProtocol::get_number_protocols()
 	{
-		return protocolList.size();
+		return CANNetworkManager::CANNetwork.protocolList.size();
 	}
 
 	void CANLibProtocol::initialize(CANLibBadge<CANNetworkManager>)

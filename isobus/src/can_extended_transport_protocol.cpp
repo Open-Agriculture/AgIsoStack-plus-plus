@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -19,8 +20,6 @@
 
 namespace isobus
 {
-	ExtendedTransportProtocolManager ExtendedTransportProtocolManager::Protocol;
-
 	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::ExtendedTransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
 	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
@@ -51,11 +50,8 @@ namespace isobus
 
 	ExtendedTransportProtocolManager ::~ExtendedTransportProtocolManager()
 	{
-		if (initialized)
-		{
-			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolDataTransfer), process_message, this);
-			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolConnectionManagement), process_message, this);
-		}
+		// No need to clean up, as this object is a member of the network manager
+		// so its callbacks will be cleared at destruction time
 	}
 
 	void ExtendedTransportProtocolManager::initialize(CANLibBadge<CANNetworkManager>)

@@ -30,6 +30,8 @@ namespace isobus
 	{
 		receiveMessageList.clear();
 		initialized = true;
+		transportProtocol.initialize({});
+		extendedTransportProtocol.initialize({});
 	}
 
 	ControlFunction *CANNetworkManager::get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>) const
