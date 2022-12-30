@@ -7,41 +7,35 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SYSTEM_TIMING_SRC_DIR "src")
 set(SYSTEM_TIMING_INCLUDE_DIR "include/isobus/utility")
 
-# Set source files 
-set(SYSTEM_TIMING_SRC 
-  "system_timing.cpp"
-  "processing_flags.cpp"
-  "iop_file_interface.cpp"
-)
+# Set source files
+set(SYSTEM_TIMING_SRC "system_timing.cpp" "processing_flags.cpp"
+                      "iop_file_interface.cpp")
 
 # Prepend the source directory path to all the source files
-PREPEND(SYSTEM_TIMING_SRC ${SYSTEM_TIMING_SRC_DIR} ${SYSTEM_TIMING_SRC})
+prepend(SYSTEM_TIMING_SRC ${SYSTEM_TIMING_SRC_DIR} ${SYSTEM_TIMING_SRC})
 
 # Set the include files
-set(SYSTEM_TIMING_INCLUDE 
-  "system_timing.hpp"
-  "processing_flags.hpp"
-  "iop_file_interface.hpp"
-  "to_string.hpp"
-)
+set(SYSTEM_TIMING_INCLUDE "system_timing.hpp" "processing_flags.hpp"
+                          "iop_file_interface.hpp" "to_string.hpp")
 
 # Prepend the include directory path to all the include files
-PREPEND(SYSTEM_TIMING_INCLUDE ${SYSTEM_TIMING_INCLUDE_DIR} ${SYSTEM_TIMING_INCLUDE})
+prepend(SYSTEM_TIMING_INCLUDE ${SYSTEM_TIMING_INCLUDE_DIR}
+        ${SYSTEM_TIMING_INCLUDE})
 
 # Create the library from the source and include files
 add_library(SystemTiming ${SYSTEM_TIMING_SRC} ${SYSTEM_TIMING_INCLUDE})
 add_library(${PROJECT_NAME}::SystemTiming ALIAS SystemTiming)
 
-# Specify the include directory to be exported for other moduels to use. The 
+# Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this
 # library and use its functionality.
-target_include_directories(SystemTiming PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
+target_include_directories(
+  SystemTiming PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
- install(TARGETS SystemTiming EXPORT IsobusTargets
+install(
+  TARGETS SystemTiming
+  EXPORT IsobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION bin
-)
+  RUNTIME DESTINATION bin)
