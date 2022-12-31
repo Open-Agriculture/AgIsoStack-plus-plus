@@ -67,6 +67,23 @@ namespace isobus
 		return globalParameterGroupNumberCallbacks.size();
 	}
 
+	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	{
+		std::unique_lock<std::mutex> lock(anyControlFunctionCallbacksMutex);
+		anyControlFunctionParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+	}
+
+	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	{
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
+		std::unique_lock<std::mutex> lock(anyControlFunctionCallbacksMutex);
+		auto callbackLocation = std::find(anyControlFunctionParameterGroupNumberCallbacks.begin(), anyControlFunctionParameterGroupNumberCallbacks.end(), tempObject);
+		if (anyControlFunctionParameterGroupNumberCallbacks.end() != callbackLocation)
+		{
+			anyControlFunctionParameterGroupNumberCallbacks.erase(callbackLocation);
+		}
+	}
+
 	InternalControlFunction *CANNetworkManager::get_internal_control_function(ControlFunction *controlFunction)
 	{
 		InternalControlFunction *retVal = nullptr;
@@ -312,6 +329,13 @@ namespace isobus
 		protocolPGNCallbacksMutex.unlock();
 
 		return retVal;
+	}
+
+	CANNetworkManager::CANNetworkManager() :
+	  updateTimestamp_ms(0),
+	  initialized(false)
+	{
+		controlFunctionTable.fill({ nullptr });
 	}
 
 	void CANNetworkManager::update_address_table(CANMessage &message)
@@ -602,7 +626,7 @@ namespace isobus
 
 			// Update Protocols
 			protocolPGNCallbacksMutex.lock();
-			for (auto currentCallback : protocolPGNCallbacks)
+			for (auto &currentCallback : protocolPGNCallbacks)
 			{
 				if (currentCallback.parameterGroupNumber == currentMessage.get_identifier().get_parameter_group_number())
 				{
@@ -610,6 +634,16 @@ namespace isobus
 				}
 			}
 			protocolPGNCallbacksMutex.unlock();
+
+			anyControlFunctionCallbacksMutex.lock();
+			for (auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
+			{
+				if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
+				{
+					currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
+				}
+			}
+			anyControlFunctionCallbacksMutex.unlock();
 
 			// Update Others
 			process_can_message_for_callbacks(&currentMessage);
