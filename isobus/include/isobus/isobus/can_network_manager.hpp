@@ -71,6 +71,18 @@ namespace isobus
 		/// @returns The number of global PGN callbacks that have been registered with the network manager
 		std::uint32_t get_number_global_parameter_group_number_callbacks() const;
 
+		/// @brief Registers a callback for ANY control function sending the associated PGN
+		/// @param[in] parameterGroupNumber The PGN you want to register for
+		/// @param[in] callback The callback that will be called when parameterGroupNumber is recieved from any control function
+		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.
+		void add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+
+		/// @brief This is how you remove a callback added with add_any_control_function_parameter_group_number_callback
+		/// @param[in] parameterGroupNumber The PGN of the callback to remove
+		/// @param[in] callback The callback that will be removed
+		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
 		/// @returns An internal control function casted from the passed in control function
 		InternalControlFunction *get_internal_control_function(ControlFunction *controlFunction);
@@ -162,6 +174,9 @@ namespace isobus
 			std::uint32_t parameterGroupNumber; ///< The PGN associated with the callback
 		};
 
+		/// @brief Constructor for the network manager. Sets default values for members
+		CANNetworkManager();
+
 		/// @brief Updates the internal address table based on a received CAN message
 		/// @param[in] message A message being received by the stack
 		void update_address_table(CANMessage &message);
@@ -236,8 +251,10 @@ namespace isobus
 		std::list<CANLibProtocolPGNCallbackInfo> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::list<CANMessage> receiveMessageList; ///< A queue of Rx messages to process
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
+		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
 		std::uint32_t updateTimestamp_ms; ///< Keeps track of the last time the CAN stack was update in milliseconds
 		bool initialized; ///< True if the network manager has been initialized by the update function
 	};
