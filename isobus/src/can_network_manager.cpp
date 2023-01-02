@@ -176,14 +176,16 @@ namespace isobus
 			{
 				InternalControlFunction *currentInternalControlFunction = InternalControlFunction::get_internal_control_function(i);
 
-				if (activeControlFunctions.end() == std::find(activeControlFunctions.begin(), activeControlFunctions.end(), currentInternalControlFunction))
+				if (nullptr != currentInternalControlFunction)
 				{
-					activeControlFunctions.push_back(currentInternalControlFunction);
-				}
-				if ((nullptr != currentInternalControlFunction) &&
-				    (currentInternalControlFunction->get_changed_address_since_last_update({})))
-				{
-					update_address_table(currentInternalControlFunction->get_can_port(), currentInternalControlFunction->get_address());
+					if (activeControlFunctions.end() == std::find(activeControlFunctions.begin(), activeControlFunctions.end(), currentInternalControlFunction))
+					{
+						activeControlFunctions.push_back(currentInternalControlFunction);
+					}
+					if (currentInternalControlFunction->get_changed_address_since_last_update({}))
+					{
+						update_address_table(currentInternalControlFunction->get_can_port(), currentInternalControlFunction->get_address());
+					}
 				}
 			}
 		}
@@ -432,7 +434,8 @@ namespace isobus
 				// If we still haven't found it, it might be a partner. Check the list of partners.
 				for (std::uint32_t i = 0; i < PartneredControlFunction::partneredControlFunctionList.size(); i++)
 				{
-					if (PartneredControlFunction::partneredControlFunctionList[i]->check_matches_name(NAME(claimedNAME)))
+					if ((nullptr != PartneredControlFunction::partneredControlFunctionList[i]) &&
+					    (PartneredControlFunction::partneredControlFunctionList[i]->check_matches_name(NAME(claimedNAME))))
 					{
 						PartneredControlFunction::partneredControlFunctionList[i]->address = CANIdentifier(rxFrame.identifier).get_source_address();
 						PartneredControlFunction::partneredControlFunctionList[i]->controlFunctionNAME = NAME(claimedNAME);

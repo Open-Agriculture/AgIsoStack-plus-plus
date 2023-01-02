@@ -21,14 +21,29 @@ namespace isobus
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort),
 	  NAMEFilterList(NAMEFilters)
 	{
+		bool emptyPartnerSlotFound = false;
 		controlFunctionType = Type::Partnered;
-		partneredControlFunctionList.push_back(this);
+
+		for (auto &partner : partneredControlFunctionList)
+		{
+			if (nullptr == partner)
+			{
+				partner = this;
+				emptyPartnerSlotFound = true;
+				break;
+			}
+		}
+
+		if (!emptyPartnerSlotFound)
+		{
+			partneredControlFunctionList.push_back(this);
+		}
 	}
 
 	PartneredControlFunction::~PartneredControlFunction()
 	{
 		auto thisObject = std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), this);
-		partneredControlFunctionList.erase(thisObject);
+		*thisObject = nullptr; // Don't erase, in case the object was already deleted. Just make room for a new partner.
 	}
 
 	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
