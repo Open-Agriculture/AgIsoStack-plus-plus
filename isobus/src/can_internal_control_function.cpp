@@ -24,13 +24,22 @@ namespace isobus
 	  objectChangedAddressSinceLastUpdate(false)
 	{
 		controlFunctionType = Type::Internal;
-		internalControlFunctionList.push_back(this);
+
+		auto location = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), nullptr);
+		if (internalControlFunctionList.end() != location)
+		{
+			*location = this; // Use the available space in the list
+		}
+		else
+		{
+			internalControlFunctionList.push_back(this); // Allocate space in the list for this ICF
+		}
 	}
 
 	InternalControlFunction::~InternalControlFunction()
 	{
 		auto thisObject = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), this);
-		internalControlFunctionList.erase(thisObject);
+		*thisObject = nullptr; // Don't erase, just null it out. Erase could cause a double free.
 	}
 
 	InternalControlFunction *InternalControlFunction::get_internal_control_function(std::uint32_t index)

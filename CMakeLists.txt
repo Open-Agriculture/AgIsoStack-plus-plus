@@ -93,7 +93,8 @@ if(BUILD_TESTING)
   if("SocketCAN" IN_LIST CAN_DRIVER)
     add_executable(
       unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp
-                 test/identifier_tests.cpp test/dm_13_tests.cpp)
+                 test/identifier_tests.cpp test/dm_13_tests.cpp
+                 test/core_network_management_tests.cpp)
     target_link_libraries(
       unit_tests
       PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
