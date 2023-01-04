@@ -23,6 +23,7 @@
 #include "isobus/isobus/can_transport_protocol.hpp"
 
 #include <array>
+#include <list>
 #include <mutex>
 
 /// @brief This namespace encompases all of the ISO11783 stack's functionality to reduce global namespace pollution
