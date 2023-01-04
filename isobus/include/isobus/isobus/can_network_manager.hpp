@@ -213,9 +213,26 @@ namespace isobus
 		/// @returns A control function matching the address and CAN port passed in
 		ControlFunction *get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress) const;
 
+		/// @brief Gets a message from the Rx Queue.
+		/// @note This will only ever get an 8 byte message. Long messages are handled elsewhere.
+		/// @returns The can message that was at the front of the buffer
+		CANMessage get_next_can_message_from_rx_queue();
+
+		/// @brief Returns the number of messages in the rx queue that need to be processed
+		/// @returns The number of messages in the rx queue that need to be processed
+		std::size_t get_number_can_messages_in_rx_queue();
+
+		/// @brief Processes a can message for callbacks added with add_any_control_function_parameter_group_number_callback
+		/// @param[in] currentMessage The message to process
+		void process_any_control_function_pgn_callbacks(CANMessage &currentMessage);
+
+		/// @brief Processes a can message for callbacks added with add_protocol_parameter_group_number_callback
+		/// @param[in] currentMessage The message to process
+		void process_protocol_pgn_callbacks(CANMessage &currentMessage);
+
 		/// @brief Matches a CAN message to any matching PGN callback, and calls that callback
 		/// @param[in] message A pointer to a CAN message to be processed
-		void process_can_message_for_callbacks(CANMessage *message);
+		void process_can_message_for_global_and_partner_callbacks(CANMessage *message);
 
 		/// @brief Processes the internal receive message queue
 		void process_rx_messages();

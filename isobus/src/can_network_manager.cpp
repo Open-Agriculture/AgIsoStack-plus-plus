@@ -69,14 +69,14 @@ namespace isobus
 
 	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		std::unique_lock<std::mutex> lock(anyControlFunctionCallbacksMutex);
+		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
 		anyControlFunctionParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
 	}
 
 	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
-		std::unique_lock<std::mutex> lock(anyControlFunctionCallbacksMutex);
+		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
 		auto callbackLocation = std::find(anyControlFunctionParameterGroupNumberCallbacks.begin(), anyControlFunctionParameterGroupNumberCallbacks.end(), tempObject);
 		if (anyControlFunctionParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -284,35 +284,28 @@ namespace isobus
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
-		CANLibProtocolPGNCallbackInfo callbackInfo;
+		CANLibProtocolPGNCallbackInfo callbackInfo{
+			callback, parentPointer, parameterGroupNumber
+		};
 
-		callbackInfo.callback = callback;
-		callbackInfo.parent = parentPointer;
-		callbackInfo.parameterGroupNumber = parameterGroupNumber;
-
-		protocolPGNCallbacksMutex.lock();
+		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 
 		if ((nullptr != callback) && (protocolPGNCallbacks.end() == find(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end(), callbackInfo)))
 		{
 			protocolPGNCallbacks.push_back(callbackInfo);
 			retVal = true;
 		}
-
-		protocolPGNCallbacksMutex.unlock();
-
 		return retVal;
 	}
 
 	bool CANNetworkManager::remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
-		CANLibProtocolPGNCallbackInfo callbackInfo;
+		CANLibProtocolPGNCallbackInfo callbackInfo{
+			callback, parentPointer, parameterGroupNumber
+		};
 
-		callbackInfo.callback = callback;
-		callbackInfo.parent = parentPointer;
-		callbackInfo.parameterGroupNumber = parameterGroupNumber;
-
-		protocolPGNCallbacksMutex.lock();
+		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 
 		if (nullptr != callback)
 		{
@@ -325,9 +318,6 @@ namespace isobus
 				retVal = true;
 			}
 		}
-
-		protocolPGNCallbacksMutex.unlock();
-
 		return retVal;
 	}
 
@@ -553,7 +543,45 @@ namespace isobus
 		return retVal;
 	}
 
-	void CANNetworkManager::process_can_message_for_callbacks(CANMessage *message)
+	CANMessage CANNetworkManager::get_next_can_message_from_rx_queue()
+	{
+		std::lock_guard<std::mutex> lock(receiveMessageMutex);
+		CANMessage retVal = receiveMessageList.front();
+		receiveMessageList.pop_front();
+		return retVal;
+	}
+
+	std::size_t CANNetworkManager::get_number_can_messages_in_rx_queue()
+	{
+		std::lock_guard<std::mutex> lock(receiveMessageMutex);
+		return receiveMessageList.size();
+	}
+
+	void CANNetworkManager::process_any_control_function_pgn_callbacks(CANMessage &currentMessage)
+	{
+		const std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
+		for (auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
+		{
+			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
+			{
+				currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
+			}
+		}
+	}
+
+	void CANNetworkManager::process_protocol_pgn_callbacks(CANMessage &currentMessage)
+	{
+		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
+		for (auto &currentCallback : protocolPGNCallbacks)
+		{
+			if (currentCallback.parameterGroupNumber == currentMessage.get_identifier().get_parameter_group_number())
+			{
+				currentCallback.callback(&currentMessage, currentCallback.parent);
+			}
+		}
+	}
+
+	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(CANMessage *message)
 	{
 		if (nullptr != message)
 		{
@@ -609,44 +637,18 @@ namespace isobus
 
 	void CANNetworkManager::process_rx_messages()
 	{
-		// Move this to a function
-		receiveMessageMutex.lock();
-		bool processNextMessage = (!receiveMessageList.empty());
-		receiveMessageMutex.unlock();
-
-		while (processNextMessage)
+		while (0 != get_number_can_messages_in_rx_queue())
 		{
-			receiveMessageMutex.lock();
-			CANMessage currentMessage = receiveMessageList.front();
-			receiveMessageList.pop_front();
-			processNextMessage = (!receiveMessageList.empty());
-			receiveMessageMutex.unlock();
+			CANMessage currentMessage = get_next_can_message_from_rx_queue();
 
 			update_address_table(currentMessage);
 
-			// Update Protocols
-			protocolPGNCallbacksMutex.lock();
-			for (auto &currentCallback : protocolPGNCallbacks)
-			{
-				if (currentCallback.parameterGroupNumber == currentMessage.get_identifier().get_parameter_group_number())
-				{
-					currentCallback.callback(&currentMessage, currentCallback.parent);
-				}
-			}
-			protocolPGNCallbacksMutex.unlock();
-
-			anyControlFunctionCallbacksMutex.lock();
-			for (auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
-			{
-				if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
-				{
-					currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
-				}
-			}
-			anyControlFunctionCallbacksMutex.unlock();
+			// Update Special Callbacks, like protocols and non-cf specific ones
+			process_protocol_pgn_callbacks(currentMessage);
+			process_any_control_function_pgn_callbacks(currentMessage);
 
 			// Update Others
-			process_can_message_for_callbacks(&currentMessage);
+			process_can_message_for_global_and_partner_callbacks(&currentMessage);
 		}
 	}
 
@@ -665,7 +667,7 @@ namespace isobus
 
 	void CANNetworkManager::protocol_message_callback(CANMessage *protocolMessage)
 	{
-		process_can_message_for_callbacks(protocolMessage);
+		process_can_message_for_global_and_partner_callbacks(protocolMessage);
 	}
 
 } // namespace isobus
