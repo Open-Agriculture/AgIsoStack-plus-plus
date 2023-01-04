@@ -163,7 +163,13 @@ Here are the different transport layers this library provides, along with a shor
    * Can be very, very, very slow (many minutes) depending on the amount of data transferred, but there are no delays between messages, so the delay mostly comes from the number of bytes you need to send overall.
    * ETP has similar overhead to transport protocol. Additional handshake messages are used to control the data flow while the session is active.
 
-The ISOBUS++ library will take care of choosing which protocol to use automatically!
+* NMEA 2000 (NMEA2K) Fast Packet Protocol (FP)
+
+	* This protocol is used primarily on boats and ships to connect equipment such as GPS, auto pilots, depth sounders, navigation instruments, engines, etc.
+	* ISO11783 Adopts this protocol for a subset of standard GNSS messages
+	* This protocol provides a means to stream up to 223 bytes of data, with the advantage that each frame retains the parameter group number and priority, where TP and ETP do not.
+
+In general, the ISOBUS++ library will take care of choosing which protocol to use automatically.
 
 Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/examples/transport_layer>`_.
 
