@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/hardware_integration/spi_transaction_plugin.hpp"
+#include "isobus/hardware_integration/spi_hardware_plugin.hpp"
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
@@ -33,7 +33,7 @@ public:
 	/// @param[in] cfg1 The configuration register 1
 	/// @param[in] cfg2 The configuration register 2
 	/// @param[in] cfg3 The configuration register 3
-	explicit MCP2515CANInterface(SPITransactionPlugin *transactionHandler, const std::uint8_t cfg1, const std::uint8_t cfg2, const std::uint8_t cfg3);
+	MCP2515CANInterface(SPIHardwarePlugin *transactionHandler, const std::uint8_t cfg1, const std::uint8_t cfg2, const std::uint8_t cfg3);
 
 	/// @brief The destructor for SocketCANInterface
 	virtual ~MCP2515CANInterface();
@@ -69,6 +69,7 @@ private:
 		READ = 0x03,
 		BITMOD = 0x05,
 		RX_STATUS = 0xB0,
+		READ_STATUS = 0xA0,
 		RESET = 0xC0
 	};
 
@@ -84,33 +85,14 @@ private:
 		CANINTF = 0x2C,
 		TXB0CTRL = 0x30,
 		TXB0SIDH = 0x31,
-		TXB0DATA = 0x36,
 		TXB1CTRL = 0x40,
 		TXB1SIDH = 0x41,
-		TXB1DATA = 0x46,
 		TXB2CTRL = 0x50,
 		TXB2SIDH = 0x51,
-		TXB2DATA = 0x56,
 		RXB0CTRL = 0x60,
 		RXB0DATA = 0x66,
 		RXB1CTRL = 0x70,
 		RXB1DATA = 0x76
-	};
-
-	/// @brief The needed registers for transmitting by TXBn for convenience
-	struct TXBRegister
-	{
-		MCPRegister ctrl;
-		MCPRegister sidh;
-		MCPRegister data;
-	};
-
-	/// @brief The needed registers for receiving by RXBn for convenience
-	struct RXBRegister
-	{
-		MCPRegister ctrl;
-		MCPRegister data;
-		std::uint8_t intf;
 	};
 
 	/// @brief The different modes of the MCP2515 associated with their internal bits
@@ -125,20 +107,10 @@ private:
 
 	static constexpr std::uint32_t RECEIVE_MESSAGE_READ_RATE = 10; ///< Hardcoded time in ms between polling the MCP2515 module for new messages, mostly arbitrary
 
-	static constexpr std::size_t NUM_WRITE_BUFFERS = 3; ///< The number of write buffers in the MCP2515
-	static constexpr std::size_t NUM_READ_BUFFERS = 2; ///< The number of read buffers in the MCP2515
-
-	static constexpr std::uint32_t CAN_SFF_MASK = 0x7FF; ///< The standard frame format (SFF) mask
-	static constexpr std::uint32_t CAN_EFF_MASK = 0x1FFFFFFF; ///< The extended frame format (EFF) mask
-
-	static constexpr std::uint32_t CAN_EFF_FLAG = 0x80000000; ///< This bit denotes if the frame is standard or extended format
-	static constexpr std::uint32_t CAN_RTR_FLAG = 0x40000000; ///< This bit denotes if the frame is a remote transmission request (RTR)
-	static constexpr std::uint32_t CAN_ERR_FLAG = 0x20000000; ///< This bit denotes if the frame is an error frame
-
 	/// @brief Read the rx status of the mcp2515
 	/// @param[out] status The status that was read
 	/// @returns If the read was successfull
-	bool get_rx_status(std::uint8_t &status);
+	bool get_read_status(std::uint8_t &status);
 
 	/// @brief read a single byte register of the mcp2515
 	/// @param[in] address The address of the register to read
@@ -151,7 +123,7 @@ private:
 	/// @param[out] data The data that was read
 	/// @param[in] length The length of the data to read
 	/// @returns If the read was successfull
-	bool read_register(const MCPRegister address, std::uint8_t data[], const std::size_t length);
+	bool read_register(const MCPRegister address, std::uint8_t *data, const std::size_t length);
 
 	/// @brief modify a register of the mcp2515
 	/// @param[in] address The address of the register to modify
@@ -181,7 +153,22 @@ private:
 	/// @returns If the mode was set successfully
 	bool set_mode(const MCPMode mode);
 
-	SPITransactionPlugin *transactionHandler; ///< The SPI transaction handler
+	/// @brief Read a frame from a buffer on the mcp2515
+	/// @param[in, out] canFrame The frame that was read
+	/// @param[in] ctrl The control register of the buffer to read from
+	/// @param[in] data The data register of the buffer to read from
+	/// @param[in] intf The interrupt flag of the buffer to reset after reading
+	/// @returns If the read was successfull
+	bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrl, const MCPRegister data, const std::uint8_t intf);
+
+	/// @brief Write a frame to a buffer on the mcp2515
+	/// @param[in] canFrame The frame to write
+	/// @param[in] ctrl The control register of the buffer to write to
+	/// @param[in] sidh The sidh register of the buffer to write to
+	/// @returns If the write was successfull
+	bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister sidhRegister);
+
+	SPIHardwarePlugin *transactionHandler; ///< The SPI transaction handler
 	const std::uint8_t cfg1, cfg2, cfg3; ///< The configuration values for can and clock speed
 	bool initialized; ///< If the mcp2515 has been initialized and no errors have occured
 };

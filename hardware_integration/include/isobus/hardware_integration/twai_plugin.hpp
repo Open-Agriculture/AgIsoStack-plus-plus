@@ -10,12 +10,13 @@
 #define TWAI_PLUGIN_HPP
 #ifdef ESP_PLATFORM
 
-#include <driver/twai.h>
-#include <string>
-
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
+
+#include "driver/twai.h"
+
+#include <string>
 
 //================================================================================================
 /// @class TWAIPlugin

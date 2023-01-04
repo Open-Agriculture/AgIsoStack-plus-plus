@@ -20,7 +20,8 @@
             "+<utility/src/*>",
             "+<hardware_integration/src/can_hardware_interface.cpp>",
             "+<hardware_integration/src/twai_plugin.cpp>",
-            "+<hardware_integration/src/mcp2515_can_interface.cpp>"
+            "+<hardware_integration/src/mcp2515_can_interface.cpp>",
+            "+<hardware_integration/src/spi_interface_esp.cpp>"
         ]
     }
 }
