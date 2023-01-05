@@ -165,15 +165,6 @@ namespace isobus
 		std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
 
 	private:
-		/// @brief A structure to hold PGN callback data to provide parent back to the reigistrar of the callback
-		struct CANLibProtocolPGNCallbackInfo
-		{
-			bool operator==(const CANLibProtocolPGNCallbackInfo &obj); ///< A function to compare the other structure member variables
-			CANLibCallback callback; ///< The callback itself
-			void *parent; ///< A generic context variable that helps identify what object the callback was destined for
-			std::uint32_t parameterGroupNumber; ///< The PGN associated with the callback
-		};
-
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
 
@@ -265,7 +256,7 @@ namespace isobus
 		std::array<std::array<ControlFunction *, 256>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::vector<ControlFunction *> activeControlFunctions; ///< A list of active control function used to track connected devices
 		std::vector<ControlFunction *> inactiveControlFunctions; ///< A list of inactive control functions, used to track disconnected devices
-		std::list<CANLibProtocolPGNCallbackInfo> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
+		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::list<CANMessage> receiveMessageList; ///< A queue of Rx messages to process
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks

@@ -284,9 +284,7 @@ namespace isobus
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
-		CANLibProtocolPGNCallbackInfo callbackInfo{
-			callback, parentPointer, parameterGroupNumber
-		};
+		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer);
 
 		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 
@@ -301,15 +299,13 @@ namespace isobus
 	bool CANNetworkManager::remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
-		CANLibProtocolPGNCallbackInfo callbackInfo{
-			callback, parentPointer, parameterGroupNumber
-		};
+		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer);
 
 		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 
 		if (nullptr != callback)
 		{
-			std::list<CANLibProtocolPGNCallbackInfo>::iterator callbackLocation;
+			std::list<ParameterGroupNumberCallbackData>::iterator callbackLocation;
 			callbackLocation = find(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end(), callbackInfo);
 
 			if (protocolPGNCallbacks.end() != callbackLocation)
@@ -525,13 +521,6 @@ namespace isobus
 		return txFrame;
 	}
 
-	bool CANNetworkManager::CANLibProtocolPGNCallbackInfo::operator==(const CANLibProtocolPGNCallbackInfo &obj)
-	{
-		return ((obj.callback == this->callback) &&
-		        (obj.parent == this->parent) &&
-		        (obj.parameterGroupNumber == this->parameterGroupNumber));
-	}
-
 	ControlFunction *CANNetworkManager::get_control_function(std::uint8_t CANPort, std::uint8_t CFAddress) const
 	{
 		ControlFunction *retVal = nullptr;
@@ -574,9 +563,9 @@ namespace isobus
 		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 		for (auto &currentCallback : protocolPGNCallbacks)
 		{
-			if (currentCallback.parameterGroupNumber == currentMessage.get_identifier().get_parameter_group_number())
+			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
 			{
-				currentCallback.callback(&currentMessage, currentCallback.parent);
+				currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
 			}
 		}
 	}
