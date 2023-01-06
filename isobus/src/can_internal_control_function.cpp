@@ -15,7 +15,7 @@
 
 namespace isobus
 {
-	std::list<InternalControlFunction *> InternalControlFunction::internalControlFunctionList;
+	std::vector<InternalControlFunction *> InternalControlFunction::internalControlFunctionList;
 	bool InternalControlFunction::anyChangedAddress = false;
 
 	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort) :

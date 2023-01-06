@@ -93,10 +93,10 @@ The final program for this tutorial (including the code from the previous Hello 
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
 
    #include <memory>
    #include <csignal>

@@ -15,7 +15,7 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 
-#include <list>
+#include <vector>
 
 namespace isobus
 {
@@ -66,7 +66,7 @@ namespace isobus
 		/// @brief Updates the internal control function, should be called periodically by the network manager
 		void update();
 
-		static std::list<InternalControlFunction *> internalControlFunctionList; ///< A list of all internal control functions that exist
+		static std::vector<InternalControlFunction *> internalControlFunctionList; ///< A list of all internal control functions that exist
 		static bool anyChangedAddress; ///< Lets the network manager know if any ICF changed address since the last update
 		AddressClaimStateMachine stateMachine; ///< The address claimer for this ICF
 		bool objectChangedAddressSinceLastUpdate; ///< Tracks if this object has changed address since the last update
