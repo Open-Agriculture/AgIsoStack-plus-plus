@@ -26,10 +26,10 @@ Let's set up a standard, empty C++ program in a file called "main.cpp", and incl
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
    
    int main()
    {
@@ -58,10 +58,10 @@ NOTE: Everything that is part of the stack is in the namespace `"isobus" <https:
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
    
    int main()
    {
@@ -74,10 +74,10 @@ Now we have a NAME instantiated. We still need to populate it with our control f
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
    
    int main()
    {
@@ -114,10 +114,10 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
 
    #include <memory>
    
@@ -230,10 +230,10 @@ Let's see what we've got so far:
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
 
    #include <memory>
    #include <iostream>
@@ -296,10 +296,10 @@ Make sure to include `csignal`.
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
 
    #include <memory>
    #include <csignal>
@@ -375,10 +375,10 @@ The total result:
 
 .. code-block:: c++
 
-   #include "can_network_manager.hpp"
-   #include "socket_can_interface.hpp"
-   #include "can_hardware_interface.hpp"
-   #include "can_partnered_control_function.hpp"
+   #include "isobus/isobus/can_network_manager.hpp"
+   #include "isobus/hardware_integration/socket_can_interface.hpp"
+   #include "isobus/hardware_integration/can_hardware_interface.hpp"
+   #include "isobus/isobus/can_partnered_control_function.hpp"
 
    #include <memory>
    #include <csignal>
