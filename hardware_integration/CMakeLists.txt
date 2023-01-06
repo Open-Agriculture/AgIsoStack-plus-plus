@@ -12,7 +12,12 @@ if(NOT CAN_DRIVER)
     AUTHOR_WARNING
       "No CAN driver specified, choosing Linux socket CAN by default. Use -DCAN_DRIVER=\"SocketCAN\" to specify another driver. or -DCAN_DRIVER=\"SocketCAN;WindowsPCANBasic\" to specify multiple drivers."
   )
-  set(CAN_DRIVER "SocketCAN")
+
+  if (WIN32)
+    set(CAN_DRIVER "WindowsPCANBasic")
+  else()
+    set(CAN_DRIVER "SocketCAN")
+  endif()
 endif()
 
 # Set the source files
