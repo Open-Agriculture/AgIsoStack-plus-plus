@@ -8,11 +8,19 @@ Check out the [tutorial website](https://delgrossoengineering.com/isobus-tutoria
 
 ## Compilation
 
-This library is compiled with CMake. Currently, I am testing on Ubuntu 20.04 and RHEL 9, and the built in Socket CAN integration (if you choose to use it) only works on Linux.
+This library is compiled with CMake.
+
 ```
 cmake -S . -B build
 cmake --build build
 ```
+
+A default CAN driver plug-in will be selected for you based on your OS, but when compiling you can explicitly choose to use one of the natively supported CAN drivers by supplying the `CAN_DRIVER` variable.
+
+* `-DCAN_DRIVER=SocketCAN` Will compile with Socket CAN support (This is the default for Linux)
+* `-DCAN_DRIVER=WindowsPCANBasic` Will compile with windows support for the PEAK PCAN drivers (This is the default for Windows)
+
+If your target hardware is not listed above, you can easily integrate your own hardware by [implementing a few simple functions](https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/hardware_integration#writing-a-new-can-driver-for-the-stack).
 
 ## Examples
 
