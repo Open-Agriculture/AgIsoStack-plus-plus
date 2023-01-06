@@ -74,6 +74,24 @@ target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::Hard
 
 A full example CMakeLists.txt file can be found on the tutorial website.
 
+### Installing The Library
+
+You can also install the library if you want.
+
+For a local install:
+
+```
+cmake --install build --prefix install
+```
+
+For a system-wide install:
+
+```
+sudo cmake --install build
+```
+
+Then, use a call to find_package() to find this package.
+
 ## Documentation
 
 You can view the pre-compiled doxygen here https://delgrossoengineering.com/isobus-docs
