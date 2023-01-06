@@ -27,12 +27,12 @@ Let's start our program similarly to the other tutorials, complete with the requ
 
 .. code-block:: c++
 
-	#include "can_general_parameter_group_numbers.hpp"
-	#include "can_hardware_interface.hpp"
-	#include "can_network_manager.hpp"
-	#include "can_partnered_control_function.hpp"
-	#include "isobus_virtual_terminal_client.hpp"
-	#include "socket_can_interface.hpp"
+	#include "isobus/isobus/can_network_manager.hpp"
+	#include "isobus/hardware_integration/socket_can_interface.hpp"
+	#include "isobus/hardware_integration/can_hardware_interface.hpp"
+	#include "isobus/isobus/can_partnered_control_function.hpp"
+	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 
 	#include <csignal>
 	#include <iostream>
@@ -122,7 +122,7 @@ With those notes in mind, let's create our VT client:
 
 .. code-block:: c++
 
-	#include "isobus_virtual_terminal_client.hpp"
+	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 
@@ -162,7 +162,7 @@ Let's add some code to our example to read in this IOP file, and give it to our 
 
 .. code-block:: c++
 
-	#include "iop_file_interface.hpp"
+	#include "isobus/utility/iop_file_interface.hpp"
 
 	static std::vector<std::uint8_t> testPool;
 
@@ -255,6 +255,10 @@ As an example, if someone presses the softkey :code:`alarm_SoftKey`, this functi
 Then, when the user releases the softkey, this function will be called with the :code:`KeyActivationCode::ButtonUnlatchedOrReleased`. If the user hold down the button, the function will be called many times with the :code:`KeyActivationCode::ButtonStillHeld` event.
 The :code:`objectID` tells us which button or key was pressed, so putting it all together, when we get the :code:`KeyActivationCode::ButtonUnlatchedOrReleased` event with the object ID of :code:`alarm_SoftKey`, we will take some action.
 In this example, the action we're taking is to change the active mask from the main runscreen data mask :code:`mainRunscreen_DataMask` to an alarm mask called :code:`example_AlarmMask`. This will cause a pop-up on the VT (and possibly some beeping if your VT has a speaker).
+
+.. note::
+
+	You may have noticed we've been referring to some of these objects by name, like :code:`alarm_SoftKey`. In reality these are object IDs, just 16 bit identifiers that, for the purposes of this example, have been defined as macros for convenience and readabilty in a header file called `objectPoolObjects.h <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/objectPoolObjects.h>`_.
 
 Note, when we added handling for the :code:`Minus_Button` and :code:`Plus_Button` in the object pool, we are incrementing and decrementing a variable in the program so that we can keep track of the displayed value on the screen.
 This variable starts out with a value of 214748364 because the output number in the object pool has an offset applied to it of -214748364. This essentially means that if we send the VT a value of 214748364, it will be shown as 0. If we subtract 1, it will be shown as -1, or if we add 1 it will be shown as 1.
