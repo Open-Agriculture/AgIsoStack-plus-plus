@@ -501,7 +501,7 @@ Add the following to a new file called CMakeLists.txt:
    
    add_executable(isobus_hello_world main.cpp)
    
-   target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
+   target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
 
 Save and close the file.
 
