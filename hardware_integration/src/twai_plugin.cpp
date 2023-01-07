@@ -35,7 +35,7 @@ bool TWAIPlugin::get_is_valid() const
 {
 	twai_status_info_t status;
 	esp_err_t error = twai_get_status_info(&status);
-	if (error == ESP_OK)
+	if (ESP_OK == error)
 	{
 		return status.state == TWAI_STATE_RUNNING;
 	}
@@ -49,12 +49,12 @@ bool TWAIPlugin::get_is_valid() const
 void TWAIPlugin::close()
 {
 	esp_err_t error = twai_stop();
-	if (error != ESP_OK)
+	if (ESP_OK != error)
 	{
 		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error stopping driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	error = twai_driver_uninstall();
-	if (error != ESP_OK)
+	if (ESP_OK != error)
 	{
 		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error uninstalling driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
@@ -63,12 +63,12 @@ void TWAIPlugin::close()
 void TWAIPlugin::open()
 {
 	esp_err_t error = twai_driver_install(generalConfig, timingConfig, filterConfig);
-	if (error != ESP_OK)
+	if (ESP_OK != error)
 	{
 		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error installing driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	error = twai_start();
-	if (error != ESP_OK)
+	if (ESP_OK != error)
 	{
 		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error starting driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
@@ -81,7 +81,7 @@ bool TWAIPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 	//Wait for message to be received
 	twai_message_t message;
 	esp_err_t error = twai_receive(&message, portMAX_DELAY);
-	if (error == ESP_OK)
+	if (ESP_OK == error)
 	{
 		// Process received message
 		if (!(message.rtr))
@@ -116,7 +116,7 @@ bool TWAIPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 	memcpy(message.data, canFrame.data, canFrame.dataLength);
 
 	esp_err_t error = twai_transmit(&message, portMAX_DELAY);
-	if (error == ESP_OK)
+	if (ESP_OK == error)
 	{
 		retVal = true;
 	}

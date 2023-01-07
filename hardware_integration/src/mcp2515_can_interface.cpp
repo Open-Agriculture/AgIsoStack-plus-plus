@@ -364,20 +364,14 @@ bool MCP2515CANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &c
 
 bool MCP2515CANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 {
-	bool retVal = false;
-
-	// Try to write the frame to the first buffer
-	retVal = write_frame(canFrame, MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH);
+	bool retVal = write_frame(canFrame, MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH);
 	if (!retVal)
 	{
-		// Try to write the frame to the second buffer
 		retVal = write_frame(canFrame, MCPRegister::TXB1CTRL, MCPRegister::TXB1SIDH);
 	}
 	if (!retVal)
 	{
-		// Try to write the frame to the third buffer
 		retVal = write_frame(canFrame, MCPRegister::TXB2CTRL, MCPRegister::TXB2SIDH);
 	}
-
 	return retVal;
 }
