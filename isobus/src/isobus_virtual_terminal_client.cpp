@@ -37,6 +37,7 @@ namespace isobus
 	  smallFontSizesBitfield(0),
 	  largeFontSizesBitfield(0),
 	  fontStylesBitfield(0),
+	  supportedGraphicsMode(GraphicMode::TwoHundredFiftySixColor),
 	  xPixels(0),
 	  yPixels(0),
 	  hardwareFeaturesBitfield(0),
@@ -49,6 +50,7 @@ namespace isobus
 	  sendWorkingSetMaintenenace(false),
 	  shouldTerminate(false),
 	  objectPoolDataCallback(nullptr),
+	  objectPoolSize_bytes(0),
 	  lastObjectPoolIndex(0)
 	{
 		if (nullptr != partnerControlFunction)
@@ -1583,7 +1585,7 @@ namespace isobus
 				{
 					std::uint32_t totalPoolSize = 0;
 
-					for (auto pool : objectPools)
+					for (auto &pool : objectPools)
 					{
 						totalPoolSize += pool.objectPoolSize;
 					}
