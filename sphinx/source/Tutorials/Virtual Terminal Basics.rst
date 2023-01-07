@@ -537,7 +537,7 @@ We can do that with this little handy bit of CMake:
 		TARGET vt_example
 		POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/VT3TestPool.iop
-		${CMAKE_CURRENT_BINARY_DIR}/VT3TestPool.iop)
+		$<TARGET_FILE_DIR:vt_example>/VT3TestPool.iop)
 
 Now you should be able to build and run the program!
 
