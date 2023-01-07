@@ -65,7 +65,7 @@ If your project is already using CMake to build your project, or this is a new p
 
    ...
 
-   target_link_libraries(<your target> PRIVATE isobus::Isobus isobus::HardwareIntegration ${CMAKE_THREAD_LIBS_INIT})
+   target_link_libraries(<your target> PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
 
 Using CMake has a lot of advantages, such as if the library is updated with additional files, or the file names change, it will not break your compilation.
    

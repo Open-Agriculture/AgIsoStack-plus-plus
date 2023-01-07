@@ -23,7 +23,15 @@ This object will act as your interface for all VT communication.
 The client requires two things to instantiate, a :code:`PartneredControlFunction` and a :code:`InternalControlFunction`. 
 This is so that it can send messages on your behalf needed to maintain the connection and simplify the API over sending raw CAN messages to the VT.
 
-Let's start our program similarly to the other tutorials, complete with the requisite control functions.
+Let's start our program fresh, with a folder containing only the CAN stack.
+
+.. code-block:: bash
+
+	mkdir vt_example
+	cd vt_example
+	git clone https://github.com/ad3154/ISO11783-CAN-Stack.git
+
+Create the file `main.cpp` as shown below inside that folder with the requisite control functions.
 
 .. code-block:: c++
 
@@ -116,7 +124,7 @@ It's the same boilerplate we've done before, but note the following key things:
 
 * We're using shared pointers (`std::shared_ptr`) to make our control functions. The VT client class requires shared pointers to your control functions, so we want to make sure we start with those.
 
-* Our partner has been defined to be any device on the bus with a function code that identifies it as a VT (isobus::NAME::NAMEParameters::FunctionCode)
+* Our partner has been defined to be any device on the bus with a function code that identifies it as a VT (see `isobus::NAME::NAMEParameters::FunctionCode <https://delgrossoengineering.com/isobus-docs/classisobus_1_1NAME.html#a5f22513106207fd1a1e0c72b17a77f77>`_ if you want to see some other function code that exist.)
 
 With those notes in mind, let's create our VT client:
 
@@ -158,7 +166,13 @@ The `utility` folder in the CAN stack contains a helper function to read standar
 
 You can make one for yourself if you have access to an ISOBUS object pool designer tool of some kind, but for our purposes, one has been included in the examples folder for you called `VT3TestPool.iop`.
 
-Let's add some code to our example to read in this IOP file, and give it to our VT client as our only object pool.
+For this example, let's `download <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/VT3TestPool.iop>`_ that object pool (or grab it from the examples folder within the CAN stack), and place it in the same directory as your main.cpp file.
+
+Let's also grab `this header file <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/objectPoolObjects.h>`_ and place it in the same folder.
+This file is for convenience, and tells us what objects are inside the IOP file along with their object ID. Files like these are often created by VT object pool designer programs to give nice, human-readable names to your objects so that instead of
+referencing object 5001, we can instead reference it by the nicer name `acknowledgeAlarm_SoftKey` for example.
+
+Now, let's add some code to our example to read in this IOP file, and give it to our VT client as our only object pool.
 
 .. code-block:: c++
 
@@ -179,12 +193,18 @@ Let's add some code to our example to read in this IOP file, and give it to our 
 
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
 
-Note how `testPool` is static here. This is not required, but what is required is that whatever pointer you pass into the VT client via `set_object_pool` MUST remain valid (IE, not deleted or out of scope) during the object pool upload or your application may crash.
+Note how :code:`testPool` is static here. This is not required, but what is required is that whatever pointer you pass into the VT client via :code:`set_object_pool` MUST remain valid (IE, not deleted or out of scope) during the object pool upload or your application may crash.
 
-If your object pool is too large to store in memory, or you are on an embedded platform with limited resources, you may instead want to use the `register_object_pool_data_chunk_callback` method instead which will get smaller chunks of data from you as the upload proceeds.
+If your object pool is too large to store in memory, or you are on an embedded platform with limited resources, you may instead want to use the :code:`register_object_pool_data_chunk_callback` method instead which will get smaller chunks of data from you as the upload proceeds.
 This can be used to read from some external device if needed in segments or just to save RAM.
 
-Now, the CAN stack should be able to upload the pool to the VT! But we haven't added any actual application logic yet - we've just set up the communication.
+.. note::
+
+    Since we are now using a function in the "isobus/utility" folder to load this IOP file, we will also need to link to the CAN stack's utility library in our CMakeLists.txt file. You can do this by adding :code:`isobus::SystemTiming` to your :code:`target_link_libraries` statement. We'll also need to add some CMake to move the IOP file to the binary location, so that when the program is compiled, the IOP will end up in a location accessable to your program.
+
+	We'll go over the full CMake closer to the end of this tutorial.
+
+Now, we've added all the code needed to upload the pool to the VT! But we haven't added any actual application logic yet - we've just set up the communication.
 In the next section we'll actually make the on-screen objects functional.
 
 VT Application Layer
@@ -195,7 +215,7 @@ Now that we've got our VT client configured, let's go over how to use the VT cli
 Button and Softkey Events
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-One of the main ways you'll get feedback from the VT is that it sends a message whenever a button is pressed, released, held, or aborted (pressed but not released).
+One of the main ways you'll get feedback from the VT is button events. These occur because the VT sends a message whenever a button is pressed, released, held, or aborted (pressed but not released).
 You will want to set up processing of these events in your program so that you can take some action based on these events.
 
 To do this, let's create a callback that follows the definition of :code:`VTKeyEventCallback`.
@@ -256,27 +276,42 @@ Then, when the user releases the softkey, this function will be called with the 
 The :code:`objectID` tells us which button or key was pressed, so putting it all together, when we get the :code:`KeyActivationCode::ButtonUnlatchedOrReleased` event with the object ID of :code:`alarm_SoftKey`, we will take some action.
 In this example, the action we're taking is to change the active mask from the main runscreen data mask :code:`mainRunscreen_DataMask` to an alarm mask called :code:`example_AlarmMask`. This will cause a pop-up on the VT (and possibly some beeping if your VT has a speaker).
 
-.. note::
-
-	You may have noticed we've been referring to some of these objects by name, like :code:`alarm_SoftKey`. In reality these are object IDs, just 16 bit identifiers that, for the purposes of this example, have been defined as macros for convenience and readabilty in a header file called `objectPoolObjects.h <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/objectPoolObjects.h>`_.
-
 Note, when we added handling for the :code:`Minus_Button` and :code:`Plus_Button` in the object pool, we are incrementing and decrementing a variable in the program so that we can keep track of the displayed value on the screen.
 This variable starts out with a value of 214748364 because the output number in the object pool has an offset applied to it of -214748364. This essentially means that if we send the VT a value of 214748364, it will be shown as 0. If we subtract 1, it will be shown as -1, or if we add 1 it will be shown as 1.
 This is how a VT handles negative numbers.
+
+Other Events
+^^^^^^^^^^^^^
+
+In this example, we're only using the button and softkey events, but be sure to check out all the other events you can use! They include events such as:
+
+	* Change Numeric Value Events
+	* Pointing Events
+	* Change String Value Events
+	* Select Input Object Events
+	* Change Active Mask Events
+	* User Layout Hide/Show Events
+	* Audio Signal Termination Events
+	* ESC Messages
+
+With all those different events, you can get all kinds of context from the VT about what the user is doing.
+
+Registering our Callbacks
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now that we have our callback, we have to tell the VT client about it so that it knows to call it when appropriate.
 
 .. code-block:: c++
 	
-	TestVirtualTerminalClient->RegisterVTButtonEventCallback(handleVTButton);
-	TestVirtualTerminalClient->RegisterVTSoftKeyEventCallback(handleVTButton);
+	TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
+	TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
 
 You could in theory have seperate callbacks for softkeys and buttons, but in this example we're just re-using the same callback for both.
 
 Other Actions
 ^^^^^^^^^^^^^^
 
-You have the ability to do a lot more than just react to button presses. The VT client exposes many functions that you can call to make the VT do things with your object pool. We've already used a few of them in our callback, such as:
+Of course, you have the ability to do a lot more than just react to events. The VT client exposes many functions that you can call to make the VT do things with your object pool. We've already used a few of them in our callback, such as:
 
 * Changing the active mask
 * Changing a numeric value
@@ -436,8 +471,8 @@ Here's the final code for this example:
 		TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
 		TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 		TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
-		TestVirtualTerminalClient->RegisterVTButtonEventCallback(handleVTButton);
-		TestVirtualTerminalClient->RegisterVTSoftKeyEventCallback(handleVTButton);
+		TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
+		TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
 		TestVirtualTerminalClient->initialize(true);
 		std::signal(SIGINT, signal_handler);
 	}
@@ -455,6 +490,63 @@ Here's the final code for this example:
 		CANHardwareInterface::stop();
 		return 0;
 	}
+
+Writing up the CMake
+^^^^^^^^^^^^^^^^^^^^^
+
+The CMake for this program is a bit more complex than the other examples.
+
+We'll start off like we did in "ISOBUS Hello World".
+
+.. code-block:: text
+
+	cmake_minimum_required(VERSION 3.16)
+
+	project(
+	  isobus_vt_tutorial
+	  VERSION 1.0
+	  LANGUAGES CXX
+	  DESCRIPTION "An example VT client program"
+	)
+
+	set(THREADS_PREFER_PTHREAD_FLAG ON)
+	find_package(Threads REQUIRED)
+
+	add_subdirectory("ISO11783-CAN-Stack")
+
+	add_executable(vt_example main.cpp)
+
+Looking "ISOBUS Hello World" we had this next:
+
+.. code-block:: c++
+
+	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
+
+But like we mentioned earlier, we're now using a function (the IOP file reader) in the isobus utility library called "SystemTiming", so we need to link that too:
+
+.. code-block:: c++
+
+	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::SystemTiming Threads::Threads)
+
+We also want to move our IOP file to be in the same folder as the executable after it's built, so that it can locate it.
+We can do that with this little handy bit of CMake:
+
+.. code-block:: text
+
+	add_custom_command(
+		TARGET vt_example
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/VT3TestPool.iop
+		${CMAKE_CURRENT_BINARY_DIR}/VT3TestPool.iop)
+
+Now you should be able to build and run the program!
+
+.. code-block:: text
+
+	cmake -S . -B build
+	cmake --build build
+	cd build
+	./vt_example
 
 That's it for this Tutorial. You should be able to run it as long as you have a VT and a "can0" network, see the test pool be uploaded, and be able to interact with all buttons on screen!
 
