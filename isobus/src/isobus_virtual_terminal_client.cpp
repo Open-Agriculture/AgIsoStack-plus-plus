@@ -2504,8 +2504,7 @@ namespace isobus
 						                                            (static_cast<std::uint32_t>(data.at(6)) << 8) |
 						                                            (static_cast<std::uint32_t>(data.at(7))));
 
-						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber) &&
-						    (StateMachineState::Connected == parentVT->state))
+						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber)
 						{
 							CANStackLogger::CAN_stack_log("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");
 							parentVT->set_state(StateMachineState::Disconnected);
