@@ -54,7 +54,7 @@ void SPIInterfaceESP::deinit()
 	}
 }
 
-void SPIInterfaceESP::transmit(TransactionFrame *frame)
+void SPIInterfaceESP::transmit(SPITransactionFrame *frame)
 {
 	if (initialized)
 	{
@@ -63,12 +63,12 @@ void SPIInterfaceESP::transmit(TransactionFrame *frame)
 			spi_transaction_t transaction;
 			std::memset(&transaction, 0, sizeof(transaction));
 
-			transaction.length = frame->txBuffer.size() * 8;
-			transaction.tx_buffer = frame->txBuffer.data();
-			if (frame->read)
+			transaction.length = frame->get_tx_buffer()->size() * 8;
+			transaction.tx_buffer = frame->get_tx_buffer()->data();
+			if (frame->get_is_read())
 			{
-				frame->rxBuffer.resize(frame->txBuffer.size());
-				transaction.rx_buffer = frame->rxBuffer.data();
+				frame->get_rx_buffer().resize(frame->get_tx_buffer()->size());
+				transaction.rx_buffer = frame->get_rx_buffer().data();
 			}
 			else
 			{
