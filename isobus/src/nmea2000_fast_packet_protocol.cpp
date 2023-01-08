@@ -170,10 +170,11 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::close_session(FastPacketProtocolSession *session)
+	void FastPacketProtocol::close_session(FastPacketProtocolSession *session, bool successfull)
 	{
 		if (nullptr != session)
 		{
+			process_session_complete_callback(session, successfull);
 			for (auto currentSession = activeSessions.begin(); currentSession != activeSessions.end(); currentSession++)
 			{
 				if (session == *currentSession)
@@ -283,13 +284,13 @@ namespace isobus
 										callback.get_callback()(&currentSession->sessionMessage, callback.get_parent());
 									}
 								}
-								close_session(currentSession); // All done
+								close_session(currentSession, true); // All done
 							}
 						}
 						else
 						{
 							CANStackLogger::CAN_stack_log("[FP]: Existing session matched new frame counter, aborting the matching session.");
-							close_session(currentSession);
+							close_session(currentSession, false);
 						}
 					}
 					else
@@ -389,7 +390,7 @@ namespace isobus
 					if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
 					{
 						CANStackLogger::CAN_stack_log("[FP]: Rx session timed out.");
-						close_session(session);
+						close_session(session, false);
 					}
 				}
 				break;
@@ -430,8 +431,7 @@ namespace isobus
 							}
 							else
 							{
-								process_session_complete_callback(session, false);
-								close_session(session);
+								close_session(session, false);
 								break;
 							}
 						}
@@ -489,8 +489,7 @@ namespace isobus
 							if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
 							{
 								CANStackLogger::CAN_stack_log("[FP]: Tx session timed out.");
-								process_session_complete_callback(session, false);
-								close_session(session);
+								close_session(session, false);
 								txSessionCancelled = true;
 							}
 							break;
@@ -501,8 +500,7 @@ namespace isobus
 					    (session->processedPacketsThisSession >= session->packetCount))
 					{
 						add_session_history(session);
-						process_session_complete_callback(session, true);
-						close_session(session); // Session is done!
+						close_session(session, true); // Session is done!
 					}
 				}
 				break;
