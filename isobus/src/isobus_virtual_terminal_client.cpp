@@ -2876,6 +2876,23 @@ namespace isobus
 												CANStackLogger::CAN_stack_log("[VT]: VT Server has a matching label for " + isobus::to_string(labelDecoded) + ". It will be loaded and upload will be skipped.");
 												break;
 											}
+											else
+											{
+												CANStackLogger::CAN_stack_log("[VT]: VT Server has a label for " + isobus::to_string(labelDecoded) + ". This version will be deleted.");
+												const std::array<std::uint8_t, 7> deleteBuffer = {
+													static_cast<std::uint8_t>(labelDecoded[0]),
+													static_cast<std::uint8_t>(labelDecoded[1]),
+													static_cast<std::uint8_t>(labelDecoded[2]),
+													static_cast<std::uint8_t>(labelDecoded[3]),
+													static_cast<std::uint8_t>(labelDecoded[4]),
+													static_cast<std::uint8_t>(labelDecoded[5]),
+													static_cast<std::uint8_t>(labelDecoded[6])
+												};
+												if (!parentVT->send_delete_version(deleteBuffer))
+												{
+													CANStackLogger::CAN_stack_log("[VT]: Failed to send the delete version message for label " + isobus::to_string(labelDecoded));
+												}
+											}
 										}
 										if (!labelMatched)
 										{
@@ -2968,6 +2985,26 @@ namespace isobus
 							else
 							{
 								CANStackLogger::CAN_stack_log("[VT]: Store Versions Response ignored!");
+							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::DeleteVersionCommand):
+						{
+							if (0 == data[5])
+							{
+								CANStackLogger::CAN_stack_log("[VT]: Delete Version Response OK!");
+							}
+							else
+							{
+								if (data[5] & 0x02)
+								{
+									CANStackLogger::CAN_stack_log("[VT]: Delete Version Response error: Version label is not correct, or unknown.");
+								}
+								if (data[5] & 0x08)
+								{
+									CANStackLogger::CAN_stack_log("[VT]: Delete Version Response error: Any other error.");
+								}
 							}
 						}
 						break;
