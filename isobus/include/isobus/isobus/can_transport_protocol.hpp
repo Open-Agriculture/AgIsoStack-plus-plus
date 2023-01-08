@@ -175,7 +175,8 @@ namespace isobus
 
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
-		void close_session(TransportProtocolSession *session);
+		/// @param[in] successfull Denotes if the session was successful
+		void close_session(TransportProtocolSession *session, bool successfull);
 
 		/// @brief Processes end of session callbacks
 		/// @param[in] session The session we've just completed

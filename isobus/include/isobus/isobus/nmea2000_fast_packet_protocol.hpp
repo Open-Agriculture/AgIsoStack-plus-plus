@@ -136,7 +136,8 @@ namespace isobus
 
 		/// @brief Ends a session and cleans up the memory associated with its metadata
 		/// @param[in] session The session to close
-		void close_session(FastPacketProtocolSession *session);
+		/// @param[in] successfull `true` if the session was closed successfully, otherwise `false`
+		void close_session(FastPacketProtocolSession *session, bool successfull);
 
 		/// @brief Gets the sequence number to use for a new session based on the history
 		/// @param[in] session The new session we're starting

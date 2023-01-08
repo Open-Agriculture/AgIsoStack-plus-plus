@@ -106,6 +106,7 @@ namespace isobus
 							{
 								abort_session(pgn, ConnectionAbortReason::AlreadyInConnectionManagedSessionAndCannotSupportAnother, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 								CANStackLogger::CAN_stack_log("[ETP]: Abort RTS when already in session");
+								close_session(session, false);
 							}
 							else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
 							         (nullptr != message->get_destination_control_function()) &&
@@ -113,6 +114,7 @@ namespace isobus
 							{
 								abort_session(pgn, ConnectionAbortReason::SystemResourcesNeededForAnotherTask, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 								CANStackLogger::CAN_stack_log("[ETP]: Abort No Sessions Available");
+								close_session(session, false);
 							}
 						}
 						break;
@@ -141,6 +143,7 @@ namespace isobus
 									// In the case of Rx'ing a CTS, we're the source in the session
 									abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhenDataTransferInProgress, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 									CANStackLogger::CAN_stack_log("[ETP]: Abort CTS while in data session");
+									close_session(session, false);
 								}
 							}
 							else
@@ -167,7 +170,7 @@ namespace isobus
 									{
 										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, DPO packet count is greater than CTS");
 										abort_session(session, ConnectionAbortReason::EDPONumberOfPacketsGreaterThanClearToSend);
-										close_session(session);
+										close_session(session, false);
 									}
 									else
 									{
@@ -189,7 +192,7 @@ namespace isobus
 								{
 									CANStackLogger::CAN_stack_log("[ETP]: Aborting session, DPO packet offset is not valid");
 									abort_session(session, ConnectionAbortReason::BadEDPOOffset);
-									close_session(session);
+									close_session(session, false);
 								}
 							}
 							else
@@ -204,7 +207,7 @@ namespace isobus
 										// Sending EDPO for this session with mismatched PGN is not allowed
 										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, EDPO for this session with mismatched PGN is not allowed");
 										abort_session(currentSession, ConnectionAbortReason::UnexpectedEDPOPgn);
-										close_session(currentSession);
+										close_session(session, false);
 										anySessionMatched = true;
 										break;
 									}
@@ -229,14 +232,12 @@ namespace isobus
 									{
 										// We completed our Tx session!
 										session->state = StateMachineState::None;
-										process_session_complete_callback(session, true);
-										close_session(session);
+										close_session(session, true);
 									}
 									else
 									{
 										abort_session(pgn, ConnectionAbortReason::AnyOtherReason, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										process_session_complete_callback(session, false);
-										close_session(session);
+										close_session(session, false);
 										CANStackLogger::CAN_stack_log("[ETP]: Abort EOM in wrong session state");
 									}
 								}
@@ -258,7 +259,7 @@ namespace isobus
 							if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
 							{
 								CANStackLogger::CAN_stack_log("[ETP]: Received an abort for an session with PGN: " + isobus::to_string(pgn));
-								close_session(session);
+								close_session(session, false);
 							}
 							else
 							{
@@ -303,7 +304,7 @@ namespace isobus
 							send_end_of_session_acknowledgement(tempSession);
 						}
 						CANNetworkManager::CANNetwork.protocol_message_callback(&tempSession->sessionMessage);
-						close_session(tempSession);
+						close_session(tempSession, true);
 					}
 					tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 				}
@@ -445,10 +446,11 @@ namespace isobus
 		                                                      CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	void ExtendedTransportProtocolManager::close_session(ExtendedTransportProtocolSession *session)
+	void ExtendedTransportProtocolManager::close_session(ExtendedTransportProtocolSession *session, bool successfull)
 	{
 		if (nullptr != session)
 		{
+			process_session_complete_callback(session, successfull);
 			auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
 			if (activeSessions.end() != sessionLocation)
 			{
@@ -635,8 +637,7 @@ namespace isobus
 						{
 							CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while in RTS state");
 							abort_session(session, ConnectionAbortReason::Timeout);
-							process_session_complete_callback(session, false);
-							close_session(session);
+							close_session(session, false);
 						}
 					}
 				}
@@ -650,8 +651,7 @@ namespace isobus
 					{
 						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while waiting for CTS");
 						abort_session(session, ConnectionAbortReason::Timeout);
-						process_session_complete_callback(session, false);
-						close_session(session);
+						close_session(session, false);
 					}
 				}
 				break;
@@ -707,8 +707,7 @@ namespace isobus
 									{
 										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, unable to transfer chunk of data (numberBytesLeft=" + to_string(numberBytesLeft) + ")");
 										abort_session(session, ConnectionAbortReason::AnyOtherReason);
-										process_session_complete_callback(session, false);
-										close_session(session);
+										close_session(session, false);
 										break;
 									}
 								}
@@ -773,7 +772,7 @@ namespace isobus
 					{
 						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, RX T1 timeout reached");
 						abort_session(session, ConnectionAbortReason::Timeout);
-						close_session(session);
+						close_session(session, false);
 					}
 				}
 				break;
@@ -788,7 +787,7 @@ namespace isobus
 					{
 						CANStackLogger::CAN_stack_log("[ETP]: Aborting session, T2-3 timeout reached while in CTS state");
 						abort_session(session, ConnectionAbortReason::Timeout);
-						close_session(session);
+						close_session(session, false);
 					}
 				}
 				break;
