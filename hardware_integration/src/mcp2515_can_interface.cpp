@@ -81,17 +81,14 @@ bool MCP2515CANInterface::get_read_status(std::uint8_t &status)
 	bool retVal = false;
 	if (transactionHandler)
 	{
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = { static_cast<std::uint8_t>(MCPInstruction::READ_STATUS), 0x00 },
-			.read = true,
-			.rxBuffer = {}
-		};
+		const std::vector<std::uint8_t> txBuffer = { static_cast<std::uint8_t>(MCPInstruction::READ_STATUS), 0x00 };
+		SPITransactionFrame frame(&txBuffer, true);
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);
 		if (transactionHandler->end_transaction())
 		{
 			retVal = true;
-			status = frame.rxBuffer[1];
+			frame.read_byte(1, status);
 		}
 	}
 	return retVal;
@@ -101,20 +98,17 @@ bool MCP2515CANInterface::read_register(const MCPRegister address, std::uint8_t 
 	bool retVal = false;
 	if (transactionHandler)
 	{
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = { static_cast<std::uint8_t>(MCPInstruction::READ),
-			              static_cast<std::uint8_t>(address),
-			              0x00 },
-			.read = true,
-			.rxBuffer = {}
-		};
+		const std::vector<std::uint8_t> txBuffer = { static_cast<std::uint8_t>(MCPInstruction::READ),
+			                                           static_cast<std::uint8_t>(address),
+			                                           0x00 };
+		SPITransactionFrame frame(&txBuffer, true);
 
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);
 		if (transactionHandler->end_transaction())
 		{
 			retVal = true;
-			data = frame.rxBuffer[2];
+			frame.read_byte(2, data);
 		}
 	}
 	return retVal;
@@ -128,18 +122,13 @@ bool MCP2515CANInterface::read_register(const MCPRegister address, std::uint8_t 
 		std::vector<std::uint8_t> txBuffer(2 + length, 0x00);
 		txBuffer[0] = static_cast<std::uint8_t>(MCPInstruction::READ);
 		txBuffer[1] = static_cast<std::uint8_t>(address);
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = txBuffer,
-			.read = true,
-			.rxBuffer = {}
-		};
-
+		SPITransactionFrame frame(&txBuffer, true);
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);
 		if (transactionHandler->end_transaction())
 		{
 			retVal = true;
-			memcpy(data, frame.rxBuffer.data() + 2, length);
+			frame.read_bytes(2, data, length);
 		}
 	}
 	return retVal;
@@ -150,14 +139,11 @@ bool MCP2515CANInterface::modify_register(const MCPRegister address, const std::
 	bool retVal = false;
 	if (transactionHandler)
 	{
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = { static_cast<std::uint8_t>(MCPInstruction::BITMOD),
-			              static_cast<std::uint8_t>(address),
-			              mask,
-			              data },
-			.read = false,
-			.rxBuffer = {}
-		};
+		const std::vector<std::uint8_t> txBuffer = { static_cast<std::uint8_t>(MCPInstruction::BITMOD),
+			                                           static_cast<std::uint8_t>(address),
+			                                           mask,
+			                                           data };
+		SPITransactionFrame frame(&txBuffer);
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);
 		retVal = transactionHandler->end_transaction();
@@ -170,11 +156,8 @@ bool MCP2515CANInterface::write_reset()
 	bool retVal = false;
 	if (transactionHandler)
 	{
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = { static_cast<std::uint8_t>(MCPInstruction::RESET) },
-			.read = false,
-			.rxBuffer = {}
-		};
+		const std::vector<std::uint8_t> txBuffer = { static_cast<std::uint8_t>(MCPInstruction::RESET) };
+		SPITransactionFrame frame(&txBuffer);
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);
 		retVal = transactionHandler->end_transaction();
@@ -187,13 +170,10 @@ bool MCP2515CANInterface::write_register(const MCPRegister address, const std::u
 	bool retVal = false;
 	if (transactionHandler)
 	{
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = { static_cast<std::uint8_t>(MCPInstruction::WRITE),
-			              static_cast<std::uint8_t>(address),
-			              data },
-			.read = false,
-			.rxBuffer = {}
-		};
+		const std::vector<std::uint8_t> txBuffer = { static_cast<std::uint8_t>(MCPInstruction::WRITE),
+			                                           static_cast<std::uint8_t>(address),
+			                                           data };
+		SPITransactionFrame frame(&txBuffer);
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);
 		retVal = transactionHandler->end_transaction();
@@ -210,11 +190,7 @@ bool MCP2515CANInterface::write_register(const MCPRegister address, const std::u
 		txBuffer[0] = static_cast<std::uint8_t>(MCPInstruction::WRITE);
 		txBuffer[1] = static_cast<std::uint8_t>(address);
 		memcpy(txBuffer.data() + 2, data, length);
-		SPIHardwarePlugin::TransactionFrame frame{
-			.txBuffer = txBuffer,
-			.read = false,
-			.rxBuffer = {}
-		};
+		SPITransactionFrame frame(&txBuffer);
 
 		transactionHandler->begin_transaction();
 		transactionHandler->transmit(&frame);

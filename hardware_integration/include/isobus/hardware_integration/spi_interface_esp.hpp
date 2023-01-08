@@ -44,7 +44,7 @@ public:
 
 	/// @brief Write (and read) a frame to the SPI bus
 	/// @param[in, out] frame A reference to the frame to transmit/receive
-	void transmit(TransactionFrame *frame) override;
+	void transmit(SPITransactionFrame *frame) override;
 
 	/// @brief End the transaction. This function returns the status since the last end_transaction().
 	/// @return True if the transaction was successful, false otherwise
