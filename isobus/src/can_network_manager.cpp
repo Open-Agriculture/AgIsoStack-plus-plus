@@ -551,7 +551,9 @@ namespace isobus
 		const std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
 		for (auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
 		{
-			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
+			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
+			    ((nullptr == currentMessage.get_destination_control_function()) ||
+			     (ControlFunction::Type::Internal == currentMessage.get_destination_control_function()->get_type())))
 			{
 				currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
 			}
