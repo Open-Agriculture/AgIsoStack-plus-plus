@@ -170,9 +170,9 @@ private:
 	bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister sidhRegister);
 
 	SPIHardwarePlugin *transactionHandler; ///< The SPI transaction handler
-	const std::uint8_t cfg1; // Configuration value for CFG1 register
-	const std::uint8_t cfg2; // Configuration value for CFG2 register
-	const std::uint8_t cfg3; // Configuration value for CFG3 register
+	const std::uint8_t cfg1; ///< Configuration value for CFG1 register
+	const std::uint8_t cfg2; ///< Configuration value for CFG2 register
+	const std::uint8_t cfg3; ///< Configuration value for CFG3 register
 	bool initialized; ///< If the mcp2515 has been initialized and no errors have occured
 };
 
