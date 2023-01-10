@@ -19,6 +19,10 @@ A default CAN driver plug-in will be selected for you based on your OS, but when
 
 * `-DCAN_DRIVER=SocketCAN` Will compile with Socket CAN support (This is the default for Linux)
 * `-DCAN_DRIVER=WindowsPCANBasic` Will compile with windows support for the PEAK PCAN drivers (This is the default for Windows)
+* `-DCAN_DRIVER=TWAI` Will compile with support for the ESP TWAI driver
+* `-DCAN_DRIVER=MCP2515` Will compile with support for the MCP2515 CAN controller
+
+Or specify multiple using a semicolon separated list: `-DCAN_DRIVER="<driver1>;<driver2>"`
 
 If your target hardware is not listed above, you can easily integrate your own hardware by [implementing a few simple functions](https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/hardware_integration#writing-a-new-can-driver-for-the-stack).
 
@@ -129,4 +133,4 @@ This project's sponsors are a big part of making this project successful. Their 
 
 Thank you:
 
-* Franz Höpfinger [franz-ms-muc](https://github.com/franz-ms-muc)
+* Franz HÃ¶pfinger [franz-ms-muc](https://github.com/franz-ms-muc)
