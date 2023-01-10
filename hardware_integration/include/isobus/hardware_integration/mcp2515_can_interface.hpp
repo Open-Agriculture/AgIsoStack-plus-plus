@@ -30,9 +30,9 @@ class MCP2515CANInterface : public CANHardwarePlugin
 public:
 	/// @brief Constructor for the socket CAN driver
 	/// @param[in] transactionHandler The SPI transaction handler
-	/// @param[in] cfg1 The configuration register 1
-	/// @param[in] cfg2 The configuration register 2
-	/// @param[in] cfg3 The configuration register 3
+	/// @param[in] cfg1 The configuration value for CFG register 1
+	/// @param[in] cfg2 The configuration value for CFG register 2
+	/// @param[in] cfg3 The configuration value for CFG register 3
 	MCP2515CANInterface(SPIHardwarePlugin *transactionHandler, const std::uint8_t cfg1, const std::uint8_t cfg2, const std::uint8_t cfg3);
 
 	/// @brief The destructor for SocketCANInterface
@@ -141,6 +141,7 @@ private:
 	/// @brief write multiple byte register of the mcp2515
 	/// @param[in] address The address of the register to write
 	/// @param[in] data The data to write to the register
+	/// @param[in] length The length of the data to write to the register
 	/// @returns If the write was successfull
 	bool write_register(const MCPRegister address, const std::uint8_t data[], const std::size_t length);
 
@@ -155,21 +156,23 @@ private:
 
 	/// @brief Read a frame from a buffer on the mcp2515
 	/// @param[in, out] canFrame The frame that was read
-	/// @param[in] ctrl The control register of the buffer to read from
-	/// @param[in] data The data register of the buffer to read from
-	/// @param[in] intf The interrupt flag of the buffer to reset after reading
+	/// @param[in] ctrlRegister The control register of the buffer to read from
+	/// @param[in] dataRegister The data register of the buffer to read from
+	/// @param[in] intfMask The interrupt flag of the buffer to reset after reading
 	/// @returns If the read was successfull
-	bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrl, const MCPRegister data, const std::uint8_t intf);
+	bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister dataRegister, const std::uint8_t intfMask);
 
 	/// @brief Write a frame to a buffer on the mcp2515
 	/// @param[in] canFrame The frame to write
-	/// @param[in] ctrl The control register of the buffer to write to
-	/// @param[in] sidh The sidh register of the buffer to write to
+	/// @param[in] ctrlRegister The control register of the buffer to write to
+	/// @param[in] sidhRegister The sidh register of the buffer to write to
 	/// @returns If the write was successfull
 	bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister sidhRegister);
 
 	SPIHardwarePlugin *transactionHandler; ///< The SPI transaction handler
-	const std::uint8_t cfg1, cfg2, cfg3; ///< The configuration values for can and clock speed
+	const std::uint8_t cfg1; // Configuration value for CFG1 register
+	const std::uint8_t cfg2; // Configuration value for CFG2 register
+	const std::uint8_t cfg3; // Configuration value for CFG3 register
 	bool initialized; ///< If the mcp2515 has been initialized and no errors have occured
 };
 

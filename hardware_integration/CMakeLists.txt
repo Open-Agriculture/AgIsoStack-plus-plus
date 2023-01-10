@@ -8,18 +8,16 @@ set(HARDWARE_INTEGRATION_SRC_DIR "src")
 set(HARDWARE_INTEGRATION_INCLUDE_DIR "include/isobus/hardware_integration")
 
 if(NOT CAN_DRIVER)
-  message(AUTHOR_WARNING "No CAN driver specified, choosing Linux socket CAN by default. Use -DCAN_DRIVER=\"SocketCAN\" to specify another driver. or -DCAN_DRIVER=\"SocketCan;MCP2515\" to specify multiple drivers.")
-  set(CAN_DRIVER "SocketCAN")
-  message(
-    AUTHOR_WARNING
-      "No CAN driver specified, choosing Linux socket CAN by default. Use -DCAN_DRIVER=\"SocketCAN\" to specify another driver. or -DCAN_DRIVER=\"SocketCAN;WindowsPCANBasic\" to specify multiple drivers."
-  )
-
   if (WIN32)
     set(CAN_DRIVER "WindowsPCANBasic")
   else()
     set(CAN_DRIVER "SocketCAN")
   endif()
+
+  message(
+    AUTHOR_WARNING
+    "No CAN driver specified, choosing ${CAN_DRIVER} by default. Set the CAN_DRIVER variable with -DCAN_DRIVER=<driver> to specify another driver. or -DCAN_DRIVER=\"<driver1>;<driver2>\" to specify multiple drivers."
+  )
 endif()
 
 # Set the source files
@@ -42,9 +40,13 @@ if("TWAI" IN_LIST CAN_DRIVER)
 	list(APPEND HARDWARE_INTEGRATION_SRC "twai_plugin.cpp")
 	list(APPEND HARDWARE_INTEGRATION_INCLUDE "twai_plugin.hpp")
 endif()
-if ("MCP2515" IN_LIST CAN_DRIVER)
+if("MCP2515" IN_LIST CAN_DRIVER)
 	list(APPEND HARDWARE_INTEGRATION_SRC "mcp2515_can_interface.cpp")
 	list(APPEND HARDWARE_INTEGRATION_INCLUDE "mcp2515_can_interface.hpp")
+  if(ESP_PLATFORM)
+    list(APPEND HARDWARE_INTEGRATION_SRC "spi_interface_esp.cpp")
+    list(APPEND HARDWARE_INTEGRATION_INCLUDE "spi_interface_esp.hpp")
+  endif()
 endif()
 
 # Prepend the source directory path to all the source files
