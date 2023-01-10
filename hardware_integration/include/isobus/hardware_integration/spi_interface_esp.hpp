@@ -39,7 +39,6 @@ public:
 	bool init();
 
 	/// @brief Deinitialize the SPI device.
-	/// @return True if the deinitialization was successful, false otherwise
 	void deinit();
 
 	/// @brief Write (and read) a frame to the SPI bus
