@@ -284,16 +284,17 @@ namespace isobus
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ExtendedTransportProtocolDataTransfer):
 			{
 				ExtendedTransportProtocolSession *tempSession = nullptr;
+				auto &messageData = message->get_data();
 
 				if ((CAN_DATA_LENGTH == message->get_data_length()) &&
 				    (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function())) &&
 				    (StateMachineState::RxDataSession == tempSession->state) &&
-				    (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1)))
+				    (messageData[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1)))
 				{
-					for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < CAN_DATA_LENGTH; i++)
+					for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < PROTOCOL_BYTES_PER_FRAME; i++)
 					{
-						std::uint32_t currentDataIndex = (CAN_DATA_LENGTH * tempSession->lastPacketNumber) + i;
-						tempSession->sessionMessage.set_data(message->get_data()[SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
+						std::uint32_t currentDataIndex = (PROTOCOL_BYTES_PER_FRAME * tempSession->processedPacketsThisSession) + i;
+						tempSession->sessionMessage.set_data(messageData[1 + SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
 					}
 					tempSession->lastPacketNumber++;
 					tempSession->processedPacketsThisSession++;
