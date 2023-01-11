@@ -544,6 +544,11 @@ namespace isobus
 				packetMax = 0xFF;
 			}
 
+			if (packetMax < session->packetCount)
+			{
+				session->packetCount = packetMax; // If we're sending a CTS with less than 0xFF, set the expected packet count to the CTS packet count
+			}
+
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_CLEAR_TO_SEND_MULTIPLEXOR,
 				                                                 static_cast<std::uint8_t>(packetMax), /// @todo Make CTS Max user configurable
 				                                                 static_cast<std::uint8_t>((session->processedPacketsThisSession + 1) & 0xFF),
