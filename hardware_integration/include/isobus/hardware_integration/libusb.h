@@ -21,6 +21,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+// clang-format off
+//! @cond Doxygen_Suppress
+
 #ifndef LIBUSB_H
 #define LIBUSB_H
 
@@ -2037,3 +2040,6 @@ int LIBUSB_CALL libusb_set_option(libusb_context *ctx, enum libusb_option option
 #endif
 
 #endif
+
+// clang-format on
+//! @endcond
