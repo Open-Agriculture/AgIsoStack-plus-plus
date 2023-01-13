@@ -1485,6 +1485,8 @@ namespace isobus
 			tempData.objectPoolVectorPointer = nullptr;
 			tempData.dataCallback = nullptr;
 			tempData.objectPoolSize = size;
+			tempData.autoScaleDataMaskOriginalDimension = 0;
+			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -1513,6 +1515,8 @@ namespace isobus
 			tempData.objectPoolVectorPointer = pool;
 			tempData.dataCallback = nullptr;
 			tempData.objectPoolSize = pool->size();
+			tempData.autoScaleDataMaskOriginalDimension = 0;
+			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -1527,6 +1531,17 @@ namespace isobus
 				objectPools.resize(poolIndex + 1);
 				objectPools[poolIndex] = tempData;
 			}
+		}
+	}
+
+	void VirtualTerminalClient::set_object_pool_scaling(std::uint8_t poolIndex,
+	                                                    std::uint32_t originalDataMaskDimensions_px,
+	                                                    std::uint32_t originalSoftKyeDesignatorHeight_px)
+	{
+		if (poolIndex < objectPools.size())
+		{
+			objectPools[poolIndex].autoScaleDataMaskOriginalDimension = originalDataMaskDimensions_px;
+			objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
 		}
 	}
 
@@ -1827,17 +1842,19 @@ namespace isobus
 
 							if (CurrentObjectPoolUploadState::Uninitialized == currentObjectPoolState)
 							{
+								bool transmitSuccessful;
+
 								if (!objectPools[i].uploaded)
 								{
-									bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-									                                                                         nullptr,
-									                                                                         objectPools[i].objectPoolSize + 1, // Account for Mux byte
-									                                                                         myControlFunction.get(),
-									                                                                         partnerControlFunction.get(),
-									                                                                         CANIdentifier::CANPriority::PriorityLowest7,
-									                                                                         process_callback,
-									                                                                         this,
-									                                                                         process_internal_object_pool_upload_callback);
+									transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+									                                                                    nullptr,
+									                                                                    objectPools[i].objectPoolSize + 1, // Account for Mux byte
+									                                                                    myControlFunction.get(),
+									                                                                    partnerControlFunction.get(),
+									                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+									                                                                    process_callback,
+									                                                                    this,
+									                                                                    process_internal_object_pool_upload_callback);
 
 									if (transmitSuccessful)
 									{
@@ -2985,14 +3002,14 @@ namespace isobus
 							std::uint16_t value1 = message->get_uint16_at(3);
 							std::uint16_t value2 = message->get_uint16_at(5);
 							/// @todo figure out how to best pass other status properties below to application
-							bool learnModeActive = message->get_bool_at(7, 0);
-							bool inputActive = message->get_bool_at(7, 1); // Only in learn mode?
-							bool controlIsLocked = false;
-							bool interactionWhileLocked = false;
+							// bool learnModeActive = message->get_bool_at(7, 0);
+							// bool inputActive = message->get_bool_at(7, 1); // Only in learn mode?
+							// bool controlIsLocked = false;
+							// bool interactionWhileLocked = false;
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
-								controlIsLocked = message->get_bool_at(7, 2);
-								interactionWhileLocked = message->get_bool_at(7, 3);
+								// controlIsLocked = message->get_bool_at(7, 2);
+								// interactionWhileLocked = message->get_bool_at(7, 3);
 							}
 							for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 							{
@@ -3085,7 +3102,22 @@ namespace isobus
 								}
 								else
 								{
-									parentVT->set_state(StateMachineState::UploadObjectPool);
+									if (parentVT->get_any_pool_needs_scaling())
+									{
+										// Scale object pools before upload.
+										if (parentVT->scale_object_pools())
+										{
+											parentVT->set_state(StateMachineState::UploadObjectPool);
+										}
+										else
+										{
+											parentVT->set_state(StateMachineState::Failed);
+										}
+									}
+									else
+									{
+										parentVT->set_state(StateMachineState::UploadObjectPool);
+									}
 								}
 							}
 						}
@@ -3294,6 +3326,12 @@ namespace isobus
 								if ((!anyErrorInPool) &&
 								    (0 == objectPoolErrorBitmask))
 								{
+									// Clear scaling buffers
+									for (auto &objectPool : parentVT->objectPools)
+									{
+										objectPool.scaledObjectPool.clear();
+									}
+
 									// Check if we need to store this pool
 									if (!parentVT->objectPools[0].versionLabel.empty())
 									{
@@ -3438,36 +3476,1775 @@ namespace isobus
 			    (bytesOffset + numberOfBytesNeeded) <= parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
 			{
 				// We've got more data to transfer
-				if (usingExternalCallback)
+				if ((0 != parentVTClient->objectPools[poolIndex].autoScaleDataMaskOriginalDimension) && (0 != parentVTClient->objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight))
 				{
-					// We're using the user's supplied callback to get a chunk of info
-					if (0 == bytesOffset)
-					{
-						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
-						retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset, numberOfBytesNeeded - 1, &chunkBuffer[1], parentVTClient);
-					}
-					else
-					{
-						// Subtract off 1 to account for the mux in the first byte of the message
-						retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset - 1, numberOfBytesNeeded, chunkBuffer, parentVTClient);
-					}
-				}
-				else
-				{
-					// We already have the whole pool in RAM
+					// Object pool has been pre-scaled. Use the scaling buffer instead
 					retVal = true;
 					if (0 == bytesOffset)
 					{
 						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
-						memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
+						memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].scaledObjectPool[bytesOffset], numberOfBytesNeeded - 1);
 					}
 					else
 					{
 						// Subtract off 1 to account for the mux in the first byte of the message
-						memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+						memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].scaledObjectPool[bytesOffset - 1], numberOfBytesNeeded);
+					}
+				}
+				else
+				{
+					if (usingExternalCallback)
+					{
+						// We're using the user's supplied callback to get a chunk of info
+						if (0 == bytesOffset)
+						{
+							chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+							retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset, numberOfBytesNeeded - 1, &chunkBuffer[1], parentVTClient);
+						}
+						else
+						{
+							// Subtract off 1 to account for the mux in the first byte of the message
+							retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset - 1, numberOfBytesNeeded, chunkBuffer, parentVTClient);
+						}
+					}
+					else
+					{
+						// We already have the whole pool in RAM
+						retVal = true;
+						if (0 == bytesOffset)
+						{
+							chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+							memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
+						}
+						else
+						{
+							// Subtract off 1 to account for the mux in the first byte of the message
+							memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+						}
 					}
 				}
 			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::get_any_pool_needs_scaling() const
+	{
+		bool retVal = false;
+
+		for (auto &objectPool : objectPools)
+		{
+			if ((0 != objectPool.autoScaleDataMaskOriginalDimension) &&
+			    (0 != objectPool.autoScaleSoftKeyDesignatorOriginalHeight))
+			{
+				retVal = true;
+				break;
+			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::scale_object_pools()
+	{
+		bool retVal = true;
+
+		for (auto &objectPool : objectPools)
+		{
+			// Step 1: Make a read/write copy of the pool
+			if (nullptr != objectPool.objectPoolDataPointer)
+			{
+				objectPool.scaledObjectPool.resize(objectPool.objectPoolSize);
+				memcpy(&objectPool.scaledObjectPool[0], objectPool.objectPoolDataPointer, objectPool.objectPoolSize);
+			}
+			else if (nullptr != objectPool.objectPoolVectorPointer)
+			{
+				objectPool.scaledObjectPool.resize(objectPool.objectPoolVectorPointer->size());
+				std::copy(objectPool.objectPoolVectorPointer->begin(), objectPool.objectPoolVectorPointer->end(), objectPool.scaledObjectPool.begin());
+			}
+			else if (objectPool.useDataCallback)
+			{
+				objectPool.scaledObjectPool.resize(objectPool.objectPoolSize);
+
+				for (std::uint32_t i = 0; i < objectPool.objectPoolSize; i++)
+				{
+					retVal &= objectPool.dataCallback(i, i, 1, &objectPool.scaledObjectPool[i], this);
+				}
+
+				if (!retVal)
+				{
+					break;
+				}
+			}
+
+			// Step 2, Parse the pool and resize each object as we iterate through it
+			auto poolIterator = objectPool.scaledObjectPool.begin();
+
+			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
+			       retVal)
+			{
+				if (ObjectType::Key == static_cast<ObjectType>(poolIterator[2]))
+				{
+					retVal &= resize_object(&poolIterator[0],
+					                        static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight),
+					                        static_cast<ObjectType>(poolIterator[2]));
+				}
+				else
+				{
+					retVal &= resize_object(&poolIterator[0],
+					                        static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension),
+					                        static_cast<ObjectType>(poolIterator[2]));
+				}
+
+				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0]);
+				if (retVal)
+				{
+					if (get_is_object_scalable(static_cast<ObjectType>(*(poolIterator + 2))))
+					{
+						CANStackLogger::debug("[VT]: Resized an object: " +
+						                      isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+						                      " with type " +
+						                      isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
+						                      " with size " +
+						                      isobus::to_string(static_cast<int>(objectSize)));
+					}
+				}
+				else
+				{
+					CANStackLogger::error("[VT]: Failed to resize an object: " +
+					                      isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+					                      " with type " +
+					                      isobus::to_string(static_cast<int>((*poolIterator + 2))) +
+					                      " with size " +
+					                      isobus::to_string(static_cast<int>(objectSize)));
+				}
+				poolIterator += get_number_bytes_in_object(&poolIterator[0]);
+			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::get_is_object_scalable(ObjectType type) const
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case ObjectType::WorkingSet:
+			{
+				retVal = false;
+			}
+			break;
+
+			case ObjectType::DataMask:
+			case ObjectType::AlarmMask:
+			case ObjectType::Container:
+			case ObjectType::Key:
+			case ObjectType::Button:
+			case ObjectType::InputBoolean:
+			case ObjectType::InputString:
+			case ObjectType::InputNumber:
+			case ObjectType::InputList:
+			case ObjectType::OutputString:
+			case ObjectType::OutputNumber:
+			case ObjectType::OutputList:
+			case ObjectType::OutputLine:
+			case ObjectType::OutputRectangle:
+			case ObjectType::OutputEllipse:
+			case ObjectType::OutputPolygon:
+			case ObjectType::OutputMeter:
+			case ObjectType::OutputLinearBarGraph:
+			case ObjectType::OutputArchedBarGraph:
+			case ObjectType::PictureGraphic:
+			case ObjectType::AuxiliaryFunctionType1:
+			case ObjectType::AuxiliaryInputType1:
+			case ObjectType::AuxiliaryFunctionType2:
+			case ObjectType::AuxiliaryInputType2:
+			case ObjectType::FontAttributes:
+			{
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				retVal = false;
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	VirtualTerminalClient::FontSize VirtualTerminalClient::get_font_or_next_smallest_font(FontSize originalFont) const
+	{
+		FontSize retVal = originalFont;
+
+		while ((!get_font_size_supported(retVal)) && (FontSize::Size6x8 != retVal))
+		{
+			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(originalFont) - 1);
+		}
+		return retVal;
+	}
+
+	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor) const
+	{
+		static constexpr float SCALE_FACTOR_POSITIVE_FUDGE = 1.05f;
+		static constexpr float SCALE_FACTOR_NEGATIVE_FUDGE = 0.95f;
+		FontSize retVal = originalFont;
+
+		switch (originalFont)
+		{
+			case FontSize::Size6x8:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 23.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 21.3f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 15.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 11.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 10.6f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 7.95f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 5.3f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 2.6f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 1.30f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size8x8:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 23.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 15.95f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 11.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 7.95f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					retVal = FontSize::Size6x8;
+				}
+			}
+			break;
+
+			case FontSize::Size8x12:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 15.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 11.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 7.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					retVal = FontSize::Size6x8;
+				}
+			}
+			break;
+
+			case FontSize::Size12x16:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 11.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 10.6f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 7.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 5.3f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 2.6f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 1.3f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.67f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size16x16:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 11.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 7.95f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size16x24:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 7.95f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size24x32:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 5.3f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 2.6f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 1.3f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.6f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.3f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size32x32:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 5.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.2f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size32x48:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 3.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.2f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size48x64:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 2.6f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 1.3f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 0.6f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.33f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 0.25f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.18f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.16f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size64x64:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 2.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.25f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 0.18f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.12f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size64x96:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 1.95f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 0.25f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.18f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.12f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size96x128:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+					else if (scaleFactor >= 1.3f)
+					{
+						retVal = FontSize::Size128x128;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 0.6f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 0.33f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 0.25f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 0.18f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.16f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 0.125f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.09f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.08f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size128x128:
+			{
+				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				{
+					if (scaleFactor >= 1.45f)
+					{
+						retVal = FontSize::Size128x192;
+					}
+				}
+				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size64x64;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 0.25f)
+					{
+						retVal = FontSize::Size32x32;
+					}
+					else if (scaleFactor >= 0.18f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.125f)
+					{
+						retVal = FontSize::Size16x16;
+					}
+					else if (scaleFactor >= 0.09f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else if (scaleFactor >= 0.06f)
+					{
+						retVal = FontSize::Size8x8;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			case FontSize::Size128x192:
+			{
+				if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
+				{
+					if (scaleFactor >= 0.75f)
+					{
+						retVal = FontSize::Size96x128;
+					}
+					else if (scaleFactor >= 0.5f)
+					{
+						retVal = FontSize::Size64x96;
+					}
+					else if (scaleFactor >= 0.37f)
+					{
+						retVal = FontSize::Size48x64;
+					}
+					else if (scaleFactor >= 0.25f)
+					{
+						retVal = FontSize::Size32x48;
+					}
+					else if (scaleFactor >= 0.18f)
+					{
+						retVal = FontSize::Size24x32;
+					}
+					else if (scaleFactor >= 0.125f)
+					{
+						retVal = FontSize::Size16x24;
+					}
+					else if (scaleFactor >= 0.09f)
+					{
+						retVal = FontSize::Size12x16;
+					}
+					else if (scaleFactor >= 0.06f)
+					{
+						retVal = FontSize::Size8x12;
+					}
+					else
+					{
+						retVal = FontSize::Size6x8;
+					}
+				}
+			}
+			break;
+
+			default:
+			{
+				// Unknown font? Newer version than we support of the ISO standard?
+				CANStackLogger::error("[VT]: Cannot scale font of unknown type " +
+				                      isobus::to_string(static_cast<int>(originalFont)));
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_minimum_object_length(ObjectType type) const
+	{
+		std::uint32_t retVal = 0;
+
+		switch (type)
+		{
+			case ObjectType::WorkingSet:
+			{
+				retVal = 10;
+			}
+			break;
+
+			case ObjectType::OutputList:
+			case ObjectType::ExternalReferenceNAME:
+			{
+				retVal = 12;
+			}
+			break;
+
+			case ObjectType::AlarmMask:
+			case ObjectType::Container:
+			{
+				retVal = 10;
+			}
+			break;
+
+			case ObjectType::ExternalObjectPointer:
+			{
+				retVal = 9;
+			}
+			break;
+
+			case ObjectType::KeyGroup:
+			{
+				retVal = 4;
+			}
+			break;
+
+			case ObjectType::SoftKeyMask:
+			{
+				retVal = 6;
+			}
+			break;
+
+			case ObjectType::Key:
+			case ObjectType::NumberVariable:
+			case ObjectType::InputAttributes:
+			{
+				retVal = 7;
+			}
+			break;
+
+			case ObjectType::Button:
+			case ObjectType::InputBoolean:
+			case ObjectType::OutputRectangle:
+			case ObjectType::InputList:
+			case ObjectType::ExternalObjectDefinition:
+			{
+				retVal = 13;
+			}
+			break;
+
+			case ObjectType::InputString:
+			{
+				retVal = 19;
+			}
+			break;
+
+			case ObjectType::InputNumber:
+			{
+				retVal = 38;
+			}
+			break;
+
+			case ObjectType::OutputString:
+			{
+				retVal = 17;
+			}
+			break;
+
+			case ObjectType::OutputNumber:
+			{
+				retVal = 29;
+			}
+			break;
+
+			case ObjectType::OutputLine:
+			{
+				retVal = 11;
+			}
+			break;
+
+			case ObjectType::OutputEllipse:
+			{
+				retVal = 15;
+			}
+			break;
+
+			case ObjectType::OutputPolygon:
+			{
+				retVal = 14;
+			}
+			break;
+
+			case ObjectType::OutputMeter:
+			{
+				retVal = 21;
+			}
+			break;
+
+			case ObjectType::OutputLinearBarGraph:
+			{
+				retVal = 24;
+			}
+			break;
+
+			case ObjectType::OutputArchedBarGraph:
+			{
+				retVal = 27;
+			}
+			break;
+
+			case ObjectType::PictureGraphic:
+			case ObjectType::Animation:
+			{
+				retVal = 17;
+			}
+			break;
+
+			case ObjectType::StringVariable:
+			case ObjectType::ExtendedInputAttributes:
+			case ObjectType::ObjectPointer:
+			case ObjectType::Macro:
+			case ObjectType::ColourMap:
+			case ObjectType::ObjectLabelRefrence:
+			{
+				retVal = 5;
+			}
+			break;
+
+			case ObjectType::FontAttributes:
+			{
+				retVal = 8;
+			}
+			break;
+
+			case ObjectType::LineAttributes:
+			case ObjectType::FillAttributes:
+			case ObjectType::DataMask:
+			{
+				retVal = 8;
+			}
+			break;
+
+			default:
+			{
+				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + static_cast<int>(type));
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer)
+	{
+		auto currentObjectType = static_cast<ObjectType>(buffer[2]);
+		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
+
+		switch (currentObjectType)
+		{
+			case ObjectType::WorkingSet:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[7] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[8] * 2);
+				const std::uint32_t sizeOfLanguageCodes = (buffer[9] * 2);
+				retVal += (sizeOfLanguageCodes + sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::DataMask:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[6] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[7] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::AlarmMask:
+			case ObjectType::Container:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[8] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[9] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::SoftKeyMask:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[4] * 2);
+				const std::uint32_t sizeOfMacros = (buffer[5] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::Key:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[5] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[6] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::Button:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[11] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::InputBoolean:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::InputString:
+			{
+				const std::uint32_t sizeOfValue = buffer[16];
+				const std::uint32_t sizeOfMacros = (buffer[18 + sizeOfValue] * 2);
+				retVal += (sizeOfValue + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::InputNumber:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[37] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::InputList:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				const std::uint32_t sizeOfListObjectIDs = (buffer[10] * 2);
+				retVal += (sizeOfMacros + sizeOfListObjectIDs);
+			}
+			break;
+
+			case ObjectType::OutputString:
+			{
+				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[14]) | static_cast<uint16_t>(buffer[15] << 8));
+				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
+				retVal += (sizeOfMacros + sizeOfValue);
+			}
+			break;
+
+			case ObjectType::OutputNumber:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[28] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputList:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[11] * 2);
+				const std::uint32_t sizeOfListObjectIDs = (buffer[10] * 2);
+				retVal += (sizeOfMacros + sizeOfListObjectIDs);
+			}
+			break;
+
+			case ObjectType::OutputLine:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[10] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputRectangle:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputEllipse:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[14] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputPolygon:
+			{
+				const std::uint32_t sizeOfPoints = (buffer[12] * 4);
+				const std::uint32_t sizeOfMacros = (buffer[13] * 2);
+				retVal += (sizeOfMacros + sizeOfPoints);
+			}
+			break;
+
+			case ObjectType::OutputMeter:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[20] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputLinearBarGraph:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[23] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputArchedBarGraph:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[26] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::PictureGraphic:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
+				const std::uint32_t sizeOfRawData = (static_cast<std::uint32_t>(buffer[12]) |
+				                                     (static_cast<std::uint32_t>(buffer[13]) << 8) |
+				                                     (static_cast<std::uint32_t>(buffer[14]) << 16) |
+				                                     (static_cast<std::uint32_t>(buffer[15]) << 24));
+				retVal += (sizeOfRawData + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::ObjectPointer:
+			case ObjectType::NumberVariable:
+			case ObjectType::GraphicsContext:
+			case ObjectType::ExternalReferenceNAME:
+			case ObjectType::ExternalObjectPointer:
+			case ObjectType::AuxiliaryControlDesignatorType2:
+			{
+				// No additional length
+			}
+			break;
+
+			case ObjectType::StringVariable:
+			{
+				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[3]) | static_cast<uint16_t>(buffer[4]) << 8);
+				retVal += sizeOfValue;
+			}
+			break;
+
+			case ObjectType::FontAttributes:
+			case ObjectType::LineAttributes:
+			case ObjectType::FillAttributes:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[7] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::InputAttributes:
+			{
+				const std::uint32_t sizeOfValidationString = buffer[4];
+				const std::uint32_t sizeOfMacros = (buffer[5 + sizeOfValidationString] * 2);
+				retVal += (sizeOfMacros + sizeOfValidationString);
+			}
+			break;
+
+			case ObjectType::ExtendedInputAttributes:
+			{
+				const std::uint32_t numberOfCodePlanes = buffer[5];
+				retVal += (numberOfCodePlanes * 2); // Doesn't include the character ranges, need to handle those externally
+			}
+			break;
+
+			case ObjectType::Macro:
+			{
+				const std::uint32_t numberOfMacroBytes = (static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8));
+				retVal += numberOfMacroBytes;
+			}
+			break;
+
+			case ObjectType::ColourMap:
+			{
+				const std::uint32_t numberIndexes = (static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8));
+				retVal += numberIndexes;
+			}
+			break;
+
+			case ObjectType::WindowMask:
+			{
+				const std::uint32_t sizeOfReferences = (buffer[14] * 2);
+				const std::uint32_t numberObjects = (buffer[15] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
+				retVal += (sizeOfMacros + numberObjects + sizeOfReferences);
+			}
+			break;
+
+			case ObjectType::KeyGroup:
+			{
+				const std::uint32_t numberObjects = (buffer[8] * 2);
+				const std::uint32_t sizeOfMacros = (buffer[9] * 2);
+				retVal += (sizeOfMacros + numberObjects);
+			}
+			break;
+
+			case ObjectType::ObjectLabelRefrence:
+			{
+				const std::uint32_t sizeOfLabeledObjects = ((static_cast<uint16_t>(buffer[4]) | static_cast<uint16_t>(buffer[5]) << 8) * 7);
+				retVal += sizeOfLabeledObjects;
+			}
+			break;
+
+			case ObjectType::ExternalObjectDefinition:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[12] * 2);
+				retVal += sizeOfObjects;
+			}
+			break;
+
+			case ObjectType::Animation:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[15] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
+				retVal += (sizeOfMacros + sizeOfObjects);
+			}
+			break;
+
+			case ObjectType::AuxiliaryFunctionType1:
+			case ObjectType::AuxiliaryFunctionType2:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[5] * 6);
+				retVal += sizeOfObjects;
+			}
+			break;
+
+			case ObjectType::AuxiliaryInputType1:
+			case ObjectType::AuxiliaryInputType2:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[6] * 6);
+				retVal += sizeOfObjects;
+			}
+			break;
+
+			default:
+			{
+				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object total length - type " + static_cast<int>(buffer[2]));
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	void VirtualTerminalClient::process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor) const
+	{
+		auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
+		auto height = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
+		buffer[3] = (width & 0xFF);
+		buffer[4] = (width >> 8);
+		buffer[5] = (height & 0xFF);
+		buffer[6] = (height >> 8);
+	}
+
+	bool VirtualTerminalClient::resize_object(std::uint8_t *buffer, float scaleFactor, ObjectType type)
+	{
+		bool retVal = false;
+
+		if (get_is_object_scalable(type))
+		{
+			switch (type)
+			{
+				case ObjectType::DataMask:
+				{
+					const std::uint8_t childrenToFollow = buffer[6];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[10 + (6 * i)]) | (static_cast<std::int16_t>(buffer[11 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[12 + (6 * i)]) | (static_cast<std::int16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[10 + (6 * i)] = (childX & 0xFF);
+						buffer[11 + (6 * i)] = (childX >> 8);
+						buffer[12 + (6 * i)] = (childY & 0xFF);
+						buffer[13 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::AlarmMask:
+				{
+					const std::uint8_t childrenToFollow = buffer[8];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[12 + (6 * i)]) | (static_cast<std::int16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[14 + (6 * i)]) | (static_cast<std::int16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[12 + (6 * i)] = (childX & 0xFF);
+						buffer[13 + (6 * i)] = (childX >> 8);
+						buffer[14 + (6 * i)] = (childY & 0xFF);
+						buffer[15 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::Container:
+				{
+					std::uint8_t childrenToFollow = buffer[8];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Iterate over the list of children and move them proportionally to the new size
+					// The container is 10 bytes, followed by children with 2 bytes of ID, 2 of X, and 2 of Y
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[12 + (6 * i)]) | (static_cast<std::int16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[14 + (6 * i)]) | (static_cast<std::int16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[12 + (6 * i)] = (childX & 0xFF);
+						buffer[13 + (6 * i)] = (childX >> 8);
+						buffer[14 + (6 * i)] = (childY & 0xFF);
+						buffer[15 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::Button:
+				{
+					std::uint8_t childrenToFollow = buffer[11];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Iterate over the list of children and move them proportionally to the new size
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childWidth = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[15 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[16 + (6 * i)]) << 8))) * scaleFactor);
+						auto childHeight = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[17 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[18 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[15 + (6 * i)] = (childWidth & 0xFF);
+						buffer[16 + (6 * i)] = (childWidth >> 8);
+						buffer[17 + (6 * i)] = (childHeight & 0xFF);
+						buffer[18 + (6 * i)] = (childHeight >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::InputBoolean:
+				{
+					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
+
+					// Modify the object in memory
+					buffer[4] = (width & 0xFF);
+					buffer[5] = (width >> 8);
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::InputString:
+				case ObjectType::InputNumber:
+				case ObjectType::InputList:
+				case ObjectType::OutputString:
+				case ObjectType::OutputNumber:
+				case ObjectType::OutputList:
+				case ObjectType::OutputLinearBarGraph:
+				{
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::OutputLine:
+				case ObjectType::OutputRectangle:
+				case ObjectType::OutputEllipse:
+				{
+					// Modify the object in memory
+					auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
+					auto height = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[7]) | (static_cast<std::uint16_t>(buffer[8]) << 8))) * scaleFactor);
+					buffer[5] = (width & 0xFF);
+					buffer[6] = (width >> 8);
+					buffer[7] = (height & 0xFF);
+					buffer[8] = (height >> 8);
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::OutputPolygon:
+				{
+					const std::uint8_t numberOfPoints = buffer[12];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Reposition the child points
+					for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
+					{
+						auto xPosition = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[14 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (4 * i)]) << 8))) * scaleFactor);
+						auto yPosition = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[16 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[17 + (4 * i)]) << 8))) * scaleFactor);
+						buffer[14 + (4 * i)] = (xPosition & 0xFF);
+						buffer[15 + (4 * i)] = (xPosition >> 8);
+						buffer[16 + (4 * i)] = (yPosition & 0xFF);
+						buffer[17 + (4 * i)] = (yPosition >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::OutputMeter:
+				case ObjectType::PictureGraphic:
+				{
+					// Modify the object in memory
+					auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
+					buffer[3] = (width & 0xFF);
+					buffer[4] = (width >> 8);
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::OutputArchedBarGraph:
+				{
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[12]) | (static_cast<std::uint16_t>(buffer[13]) << 8))) * scaleFactor);
+					buffer[12] = (width & 0xFF);
+					buffer[13] = (width >> 8);
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::Animation:
+				{
+					std::uint8_t childrenToFollow = buffer[15];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Iterate over the list of children and move them proportionally to the new size
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[20 + (6 * i)]) | (static_cast<std::int16_t>(buffer[21 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[22 + (6 * i)]) | (static_cast<std::int16_t>(buffer[23 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[20 + (6 * i)] = (childX & 0xFF);
+						buffer[21 + (6 * i)] = (childX >> 8);
+						buffer[22 + (6 * i)] = (childY & 0xFF);
+						buffer[23 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::Key:
+				{
+					const std::uint8_t childrenToFollow = buffer[5];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[11 + (6 * i)]) | (static_cast<std::int16_t>(buffer[12 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[9 + (6 * i)] = (childX & 0xFF);
+						buffer[10 + (6 * i)] = (childX >> 8);
+						buffer[11 + (6 * i)] = (childY & 0xFF);
+						buffer[12 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::FontAttributes:
+				{
+					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::AuxiliaryFunctionType1:
+				case ObjectType::AuxiliaryFunctionType2:
+				case ObjectType::AuxiliaryInputType2:
+				{
+					std::uint8_t childrenToFollow = buffer[5];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[8 + (6 * i)]) | (static_cast<std::int16_t>(buffer[9 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[10 + (6 * i)]) | (static_cast<std::int16_t>(buffer[11 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[8 + (6 * i)] = (childX & 0xFF);
+						buffer[9 + (6 * i)] = (childX >> 8);
+						buffer[10 + (6 * i)] = (childY & 0xFF);
+						buffer[11 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::AuxiliaryInputType1:
+				{
+					std::uint8_t childrenToFollow = buffer[6];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8))) * scaleFactor);
+						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[11 + (6 * i)]) | (static_cast<std::int16_t>(buffer[12 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[9 + (6 * i)] = (childX & 0xFF);
+						buffer[10 + (6 * i)] = (childX >> 8);
+						buffer[11 + (6 * i)] = (childY & 0xFF);
+						buffer[12 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					CANStackLogger::debug("[VT]: Skipping resize of non-resizable object type " +
+					                      isobus::to_string(static_cast<int>(type)));
+					retVal = false;
+				}
+				break;
+			}
+		}
+		else
+		{
+			CANStackLogger::debug("[VT]: Skipping resize of non-resizable object type " +
+			                      isobus::to_string(static_cast<int>(type)));
+			retVal = true;
 		}
 		return retVal;
 	}

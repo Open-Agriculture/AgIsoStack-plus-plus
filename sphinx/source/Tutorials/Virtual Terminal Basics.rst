@@ -195,6 +195,11 @@ Furthermore, a hash is generated for the object pool. This is a unique string th
 If your object pool is too large to store in memory, or you are on an embedded platform with limited resources, you may instead want to use the :code:`register_object_pool_data_chunk_callback` method instead which will get smaller chunks of data from you as the upload proceeds.
 This can be used to read from some external device if needed in segments or just to save RAM.
 
+You can also have the CAN stack automatically scale your object pool to match the dimensions of whatever VT it ends up loading to. 
+This can be helpful if you designed your object pool for a certain data mask size, but need the pool to load on VTs with different resolutions or VTs that support different fonts than you designed your pool with.
+To do this, just tell the client what sizes you used when creating your object pool with the :code:`set_object_pool_scaling` function. The documentation for that funcation can be found `in our api docs <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a677ff706f3ebe65e1ea9972e0a7304da>`_.
+
+
 .. note::
 
     Since we are now using a function in the "isobus/utility" folder to load this IOP file, we will also need to link to the CAN stack's utility library in our CMakeLists.txt file. You can do this by adding :code:`isobus::Utility` to your :code:`target_link_libraries` statement. We'll also need to add some CMake to move the IOP file to the binary location, so that when the program is compiled, the IOP will end up in a location accessable to your program.

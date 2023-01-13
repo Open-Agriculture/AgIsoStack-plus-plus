@@ -9,6 +9,9 @@
 #include <vector>
 #include <atomic>
 
+// clang-format off
+//! @cond Doxygen_Suppress
+
 using  namespace  std;
 
 class INNOMAKERUSB2CANLIB_EXP InnoMakerUsb2CanLib {
@@ -194,3 +197,6 @@ private:
 public:
 	int innomaker_MAX_TX_URBS = 10;
 };
+
+// clang-format on
+//! @endcond
