@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file innomaker_usb2can_plugin.cpp
+/// @file innomaker_usb2can_windows_plugin.cpp
 ///
 /// @brief An interface for using an INNO-Maker USB2CAN
 /// @attention Use of this plugin may affect your license, as the LGPL-2.1 libusb will be linked to.

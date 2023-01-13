@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file innomaker_usb2can_plugin.hpp
+/// @file innomaker_usb2can_windows_plugin.hpp
 ///
 /// @brief An interface for using an InnoMaker USB2CAN device.
 /// @attention This is not legal advice. The InnoMaker USB2CAN driver uses libusb, which is
@@ -51,6 +51,7 @@ public:
 
 	/// @brief Constructor for the Windows version of the InnoMaker USB2CAN Windows CAN driver
 	/// @param[in] channel The channel to use by index, passed directly to the consuming driver
+	/// @param[in] baudrate The baud rate to configure the device for. Typically 250k baud
 	explicit InnoMakerUSB2CANWindowsPlugin(int channel, Baudrate baudrate = B250k);
 
 	/// @brief The destructor for InnoMakerUSB2CANWindowsPlugin
@@ -85,7 +86,7 @@ private:
 	static std::unique_ptr<InnoMakerUsb2CanLib> driverInstance; ///< The driver itself
 	const int channel; ///< Stores the channel associated with this object
 	const std::uint32_t baudrate; ///< Stores the baud rate associated with this object
-	std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can> txContexts; /// Stores Tx tickets for the driver
+	std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can> txContexts; ///< Stores Tx tickets for the driver
 };
 
 #endif // INNOMAKER_USB2CAN_PLUGIN_HPP
