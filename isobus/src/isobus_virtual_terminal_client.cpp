@@ -1784,9 +1784,9 @@ namespace isobus
 
 					for (std::uint32_t i = 0; i < objectPools.size(); i++)
 					{
-						if ((nullptr != objectPools[i].objectPoolDataPointer) &&
-						    (objectPools[i].objectPoolSize > 0) &&
-						    (!objectPools[i].useDataCallback))
+						if (((nullptr != objectPools[i].objectPoolDataPointer) ||
+						     (nullptr != objectPools[i].dataCallback)) &&
+						    (objectPools[i].objectPoolSize > 0))
 						{
 							if (!objectPools[i].uploaded)
 							{
@@ -1806,6 +1806,7 @@ namespace isobus
 									                                                                         process_callback,
 									                                                                         this,
 									                                                                         process_internal_object_pool_upload_callback);
+
 									if (transmitSuccessful)
 									{
 										currentObjectPoolState = CurrentObjectPoolUploadState::InProgress;
@@ -1832,6 +1833,11 @@ namespace isobus
 								// Transfer is in progress. Nothing to do now.
 								break;
 							}
+						}
+						else
+						{
+							CANStackLogger::CAN_stack_log("[VT]: An object pool was supplied with an invalid size or pointer. Ignoring it.");
+							objectPools[i].uploaded = true;
 						}
 					}
 
@@ -3101,7 +3107,7 @@ namespace isobus
 		}
 	}
 
-	bool VirtualTerminalClient::process_internal_object_pool_upload_callback(std::uint32_t,
+	bool VirtualTerminalClient::process_internal_object_pool_upload_callback(std::uint32_t callbackIndex,
 	                                                                         std::uint32_t bytesOffset,
 	                                                                         std::uint32_t numberOfBytesNeeded,
 	                                                                         std::uint8_t *chunkBuffer,
@@ -3115,6 +3121,7 @@ namespace isobus
 		{
 			VirtualTerminalClient *parentVTClient = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
 			std::uint32_t poolIndex = std::numeric_limits<std::uint32_t>::max();
+			bool usingExternalCallback = false;
 
 			// Need to figure out which pool we're currently uploading
 			for (std::uint32_t i = 0; i < parentVTClient->objectPools.size(); i++)
@@ -3122,6 +3129,7 @@ namespace isobus
 				if (!parentVTClient->objectPools[i].uploaded)
 				{
 					poolIndex = i;
+					usingExternalCallback = parentVTClient->objectPools[i].useDataCallback;
 					break;
 				}
 			}
@@ -3131,16 +3139,34 @@ namespace isobus
 			    (bytesOffset + numberOfBytesNeeded) <= parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
 			{
 				// We've got more data to transfer
-				retVal = true;
-				if (0 == bytesOffset)
+				if (usingExternalCallback)
 				{
-					chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
-					memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
+					// We're using the user's supplied callback to get a chunk of info
+					if (0 == bytesOffset)
+					{
+						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+						retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset, numberOfBytesNeeded - 1, &chunkBuffer[1], parentVTClient);
+					}
+					else
+					{
+						// Subtract off 1 to account for the mux in the first byte of the message
+						retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset - 1, numberOfBytesNeeded, chunkBuffer, parentVTClient);
+					}
 				}
 				else
 				{
-					// Subtract off 1 to account for the mux in the first byte of the message
-					memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+					// We already have the whole pool in RAM
+					retVal = true;
+					if (0 == bytesOffset)
+					{
+						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+						memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
+					}
+					else
+					{
+						// Subtract off 1 to account for the mux in the first byte of the message
+						memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+					}
 				}
 			}
 		}
