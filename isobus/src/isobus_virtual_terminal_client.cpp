@@ -1474,7 +1474,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version, std::uint32_t originalDataMaskDimensions_px)
 	{
 		if ((nullptr != pool) &&
 		    (0 != size))
@@ -1485,6 +1485,7 @@ namespace isobus
 			tempData.objectPoolVectorPointer = nullptr;
 			tempData.dataCallback = nullptr;
 			tempData.objectPoolSize = size;
+			tempData.autoScaleOriginalDimension = originalDataMaskDimensions_px;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -1502,7 +1503,7 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version, std::uint32_t originalDataMaskDimensions_px)
 	{
 		if ((nullptr != pool) &&
 		    (0 != pool->size()))
@@ -1513,6 +1514,7 @@ namespace isobus
 			tempData.objectPoolVectorPointer = pool;
 			tempData.dataCallback = nullptr;
 			tempData.objectPoolSize = pool->size();
+			tempData.autoScaleOriginalDimension = originalDataMaskDimensions_px;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -3468,6 +3470,160 @@ namespace isobus
 					}
 				}
 			}
+		}
+		return retVal;
+	}
+
+	void VirtualTerminalClient::process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor)
+	{
+		std::uint16_t width = (((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
+		std::uint16_t height = (((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
+		buffer[3] = (width & 0xFF);
+		buffer[4] = (width >> 8);
+		buffer[5] = (height & 0xFF);
+		buffer[6] = (height >> 8);
+	}
+
+	bool VirtualTerminalClient::resize_object(std::uint8_t *buffer, float scaleFactor, ObjectType type)
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case ObjectType::Container:
+			{
+				std::uint8_t childrenToFollow = buffer[8];
+
+				// Modify the object in memory
+				process_standard_object_height_and_width(buffer, scaleFactor);
+
+				// Iterate over the list of children and move them proportionally to the new size
+				// The container is 10 bytes, followed by children with 2 bytes of ID, 2 of X, and 2 of Y
+				for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+				{
+					std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[12 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+					std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[14 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
+					buffer[12 + (6 * i)] = (childWidth & 0xFF);
+					buffer[13 + (6 * i)] = (childWidth >> 8);
+					buffer[14 + (6 * i)] = (childHeight & 0xFF);
+					buffer[15 + (6 * i)] = (childHeight >> 8);
+				}
+				retVal = true;
+			}
+			break;
+
+			case ObjectType::Button:
+			{
+				std::uint8_t childrenToFollow = buffer[11];
+
+				// Modify the object in memory
+				process_standard_object_height_and_width(buffer, scaleFactor);
+
+				// Iterate over the list of children and move them proportionally to the new size
+				for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+				{
+					std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[15 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[16 + (6 * i)]) << 8))) * scaleFactor);
+					std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[17 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[18 + (6 * i)]) << 8))) * scaleFactor);
+					buffer[15 + (6 * i)] = (childWidth & 0xFF);
+					buffer[16 + (6 * i)] = (childWidth >> 8);
+					buffer[17 + (6 * i)] = (childHeight & 0xFF);
+					buffer[18 + (6 * i)] = (childHeight >> 8);
+				}
+			}
+			break;
+
+			case ObjectType::InputBoolean:
+			{
+				std::uint16_t width = ((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
+
+				// Modify the object in memory
+				buffer[4] = (width & 0xFF);
+				buffer[5] = (width >> 8);
+			}
+			break;
+
+			case ObjectType::InputString:
+			case ObjectType::InputNumber:
+			case ObjectType::InputList:
+			case ObjectType::OutputString:
+			case ObjectType::OutputNumber:
+			case ObjectType::OutputList:
+			case ObjectType::OutputLinearBarGraph:
+			{
+				// Modify the object in memory
+				process_standard_object_height_and_width(buffer, scaleFactor);
+			}
+			break;
+
+			case ObjectType::OutputLine:
+			case ObjectType::OutputRectangle:
+			case ObjectType::OutputEllipse:
+			{
+				// Modify the object in memory
+				std::uint16_t width = (((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
+				std::uint16_t height = (((static_cast<std::uint16_t>(buffer[7]) | (static_cast<std::uint16_t>(buffer[8]) << 8))) * scaleFactor);
+				buffer[5] = (width & 0xFF);
+				buffer[6] = (width >> 8);
+				buffer[7] = (height & 0xFF);
+				buffer[8] = (height >> 8);
+			}
+			break;
+
+			case ObjectType::OutputPolygon:
+			{
+				const std::uint8_t numberOfPoints = buffer[12];
+
+				// Modify the object in memory
+				process_standard_object_height_and_width(buffer, scaleFactor);
+
+				// Reposition the child points
+				for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
+				{
+					std::uint16_t xPosition = (((static_cast<std::uint16_t>(buffer[14 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (4 * i)]) << 8))) * scaleFactor);
+					std::uint16_t yPosition = (((static_cast<std::uint16_t>(buffer[16 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[17 + (4 * i)]) << 8))) * scaleFactor);
+					buffer[14 + (4 * i)] = (xPosition & 0xFF);
+					buffer[15 + (4 * i)] = (xPosition >> 8);
+					buffer[16 + (4 * i)] = (yPosition & 0xFF);
+					buffer[17 + (4 * i)] = (yPosition >> 8);
+				}
+			}
+			break;
+
+			case ObjectType::OutputMeter:
+			case ObjectType::PictureGraphic:
+			{
+				// Modify the object in memory
+				std::uint16_t width = (((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
+				buffer[3] = (width & 0xFF);
+				buffer[4] = (width >> 8);
+			}
+			break;
+
+			case ObjectType::OutputArchedBarGraph:
+			{
+				// Modify the object in memory
+				process_standard_object_height_and_width(buffer, scaleFactor);
+
+				std::uint16_t width = (((static_cast<std::uint16_t>(buffer[12]) | (static_cast<std::uint16_t>(buffer[13]) << 8))) * scaleFactor);
+				buffer[12] = (width & 0xFF);
+				buffer[13] = (width >> 8);
+			}
+			break;
+
+			// Todo
+			case ObjectType::AuxiliaryFunctionType1:
+			case ObjectType::AuxiliaryInputType1:
+			case ObjectType::AuxiliaryFunctionType2:
+			case ObjectType::AuxiliaryInputType2:
+			{
+			}
+			break;
+
+			default:
+			{
+				retVal = false;
+			}
+			break;
 		}
 		return retVal;
 	}
