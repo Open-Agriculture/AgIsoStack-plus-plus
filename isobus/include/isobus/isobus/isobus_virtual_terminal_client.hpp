@@ -243,6 +243,36 @@ namespace isobus
 			TwoHundredFiftySixColor = 2 ///< 256 Color mode (8 bit)
 		};
 
+		/// @brief Enumerates the various auxiliary input function types
+		enum class AuxiliaryTypeTwoFunctionType : std::uint8_t
+		{
+			BooleanLatching = 0, ///< Two-position switch (maintains position) (Single Pole, Double Throw)
+			AnalogueLatching = 1, ///< Two-way analogue (Maintains position setting)
+			BooleanMomentary = 2, ///< Two-position switch (returns to off) (Momentary Single Pole, Single Throw)
+			AnalogueMomentaryTwoWay = 3, ///< Two-way analogue (returns to centre position - 50%)
+			AnalogueMomentaryOneWay = 4, ///< One-way analogue (returns to 0%)
+			DualBooleanLatching = 5, ///< Three-position switch (maintains position) (Single Pole, Three Positions, Centre Off)
+			DualBooleanMomentary = 6, ///< Three-position switch (returns to off/centre position) (Momentary Single Pole, Three Positions, Centre Off)
+			DualBooleanLatchingUpOnly = 7, ///< Three-position switch (maintains position only in up position) (Single Pole, Three Positions, Centre Off)
+			DualBooleanLatchingDownpOnly = 8, ///< Three-position switch (maintains position only in down position) (Momentary Single Pole, Three Positions, Centre Off)
+			AnalogueMomentaryBooleanLatching = 9, ///< two-way analogue (returns to centre position) with latching Boolean at 0% and 100% positions
+			AnalogueLatchingBooleanLatching = 10, ///< two-way analogue (maintains position setting) with momentary Boolean at 0% and 100% positions
+			QuadratureBooleanMomentary = 11, ///< Two Quadrature mounted Three-position switches (returns to centre position) (Momentary Single Pole, Three Position Single Throw, Centre Off)
+			QuadratureAnalogueLatching = 12, ///< Two Quadrature mounted Two-way analogue (maintains position)
+			QuadratureAnalogueMomentary = 13, ///< Two Quadrature mounted Two-way analogue (returns to centre position - 50%)
+			BidirectionalEncoder = 14, ///< Count increases when turning in the encoders "increase" direction, and decreases when turning in the opposite direction
+			Reserved = 30, ///< 15-30 Reserved
+			ReservedRemoveAssignment = 31 ///< Used for Remove assignment command
+		};
+
+		/// @brief A struct for storing information of a function assigned to an auxiliary input
+		struct AssignedAuxiliaryFunction
+		{
+			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
+			std::uint16_t inputObjectID; ///< The object ID assigned on the auxiliary inputs end
+			AuxiliaryTypeTwoFunctionType functionType; ///< The type of function
+		};
+
 		static constexpr std::uint16_t NULL_OBJECT_ID = 0xFFFF; ///< The NULL Object ID, usually drawn as blank space
 
 		/// @brief The constructor for a VirtualTerminalClient
@@ -304,6 +334,8 @@ namespace isobus
 		typedef void (*VTUserLayoutHideShowCallback)(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer);
 		/// @brief A typedef for a generic VT control audio signal termination callback for convenience
 		typedef void (*VTAudioSignalTerminationCallback)(bool isTerminated, VirtualTerminalClient *parentPointer);
+		/// @brief A typedef for an auxilary input event for convenience
+		typedef void (*AuxiliaryInputCallback)(AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, VirtualTerminalClient *parentPointer);
 
 		// Callbacks for events that happen on the VT
 		/// @brief Allows you to register for a callback when a softkey is pressed or released
@@ -396,6 +428,14 @@ namespace isobus
 		/// @brief Allows you to remove a callback when an audio signal is terminated
 		/// @param[in] value The callback to remove
 		void remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value);
+
+		/// @brief Allows you to register for a callback for when a change in auxiliary input is received
+		/// @param[in] value The AuxiliaryInputCallback to register
+		void register_auxiliary_input_event_callback(AuxiliaryInputCallback value);
+
+		/// @brief Allows you to remove a callback when for a change in auxiliary input is received
+		/// @param[in] value The AuxiliaryInputCallback to remove
+		void remove_auxiliary_input_event_callback(AuxiliaryInputCallback value);
 
 		// Command Messages
 		/// @brief Sends a hide/show object command
@@ -1163,18 +1203,10 @@ namespace isobus
 			bool uploaded; ///< The upload state of this pool
 		};
 
-		/// @brief A struct for storing information of a function assigned to an auxiliary input
-		struct AssignedAuxiliaryFunction
-		{
-			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
-			std::uint16_t inputObjectID; ///< The object ID assigned on the auxiliary inputs end
-			std::uint8_t functionType; ///< The type of function
-		};
-
 		/// @brief A struct for storing information about an auxiliary input device
 		struct AuxiliaryInputDevice
 		{
-			std::uint64_t name; ///< The name of the unit
+			std::uint64_t name; ///< The NAME of the unit
 			std::uint16_t modelIdentificationCode; ///< The model identification code
 			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device
 		};
@@ -1379,6 +1411,16 @@ namespace isobus
 		/// @param[in] parentPointer A context variable that is passed back through the callback
 		void process_audio_signal_termination_callback(bool isTerminated, VirtualTerminalClient *parentPointer);
 
+		/// @brief Calls all registered callbacks for auxiliary input
+		/// @param[in] function The function of the auxiliary input object
+		/// @param[in] value1 The new value1 of the auxiliary input object
+		/// @param[in] value2 The new value2 of the auxiliary input object
+		/// @param[in] parentPointer A context variable that is passed back through the callback
+		void process_auxiliary_input_callback(AssignedAuxiliaryFunction function,
+		                                      std::uint32_t value1,
+		                                      std::uint32_t value2,
+		                                      VirtualTerminalClient *parentPointer);
+
 		/// @brief Processes the internal Tx flags
 		/// @param[in] flag The flag to process
 		/// @param[in] parent A context variable to find the relevant VT client class
@@ -1474,6 +1516,7 @@ namespace isobus
 		std::vector<VTChangeStringValueCallback> changeStringValueCallbacks; ///< A list of all change string value callbacks
 		std::vector<VTUserLayoutHideShowCallback> userLayoutHideShowCallbacks; ///< A list of all user layout hide/show callbacks
 		std::vector<VTAudioSignalTerminationCallback> audioSignalTerminationCallbacks; ///< A list of all control audio signal termination callbacks
+		std::vector<AuxiliaryInputCallback> auxiliaryInputCallbacks; ///< A list of all auxiliary input callbacks
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback; ///< The callback to use to get pool data

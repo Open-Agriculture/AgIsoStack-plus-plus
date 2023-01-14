@@ -276,6 +276,21 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalClient::register_auxiliary_input_event_callback(AuxiliaryInputCallback value)
+	{
+		auxiliaryInputCallbacks.push_back(value);
+	}
+
+	void VirtualTerminalClient::remove_auxiliary_input_event_callback(AuxiliaryInputCallback value)
+	{
+		auto callbackLocation = std::find(auxiliaryInputCallbacks.begin(), auxiliaryInputCallbacks.end(), value);
+
+		if (auxiliaryInputCallbacks.end() != callbackLocation)
+		{
+			auxiliaryInputCallbacks.erase(callbackLocation);
+		}
+	}
+
 	bool VirtualTerminalClient::send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::HideShowObjectCommand),
@@ -2289,36 +2304,6 @@ namespace isobus
 	bool VirtualTerminalClient::send_aux_n_preferred_assignment()
 	{
 		// TODO load preferred assignment from saved configuration
-		// std::uint8_t numberOfAuxiliaryInputUnits = auxiliaryInputDevices.size();
-		// if (auxiliaryInputDevices.size() > 127)
-		// {
-		// 	numberOfAuxiliaryInputUnits = 127;
-		// 	CANStackLogger::CAN_stack_log("[AUX-N] Unable to send all units for preferred assignment command, too many AUX-N units");
-		// }
-
-		// std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), numberOfAuxiliaryInputUnits };
-		// for (int i = 0; i < numberOfAuxiliaryInputUnits; i++)
-		// {
-		// 	const AuxiliaryInputDevice &aux = auxiliaryInputDevices[i];
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 8));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 16));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 24));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 32));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 40));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 48));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.name >> 56));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.modelIdentificationCode));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.modelIdentificationCode >> 8));
-		// 	buffer.push_back(static_cast<std::uint8_t>(aux.functions.size()));
-		// 	for (const AssignedAuxiliaryFunction &assigned : aux.functions)
-		// 	{
-		// 		buffer.push_back(static_cast<std::uint8_t>(assigned.functionObjectID));
-		// 		buffer.push_back(static_cast<std::uint8_t>(assigned.functionObjectID >> 8));
-		// 		buffer.push_back(static_cast<std::uint8_t>(assigned.inputObjectID));
-		// 		buffer.push_back(static_cast<std::uint8_t>(assigned.inputObjectID >> 8));
-		// 	}
-		// }
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
@@ -2517,6 +2502,17 @@ namespace isobus
 			if (nullptr != parentPointer->audioSignalTerminationCallbacks[i])
 			{
 				parentPointer->audioSignalTerminationCallbacks[i](isTerminated, parentPointer);
+			}
+		}
+	}
+
+	void VirtualTerminalClient::process_auxiliary_input_callback(AssignedAuxiliaryFunction function, std::uint32_t value1, std::uint32_t value2, VirtualTerminalClient *parentPointer)
+	{
+		for (std::size_t i = 0; i < parentPointer->auxiliaryInputCallbacks.size(); i++)
+		{
+			if (nullptr != parentPointer->auxiliaryInputCallbacks[i])
+			{
+				parentPointer->auxiliaryInputCallbacks[i](function, value1, value2, parentPointer);
 			}
 		}
 	}
@@ -2945,21 +2941,29 @@ namespace isobus
 									if (aux.name == isoName)
 									{
 										found = true;
-										AssignedAuxiliaryFunction assignment{ functionObjectID, inputObjectID, functionType };
-										auto location = std::find(aux.functions.begin(), aux.functions.end(), assignment);
-										if (location == aux.functions.end())
+										if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
 										{
-											aux.functions.push_back({ functionObjectID, inputObjectID, functionType });
-											if (storeAsPreferred)
+											AssignedAuxiliaryFunction assignment{ functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType) };
+											auto location = std::find(aux.functions.begin(), aux.functions.end(), assignment);
+											if (location == aux.functions.end())
 											{
-												// TODO save preferred assignment to persistent configuration
+												aux.functions.push_back(assignment);
+												if (storeAsPreferred)
+												{
+													// TODO save preferred assignment to persistent configuration
+												}
+											}
+											else
+											{
+												hasError = true;
+												isAlreadyAssigned = true;
+												CANStackLogger::CAN_stack_log("[AUX-N]: Unable store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 											}
 										}
 										else
 										{
 											hasError = true;
-											isAlreadyAssigned = true;
-											CANStackLogger::CAN_stack_log("[AUX-N]: Unable store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+											CANStackLogger::CAN_stack_log("[AUX-N]: Unable store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
 										}
 										break;
 									}
@@ -2995,7 +2999,7 @@ namespace isobus
 								{
 									if (assignment.inputObjectID == inputObjectID)
 									{
-										// TODO: call callback
+										parentVT->process_auxiliary_input_callback(assignment, value1, value2, parentVT);
 									}
 								}
 							}
