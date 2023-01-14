@@ -147,6 +147,7 @@ namespace isobus
 
 	private:
 		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH; ///< The max payload this protocol can support
+		static constexpr std::uint32_t MIN_PROTOCOL_DATA_LENGTH = 1786; ///< The min payload this protocol can support
 		static constexpr std::uint32_t TR_TIMEOUT_MS = 200; ///< The Tr timeout as defined by the standard
 		static constexpr std::uint32_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
 		static constexpr std::uint32_t T2_3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard

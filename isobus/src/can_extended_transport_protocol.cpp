@@ -340,7 +340,7 @@ namespace isobus
 		bool retVal = false;
 
 		if ((messageLength < MAX_PROTOCOL_DATA_LENGTH) &&
-		    (messageLength > CAN_DATA_LENGTH) &&
+		    (messageLength >= MIN_PROTOCOL_DATA_LENGTH) &&
 		    (nullptr != destination) &&
 		    ((nullptr != dataBuffer) ||
 		     (nullptr != frameChunkCallback)) &&
