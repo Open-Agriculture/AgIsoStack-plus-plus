@@ -291,6 +291,16 @@ namespace isobus
 		}
 	}
 
+	isobus::VirtualTerminalClient::AssignedAuxiliaryFunction::AssignedAuxiliaryFunction(const std::uint16_t functionObjectID, const std::uint16_t inputObjectID, const AuxiliaryTypeTwoFunctionType functionType) :
+	  functionObjectID(functionObjectID), inputObjectID(inputObjectID), functionType(functionType)
+	{
+	}
+
+	bool VirtualTerminalClient::AssignedAuxiliaryFunction::operator==(const AssignedAuxiliaryFunction &other) const
+	{
+		return (functionObjectID == other.functionObjectID) && (inputObjectID == other.inputObjectID) && (functionType == other.functionType);
+	}
+
 	bool VirtualTerminalClient::send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::HideShowObjectCommand),
@@ -2943,9 +2953,9 @@ namespace isobus
 										found = true;
 										if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
 										{
-											AssignedAuxiliaryFunction assignment{ functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType) };
+											AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
 											auto location = std::find(aux.functions.begin(), aux.functions.end(), assignment);
-											if (location == aux.functions.end())
+											if (aux.functions.end() == location)
 											{
 												aux.functions.push_back(assignment);
 												if (storeAsPreferred)
