@@ -266,8 +266,16 @@ namespace isobus
 		};
 
 		/// @brief A struct for storing information of a function assigned to an auxiliary input
-		struct AssignedAuxiliaryFunction
+		class AssignedAuxiliaryFunction
 		{
+		public:
+			/// @brief Constructs a `AssignedAuxiliaryFunction`, sets default values
+			AssignedAuxiliaryFunction(std::uint16_t functionObjectID, std::uint16_t inputObjectID, AuxiliaryTypeTwoFunctionType functionType);
+
+			/// @brief Allows easy comparison of two `AssignedAuxiliaryFunction` objects
+			/// @param obj the object to compare against
+			bool operator==(const AssignedAuxiliaryFunction &other) const;
+
 			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
 			std::uint16_t inputObjectID; ///< The object ID assigned on the auxiliary inputs end
 			AuxiliaryTypeTwoFunctionType functionType; ///< The type of function
@@ -1206,8 +1214,8 @@ namespace isobus
 		/// @brief A struct for storing information about an auxiliary input device
 		struct AuxiliaryInputDevice
 		{
-			std::uint64_t name; ///< The NAME of the unit
-			std::uint16_t modelIdentificationCode; ///< The model identification code
+			const std::uint64_t name; ///< The NAME of the unit
+			const std::uint16_t modelIdentificationCode; ///< The model identification code
 			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device
 		};
 
