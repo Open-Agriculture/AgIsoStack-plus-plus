@@ -1163,6 +1163,22 @@ namespace isobus
 			bool uploaded; ///< The upload state of this pool
 		};
 
+		/// @brief A struct for storing information of a function assigned to an auxiliary input
+		struct AssignedAuxiliaryFunction
+		{
+			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
+			std::uint16_t inputObjectID; ///< The object ID assigned on the auxiliary inputs end
+			std::uint8_t functionType; ///< The type of function
+		};
+
+		/// @brief A struct for storing information about an auxiliary input device
+		struct AuxiliaryInputDevice
+		{
+			std::uint64_t name; ///< The name of the unit
+			std::uint16_t modelIdentificationCode; ///< The model identification code
+			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device
+		};
+
 		// Object Pool Managment
 		/// @brief Sends the delete object pool message
 		/// @returns true if the message was sent
@@ -1249,6 +1265,17 @@ namespace isobus
 		/// @brief Sends the working set master message
 		/// @returns true if the message was sent
 		bool send_working_set_master();
+
+		/// @brief Send the preferred auxiliary control type 2 assignment command
+		/// @returns true if the message was sent successfully
+		bool send_aux_n_preferred_assignment();
+
+		/// @brief Send the auxiliary control type 2 assignment reponse message
+		/// @param[in] functionObjectID The object ID of the function
+		/// @param[in] hasError true if the assignment failed
+		/// @param[in] isAlreadyAssigned true if the function is already assigned
+		/// @returns true if the message was sent successfully
+		bool send_aux_n_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned);
 
 		/// @brief Sets the state machine state and updates the associated timestamp
 		/// @param[in] value The new state for the state machine
@@ -1429,6 +1456,7 @@ namespace isobus
 		std::uint32_t stateMachineTimestamp_ms; ///< Timestamp from the last state machine update
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
+		std::vector<AuxiliaryInputDevice> auxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::thread *workerThread; ///< The worker thread that updates this interface
 		bool initialized; ///< Stores the client initialization state
 		bool sendWorkingSetMaintenenace; ///< Used internally to enable and disable cyclic sending of the maintenance message
