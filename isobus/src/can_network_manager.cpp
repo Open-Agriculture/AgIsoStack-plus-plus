@@ -287,7 +287,7 @@ namespace isobus
 
 	void CANNetworkManager::on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>)
 	{
-		CANStackLogger::CAN_stack_log("[NM]: A partner was deleted.");
+		CANStackLogger::CAN_stack_log("[NM]: Partner " + isobus::to_string(static_cast<int>(partner->get_address())) + " was deleted.");
 
 		for (auto activeControlFunction = activeControlFunctions.begin(); activeControlFunction != activeControlFunctions.end(); activeControlFunction++)
 		{
