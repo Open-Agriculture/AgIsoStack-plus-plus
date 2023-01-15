@@ -29,6 +29,8 @@
 /// @brief This namespace encompases all of the ISO11783 stack's functionality to reduce global namespace pollution
 namespace isobus
 {
+	class PartneredControlFunction;
+
 	//================================================================================================
 	/// @class CANNetworkManager
 	///
@@ -115,6 +117,10 @@ namespace isobus
 		/// @param[in] rxFrame Frame to process
 		/// @param[in] parentClass A generic context variable
 		static void can_lib_process_rx_message(HardwareInterfaceCANFrame &rxFrame, void *parentClass);
+
+		/// @brief Informs the network manager that a partner was deleted so that it can be purged from the address/cf tables
+		/// @param[in] partner Pointer to the partner being deleted
+		void on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>);
 
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
