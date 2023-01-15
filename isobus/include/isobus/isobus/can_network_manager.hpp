@@ -181,6 +181,9 @@ namespace isobus
 		/// @param[in] rxFrame Raw frames coming in from the bus
 		void update_control_functions(HardwareInterfaceCANFrame &rxFrame);
 
+		/// @brief Checks if new partners have been created and matches them to existing control functions
+		void update_new_partners();
+
 		/// @brief Builds a CAN frame from a frame's discrete components
 		/// @param[in] portIndex The CAN channel index of the CAN message being processed
 		/// @param[in] sourceAddress The source address to send the CAN message from

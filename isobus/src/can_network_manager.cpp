@@ -178,10 +178,14 @@ namespace isobus
 
 	void CANNetworkManager::update()
 	{
+		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
+
 		if (!initialized)
 		{
 			initialize();
 		}
+
+		update_new_partners();
 
 		process_rx_messages();
 
@@ -189,7 +193,7 @@ namespace isobus
 
 		if (InternalControlFunction::get_any_internal_control_function_changed_address({}))
 		{
-			for (std::uint32_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
+			for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
 			{
 				InternalControlFunction *currentInternalControlFunction = InternalControlFunction::get_internal_control_function(i);
 
@@ -207,7 +211,7 @@ namespace isobus
 			}
 		}
 
-		for (uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
+		for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 		{
 			CANLibProtocol *currentProtocol = nullptr;
 
@@ -394,7 +398,8 @@ namespace isobus
 	void CANNetworkManager::update_control_functions(HardwareInterfaceCANFrame &rxFrame)
 	{
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
-		    (CAN_DATA_LENGTH == rxFrame.dataLength))
+		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
+		    (rxFrame.channel < CAN_PORT_MAXIMUM))
 		{
 			std::uint64_t claimedNAME;
 			ControlFunction *foundControlFunction = nullptr;
@@ -408,15 +413,17 @@ namespace isobus
 			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[6]) << 48);
 			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[7]) << 56);
 
-			for (std::uint32_t i = 0; i < activeControlFunctions.size(); i++)
+			for (std::size_t i = 0; i < activeControlFunctions.size(); i++)
 			{
-				if (claimedNAME == activeControlFunctions[i]->controlFunctionNAME.get_full_name())
+				if ((claimedNAME == activeControlFunctions[i]->controlFunctionNAME.get_full_name()) &&
+				    (rxFrame.channel == activeControlFunctions[i]->get_can_port()))
 				{
 					// Device already in the active list
 					foundControlFunction = activeControlFunctions[i];
 					break;
 				}
-				else if (activeControlFunctions[i]->address == CANIdentifier(rxFrame.identifier).get_source_address())
+				else if ((activeControlFunctions[i]->address == CANIdentifier(rxFrame.identifier).get_source_address()) &&
+				         (rxFrame.channel == activeControlFunctions[i]->get_can_port()))
 				{
 					// If this CF has the same address as the one claiming, we need set it to 0xFE (null address)
 					activeControlFunctions[i]->address = CANIdentifier::NULL_ADDRESS;
@@ -425,14 +432,16 @@ namespace isobus
 
 			// Maybe it's in the inactive list (device reconnected)
 			// Always have to iterate the list to check for duplicate addresses
-			for (std::uint32_t i = 0; i < inactiveControlFunctions.size(); i++)
+			for (std::size_t i = 0; i < inactiveControlFunctions.size(); i++)
 			{
-				if (claimedNAME == inactiveControlFunctions[i]->controlFunctionNAME.get_full_name())
+				if ((claimedNAME == inactiveControlFunctions[i]->controlFunctionNAME.get_full_name()) &&
+				    (rxFrame.channel == inactiveControlFunctions[i]->get_can_port()))
 				{
 					// Device already in the inactive list
 					foundControlFunction = inactiveControlFunctions[i];
+					break;
 				}
-				else
+				else if (rxFrame.channel == inactiveControlFunctions[i]->get_can_port())
 				{
 					// If this CF has the same address as the one claiming, we need set it to 0xFE (null address)
 					inactiveControlFunctions[i]->address = CANIdentifier::NULL_ADDRESS;
@@ -442,9 +451,10 @@ namespace isobus
 			if (nullptr == foundControlFunction)
 			{
 				// If we still haven't found it, it might be a partner. Check the list of partners.
-				for (std::uint32_t i = 0; i < PartneredControlFunction::partneredControlFunctionList.size(); i++)
+				for (std::size_t i = 0; i < PartneredControlFunction::partneredControlFunctionList.size(); i++)
 				{
 					if ((nullptr != PartneredControlFunction::partneredControlFunctionList[i]) &&
+					    (PartneredControlFunction::partneredControlFunctionList[i]->get_can_port() == rxFrame.channel) &&
 					    (PartneredControlFunction::partneredControlFunctionList[i]->check_matches_name(NAME(claimedNAME))))
 					{
 						PartneredControlFunction::partneredControlFunctionList[i]->address = CANIdentifier(rxFrame.identifier).get_source_address();
@@ -468,6 +478,66 @@ namespace isobus
 			{
 				foundControlFunction->address = CANIdentifier(rxFrame.identifier).get_source_address();
 			}
+		}
+	}
+
+	void CANNetworkManager::update_new_partners()
+	{
+		if (PartneredControlFunction::anyPartnerNeedsInitializing)
+		{
+			for (auto &partner : PartneredControlFunction::partneredControlFunctionList)
+			{
+				if ((nullptr != partner) && (!partner->initialized))
+				{
+					bool foundReplaceableControlFunction = false;
+
+					// Check this partner against the existing CFs
+					for (auto currentInactiveControlFunction = inactiveControlFunctions.begin(); currentInactiveControlFunction != inactiveControlFunctions.end(); currentInactiveControlFunction++)
+					{
+						if ((partner->check_matches_name((*currentInactiveControlFunction)->get_NAME())) &&
+						    (partner->get_can_port() == (*currentInactiveControlFunction)->get_can_port()) &&
+						    (ControlFunction::Type::External == (*currentInactiveControlFunction)->get_type()))
+						{
+							foundReplaceableControlFunction = true;
+
+							// This CF matches the filter and is not an internal or already partnered CF
+							CANStackLogger::CAN_stack_log("[NM]: Remapping new partner control function to inactive external control function at address " + isobus::to_string(static_cast<int>((*currentInactiveControlFunction)->get_address())));
+
+							// Populate the partner's data
+							partner->address = (*currentInactiveControlFunction)->get_address();
+							partner->controlFunctionNAME = (*currentInactiveControlFunction)->get_NAME();
+							partner->initialized = true;
+							inactiveControlFunctions.erase(currentInactiveControlFunction);
+							break;
+						}
+					}
+
+					if (!foundReplaceableControlFunction)
+					{
+						for (auto currentActiveControlFunction = activeControlFunctions.begin(); currentActiveControlFunction != activeControlFunctions.end(); currentActiveControlFunction++)
+						{
+							if ((partner->check_matches_name((*currentActiveControlFunction)->get_NAME())) &&
+							    (partner->get_can_port() == (*currentActiveControlFunction)->get_can_port()) &&
+							    (ControlFunction::Type::External == (*currentActiveControlFunction)->get_type()))
+							{
+								// This CF matches the filter and is not an internal or already partnered CF
+								CANStackLogger::CAN_stack_log("[NM]: Remapping new partner control function to an active external control function at address " + isobus::to_string(static_cast<int>((*currentActiveControlFunction)->get_address())));
+
+								// Populate the partner's data
+								partner->address = (*currentActiveControlFunction)->get_address();
+								partner->controlFunctionNAME = (*currentActiveControlFunction)->get_NAME();
+								partner->initialized = true;
+								controlFunctionTable[partner->get_can_port()][partner->address] = partner;
+								activeControlFunctions.erase(currentActiveControlFunction);
+								activeControlFunctions.push_back(partner);
+								break;
+							}
+						}
+					}
+					partner->initialized = true;
+				}
+			}
+			PartneredControlFunction::anyPartnerNeedsInitializing = false;
 		}
 	}
 
