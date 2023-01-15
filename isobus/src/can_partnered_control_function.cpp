@@ -10,6 +10,7 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 
 #include <algorithm>
 
@@ -49,6 +50,7 @@ namespace isobus
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
 		auto thisObject = std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), this);
 		*thisObject = nullptr; // Don't erase, in case the object was already deleted. Just make room for a new partner.
+		CANNetworkManager::CANNetwork.on_partner_deleted(this, {}); // Tell the network manager to purge this partner from all tables
 	}
 
 	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)

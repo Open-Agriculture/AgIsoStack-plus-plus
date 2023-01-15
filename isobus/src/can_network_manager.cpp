@@ -285,6 +285,39 @@ namespace isobus
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
 
+	void CANNetworkManager::on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>)
+	{
+		CANStackLogger::CAN_stack_log("[NM]: A partner was deleted.");
+
+		for (auto activeControlFunction = activeControlFunctions.begin(); activeControlFunction != activeControlFunctions.end(); activeControlFunction++)
+		{
+			if ((partner->get_can_port() == (*activeControlFunction)->get_can_port()) &&
+			    (partner->get_NAME() == (*activeControlFunction)->get_NAME()))
+			{
+				(*activeControlFunction) = nullptr;
+				activeControlFunctions.erase(activeControlFunction);
+				if (partner->address < NULL_CAN_ADDRESS)
+				{
+					controlFunctionTable[partner->get_can_port()][partner->address] = nullptr;
+					// If the control function was active, replace it with an external control function
+					activeControlFunctions.push_back(new ControlFunction(partner->get_NAME(), partner->get_address(), partner->get_can_port()));
+					CANStackLogger::CAN_stack_log("[NM]: Since the deleted partner was active, it has been replaced with an external control function.");
+				}
+				break;
+			}
+		}
+		for (auto inactiveControlFunction = inactiveControlFunctions.begin(); inactiveControlFunction != inactiveControlFunctions.end(); inactiveControlFunction++)
+		{
+			if ((partner->get_can_port() == (*inactiveControlFunction)->get_can_port()) &&
+			    (partner->get_NAME() == (*inactiveControlFunction)->get_NAME()))
+			{
+				(*inactiveControlFunction) = nullptr;
+				inactiveControlFunctions.erase(inactiveControlFunction);
+				break;
+			}
+		}
+	}
+
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
