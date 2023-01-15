@@ -58,6 +58,7 @@ namespace isobus
 			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
 		}
 	}
 
@@ -98,6 +99,7 @@ namespace isobus
 				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
 			}
 
 			shouldTerminate = true;
@@ -2314,7 +2316,12 @@ namespace isobus
 	bool VirtualTerminalClient::send_aux_n_preferred_assignment()
 	{
 		// TODO load preferred assignment from saved configuration
+		// TODO only send command if there is an Auxiliary Function Type 2 object in the object pool
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
+		if (buffer.size() < 8)
+		{
+			buffer.resize(8);
+		}
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
@@ -2841,7 +2848,7 @@ namespace isobus
 							}
 							if (0x10 == (data[1] & 0x10))
 							{
-								CANStackLogger::CAN_stack_log("[AUX-N]: Any other error");
+								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment Error - Other");
 							}
 
 							if (0 != data[1])
@@ -2887,6 +2894,7 @@ namespace isobus
 										// TODO save preferred assignment to persistent configuration
 									}
 								}
+								CANStackLogger::CAN_stack_log("[AUX-N] Unassigned all functions");
 							}
 							else if (0x1F == functionType)
 							{
@@ -2899,6 +2907,7 @@ namespace isobus
 										{
 											// TODO save preferred assignment to persistent configuration
 										}
+										CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 										break;
 									}
 								}
@@ -2918,6 +2927,7 @@ namespace isobus
 												{
 													// TODO save preferred assignment to persistent configuration
 												}
+												CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
 										}
 									}
@@ -2938,6 +2948,7 @@ namespace isobus
 												{
 													// TODO save preferred assignment to persistent configuration
 												}
+												CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
 										}
 									}
@@ -2962,18 +2973,19 @@ namespace isobus
 												{
 													// TODO save preferred assignment to persistent configuration
 												}
+												CANStackLogger::CAN_stack_log("[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
 											else
 											{
 												hasError = true;
 												isAlreadyAssigned = true;
-												CANStackLogger::CAN_stack_log("[AUX-N]: Unable store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+												CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 											}
 										}
 										else
 										{
 											hasError = true;
-											CANStackLogger::CAN_stack_log("[AUX-N]: Unable store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
+											CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
 										}
 										break;
 									}
@@ -2982,7 +2994,7 @@ namespace isobus
 								{
 									hasError = true;
 									// TODO prettier logging of NAME
-									CANStackLogger::CAN_stack_log("[AUX-N]: Unable store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+									CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 								}
 							}
 							parentVT->send_aux_n_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
@@ -3011,32 +3023,6 @@ namespace isobus
 									{
 										parentVT->process_auxiliary_input_callback(assignment, value1, value2, parentVT);
 									}
-								}
-							}
-						}
-						break;
-
-						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage):
-						{
-							std::uint16_t modelIdentificationCode = (static_cast<std::uint16_t>(data[1]) | ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool ready = data[3];
-
-							if (ready)
-							{
-								bool found = false;
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
-								{
-									if (aux.modelIdentificationCode == modelIdentificationCode)
-									{
-										found = true;
-									}
-								}
-								if (false == found)
-								{
-									AuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
-									parentVT->auxiliaryInputDevices.push_back(inputDevice);
-									// TODO prettier logging of NAME
-									CANStackLogger::CAN_stack_log("[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + std::to_string(modelIdentificationCode));
 								}
 							}
 						}
@@ -3228,6 +3214,14 @@ namespace isobus
 								{
 									CANStackLogger::CAN_stack_log("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
 									parentVT->set_state(StateMachineState::Connected);
+									if (parentVT->send_aux_n_preferred_assignment())
+									{
+										CANStackLogger::CAN_stack_log("[AUX-N]: Sent preferred assignments.");
+									}
+									else
+									{
+										CANStackLogger::CAN_stack_log("[AUX-N]: Failed to send preferred assignments.");
+									}
 								}
 								else
 								{
@@ -3337,8 +3331,14 @@ namespace isobus
 										parentVT->set_state(StateMachineState::Connected);
 									}
 
-									// We can send the preferred aux-n assignments now
-									parentVT->send_aux_n_preferred_assignment();
+									if (parentVT->send_aux_n_preferred_assignment())
+									{
+										CANStackLogger::CAN_stack_log("[AUX-N]: Sent preferred assignments.");
+									}
+									else
+									{
+										CANStackLogger::CAN_stack_log("[AUX-N]: Failed to send preferred assignments.");
+									}
 								}
 								else
 								{
@@ -3366,9 +3366,42 @@ namespace isobus
 				}
 				break;
 
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal):
+				{
+					switch (data.at(0))
+					{
+						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage):
+						{
+							std::uint16_t modelIdentificationCode = (static_cast<std::uint16_t>(data[1]) | ((static_cast<std::uint16_t>(data[2])) << 8));
+							bool ready = data[3];
+
+							if (ready)
+							{
+								bool found = false;
+								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+								{
+									if (aux.modelIdentificationCode == modelIdentificationCode)
+									{
+										found = true;
+									}
+								}
+								if (false == found)
+								{
+									AuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
+									parentVT->auxiliaryInputDevices.push_back(inputDevice);
+									// TODO prettier logging of NAME
+									CANStackLogger::CAN_stack_log("[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + std::to_string(modelIdentificationCode));
+								}
+							}
+						}
+						break;
+					}
+				}
+				break;
+
 				default:
 				{
-					CANStackLogger::CAN_stack_log("[VT]: Client unknown message");
+					CANStackLogger::CAN_stack_log("[VT]: Client unknown message: " + isobus::to_string(static_cast<int>(message->get_identifier().get_parameter_group_number())));
 				}
 				break;
 			}
