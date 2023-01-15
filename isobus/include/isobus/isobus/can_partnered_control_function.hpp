@@ -42,7 +42,7 @@ namespace isobus
 		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
 
 		/// @brief The destructor for PartneredControlFunction
-		~PartneredControlFunction();
+		virtual ~PartneredControlFunction();
 
 		/// @brief This is how you get notified that this control function has sent you a destination specific message.
 		/// @details Add a callback function here to be notified when this device has sent you a message with the specified PGN.
@@ -105,8 +105,10 @@ namespace isobus
 		ParameterGroupNumberCallbackData get_parameter_group_number_callback(std::uint32_t index) const;
 
 		static std::vector<PartneredControlFunction *> partneredControlFunctionList; ///< A list of all created partnered control functions
+		static bool anyPartnerNeedsInitializing; ///< A way for the network manager to know if it needs to parse the partner list to match partners with existing CFs
 		const std::vector<NAMEFilter> NAMEFilterList; ///< A list of NAME parameters that describe this control function's identity
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks associated with this control function
+		bool initialized; ///< A way to track if the network manager has processed this CF against existing CFs
 	};
 
 } // namespace isobus

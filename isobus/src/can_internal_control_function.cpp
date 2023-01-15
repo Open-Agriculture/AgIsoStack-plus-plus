@@ -23,6 +23,7 @@ namespace isobus
 	  stateMachine(preferredAddress, desiredName, CANPort),
 	  objectChangedAddressSinceLastUpdate(false)
 	{
+		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
 		controlFunctionType = Type::Internal;
 
 		auto location = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), nullptr);
@@ -38,6 +39,7 @@ namespace isobus
 
 	InternalControlFunction::~InternalControlFunction()
 	{
+		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
 		auto thisObject = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), this);
 		*thisObject = nullptr; // Don't erase, just null it out. Erase could cause a double free.
 	}

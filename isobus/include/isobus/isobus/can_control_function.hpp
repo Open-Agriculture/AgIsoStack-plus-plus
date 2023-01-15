@@ -12,6 +12,8 @@
 
 #include "isobus/isobus/can_NAME.hpp"
 
+#include <mutex>
+
 namespace isobus
 {
 	//================================================================================================
@@ -61,6 +63,7 @@ namespace isobus
 
 	protected:
 		friend class CANNetworkManager;
+		static std::mutex controlFunctionProcessingMutex; ///< Protects the control function tables
 		NAME controlFunctionNAME; ///< The NAME of the control function
 		Type controlFunctionType; ///< The Type of the control function
 		std::uint8_t address; ///< The address of the control function
