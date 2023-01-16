@@ -1474,7 +1474,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version, std::uint32_t originalDataMaskDimensions_px)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != size))
@@ -1485,7 +1485,10 @@ namespace isobus
 			tempData.objectPoolVectorPointer = nullptr;
 			tempData.dataCallback = nullptr;
 			tempData.objectPoolSize = size;
-			tempData.autoScaleOriginalDimension = originalDataMaskDimensions_px;
+			tempData.autoScaleDataMaskOriginalDimension = 0;
+			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
+			tempData.autoScaleDataIndex = 0;
+			tempData.autoScaleCurrentObjectBytesRemaining = 0;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -1503,7 +1506,7 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version, std::uint32_t originalDataMaskDimensions_px)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != pool->size()))
@@ -1514,7 +1517,10 @@ namespace isobus
 			tempData.objectPoolVectorPointer = pool;
 			tempData.dataCallback = nullptr;
 			tempData.objectPoolSize = pool->size();
-			tempData.autoScaleOriginalDimension = originalDataMaskDimensions_px;
+			tempData.autoScaleDataMaskOriginalDimension = 0;
+			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
+			tempData.autoScaleDataIndex = 0;
+			tempData.autoScaleCurrentObjectBytesRemaining = 0;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -1529,6 +1535,17 @@ namespace isobus
 				objectPools.resize(poolIndex + 1);
 				objectPools[poolIndex] = tempData;
 			}
+		}
+	}
+
+	void VirtualTerminalClient::set_object_pool_scaling(std::uint8_t poolIndex,
+	                                                    std::uint32_t originalDataMaskDimensions_px,
+	                                                    std::uint32_t originalSoftKyeDesignatorHeight_px)
+	{
+		if (poolIndex < objectPools.size())
+		{
+			objectPools[poolIndex].autoScaleDataMaskOriginalDimension = originalDataMaskDimensions_px;
+			objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
 		}
 	}
 
@@ -1829,17 +1846,35 @@ namespace isobus
 
 							if (CurrentObjectPoolUploadState::Uninitialized == currentObjectPoolState)
 							{
+								bool transmitSuccessful;
+
 								if (!objectPools[i].uploaded)
 								{
-									bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-									                                                                         nullptr,
-									                                                                         objectPools[i].objectPoolSize + 1, // Account for Mux byte
-									                                                                         myControlFunction.get(),
-									                                                                         partnerControlFunction.get(),
-									                                                                         CANIdentifier::CANPriority::PriorityLowest7,
-									                                                                         process_callback,
-									                                                                         this,
-									                                                                         process_internal_object_pool_upload_callback);
+									if ((0 != objectPools[i].autoScaleDataMaskOriginalDimension) &&
+									    (0 != objectPools[i].autoScaleSoftKeyDesignatorOriginalHeight))
+									{
+										transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+										                                                                    nullptr,
+										                                                                    objectPools[i].objectPoolSize + 1, // Account for Mux byte
+										                                                                    myControlFunction.get(),
+										                                                                    partnerControlFunction.get(),
+										                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+										                                                                    process_callback,
+										                                                                    this,
+										                                                                    process_internal_object_pool_upload_callback_with_autoscaling);
+									}
+									else
+									{
+										transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+										                                                                    nullptr,
+										                                                                    objectPools[i].objectPoolSize + 1, // Account for Mux byte
+										                                                                    myControlFunction.get(),
+										                                                                    partnerControlFunction.get(),
+										                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+										                                                                    process_callback,
+										                                                                    this,
+										                                                                    process_internal_object_pool_upload_callback);
+									}
 
 									if (transmitSuccessful)
 									{
@@ -3474,6 +3509,670 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalClient::process_internal_object_pool_upload_callback_with_autoscaling(std::uint32_t callbackIndex,
+	                                                                                          std::uint32_t bytesOffset,
+	                                                                                          std::uint32_t numberOfBytesNeeded,
+	                                                                                          std::uint8_t *chunkBuffer,
+	                                                                                          void *parentPointer)
+	{
+		bool retVal = false;
+
+		if ((nullptr != parentPointer) &&
+		    (nullptr != chunkBuffer) &&
+		    (0 != numberOfBytesNeeded))
+		{
+			VirtualTerminalClient *parentVTClient = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+			std::uint32_t poolIndex = std::numeric_limits<std::uint32_t>::max();
+			bool usingExternalCallback = false;
+
+			// Need to figure out which pool we're currently uploading
+			for (std::uint32_t i = 0; i < parentVTClient->objectPools.size(); i++)
+			{
+				if (!parentVTClient->objectPools[i].uploaded)
+				{
+					poolIndex = i;
+					usingExternalCallback = parentVTClient->objectPools[i].useDataCallback;
+					break;
+				}
+			}
+
+			// If pool index is FFs, something is wrong with the state machine state, return false.
+			if ((std::numeric_limits<std::uint32_t>::max() != poolIndex) &&
+			    (bytesOffset + numberOfBytesNeeded) <= parentVTClient->objectPools[poolIndex].objectPoolSize + 1)
+			{
+				// We've got more data to transfer
+				if (usingExternalCallback)
+				{
+					// We're using the user's supplied callback to get a chunk of info
+					if (0 == bytesOffset)
+					{
+						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+						parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.clear();
+						parentVTClient->objectPools[poolIndex].autoScaleDataIndex = 0;
+						parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining = 0;
+						parentVTClient->objectPools[poolIndex].autoScaleLastNumberBytesNeeded = (numberOfBytesNeeded - 1);
+
+						// Get the first 6 bytes of the pool
+						retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset, numberOfBytesNeeded - 1, &chunkBuffer[1], parentVTClient);
+
+						if (retVal)
+						{
+							std::uint32_t objectMinLengh = parentVTClient->get_minimum_object_length(static_cast<ObjectType>(chunkBuffer[3]));
+							parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(objectMinLengh);
+
+							retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset, objectMinLengh, parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.data(), parentVTClient);
+
+							if (retVal)
+							{
+								std::size_t fullObjectLength = parentVTClient->get_number_bytes_in_object(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.data());
+
+								if (fullObjectLength > parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size())
+								{
+									parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(fullObjectLength);
+								}
+
+								if (0 != fullObjectLength)
+								{
+									// If we need more of the object data, copy it into the buffer.
+									if (fullObjectLength > objectMinLengh)
+									{
+										retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex,
+										                                                             (objectMinLengh + bytesOffset),
+										                                                             (fullObjectLength - objectMinLengh),
+										                                                             &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[objectMinLengh],
+										                                                             parentVTClient);
+									}
+
+									if ((retVal) &&
+									    (parentVTClient->resize_object(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.data(),
+									                                   static_cast<float>(parentVTClient->get_number_x_pixels()) / static_cast<float>(parentVTClient->objectPools[poolIndex].autoScaleDataMaskOriginalDimension),
+									                                   static_cast<ObjectType>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[2]))))
+									{
+										// Resize completed.
+										// Track how many bytes we're sending to the stack.
+										parentVTClient->objectPools[poolIndex].autoScaleDataIndex = (numberOfBytesNeeded - 1);
+										parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining = (fullObjectLength - (numberOfBytesNeeded - 1));
+
+										// Copy the updated data into the stack's buffer
+										memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[0], numberOfBytesNeeded - 1);
+									}
+									else
+									{
+										retVal = false;
+									}
+								}
+								else
+								{
+									retVal = false;
+								}
+							}
+							else
+							{
+								CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - can't get enough data to autoscale.");
+							}
+						}
+					}
+					else
+					{
+						parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.erase(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.begin(), parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.begin() + (parentVTClient->objectPools[poolIndex].autoScaleLastNumberBytesNeeded));
+						if ((parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() >= numberOfBytesNeeded) &&
+						    (parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() >= parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining))
+						{
+							memcpy(&chunkBuffer[0], &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
+							retVal = true;
+						}
+						else
+						{
+							std::uint32_t indexOfNextObject = parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining;
+
+							// Get Some more bytes
+							parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() + numberOfBytesNeeded);
+							retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset + indexOfNextObject, numberOfBytesNeeded, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() - 1 - numberOfBytesNeeded], parentVTClient);
+
+							// Now we have the first part of the next object in memory. See how much more of the object we need to scale it
+							std::uint32_t minimumNumberOfBytesInNextObject = parentVTClient->get_minimum_object_length(static_cast<ObjectType>(chunkBuffer[3 + indexOfNextObject]));
+							if (minimumNumberOfBytesInNextObject > (parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() - indexOfNextObject))
+							{
+								parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(indexOfNextObject + minimumNumberOfBytesInNextObject);
+								retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset + indexOfNextObject, minimumNumberOfBytesInNextObject, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject], parentVTClient);
+
+							}
+
+							std::size_t fullObjectLength = parentVTClient->get_number_bytes_in_object(&parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject]);
+
+							if (fullObjectLength > parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size())
+							{
+								parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(fullObjectLength + indexOfNextObject);
+							}
+							
+						}
+						parentVTClient->objectPools[poolIndex].autoScaleLastNumberBytesNeeded = numberOfBytesNeeded;
+						parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining -= numberOfBytesNeeded;
+						parentVTClient->objectPools[poolIndex].autoScaleDataIndex += numberOfBytesNeeded;
+						// Subtract off 1 to account for the mux in the first byte of the message
+						// retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset - 1, numberOfBytesNeeded, chunkBuffer, parentVTClient);
+					}
+				}
+				else
+				{
+					// We already have the whole pool in RAM, but we can't modify it because the pointer we have is const.
+					retVal = true;
+					if (0 == bytesOffset)
+					{
+						chunkBuffer[0] = static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage);
+						memcpy(&chunkBuffer[1], &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset], numberOfBytesNeeded - 1);
+					}
+					else
+					{
+						// Subtract off 1 to account for the mux in the first byte of the message
+						memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
+					}
+				}
+			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::get_is_object_scalable(ObjectType type)
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case ObjectType::WorkingSet:
+			{
+				retVal = false;
+			}
+			break;
+
+			case ObjectType::DataMask:
+			case ObjectType::AlarmMask:
+			case ObjectType::Container:
+			case ObjectType::Key:
+			case ObjectType::Button:
+			case ObjectType::InputBoolean:
+			case ObjectType::InputString:
+			case ObjectType::InputNumber:
+			case ObjectType::InputList:
+			case ObjectType::OutputString:
+			case ObjectType::OutputNumber:
+			case ObjectType::OutputList:
+			case ObjectType::OutputLine:
+			case ObjectType::OutputRectangle:
+			case ObjectType::OutputEllipse:
+			case ObjectType::OutputPolygon:
+			case ObjectType::OutputMeter:
+			case ObjectType::OutputLinearBarGraph:
+			case ObjectType::OutputArchedBarGraph:
+			case ObjectType::PictureGraphic:
+			case ObjectType::AuxiliaryFunctionType1:
+			case ObjectType::AuxiliaryInputType1:
+			case ObjectType::AuxiliaryFunctionType2:
+			case ObjectType::AuxiliaryInputType2:
+				/// @todo case ObjectType::FontAttribute:
+				{
+					retVal = true;
+				}
+				break;
+
+			default:
+			{
+				retVal = false;
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_minimum_object_length(ObjectType type)
+	{
+		std::uint32_t retVal = 0;
+
+		switch (type)
+		{
+			case ObjectType::WorkingSet:
+			{
+				retVal = 18;
+			}
+			break;
+
+			case ObjectType::OutputList:
+			case ObjectType::DataMask:
+			case ObjectType::ExternalReferenceNAME:
+			{
+				retVal = 12;
+			}
+			break;
+
+			case ObjectType::AlarmMask:
+			{
+				retVal = 10;
+			}
+			break;
+
+			case ObjectType::Container:
+			case ObjectType::ExternalObjectPointer:
+			{
+				retVal = 9;
+			}
+			break;
+
+			case ObjectType::KeyGroup:
+			{
+				retVal = 4;
+			}
+			break;
+
+			case ObjectType::SoftKeyMask:
+			{
+				retVal = 6;
+			}
+			break;
+
+			case ObjectType::Key:
+			case ObjectType::NumberVariable:
+			case ObjectType::InputAttributes:
+			{
+				retVal = 7;
+			}
+			break;
+
+			case ObjectType::Button:
+			case ObjectType::InputBoolean:
+			case ObjectType::OutputRectangle:
+			case ObjectType::InputList:
+			case ObjectType::ExternalObjectDefinition:
+			{
+				retVal = 13;
+			}
+			break;
+
+			case ObjectType::InputString:
+			{
+				retVal = 19;
+			}
+			break;
+
+			case ObjectType::InputNumber:
+			{
+				retVal = 38;
+			}
+			break;
+
+			case ObjectType::OutputString:
+			{
+				retVal = 16;
+			}
+			break;
+
+			case ObjectType::OutputNumber:
+			{
+				retVal = 29;
+			}
+			break;
+
+			case ObjectType::OutputLine:
+			{
+				retVal = 11;
+			}
+			break;
+
+			case ObjectType::OutputEllipse:
+			{
+				retVal = 15;
+			}
+			break;
+
+			case ObjectType::OutputPolygon:
+			{
+				retVal = 14;
+			}
+			break;
+
+			case ObjectType::OutputMeter:
+			{
+				retVal = 21;
+			}
+			break;
+
+			case ObjectType::OutputLinearBarGraph:
+			{
+				retVal = 24;
+			}
+			break;
+
+			case ObjectType::OutputArchedBarGraph:
+			{
+				retVal = 27;
+			}
+			break;
+
+			case ObjectType::PictureGraphic:
+			case ObjectType::Animation:
+			{
+				retVal = 17;
+			}
+			break;
+
+			case ObjectType::StringVariable:
+			case ObjectType::ExtendedInputAttributes:
+			case ObjectType::ObjectPointer:
+			case ObjectType::Macro:
+			case ObjectType::ColourMap:
+			case ObjectType::ObjectLabelRefrence:
+			{
+				retVal = 5;
+			}
+			break;
+
+			case ObjectType::FontAttributes:
+			case ObjectType::LineAttributes:
+			case ObjectType::FillAttributes:
+			{
+				retVal = 8;
+			}
+			break;
+
+			default:
+			{
+				CANStackLogger::CAN_stack_log("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + static_cast<int>(type));
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer)
+	{
+		ObjectType currentObjectType = static_cast<ObjectType>(buffer[2]);
+		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
+
+		switch (currentObjectType)
+		{
+			case ObjectType::WorkingSet:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[8] * 2);
+				const std::uint32_t sizeOfLanguageCodes = (buffer[9] * 2);
+				const std::uint32_t sizeOfChildObjects = (buffer[10] * 6);
+				retVal += (sizeOfLanguageCodes + sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::DataMask:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[6] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[7] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::AlarmMask:
+			case ObjectType::Container:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[8] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[9] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::SoftKeyMask:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[4] * 2);
+				const std::uint32_t sizeOfMacros = (buffer[5] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::Key:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[5] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[6] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::Button:
+			{
+				const std::uint32_t sizeOfChildObjects = (buffer[11] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				retVal += (sizeOfChildObjects + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::InputBoolean:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::InputString:
+			{
+				const std::uint32_t sizeOfValue = buffer[16];
+				const std::uint32_t sizeOfMacros = (buffer[18 + sizeOfValue] * 2);
+				retVal += (sizeOfValue + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::InputNumber:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[37] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::InputList:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				const std::uint32_t sizeOfListObjectIDs = (buffer[10] * 2);
+				retVal += (sizeOfMacros + sizeOfListObjectIDs);
+			}
+			break;
+
+			case ObjectType::OutputString:
+			{
+				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[14]) | static_cast<uint16_t>(buffer[15] << 8));
+				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
+				retVal += (sizeOfMacros + sizeOfValue);
+			}
+			break;
+
+			case ObjectType::OutputNumber:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[28] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputList:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[11] * 2);
+				const std::uint32_t sizeOfListObjectIDs = (buffer[10] * 2);
+				retVal += (sizeOfMacros + sizeOfListObjectIDs);
+			}
+			break;
+
+			case ObjectType::OutputLine:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[10] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputRectangle:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputEllipse:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[14] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputPolygon:
+			{
+				const std::uint32_t sizeOfPoints = (buffer[12] * 4);
+				const std::uint32_t sizeOfMacros = (buffer[13] * 2);
+				retVal += (sizeOfMacros + sizeOfPoints);
+			}
+			break;
+
+			case ObjectType::OutputMeter:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[20] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputLinearBarGraph:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[23] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::OutputArchedBarGraph:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[26] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::PictureGraphic:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
+				const std::uint32_t sizeOfRawData = (static_cast<std::uint32_t>(buffer[12]) |
+				                                     (static_cast<std::uint32_t>(buffer[13]) << 8) |
+				                                     (static_cast<std::uint32_t>(buffer[14]) << 16) |
+				                                     (static_cast<std::uint32_t>(buffer[15]) << 24));
+				retVal += (sizeOfRawData + sizeOfMacros);
+			}
+			break;
+
+			case ObjectType::ObjectPointer:
+			case ObjectType::NumberVariable:
+			case ObjectType::GraphicsContext:
+			case ObjectType::ExternalReferenceNAME:
+			case ObjectType::ExternalObjectPointer:
+			case ObjectType::AuxiliaryControlDesignatorType2:
+			{
+				// No additional length
+			}
+			break;
+
+			case ObjectType::StringVariable:
+			{
+				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[3]) | static_cast<uint16_t>(buffer[4]) << 8);
+				retVal += sizeOfValue;
+			}
+			break;
+
+			case ObjectType::FontAttributes:
+			case ObjectType::LineAttributes:
+			case ObjectType::FillAttributes:
+			{
+				const std::uint32_t sizeOfMacros = (buffer[7] * 2);
+				retVal += sizeOfMacros;
+			}
+			break;
+
+			case ObjectType::InputAttributes:
+			{
+				const std::uint32_t sizeOfValidationString = buffer[4];
+				const std::uint32_t sizeOfMacros = (buffer[5 + sizeOfValidationString] * 2);
+				retVal += (sizeOfMacros + sizeOfValidationString);
+			}
+			break;
+
+			case ObjectType::ExtendedInputAttributes:
+			{
+				const std::uint32_t numberOfCodePlanes = buffer[5];
+				retVal += (numberOfCodePlanes * 2); // Doesn't include the character ranges, need to handle those externally
+			}
+			break;
+
+			case ObjectType::Macro:
+			{
+				const std::uint32_t numberOfMacroBytes = (static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8));
+				retVal += numberOfMacroBytes;
+			}
+			break;
+
+			case ObjectType::ColourMap:
+			{
+				const std::uint32_t numberIndexes = (static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8));
+				retVal += numberIndexes;
+			}
+			break;
+
+			case ObjectType::WindowMask:
+			{
+				const std::uint32_t sizeOfReferences = (buffer[14] * 2);
+				const std::uint32_t numberObjects = (buffer[15] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
+				retVal += (sizeOfMacros + numberObjects + sizeOfReferences);
+			}
+			break;
+
+			case ObjectType::KeyGroup:
+			{
+				const std::uint32_t numberObjects = (buffer[8] * 2);
+				const std::uint32_t sizeOfMacros = (buffer[9] * 2);
+				retVal += (sizeOfMacros + numberObjects);
+			}
+			break;
+
+			case ObjectType::ObjectLabelRefrence:
+			{
+				const std::uint32_t sizeOfLabeledObjects = ((static_cast<uint16_t>(buffer[4]) | static_cast<uint16_t>(buffer[5]) << 8) * 7);
+				retVal += sizeOfLabeledObjects;
+			}
+			break;
+
+			case ObjectType::ExternalObjectDefinition:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[12] * 2);
+				retVal += sizeOfObjects;
+			}
+			break;
+
+			case ObjectType::Animation:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[15] * 6);
+				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
+				retVal += (sizeOfMacros + sizeOfObjects);
+			}
+			break;
+
+			case ObjectType::AuxiliaryFunctionType1:
+			case ObjectType::AuxiliaryFunctionType2:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[5] * 6);
+				retVal += sizeOfObjects;
+			}
+			break;
+
+			case ObjectType::AuxiliaryInputType1:
+			case ObjectType::AuxiliaryInputType2:
+			{
+				const std::uint32_t sizeOfObjects = (buffer[6] * 6);
+				retVal += sizeOfObjects;
+			}
+			break;
+
+			default:
+			{
+				CANStackLogger::CAN_stack_log("[VT]: Cannot autoscale object pool due to unknown object total length - type " + static_cast<int>(buffer[2]));
+			}
+			break;
+		}
+		return retVal;
+	}
+
 	void VirtualTerminalClient::process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor)
 	{
 		std::uint16_t width = (((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
@@ -3488,142 +4187,175 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		switch (type)
+		if (get_is_object_scalable(type))
 		{
-			case ObjectType::Container:
+			switch (type)
 			{
-				std::uint8_t childrenToFollow = buffer[8];
-
-				// Modify the object in memory
-				process_standard_object_height_and_width(buffer, scaleFactor);
-
-				// Iterate over the list of children and move them proportionally to the new size
-				// The container is 10 bytes, followed by children with 2 bytes of ID, 2 of X, and 2 of Y
-				for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+				case ObjectType::WorkingSet:
 				{
-					std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[12 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
-					std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[14 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
-					buffer[12 + (6 * i)] = (childWidth & 0xFF);
-					buffer[13 + (6 * i)] = (childWidth >> 8);
-					buffer[14 + (6 * i)] = (childHeight & 0xFF);
-					buffer[15 + (6 * i)] = (childHeight >> 8);
+				
 				}
-				retVal = true;
-			}
-			break;
+				break;
 
-			case ObjectType::Button:
-			{
-				std::uint8_t childrenToFollow = buffer[11];
-
-				// Modify the object in memory
-				process_standard_object_height_and_width(buffer, scaleFactor);
-
-				// Iterate over the list of children and move them proportionally to the new size
-				for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+				case ObjectType::Container:
 				{
-					std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[15 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[16 + (6 * i)]) << 8))) * scaleFactor);
-					std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[17 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[18 + (6 * i)]) << 8))) * scaleFactor);
-					buffer[15 + (6 * i)] = (childWidth & 0xFF);
-					buffer[16 + (6 * i)] = (childWidth >> 8);
-					buffer[17 + (6 * i)] = (childHeight & 0xFF);
-					buffer[18 + (6 * i)] = (childHeight >> 8);
+					std::uint8_t childrenToFollow = buffer[8];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Iterate over the list of children and move them proportionally to the new size
+					// The container is 10 bytes, followed by children with 2 bytes of ID, 2 of X, and 2 of Y
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[12 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[14 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[12 + (6 * i)] = (childWidth & 0xFF);
+						buffer[13 + (6 * i)] = (childWidth >> 8);
+						buffer[14 + (6 * i)] = (childHeight & 0xFF);
+						buffer[15 + (6 * i)] = (childHeight >> 8);
+					}
+					retVal = true;
 				}
-			}
-			break;
+				break;
 
-			case ObjectType::InputBoolean:
-			{
-				std::uint16_t width = ((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
-
-				// Modify the object in memory
-				buffer[4] = (width & 0xFF);
-				buffer[5] = (width >> 8);
-			}
-			break;
-
-			case ObjectType::InputString:
-			case ObjectType::InputNumber:
-			case ObjectType::InputList:
-			case ObjectType::OutputString:
-			case ObjectType::OutputNumber:
-			case ObjectType::OutputList:
-			case ObjectType::OutputLinearBarGraph:
-			{
-				// Modify the object in memory
-				process_standard_object_height_and_width(buffer, scaleFactor);
-			}
-			break;
-
-			case ObjectType::OutputLine:
-			case ObjectType::OutputRectangle:
-			case ObjectType::OutputEllipse:
-			{
-				// Modify the object in memory
-				std::uint16_t width = (((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
-				std::uint16_t height = (((static_cast<std::uint16_t>(buffer[7]) | (static_cast<std::uint16_t>(buffer[8]) << 8))) * scaleFactor);
-				buffer[5] = (width & 0xFF);
-				buffer[6] = (width >> 8);
-				buffer[7] = (height & 0xFF);
-				buffer[8] = (height >> 8);
-			}
-			break;
-
-			case ObjectType::OutputPolygon:
-			{
-				const std::uint8_t numberOfPoints = buffer[12];
-
-				// Modify the object in memory
-				process_standard_object_height_and_width(buffer, scaleFactor);
-
-				// Reposition the child points
-				for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
+				case ObjectType::Button:
 				{
-					std::uint16_t xPosition = (((static_cast<std::uint16_t>(buffer[14 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (4 * i)]) << 8))) * scaleFactor);
-					std::uint16_t yPosition = (((static_cast<std::uint16_t>(buffer[16 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[17 + (4 * i)]) << 8))) * scaleFactor);
-					buffer[14 + (4 * i)] = (xPosition & 0xFF);
-					buffer[15 + (4 * i)] = (xPosition >> 8);
-					buffer[16 + (4 * i)] = (yPosition & 0xFF);
-					buffer[17 + (4 * i)] = (yPosition >> 8);
+					std::uint8_t childrenToFollow = buffer[11];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Iterate over the list of children and move them proportionally to the new size
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[15 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[16 + (6 * i)]) << 8))) * scaleFactor);
+						std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[17 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[18 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[15 + (6 * i)] = (childWidth & 0xFF);
+						buffer[16 + (6 * i)] = (childWidth >> 8);
+						buffer[17 + (6 * i)] = (childHeight & 0xFF);
+						buffer[18 + (6 * i)] = (childHeight >> 8);
+					}
 				}
-			}
-			break;
+				break;
 
-			case ObjectType::OutputMeter:
-			case ObjectType::PictureGraphic:
-			{
-				// Modify the object in memory
-				std::uint16_t width = (((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
-				buffer[3] = (width & 0xFF);
-				buffer[4] = (width >> 8);
-			}
-			break;
+				case ObjectType::InputBoolean:
+				{
+					std::uint16_t width = ((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
 
-			case ObjectType::OutputArchedBarGraph:
-			{
-				// Modify the object in memory
-				process_standard_object_height_and_width(buffer, scaleFactor);
+					// Modify the object in memory
+					buffer[4] = (width & 0xFF);
+					buffer[5] = (width >> 8);
+				}
+				break;
 
-				std::uint16_t width = (((static_cast<std::uint16_t>(buffer[12]) | (static_cast<std::uint16_t>(buffer[13]) << 8))) * scaleFactor);
-				buffer[12] = (width & 0xFF);
-				buffer[13] = (width >> 8);
-			}
-			break;
+				case ObjectType::InputString:
+				case ObjectType::InputNumber:
+				case ObjectType::InputList:
+				case ObjectType::OutputString:
+				case ObjectType::OutputNumber:
+				case ObjectType::OutputList:
+				case ObjectType::OutputLinearBarGraph:
+				{
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+				}
+				break;
 
-			// Todo
-			case ObjectType::AuxiliaryFunctionType1:
-			case ObjectType::AuxiliaryInputType1:
-			case ObjectType::AuxiliaryFunctionType2:
-			case ObjectType::AuxiliaryInputType2:
-			{
-			}
-			break;
+				case ObjectType::OutputLine:
+				case ObjectType::OutputRectangle:
+				case ObjectType::OutputEllipse:
+				{
+					// Modify the object in memory
+					std::uint16_t width = (((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
+					std::uint16_t height = (((static_cast<std::uint16_t>(buffer[7]) | (static_cast<std::uint16_t>(buffer[8]) << 8))) * scaleFactor);
+					buffer[5] = (width & 0xFF);
+					buffer[6] = (width >> 8);
+					buffer[7] = (height & 0xFF);
+					buffer[8] = (height >> 8);
+				}
+				break;
 
-			default:
-			{
-				retVal = false;
+				case ObjectType::OutputPolygon:
+				{
+					const std::uint8_t numberOfPoints = buffer[12];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Reposition the child points
+					for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
+					{
+						std::uint16_t xPosition = (((static_cast<std::uint16_t>(buffer[14 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (4 * i)]) << 8))) * scaleFactor);
+						std::uint16_t yPosition = (((static_cast<std::uint16_t>(buffer[16 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[17 + (4 * i)]) << 8))) * scaleFactor);
+						buffer[14 + (4 * i)] = (xPosition & 0xFF);
+						buffer[15 + (4 * i)] = (xPosition >> 8);
+						buffer[16 + (4 * i)] = (yPosition & 0xFF);
+						buffer[17 + (4 * i)] = (yPosition >> 8);
+					}
+				}
+				break;
+
+				case ObjectType::OutputMeter:
+				case ObjectType::PictureGraphic:
+				{
+					// Modify the object in memory
+					std::uint16_t width = (((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
+					buffer[3] = (width & 0xFF);
+					buffer[4] = (width >> 8);
+				}
+				break;
+
+				case ObjectType::OutputArchedBarGraph:
+				{
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					std::uint16_t width = (((static_cast<std::uint16_t>(buffer[12]) | (static_cast<std::uint16_t>(buffer[13]) << 8))) * scaleFactor);
+					buffer[12] = (width & 0xFF);
+					buffer[13] = (width >> 8);
+				}
+				break;
+
+				case ObjectType::Animation:
+				{
+					std::uint8_t childrenToFollow = buffer[15];
+
+					// Modify the object in memory
+					process_standard_object_height_and_width(buffer, scaleFactor);
+
+					// Iterate over the list of children and move them proportionally to the new size
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						std::uint16_t childX = (((static_cast<std::uint16_t>(buffer[20 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[21 + (6 * i)]) << 8))) * scaleFactor);
+						std::uint16_t childY = (((static_cast<std::uint16_t>(buffer[22 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[23 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[20 + (6 * i)] = (childX & 0xFF);
+						buffer[21 + (6 * i)] = (childX >> 8);
+						buffer[22 + (6 * i)] = (childY & 0xFF);
+						buffer[23 + (6 * i)] = (childY >> 8);
+					}
+				}
+				break;
+
+				// Todo
+				case ObjectType::AuxiliaryFunctionType1:
+				case ObjectType::AuxiliaryInputType1:
+				case ObjectType::AuxiliaryFunctionType2:
+				case ObjectType::AuxiliaryInputType2:
+				{
+				}
+				break;
+
+				default:
+				{
+					retVal = false;
+				}
+				break;
 			}
-			break;
+		}
+		else
+		{
+			retVal = true;
 		}
 		return retVal;
 	}

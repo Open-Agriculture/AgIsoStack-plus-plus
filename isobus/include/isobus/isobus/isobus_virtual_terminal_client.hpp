@@ -1036,8 +1036,7 @@ namespace isobus
 		                     VTVersion poolSupportedVTVersion,
 		                     const std::uint8_t *pool,
 		                     std::uint32_t size,
-		                     std::string version = "",
-		                     std::uint32_t originalDataMaskDimensions_px = 0);
+		                     std::string version = "");
 
 		/// @brief Assigns an object pool to the client using a vector.
 		/// @details This is good for small pools or pools where you have all the data in memory.
@@ -1049,8 +1048,11 @@ namespace isobus
 		void set_object_pool(std::uint8_t poolIndex,
 		                     VTVersion poolSupportedVTVersion,
 		                     const std::vector<std::uint8_t> *pool,
-		                     std::string version = "",
-		                     std::uint32_t originalDataMaskDimensions_px = 0);
+		                     std::string version = "");
+
+		void set_object_pool_scaling(std::uint8_t poolIndex,
+		                             std::uint32_t originalDataMaskDimensions_px,
+		                             std::uint32_t originalSoftKyeDesignatorHeight_px);
 
 		/// @brief Assigns an object pool to the client where the client will get data in chunks during upload.
 		/// @details This is probably better for huge pools if you are RAM constrained, or if your
@@ -1292,7 +1294,11 @@ namespace isobus
 			DataChunkCallback dataCallback; ///< A callback used to get data in chunks as an alternative to loading the whole pool at once
 			std::string versionLabel; ///< An optional version label that will be used to load/store the pool to the VT. 7 character max!
 			std::uint32_t objectPoolSize; ///< The size of the object pool
-			std::uint32_t autoScaleOriginalDimension; ///< The original length or width of this object pool's data mask area
+			std::uint32_t autoScaleDataMaskOriginalDimension; ///< The original length or width of this object pool's data mask area (in pixels)
+			std::uint32_t autoScaleSoftKeyDesignatorOriginalHeight; ///< The original height of a soft key designator as designed in the pool (in pixels)
+			std::uint32_t autoScaleDataIndex; ///< Used for parsing objects in-flight to auto scale them. Tracks start and end of the current object
+			std::uint32_t autoScaleCurrentObjectBytesRemaining; ///< Number of bytes left to process for the current auto scaled object
+			std::uint32_t autoScaleLastNumberBytesNeeded; /// Keeps track of the last number of bytes we processed in the previous callback
 			VTVersion version; ///< The version of the object pool. Must be the same for all pools!
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
 			bool uploaded; ///< The upload state of this pool
@@ -1548,6 +1554,28 @@ namespace isobus
 		                                                         std::uint32_t numberOfBytesNeeded,
 		                                                         std::uint8_t *chunkBuffer,
 		                                                         void *parentPointer);
+
+		/// @brief The data callback passed to the network manger's send function for the transport layer messages
+		/// @details We upload the data with callbacks to avoid making a complete copy of the pool to
+		/// accommodate the multiplexor that needs to get passed to the transport layer message's first byte.
+		/// This function, as opposed to `process_internal_object_pool_upload_callback` also performs autoscaling.
+		/// @param[in] callbackIndex The number of times the callback has been called
+		/// @param[in] bytesOffset The byte offset at which to get pool data
+		/// @param[in] numberOfBytesNeeded The number of bytes the protocol needs to send another frame (usually 7)
+		/// @param[out] chunkBuffer A pointer through which the data should be returned to the protocol
+		/// @param[in] parentPointer A context variable that is passed back through the callback
+		/// @returns true if the data was successfully returned via the callback
+		static bool process_internal_object_pool_upload_callback_with_autoscaling(std::uint32_t callbackIndex,
+		                                                                          std::uint32_t bytesOffset,
+		                                                                          std::uint32_t numberOfBytesNeeded,
+		                                                                          std::uint8_t *chunkBuffer,
+		                                                                          void *parentPointer);
+
+		bool get_is_object_scalable(ObjectType type);
+
+		std::uint32_t get_minimum_object_length(ObjectType type);
+
+		std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer);
 
 		void process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor);
 
