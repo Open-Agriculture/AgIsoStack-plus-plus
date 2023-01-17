@@ -2315,12 +2315,12 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_aux_n_preferred_assignment()
 	{
-		// TODO load preferred assignment from saved configuration
-		// TODO only send command if there is an Auxiliary Function Type 2 object in the object pool
+		//! @todo load preferred assignment from saved configuration
+		//! @todo only send command if there is an Auxiliary Function Type 2 object in the object pool
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
-		if (buffer.size() < 8)
+		if (buffer.size() < CAN_DATA_LENGTH)
 		{
-			buffer.resize(8);
+			buffer.resize(CAN_DATA_LENGTH);
 		}
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
@@ -2860,144 +2860,151 @@ namespace isobus
 							if (0 == data[1])
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment OK");
-								// TODO: load the preferred assignment into parentVT->auxiliaryInputDevices
+								//! @todo load the preferred assignment into parentVT->auxiliaryInputDevices
 							}
 						}
 						break;
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand):
 						{
-							std::uint64_t isoName = (static_cast<std::uint64_t>(data[1]) |
-							                         ((static_cast<std::uint64_t>(data[2])) << 8) |
-							                         ((static_cast<std::uint64_t>(data[3])) << 16) |
-							                         ((static_cast<std::uint64_t>(data[4])) << 24) |
-							                         ((static_cast<std::uint64_t>(data[5])) << 32) |
-							                         ((static_cast<std::uint64_t>(data[6])) << 40) |
-							                         ((static_cast<std::uint64_t>(data[7])) << 48) |
-							                         ((static_cast<std::uint64_t>(data[8])) << 56));
-							bool storeAsPreferred = (0x80 == (data[9] & 0x80));
-							std::uint8_t functionType = (data[9] & 0x1F);
-							std::uint16_t inputObjectID = (static_cast<std::uint16_t>(data[10]) |
-							                               ((static_cast<std::uint16_t>(data[11])) << 8));
-							std::uint16_t functionObjectID = (static_cast<std::uint16_t>(data[12]) |
-							                                  ((static_cast<std::uint16_t>(data[13])) << 8));
+							if (14 == data.size())
+							{
+								std::uint64_t isoName = (static_cast<std::uint64_t>(data[1]) |
+								                         ((static_cast<std::uint64_t>(data[2])) << 8) |
+								                         ((static_cast<std::uint64_t>(data[3])) << 16) |
+								                         ((static_cast<std::uint64_t>(data[4])) << 24) |
+								                         ((static_cast<std::uint64_t>(data[5])) << 32) |
+								                         ((static_cast<std::uint64_t>(data[6])) << 40) |
+								                         ((static_cast<std::uint64_t>(data[7])) << 48) |
+								                         ((static_cast<std::uint64_t>(data[8])) << 56));
+								bool storeAsPreferred = (0x80 == (data[9] & 0x80));
+								std::uint8_t functionType = (data[9] & 0x1F);
+								std::uint16_t inputObjectID = (static_cast<std::uint16_t>(data[10]) |
+								                               ((static_cast<std::uint16_t>(data[11])) << 8));
+								std::uint16_t functionObjectID = (static_cast<std::uint16_t>(data[12]) |
+								                                  ((static_cast<std::uint16_t>(data[13])) << 8));
 
-							bool hasError = false;
-							bool isAlreadyAssigned = false;
-							if (DEFAULT_NAME == isoName)
-							{
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+								bool hasError = false;
+								bool isAlreadyAssigned = false;
+								if (DEFAULT_NAME == isoName)
 								{
-									aux.functions.clear();
-									if (storeAsPreferred)
-									{
-										// TODO save preferred assignment to persistent configuration
-									}
-								}
-								CANStackLogger::CAN_stack_log("[AUX-N] Unassigned all functions");
-							}
-							else if (0x1F == functionType)
-							{
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
-								{
-									if (aux.name == isoName)
+									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 									{
 										aux.functions.clear();
 										if (storeAsPreferred)
 										{
-											// TODO save preferred assignment to persistent configuration
+											//! @todo save preferred assignment to persistent configuration
 										}
-										CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
-										break;
+									}
+									CANStackLogger::CAN_stack_log("[AUX-N] Unassigned all functions");
+								}
+								else if (0x1F == functionType)
+								{
+									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+									{
+										if (aux.name == isoName)
+										{
+											aux.functions.clear();
+											if (storeAsPreferred)
+											{
+												//! @todo save preferred assignment to persistent configuration
+											}
+											CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
+											break;
+										}
 									}
 								}
-							}
-							else if (NULL_OBJECT_ID == inputObjectID)
-							{
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+								else if (NULL_OBJECT_ID == inputObjectID)
 								{
-									if (aux.name == isoName)
+									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 									{
-										for (auto iter = aux.functions.begin(); iter != aux.functions.end(); iter++)
+										if (aux.name == isoName)
 										{
-											if (iter->functionObjectID == functionObjectID)
+											for (auto iter = aux.functions.begin(); iter != aux.functions.end(); iter++)
 											{
-												aux.functions.erase(iter);
-												if (storeAsPreferred)
+												if (iter->functionObjectID == functionObjectID)
 												{
-													// TODO save preferred assignment to persistent configuration
+													aux.functions.erase(iter);
+													if (storeAsPreferred)
+													{
+														//! @todo save preferred assignment to persistent configuration
+													}
+													CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 												}
-												CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
 										}
 									}
 								}
-							}
-							else if (NULL_OBJECT_ID == functionObjectID)
-							{
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+								else if (NULL_OBJECT_ID == functionObjectID)
 								{
-									if (aux.name == isoName)
+									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 									{
-										for (auto iter = aux.functions.begin(); iter != aux.functions.end(); iter++)
+										if (aux.name == isoName)
 										{
-											if (iter->inputObjectID == inputObjectID)
+											for (auto iter = aux.functions.begin(); iter != aux.functions.end(); iter++)
 											{
-												aux.functions.erase(iter);
-												if (storeAsPreferred)
+												if (iter->inputObjectID == inputObjectID)
 												{
-													// TODO save preferred assignment to persistent configuration
+													aux.functions.erase(iter);
+													if (storeAsPreferred)
+													{
+														//! @todo save preferred assignment to persistent configuration
+													}
+													CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 												}
-												CANStackLogger::CAN_stack_log("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
 										}
 									}
 								}
-							}
-							else
-							{
-								bool found = false;
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+								else
 								{
-									if (aux.name == isoName)
+									bool found = false;
+									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 									{
-										found = true;
-										if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
+										if (aux.name == isoName)
 										{
-											AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
-											auto location = std::find(aux.functions.begin(), aux.functions.end(), assignment);
-											if (aux.functions.end() == location)
+											found = true;
+											if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
 											{
-												aux.functions.push_back(assignment);
-												if (storeAsPreferred)
+												AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
+												auto location = std::find(aux.functions.begin(), aux.functions.end(), assignment);
+												if (aux.functions.end() == location)
 												{
-													// TODO save preferred assignment to persistent configuration
+													aux.functions.push_back(assignment);
+													if (storeAsPreferred)
+													{
+														//! @todo save preferred assignment to persistent configuration
+													}
+													CANStackLogger::CAN_stack_log("[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
 												}
-												CANStackLogger::CAN_stack_log("[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
+												else
+												{
+													hasError = true;
+													isAlreadyAssigned = true;
+													CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+												}
 											}
 											else
 											{
 												hasError = true;
-												isAlreadyAssigned = true;
-												CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+												CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
 											}
+											break;
 										}
-										else
-										{
-											hasError = true;
-											CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
-										}
-										break;
+									}
+									if (false == found)
+									{
+										hasError = true;
+										//! @todo prettier logging of NAME
+										CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 									}
 								}
-								if (false == found)
-								{
-									hasError = true;
-									// TODO prettier logging of NAME
-									CANStackLogger::CAN_stack_log("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
-								}
+								parentVT->send_aux_n_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
 							}
-							parentVT->send_aux_n_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
+							else
+							{
+								CANStackLogger::CAN_stack_log("[AUX-N]: Received AuxiliaryAssignmentTypeTwoCommand with wrong data length: " + isobus::to_string(data.size()) + " but expected 14.");
+							}
 						}
 						break;
 
@@ -3006,6 +3013,7 @@ namespace isobus
 							std::uint16_t inputObjectID = (static_cast<std::uint16_t>(data[1]) | ((static_cast<std::uint16_t>(data[2])) << 8));
 							std::uint16_t value1 = (static_cast<std::uint16_t>(data[3]) | ((static_cast<std::uint16_t>(data[4])) << 8));
 							std::uint16_t value2 = (static_cast<std::uint16_t>(data[5]) | ((static_cast<std::uint16_t>(data[6])) << 8));
+							/// @todo figure out how to best pass other status properties below to application
 							bool learnModeActive = (0x01 == (data[7] & 0x01));
 							bool inputActive = (0x02 == (data[7] & 0x02)); // Only in learn mode?
 							bool controlIsLocked = false;
@@ -3389,7 +3397,7 @@ namespace isobus
 								{
 									AuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
 									parentVT->auxiliaryInputDevices.push_back(inputDevice);
-									// TODO prettier logging of NAME
+									//! @todo prettier logging of NAME
 									CANStackLogger::CAN_stack_log("[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + std::to_string(modelIdentificationCode));
 								}
 							}
