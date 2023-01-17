@@ -270,10 +270,13 @@ namespace isobus
 		{
 		public:
 			/// @brief Constructs a `AssignedAuxiliaryFunction`, sets default values
+			/// @param[in] functionObjectID the object ID of the function present in our object pool
+			/// @param[in] inputObjectID the object ID assigned on the auxiliary inputs end
+			/// @param[in] functionType the type of function
 			AssignedAuxiliaryFunction(std::uint16_t functionObjectID, std::uint16_t inputObjectID, AuxiliaryTypeTwoFunctionType functionType);
 
 			/// @brief Allows easy comparison of two `AssignedAuxiliaryFunction` objects
-			/// @param obj the object to compare against
+			/// @param[in] other the object to compare against
 			bool operator==(const AssignedAuxiliaryFunction &other) const;
 
 			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
