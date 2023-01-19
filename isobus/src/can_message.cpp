@@ -62,4 +62,97 @@ namespace isobus
 		return CANPortIndex;
 	}
 
+	std::uint8_t CANMessage::get_uint8_at(const std::size_t index)
+	{
+		std::uint8_t retVal = 0;
+		if (index + 1 <= get_data_length())
+		{
+			retVal = data[index];
+		}
+		return retVal;
+	}
+
+	std::uint16_t CANMessage::get_uint16_at(const std::size_t index, const ByteFormat format)
+	{
+		std::uint16_t retVal = 0;
+		if (index + 2 <= get_data_length())
+		{
+			if (ByteFormat::LittleEndian == format)
+			{
+				retVal = data[index];
+				retVal |= static_cast<std::uint16_t>(data[index + 1]) << 8;
+			}
+			else
+			{
+				retVal = static_cast<std::uint16_t>(data[index]) << 8;
+				retVal |= data[index + 1];
+			}
+		}
+		return retVal;
+	}
+
+	std::uint32_t CANMessage::get_uint32_at(const std::size_t index, const ByteFormat format)
+	{
+		std::uint32_t retVal = 0;
+		if (index + 4 <= get_data_length())
+		{
+			if (ByteFormat::LittleEndian == format)
+			{
+				retVal = data[index];
+				retVal |= static_cast<std::uint32_t>(data[index + 1]) << 8;
+				retVal |= static_cast<std::uint32_t>(data[index + 2]) << 16;
+				retVal |= static_cast<std::uint32_t>(data[index + 3]) << 24;
+			}
+			else
+			{
+				retVal = static_cast<std::uint32_t>(data[index]) << 24;
+				retVal |= static_cast<std::uint32_t>(data[index + 1]) << 16;
+				retVal |= static_cast<std::uint32_t>(data[index + 2]) << 8;
+				retVal |= data[index + 3];
+			}
+		}
+		return retVal;
+	}
+
+	std::uint64_t CANMessage::get_uint64_at(const std::size_t index, const ByteFormat format)
+	{
+		std::uint64_t retVal = 0;
+		if (index + 8 <= get_data_length())
+		{
+			if (ByteFormat::LittleEndian == format)
+			{
+				retVal = data[index];
+				retVal |= static_cast<std::uint64_t>(data[index + 1]) << 8;
+				retVal |= static_cast<std::uint64_t>(data[index + 2]) << 16;
+				retVal |= static_cast<std::uint64_t>(data[index + 3]) << 24;
+				retVal |= static_cast<std::uint64_t>(data[index + 4]) << 32;
+				retVal |= static_cast<std::uint64_t>(data[index + 5]) << 40;
+				retVal |= static_cast<std::uint64_t>(data[index + 6]) << 48;
+				retVal |= static_cast<std::uint64_t>(data[index + 7]) << 56;
+			}
+			else
+			{
+				retVal = static_cast<std::uint64_t>(data[index]) << 56;
+				retVal |= static_cast<std::uint64_t>(data[index + 1]) << 48;
+				retVal |= static_cast<std::uint64_t>(data[index + 2]) << 40;
+				retVal |= static_cast<std::uint64_t>(data[index + 3]) << 32;
+				retVal |= static_cast<std::uint64_t>(data[index + 4]) << 24;
+				retVal |= static_cast<std::uint64_t>(data[index + 5]) << 16;
+				retVal |= static_cast<std::uint64_t>(data[index + 6]) << 8;
+				retVal |= data[index + 7];
+			}
+		}
+		return retVal;
+	}
+	bool isobus::CANMessage::get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length)
+	{
+		bool retVal = false;
+		if (length <= 8 - bitIndex)
+		{
+			uint8_t mask = ((1 << length) - 1) << bitIndex;
+			retVal = (get_uint8_at(byteIndex) & mask) == mask;
+		}
+		return retVal;
+	}
+
 } // namespace isobus

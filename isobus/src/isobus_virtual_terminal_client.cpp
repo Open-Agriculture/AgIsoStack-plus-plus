@@ -2580,18 +2580,13 @@ namespace isobus
 		    (CAN_DATA_LENGTH <= message->get_data_length()))
 		{
 			VirtualTerminalClient *parentVT = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
-			std::vector<std::uint8_t> &data = message->get_data();
-
 			switch (message->get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
 				{
-					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(data.at(0)))
+					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message->get_uint8_at(0)))
 					{
-						std::uint32_t targetParameterGroupNumber = ((static_cast<std::uint32_t>(data.at(5)) << 16) |
-						                                            (static_cast<std::uint32_t>(data.at(6)) << 8) |
-						                                            (static_cast<std::uint32_t>(data.at(7))));
-
+						std::uint32_t targetParameterGroupNumber = message->get_uint32_at(5, CANMessage::ByteFormat::BigEndian);
 						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber)
 						{
 							CANStackLogger::CAN_stack_log("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");
@@ -2603,67 +2598,61 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU):
 				{
-					switch (data.at(0))
+					switch (message->get_uint8_at(0))
 					{
 						case static_cast<std::uint8_t>(Function::SoftKeyActivationMessage):
 						{
-							std::uint8_t keyCode = data.at(1);
+							std::uint8_t keyCode = message->get_uint8_at(1);
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
+								std::uint16_t objectID = message->get_uint16_at(2);
+								std::uint16_t parentObjectID = message->get_uint16_at(4);
+								std::uint8_t keyNumber = message->get_uint8_at(6);
 								if (parentVT->get_vt_version_supported(VTVersion::Version6))
 								{
 									//! @todo process TAN
 								}
 
-								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode),
-								                                         static_cast<std::uint16_t>(data.at(6)),
-								                                         (static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8)),
-								                                         (static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8)),
-								                                         parentVT);
+								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT);
 							}
 						}
 						break;
 
 						case static_cast<std::uint8_t>(Function::ButtonActivationMessage):
 						{
-							std::uint8_t keyCode = data.at(1);
+							std::uint8_t keyCode = message->get_uint8_at(1);
 							if (keyCode <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
+								std::uint16_t objectID = message->get_uint16_at(2);
+								std::uint16_t parentObjectID = message->get_uint16_at(4);
+								std::uint8_t keyNumber = message->get_uint8_at(6);
 								if (parentVT->get_vt_version_supported(VTVersion::Version6))
 								{
 									//! @todo process TAN
 								}
-
-								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode),
-								                                        static_cast<std::uint16_t>(data.at(6)),
-								                                        (static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8)),
-								                                        (static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8)),
-								                                        parentVT);
+								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT);
 							}
 						}
 						break;
 
 						case static_cast<std::uint8_t>(Function::PointingEventMessage):
 						{
-							std::uint16_t xPosition = (static_cast<std::uint16_t>(data.at(1)) |
-							                           ((static_cast<std::uint16_t>(data.at(2))) << 8));
-							std::uint16_t yPosition = (static_cast<std::uint16_t>(data.at(3)) |
-							                           ((static_cast<std::uint16_t>(data.at(4))) << 8));
+							std::uint16_t xPosition = message->get_uint16_at(1);
+							std::uint16_t yPosition = message->get_uint16_at(3);
 
 							std::uint8_t touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
 							std::uint16_t partenMaskObjectID = NULL_OBJECT_ID;
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
 								// VT version is at least 6
-								touchState = data.at(5) & 0x0F;
-								partenMaskObjectID = (static_cast<std::uint16_t>(data.at(6)) |
-								                      ((static_cast<std::uint16_t>(data.at(7))) << 8));
+								touchState = message->get_uint8_at(5) & 0x0F;
+								partenMaskObjectID = message->get_uint16_at(6);
 								//! @todo process TAN
 							}
 							else if (parentVT->get_vt_version_supported(VTVersion::Version4))
 							{
 								// VT version is either 4 or 5
-								touchState = data.at(5);
+								touchState = message->get_uint8_at(5);
 							}
 
 							if (touchState <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
@@ -2679,14 +2668,13 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTSelectInputObjectMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
-							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool objectSelected = (0x01 == data[3]);
+							std::uint16_t objectID = message->get_uint16_at(1);
+							bool objectSelected = (0x01 == message->get_uint8_at(3));
 							bool objectOpenForInput = true;
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version4))
 							{
-								objectOpenForInput = (0x01 == (data[4] & 0x01));
+								objectOpenForInput = message->get_bool_at(4, 0);
 							}
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
@@ -2700,9 +2688,8 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTESCMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
-							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint8_t errorCode = data.at(3) & 0x1F;
+							std::uint16_t objectID = message->get_uint16_at(1);
+							std::uint8_t errorCode = message->get_uint8_at(3) & 0x1F;
 							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
 							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
 							{
@@ -2718,12 +2705,8 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeNumericValueMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
-							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint32_t value = (static_cast<std::uint32_t>(data[4]) |
-							                       ((static_cast<std::uint32_t>(data[5])) << 8) |
-							                       ((static_cast<std::uint32_t>(data[6])) << 16) |
-							                       ((static_cast<std::uint32_t>(data[7])) << 24));
+							std::uint16_t objectID = message->get_uint16_at(1);
+							std::uint32_t value = message->get_uint32_at(4);
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
@@ -2735,18 +2718,15 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeActiveMaskMessage):
 						{
-							std::uint16_t maskObjectID = (static_cast<std::uint16_t>(data[1]) |
-							                              ((static_cast<std::uint16_t>(data[2])) << 8));
+							std::uint16_t maskObjectID = message->get_uint16_at(1);
 
-							bool missingObjects = (0x04 == (data[3] & 0x04));
-							bool maskOrChildHasErrors = (0x08 == (data[3] & 0x08));
-							bool anyOtherError = (0x010 == (data[3] & 0x010));
-							bool poolDeleted = (0x020 == (data[3] & 0x020));
+							bool missingObjects = message->get_bool_at(3, 2);
+							bool maskOrChildHasErrors = message->get_bool_at(3, 3);
+							bool anyOtherError = message->get_bool_at(3, 4);
+							bool poolDeleted = message->get_bool_at(3, 5);
 
-							std::uint16_t errorObjectID = (static_cast<std::uint16_t>(data[4]) |
-							                               ((static_cast<std::uint16_t>(data[5])) << 8));
-							std::uint16_t parentObjectID = (static_cast<std::uint16_t>(data[6]) |
-							                                ((static_cast<std::uint16_t>(data[7])) << 8));
+							std::uint16_t errorObjectID = message->get_uint16_at(4);
+							std::uint16_t parentObjectID = message->get_uint16_at(6);
 
 							parentVT->process_change_active_mask_callback(maskObjectID,
 							                                              errorObjectID,
@@ -2761,14 +2741,13 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeSoftKeyMaskMessage):
 						{
-							std::uint16_t dataOrAlarmMaskID = (static_cast<std::uint16_t>(data[1]) |
-							                                   ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint16_t softKeyMaskID = (static_cast<std::uint16_t>(data[3]) |
-							                               ((static_cast<std::uint16_t>(data[4])) << 8));
-							bool missingObjects = (0x04 == (data[5] & 0x04));
-							bool maskOrChildHasErrors = (0x08 == (data[5] & 0x08));
-							bool anyOtherError = (0x010 == (data[5] & 0x010));
-							bool poolDeleted = (0x020 == (data[5] & 0x020));
+							std::uint16_t dataOrAlarmMaskID = message->get_uint16_at(1);
+							std::uint16_t softKeyMaskID = message->get_uint16_at(3);
+
+							bool missingObjects = message->get_bool_at(5, 2);
+							bool maskOrChildHasErrors = message->get_bool_at(5, 3);
+							bool anyOtherError = message->get_bool_at(5, 4);
+							bool poolDeleted = message->get_bool_at(5, 5);
 
 							parentVT->process_change_soft_key_mask_callback(dataOrAlarmMaskID,
 							                                                softKeyMaskID,
@@ -2782,10 +2761,9 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTChangeStringValueMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
-							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint8_t stringLength = data[3];
-							std::string value = std::string(data.begin() + 4, data.begin() + 4 + stringLength);
+							std::uint16_t objectID = message->get_uint16_at(1);
+							std::uint8_t stringLength = message->get_uint8_at(3);
+							std::string value = std::string(message->get_data().begin() + 4, message->get_data().begin() + 4 + stringLength);
 
 							parentVT->process_change_string_value_callback(objectID, value, parentVT);
 						}
@@ -2793,18 +2771,16 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTOnUserLayoutHideShowMessage):
 						{
-							std::uint16_t objectID = (static_cast<std::uint16_t>(data[1]) |
-							                          ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool hidden = (0 == (data[3] & 0x01));
+							std::uint16_t objectID = message->get_uint16_at(1);
+							bool hidden = !message->get_bool_at(3, 0);
 
 							parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
 
 							// There could be two layout messages in one packet
-							objectID = static_cast<std::uint16_t>(data[4]) | ((static_cast<std::uint16_t>(data[5])) << 8);
+							objectID = message->get_uint16_at(4);
 							if (objectID != NULL_OBJECT_ID)
 							{
-								hidden = (0 == (data[6] & 0x01));
-
+								hidden = !message->get_bool_at(6, 0);
 								parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
 							}
 
@@ -2817,7 +2793,7 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTControlAudioSignalTerminationMessage):
 						{
-							bool terminated = (0x01 == (data[1] & 0x01));
+							bool terminated = message->get_bool_at(1, 0);
 
 							parentVT->process_audio_signal_termination_callback(terminated, parentVT);
 
@@ -2830,34 +2806,33 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::PreferredAssignmentCommand):
 						{
-							if (0x01 == (data[1] & 0x01))
+							if (message->get_bool_at(1, 0))
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment Error - Auxiliary Input Unit(s) (NAME or Model Identification Code) not valid");
 							}
-							if (0x02 == (data[1] & 0x02))
+							if (message->get_bool_at(3, 1))
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment Error - Function Object ID(S) not valid");
 							}
-							if (0x04 == (data[1] & 0x04))
+							if (message->get_bool_at(3, 2))
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment Error - Input Object ID(s) not valid");
 							}
-							if (0x08 == (data[1] & 0x08))
+							if (message->get_bool_at(3, 3))
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment Error - Duplicate Object ID of Auxiliary Function");
 							}
-							if (0x10 == (data[1] & 0x10))
+							if (message->get_bool_at(3, 4))
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment Error - Other");
 							}
 
-							if (0 != data[1])
+							if (0 != message->get_uint8_at(1))
 							{
-								std::uint16_t faultyObjectID = (static_cast<std::uint16_t>(data[2]) |
-								                                ((static_cast<std::uint16_t>(data[3])) << 8));
+								std::uint16_t faultyObjectID = message->get_uint16_at(2);
 								CANStackLogger::CAN_stack_log("[AUX-N]: Auxiliary Function Object ID of faulty assignment: " + isobus::to_string(faultyObjectID));
 							}
-							if (0 == data[1])
+							else
 							{
 								CANStackLogger::CAN_stack_log("[AUX-N]: Preferred Assignment OK");
 								//! @todo load the preferred assignment into parentVT->auxiliaryInputDevices
@@ -2867,22 +2842,13 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand):
 						{
-							if (14 == data.size())
+							if (14 == message->get_data_length())
 							{
-								std::uint64_t isoName = (static_cast<std::uint64_t>(data[1]) |
-								                         ((static_cast<std::uint64_t>(data[2])) << 8) |
-								                         ((static_cast<std::uint64_t>(data[3])) << 16) |
-								                         ((static_cast<std::uint64_t>(data[4])) << 24) |
-								                         ((static_cast<std::uint64_t>(data[5])) << 32) |
-								                         ((static_cast<std::uint64_t>(data[6])) << 40) |
-								                         ((static_cast<std::uint64_t>(data[7])) << 48) |
-								                         ((static_cast<std::uint64_t>(data[8])) << 56));
-								bool storeAsPreferred = (0x80 == (data[9] & 0x80));
-								std::uint8_t functionType = (data[9] & 0x1F);
-								std::uint16_t inputObjectID = (static_cast<std::uint16_t>(data[10]) |
-								                               ((static_cast<std::uint16_t>(data[11])) << 8));
-								std::uint16_t functionObjectID = (static_cast<std::uint16_t>(data[12]) |
-								                                  ((static_cast<std::uint16_t>(data[13])) << 8));
+								std::uint64_t isoName = message->get_uint64_at(1);
+								bool storeAsPreferred = message->get_bool_at(9, 7);
+								std::uint8_t functionType = (message->get_uint8_at(9) & 0x1F);
+								std::uint16_t inputObjectID = message->get_uint64_at(10);
+								std::uint16_t functionObjectID = message->get_uint64_at(12);
 
 								bool hasError = false;
 								bool isAlreadyAssigned = false;
@@ -3003,25 +2969,25 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[AUX-N]: Received AuxiliaryAssignmentTypeTwoCommand with wrong data length: " + isobus::to_string(data.size()) + " but expected 14.");
+								CANStackLogger::CAN_stack_log("[AUX-N]: Received AuxiliaryAssignmentTypeTwoCommand with wrong data length: " + isobus::to_string(message->get_data_length()) + " but expected 14.");
 							}
 						}
 						break;
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage):
 						{
-							std::uint16_t inputObjectID = (static_cast<std::uint16_t>(data[1]) | ((static_cast<std::uint16_t>(data[2])) << 8));
-							std::uint16_t value1 = (static_cast<std::uint16_t>(data[3]) | ((static_cast<std::uint16_t>(data[4])) << 8));
-							std::uint16_t value2 = (static_cast<std::uint16_t>(data[5]) | ((static_cast<std::uint16_t>(data[6])) << 8));
+							std::uint16_t inputObjectID = message->get_uint16_at(1);
+							std::uint16_t value1 = message->get_uint16_at(3);
+							std::uint16_t value2 = message->get_uint16_at(5);
 							/// @todo figure out how to best pass other status properties below to application
-							bool learnModeActive = (0x01 == (data[7] & 0x01));
-							bool inputActive = (0x02 == (data[7] & 0x02)); // Only in learn mode?
+							bool learnModeActive = message->get_bool_at(7, 0);
+							bool inputActive = message->get_bool_at(7, 1); // Only in learn mode?
 							bool controlIsLocked = false;
 							bool interactionWhileLocked = false;
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
-								controlIsLocked = (0x04 == (data[7] & 0x04));
-								interactionWhileLocked = (0x08 == (data[7] & 0x08));
+								controlIsLocked = message->get_bool_at(7, 2);
+								interactionWhileLocked = message->get_bool_at(7, 3);
 							}
 							for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 							{
@@ -3039,13 +3005,11 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::VTStatusMessage):
 						{
 							parentVT->lastVTStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
-							parentVT->activeWorkingSetMasterAddress = data[1];
-							parentVT->activeWorkingSetDataMaskObjectID = (static_cast<std::uint16_t>(data[2]) |
-							                                              ((static_cast<std::uint16_t>(data[3])) << 8));
-							parentVT->activeWorkingSetSoftkeyMaskObjectID = (static_cast<std::uint16_t>(data[4]) |
-							                                                 ((static_cast<std::uint16_t>(data[5])) << 8));
-							parentVT->busyCodesBitfield = data[6];
-							parentVT->currentCommandFunctionCode = data[7];
+							parentVT->activeWorkingSetMasterAddress = message->get_uint8_at(1);
+							parentVT->activeWorkingSetDataMaskObjectID = message->get_uint16_at(2);
+							parentVT->activeWorkingSetSoftkeyMaskObjectID = message->get_uint16_at(4);
+							parentVT->busyCodesBitfield = message->get_uint8_at(6);
+							parentVT->currentCommandFunctionCode = message->get_uint8_at(7);
 						}
 						break;
 
@@ -3053,9 +3017,9 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetMemoryResponse == parentVT->state)
 							{
-								parentVT->connectedVTVersion = data[1];
+								parentVT->connectedVTVersion = message->get_uint8_at(1);
 
-								if (0 == data[2])
+								if (0 == message->get_uint8_at(2))
 								{
 									// There IS enough memory
 									parentVT->set_state(StateMachineState::SendGetNumberSoftkeys);
@@ -3073,10 +3037,10 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetNumberSoftKeysResponse == parentVT->state)
 							{
-								parentVT->softKeyXAxisPixels = data[4];
-								parentVT->softKeyYAxisPixels = data[5];
-								parentVT->numberVirtualSoftkeysPerSoftkeyMask = data[6];
-								parentVT->numberPhysicalSoftkeys = data[7];
+								parentVT->softKeyXAxisPixels = message->get_uint8_at(4);
+								parentVT->softKeyYAxisPixels = message->get_uint8_at(5);
+								parentVT->numberVirtualSoftkeysPerSoftkeyMask = message->get_uint8_at(6);
+								parentVT->numberPhysicalSoftkeys = message->get_uint8_at(7);
 								parentVT->set_state(StateMachineState::SendGetTextFontData);
 							}
 						}
@@ -3086,9 +3050,9 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetTextFontDataResponse == parentVT->state)
 							{
-								parentVT->smallFontSizesBitfield = data[5];
-								parentVT->largeFontSizesBitfield = data[6];
-								parentVT->fontStylesBitfield = data[7];
+								parentVT->smallFontSizesBitfield = message->get_uint8_at(5);
+								parentVT->largeFontSizesBitfield = message->get_uint8_at(6);
+								parentVT->fontStylesBitfield = message->get_uint8_at(7);
 								parentVT->set_state(StateMachineState::SendGetHardware);
 							}
 						}
@@ -3098,15 +3062,13 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetHardwareResponse == parentVT->state)
 							{
-								if (data[2] <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColor))
+								if (message->get_uint8_at(2) <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColor))
 								{
-									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(data[2]);
+									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(message->get_uint8_at(2));
 								}
-								parentVT->hardwareFeaturesBitfield = data[3];
-								parentVT->xPixels = (static_cast<std::uint16_t>(data[4]) |
-								                     ((static_cast<std::uint16_t>(data[5])) << 8));
-								parentVT->yPixels = (static_cast<std::uint16_t>(data[6]) |
-								                     ((static_cast<std::uint16_t>(data[7])) << 8));
+								parentVT->hardwareFeaturesBitfield = message->get_uint8_at(3);
+								parentVT->xPixels = message->get_uint16_at(4);
+								parentVT->yPixels = message->get_uint16_at(6);
 								parentVT->lastObjectPoolIndex = 0;
 
 								// Check if we need to ask for pool versions
@@ -3129,7 +3091,7 @@ namespace isobus
 							if (StateMachineState::WaitForGetVersionsResponse == parentVT->state)
 							{
 								// See if the server returned any labels
-								const std::uint8_t numberOfLabels = data[1];
+								const std::uint8_t numberOfLabels = message->get_uint8_at(1);
 								constexpr std::size_t LABEL_LENGTH = 7;
 
 								if (numberOfLabels > 0)
@@ -3138,18 +3100,18 @@ namespace isobus
 									bool labelMatched = false;
 									const std::size_t remainingLength = (2 + (LABEL_LENGTH * numberOfLabels));
 
-									if (data.size() >= remainingLength)
+									if (message->get_data_length() >= remainingLength)
 									{
 										for (std::uint_fast8_t i = 0; i < numberOfLabels; i++)
 										{
 											char tempStringLabel[8] = { 0 };
-											tempStringLabel[0] = data[2 + (LABEL_LENGTH * i)];
-											tempStringLabel[1] = data[3 + (LABEL_LENGTH * i)];
-											tempStringLabel[2] = data[4 + (LABEL_LENGTH * i)];
-											tempStringLabel[3] = data[5 + (LABEL_LENGTH * i)];
-											tempStringLabel[4] = data[6 + (LABEL_LENGTH * i)];
-											tempStringLabel[5] = data[7 + (LABEL_LENGTH * i)];
-											tempStringLabel[6] = data[8 + (LABEL_LENGTH * i)];
+											tempStringLabel[0] = message->get_uint8_at(2 + (LABEL_LENGTH * i));
+											tempStringLabel[1] = message->get_uint8_at(3 + (LABEL_LENGTH * i));
+											tempStringLabel[2] = message->get_uint8_at(4 + (LABEL_LENGTH * i));
+											tempStringLabel[3] = message->get_uint8_at(5 + (LABEL_LENGTH * i));
+											tempStringLabel[4] = message->get_uint8_at(6 + (LABEL_LENGTH * i));
+											tempStringLabel[5] = message->get_uint8_at(7 + (LABEL_LENGTH * i));
+											tempStringLabel[6] = message->get_uint8_at(8 + (LABEL_LENGTH * i));
 											tempStringLabel[7] = '\0';
 											std::string labelDecoded(tempStringLabel);
 											std::string tempActualLabel(parentVT->objectPools[0].versionLabel);
@@ -3218,7 +3180,7 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForLoadVersionResponse == parentVT->state)
 							{
-								if (0 == data[5])
+								if (0 == message->get_uint8_at(5))
 								{
 									CANStackLogger::CAN_stack_log("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
 									parentVT->set_state(StateMachineState::Connected);
@@ -3234,15 +3196,15 @@ namespace isobus
 								else
 								{
 									// At least one error is set
-									if (data[5] & 0x01)
+									if (message->get_bool_at(5, 0))
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Load Versions Response error: File system error or corruption.");
 									}
-									if (data[5] & 0x02)
+									if (message->get_bool_at(5, 1))
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Load Versions Response error: Insufficient memory.");
 									}
-									if (data[5] & 0x04)
+									if (message->get_bool_at(5, 2))
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Load Versions Response error: Any other error.");
 									}
@@ -3263,7 +3225,7 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForStoreVersionResponse == parentVT->state)
 							{
-								if (0 == data[5])
+								if (0 == message->get_uint8_at(5))
 								{
 									// Stored with no error
 									parentVT->set_state(StateMachineState::Connected);
@@ -3272,15 +3234,15 @@ namespace isobus
 								else
 								{
 									// At least one error is set
-									if (data[5] & 0x01)
+									if (message->get_bool_at(5, 0))
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Store Versions Response error: Version label is not correct.");
 									}
-									if (data[5] & 0x02)
+									if (message->get_bool_at(5, 1))
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Store Versions Response error: Insufficient memory.");
 									}
-									if (data[5] & 0x04)
+									if (message->get_bool_at(5, 2))
 									{
 										CANStackLogger::CAN_stack_log("[VT]: Store Versions Response error: Any other error.");
 									}
@@ -3295,17 +3257,17 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::DeleteVersionCommand):
 						{
-							if (0 == data[5])
+							if (0 == message->get_uint8_at(5))
 							{
 								CANStackLogger::CAN_stack_log("[VT]: Delete Version Response OK!");
 							}
 							else
 							{
-								if (data[5] & 0x02)
+								if (message->get_bool_at(5, 1))
 								{
 									CANStackLogger::CAN_stack_log("[VT]: Delete Version Response error: Version label is not correct, or unknown.");
 								}
-								if (data[5] & 0x08)
+								if (message->get_bool_at(5, 3))
 								{
 									CANStackLogger::CAN_stack_log("[VT]: Delete Version Response error: Any other error.");
 								}
@@ -3317,14 +3279,12 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state)
 							{
-								bool anyErrorInPool = (0 != (data[1] & 0x01));
-								bool vtRanOutOfMemory = (0 != (data[1] & 0x02));
-								bool otherErrors = (0 != (data[1] & 0x08));
-								std::uint16_t parentObjectIDOfFaultyObject = (static_cast<std::uint16_t>(data[2]) |
-								                                              ((static_cast<std::uint16_t>(data[3])) << 8));
-								std::uint16_t objectIDOfFaultyObject = (static_cast<std::uint16_t>(data[4]) |
-								                                        ((static_cast<std::uint16_t>(data[5])) << 8));
-								std::uint8_t objectPoolErrorBitmask = data[6];
+								bool anyErrorInPool = message->get_bool_at(1, 0);
+								bool vtRanOutOfMemory = message->get_bool_at(1, 1);
+								bool otherErrors = message->get_bool_at(1, 3);
+								std::uint16_t parentObjectIDOfFaultyObject = message->get_uint16_at(2);
+								std::uint16_t objectIDOfFaultyObject = message->get_uint16_at(4);
+								std::uint8_t objectPoolErrorBitmask = message->get_uint8_at(6);
 
 								if ((!anyErrorInPool) &&
 								    (0 == objectPoolErrorBitmask))
@@ -3376,12 +3336,12 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal):
 				{
-					switch (data.at(0))
+					switch (message->get_uint8_at(0))
 					{
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage):
 						{
-							std::uint16_t modelIdentificationCode = (static_cast<std::uint16_t>(data[1]) | ((static_cast<std::uint16_t>(data[2])) << 8));
-							bool ready = data[3];
+							std::uint16_t modelIdentificationCode = message->get_uint16_at(1);
+							bool ready = message->get_uint8_at(3);
 
 							if (ready)
 							{
