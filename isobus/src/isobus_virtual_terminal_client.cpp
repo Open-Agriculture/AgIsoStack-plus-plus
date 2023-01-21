@@ -49,10 +49,13 @@ namespace isobus
 	  currentObjectPoolState(CurrentObjectPoolUploadState::Uninitialized),
 	  stateMachineTimestamp_ms(0),
 	  lastWorkingSetMaintenanceTimestamp_ms(0),
+	  lastAuxiliaryMaintenanceTimestamp_ms(0),
+	  ourModelIdentificationCode(1),
 	  workerThread(nullptr),
 	  firstTimeInState(false),
 	  initialized(false),
-	  sendWorkingSetMaintenenace(false),
+	  sendWorkingSetMaintenance(false),
+	  sendAuxiliaryMaintenance(false),
 	  shouldTerminate(false),
 	  objectPoolDataCallback(nullptr),
 	  objectPoolSize_bytes(0),
@@ -292,18 +295,49 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::register_auxiliary_input_event_callback(AuxiliaryInputCallback value)
+	void VirtualTerminalClient::register_auxiliary_function_event_callback(AuxiliaryFunctionCallback value)
 	{
-		auxiliaryInputCallbacks.push_back(value);
+		auxiliaryFunctionCallbacks.push_back(value);
 	}
 
-	void VirtualTerminalClient::remove_auxiliary_input_event_callback(AuxiliaryInputCallback value)
+	void VirtualTerminalClient::remove_auxiliary_function_event_callback(AuxiliaryFunctionCallback value)
 	{
-		auto callbackLocation = std::find(auxiliaryInputCallbacks.begin(), auxiliaryInputCallbacks.end(), value);
+		auto callbackLocation = std::find(auxiliaryFunctionCallbacks.begin(), auxiliaryFunctionCallbacks.end(), value);
 
-		if (auxiliaryInputCallbacks.end() != callbackLocation)
+		if (auxiliaryFunctionCallbacks.end() != callbackLocation)
 		{
-			auxiliaryInputCallbacks.erase(callbackLocation);
+			auxiliaryFunctionCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void VirtualTerminalClient::set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode)
+	{
+		if (state == StateMachineState::Disconnected)
+		{
+			ourModelIdentificationCode = modelIdentificationCode;
+		}
+		else
+		{
+			CANStackLogger::CAN_stack_log("[AUX-N] Error setting model identification code... can only be changed when disconnected");
+		}
+	}
+
+	void VirtualTerminalClient::update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked)
+	{
+		if (state == StateMachineState::Connected)
+		{
+			if ((value1 != ourAuxiliaryInputs.at(auxiliaryInputID).value1) || (value2 != ourAuxiliaryInputs.at(auxiliaryInputID).value2))
+			{
+				ourAuxiliaryInputs.at(auxiliaryInputID).value2 = value1;
+				ourAuxiliaryInputs.at(auxiliaryInputID).value2 = value2;
+				ourAuxiliaryInputs.at(auxiliaryInputID).controlLocked = controlLocked;
+				ourAuxiliaryInputs.at(auxiliaryInputID).hasInteraction = true;
+				update_auxiliary_input_status(auxiliaryInputID);
+			}
+		}
+		else
+		{
+			CANStackLogger::CAN_stack_log("[AUX-N] Error updating auxiliary input... not connected");
 		}
 	}
 
@@ -1590,7 +1624,8 @@ namespace isobus
 			{
 				case StateMachineState::Disconnected:
 				{
-					sendWorkingSetMaintenenace = false;
+					sendWorkingSetMaintenance = false;
+					sendAuxiliaryMaintenance = false;
 
 					if (partnerControlFunction->get_address_valid())
 					{
@@ -1633,7 +1668,8 @@ namespace isobus
 						set_state(StateMachineState::SendGetMemory);
 						send_working_set_maintenance(true, objectPools[0].version);
 						lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
-						sendWorkingSetMaintenenace = true;
+						sendWorkingSetMaintenance = true;
+						sendAuxiliaryMaintenance = true;
 					}
 				}
 				break;
@@ -1944,13 +1980,15 @@ namespace isobus
 						set_state(StateMachineState::Disconnected);
 						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[VT]: Status Timeout");
 					}
+					update_auxiliary_input_status();
 				}
 				break;
 
 				case StateMachineState::Failed:
 				{
 					constexpr std::uint32_t VT_STATE_MACHINE_RETRY_TIMEOUT_MS = 5000;
-					sendWorkingSetMaintenenace = false;
+					sendWorkingSetMaintenance = false;
+					sendAuxiliaryMaintenance = false;
 
 					// Retry connecting after a while
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS))
@@ -1972,10 +2010,16 @@ namespace isobus
 			set_state(StateMachineState::Disconnected);
 		}
 
-		if ((sendWorkingSetMaintenenace) &&
+		if ((sendWorkingSetMaintenance) &&
 		    (SystemTiming::time_expired_ms(lastWorkingSetMaintenanceTimestamp_ms, WORKING_SET_MAINTENANCE_TIMEOUT_MS)))
 		{
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
+		}
+		if ((sendAuxiliaryMaintenance) &&
+		    (SystemTiming::time_expired_ms(lastAuxiliaryMaintenanceTimestamp_ms, AUXILIARY_MAINTENANCE_TIMEOUT_MS)))
+		{
+			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
+			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendAuxiliaryMaintenance));
 		}
 		txFlags.process_all_flags();
 
@@ -1983,6 +2027,16 @@ namespace isobus
 		{
 			firstTimeInState = false;
 		}
+	}
+
+	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
+	{
+		return 0x40 == (busyCodesBitfield && 0x40);
+	}
+
+	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
+	{
+		return 0x40 == (busyCodesBitfield && 0x40);
 	}
 
 	bool VirtualTerminalClient::send_delete_object_pool()
@@ -2360,7 +2414,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_aux_n_preferred_assignment()
+	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment()
 	{
 		//! @todo load preferred assignment from saved configuration
 		//! @todo only send command if there is an Auxiliary Function Type 2 object in the object pool
@@ -2377,7 +2431,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_aux_n_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned)
+	bool VirtualTerminalClient::send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned)
 	{
 		std::uint8_t errorCode = 0;
 		if (hasError)
@@ -2402,6 +2456,90 @@ namespace isobus
 		                                                      myControlFunction.get(),
 		                                                      partnerControlFunction.get(),
 		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalClient::send_auxiliary_input_maintenance()
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage),
+			                                             static_cast<std::uint8_t>(ourModelIdentificationCode),
+			                                             static_cast<std::uint8_t>(ourModelIdentificationCode >> 8),
+			                                             StateMachineState::Connected == state ? 0x01 : 0x00,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      nullptr,
+		                                                      CANIdentifier::Priority3);
+	}
+
+	void VirtualTerminalClient::update_auxiliary_input_status()
+	{
+		for (auto &auxiliaryInput : ourAuxiliaryInputs)
+		{
+			update_auxiliary_input_status(auxiliaryInput.first);
+		}
+	}
+
+	bool VirtualTerminalClient::update_auxiliary_input_status(std::uint16_t objectID)
+	{
+		bool retVal = false;
+		AuxiliaryInputState &state = ourAuxiliaryInputs.at(objectID);
+		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs
+		if (SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY) ||
+		    (state.hasInteraction && !get_auxiliary_input_learn_mode_enabled() && SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
+		{
+			state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
+
+			std::uint8_t operatingState = 0;
+			if (get_auxiliary_input_learn_mode_enabled())
+			{
+				operatingState |= 0x01;
+				if (state.hasInteraction)
+				{
+					operatingState |= 0x02;
+				}
+			}
+			if (state.controlLocked)
+			{
+				operatingState |= 0x04;
+				if (state.hasInteraction)
+				{
+					operatingState |= 0x08;
+				}
+			}
+			state.hasInteraction = false; // reset interaction flag
+			const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage),
+				                                             static_cast<std::uint8_t>(objectID),
+				                                             static_cast<std::uint8_t>(objectID >> 8),
+				                                             static_cast<std::uint8_t>(state.value1),
+				                                             static_cast<std::uint8_t>(state.value1 >> 8),
+				                                             static_cast<std::uint8_t>(state.value2),
+				                                             static_cast<std::uint8_t>(state.value2 >> 8),
+				                                             operatingState };
+			if (get_auxiliary_input_learn_mode_enabled())
+			{
+				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+				                                                        buffer,
+				                                                        CAN_DATA_LENGTH,
+				                                                        myControlFunction.get(),
+				                                                        partnerControlFunction.get(),
+				                                                        CANIdentifier::Priority3);
+			}
+			else
+			{
+				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                                        buffer,
+				                                                        CAN_DATA_LENGTH,
+				                                                        myControlFunction.get(),
+				                                                        nullptr,
+				                                                        CANIdentifier::Priority3);
+			}
+		}
+		return retVal;
 	}
 
 	void VirtualTerminalClient::set_state(StateMachineState value)
@@ -2578,11 +2716,11 @@ namespace isobus
 
 	void VirtualTerminalClient::process_auxiliary_input_callback(AssignedAuxiliaryFunction function, std::uint32_t value1, std::uint32_t value2, VirtualTerminalClient *parentPointer)
 	{
-		for (std::size_t i = 0; i < parentPointer->auxiliaryInputCallbacks.size(); i++)
+		for (std::size_t i = 0; i < parentPointer->auxiliaryFunctionCallbacks.size(); i++)
 		{
-			if (nullptr != parentPointer->auxiliaryInputCallbacks[i])
+			if (nullptr != parentPointer->auxiliaryFunctionCallbacks[i])
 			{
-				parentPointer->auxiliaryInputCallbacks[i](function, value1, value2, parentPointer);
+				parentPointer->auxiliaryFunctionCallbacks[i](function, value1, value2, parentPointer);
 			}
 		}
 	}
@@ -2607,6 +2745,20 @@ namespace isobus
 						if (transmitSuccessful)
 						{
 							vtClient->lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
+						}
+					}
+				}
+				break;
+
+				case TransmitFlags::SendAuxiliaryMaintenance:
+				{
+					if (vtClient->objectPools.size() > 0)
+					{
+						transmitSuccessful = vtClient->send_auxiliary_input_maintenance();
+
+						if (transmitSuccessful)
+						{
+							vtClient->lastAuxiliaryMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
 						}
 					}
 				}
@@ -2888,7 +3040,7 @@ namespace isobus
 							else
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Preferred Assignment OK");
-								//! @todo load the preferred assignment into parentVT->auxiliaryInputDevices
+								//! @todo load the preferred assignment into parentVT->assignedAuxiliaryInputDevices
 							}
 						}
 						break;
@@ -2907,7 +3059,7 @@ namespace isobus
 								bool isAlreadyAssigned = false;
 								if (DEFAULT_NAME == isoName)
 								{
-									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 									{
 										aux.functions.clear();
 										if (storeAsPreferred)
@@ -2919,7 +3071,7 @@ namespace isobus
 								}
 								else if (0x1F == functionType)
 								{
-									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 									{
 										if (aux.name == isoName)
 										{
@@ -2935,7 +3087,7 @@ namespace isobus
 								}
 								else if (NULL_OBJECT_ID == inputObjectID)
 								{
-									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 									{
 										if (aux.name == isoName)
 										{
@@ -2956,7 +3108,7 @@ namespace isobus
 								}
 								else if (NULL_OBJECT_ID == functionObjectID)
 								{
-									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 									{
 										if (aux.name == isoName)
 										{
@@ -2978,7 +3130,7 @@ namespace isobus
 								else
 								{
 									bool found = false;
-									for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 									{
 										if (aux.name == isoName)
 										{
@@ -3018,7 +3170,7 @@ namespace isobus
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 									}
 								}
-								parentVT->send_aux_n_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
+								parentVT->send_auxiliary_function_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
 							}
 							else
 							{
@@ -3033,6 +3185,7 @@ namespace isobus
 							std::uint16_t value1 = message->get_uint16_at(3);
 							std::uint16_t value2 = message->get_uint16_at(5);
 							/// @todo figure out how to best pass other status properties below to application
+							/// @todo The standard requires us to not perform any auxiliary function when learn mode is active, so we probably want to let the application know about that somehow
 							// bool learnModeActive = message->get_bool_at(7, 0);
 							// bool inputActive = message->get_bool_at(7, 1); // Only in learn mode?
 							// bool controlIsLocked = false;
@@ -3042,7 +3195,7 @@ namespace isobus
 								// controlIsLocked = message->get_bool_at(7, 2);
 								// interactionWhileLocked = message->get_bool_at(7, 3);
 							}
-							for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+							for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 							{
 								for (AssignedAuxiliaryFunction &assignment : aux.functions)
 								{
@@ -3237,13 +3390,13 @@ namespace isobus
 								{
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
 									parentVT->set_state(StateMachineState::Connected);
-									if (parentVT->send_aux_n_preferred_assignment())
+									if (parentVT->send_auxiliary_functions_preferred_assignment())
 									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments.");
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments after LoadVersionCommand.");
 									}
 									else
 									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments.");
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments after LoadVersionCommand.");
 									}
 								}
 								else
@@ -3357,14 +3510,13 @@ namespace isobus
 									{
 										parentVT->set_state(StateMachineState::Connected);
 									}
-
-									if (parentVT->send_aux_n_preferred_assignment())
+									if (parentVT->send_auxiliary_functions_preferred_assignment())
 									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments.");
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments after EndOfObjectPoolMessage.");
 									}
 									else
 									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments.");
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments after EndOfObjectPoolMessage.");
 									}
 								}
 								else
@@ -3399,7 +3551,7 @@ namespace isobus
 							if (ready)
 							{
 								bool found = false;
-								for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
+								for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 								{
 									if (aux.modelIdentificationCode == modelIdentificationCode)
 									{
@@ -3408,8 +3560,8 @@ namespace isobus
 								}
 								if (false == found)
 								{
-									AuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
-									parentVT->auxiliaryInputDevices.push_back(inputDevice);
+									AssignedAuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
+									parentVT->assignedAuxiliaryInputDevices.push_back(inputDevice);
 									//! @todo prettier logging of NAME
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + std::to_string(modelIdentificationCode));
 								}
