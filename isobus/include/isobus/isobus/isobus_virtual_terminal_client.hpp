@@ -1387,6 +1387,13 @@ namespace isobus
 		/// @returns true if the message was sent successfully
 		bool send_auxiliary_input_maintenance();
 
+		/// @brief Send the auxiliary input status type 2 enable response
+		/// @param[in] objectID The object ID of the input
+		/// @param[in] isEnabled true if the input is enabled
+		/// @param[in] hasError true if the enable failed
+		/// @returns true if the message was sent successfully
+		bool send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool hasError);
+
 		/// @brief Send the auxiliary control type 2 status message for all inputs if applicable
 		void update_auxiliary_input_status();
 

@@ -2476,6 +2476,24 @@ namespace isobus
 		                                                      CANIdentifier::Priority3);
 	}
 
+	bool VirtualTerminalClient::send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool invalidObjectID)
+	{
+		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand),
+			                                             static_cast<std::uint8_t>(objectID),
+			                                             static_cast<std::uint8_t>(objectID >> 8),
+			                                             isEnabled ? 0x01 : 0x00,
+			                                             invalidObjectID ? 0x01 : 0x00,
+			                                             0xFF,
+			                                             0xFF,
+			                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer,
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
 	void VirtualTerminalClient::update_auxiliary_input_status()
 	{
 		for (auto &auxiliaryInput : ourAuxiliaryInputs)
@@ -3205,6 +3223,24 @@ namespace isobus
 									}
 								}
 							}
+						}
+						break;
+
+						case static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand):
+						{
+							std::uint16_t inputObjectID = message->get_uint16_at(1);
+							bool shouldEnable = message->get_bool_at(3, 0);
+							bool isInvalidObjectID = true;
+							for (auto &input : parentVT->ourAuxiliaryInputs)
+							{
+								if (inputObjectID == input.first)
+								{
+									input.second.enabled = shouldEnable;
+									isInvalidObjectID = false;
+									break;
+								}
+							}
+							parentVT->send_auxiliary_input_status_enable_response(inputObjectID, isInvalidObjectID ? false : shouldEnable, isInvalidObjectID);
 						}
 						break;
 
