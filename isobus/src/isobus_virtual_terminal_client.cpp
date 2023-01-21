@@ -2586,7 +2586,7 @@ namespace isobus
 				{
 					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message->get_uint8_at(0)))
 					{
-						std::uint32_t targetParameterGroupNumber = message->get_uint32_at(5, CANMessage::ByteFormat::BigEndian);
+						std::uint32_t targetParameterGroupNumber = message->get_uint24_at(5);
 						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber)
 						{
 							CANStackLogger::CAN_stack_log("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");

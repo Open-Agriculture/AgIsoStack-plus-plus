@@ -84,6 +84,24 @@ namespace isobus
 		return retVal;
 	}
 
+	std::uint32_t CANMessage::get_uint24_at(const std::size_t index, const ByteFormat format)
+	{
+		std::uint32_t retVal;
+		if (ByteFormat::LittleEndian == format)
+		{
+			retVal = data.at(index);
+			retVal |= static_cast<std::uint32_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::uint32_t>(data.at(index + 2)) << 16;
+		}
+		else
+		{
+			retVal = static_cast<std::uint32_t>(data.at(index + 2)) << 16;
+			retVal |= static_cast<std::uint32_t>(data.at(index + 1)) << 8;
+			retVal |= data.at(index + 2);
+		}
+		return retVal;
+	}
+
 	std::uint32_t CANMessage::get_uint32_at(const std::size_t index, const ByteFormat format)
 	{
 		std::uint32_t retVal;
