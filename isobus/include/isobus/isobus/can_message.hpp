@@ -91,6 +91,14 @@ namespace isobus
 		/// @return The 16-bit unsigned integer
 		std::uint16_t get_uint16_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian);
 
+		/// @brief Get a right-aligned 24-bit integer from the buffer (returned as a uint32_t) at a specific index.
+		/// A 24-bit number can hold a value between 0 and 16,777,215.
+		/// @details This function will return the 3 bytes at the specified index in the buffer.
+		/// @param[in] index The index to get the 24-bit unsigned integer from
+		/// @param[in] format The byte format to use when reading the integer
+		/// @return The 24-bit unsigned integer, right aligned into a uint32_t
+		std::uint32_t get_uint24_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian);
+
 		/// @brief Get a 32-bit unsigned integer from the buffer at a specific index.
 		/// A 32-bit unsigned integer can hold a value between 0 and 4294967295.
 		/// @details This function will return the 4 bytes at the specified index in the buffer.
