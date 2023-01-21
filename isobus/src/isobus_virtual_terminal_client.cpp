@@ -2847,8 +2847,8 @@ namespace isobus
 								std::uint64_t isoName = message->get_uint64_at(1);
 								bool storeAsPreferred = message->get_bool_at(9, 7);
 								std::uint8_t functionType = (message->get_uint8_at(9) & 0x1F);
-								std::uint16_t inputObjectID = message->get_uint64_at(10);
-								std::uint16_t functionObjectID = message->get_uint64_at(12);
+								std::uint16_t inputObjectID = message->get_uint16_at(10);
+								std::uint16_t functionObjectID = message->get_uint16_at(12);
 
 								bool hasError = false;
 								bool isAlreadyAssigned = false;
