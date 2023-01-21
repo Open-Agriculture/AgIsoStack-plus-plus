@@ -669,6 +669,7 @@ namespace isobus
 					{
 						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
 						bool proceedToSendDataPackets = true;
+						bool sessionStillValid = true;
 
 						if (0 == session->lastPacketNumber)
 						{
@@ -715,6 +716,7 @@ namespace isobus
 										CANStackLogger::CAN_stack_log("[ETP]: Aborting session, unable to transfer chunk of data (numberBytesLeft=" + to_string(numberBytesLeft) + ")");
 										abort_session(session, ConnectionAbortReason::AnyOtherReason);
 										close_session(session, false);
+										sessionStillValid = false;
 										break;
 									}
 								}
@@ -754,16 +756,19 @@ namespace isobus
 							}
 						}
 
-						if ((session->lastPacketNumber == (session->packetCount)) &&
-						    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+						if (sessionStillValid)
 						{
-							set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
-							session->timestamp_ms = SystemTiming::get_timestamp_ms();
-						}
-						else if (session->lastPacketNumber == session->packetCount)
-						{
-							set_state(session, StateMachineState::WaitForClearToSend);
-							session->timestamp_ms = SystemTiming::get_timestamp_ms();
+							if ((session->lastPacketNumber == (session->packetCount)) &&
+							    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+							{
+								set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
+								session->timestamp_ms = SystemTiming::get_timestamp_ms();
+							}
+							else if (session->lastPacketNumber == session->packetCount)
+							{
+								set_state(session, StateMachineState::WaitForClearToSend);
+								session->timestamp_ms = SystemTiming::get_timestamp_ms();
+							}
 						}
 					}
 				}
