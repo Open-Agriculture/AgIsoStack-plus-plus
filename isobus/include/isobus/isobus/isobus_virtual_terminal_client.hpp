@@ -15,6 +15,7 @@
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
@@ -324,8 +325,8 @@ namespace isobus
 		typedef void (*VTUserLayoutHideShowCallback)(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer);
 		/// @brief A typedef for a generic VT control audio signal termination callback for convenience
 		typedef void (*VTAudioSignalTerminationCallback)(bool isTerminated, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for an auxilary input event for convenience
-		typedef void (*AuxiliaryInputCallback)(AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, VirtualTerminalClient *parentPointer);
+		/// @brief A typedef for an auxilary function event for convenience
+		typedef void (*AuxiliaryFunctionCallback)(AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, VirtualTerminalClient *parentPointer);
 
 		// Callbacks for events that happen on the VT
 		/// @brief Allows you to register for a callback when a softkey is pressed or released
@@ -420,12 +421,27 @@ namespace isobus
 		void remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value);
 
 		/// @brief Allows you to register for a callback for when a change in auxiliary input is received
-		/// @param[in] value The AuxiliaryInputCallback to register
-		void register_auxiliary_input_event_callback(AuxiliaryInputCallback value);
+		/// @param[in] value The AuxiliaryFunctionCallback to register
+		void register_auxiliary_function_event_callback(AuxiliaryFunctionCallback value);
 
 		/// @brief Allows you to remove a callback when for a change in auxiliary input is received
-		/// @param[in] value The AuxiliaryInputCallback to remove
-		void remove_auxiliary_input_event_callback(AuxiliaryInputCallback value);
+		/// @param[in] value The AuxiliaryFunctionCallback to remove
+		void remove_auxiliary_function_event_callback(AuxiliaryFunctionCallback value);
+
+		/// @brief Set the model identification code of our auxiliary input device.
+		/// @details The model identification code is used to allow other devices indentify
+		/// whether our device differs from a previous versions. If the model identification code
+		/// is different, the preferred assignments are reset.
+		/// @param[in] modelIdentificationCode The model identification code
+		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
+
+		/// @brief Update the state of an auxiliary input. This should be called when
+		/// the value of an auxiliary input changes.
+		/// @param[in] auxiliaryInputID The ID of the auxiliary input
+		/// @param[in] value1 The first value of the auxiliary input. See Table J.5 of Part 6 of the standard for details.
+		/// @param[in] value2 The second value of the auxiliary input. See Table J.5 of Part 6 of the standard for details.
+		/// @param[in] controlLocked Whether the auxiliary input is locked
+		void update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked = false);
 
 		// Command Messages
 		/// @brief Sends a hide/show object command
@@ -1213,6 +1229,7 @@ namespace isobus
 		enum class TransmitFlags : std::uint32_t
 		{
 			SendWorkingSetMaintenance = 0, ///< Flag to send the working set maintenenace message
+			SendAuxiliaryMaintenance = 1, ///< Flag to send the auxiliary maintenance message
 
 			NumberFlags ///< The number of flags in this enum
 		};
@@ -1243,12 +1260,30 @@ namespace isobus
 		};
 
 		/// @brief A struct for storing information about an auxiliary input device
-		struct AuxiliaryInputDevice
+		struct AssignedAuxiliaryInputDevice
 		{
 			const std::uint64_t name; ///< The NAME of the unit
 			const std::uint16_t modelIdentificationCode; ///< The model identification code
-			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device
+			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device (only applicable for listeners of input)
 		};
+
+		/// @brief Struct for storing the state of an auxiliary input on our device
+		struct AuxiliaryInputState
+		{
+			std::uint64_t lastStatusUpdate; ///< The time of the last status update, in milliseconds
+			bool enabled; ///< Whether the auxiliary input is enabled by the VT
+			bool hasInteraction; ///< Whether the auxiliary input is currently interacted with
+			bool controlLocked; ///< Whether the auxiliary input is currently locked
+			std::uint16_t value1; ///< The first value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
+			std::uint16_t value2; ///< The second value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
+		};
+
+		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY = 1000; ///< The delay between the auxiliary input status messages, in milliseconds
+		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY_INTERACTION = 500; ///< The delay between the auxiliary input status messages when the input is interacted with, in milliseconds
+
+		/// @brief Get whether the VT has enabled the learn mode for the auxiliary input
+		/// @returns true if the VT has enabled the learn mode for the auxiliary input
+		bool get_auxiliary_input_learn_mode_enabled() const;
 
 		// Object Pool Managment
 		/// @brief Sends the delete object pool message
@@ -1339,14 +1374,26 @@ namespace isobus
 
 		/// @brief Send the preferred auxiliary control type 2 assignment command
 		/// @returns true if the message was sent successfully
-		bool send_aux_n_preferred_assignment();
+		bool send_auxiliary_functions_preferred_assignment();
 
 		/// @brief Send the auxiliary control type 2 assignment reponse message
 		/// @param[in] functionObjectID The object ID of the function
 		/// @param[in] hasError true if the assignment failed
 		/// @param[in] isAlreadyAssigned true if the function is already assigned
 		/// @returns true if the message was sent successfully
-		bool send_aux_n_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned);
+		bool send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned);
+
+		/// @brief Send the auxiliary control type 2 maintenance message
+		/// @returns true if the message was sent successfully
+		bool send_auxiliary_input_maintenance();
+
+		/// @brief Send the auxiliary control type 2 status message for all inputs if applicable
+		void update_auxiliary_input_status();
+
+		/// @brief Send the auxiliary control type 2 status message for a specific input if applicable
+		/// @param[in] objectID The object ID of the input
+		/// @returns true if the status message was sent
+		bool update_auxiliary_input_status(std::uint16_t objectID);
 
 		/// @brief Sets the state machine state and updates the associated timestamp
 		/// @param[in] value The new state for the state machine
@@ -1543,7 +1590,8 @@ namespace isobus
 		void worker_thread_function();
 
 		static constexpr std::uint32_t VT_STATUS_TIMEOUT_MS = 3000; ///< The max allowable time between VT status messages before its considered offline
-		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The frequency at which we send the working set maintenance message
+		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The delay between working set maintenance messages
+		static constexpr std::uint32_t AUXILIARY_MAINTENANCE_TIMEOUT_MS = 100; ///< The delay between auxiliary maintenance messages
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
@@ -1582,12 +1630,16 @@ namespace isobus
 		CurrentObjectPoolUploadState currentObjectPoolState; ///< The current upload state of the object pool being processed
 		std::uint32_t stateMachineTimestamp_ms; ///< Timestamp from the last state machine update
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms; ///< The timestamp from the last time we sent the maintenance message
+		std::uint32_t lastAuxiliaryMaintenanceTimestamp_ms; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
-		std::vector<AuxiliaryInputDevice> auxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
+		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
+		std::uint16_t ourModelIdentificationCode; ///< The model identification code of this input device
+		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 		std::thread *workerThread; ///< The worker thread that updates this interface
 		bool firstTimeInState; ///< Stores if the current update cycle is the first time a state machine state has been processed
 		bool initialized; ///< Stores the client initialization state
-		bool sendWorkingSetMaintenenace; ///< Used internally to enable and disable cyclic sending of the maintenance message
+		bool sendWorkingSetMaintenance; ///< Used internally to enable and disable cyclic sending of the working set maintenance message
+		bool sendAuxiliaryMaintenance; ///< Used internally to enable and disable cyclic sending of the auxiliary maintenance message
 		bool shouldTerminate; ///< Used to determine if the client should exit and join the worker thread
 
 		// Activation event callbacks
@@ -1602,7 +1654,7 @@ namespace isobus
 		std::vector<VTChangeStringValueCallback> changeStringValueCallbacks; ///< A list of all change string value callbacks
 		std::vector<VTUserLayoutHideShowCallback> userLayoutHideShowCallbacks; ///< A list of all user layout hide/show callbacks
 		std::vector<VTAudioSignalTerminationCallback> audioSignalTerminationCallbacks; ///< A list of all control audio signal termination callbacks
-		std::vector<AuxiliaryInputCallback> auxiliaryInputCallbacks; ///< A list of all auxiliary input callbacks
+		std::vector<AuxiliaryFunctionCallback> auxiliaryFunctionCallbacks; ///< A list of all auxiliary function callbacks
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback; ///< The callback to use to get pool data
