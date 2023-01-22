@@ -85,9 +85,14 @@ namespace isobus
 		}
 	}
 
-	bool VirtualTerminalClient::get_is_initialized()
+	bool VirtualTerminalClient::get_is_initialized() const
 	{
 		return initialized;
+	}
+
+	bool VirtualTerminalClient::get_is_connected() const
+	{
+		return (StateMachineState::Connected == state);
 	}
 
 	void VirtualTerminalClient::terminate()

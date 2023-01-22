@@ -170,34 +170,6 @@ namespace isobus
 			OtherError = 5 ///< Error is not one of the above
 		};
 
-		/// @brief The internal state machine state of the VT client
-		enum class StateMachineState : std::uint8_t
-		{
-			Disconnected, ///< VT is not connected, and is not trying to connect yet
-			WaitForPartnerVTStatusMessage, ///< VT client is initialized, waiting for a VT server to come online
-			SendWorkingSetMasterMessage, ///< Client is sending the working state master message
-			ReadyForObjectPool, ///< Client needs an object pool before connection can continue
-			SendGetMemory, ///< Client is sending the "get memory" message to see if VT has enough memory available
-			WaitForGetMemoryResponse, ///< Client is waiting for a response to the "get memory" message
-			SendGetNumberSoftkeys, ///< Client is sending the "get number of soft keys" message
-			WaitForGetNumberSoftKeysResponse, ///< Client is waiting for a response to the "get number of soft keys" message
-			SendGetTextFontData, ///< Client is sending the "get text font data" message
-			WaitForGetTextFontDataResponse, ///< Client is waiting for a response to the "get text font data" message
-			SendGetHardware, ///< Client is sending the "get hardware" message
-			WaitForGetHardwareResponse, ///< Client is waiting for a response to the "get hardware" message
-			SendGetVersions, ///< If a version label was specified, check to see if the VT has that version already
-			WaitForGetVersionsResponse, ///< Client is waiting for a response to the "get versions" message
-			SendStoreVersion, ///< Sending the store version command
-			WaitForStoreVersionResponse, ///< Client is waiting for a response to the store version command
-			SendLoadVersion, ///< Sending the load version command
-			WaitForLoadVersionResponse, ///< Client is waiting for the VT to respond to the "Load Version" command
-			UploadObjectPool, ///< Client is uploading the object pool
-			SendEndOfObjectPool, ///< Client is sending the end of object pool message
-			WaitForEndOfObjectPoolResponse, ///< Client is waiting for the end of object pool response message
-			Connected, ///< Client is connected to the VT server and the application layer is in control
-			Failed ///< Client could not connect to the VT due to an error
-		};
-
 		/// @brief Enumerates the different events that can be associated with a macro
 		enum class MacroEventID : std::uint8_t
 		{
@@ -300,8 +272,13 @@ namespace isobus
 		void initialize(bool spawnThread);
 
 		/// @brief Returns if the client has been initialized
+		/// @note This does not mean that the client is connected to the VT server
 		/// @returns true if the client has been initialized
-		bool get_is_initialized();
+		bool get_is_initialized() const;
+
+		/// @brief Check whether the client is connected to the VT server
+		/// @returns true if cconnected, false otherwise
+		bool get_is_connected() const;
 
 		// Calling this will stop the worker thread if it exists
 		/// @brief Terminates the client and joins the worker thread if applicable
@@ -1080,6 +1057,34 @@ namespace isobus
 		void update();
 
 	private:
+		/// @brief The internal state machine state of the VT client
+		enum class StateMachineState : std::uint8_t
+		{
+			Disconnected, ///< VT is not connected, and is not trying to connect yet
+			WaitForPartnerVTStatusMessage, ///< VT client is initialized, waiting for a VT server to come online
+			SendWorkingSetMasterMessage, ///< Client is sending the working state master message
+			ReadyForObjectPool, ///< Client needs an object pool before connection can continue
+			SendGetMemory, ///< Client is sending the "get memory" message to see if VT has enough memory available
+			WaitForGetMemoryResponse, ///< Client is waiting for a response to the "get memory" message
+			SendGetNumberSoftkeys, ///< Client is sending the "get number of soft keys" message
+			WaitForGetNumberSoftKeysResponse, ///< Client is waiting for a response to the "get number of soft keys" message
+			SendGetTextFontData, ///< Client is sending the "get text font data" message
+			WaitForGetTextFontDataResponse, ///< Client is waiting for a response to the "get text font data" message
+			SendGetHardware, ///< Client is sending the "get hardware" message
+			WaitForGetHardwareResponse, ///< Client is waiting for a response to the "get hardware" message
+			SendGetVersions, ///< If a version label was specified, check to see if the VT has that version already
+			WaitForGetVersionsResponse, ///< Client is waiting for a response to the "get versions" message
+			SendStoreVersion, ///< Sending the store version command
+			WaitForStoreVersionResponse, ///< Client is waiting for a response to the store version command
+			SendLoadVersion, ///< Sending the load version command
+			WaitForLoadVersionResponse, ///< Client is waiting for the VT to respond to the "Load Version" command
+			UploadObjectPool, ///< Client is uploading the object pool
+			SendEndOfObjectPool, ///< Client is sending the end of object pool message
+			WaitForEndOfObjectPoolResponse, ///< Client is waiting for the end of object pool response message
+			Connected, ///< Client is connected to the VT server and the application layer is in control
+			Failed ///< Client could not connect to the VT due to an error
+		};
+
 		/// @brief Enumerates the multiplexor byte values for VT commands
 		enum class Function : std::uint8_t
 		{
