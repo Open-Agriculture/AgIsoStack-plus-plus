@@ -8,7 +8,7 @@
 //================================================================================================
 
 #include "isobus/hardware_integration/spi_interface_esp.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
 #include <cstring>
@@ -35,7 +35,7 @@ bool SPIInterfaceESP::init()
 	}
 	else
 	{
-		isobus::CANStackLogger::CAN_stack_log("[SPI-ESP] Failed to add SPI device: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SPI-ESP] Failed to add SPI device: " + isobus::to_string(esp_err_to_name(error)));
 	}
 
 	return ESP_OK == error;
@@ -46,7 +46,7 @@ void SPIInterfaceESP::deinit()
 	esp_err_t error = spi_bus_remove_device(spiDevice);
 	if (ESP_OK != error)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[SPI-ESP] Failed to remove SPI device: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPI-ESP] Failed to remove SPI device: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	if (ESP_ERR_INVALID_STATE == error || ESP_OK == error)
 	{
@@ -79,20 +79,20 @@ void SPIInterfaceESP::transmit(SPITransactionFrame *frame)
 			if (ESP_OK != error)
 			{
 				success = false;
-				isobus::CANStackLogger::CAN_stack_log("[SPI-ESP] Failed to transmit SPI transaction frame: " + isobus::to_string(esp_err_to_name(error)));
+				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Warning, "[SPI-ESP] Failed to transmit SPI transaction frame: " + isobus::to_string(esp_err_to_name(error)));
 			}
 			xSemaphoreGive(spiMutex);
 		}
 		else
 		{
 			success = false;
-			isobus::CANStackLogger::CAN_stack_log("[SPI-ESP] Failed to obtain SPI mutex in transmit().");
+			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPI-ESP] Failed to obtain SPI mutex in transmit().");
 		}
 	}
 	else
 	{
 		success = false;
-		isobus::CANStackLogger::CAN_stack_log("[SPI-ESP] SPI device not initialized, pherhaps you forgot to call init()?");
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SPI-ESP] SPI device not initialized, pherhaps you forgot to call init()?");
 	}
 }
 

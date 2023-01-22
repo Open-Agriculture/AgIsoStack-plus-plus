@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file can_warning_logger.cpp
+/// @file can_stack_logger.cpp
 ///
 /// @brief A class that acts as a logging sink. The intent is that someone could make their own
 /// derived class of logger and inject it into the CAN stack to get helpful debug logging.
@@ -7,13 +7,15 @@
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 
 #include <iostream>
 
 namespace isobus
 {
 	CANStackLogger *CANStackLogger::logger = nullptr;
+	CANStackLogger::LoggingLevel CANStackLogger::currentLogLevel = LoggingLevel::Info;
+	std::mutex CANStackLogger::loggerMutex;
 
 	CANStackLogger::CANStackLogger()
 	{
@@ -23,13 +25,15 @@ namespace isobus
 	{
 	}
 
-	void CANStackLogger::CAN_stack_log(const std::string &warningText)
+	void CANStackLogger::CAN_stack_log(LoggingLevel level, const std::string &logText)
 	{
+		const std::lock_guard<std::mutex> lock(loggerMutex);
 		CANStackLogger *canStackLogger = nullptr;
 
-		if (get_can_stack_logger(canStackLogger))
+		if ((get_can_stack_logger(canStackLogger)) &&
+		    (level >= get_log_level()))
 		{
-			canStackLogger->LogCANLibWarning(warningText);
+			canStackLogger->sink_CAN_stack_log(level, logText);
 		}
 	}
 
@@ -38,7 +42,17 @@ namespace isobus
 		logger = logSink;
 	}
 
-	void CANStackLogger::LogCANLibWarning(const std::string &)
+	CANStackLogger::LoggingLevel CANStackLogger::get_log_level()
+	{
+		return currentLogLevel;
+	}
+
+	void CANStackLogger::set_log_level(LoggingLevel newLogLevel)
+	{
+		currentLogLevel = newLogLevel;
+	}
+
+	void CANStackLogger::sink_CAN_stack_log(LoggingLevel, const std::string &)
 	{
 		// Override this function to use the log sink
 	}

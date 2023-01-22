@@ -7,7 +7,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/hardware_integration/spi_transaction_frame.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
 #include <cstring>
@@ -36,12 +36,12 @@ bool SPITransactionFrame::read_byte(std::size_t index, std::uint8_t &byte) const
 		}
 		else
 		{
-			isobus::CANStackLogger::CAN_stack_log("[SPIFrame] Tried to read byte at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
+			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPIFrame] Tried to read byte at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
 		}
 	}
 	else
 	{
-		isobus::CANStackLogger::CAN_stack_log("[SPIFrame] The transaction was not configured to read, but tried to read byte at index: " + isobus::to_string(index));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPIFrame] The transaction was not configured to read, but tried to read byte at index: " + isobus::to_string(index));
 	}
 	return retVal;
 }
@@ -58,12 +58,12 @@ bool SPITransactionFrame::read_bytes(std::size_t index, std::uint8_t *buffer, st
 		}
 		else
 		{
-			isobus::CANStackLogger::CAN_stack_log("[SPIFrame] Tried to read " + isobus::to_string(length) + " bytes at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
+			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPIFrame] Tried to read " + isobus::to_string(length) + " bytes at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
 		}
 	}
 	else
 	{
-		isobus::CANStackLogger::CAN_stack_log("[SPIFrame] The transaction was not configured to read, but tried to read " + isobus::to_string(length) + " bytes at index: " + isobus::to_string(index));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPIFrame] The transaction was not configured to read, but tried to read " + isobus::to_string(length) + " bytes at index: " + isobus::to_string(index));
 	}
 	return retVal;
 }

@@ -18,20 +18,21 @@ Let's write a very simple custom logger that will consume the output from the CA
 
 .. code-block:: c++
 
-	#include "isobus/isobus/can_warning_logger.hpp"
+	#include "isobus/isobus/can_stack_logger.hpp"
 	#include <iostream>
 
 	class CustomLogger : public isobus::CANStackLogger
 	{
 	public:
-		void LogCANLibWarning(const std::string &text) override
+		void sink_CAN_stack_log(CANStackLogger::LoggingLevel level, const std::string &text) override
 		{
 			std::cout << text << std::endl;
 		}
 	};
 
-Here you can see that we've inherited from the CAN Stack's :code:`CANStackLogger` and implemented the function :code:`LogCANLibWarning`.
+Here you can see that we've inherited from the CAN Stack's :code:`CANStackLogger` and implemented the function :code:`sink_CAN_stack_log`.
 In our example the text that the stack is logging will be printed to the console.
+If you want, you can also check the logging level using the :code:`level` parameter, and take different actions depending on the severity of the log message.
 You could also emit this text to your favorite logger instead if you like, such as `spdlog <https://github.com/gabime/spdlog>`_.
 
 Now, we just need to create a static instance of this logger, and tell the CAN stack to use it.

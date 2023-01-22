@@ -10,7 +10,7 @@
 //================================================================================================
 
 #include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 
 #include <thread>
 
@@ -40,7 +40,7 @@ void PCANBasicWindowsPlugin::open()
 
 	if (PCAN_ERROR_OK != openResult)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[PCAN]: Error trying to connect to PCAN probe");
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[PCAN]: Error trying to connect to PCAN probe");
 	}
 }
 
