@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.16)
+project(vt_aux_inputs_example)
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(isobus CONFIG) # Normally, you set REQUIRED, however if building
+                            # from top level, it already exists
+find_package(Threads REQUIRED)
+
+add_executable(VTAuxInputsExample main.cpp object_pool_ids.h)
+target_link_libraries(
+  VTAuxInputsExample PRIVATE isobus::Isobus isobus::HardwareIntegration
+                             Threads::Threads isobus::SystemTiming)
+
+add_custom_command(
+  TARGET VTAuxInputsExample
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/vtpooldata.iop
+          $<TARGET_FILE_DIR:VTAuxInputsExample>/vtpooldata.iop)

@@ -39,7 +39,7 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 // This callback will provide us with event driven notifications of auxiliary input from the stack
 void handle_aux_input(isobus::VirtualTerminalClient::AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, isobus::VirtualTerminalClient *)
 {
-	std::cout << "Auxiliary input received: (" << function.functionObjectID << ", " << function.inputObjectID << ", " << static_cast<int>(function.functionType) << "), value1: " << value1 << ", value2: " << value2 << std::endl;
+	std::cout << "Auxiliary function event received: (" << function.functionObjectID << ", " << function.inputObjectID << ", " << static_cast<int>(function.functionType) << "), value1: " << value1 << ", value2: " << value2 << std::endl;
 }
 
 int main()
@@ -115,7 +115,7 @@ int main()
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
-	TestVirtualTerminalClient->register_auxiliary_input_event_callback(handle_aux_input);
+	TestVirtualTerminalClient->register_auxiliary_function_event_callback(handle_aux_input);
 	TestVirtualTerminalClient->initialize(true);
 
 	while (running)

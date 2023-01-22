@@ -324,20 +324,23 @@ namespace isobus
 
 	void VirtualTerminalClient::update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked)
 	{
+		/// @todo remove this temporary workaround when the VT client can read which objects are passed to the VT (#65)
+		if (!ourAuxiliaryInputs.count(auxiliaryInputID))
+		{
+			ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
+			CANStackLogger::CAN_stack_log("[AUX-N] Inserted new auxiliary input with ID: " + isobus::to_string(static_cast<int>(auxiliaryInputID)));
+		}
+
 		if (state == StateMachineState::Connected)
 		{
 			if ((value1 != ourAuxiliaryInputs.at(auxiliaryInputID).value1) || (value2 != ourAuxiliaryInputs.at(auxiliaryInputID).value2))
 			{
-				ourAuxiliaryInputs.at(auxiliaryInputID).value2 = value1;
+				ourAuxiliaryInputs.at(auxiliaryInputID).value1 = value1;
 				ourAuxiliaryInputs.at(auxiliaryInputID).value2 = value2;
 				ourAuxiliaryInputs.at(auxiliaryInputID).controlLocked = controlLocked;
 				ourAuxiliaryInputs.at(auxiliaryInputID).hasInteraction = true;
 				update_auxiliary_input_status(auxiliaryInputID);
 			}
-		}
-		else
-		{
-			CANStackLogger::CAN_stack_log("[AUX-N] Error updating auxiliary input... not connected");
 		}
 	}
 
@@ -2018,6 +2021,7 @@ namespace isobus
 		if ((sendAuxiliaryMaintenance) &&
 		    (SystemTiming::time_expired_ms(lastAuxiliaryMaintenanceTimestamp_ms, AUXILIARY_MAINTENANCE_TIMEOUT_MS)))
 		{
+			/// @todo Only set this flag if the object pool contains a 'Auxiliary Input Type 2 Object' (#65)
 			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendAuxiliaryMaintenance));
 		}
@@ -2036,7 +2040,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
 	{
-		return 0x40 == (busyCodesBitfield && 0x40);
+		return 0x40 == (busyCodesBitfield & 0x40);
 	}
 
 	bool VirtualTerminalClient::send_delete_object_pool()
@@ -2417,7 +2421,7 @@ namespace isobus
 	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment()
 	{
 		//! @todo load preferred assignment from saved configuration
-		//! @todo only send command if there is an Auxiliary Function Type 2 object in the object pool
+		//! @todo only send command if there is an Auxiliary Function Type 2 object in the object pool (#65)
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
 		if (buffer.size() < CAN_DATA_LENGTH)
 		{
@@ -2463,7 +2467,7 @@ namespace isobus
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage),
 			                                             static_cast<std::uint8_t>(ourModelIdentificationCode),
 			                                             static_cast<std::uint8_t>(ourModelIdentificationCode >> 8),
-			                                             StateMachineState::Connected == state ? 0x01 : 0x00,
+			                                             static_cast<std::uint8_t>(StateMachineState::Connected == state ? 0x01 : 0x00),
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
@@ -2481,8 +2485,8 @@ namespace isobus
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand),
 			                                             static_cast<std::uint8_t>(objectID),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             isEnabled ? 0x01 : 0x00,
-			                                             invalidObjectID ? 0x01 : 0x00,
+			                                             static_cast<std::uint8_t>(isEnabled ? 0x01 : 0x00),
+			                                             static_cast<std::uint8_t>(invalidObjectID ? 0x01 : 0x00),
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF };
@@ -2530,6 +2534,8 @@ namespace isobus
 				}
 			}
 			state.hasInteraction = false; // reset interaction flag
+
+			/// @todo Change values based on state of auxiliary input, e.g. for non-latched boolean inputs we have to change from value=1 (momentary) to value=2 (held)
 			const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage),
 				                                             static_cast<std::uint8_t>(objectID),
 				                                             static_cast<std::uint8_t>(objectID >> 8),
@@ -3033,19 +3039,19 @@ namespace isobus
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[AUX-N]: Preferred Assignment Error - Auxiliary Input Unit(s) (NAME or Model Identification Code) not valid");
 							}
-							if (message->get_bool_at(3, 1))
+							if (message->get_bool_at(1, 1))
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[AUX-N]: Preferred Assignment Error - Function Object ID(S) not valid");
 							}
-							if (message->get_bool_at(3, 2))
+							if (message->get_bool_at(1, 2))
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[AUX-N]: Preferred Assignment Error - Input Object ID(s) not valid");
 							}
-							if (message->get_bool_at(3, 3))
+							if (message->get_bool_at(1, 3))
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[AUX-N]: Preferred Assignment Error - Duplicate Object ID of Auxiliary Function");
 							}
-							if (message->get_bool_at(3, 4))
+							if (message->get_bool_at(1, 4))
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[AUX-N]: Preferred Assignment Error - Other");
 							}
