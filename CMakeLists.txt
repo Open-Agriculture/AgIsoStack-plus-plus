@@ -104,8 +104,7 @@ if(BUILD_TESTING)
     target_link_libraries(
       unit_tests
       PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
-              ${PROJECT_NAME}::HardwareIntegration
-              ${PROJECT_NAME}::Utility)
+              ${PROJECT_NAME}::HardwareIntegration ${PROJECT_NAME}::Utility)
 
     include(GoogleTest)
     gtest_discover_tests(unit_tests name_tests identifier_tests)
