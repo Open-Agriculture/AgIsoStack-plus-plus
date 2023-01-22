@@ -3599,11 +3599,13 @@ namespace isobus
 									else
 									{
 										retVal = false;
+										CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - error resizing an object.");
 									}
 								}
 								else
 								{
 									retVal = false;
+									CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - autoscaling found an object with no length.");
 								}
 							}
 							else
@@ -3627,24 +3629,78 @@ namespace isobus
 
 							// Get Some more bytes
 							parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() + numberOfBytesNeeded);
-							retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset + indexOfNextObject, numberOfBytesNeeded, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() - 1 - numberOfBytesNeeded], parentVTClient);
+							retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset + indexOfNextObject - 1, numberOfBytesNeeded, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() - numberOfBytesNeeded], parentVTClient);
 
 							// Now we have the first part of the next object in memory. See how much more of the object we need to scale it
-							std::uint32_t minimumNumberOfBytesInNextObject = parentVTClient->get_minimum_object_length(static_cast<ObjectType>(chunkBuffer[3 + indexOfNextObject]));
+							std::uint32_t minimumNumberOfBytesInNextObject = parentVTClient->get_minimum_object_length(static_cast<ObjectType>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[2 + indexOfNextObject]));
 							if (minimumNumberOfBytesInNextObject > (parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() - indexOfNextObject))
 							{
 								parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(indexOfNextObject + minimumNumberOfBytesInNextObject);
-								retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset + indexOfNextObject, minimumNumberOfBytesInNextObject, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject], parentVTClient);
-
+								retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex, bytesOffset + indexOfNextObject - 1, minimumNumberOfBytesInNextObject, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject], parentVTClient);
+							}
+							else if (0 == minimumNumberOfBytesInNextObject)
+							{
+								CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - an object's minimum length is zero.");
 							}
 
 							std::size_t fullObjectLength = parentVTClient->get_number_bytes_in_object(&parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject]);
 
-							if (fullObjectLength > parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size())
+							switch (static_cast<ObjectType>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject + 2]))
+							{
+								// For some objects, the "full length" is not really the full length and we have to do
+								// some additional trickery...
+								case ObjectType::OutputString:
+								{
+									// For output strings the macro count is past the entire value of the string
+									// Which means we nead to read it in later.
+								}
+								break;
+
+								case ObjectType::PictureGraphic:
+								{
+									// We really just don't want to hold a full bitmap in memory
+								}
+								break;
+							}
+
+							if (fullObjectLength > (parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size() - indexOfNextObject))
 							{
 								parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.resize(fullObjectLength + indexOfNextObject);
 							}
-							
+
+							// If we need still more of the object data, copy it into the buffer.
+							if (fullObjectLength > minimumNumberOfBytesInNextObject)
+							{
+								retVal = parentVTClient->objectPools[poolIndex].dataCallback(callbackIndex,
+								                                                             (minimumNumberOfBytesInNextObject + bytesOffset - 1 + indexOfNextObject),
+								                                                             (fullObjectLength - minimumNumberOfBytesInNextObject),
+								                                                             &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[minimumNumberOfBytesInNextObject + indexOfNextObject],
+								                                                             parentVTClient);
+							}
+
+							parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining = parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer.size();
+
+							if ((retVal) &&
+							    (parentVTClient->resize_object(&parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject],
+							                                   static_cast<float>(parentVTClient->get_number_x_pixels()) / static_cast<float>(parentVTClient->objectPools[poolIndex].autoScaleDataMaskOriginalDimension),
+							                                   static_cast<ObjectType>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject + 2]))))
+							{
+								// Resize completed.
+								CANStackLogger::CAN_stack_log("[VT]: Resized an object " +
+								                              isobus::to_string(static_cast<int>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject]) | (static_cast<int>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject + 1])) << 8) +
+								                              " with type " +
+								                              isobus::to_string(static_cast<int>(parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[indexOfNextObject + 2])) +
+								                              "with size " +
+								                              isobus::to_string(static_cast<int>(fullObjectLength)));
+								// Copy the updated data into the stack's buffer
+								memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
+								retVal = true;
+							}
+							else
+							{
+								retVal = false;
+								CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - error resizing an object.");
+							}
 						}
 						parentVTClient->objectPools[poolIndex].autoScaleLastNumberBytesNeeded = numberOfBytesNeeded;
 						parentVTClient->objectPools[poolIndex].autoScaleCurrentObjectBytesRemaining -= numberOfBytesNeeded;
@@ -3732,12 +3788,11 @@ namespace isobus
 		{
 			case ObjectType::WorkingSet:
 			{
-				retVal = 18;
+				retVal = 10;
 			}
 			break;
 
 			case ObjectType::OutputList:
-			case ObjectType::DataMask:
 			case ObjectType::ExternalReferenceNAME:
 			{
 				retVal = 12;
@@ -3745,12 +3800,12 @@ namespace isobus
 			break;
 
 			case ObjectType::AlarmMask:
+			case ObjectType::Container:
 			{
 				retVal = 10;
 			}
 			break;
 
-			case ObjectType::Container:
 			case ObjectType::ExternalObjectPointer:
 			{
 				retVal = 9;
@@ -3801,7 +3856,7 @@ namespace isobus
 
 			case ObjectType::OutputString:
 			{
-				retVal = 16;
+				retVal = 17;
 			}
 			break;
 
@@ -3866,8 +3921,14 @@ namespace isobus
 			break;
 
 			case ObjectType::FontAttributes:
+			{
+				retVal = 8;
+			}
+			break;
+
 			case ObjectType::LineAttributes:
 			case ObjectType::FillAttributes:
+			case ObjectType::DataMask:
 			{
 				retVal = 8;
 			}
@@ -3891,9 +3952,9 @@ namespace isobus
 		{
 			case ObjectType::WorkingSet:
 			{
+				const std::uint32_t sizeOfChildObjects = (buffer[7] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[8] * 2);
 				const std::uint32_t sizeOfLanguageCodes = (buffer[9] * 2);
-				const std::uint32_t sizeOfChildObjects = (buffer[10] * 6);
 				retVal += (sizeOfLanguageCodes + sizeOfChildObjects + sizeOfMacros);
 			}
 			break;
@@ -4193,7 +4254,40 @@ namespace isobus
 			{
 				case ObjectType::WorkingSet:
 				{
-				
+				}
+				break;
+
+				case ObjectType::DataMask:
+				{
+					const std::uint8_t childrenToFollow = buffer[6];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						std::int16_t childX = (((static_cast<std::int16_t>(buffer[10 + (6 * i)]) | (static_cast<std::int16_t>(buffer[11 + (6 * i)]) << 8))) * scaleFactor);
+						std::int16_t childY = (((static_cast<std::int16_t>(buffer[12 + (6 * i)]) | (static_cast<std::int16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[10 + (6 * i)] = (childX & 0xFF);
+						buffer[11 + (6 * i)] = (childX >> 8);
+						buffer[12 + (6 * i)] = (childY & 0xFF);
+						buffer[13 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::AlarmMask:
+				{
+					const std::uint8_t childrenToFollow = buffer[8];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						std::int16_t childX = (((static_cast<std::int16_t>(buffer[10 + (6 * i)]) | (static_cast<std::int16_t>(buffer[11 + (6 * i)]) << 8))) * scaleFactor);
+						std::int16_t childY = (((static_cast<std::int16_t>(buffer[12 + (6 * i)]) | (static_cast<std::int16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[10 + (6 * i)] = (childX & 0xFF);
+						buffer[11 + (6 * i)] = (childX >> 8);
+						buffer[12 + (6 * i)] = (childY & 0xFF);
+						buffer[13 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
 				}
 				break;
 
@@ -4208,12 +4302,12 @@ namespace isobus
 					// The container is 10 bytes, followed by children with 2 bytes of ID, 2 of X, and 2 of Y
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						std::uint16_t childWidth = (((static_cast<std::uint16_t>(buffer[12 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
-						std::uint16_t childHeight = (((static_cast<std::uint16_t>(buffer[14 + (6 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
-						buffer[12 + (6 * i)] = (childWidth & 0xFF);
-						buffer[13 + (6 * i)] = (childWidth >> 8);
-						buffer[14 + (6 * i)] = (childHeight & 0xFF);
-						buffer[15 + (6 * i)] = (childHeight >> 8);
+						std::int16_t childX = (((static_cast<std::int16_t>(buffer[12 + (6 * i)]) | (static_cast<std::int16_t>(buffer[13 + (6 * i)]) << 8))) * scaleFactor);
+						std::int16_t childY = (((static_cast<std::int16_t>(buffer[14 + (6 * i)]) | (static_cast<std::int16_t>(buffer[15 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[12 + (6 * i)] = (childX & 0xFF);
+						buffer[13 + (6 * i)] = (childX >> 8);
+						buffer[14 + (6 * i)] = (childY & 0xFF);
+						buffer[15 + (6 * i)] = (childY >> 8);
 					}
 					retVal = true;
 				}
@@ -4236,6 +4330,7 @@ namespace isobus
 						buffer[17 + (6 * i)] = (childHeight & 0xFF);
 						buffer[18 + (6 * i)] = (childHeight >> 8);
 					}
+					retVal = true;
 				}
 				break;
 
@@ -4246,6 +4341,7 @@ namespace isobus
 					// Modify the object in memory
 					buffer[4] = (width & 0xFF);
 					buffer[5] = (width >> 8);
+					retVal = true;
 				}
 				break;
 
@@ -4259,6 +4355,7 @@ namespace isobus
 				{
 					// Modify the object in memory
 					process_standard_object_height_and_width(buffer, scaleFactor);
+					retVal = true;
 				}
 				break;
 
@@ -4273,6 +4370,7 @@ namespace isobus
 					buffer[6] = (width >> 8);
 					buffer[7] = (height & 0xFF);
 					buffer[8] = (height >> 8);
+					retVal = true;
 				}
 				break;
 
@@ -4293,6 +4391,7 @@ namespace isobus
 						buffer[16 + (4 * i)] = (yPosition & 0xFF);
 						buffer[17 + (4 * i)] = (yPosition >> 8);
 					}
+					retVal = true;
 				}
 				break;
 
@@ -4303,6 +4402,7 @@ namespace isobus
 					std::uint16_t width = (((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
 					buffer[3] = (width & 0xFF);
 					buffer[4] = (width >> 8);
+					retVal = true;
 				}
 				break;
 
@@ -4314,6 +4414,7 @@ namespace isobus
 					std::uint16_t width = (((static_cast<std::uint16_t>(buffer[12]) | (static_cast<std::uint16_t>(buffer[13]) << 8))) * scaleFactor);
 					buffer[12] = (width & 0xFF);
 					buffer[13] = (width >> 8);
+					retVal = true;
 				}
 				break;
 
@@ -4334,6 +4435,24 @@ namespace isobus
 						buffer[22 + (6 * i)] = (childY & 0xFF);
 						buffer[23 + (6 * i)] = (childY >> 8);
 					}
+					retVal = true;
+				}
+				break;
+
+				case ObjectType::Key:
+				{
+					const std::uint8_t childrenToFollow = buffer[5];
+
+					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
+					{
+						std::int16_t childX = (((static_cast<std::int16_t>(buffer[7 + (6 * i)]) | (static_cast<std::int16_t>(buffer[8 + (6 * i)]) << 8))) * scaleFactor);
+						std::int16_t childY = (((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8))) * scaleFactor);
+						buffer[7 + (6 * i)] = (childX & 0xFF);
+						buffer[8 + (6 * i)] = (childX >> 8);
+						buffer[9 + (6 * i)] = (childY & 0xFF);
+						buffer[10 + (6 * i)] = (childY >> 8);
+					}
+					retVal = true;
 				}
 				break;
 
