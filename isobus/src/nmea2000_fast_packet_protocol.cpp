@@ -12,7 +12,7 @@
 
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
@@ -120,12 +120,12 @@ namespace isobus
 			else
 			{
 				// Already in a matching session, can't start another.
-				CANStackLogger::CAN_stack_log("[FP]: Can't send fast packet message, already in matching session.");
+				CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[FP]: Can't send fast packet message, already in matching session.");
 			}
 		}
 		else
 		{
-			CANStackLogger::CAN_stack_log("[FP]: Can't send fast packet message, bad parameters or ICF is invalid");
+			CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[FP]: Can't send fast packet message, bad parameters or ICF is invalid");
 		}
 		return retVal;
 	}
@@ -289,7 +289,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::CAN_stack_log("[FP]: Existing session matched new frame counter, aborting the matching session.");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[FP]: Existing session matched new frame counter, aborting the matching session.");
 							close_session(currentSession, false);
 						}
 					}
@@ -336,14 +336,14 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[FP]: Ignoring possible new FP session with advertised length > 233.");
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[FP]: Ignoring possible new FP session with advertised length > 233.");
 							}
 						}
 						else
 						{
 							// This is the middle of some message that we have no context for.
 							// Ignore the message.
-							CANStackLogger::CAN_stack_log("[FP]: Ignoring FP message, no context available.");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[FP]: Ignoring FP message, no context available.");
 						}
 					}
 				}
@@ -389,7 +389,7 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
 					{
-						CANStackLogger::CAN_stack_log("[FP]: Rx session timed out.");
+						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[FP]: Rx session timed out.");
 						close_session(session, false);
 					}
 				}
@@ -488,7 +488,7 @@ namespace isobus
 						{
 							if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
 							{
-								CANStackLogger::CAN_stack_log("[FP]: Tx session timed out.");
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[FP]: Tx session timed out.");
 								close_session(session, false);
 								txSessionCancelled = true;
 							}

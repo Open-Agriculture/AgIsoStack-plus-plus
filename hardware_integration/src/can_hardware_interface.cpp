@@ -8,7 +8,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -487,7 +487,7 @@ void CANHardwareInterface::receive_message_thread_function(uint8_t aCANChannel)
 			}
 			else
 			{
-				isobus::CANStackLogger::CAN_stack_log("[CAN Rx Thread]: CAN Channel " + isobus::to_string(aCANChannel) + " appears to be invalid.");
+				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[CAN Rx Thread]: CAN Channel " + isobus::to_string(aCANChannel) + " appears to be invalid.");
 				std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Arbitrary, but don't want to infinite loop on the validity check.
 			}
 		}

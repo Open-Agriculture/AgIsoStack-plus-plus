@@ -9,7 +9,7 @@
 #ifdef ESP_PLATFORM
 #include "isobus/hardware_integration/twai_plugin.hpp"
 #include "isobus/isobus/can_constants.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -41,7 +41,7 @@ bool TWAIPlugin::get_is_valid() const
 	}
 	else
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error getting status: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error getting status: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	return false;
 }
@@ -51,12 +51,12 @@ void TWAIPlugin::close()
 	esp_err_t error = twai_stop();
 	if (ESP_OK != error)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error stopping driver: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error stopping driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	error = twai_driver_uninstall();
 	if (ESP_OK != error)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error uninstalling driver: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error uninstalling driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
 }
 
@@ -65,12 +65,12 @@ void TWAIPlugin::open()
 	esp_err_t error = twai_driver_install(generalConfig, timingConfig, filterConfig);
 	if (ESP_OK != error)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error installing driver: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[TWAI] Error installing driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	error = twai_start();
 	if (ESP_OK != error)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error starting driver: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[TWAI] Error starting driver: " + isobus::to_string(esp_err_to_name(error)));
 	}
 }
 
@@ -99,7 +99,7 @@ bool TWAIPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 	}
 	else
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error receiving message: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error receiving message: " + isobus::to_string(esp_err_to_name(error)));
 	}
 
 	return retVal;
@@ -122,7 +122,7 @@ bool TWAIPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 	}
 	else
 	{
-		isobus::CANStackLogger::CAN_stack_log("[TWAI] Error sending message: " + isobus::to_string(esp_err_to_name(error)));
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error sending message: " + isobus::to_string(esp_err_to_name(error)));
 	}
 	return retVal;
 }

@@ -10,7 +10,7 @@
 //================================================================================================
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
@@ -255,7 +255,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
+						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
 					}
 				}
 				break;
@@ -304,12 +304,12 @@ namespace isobus
 							                     requestedPGN,
 							                     reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()),
 							                     message->get_source_control_function());
-							CANStackLogger::CAN_stack_log("[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
 						}
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[PR]: Received a malformed PGN request message. The message will not be processed.");
+						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[PR]: Received a malformed PGN request message. The message will not be processed.");
 					}
 				}
 				break;

@@ -7,7 +7,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/hardware_integration/socket_can_interface.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include <linux/can.h>
@@ -178,7 +178,7 @@ bool SocketCANInterface::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 		}
 		else if (errno == ENETDOWN)
 		{
-			isobus::CANStackLogger::CAN_stack_log("[SocketCAN] " + get_device_name() + " interface is down.");
+			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SocketCAN] " + get_device_name() + " interface is down.");
 			close();
 		}
 	}
@@ -209,7 +209,7 @@ bool SocketCANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &ca
 	}
 	else if (errno == ENETDOWN)
 	{
-		isobus::CANStackLogger::CAN_stack_log("[SocketCAN] " + get_device_name() + " interface is down.");
+		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SocketCAN] " + get_device_name() + " interface is down.");
 		close();
 	}
 	return retVal;

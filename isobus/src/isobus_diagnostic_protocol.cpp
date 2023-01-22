@@ -38,7 +38,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
@@ -99,7 +99,7 @@ namespace isobus
 		{
 			// If we're being destructed but have not been deassigned, that is not ideal.
 			// So, we'll log it here, and try to clean ourselves up.
-			CANStackLogger::CAN_stack_log("[DP]: DiagnosticProtocol instance is being destroyed without being deassigned first! It is suggested that you deassign the protocol before deleting this object!");
+			CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[DP]: DiagnosticProtocol instance is being destroyed without being deassigned first! It is suggested that you deassign the protocol before deleting this object!");
 			deregister_all_pgns();
 		}
 

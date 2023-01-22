@@ -13,7 +13,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -99,18 +99,20 @@ namespace isobus
 									newSession->state = StateMachineState::RxDataSession;
 									newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 									activeSessions.push_back(newSession);
-									CANStackLogger::CAN_stack_log("[TP]: New BAM Session. Source: " + isobus::to_string(static_cast<int>(newSession->sessionMessage.get_source_control_function()->get_address())));
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug,
+									                              "[TP]: New Rx BAM Session. Source: " +
+									                                isobus::to_string(static_cast<int>(newSession->sessionMessage.get_source_control_function()->get_address())));
 								}
 								else
 								{
 									// Don't send an abort, they're probably expecting a CTS so it'll timeout
 									// Or maybe if we already had a session they sent a second BAM? Also bad
-									CANStackLogger::CAN_stack_log("[TP]: Can't Create BAM session");
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Can't Create an Rx BAM session");
 								}
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[TP]: Bad BAM Message Length");
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Bad BAM Message Length");
 							}
 						}
 						break;
@@ -140,20 +142,20 @@ namespace isobus
 								         (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 								{
 									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-									CANStackLogger::CAN_stack_log("[TP]: Abort RTS when already in CM session");
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, RTS when already in CM session");
 								}
 								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
 								         (nullptr != message->get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
 								{
 									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-									CANStackLogger::CAN_stack_log("[TP]: Abort No Sessions Available");
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, No Sessions Available");
 								}
 							}
 							else
 							{
 								// Bad RTS message length. Can't really abort? Not sure what the PGN is if length < 8
-								CANStackLogger::CAN_stack_log("[TP]: Bad Message Length");
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Received Bad Message Length for an RTS");
 							}
 						}
 						break;
@@ -186,7 +188,7 @@ namespace isobus
 										// The session exists, but we're probably already in the TxDataSession state. Need to abort
 										// In the case of Rx'ing a CTS, we're the source in the session
 										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-										CANStackLogger::CAN_stack_log("[TP]: Abort CTS while in data session, PGN: " + isobus::to_string(pgn));
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS while in data session, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
@@ -194,12 +196,12 @@ namespace isobus
 									// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
 									// In the case of Rx'ing a CTS, we're the source in the session
 									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-									CANStackLogger::CAN_stack_log("[TP]: Abort CTS With no matching session, PGN: " + isobus::to_string(pgn));
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS With no matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[TP]: Invalid CTS");
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Received an Invalid CTS");
 							}
 						}
 						break;
@@ -223,18 +225,18 @@ namespace isobus
 									{
 										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
 										close_session(session, false);
-										CANStackLogger::CAN_stack_log("[TP]: Abort EOM in wrong session state, PGN: " + isobus::to_string(pgn));
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM in wrong session state, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
 								{
 									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
-									CANStackLogger::CAN_stack_log("[TP]: Abort EOM without matching session, PGN: " + isobus::to_string(pgn));
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM without matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[TP]: Bad EOM received");
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Bad EOM received");
 							}
 						}
 						break;
@@ -243,19 +245,19 @@ namespace isobus
 						{
 							if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
 							{
-								CANStackLogger::CAN_stack_log("[TP]: Received an abort for an session with PGN: " + isobus::to_string(pgn));
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Received an abort for an session with PGN: " + isobus::to_string(pgn));
 								close_session(session, false);
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[TP]: Received an abort with no matching session with PGN: " + isobus::to_string(pgn));
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Received an abort with no matching session with PGN: " + isobus::to_string(pgn));
 							}
 						}
 						break;
 
 						default:
 						{
-							CANStackLogger::CAN_stack_log("[TP]: Bad Mux in Transport Protocol Command");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Bad Mux in Transport Protocol Command");
 						}
 						break;
 					}
@@ -296,20 +298,20 @@ namespace isobus
 						else if (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber))
 						{
 							// Sequence number is duplicate of the last one
-							CANStackLogger::CAN_stack_log("[TP]: Aborting session due to duplciate sequence number");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Aborting session due to duplciate sequence number");
 							abort_session(tempSession, ConnectionAbortReason::DuplicateSequenceNumber);
 							close_session(tempSession, false);
 						}
 						else
 						{
-							CANStackLogger::CAN_stack_log("[TP]: Aborting session due to bad sequence number");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Aborting session due to bad sequence number");
 							abort_session(tempSession, ConnectionAbortReason::BadSequenceNumber);
 							close_session(tempSession, false);
 						}
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[TP]: Invalid BAM TP Data Received");
+						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Invalid BAM TP Data Received");
 						if (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function()))
 						{
 							// If a session matches and ther was an error, get rid of the session
@@ -323,7 +325,7 @@ namespace isobus
 				{
 					// This is not a runtime error, should never happen.
 					// Bad PGN passed to protocol. Check PGN registrations.
-					CANStackLogger::CAN_stack_log("[TP]: Received an unexpected PGN");
+					CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Received an unexpected PGN");
 				}
 				break;
 			}
@@ -483,7 +485,7 @@ namespace isobus
 			{
 				activeSessions.erase(sessionLocation);
 				delete session;
-				CANStackLogger::CAN_stack_log("[TP]: Session Closed");
+				CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[TP]: Session Closed");
 			}
 		}
 	}
@@ -620,7 +622,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::CAN_stack_log("[TP]: Attempted to send EOM to null session");
+			CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Attempted to send EOM to null session");
 		}
 		return retVal;
 	}
@@ -688,7 +690,7 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(session->timestamp_ms, T2_T3_TIMEOUT_MS))
 					{
-						CANStackLogger::CAN_stack_log("[TP]: Timeout");
+						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Timeout");
 						abort_session(session, ConnectionAbortReason::Timeout);
 						close_session(session, false);
 					}
@@ -830,7 +832,7 @@ namespace isobus
 						// BAM Timeout check
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, T1_TIMEOUT_MS))
 						{
-							CANStackLogger::CAN_stack_log("[TP]: BAM Rx Timeout");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: BAM Rx Timeout");
 							close_session(session, false);
 						}
 					}
@@ -839,7 +841,7 @@ namespace isobus
 						// CM TP Timeout check
 						if (SystemTiming::time_expired_ms(session->timestamp_ms, MESSAGE_TR_TIMEOUT_MS))
 						{
-							CANStackLogger::CAN_stack_log("[TP]: CM Rx Timeout");
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: CM Rx Timeout");
 							abort_session(session, ConnectionAbortReason::Timeout);
 							close_session(session, false);
 						}

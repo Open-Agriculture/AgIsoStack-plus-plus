@@ -16,7 +16,7 @@
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_protocol.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -287,7 +287,7 @@ namespace isobus
 
 	void CANNetworkManager::on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>)
 	{
-		CANStackLogger::CAN_stack_log("[NM]: Partner " + isobus::to_string(static_cast<int>(partner->get_address())) + " was deleted.");
+		CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: Partner " + isobus::to_string(static_cast<int>(partner->get_address())) + " was deleted.");
 
 		for (auto activeControlFunction = activeControlFunctions.begin(); activeControlFunction != activeControlFunctions.end(); activeControlFunction++)
 		{
@@ -301,7 +301,7 @@ namespace isobus
 					controlFunctionTable[partner->get_can_port()][partner->address] = nullptr;
 					// If the control function was active, replace it with an external control function
 					activeControlFunctions.push_back(new ControlFunction(partner->get_NAME(), partner->get_address(), partner->get_can_port()));
-					CANStackLogger::CAN_stack_log("[NM]: Since the deleted partner was active, it has been replaced with an external control function.");
+					CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: Since the deleted partner was active, it has been replaced with an external control function.");
 				}
 				break;
 			}
@@ -494,7 +494,7 @@ namespace isobus
 						PartneredControlFunction::partneredControlFunctionList[i]->controlFunctionNAME = NAME(claimedNAME);
 						activeControlFunctions.push_back(PartneredControlFunction::partneredControlFunctionList[i]);
 						foundControlFunction = PartneredControlFunction::partneredControlFunctionList[i];
-						CANStackLogger::CAN_stack_log("[NM]: A Partner Has Claimed " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: A Partner Has Claimed " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 						break;
 					}
 				}
@@ -503,7 +503,7 @@ namespace isobus
 				{
 					// New device, need to start keeping track of it
 					activeControlFunctions.push_back(new ControlFunction(NAME(claimedNAME), CANIdentifier(rxFrame.identifier).get_source_address(), rxFrame.channel));
-					CANStackLogger::CAN_stack_log("[NM]: New Control function " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
+					CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: New Control function " + isobus::to_string(static_cast<int>(CANIdentifier(rxFrame.identifier).get_source_address())));
 				}
 			}
 
@@ -534,7 +534,7 @@ namespace isobus
 							foundReplaceableControlFunction = true;
 
 							// This CF matches the filter and is not an internal or already partnered CF
-							CANStackLogger::CAN_stack_log("[NM]: Remapping new partner control function to inactive external control function at address " + isobus::to_string(static_cast<int>((*currentInactiveControlFunction)->get_address())));
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: Remapping new partner control function to inactive external control function at address " + isobus::to_string(static_cast<int>((*currentInactiveControlFunction)->get_address())));
 
 							// Populate the partner's data
 							partner->address = (*currentInactiveControlFunction)->get_address();
@@ -554,7 +554,7 @@ namespace isobus
 							    (ControlFunction::Type::External == (*currentActiveControlFunction)->get_type()))
 							{
 								// This CF matches the filter and is not an internal or already partnered CF
-								CANStackLogger::CAN_stack_log("[NM]: Remapping new partner control function to an active external control function at address " + isobus::to_string(static_cast<int>((*currentActiveControlFunction)->get_address())));
+								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: Remapping new partner control function to an active external control function at address " + isobus::to_string(static_cast<int>((*currentActiveControlFunction)->get_address())));
 
 								// Populate the partner's data
 								partner->address = (*currentActiveControlFunction)->get_address();
