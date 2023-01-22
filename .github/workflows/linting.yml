@@ -1,0 +1,41 @@
+name: Linting
+on: pull_request
+jobs:
+  clang-format:
+    name: clang-format style
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        path:
+          - "isobus"
+          - "socket_can"
+          - "examples"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run clang-format style check for C/C++/Protobuf programs.
+        uses: jidicula/clang-format-action@v4.9.0
+        with:
+          clang-format-version: "13"
+          check-path: ${{ matrix.path }}
+          fallback-style: "Google" # optional
+  cmake-format:
+    name: cmake-format style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      - name: Install lint tool
+        run: |
+          python -m pip install --upgrade pip
+          pip install cmake-format pyyaml
+      - name: Check cmake-lint
+        run: find . -name CMakeLists.txt | xargs cmake-lint
+      - name: Run cmake-format
+        run: find . -name CMakeLists.txt | xargs cmake-format -i
+      - name: Check cmake-format
+        run: git diff --patch-with-stat --exit-code
