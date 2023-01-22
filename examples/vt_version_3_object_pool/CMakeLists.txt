@@ -10,7 +10,7 @@ find_package(Threads REQUIRED)
 add_executable(VT3ExampleTarget main.cpp objectPoolObjects.h)
 target_link_libraries(
   VT3ExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration
-                           Threads::Threads isobus::SystemTiming)
+                           Threads::Threads isobus::Utility)
 
 add_custom_command(
   TARGET VT3ExampleTarget

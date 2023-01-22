@@ -200,7 +200,7 @@ This can be used to read from some external device if needed in segments or just
 
 .. note::
 
-    Since we are now using a function in the "isobus/utility" folder to load this IOP file, we will also need to link to the CAN stack's utility library in our CMakeLists.txt file. You can do this by adding :code:`isobus::SystemTiming` to your :code:`target_link_libraries` statement. We'll also need to add some CMake to move the IOP file to the binary location, so that when the program is compiled, the IOP will end up in a location accessable to your program.
+    Since we are now using a function in the "isobus/utility" folder to load this IOP file, we will also need to link to the CAN stack's utility library in our CMakeLists.txt file. You can do this by adding :code:`isobus::Utility` to your :code:`target_link_libraries` statement. We'll also need to add some CMake to move the IOP file to the binary location, so that when the program is compiled, the IOP will end up in a location accessable to your program.
 
 	We'll go over the full CMake closer to the end of this tutorial.
 
@@ -522,11 +522,11 @@ Looking "ISOBUS Hello World" we had this next:
 
 	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
 
-But like we mentioned earlier, we're now using a function (the IOP file reader) in the isobus utility library called "SystemTiming", so we need to link that too:
+But like we mentioned earlier, we're now using a function (the IOP file reader) in the isobus utility library called "Utility", so we need to link that too:
 
 .. code-block:: c++
 
-	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::SystemTiming Threads::Threads)
+	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 We also want to move our IOP file to be in the same folder as the executable after it's built, so that it can locate it.
 We can do that with this little handy bit of CMake:

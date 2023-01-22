@@ -10,7 +10,7 @@ find_package(Threads REQUIRED)
 add_executable(VTAuxNExample main.cpp object_pool_ids.h)
 target_link_libraries(
   VTAuxNExample PRIVATE isobus::Isobus isobus::HardwareIntegration
-                           Threads::Threads isobus::SystemTiming)
+                           Threads::Threads isobus::Utility)
 
 add_custom_command(
   TARGET VTAuxNExample

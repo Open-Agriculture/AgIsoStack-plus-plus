@@ -73,7 +73,7 @@ target_include_directories(
   Isobus PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::SystemTiming)
+target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::Utility)
 
 install(
   TARGETS Isobus

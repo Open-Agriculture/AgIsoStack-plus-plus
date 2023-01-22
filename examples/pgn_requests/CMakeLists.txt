@@ -10,4 +10,4 @@ find_package(Threads REQUIRED)
 add_executable(PGNRequestExampleTarget main.cpp)
 target_link_libraries(
   PGNRequestExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration
-                                  Threads::Threads isobus::SystemTiming)
+                                  Threads::Threads isobus::Utility)

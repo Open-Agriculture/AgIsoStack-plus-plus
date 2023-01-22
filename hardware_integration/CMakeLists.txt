@@ -61,7 +61,7 @@ prepend(HARDWARE_INTEGRATION_INCLUDE ${HARDWARE_INTEGRATION_INCLUDE_DIR}
 add_library(HardwareIntegration ${HARDWARE_INTEGRATION_SRC}
                                 ${HARDWARE_INTEGRATION_INCLUDE})
 add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
-target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::SystemTiming
+target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility
                                                   ${PROJECT_NAME}::Isobus)
 
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)

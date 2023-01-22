@@ -10,4 +10,4 @@ add_executable(NMEA2KExampleTarget main.cpp)
 
 target_link_libraries(
   NMEA2KExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration
-                              Threads::Threads isobus::SystemTiming)
+                              Threads::Threads isobus::Utility)
