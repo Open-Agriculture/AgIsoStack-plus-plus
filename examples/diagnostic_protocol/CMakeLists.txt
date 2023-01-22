@@ -11,4 +11,4 @@ add_executable(DiagnosticProtocolExampleTarget main.cpp)
 target_link_libraries(
   DiagnosticProtocolExampleTarget
   PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads
-          isobus::SystemTiming)
+          isobus::Utility)

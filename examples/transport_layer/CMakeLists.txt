@@ -11,4 +11,4 @@ add_executable(TransportLayerExampleTarget main.cpp)
 target_link_libraries(
   TransportLayerExampleTarget
   PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads
-          isobus::SystemTiming)
+          isobus::Utility)

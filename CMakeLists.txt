@@ -102,7 +102,7 @@ if(BUILD_TESTING)
       unit_tests
       PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
               ${PROJECT_NAME}::HardwareIntegration
-              ${PROJECT_NAME}::SystemTiming)
+              ${PROJECT_NAME}::Utility)
 
     include(GoogleTest)
     gtest_discover_tests(unit_tests name_tests identifier_tests)
@@ -110,7 +110,7 @@ if(BUILD_TESTING)
 endif()
 
 install(
-  TARGETS Isobus SystemTiming HardwareIntegration
+  TARGETS Isobus Utility HardwareIntegration
   EXPORT isobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
