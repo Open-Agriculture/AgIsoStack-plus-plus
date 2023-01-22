@@ -6,7 +6,7 @@ We accept public contributions that follow our code of conduct, pass all automat
 
 Our style rules and PR reviews are based loosely on Autosar's `Guidelines for the use of the C++14 language in critical and safety-related systems` and `MISRA C++` suggestions and try to ensure the highest quality possible.
 
-* Contributions must follow the style defined in our `.clang-format` file. You can ensure you pass this check by running `find . -iname *.hpp -o -iname *.cpp | xargs clang-format -i` at the root of the repo before submitting your PR.
+* Contributions must follow the style defined in our `.clang-format` and `.cmake-format` files. You can ensure you pass this check by running `find . -iname *.hpp -o -iname *.cpp | xargs clang-format -i` and `find . -name CMakeLists.txt | xargs cmake-format -i` at the root of the repo before submitting your PR.
 * Contributions should follow these additional style requirements, which will be checked in code reviews.
 	* Function names `snake_case`
 	* Variables `camelCase`
