@@ -8,7 +8,7 @@ set(HARDWARE_INTEGRATION_SRC_DIR "src")
 set(HARDWARE_INTEGRATION_INCLUDE_DIR "include/isobus/hardware_integration")
 
 if(NOT CAN_DRIVER)
-  if (WIN32)
+  if(WIN32)
     set(CAN_DRIVER "WindowsPCANBasic")
   else()
     set(CAN_DRIVER "SocketCAN")
@@ -16,7 +16,7 @@ if(NOT CAN_DRIVER)
 
   message(
     AUTHOR_WARNING
-    "No CAN driver specified, choosing ${CAN_DRIVER} by default. Set the CAN_DRIVER variable with -DCAN_DRIVER=<driver> to specify another driver. or -DCAN_DRIVER=\"<driver1>;<driver2>\" to specify multiple drivers."
+      "No CAN driver specified, choosing ${CAN_DRIVER} by default. Set the CAN_DRIVER variable with -DCAN_DRIVER=<driver> to specify another driver. or -DCAN_DRIVER=\"<driver1>;<driver2>\" to specify multiple drivers."
   )
 endif()
 
@@ -37,12 +37,12 @@ if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "pcan_basic_windows_plugin.hpp")
 endif()
 if("TWAI" IN_LIST CAN_DRIVER)
-	list(APPEND HARDWARE_INTEGRATION_SRC "twai_plugin.cpp")
-	list(APPEND HARDWARE_INTEGRATION_INCLUDE "twai_plugin.hpp")
+  list(APPEND HARDWARE_INTEGRATION_SRC "twai_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "twai_plugin.hpp")
 endif()
 if("MCP2515" IN_LIST CAN_DRIVER)
-	list(APPEND HARDWARE_INTEGRATION_SRC "mcp2515_can_interface.cpp")
-	list(APPEND HARDWARE_INTEGRATION_INCLUDE "mcp2515_can_interface.hpp")
+  list(APPEND HARDWARE_INTEGRATION_SRC "mcp2515_can_interface.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "mcp2515_can_interface.hpp")
   if(ESP_PLATFORM)
     list(APPEND HARDWARE_INTEGRATION_SRC "spi_interface_esp.cpp")
     list(APPEND HARDWARE_INTEGRATION_INCLUDE "spi_interface_esp.hpp")
@@ -79,6 +79,7 @@ if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
       PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_x64.lib)
     add_custom_command(
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lib/Windows/PCANBasic_x64.lib
+      COMMENT "Copying PCANBasic_x64.lib to build directory"
       COMMAND
         ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_x64.lib
@@ -90,6 +91,7 @@ if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
       PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_ARM64.lib)
     add_custom_command(
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lib/Windows/PCANBasic_ARM64.lib
+      COMMENT "Copying PCANBasic_ARM64.lib to build directory"
       COMMAND
         ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_ARM64.lib
@@ -102,6 +104,7 @@ if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
       PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_x86.lib)
     add_custom_command(
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lib/Windows/PCANBasic_x86.lib
+      COMMENT "Copying PCANBasic_x86.lib to build directory"
       COMMAND
         ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/PCANBasic_x86.lib
