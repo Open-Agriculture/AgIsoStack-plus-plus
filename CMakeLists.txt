@@ -29,21 +29,22 @@ endif()
 
 # Find packages required for Socket CAN
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-if(NOT ESP_PLATFORM) # ESP-IDF doesn't implement find_package(Threads) correctly (dec 2022)
+# ESP-IDF doesn't implement find_package(Threads) correctly (dec 2022)
+if(NOT ESP_PLATFORM)
   find_package(Threads REQUIRED)
 endif()
 
-# A handy function to PREPEND text to all elements in a list (useful for
+# A handy function to prepend text to all elements in a list (useful for
 # subdirectories)
-function(PREPEND var prefix)
+function(prepend var prefix)
   set(listVar "")
-  foreach(f ${ARGN})
-    list(APPEND listVar "${prefix}/${f}")
-  endforeach(f)
+  foreach(arg ${ARGN})
+    list(APPEND listVar "${prefix}/${arg}")
+  endforeach(arg)
   set(${var}
       "${listVar}"
       PARENT_SCOPE)
-endfunction(PREPEND)
+endfunction(prepend)
 
 # Add subdirectories
 add_subdirectory("utility")
@@ -72,6 +73,7 @@ if(BUILD_TESTING)
       googletest
       GIT_REPOSITORY https://github.com/google/googletest.git
       GIT_TAG release-1.12.1)
+
     # For Windows: Prevent overriding the parent project's compiler/linker
     # settings
     set(gtest_force_shared_crt
@@ -95,9 +97,10 @@ if(BUILD_TESTING)
 
   if("SocketCAN" IN_LIST CAN_DRIVER)
     add_executable(
-      unit_tests test/address_claim_test.cpp test/test_CAN_glue.cpp
-                 test/identifier_tests.cpp test/dm_13_tests.cpp
-                 test/core_network_management_tests.cpp)
+      unit_tests
+      test/address_claim_test.cpp test/test_CAN_glue.cpp
+      test/identifier_tests.cpp test/dm_13_tests.cpp
+      test/core_network_management_tests.cpp)
     target_link_libraries(
       unit_tests
       PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
