@@ -37,6 +37,31 @@ namespace isobus
 		}
 	}
 
+	void CANStackLogger::debug(const std::string &logText)
+	{
+		CAN_stack_log(LoggingLevel::Debug, logText);
+	}
+
+	void CANStackLogger::info(const std::string &logText)
+	{
+		CAN_stack_log(LoggingLevel::Info, logText);
+	}
+
+	void CANStackLogger::warn(const std::string &logText)
+	{
+		CAN_stack_log(LoggingLevel::Warning, logText);
+	}
+
+	void CANStackLogger::error(const std::string &logText)
+	{
+		CAN_stack_log(LoggingLevel::Error, logText);
+	}
+
+	void CANStackLogger::critical(const std::string &logText)
+	{
+		CAN_stack_log(LoggingLevel::Critical, logText);
+	}
+
 	void CANStackLogger::set_can_stack_logger_sink(CANStackLogger *logSink)
 	{
 		logger = logSink;
