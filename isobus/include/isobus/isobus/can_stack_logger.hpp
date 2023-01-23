@@ -47,6 +47,26 @@ namespace isobus
 		/// @param[in] logText The text to be logged
 		static void CAN_stack_log(LoggingLevel level, const std::string &logText);
 
+		/// @brief Logs a string to the log sink with `Debug` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] logText The text to be logged at `Debug` severity
+		static void debug(const std::string &logText);
+
+		/// @brief Logs a string to the log sink with `Info` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] logText The text to be logged at `Info` severity
+		static void info(const std::string &logText);
+
+		/// @brief Logs a string to the log sink with `Warning` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] logText The text to be logged at `Warning` severity
+		static void warn(const std::string &logText);
+
+		/// @brief Logs a string to the log sink with `Error` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] logText The text to be logged at `Error` severity
+		static void error(const std::string &logText);
+
+		/// @brief Logs a string to the log sink with `Critical` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] logText The text to be logged at `Critical` severity
+		static void critical(const std::string &logText);
+
 		/// @brief Assigns a derived logger class to be used as the log sink
 		/// @param[in] logSink A pointer to a derived CANStackLogger class
 		static void set_can_stack_logger_sink(CANStackLogger *logSink);
