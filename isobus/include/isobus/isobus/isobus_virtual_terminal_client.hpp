@@ -1299,6 +1299,7 @@ namespace isobus
 			std::uint32_t autoScaleDataIndex; ///< Used for parsing objects in-flight to auto scale them. Tracks start and end of the current object
 			std::uint32_t autoScaleCurrentObjectBytesRemaining; ///< Number of bytes left to process for the current auto scaled object
 			std::uint32_t autoScaleLastNumberBytesNeeded; /// Keeps track of the last number of bytes we processed in the previous callback
+			std::uint32_t autoScaleAdditionalObjectLengthBytes; /// Handles special objects with huge lengths
 			VTVersion version; ///< The version of the object pool. Must be the same for all pools!
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
 			bool uploaded; ///< The upload state of this pool
@@ -1586,6 +1587,7 @@ namespace isobus
 
 		static constexpr std::uint32_t VT_STATUS_TIMEOUT_MS = 3000; ///< The max allowable time between VT status messages before its considered offline
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The frequency at which we send the working set maintenance message
+		static constexpr std::size_t MAX_AUTOSCALING_READAHEAD_BUFFER_CHUNK = 70; ///< A mostly arbitrary cap on picture graphic in-memory storage. 70 is equal to 10 ETP buffers
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
