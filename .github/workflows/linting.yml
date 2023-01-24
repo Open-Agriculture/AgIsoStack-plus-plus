@@ -9,6 +9,11 @@ jobs:
         uses: actions/checkout@v3
       - name: Run clang-format style check for C/C++/Protobuf programs.
         uses: jidicula/clang-format-action@v4.10.1
+        with:
+          # Some files can be excluded from the clang-format style check, like 3rd party driver files,
+          # as their licenses may not allow us to modify them, such as if they are LGPL licensed.
+          # The exclude-regex option can be used to exclude these files from the style check:
+          exclude-regex: ^.*(PCANBasic\.h|libusb\.h)$
   cmake-format:
     name: cmake-format style
     runs-on: ubuntu-latest
