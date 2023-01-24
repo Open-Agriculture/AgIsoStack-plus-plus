@@ -4,21 +4,11 @@ jobs:
   clang-format:
     name: clang-format style
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        path:
-          - "isobus"
-          - "socket_can"
-          - "examples"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Run clang-format style check for C/C++/Protobuf programs.
-        uses: jidicula/clang-format-action@v4.9.0
-        with:
-          clang-format-version: "13"
-          check-path: ${{ matrix.path }}
-          fallback-style: "Google" # optional
+        uses: jidicula/clang-format-action@v4.10.1
   cmake-format:
     name: cmake-format style
     runs-on: ubuntu-latest
