@@ -37,8 +37,10 @@ cmake --build build
 
 ## Tests
 
-Tests are run with GTest. They can be invoked through ctest. Once the library is compiled (see above), navigate to the build directory to run tests.
+Tests are run with GTest. They can be invoked through ctest. Once the library is compiled, navigate to the build directory to run tests.
 ```
+cmake -S . -B build -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN
+cmake --build build
 cd build
 ctest
 ```
