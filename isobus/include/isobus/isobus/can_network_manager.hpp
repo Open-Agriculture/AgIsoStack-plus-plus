@@ -108,7 +108,7 @@ namespace isobus
 		/// @brief This is the main function used by the stack to receive CAN messages and add them to a queue.
 		/// @details This function is called by the stack itself when you call can_lib_process_rx_message.
 		/// @param[in] message The message to be received
-		void receive_can_message(CANMessage message);
+		void receive_can_message(CANMessage &message);
 
 		/// @brief The main update function for the network manager. Updates all protocols.
 		void update();

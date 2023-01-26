@@ -717,6 +717,8 @@ namespace isobus
 
 				case StateMachineState::TxDataSession:
 				{
+					bool sessionStillValid = true;
+
 					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames())))
 					{
 						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
@@ -758,6 +760,7 @@ namespace isobus
 								{
 									abort_session(session, ConnectionAbortReason::AnyOtherError);
 									close_session(session, false);
+									sessionStillValid = false;
 									break;
 								}
 							}
@@ -803,24 +806,27 @@ namespace isobus
 						}
 					}
 
-					if ((session->lastPacketNumber == (session->packetCount)) &&
-					    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+					if (sessionStillValid)
 					{
-						if (nullptr == session->sessionMessage.get_destination_control_function())
+						if ((session->lastPacketNumber == (session->packetCount)) &&
+						    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
 						{
-							// BAM is complete
-							close_session(session, true);
+							if (nullptr == session->sessionMessage.get_destination_control_function())
+							{
+								// BAM is complete
+								close_session(session, true);
+							}
+							else
+							{
+								set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
+								session->timestamp_ms = SystemTiming::get_timestamp_ms();
+							}
 						}
-						else
+						else if (session->lastPacketNumber == session->packetCount)
 						{
-							set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
+							set_state(session, StateMachineState::WaitForClearToSend);
 							session->timestamp_ms = SystemTiming::get_timestamp_ms();
 						}
-					}
-					else if (session->lastPacketNumber == session->packetCount)
-					{
-						set_state(session, StateMachineState::WaitForClearToSend);
-						session->timestamp_ms = SystemTiming::get_timestamp_ms();
 					}
 				}
 				break;
