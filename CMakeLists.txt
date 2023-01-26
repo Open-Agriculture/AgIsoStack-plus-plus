@@ -18,9 +18,16 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++11
+# Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
+endif()
+
+# Make CTest available which adds the option BUILD_TESTING
+include(CTest)
+if(BUILD_TESTING)
+  # Set --coverage flag for gcovr (SonarCloud)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -62,12 +69,7 @@ if(BUILD_EXAMPLES)
   add_subdirectory("examples/vt_aux_n")
 endif()
 
-# Make CTest available which adds the option BUILD_TESTING
-include(CTest)
 if(BUILD_TESTING)
-  # Set --coverage flag for gcovr (SonarCloud)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
-
   find_package(GTest QUIET)
   if(NOT GTest_FOUND)
     # Find GoogleTest
