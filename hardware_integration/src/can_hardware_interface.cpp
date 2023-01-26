@@ -377,7 +377,7 @@ void CANHardwareInterface::can_thread_function()
 
 		if (threadsStarted)
 		{
-			threadConditionVariable.wait(lMutex);
+			threadConditionVariable.wait(lMutex, [] { return true; }); // Always wake up
 
 			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
 			{

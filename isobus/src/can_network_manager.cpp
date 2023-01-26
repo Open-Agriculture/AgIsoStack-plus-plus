@@ -164,7 +164,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void CANNetworkManager::receive_can_message(CANMessage message)
+	void CANNetworkManager::receive_can_message(CANMessage &message)
 	{
 		if (initialized)
 		{
