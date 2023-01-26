@@ -65,6 +65,9 @@ endif()
 # Make CTest available which adds the option BUILD_TESTING
 include(CTest)
 if(BUILD_TESTING)
+  # Set --coverage flag for gcovr (SonarCloud)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+
   find_package(GTest QUIET)
   if(NOT GTest_FOUND)
     # Find GoogleTest
