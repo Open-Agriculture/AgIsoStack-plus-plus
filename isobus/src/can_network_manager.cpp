@@ -590,7 +590,6 @@ namespace isobus
 			std::uint32_t identifier = 0;
 
 			// Manually encode an identifier
-			// Todo: If we bring in a CAN library we sould replace this with some class
 			identifier |= ((priority & 0x07) << 26);
 			identifier |= (sourceAddress & 0xFF);
 
@@ -613,13 +612,24 @@ namespace isobus
 					identifier |= (destAddress << 8);
 					identifier |= ((parameterGroupNumber & 0x3FF00) << 8);
 				}
+				else
+				{
+					CANStackLogger::warn("[NM]: Cannot send a message with PGN " +
+					                     isobus::to_string(static_cast<int>(parameterGroupNumber)) +
+					                     " as a destination specific message. " +
+					                     "Try resending it using nullptr as your destination control function.");
+					identifier = DEFAULT_IDENTIFIER;
+				}
 			}
 
-			txFrame.channel = portIndex;
-			memcpy(reinterpret_cast<void *>(txFrame.data), data, size);
-			txFrame.dataLength = size;
-			txFrame.isExtendedFrame = true;
-			txFrame.identifier = identifier & 0x1FFFFFFF;
+			if (DEFAULT_IDENTIFIER != identifier)
+			{
+				txFrame.channel = portIndex;
+				memcpy(reinterpret_cast<void *>(txFrame.data), data, size);
+				txFrame.dataLength = size;
+				txFrame.isExtendedFrame = true;
+				txFrame.identifier = identifier & 0x1FFFFFFF;
+			}
 		}
 		return txFrame;
 	}
