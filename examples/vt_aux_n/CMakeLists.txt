@@ -8,7 +8,7 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(VTAuxNExample main.cpp object_pool_ids.h)
+add_executable(VTAuxNExample main.cpp console_logger.cpp object_pool_ids.h)
 target_link_libraries(
   VTAuxNExample PRIVATE isobus::Isobus isobus::HardwareIntegration
                         Threads::Threads isobus::Utility)
