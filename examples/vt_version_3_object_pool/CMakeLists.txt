@@ -8,7 +8,7 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(VT3ExampleTarget main.cpp objectPoolObjects.h)
+add_executable(VT3ExampleTarget main.cpp console_logger.cpp objectPoolObjects.h)
 target_link_libraries(
   VT3ExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration
                            Threads::Threads isobus::Utility)

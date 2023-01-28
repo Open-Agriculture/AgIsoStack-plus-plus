@@ -5,6 +5,8 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
+
+#include "console_logger.cpp"
 #include "object_pool_ids.h"
 
 #ifdef WIN32
@@ -27,70 +29,6 @@ const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, 
 static std::vector<std::uint8_t> testPool;
 
 using namespace std;
-
-// A log sink for the CAN stack
-class CustomLogger : public isobus::CANStackLogger
-{
-public:
-	void sink_CAN_stack_log(CANStackLogger::LoggingLevel level, const std::string &text) override
-	{
-		switch (level)
-		{
-			case LoggingLevel::Debug:
-			{
-				std::cout << "["
-				          << "\033[1;36m"
-				          << "Debug"
-				          << "]"
-				          << "\033[0m";
-			}
-			break;
-
-			case LoggingLevel::Info:
-			{
-				std::cout << "["
-				          << "\033[1;32m"
-				          << "Info"
-				          << "]"
-				          << "\033[0m";
-			}
-			break;
-
-			case LoggingLevel::Warning:
-			{
-				std::cout << "["
-				          << "\033[1;33m"
-				          << "Warn"
-				          << "]"
-				          << "\033[0m";
-			}
-			break;
-
-			case LoggingLevel::Error:
-			{
-				std::cout << "["
-				          << "\033[1;31m"
-				          << "Debug"
-				          << "]"
-				          << "\033[0m";
-			}
-			break;
-
-			case LoggingLevel::Critical:
-			{
-				std::cout << "["
-				          << "\033[1;35m"
-				          << "Debug"
-				          << "]"
-				          << "\033[0m";
-			}
-			break;
-		}
-		std::cout << text << std::endl; // Write the text to stdout
-	}
-};
-
-static CustomLogger logger;
 
 void signal_handler(int signum)
 {
@@ -121,6 +59,7 @@ void handle_aux_input(isobus::VirtualTerminalClient::AssignedAuxiliaryFunction f
 void setup()
 {
 	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
+	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info); // Change this to Debug to see more information
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
 
