@@ -9,20 +9,20 @@
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 
 std::mutex VirtualCANPlugin::mutex;
-std::map<std::string, std::vector<VirtualCANPlugin::VirtualDevice>> VirtualCANPlugin::channels;
+std::map<std::string, std::vector<std::shared_ptr<VirtualCANPlugin::VirtualDevice>>> VirtualCANPlugin::channels;
 
 VirtualCANPlugin::VirtualCANPlugin(const std::string channel, const bool receiveOwnMessages) :
   channel(channel),
   receiveOwnMessages(receiveOwnMessages)
 {
 	const std::lock_guard<std::mutex> lock(mutex);
-	channels[channel].push_back({ {}, this });
-	ourDevice = &channels[channel].back();
+	ourDevice = std::make_shared<VirtualDevice>();
+	channels[channel].push_back(ourDevice);
 }
 
 bool VirtualCANPlugin::get_is_valid() const
 {
-	return true;
+	return running;
 }
 
 std::string VirtualCANPlugin::get_channel_name() const
@@ -38,20 +38,21 @@ void VirtualCANPlugin::open()
 void VirtualCANPlugin::close()
 {
 	running = false;
+	ourDevice->condition.notify_one();
 }
 
 bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 {
 	bool retVal = false;
 	const std::lock_guard<std::mutex> lock(mutex);
-	for (VirtualDevice &device : channels[channel])
+	for (std::shared_ptr<VirtualDevice> device : channels[channel])
 	{
-		if (device.queue.size() < MAX_QUEUE_SIZE)
+		if (device->queue.size() < MAX_QUEUE_SIZE)
 		{
-			if (receiveOwnMessages || device.owner != this)
+			if (receiveOwnMessages || device != ourDevice)
 			{
-				device.queue.push_back(canFrame);
-				device.owner->condition.notify_one();
+				device->queue.push_back(canFrame);
+				device->condition.notify_one();
 				retVal = true;
 			}
 		}
@@ -62,7 +63,7 @@ bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canF
 bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 {
 	std::unique_lock<std::mutex> lock(mutex);
-	condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });
+	ourDevice->condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });
 	if (!ourDevice->queue.empty())
 	{
 		canFrame = ourDevice->queue.front();

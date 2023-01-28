@@ -66,19 +66,18 @@ private:
 	struct VirtualDevice
 	{
 		std::deque<isobus::HardwareInterfaceCANFrame> queue; ///< A queue of CAN frames
-		VirtualCANPlugin *owner; ///< A pointer to the owner of this device
+		std::condition_variable condition; ///< A condition variable to wake us up when a frame is received
 	};
 
 	static constexpr size_t MAX_QUEUE_SIZE = 1000; ///< The maximum size of the queue, mostly arbitrary
 
 	static std::mutex mutex; ///< Mutex to access channels and queues for thread safety
-	static std::map<std::string, std::vector<VirtualDevice>> channels; ///< A channel is a vector of devices
+	static std::map<std::string, std::vector<std::shared_ptr<VirtualDevice>>> channels; ///< A channel is a vector of devices
 
 	const std::string channel; ///< The virtual channel name
 	const bool receiveOwnMessages; ///< If `true`, the driver will receive its own messages
 
-	std::condition_variable condition; ///< A condition variable to wake us up when a frame is received
-	VirtualDevice *ourDevice; ///< A pointer to the virtual device of this instance
+	std::shared_ptr<VirtualDevice> ourDevice; ///< A pointer to the virtual device of this instance
 	bool running; ///< If `true`, the driver is running
 };
 
