@@ -7,6 +7,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/can_NAME.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 
 namespace isobus
 {
@@ -15,7 +16,7 @@ namespace isobus
 	{
 	}
 
-	bool NAME::operator==(const NAME &obj)
+	bool NAME::operator==(const NAME &obj) const
 	{
 		return this->rawName == obj.rawName;
 	}
@@ -27,10 +28,8 @@ namespace isobus
 
 	void NAME::set_arbitrary_address_capable(bool value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~(static_cast<std::uint64_t>(1) << 63);
-		tempNAME |= (static_cast<std::uint64_t>(value) << 63);
-		set_full_name(tempNAME);
+		rawName &= ~(static_cast<std::uint64_t>(1) << 63);
+		rawName |= (static_cast<std::uint64_t>(value) << 63);
 	}
 
 	std::uint8_t NAME::get_industry_group() const
@@ -40,10 +39,12 @@ namespace isobus
 
 	void NAME::set_industry_group(std::uint8_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0x7000000000000000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0x07) << 60);
-		set_full_name(tempNAME);
+		if (value > 0x07)
+		{
+			CANStackLogger::error("[NAME]: Industry group out of range, must be between 0 and 7");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0x7000000000000000);
+		rawName |= (static_cast<std::uint64_t>(value & 0x07) << 60);
 	}
 
 	std::uint8_t NAME::get_device_class_instance() const
@@ -53,10 +54,12 @@ namespace isobus
 
 	void NAME::set_device_class_instance(std::uint8_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0xF00000000000000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0x0F) << 56);
-		set_full_name(tempNAME);
+		if (value > 0x0F)
+		{
+			CANStackLogger::error("[NAME]: Device class instance out of range, must be between 0 and 15");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0xF00000000000000);
+		rawName |= (static_cast<std::uint64_t>(value & 0x0F) << 56);
 	}
 
 	std::uint8_t NAME::get_device_class() const
@@ -66,10 +69,12 @@ namespace isobus
 
 	void NAME::set_device_class(std::uint8_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0xFE000000000000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0x7F) << 49);
-		set_full_name(tempNAME);
+		if (value > 0x7F)
+		{
+			CANStackLogger::error("[NAME]: Device class out of range, must be between 0 and 127");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0xFE000000000000);
+		rawName |= (static_cast<std::uint64_t>(value & 0x7F) << 49);
 	}
 
 	std::uint8_t NAME::get_function_code() const
@@ -79,10 +84,12 @@ namespace isobus
 
 	void NAME::set_function_code(std::uint8_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0xFF0000000000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0xFF) << 40);
-		set_full_name(tempNAME);
+		if (value > 0xFF)
+		{
+			CANStackLogger::error("[NAME]: Function code out of range, must be between 0 and 255");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0xFF0000000000);
+		rawName |= (static_cast<std::uint64_t>(value & 0xFF) << 40);
 	}
 
 	std::uint8_t NAME::get_function_instance() const
@@ -92,10 +99,12 @@ namespace isobus
 
 	void NAME::set_function_instance(std::uint8_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0xF800000000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0x1F) << 35);
-		set_full_name(tempNAME);
+		if (value > 0x1F)
+		{
+			CANStackLogger::error("[NAME]: Function instance out of range, must be between 0 and 31");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0xF800000000);
+		rawName |= (static_cast<std::uint64_t>(value & 0x1F) << 35);
 	}
 
 	std::uint8_t NAME::get_ecu_instance() const
@@ -105,10 +114,12 @@ namespace isobus
 
 	void NAME::set_ecu_instance(std::uint8_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0x700000000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0x07) << 32);
-		set_full_name(tempNAME);
+		if (value > 0x07)
+		{
+			CANStackLogger::error("[NAME]: ECU instance out of range, must be between 0 and 7");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0x700000000);
+		rawName |= (static_cast<std::uint64_t>(value & 0x07) << 32);
 	}
 
 	std::uint16_t NAME::get_manufacturer_code() const
@@ -118,10 +129,12 @@ namespace isobus
 
 	void NAME::set_manufacturer_code(std::uint16_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0xFFE00000);
-		tempNAME |= (static_cast<std::uint64_t>(value & 0x07FF) << 21);
-		set_full_name(tempNAME);
+		if (value > 0x07FF)
+		{
+			CANStackLogger::error("[NAME]: Manufacturer code out of range, must be between 0 and 2047");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0xFFE00000);
+		rawName |= (static_cast<std::uint64_t>(value & 0x07FF) << 21);
 	}
 
 	std::uint32_t NAME::get_identity_number() const
@@ -131,10 +144,12 @@ namespace isobus
 
 	void NAME::set_identity_number(uint32_t value)
 	{
-		uint64_t tempNAME = rawName;
-		tempNAME &= ~static_cast<std::uint64_t>(0x1FFFFF);
-		tempNAME |= static_cast<std::uint64_t>(value & 0x1FFFFF);
-		set_full_name(tempNAME);
+		if (value > 0x001FFFFF)
+		{
+			CANStackLogger::error("[NAME]: Identity number out of range, must be between 0 and 2097151");
+		}
+		rawName &= ~static_cast<std::uint64_t>(0x1FFFFF);
+		rawName |= static_cast<std::uint64_t>(value & 0x1FFFFF);
 	}
 
 	std::uint64_t NAME::get_full_name() const
