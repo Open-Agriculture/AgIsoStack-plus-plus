@@ -57,6 +57,15 @@ if("MCP2515" IN_LIST CAN_DRIVER)
     list(APPEND HARDWARE_INTEGRATION_INCLUDE "spi_interface_esp.hpp")
   endif()
 endif()
+if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
+  message(
+    WARNING
+      "This is not legal advice. The InnoMaker USB2CAN driver uses libusb, which is an LGPL-2.1 library. Be sure you understand the implications of this before proceeding."
+  )
+  list(APPEND HARDWARE_INTEGRATION_SRC "innomaker_usb2can_windows_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE
+       "innomaker_usb2can_windows_plugin.hpp")
+endif()
 
 # Prepend the source directory path to all the source files
 prepend(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR}
@@ -122,6 +131,33 @@ if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
     message(
       FATAL_ERROR
         "Windows PCAN Selected but no supported processor arch was detected. Only x64, x86, and ARM64 are supported by PEAK's drivers."
+    )
+  endif()
+endif()
+
+if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
+  if(MSVC)
+    # See https://gitlab.kitware.com/cmake/cmake/-/issues/15170
+    set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
+  endif()
+
+  message(STATUS "Target Arch: ${CMAKE_SYSTEM_PROCESSOR}")
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL
+                                                "x64")
+    message(STATUS "Detected AMD64, linking to INNOMAKER USB2CAN x64 Library")
+    target_link_libraries(
+      HardwareIntegration
+      PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/InnoMakerUsb2CanLib64.lib)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
+                                                     STREQUAL "X86")
+    message(STATUS "Detected x86, linking to INNOMAKER USB2CAN x86 Library")
+    target_link_libraries(
+      HardwareIntegration
+      PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/InnoMakerUsb2CanLib32.lib)
+  else()
+    message(
+      FATAL_ERROR
+        "Windows InnoMaker USB2CAN Selected but no supported processor arch was detected. Only x64 and x86 are supported."
     )
   endif()
 endif()
