@@ -20,6 +20,11 @@ if(NOT CAN_DRIVER)
   )
 endif()
 
+if(BUILD_TESTING AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
+  message(STATUS "Including VirtualCAN driver for testing.")
+  list(APPEND CAN_DRIVER "VirtualCAN")
+endif()
+
 # Set the source files
 set(HARDWARE_INTEGRATION_SRC "can_hardware_interface.cpp")
 
@@ -35,6 +40,10 @@ endif()
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "pcan_basic_windows_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "pcan_basic_windows_plugin.hpp")
+endif()
+if("VirtualCAN" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "virtual_can_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "virtual_can_plugin.hpp")
 endif()
 if("TWAI" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "twai_plugin.cpp")
