@@ -16,9 +16,9 @@
 
 #include <thread>
 
-std::unique_ptr<InnoMakerUsb2CanLib> InnomakerUSB2CANWindowsPlugin::driverInstance = nullptr;
+std::unique_ptr<InnoMakerUsb2CanLib> InnoMakerUSB2CANWindowsPlugin::driverInstance = nullptr;
 
-InnomakerUSB2CANWindowsPlugin::InnomakerUSB2CANWindowsPlugin(int channel, Baudrate baudrate) :
+InnoMakerUSB2CANWindowsPlugin::InnoMakerUSB2CANWindowsPlugin(int channel, Baudrate baudrate) :
   channel(channel),
   baudrate(baudrate)
 {
@@ -31,21 +31,21 @@ InnomakerUSB2CANWindowsPlugin::InnomakerUSB2CANWindowsPlugin(int channel, Baudra
 	txContexts = std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can>(new InnoMakerUsb2CanLib::innomaker_can());
 }
 
-InnomakerUSB2CANWindowsPlugin::~InnomakerUSB2CANWindowsPlugin()
+InnoMakerUSB2CANWindowsPlugin::~InnoMakerUSB2CANWindowsPlugin()
 {
 	close();
 }
 
-bool InnomakerUSB2CANWindowsPlugin::get_is_valid() const
+bool InnoMakerUSB2CANWindowsPlugin::get_is_valid() const
 {
 	return nullptr != driverInstance->getInnoMakerDevice(channel) && driverInstance->getInnoMakerDevice(channel)->isOpen;
 }
 
-void InnomakerUSB2CANWindowsPlugin::close()
+void InnoMakerUSB2CANWindowsPlugin::close()
 {
 	InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
 
-	if (nullptr != device)
+	if (nullptr != device && device->isOpen)
 	{
 		driverInstance->urbResetDevice(device);
 		driverInstance->closeInnoMakerDevice(device);
@@ -63,14 +63,14 @@ void InnomakerUSB2CANWindowsPlugin::close()
 		}
 		if (allChannelsClosed)
 		{
-			isobus::CANStackLogger::info("[Innomaker-Windows] All channels closed, closing driver instance");
+			isobus::CANStackLogger::info("[InnoMaker-Windows] All channels closed, closing driver instance");
 			driverInstance->setdown();
 			driverInstance = nullptr;
 		}
 	}
 }
 
-void InnomakerUSB2CANWindowsPlugin::open()
+void InnoMakerUSB2CANWindowsPlugin::open()
 {
 	InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
 
@@ -235,7 +235,7 @@ void InnomakerUSB2CANWindowsPlugin::open()
 
 			default:
 			{
-				isobus::CANStackLogger::error("[Innomaker-Windows] Unsupported baudrate with index " + std::to_string(baudrate) + " in InnomakerUSB2CANWindowsPlugin::Baudrate enum.");
+				isobus::CANStackLogger::error("[InnoMaker-Windows] Unsupported baudrate with index " + std::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
 				return;
 			}
 			break;
@@ -245,11 +245,11 @@ void InnomakerUSB2CANWindowsPlugin::open()
 	}
 	else
 	{
-		isobus::CANStackLogger::error("[Innomaker-Windows] No device found on channel " + std::to_string(channel));
+		isobus::CANStackLogger::error("[InnoMaker-Windows] No device found on channel " + std::to_string(channel));
 	}
 }
 
-bool InnomakerUSB2CANWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+bool InnoMakerUSB2CANWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 {
 	InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
 
@@ -267,12 +267,12 @@ bool InnomakerUSB2CANWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame
 	InnoMakerUsb2CanLib::innomaker_host_frame frame;
 	memcpy(&frame, receiveBuffer, sizeof(InnoMakerUsb2CanLib::innomaker_host_frame));
 
-	if (frame.echo_id != 0xFFFFFFFF)
+	if (0xFFFFFFFF != frame.echo_id)
 	{
 		InnoMakerUsb2CanLib::innomaker_tx_context *txc = driverInstance->innomaker_get_tx_context(txContexts.get(), frame.echo_id);
-		if (txc == nullptr)
+		if (nullptr == txc)
 		{
-			isobus::CANStackLogger::warn("[Innomaker-Windows] Received frame with bad echo ID: " + std::to_string(static_cast<int>(frame.echo_id)));
+			isobus::CANStackLogger::warn("[InnoMaker-Windows] Received frame with bad echo ID: " + std::to_string(static_cast<int>(frame.echo_id)));
 			return false;
 		}
 		driverInstance->innomaker_free_tx_context(txc);
@@ -296,7 +296,7 @@ bool InnomakerUSB2CANWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame
 	return true;
 }
 
-bool InnomakerUSB2CANWindowsPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+bool InnoMakerUSB2CANWindowsPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 {
 	InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
 	if (nullptr == device)
@@ -305,9 +305,9 @@ bool InnomakerUSB2CANWindowsPlugin::write_frame(const isobus::HardwareInterfaceC
 	}
 
 	InnoMakerUsb2CanLib::innomaker_tx_context *txc = driverInstance->innomaker_alloc_tx_context(txContexts.get());
-	if (0xff == txc->echo_id)
+	if (0xFF == txc->echo_id)
 	{
-		isobus::CANStackLogger::warn("[Innomaker-Windows] No free transmission context");
+		isobus::CANStackLogger::warn("[InnoMaker-Windows] No free transmission context");
 		return false;
 	}
 
@@ -330,7 +330,7 @@ bool InnomakerUSB2CANWindowsPlugin::write_frame(const isobus::HardwareInterfaceC
 	bool success = driverInstance->sendInnoMakerDeviceBuf(device, sendBuffer, sizeof(InnoMakerUsb2CanLib::innomaker_host_frame), 10);
 	if (!success)
 	{
-		isobus::CANStackLogger::warn("[Innomaker-Windows] Failed to send frame");
+		isobus::CANStackLogger::warn("[InnoMaker-Windows] Failed to send frame");
 		driverInstance->innomaker_free_tx_context(txc);
 	}
 	return success;

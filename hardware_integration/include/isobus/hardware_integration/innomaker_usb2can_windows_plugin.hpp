@@ -21,11 +21,11 @@
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 
 //================================================================================================
-/// @class InnomakerUSB2CANWindowsPlugin
+/// @class InnoMakerUSB2CANWindowsPlugin
 ///
 /// @brief A Windows CAN Driver for InnoMaker USB2CAN devices
 //================================================================================================
-class InnomakerUSB2CANWindowsPlugin : public CANHardwarePlugin
+class InnoMakerUSB2CANWindowsPlugin : public CANHardwarePlugin
 {
 public:
 	/// @brief The baudrates supported by the InnoMaker USB2CAN device
@@ -49,12 +49,12 @@ public:
 		B1000k, ///< 1000 kbps baudrate
 	};
 
-	/// @brief Constructor for the Windows version of the Innomaker USB2CAN Windows CAN driver
+	/// @brief Constructor for the Windows version of the InnoMaker USB2CAN Windows CAN driver
 	/// @param[in] channel The channel to use by index, passed directly to the consuming driver
-	explicit InnomakerUSB2CANWindowsPlugin(int channel, Baudrate baudrate = B250k);
+	explicit InnoMakerUSB2CANWindowsPlugin(int channel, Baudrate baudrate = B250k);
 
-	/// @brief The destructor for InnomakerUSB2CANWindowsPlugin
-	virtual ~InnomakerUSB2CANWindowsPlugin();
+	/// @brief The destructor for InnoMakerUSB2CANWindowsPlugin
+	virtual ~InnoMakerUSB2CANWindowsPlugin();
 
 	/// @brief Returns if the connection with the hardware is valid
 	/// @returns `true` if connected, `false` if not connected
@@ -82,8 +82,7 @@ private:
 	static constexpr std::uint32_t CAN_SFF_MASK = 0x000007FF; ///< The mask for standard frames
 	static constexpr std::uint32_t CAN_EFF_MASK = 0x1FFFFFFF; ///< The mask for extended frames
 
-	static std::unique_ptr<InnoMakerUsb2CanLib>
-	  driverInstance; ///< The driver itself
+	static std::unique_ptr<InnoMakerUsb2CanLib> driverInstance; ///< The driver itself
 	const int channel; ///< Stores the channel associated with this object
 	const std::uint32_t baudrate; ///< Stores the baud rate associated with this object
 	std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can> txContexts; /// Stores Tx tickets for the driver
