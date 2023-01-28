@@ -13,7 +13,7 @@ jobs:
           # Some files can be excluded from the clang-format style check, like 3rd party driver files,
           # as their licenses may not allow us to modify them, such as if they are LGPL licensed.
           # The exclude-regex option can be used to exclude these files from the style check:
-          exclude-regex: ^.*(PCANBasic\.h|libusb\.h)$
+          exclude-regex: ^.*(PCANBasic\.h|libusb\.h|InnoMakerUsb2CanLib\.h)$
   cmake-format:
     name: cmake-format style
     runs-on: ubuntu-latest
