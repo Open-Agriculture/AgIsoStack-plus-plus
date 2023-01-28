@@ -25,7 +25,7 @@ endif()
 
 # Make CTest available which adds the option BUILD_TESTING
 include(CTest)
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NOT MSVC)
   # Set --coverage flag for gcovr (SonarCloud)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 endif()
