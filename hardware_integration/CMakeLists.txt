@@ -60,8 +60,15 @@ endif()
 if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
   message(
     WARNING
-      "This is not legal advice. The InnoMaker USB2CAN driver uses libusb, which is an LGPL-2.1 library. Be sure you understand the implications of this before proceeding."
+      "
+      This is not legal advice. The InnoMaker USB2CAN driver uses libusb, which is an LGPL-2.1 library. Be sure you understand the implications of this before proceeding."
   )
+  message(
+    AUTHOR_WARNING
+      "
+      The WindowsInnoMakerUSB2CAN driver requires the InnoMakerUsb2CANLibxx.dll to be in the same directory as the executable. A copy of this file is included in the repository,
+      under the /hardware_integration/lib/Windows directory. It is recommended to use this copy, as it is known to work with the WindowsInnoMakerUSB2CAN driver provided by the stack.
+      ")
   list(APPEND HARDWARE_INTEGRATION_SRC "innomaker_usb2can_windows_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE
        "innomaker_usb2can_windows_plugin.hpp")
