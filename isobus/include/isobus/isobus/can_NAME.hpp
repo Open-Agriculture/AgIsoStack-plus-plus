@@ -115,14 +115,14 @@ namespace isobus
 		/// @brief A useful way to compare sesson objects to each other for equality
 		/// @param[in] obj The rhs of the operator
 		/// @returns `true` if the objects are "equal"
-		bool operator==(const NAME &obj);
+		bool operator==(const NAME &obj) const;
 
 		/// @brief A structure that tracks the pair of a NAME parameter and associated value
 		typedef std::pair<const NAMEParameters, const std::uint32_t> NameParameterFilter;
 
 		/// @brief Constructor for a NAME
 		/// @param[in] rawNAMEData The raw 64 bit NAME of an ECU
-		explicit NAME(std::uint64_t rawNAMEData);
+		explicit NAME(std::uint64_t rawNAMEData = 0);
 
 		/// @brief Returns if the ECU is capable of address arbitration
 		/// @returns true if the ECU can arbitrate addresses

@@ -40,7 +40,7 @@ namespace isobus
 
 		/// @brief Returns true if a NAME matches this filter class's components
 		/// @returns true if a NAME matches this filter class's components
-		bool check_name_matches_filter(const NAME &nameToCompare);
+		bool check_name_matches_filter(const NAME &nameToCompare) const;
 
 	private:
 		NAME::NAMEParameters parameter; ///< The NAME component to filter against

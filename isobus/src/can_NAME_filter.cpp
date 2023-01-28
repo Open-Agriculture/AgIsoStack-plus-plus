@@ -27,7 +27,7 @@ namespace isobus
 		return value;
 	}
 
-	bool NAMEFilter::check_name_matches_filter(const NAME &nameToCompare)
+	bool NAMEFilter::check_name_matches_filter(const NAME &nameToCompare) const
 	{
 		bool retVal = false;
 
