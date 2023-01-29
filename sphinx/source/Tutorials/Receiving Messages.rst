@@ -77,7 +77,7 @@ So, our updated tutorial program now should look like this:
    #include <csignal>
    #include <iostream>
 
-   void signal_handler(int signum)
+   void signal_handler(int)
    {
       CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);

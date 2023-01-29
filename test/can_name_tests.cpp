@@ -30,7 +30,7 @@ TEST(CAN_NAME_TESTS, NAMEProperties)
 	EXPECT_EQ(TestDeviceNAME.get_function_instance(), 6);
 	EXPECT_EQ(TestDeviceNAME.get_device_class_instance(), 7);
 	EXPECT_EQ(TestDeviceNAME.get_manufacturer_code(), 8);
-	EXPECT_EQ(TestDeviceNAME.get_full_name(), 10881826125818888196);
+	EXPECT_EQ(TestDeviceNAME.get_full_name(), 10881826125818888196U);
 }
 
 TEST(CAN_NAME_TESTS, NAMEPropertiesOutOfRange)
@@ -39,26 +39,24 @@ TEST(CAN_NAME_TESTS, NAMEPropertiesOutOfRange)
 	TestDeviceNAME.set_industry_group(8);
 	TestDeviceNAME.set_device_class_instance(16);
 	TestDeviceNAME.set_device_class(128);
-	TestDeviceNAME.set_function_code(256);
 	TestDeviceNAME.set_identity_number(2097152);
-	TestDeviceNAME.set_ecu_instance(256);
-	TestDeviceNAME.set_function_instance(256);
-	TestDeviceNAME.set_manufacturer_code(65536);
+	TestDeviceNAME.set_ecu_instance(8);
+	TestDeviceNAME.set_function_instance(32);
+	TestDeviceNAME.set_manufacturer_code(2048);
 
 	EXPECT_NE(TestDeviceNAME.get_industry_group(), 8);
 	EXPECT_NE(TestDeviceNAME.get_device_class_instance(), 16);
 	EXPECT_NE(TestDeviceNAME.get_device_class(), 128);
-	EXPECT_NE(TestDeviceNAME.get_function_code(), 256);
-	EXPECT_NE(TestDeviceNAME.get_identity_number(), 2097152);
-	EXPECT_NE(TestDeviceNAME.get_ecu_instance(), 256);
-	EXPECT_NE(TestDeviceNAME.get_function_instance(), 256);
-	EXPECT_NE(TestDeviceNAME.get_manufacturer_code(), 65536);
+	EXPECT_NE(TestDeviceNAME.get_identity_number(), 2097151);
+	EXPECT_NE(TestDeviceNAME.get_ecu_instance(), 8);
+	EXPECT_NE(TestDeviceNAME.get_function_instance(), 32);
+	EXPECT_NE(TestDeviceNAME.get_manufacturer_code(), 2048);
 }
 
 TEST(CAN_NAME_TESTS, NAMEEquals)
 {
-	NAME firstNAME(10376445291390828545);
-	NAME secondNAME(10376445291390828545);
+	NAME firstNAME(10376445291390828545U);
+	NAME secondNAME(10376445291390828545U);
 	EXPECT_EQ(firstNAME, secondNAME);
 }
 

@@ -16,7 +16,7 @@ static isobus::ControlFunction *repetitionRateRequestor = nullptr;
 
 using namespace std;
 
-void signal_handler(int signum)
+void signal_handler(int)
 {
 	CANHardwareInterface::stop();
 	_exit(EXIT_FAILURE);

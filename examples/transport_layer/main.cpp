@@ -17,7 +17,7 @@ static constexpr std::uint32_t ETP_TEST_SIZE = 2048;
 
 using namespace std;
 
-void signal_handler(int signum)
+void signal_handler(int)
 {
 	CANHardwareInterface::stop();
 	_exit(EXIT_FAILURE);
