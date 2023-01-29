@@ -66,7 +66,7 @@ CANHardwareInterface::~CANHardwareInterface()
 	set_number_of_can_channels(0);
 }
 
-bool CANHardwareInterface::assign_can_channel_frame_handler(std::uint8_t aCANChannel, CANHardwarePlugin *driver)
+bool CANHardwareInterface::assign_can_channel_frame_handler(std::uint8_t aCANChannel, std::shared_ptr<CANHardwarePlugin> driver)
 {
 	bool retVal = false;
 

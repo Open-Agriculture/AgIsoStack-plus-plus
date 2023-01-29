@@ -307,7 +307,7 @@ bool InnoMakerUSB2CANWindowsPlugin::write_frame(const isobus::HardwareInterfaceC
 	InnoMakerUsb2CanLib::innomaker_tx_context *txc = driverInstance->innomaker_alloc_tx_context(txContexts.get());
 	if (0xFF == txc->echo_id)
 	{
-		isobus::CANStackLogger::warn("[InnoMaker-Windows] No free transmission context");
+		isobus::CANStackLogger::debug("[InnoMaker-Windows] No free transmission context");
 		return false;
 	}
 

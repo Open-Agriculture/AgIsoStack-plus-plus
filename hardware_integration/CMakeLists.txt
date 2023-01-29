@@ -29,8 +29,9 @@ endif()
 set(HARDWARE_INTEGRATION_SRC "can_hardware_interface.cpp")
 
 # Set the include files
-set(HARDWARE_INTEGRATION_INCLUDE "can_hardware_interface.hpp"
-                                 "can_hardware_plugin.hpp")
+set(HARDWARE_INTEGRATION_INCLUDE
+    "can_hardware_interface.hpp" "can_hardware_plugin.hpp"
+    "available_can_drivers.hpp")
 
 # Add the source/include files based on the CAN driver chosen
 if("SocketCAN" IN_LIST CAN_DRIVER)
@@ -168,6 +169,15 @@ if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
     )
   endif()
 endif()
+
+# Mark the compiled CAN drivers available to other modules. In the form:
+# `ISOBUS_<uppercase CAN_DRIVER>_AVAILABLE` as a preprocessor definition.
+foreach(AVAILABLE_DRIVER ${CAN_DRIVER})
+  string(TOUPPER ${AVAILABLE_DRIVER} AVAILABLE_DRIVER)
+  string(PREPEND AVAILABLE_DRIVER "ISOBUS_")
+  string(APPEND AVAILABLE_DRIVER "_AVAILABLE")
+  target_compile_definitions(HardwareIntegration PUBLIC ${AVAILABLE_DRIVER})
+endforeach()
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

@@ -1,3 +1,4 @@
+#include "isobus/hardware_integration/available_can_drivers.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -8,14 +9,6 @@
 
 #include "console_logger.cpp"
 #include "object_pool_ids.h"
-
-#ifdef WIN32
-#include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
-static PCANBasicWindowsPlugin canDriver(PCAN_USBBUS1);
-#else
-#include "isobus/hardware_integration/socket_can_interface.hpp"
-static SocketCANInterface canDriver("can0");
-#endif
 
 #include <csignal>
 #include <iostream>
@@ -56,16 +49,34 @@ void handle_aux_input(isobus::VirtualTerminalClient::AssignedAuxiliaryFunction f
 	std::cout << "Auxiliary input received: (" << function.functionObjectID << ", " << function.inputObjectID << ", " << static_cast<int>(function.functionType) << "), value1: " << value1 << ", value2: " << value2 << std::endl;
 }
 
-void setup()
+int main()
 {
+	std::signal(SIGINT, signal_handler);
+
+	std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
+#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
+	canDriver = std::make_shared<SocketCANInterface>("can0");
+#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#endif
+	if (nullptr == canDriver)
+	{
+		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
+		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
+		return -1;
+	}
+
 	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
 	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info); // Change this to Debug to see more information
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-	if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
 		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		return -2;
 	}
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -108,12 +119,6 @@ void setup()
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
 	TestVirtualTerminalClient->register_auxiliary_input_event_callback(handle_aux_input);
 	TestVirtualTerminalClient->initialize(true);
-	std::signal(SIGINT, signal_handler);
-}
-
-int main()
-{
-	setup();
 
 	while (true)
 	{
