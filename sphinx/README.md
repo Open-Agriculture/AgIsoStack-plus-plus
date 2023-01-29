@@ -14,7 +14,7 @@ pip install sphinx-rtd-theme
 ## Build the Tutorial
 
 ```
-make html
+./make html
 ```
 
 Then, you can view the documentation at build\html\index.html in your web browser.

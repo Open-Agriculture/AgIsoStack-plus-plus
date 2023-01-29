@@ -91,8 +91,9 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 }
 
+std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
 CANHardwareInterface::set_number_of_can_channels(1);
-CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
+CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 CANHardwareInterface::start();
 
 CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);

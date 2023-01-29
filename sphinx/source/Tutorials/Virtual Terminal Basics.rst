@@ -35,29 +35,23 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 .. code-block:: c++
 
-	#include "isobus/isobus/can_network_manager.hpp"
-	#include "isobus/hardware_integration/socket_can_interface.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
-	#include "isobus/isobus/can_partnered_control_function.hpp"
+	#include "isobus/hardware_integration/socket_can_interface.hpp"
 	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
-	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
+	#include "isobus/isobus/can_network_manager.hpp"
+	#include "isobus/isobus/can_partnered_control_function.hpp"
+	#include "isobus/isobus/can_stack_logger.hpp"
 
 	#include <csignal>
 	#include <iostream>
 	#include <memory>
-
-	static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-	static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = nullptr;
-	std::vector<isobus::NAMEFilter> vtNameFilters;
-	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-	static SocketCANInterface canDriver("can0");
 
 	using namespace std;
 
 	void signal_handler(int signum)
 	{
 		CANHardwareInterface::stop();
-		exit(signum);
+		_exit(EXIT_FAILURE);
 	}
 
 	void update_CAN_network()
@@ -70,14 +64,17 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 	}
 
-	void setup()
+	int main()
 	{
+		// Set up the hardware layer to use SocketCAN interface on channel "can0"
+		std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
 		CANHardwareInterface::set_number_of_can_channels(1);
-		CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-		if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+		if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 		{
-			std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+			std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
+			return -1;
 		}
 
 		CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -87,8 +84,8 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 		isobus::NAME TestDeviceNAME(0);
 
-		// Make sure you change these for your device!!!!
-		// This is an example device that is using a manufacturer code that is currently unused at time of writing
+		//! Make sure you change these for your device!!!!
+		//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 		TestDeviceNAME.set_arbitrary_address_capable(true);
 		TestDeviceNAME.set_industry_group(1);
 		TestDeviceNAME.set_device_class(0);
@@ -98,17 +95,11 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		TestDeviceNAME.set_function_instance(0);
 		TestDeviceNAME.set_device_class_instance(0);
 		TestDeviceNAME.set_manufacturer_code(64);
-		vtNameFilters.push_back(testFilter);
 
-		TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-		TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
-		TestVirtualTerminalClient->initialize(true);
-		std::signal(SIGINT, signal_handler);
-	}
-
-	int main()
-	{
-		setup();
+		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
+		std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+		std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
 		while (true)
 		{
@@ -119,6 +110,7 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		CANHardwareInterface::stop();
 		return 0;
 	}
+
 
 It's the same boilerplate we've done before, but note the following key things:
 
@@ -132,6 +124,7 @@ With those notes in mind, let's create our VT client:
 
 	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 
+	//! It is discouraged to use global variables, but we have done it here for simplicity.
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
@@ -178,9 +171,7 @@ Now, let's add some code to our example to read in this IOP file, and give it to
 
 	#include "isobus/utility/iop_file_interface.hpp"
 
-	static std::vector<std::uint8_t> testPool;
-
-	testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 
 	if (0 != testPool.size())
 	{
@@ -189,11 +180,17 @@ Now, let's add some code to our example to read in this IOP file, and give it to
 	else
 	{
 		std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
+		return -2;
 	}
+
+	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
+	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
 
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
 
-Note how :code:`testPool` is static here. This is not required, but what is required is that whatever pointer you pass into the VT client via :code:`set_object_pool` MUST remain valid (IE, not deleted or out of scope) during the object pool upload or your application may crash.
+Note how :code:`testPool` is not static here. It is required that whatever pointer you pass into the VT client via :code:`set_object_pool` MUST remain valid (IE, not deleted or out of scope) during the object pool upload or your application may crash.
+
+Furthermore, a hash is generated for the object pool. This is a unique string that represents the object pool. It is used to tell the VT if the object pool has changed since the last time it was uploaded. If it has, the VT will request the new object pool from the ECU. If it hasn't, the VT will assume the object pool is the same as the last time it was uploaded and will not request it again but instead load it from their cache.
 
 If your object pool is too large to store in memory, or you are on an embedded platform with limited resources, you may instead want to use the :code:`register_object_pool_data_chunk_callback` method instead which will get smaller chunks of data from you as the upload proceeds.
 This can be used to read from some external device if needed in segments or just to save RAM.
@@ -345,20 +342,15 @@ Here's the final code for this example:
 	#include "isobus/isobus/can_partnered_control_function.hpp"
 	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 	#include "isobus/utility/iop_file_interface.hpp"
+
 	#include "objectPoolObjects.h"
 
 	#include <csignal>
 	#include <iostream>
 	#include <memory>
 
-	static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-	static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = nullptr;
+	//! It is discouraged to use global variables, but it is done here for simplicity.
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
-	std::vector<isobus::NAMEFilter> vtNameFilters;
-	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-	static std::vector<std::uint8_t> testPool;
-	static SocketCANInterface canDriver("can0");
-	static std::uint32_t exampleNumberOutput = 214748364;
 
 	using namespace std;
 
@@ -369,7 +361,7 @@ Here's the final code for this example:
 		{
 			TestVirtualTerminalClient->terminate();
 		}
-		exit(signum);
+		_exit(EXIT_FAILURE);
 	}
 
 	void update_CAN_network()
@@ -385,6 +377,8 @@ Here's the final code for this example:
 	// This callback will provide us with event driven notifications of button presses from the stack
 	void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, std::uint8_t, std::uint16_t objectID, std::uint16_t, isobus::VirtualTerminalClient *)
 	{
+		static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
+
 		switch (keyEvent)
 		{
 			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
@@ -420,20 +414,24 @@ Here's the final code for this example:
 
 			default:
 			{
-		
 			}
 			break;
 		}
 	}
 
-	void setup()
+	int main()
 	{
-		CANHardwareInterface::set_number_of_can_channels(1);
-		CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
+		std::signal(SIGINT, signal_handler);
 
-		if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+		// Set up the hardware layer to use SocketCAN interface on channel "can0"
+		std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+
+		if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 		{
-			std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+			std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
+			return -1;
 		}
 
 		CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -443,8 +441,8 @@ Here's the final code for this example:
 
 		isobus::NAME TestDeviceNAME(0);
 
-		// Make sure you change these for your device!!!!
-		// This is an example device that is using a manufacturer code that is currently unused at time of writing
+		//! Make sure you change these for your device!!!!
+		//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 		TestDeviceNAME.set_arbitrary_address_capable(true);
 		TestDeviceNAME.set_industry_group(1);
 		TestDeviceNAME.set_device_class(0);
@@ -454,9 +452,8 @@ Here's the final code for this example:
 		TestDeviceNAME.set_function_instance(0);
 		TestDeviceNAME.set_device_class_instance(0);
 		TestDeviceNAME.set_manufacturer_code(64);
-		vtNameFilters.push_back(testFilter);
 
-		testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
+		std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 
 		if (0 != testPool.size())
 		{
@@ -465,21 +462,22 @@ Here's the final code for this example:
 		else
 		{
 			std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
+			return -3;
 		}
 
-		TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-		TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
+		// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
+		std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
+
+		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
+		std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+		std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+
 		TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-		TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
+		TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
 		TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
 		TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
 		TestVirtualTerminalClient->initialize(true);
-		std::signal(SIGINT, signal_handler);
-	}
-
-	int main()
-	{
-		setup();
 
 		while (true)
 		{
@@ -490,6 +488,7 @@ Here's the final code for this example:
 		CANHardwareInterface::stop();
 		return 0;
 	}
+
 
 Writing up the CMake
 ^^^^^^^^^^^^^^^^^^^^^

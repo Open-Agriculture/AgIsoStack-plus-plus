@@ -12,10 +12,8 @@
 #include <iterator>
 #include <memory>
 
-std::uint8_t *TPTestBuffer = nullptr;
-std::uint8_t *ETPTestBuffer = nullptr;
-constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
-constexpr std::uint32_t ETP_TEST_SIZE = 2048;
+static constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
+static constexpr std::uint32_t ETP_TEST_SIZE = 2048;
 
 using namespace std;
 
@@ -59,7 +57,7 @@ int main()
 
 	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
-		std::cout << "Failed to start hardware interface. A CAN driver might be invalid." << std::endl;
+		std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
 		return -2;
 	}
 
