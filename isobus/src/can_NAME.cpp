@@ -84,10 +84,6 @@ namespace isobus
 
 	void NAME::set_function_code(std::uint8_t value)
 	{
-		if (value > 0xFF)
-		{
-			CANStackLogger::error("[NAME]: Function code out of range, must be between 0 and 255");
-		}
 		rawName &= ~static_cast<std::uint64_t>(0xFF0000000000);
 		rawName |= (static_cast<std::uint64_t>(value & 0xFF) << 40);
 	}
