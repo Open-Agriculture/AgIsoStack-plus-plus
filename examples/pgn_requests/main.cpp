@@ -10,21 +10,16 @@
 #include <iostream>
 #include <memory>
 
-static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
+//! It is discouraged to use global variables, but it is done here for simplicity.
 static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;
 static isobus::ControlFunction *repetitionRateRequestor = nullptr;
 
 using namespace std;
 
-void cleanup()
-{
-	CANHardwareInterface::stop();
-}
-
 void signal_handler(int signum)
 {
-	cleanup();
-	exit(signum);
+	CANHardwareInterface::stop();
+	_exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()
@@ -119,7 +114,7 @@ int main()
 
 	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
-		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		std::cout << "Failed to start hardware interface. A CAN driver might be invalid" << std::endl;
 		return -2;
 	}
 
@@ -130,8 +125,8 @@ int main()
 
 	isobus::NAME TestDeviceNAME(0);
 
-	// Make sure you change these for your device!!!!
-	// This is an example device that is using a manufacturer code that is currently unused at time of writing
+	//! Make sure you change these for your device!!!!
+	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(1);
 	TestDeviceNAME.set_device_class(0);
@@ -142,10 +137,11 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
 	std::signal(SIGINT, signal_handler);
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
+	//! @todo Check this instead of asuming it is done
 	std::this_thread::sleep_for(std::chrono::milliseconds(1250));
 
 	// Tell the CAN stack that we want to respond to PGN requests that are sent to our internal control function
@@ -191,7 +187,7 @@ int main()
 		}
 	}
 
-	cleanup();
+	CANHardwareInterface::stop();
 
 	return 0;
 }

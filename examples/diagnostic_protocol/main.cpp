@@ -10,15 +10,13 @@
 #include <iterator>
 #include <memory>
 
-static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-
 using namespace std;
 
 void signal_handler(int signum)
 {
-	isobus::DiagnosticProtocol::deassign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
+	isobus::DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions();
 	CANHardwareInterface::stop();
-	exit(signum);
+	_exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()
@@ -55,7 +53,7 @@ int main()
 
 	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
-		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		std::cout << "Failed to start hardware interface. A CAN driver might be invalid." << std::endl;
 		return -2;
 	}
 
@@ -66,8 +64,8 @@ int main()
 
 	isobus::NAME TestDeviceNAME(0);
 
-	// Make sure you change these for your device!!!!
-	// This is an example device that is using a manufacturer code that is currently unused at time of writing
+	//! Make sure you change these for your device!!!!
+	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(0);
 	TestDeviceNAME.set_device_class(0);
@@ -78,7 +76,11 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+
+	// Wait to make sure address claiming is done. The time is arbitrary.
+	//! @todo Check this instead of asuming it is done
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 	isobus::DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
 

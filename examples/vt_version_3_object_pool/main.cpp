@@ -14,12 +14,8 @@
 #include <iostream>
 #include <memory>
 
-static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = nullptr;
+//! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
-std::vector<isobus::NAMEFilter> vtNameFilters;
-const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-static std::vector<std::uint8_t> testPool;
 
 using namespace std;
 
@@ -30,7 +26,7 @@ void signal_handler(int signum)
 	{
 		TestVirtualTerminalClient->terminate();
 	}
-	exit(signum);
+	_exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()
@@ -114,7 +110,7 @@ int main()
 
 	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
-		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		std::cout << "Failed to start hardware interface. A CAN driver might be invalid." << std::endl;
 		return -2;
 	}
 
@@ -125,8 +121,8 @@ int main()
 
 	isobus::NAME TestDeviceNAME(0);
 
-	// Make sure you change these for your device!!!!
-	// This is an example device that is using a manufacturer code that is currently unused at time of writing
+	//! Make sure you change these for your device!!!!
+	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(1);
 	TestDeviceNAME.set_device_class(0);
@@ -136,9 +132,8 @@ int main()
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
-	vtNameFilters.push_back(testFilter);
 
-	testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 
 	if (0 != testPool.size())
 	{
@@ -147,13 +142,17 @@ int main()
 	else
 	{
 		std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
+		return -3;
 	}
 
 	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
 	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
 
-	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
+	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
+	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
 	TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);

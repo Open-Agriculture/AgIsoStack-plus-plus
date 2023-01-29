@@ -168,6 +168,16 @@ namespace isobus
 		return retVal;
 	}
 
+	void DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions()
+	{
+		for (isobus::DiagnosticProtocol *protocol : diagnosticProtocolList)
+		{
+			// First, remove callbacks from PGN requests
+			protocol->deregister_all_pgns();
+			delete protocol;
+		}
+	}
+
 	DiagnosticProtocol *DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		DiagnosticProtocol *retVal = nullptr;

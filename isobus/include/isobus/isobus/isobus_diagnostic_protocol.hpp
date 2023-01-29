@@ -214,6 +214,10 @@ namespace isobus
 		/// @returns `true` If the protocol instance was deleted OK according to the passed in ICF
 		static bool deassign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
+		/// @brief Used to tell the CAN stack that diagnostic messages should no longer be sent from any internal control function
+		/// @details This will delete all instances of this protocol and may delete associated but unused instances of the PGN request protocol.
+		static void deassign_all_diagnostic_protocol_to_internal_control_functions();
+
 		/// @brief Retuns the diagnostic protocol assigned to an internal control function, if any
 		/// @param internalControlFunction The internal control function to search against
 		/// @returns The protocol object associated to the passed in ICF, or `nullptr` if none found that match the passed in ICF
