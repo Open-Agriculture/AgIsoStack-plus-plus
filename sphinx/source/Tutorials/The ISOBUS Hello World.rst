@@ -311,7 +311,7 @@ Make sure to include `csignal`.
    #include <csignal>
    #include <iostream>
 
-   void signal_handler(int signum)
+   void signal_handler(int)
    {
       CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);
@@ -392,7 +392,7 @@ The total result:
    #include <csignal>
    #include <iostream>
 
-   void signal_handler(int signum)
+   void signal_handler(int)
    {
    	CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);

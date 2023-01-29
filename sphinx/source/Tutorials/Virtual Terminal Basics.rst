@@ -48,7 +48,7 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 	using namespace std;
 
-	void signal_handler(int signum)
+	void signal_handler(int)
 	{
 		CANHardwareInterface::stop();
 		_exit(EXIT_FAILURE);
@@ -354,7 +354,7 @@ Here's the final code for this example:
 
 	using namespace std;
 
-	void signal_handler(int signum)
+	void signal_handler(int)
 	{
 		CANHardwareInterface::stop();
 		if (nullptr != TestVirtualTerminalClient)

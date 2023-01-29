@@ -34,7 +34,7 @@ void nmea2k_transmit_complete_callback(std::uint32_t parameterGroupNumber,
 	}
 }
 
-void signal_handler(int signum)
+void signal_handler(int)
 {
 	CANHardwareInterface::stop();
 	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);

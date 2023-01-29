@@ -12,7 +12,7 @@
 
 using namespace std;
 
-void signal_handler(int signum)
+void signal_handler(int)
 {
 	isobus::DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions();
 	CANHardwareInterface::stop();

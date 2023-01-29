@@ -101,7 +101,7 @@ The final program for this tutorial (including the code from the previous Hello 
    #include <memory>
    #include <csignal>
 
-   void signal_handler(int signum)
+   void signal_handler(int)
    {
       CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);
