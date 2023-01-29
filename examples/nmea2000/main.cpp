@@ -10,8 +10,6 @@
 #include <iterator>
 #include <memory>
 
-static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-
 using namespace std;
 
 void nmea2k_callback(isobus::CANMessage *message, void *)
@@ -40,7 +38,7 @@ void signal_handler(int signum)
 {
 	CANHardwareInterface::stop();
 	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
-	exit(signum);
+	_exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()
@@ -77,7 +75,7 @@ int main()
 
 	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
-		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		std::cout << "Failed to start hardware interface. A CAN driver might be invalid." << std::endl;
 		return -2;
 	}
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -87,8 +85,8 @@ int main()
 
 	isobus::NAME TestDeviceNAME(0);
 
-	// Make sure you change these for your device!!!!
-	// This is an example device that is using a manufacturer code that is currently unused at time of writing
+	//! Make sure you change these for your device!!!!
+	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(0);
 	TestDeviceNAME.set_device_class(0);
@@ -99,11 +97,13 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	isobus::InternalControlFunction TestInternalECU(TestDeviceNAME, 0x1C, 0);
 
 	isobus::FastPacketProtocol::Protocol.register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(250)); // Wait to make sure our address was claimed
+	// Wait to make sure address claiming is done. The time is arbitrary.
+	//! @todo Check this instead of asuming it is done
+	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	constexpr std::uint8_t TEST_MESSAGE_LENGTH = 100;
 	std::uint8_t testMessageData[TEST_MESSAGE_LENGTH];
@@ -117,7 +117,7 @@ int main()
 	while (true)
 	{
 		// Send a fast packet message
-		isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, TestInternalECU.get(), nullptr, isobus::CANIdentifier::PriorityLowest7, nmea2k_transmit_complete_callback);
+		isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, &TestInternalECU, nullptr, isobus::CANIdentifier::PriorityLowest7, nmea2k_transmit_complete_callback);
 
 		// Sleep for a while
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
