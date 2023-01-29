@@ -1,3 +1,4 @@
+#include "isobus/hardware_integration/available_can_drivers.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
@@ -8,14 +9,6 @@
 #include <csignal>
 #include <iostream>
 #include <memory>
-
-#ifdef WIN32
-#include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
-static PCANBasicWindowsPlugin canDriver(PCAN_USBBUS1);
-#else
-#include "isobus/hardware_integration/socket_can_interface.hpp"
-static SocketCANInterface canDriver("can0");
-#endif
 
 static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
 static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;
@@ -102,14 +95,32 @@ bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t par
 	return retVal;
 }
 
-void setup()
+int main()
 {
-	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
+	std::signal(SIGINT, signal_handler);
 
-	if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+	std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
+#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
+	canDriver = std::make_shared<SocketCANInterface>("can0");
+#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#endif
+	if (nullptr == canDriver)
+	{
+		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
+		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
+		return -1;
+	}
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+
+	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
 		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		return -2;
 	}
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -136,11 +147,6 @@ void setup()
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
 	std::this_thread::sleep_for(std::chrono::milliseconds(1250));
-}
-
-int main()
-{
-	setup();
 
 	// Tell the CAN stack that we want to respond to PGN requests that are sent to our internal control function
 	isobus::ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(TestInternalECU);

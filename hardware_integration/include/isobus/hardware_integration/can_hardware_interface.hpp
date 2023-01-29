@@ -84,7 +84,7 @@ public:
 	/// @param[in] canDriver The driver to assign to the channel
 	/// @note All changes to driver assignment will be ignored if `start` has been called and the threads are running
 	/// @returns `true` if the driver was assigned to the channel, otherwise `false`
-	static bool assign_can_channel_frame_handler(std::uint8_t aCANChannel, CANHardwarePlugin *canDriver);
+	static bool assign_can_channel_frame_handler(std::uint8_t aCANChannel, std::shared_ptr<CANHardwarePlugin> canDriver);
 
 	/// @brief Starts the threads for managing the CAN stack and CAN drivers
 	/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
@@ -146,7 +146,7 @@ private:
 
 		std::thread *receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
 
-		CANHardwarePlugin *frameHandler; ///< The CAN driver to use for a CAN channel
+		std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel
 	};
 
 	/// @brief The default update interval for the CAN stack. Mostly arbitrary
