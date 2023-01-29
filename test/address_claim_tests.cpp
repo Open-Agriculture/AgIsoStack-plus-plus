@@ -15,11 +15,11 @@ using namespace isobus;
 
 TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 {
-	VirtualCANPlugin firstDevice;
-	VirtualCANPlugin secondDevice;
+	std::shared_ptr<VirtualCANPlugin> firstDevice = std::make_shared<VirtualCANPlugin>();
+	std::shared_ptr<VirtualCANPlugin> secondDevice = std::make_shared<VirtualCANPlugin>();
 	CANHardwareInterface::set_number_of_can_channels(2);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, &firstDevice);
-	CANHardwareInterface::assign_can_channel_frame_handler(1, &secondDevice);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, firstDevice);
+	CANHardwareInterface::assign_can_channel_frame_handler(1, secondDevice);
 	CANHardwareInterface::start();
 
 	CANHardwareInterface::add_can_lib_update_callback(
