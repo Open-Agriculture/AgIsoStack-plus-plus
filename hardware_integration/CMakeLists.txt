@@ -172,11 +172,11 @@ endif()
 
 # Mark the compiled CAN drivers available to other modules. In the form:
 # `ISOBUS_<uppercase CAN_DRIVER>_AVAILABLE` as a preprocessor definition.
-foreach(AVAILABLE_DRIVER ${CAN_DRIVER})
-  string(TOUPPER ${AVAILABLE_DRIVER} AVAILABLE_DRIVER)
-  string(PREPEND AVAILABLE_DRIVER "ISOBUS_")
-  string(APPEND AVAILABLE_DRIVER "_AVAILABLE")
-  target_compile_definitions(HardwareIntegration PUBLIC ${AVAILABLE_DRIVER})
+foreach(available_driver ${CAN_DRIVER})
+  string(TOUPPER ${available_driver} available_driver)
+  string(PREPEND available_driver "ISOBUS_")
+  string(APPEND available_driver "_AVAILABLE")
+  target_compile_definitions(HardwareIntegration PUBLIC ${available_driver})
 endforeach()
 
 # Specify the include directory to be exported for other moduels to use. The

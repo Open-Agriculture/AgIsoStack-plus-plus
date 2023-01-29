@@ -103,80 +103,82 @@ The final program for this tutorial (including the code from the previous Hello 
 
    void signal_handler(int signum)
    {
-        CANHardwareInterface::stop(); // Clean up the threads
-        exit(signum);
+      CANHardwareInterface::stop(); // Clean up the threads
+		_exit(EXIT_FAILURE);
    }
 
    void update_CAN_network()
    {
-        isobus::CANNetworkManager::CANNetwork.update();
+      isobus::CANNetworkManager::CANNetwork.update();
    }
 
    void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
    {
-        isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
+      isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
    }
 
    int main()
    {
-    isobus::NAME myNAME(0); // Create an empty NAME
-    std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
-    std::shared_ptr<isobus::PartneredControlFunction> myPartner = nullptr; // A pointer to hold a partner
-    SocketCANInterface canDriver("can0"); // The CAN driver to use for this program. In this case, we're using socket CAN.
+      isobus::NAME myNAME(0); // Create an empty NAME
+      std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
+      std::shared_ptr<isobus::PartneredControlFunction> myPartner = nullptr; // A pointer to hold a partner
 
-    // Define a NAME filter for our partner
-    std::vector<isobus::NAMEFilter> myPartnerFilter;
-    const isobus::NAMEFilter virtualTerminalFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-    myPartnerFilter.push_back(virtualTerminalFilter);
+      // Set up the hardware layer to use SocketCAN interface on channel "can0"
+      std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
+      CANHardwareInterface::set_number_of_can_channels(1);
+      CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-    // Set up the hardware layer to use "can0"
-    CANHardwareInterface::set_number_of_can_channels(1);
-    CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
-    
-    if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
-    {
-	    std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
-    }
+      if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+      {
+         std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
+         return -1;
+      }
 
-    // Handle control+c
-    std::signal(SIGINT, signal_handler);
+      // Handle control+c
+      std::signal(SIGINT, signal_handler);
 
-    CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-    CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
+      CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
+      CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
-    // Set up NAME fields
-    myNAME.set_arbitrary_address_capable(true);
-    myNAME.set_industry_group(1);
-    myNAME.set_device_class(0);
-    myNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::SteeringControl));
-    myNAME.set_identity_number(2);
-    myNAME.set_ecu_instance(0);
-    myNAME.set_function_instance(0);
-    myNAME.set_device_class_instance(0);
-    myNAME.set_manufacturer_code(64);
+      //! Make sure you change these for your device!!!!
+      //! This is an example device that is using a manufacturer code that is currently unused at time of writing
+      myNAME.set_arbitrary_address_capable(true);
+      myNAME.set_industry_group(1);
+      myNAME.set_device_class(0);
+      myNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::SteeringControl));
+      myNAME.set_identity_number(2);
+      myNAME.set_ecu_instance(0);
+      myNAME.set_function_instance(0);
+      myNAME.set_device_class_instance(0);
+      myNAME.set_manufacturer_code(64);
 
-    // Create our InternalControlFunction
-    myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
+      // Define a NAME filter for our partner
+      std::vector<isobus::NAMEFilter> myPartnerFilter;
+      const isobus::NAMEFilter virtualTerminalFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+      myPartnerFilter.push_back(virtualTerminalFilter);
 
-    // Create our PartneredControlFunction
-    myPartner = std::make_shared<isobus::PartneredControlFunction>(0, myPartnerFilter);
+      // Create our InternalControlFunction
+      myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+      // Create our PartneredControlFunction
+      myPartner = std::make_shared<isobus::PartneredControlFunction>(0, myPartnerFilter);
 
-    std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0}; // Data is just all zeros
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    // Send a message to the broadcast address
-    isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get());
+      std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0}; // Data is just all zeros
 
-    // Send a message to our partner (if it is present)
-    isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get(), myPartner.get());
+      // Send a message to the broadcast address
+      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get());
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      // Send a message to our partner (if it is present)
+      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get(), myPartner.get());
 
-    // Clean up the threads
-    CANHardwareInterface::stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    return 0;
+      // Clean up the threads
+      CANHardwareInterface::stop();
+
+      return 0;
    }
   
 Like before, you can compile it with :code:`cmake --build build` and run it!

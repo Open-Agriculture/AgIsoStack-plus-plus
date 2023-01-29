@@ -43,6 +43,9 @@ Now, we just need to create a static instance of this logger, and tell the CAN s
 
 	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
 
+	// If you want to change the logging level, you can do so as followed; the default level is INFO.
+	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::DEBUG);
+
 The logger must be static or otherwise not go out of scope, as the CAN stack saves a reference to that logger object!
 
 That's all there is to it! Now, when you run your program you should see some logging messages are written to your console.

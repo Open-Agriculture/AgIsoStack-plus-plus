@@ -110,7 +110,7 @@ int main()
 
 	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 	{
-		std::cout << "Failed to start hardware interface. A CAN driver might be invalid." << std::endl;
+		std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
 		return -2;
 	}
 

@@ -25,7 +25,7 @@ To send a message of more than 8 bytes, simply send a message like normal, but w
 
 .. code-block:: c++
 
-   longMessage = std::uint8_t[2000] = {0};
+   std::uint8_t longMessage[2000] = {0};
 
    isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, longMessage, 2000, myECU.get(), myPartner.get());
 
@@ -61,7 +61,7 @@ Here's an example:
 
 .. code-block:: c++
 
-	std::uint8_t testMessageData[100];
+	std::uint8_t testMessageData[100] = {0};
 
 	isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, 100, someInternalControlFunction, nullptr, isobus::CANIdentifier::PriorityLowest7, nullptr);
 
