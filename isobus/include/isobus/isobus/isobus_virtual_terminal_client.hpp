@@ -1572,6 +1572,21 @@ namespace isobus
 		                                                                          std::uint8_t *chunkBuffer,
 		                                                                          void *parentPointer);
 
+		bool process_next_object_for_autoscaling(ObjectPoolDataStruct &currentPool,
+		                                         bool postSegmentReadAhead,
+		                                         std::uint32_t callbackIndex,
+		                                         std::uint32_t bytesOffset,
+		                                         std::uint32_t numberOfBytesNeeded,
+		                                         std::uint8_t *chunkBuffer,
+		                                         void *parentPointer);
+
+		bool process_next_object_segment_for_autoscaling(ObjectPoolDataStruct &currentPool,
+		                                         std::uint32_t callbackIndex,
+		                                         std::uint32_t bytesOffset,
+		                                         std::uint32_t numberOfBytesNeeded,
+		                                         std::uint8_t *chunkBuffer,
+		                                         void *parentPointer);
+
 		bool get_is_object_scalable(ObjectType type);
 
 		std::uint32_t get_minimum_object_length(ObjectType type);

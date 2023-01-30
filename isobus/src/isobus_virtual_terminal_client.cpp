@@ -1489,6 +1489,7 @@ namespace isobus
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
 			tempData.autoScaleDataIndex = 0;
 			tempData.autoScaleCurrentObjectBytesRemaining = 0;
+			tempData.autoScaleAdditionalObjectLengthBytes = 0;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -1521,6 +1522,7 @@ namespace isobus
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
 			tempData.autoScaleDataIndex = 0;
 			tempData.autoScaleCurrentObjectBytesRemaining = 0;
+			tempData.autoScaleAdditionalObjectLengthBytes = 0;
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
@@ -3022,14 +3024,14 @@ namespace isobus
 							std::uint16_t value1 = message->get_uint16_at(3);
 							std::uint16_t value2 = message->get_uint16_at(5);
 							/// @todo figure out how to best pass other status properties below to application
-							bool learnModeActive = message->get_bool_at(7, 0);
-							bool inputActive = message->get_bool_at(7, 1); // Only in learn mode?
-							bool controlIsLocked = false;
-							bool interactionWhileLocked = false;
+							// bool learnModeActive = message->get_bool_at(7, 0);
+							// bool inputActive = message->get_bool_at(7, 1); // Only in learn mode?
+							// bool controlIsLocked = false;
+							// bool interactionWhileLocked = false;
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
-								controlIsLocked = message->get_bool_at(7, 2);
-								interactionWhileLocked = message->get_bool_at(7, 3);
+								// controlIsLocked = message->get_bool_at(7, 2);
+								// interactionWhileLocked = message->get_bool_at(7, 3);
 							}
 							for (AuxiliaryInputDevice &aux : parentVT->auxiliaryInputDevices)
 							{
@@ -3602,135 +3604,25 @@ namespace isobus
 									else
 									{
 										retVal = false;
-										CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - error resizing an object.");
+										CANStackLogger::error("[VT]: Error parsing object pool - error resizing an object.");
 									}
 								}
 								else
 								{
 									retVal = false;
-									CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - autoscaling found an object with no length.");
+									CANStackLogger::error("[VT]: Error parsing object pool - autoscaling found an object with no length.");
 								}
 							}
 							else
 							{
-								CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - can't get enough data to autoscale.");
+								retVal = false;
+								CANStackLogger::error("[VT]: Error parsing object pool - can't get enough data to autoscale.");
 							}
 						}
 					}
 					else
 					{
-						currentPool.dataCallbackReadAheadBuffer.erase(currentPool.dataCallbackReadAheadBuffer.begin(), currentPool.dataCallbackReadAheadBuffer.begin() + (currentPool.autoScaleLastNumberBytesNeeded));
-						if ((currentPool.dataCallbackReadAheadBuffer.size() >= numberOfBytesNeeded) &&
-						    (currentPool.dataCallbackReadAheadBuffer.size() >= currentPool.autoScaleCurrentObjectBytesRemaining))
-						{
-							memcpy(&chunkBuffer[0], &currentPool.dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
-							retVal = true;
-						}
-						else
-						{
-							std::uint32_t indexOfNextObject = currentPool.autoScaleCurrentObjectBytesRemaining;
-
-							// Get Some more bytes
-							currentPool.dataCallbackReadAheadBuffer.resize(currentPool.dataCallbackReadAheadBuffer.size() + numberOfBytesNeeded);
-							retVal = currentPool.dataCallback(callbackIndex,
-							                                  bytesOffset + indexOfNextObject - 1,
-							                                  numberOfBytesNeeded,
-							                                  &currentPool.dataCallbackReadAheadBuffer[currentPool.dataCallbackReadAheadBuffer.size() - numberOfBytesNeeded],
-							                                  parentVTClient);
-
-							// Now we have the first part of the next object in memory. See how much more of the object we need to scale it
-							std::uint32_t minimumNumberOfBytesInNextObject = parentVTClient->get_minimum_object_length(static_cast<ObjectType>(currentPool.dataCallbackReadAheadBuffer[2 + indexOfNextObject]));
-							if (minimumNumberOfBytesInNextObject > (currentPool.dataCallbackReadAheadBuffer.size() - indexOfNextObject))
-							{
-								currentPool.dataCallbackReadAheadBuffer.resize(indexOfNextObject + minimumNumberOfBytesInNextObject);
-								retVal = currentPool.dataCallback(callbackIndex, bytesOffset + indexOfNextObject - 1, minimumNumberOfBytesInNextObject, &currentPool.dataCallbackReadAheadBuffer[indexOfNextObject], parentVTClient);
-							}
-							else if (0 == minimumNumberOfBytesInNextObject)
-							{
-								CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - an object's minimum length is zero.");
-							}
-
-							std::size_t fullObjectLength = parentVTClient->get_number_bytes_in_object(&currentPool.dataCallbackReadAheadBuffer[indexOfNextObject]);
-
-							switch (static_cast<ObjectType>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 2]))
-							{
-								// For some objects, the "full length" is not really the full length and we have to do
-								// some additional trickery...
-								case ObjectType::OutputString:
-								{
-									// For output strings the macro count is past the entire value of the string
-									const std::uint32_t sizeOfValue = (static_cast<std::uint32_t>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 14]) |
-									                                   (static_cast<std::uint32_t>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 15]) << 8));
-									if (0 != sizeOfValue)
-									{
-										std::size_t prevSize = currentPool.dataCallbackReadAheadBuffer.size();
-										fullObjectLength += sizeOfValue;
-										currentPool.dataCallbackReadAheadBuffer.resize(prevSize + sizeOfValue); // Resize for value and macro count
-										retVal = currentPool.dataCallback(callbackIndex, bytesOffset + prevSize - 1, sizeOfValue + 1, &currentPool.dataCallbackReadAheadBuffer[prevSize], parentVTClient);
-
-										if (retVal)
-										{
-											std::uint8_t numberOfMacros = currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 16 + sizeOfValue];
-											fullObjectLength += (2 * numberOfMacros);
-										}
-										else
-										{
-											CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - can't get an output string value and macro count.");
-										}
-									}
-									else
-									{
-										currentPool.autoScaleAdditionalObjectLengthBytes = 0;
-									}
-								}
-								break;
-
-								case ObjectType::PictureGraphic:
-								{
-									// We really just don't want to hold a full bitmap in memory
-								}
-								break;
-							}
-
-							if (fullObjectLength > (currentPool.dataCallbackReadAheadBuffer.size() - indexOfNextObject))
-							{
-								currentPool.dataCallbackReadAheadBuffer.resize(fullObjectLength + indexOfNextObject);
-							}
-
-							// If we need still more of the object data, copy it into the buffer.
-							if (fullObjectLength > minimumNumberOfBytesInNextObject)
-							{
-								retVal = currentPool.dataCallback(callbackIndex,
-								                                  (minimumNumberOfBytesInNextObject + bytesOffset - 1 + indexOfNextObject),
-								                                  (fullObjectLength - minimumNumberOfBytesInNextObject),
-								                                  &currentPool.dataCallbackReadAheadBuffer[minimumNumberOfBytesInNextObject + indexOfNextObject],
-								                                  parentVTClient);
-							}
-
-							currentPool.autoScaleCurrentObjectBytesRemaining = currentPool.dataCallbackReadAheadBuffer.size();
-
-							if ((retVal) &&
-							    (parentVTClient->resize_object(&currentPool.dataCallbackReadAheadBuffer[indexOfNextObject],
-							                                   static_cast<float>(parentVTClient->get_number_x_pixels()) / static_cast<float>(currentPool.autoScaleDataMaskOriginalDimension),
-							                                   static_cast<ObjectType>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 2]))))
-							{
-								// Resize completed.
-								CANStackLogger::CAN_stack_log("[VT]: Resized an object " +
-								                              isobus::to_string(static_cast<int>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject]) | (static_cast<int>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 1])) << 8) +
-								                              " with type " +
-								                              isobus::to_string(static_cast<int>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 2])) +
-								                              " with size " +
-								                              isobus::to_string(static_cast<int>(fullObjectLength)));
-								// Copy the updated data into the stack's buffer
-								memcpy(chunkBuffer, &currentPool.dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
-								retVal = true;
-							}
-							else
-							{
-								retVal = false;
-								CANStackLogger::CAN_stack_log("[VT]: Error parsing object pool - error resizing an object.");
-							}
-						}
+						retVal = parentVTClient->process_next_object_for_autoscaling(currentPool, false, callbackIndex, bytesOffset, numberOfBytesNeeded, chunkBuffer, parentPointer);
 						currentPool.autoScaleLastNumberBytesNeeded = numberOfBytesNeeded;
 						currentPool.autoScaleCurrentObjectBytesRemaining -= numberOfBytesNeeded;
 						currentPool.autoScaleDataIndex += numberOfBytesNeeded;
@@ -3753,6 +3645,221 @@ namespace isobus
 						memcpy(chunkBuffer, &currentPool.objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
 					}
 				}
+			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::process_next_object_for_autoscaling(ObjectPoolDataStruct &currentPool,
+	                                                                bool postSegmentReadAhead,
+	                                                                std::uint32_t callbackIndex,
+	                                                                std::uint32_t bytesOffset,
+	                                                                std::uint32_t numberOfBytesNeeded,
+	                                                                std::uint8_t *chunkBuffer,
+	                                                                void *parentPointer)
+	{
+		VirtualTerminalClient *parentVTClient = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+		bool retVal = false;
+
+		if (!postSegmentReadAhead)
+		{
+			currentPool.dataCallbackReadAheadBuffer.erase(currentPool.dataCallbackReadAheadBuffer.begin(), currentPool.dataCallbackReadAheadBuffer.begin() + (currentPool.autoScaleLastNumberBytesNeeded));
+		}
+		else
+		{
+			retVal = true;
+		}
+
+		if (((currentPool.dataCallbackReadAheadBuffer.size() >= numberOfBytesNeeded) &&
+		     (currentPool.dataCallbackReadAheadBuffer.size() >= currentPool.autoScaleCurrentObjectBytesRemaining)) ||
+		    ((currentPool.dataCallbackReadAheadBuffer.size() >= numberOfBytesNeeded) &&
+		     (0 != currentPool.autoScaleAdditionalObjectLengthBytes)))
+		{
+			memcpy(&chunkBuffer[0], &currentPool.dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
+			retVal = true;
+		}
+		else if (0 != currentPool.autoScaleAdditionalObjectLengthBytes)
+		{
+			retVal = process_next_object_segment_for_autoscaling(currentPool, callbackIndex, bytesOffset, numberOfBytesNeeded, chunkBuffer, parentPointer);
+		}
+		else
+		{
+			std::uint32_t indexOfNextObject = currentPool.autoScaleCurrentObjectBytesRemaining;
+
+			// Get Some more bytes
+			currentPool.dataCallbackReadAheadBuffer.resize(currentPool.dataCallbackReadAheadBuffer.size() + numberOfBytesNeeded);
+			retVal = currentPool.dataCallback(callbackIndex,
+			                                  bytesOffset + indexOfNextObject - 1,
+			                                  numberOfBytesNeeded,
+			                                  &currentPool.dataCallbackReadAheadBuffer[currentPool.dataCallbackReadAheadBuffer.size() - numberOfBytesNeeded],
+			                                  parentVTClient);
+
+			// Now we have the first part of the next object in memory. See how much more of the object we need to scale it
+			std::uint32_t minimumNumberOfBytesInNextObject = parentVTClient->get_minimum_object_length(static_cast<ObjectType>(currentPool.dataCallbackReadAheadBuffer[2 + indexOfNextObject]));
+			if (minimumNumberOfBytesInNextObject > (currentPool.dataCallbackReadAheadBuffer.size() - indexOfNextObject))
+			{
+				currentPool.dataCallbackReadAheadBuffer.resize(indexOfNextObject + minimumNumberOfBytesInNextObject);
+				retVal = currentPool.dataCallback(callbackIndex, bytesOffset + indexOfNextObject - 1, minimumNumberOfBytesInNextObject, &currentPool.dataCallbackReadAheadBuffer[indexOfNextObject], parentVTClient);
+			}
+			else if (0 == minimumNumberOfBytesInNextObject)
+			{
+				retVal = false;
+				CANStackLogger::error("[VT]: Error parsing object pool - an object's minimum length is zero.");
+			}
+
+			std::size_t fullObjectLength;
+
+			if (retVal)
+			{
+				fullObjectLength = parentVTClient->get_number_bytes_in_object(&currentPool.dataCallbackReadAheadBuffer[indexOfNextObject]);
+			}
+			else
+			{
+				fullObjectLength = parentVTClient->get_number_bytes_in_object(&currentPool.dataCallbackReadAheadBuffer[indexOfNextObject]);
+			}
+
+			switch (static_cast<ObjectType>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 2]))
+			{
+				// For some objects, the "full length" is not really the full length and we have to do
+				// some additional trickery...
+				case ObjectType::OutputString:
+				{
+					// For output strings the macro count is past the entire value of the string
+					const std::uint32_t sizeOfValue = (static_cast<std::uint32_t>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 14]) |
+					                                   (static_cast<std::uint32_t>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 15]) << 8));
+					if (0 != sizeOfValue)
+					{
+						std::size_t prevSize = currentPool.dataCallbackReadAheadBuffer.size();
+						fullObjectLength += sizeOfValue;
+						currentPool.dataCallbackReadAheadBuffer.resize(prevSize + sizeOfValue); // Resize for value and macro count
+						retVal = currentPool.dataCallback(callbackIndex, bytesOffset + prevSize - 1, sizeOfValue + 1, &currentPool.dataCallbackReadAheadBuffer[prevSize], parentVTClient);
+
+						if (retVal)
+						{
+							std::uint8_t numberOfMacros = currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 16 + sizeOfValue];
+							fullObjectLength += (2 * numberOfMacros);
+						}
+						else
+						{
+							retVal = false;
+							CANStackLogger::error("[VT]: Error parsing object pool - can't get an output string value and macro count.");
+						}
+					}
+				}
+				break;
+
+				case ObjectType::PictureGraphic:
+				{
+					// We really just don't want to hold a full bitmap in memory
+					currentPool.autoScaleAdditionalObjectLengthBytes = fullObjectLength - minimumNumberOfBytesInNextObject;
+					currentPool.autoScaleCurrentObjectBytesRemaining += fullObjectLength;
+					fullObjectLength = minimumNumberOfBytesInNextObject;
+				}
+				break;
+
+				default:
+				{
+				}
+				break;
+			}
+
+			if (fullObjectLength > (currentPool.dataCallbackReadAheadBuffer.size() - indexOfNextObject))
+			{
+				currentPool.dataCallbackReadAheadBuffer.resize(fullObjectLength + indexOfNextObject);
+			}
+
+			// If we need still more of the object data, copy it into the buffer.
+			if (fullObjectLength > minimumNumberOfBytesInNextObject)
+			{
+				retVal = currentPool.dataCallback(callbackIndex,
+				                                  (minimumNumberOfBytesInNextObject + bytesOffset - 1 + indexOfNextObject),
+				                                  (fullObjectLength - minimumNumberOfBytesInNextObject),
+				                                  &currentPool.dataCallbackReadAheadBuffer[minimumNumberOfBytesInNextObject + indexOfNextObject],
+				                                  parentVTClient);
+			}
+
+			if (0 == currentPool.autoScaleAdditionalObjectLengthBytes)
+			{
+				currentPool.autoScaleCurrentObjectBytesRemaining = currentPool.dataCallbackReadAheadBuffer.size();
+			}
+
+			if ((retVal) &&
+			    (parentVTClient->resize_object(&currentPool.dataCallbackReadAheadBuffer[indexOfNextObject],
+			                                   static_cast<float>(parentVTClient->get_number_x_pixels()) / static_cast<float>(currentPool.autoScaleDataMaskOriginalDimension),
+			                                   static_cast<ObjectType>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 2]))))
+			{
+				// Resize completed.
+				CANStackLogger::debug("[VT]: Resized an object: " +
+				                      isobus::to_string(static_cast<int>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject]) | (static_cast<int>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 1])) << 8) +
+				                      " with type " +
+				                      isobus::to_string(static_cast<int>(currentPool.dataCallbackReadAheadBuffer[indexOfNextObject + 2])) +
+				                      " with size " +
+				                      isobus::to_string(static_cast<int>(fullObjectLength + currentPool.autoScaleAdditionalObjectLengthBytes)) +
+				                      " at offset " +
+				                      isobus::to_string(static_cast<int>(bytesOffset + indexOfNextObject)));
+				// Copy the updated data into the stack's buffer
+				memcpy(chunkBuffer, &currentPool.dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
+				retVal = true;
+			}
+			else
+			{
+				retVal = false;
+				CANStackLogger::error("[VT]: Error parsing object pool - error resizing an object.");
+			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::process_next_object_segment_for_autoscaling(ObjectPoolDataStruct &currentPool,
+	                                                                        std::uint32_t callbackIndex,
+	                                                                        std::uint32_t bytesOffset,
+	                                                                        std::uint32_t numberOfBytesNeeded,
+	                                                                        std::uint8_t *chunkBuffer,
+	                                                                        void *parentPointer)
+	{
+		VirtualTerminalClient *parentVTClient = reinterpret_cast<VirtualTerminalClient *>(parentPointer);
+		bool retVal = false;
+
+		if ((currentPool.autoScaleCurrentObjectBytesRemaining < numberOfBytesNeeded))
+		{
+			retVal = false;
+		}
+
+		// We need to process the current object's raw data value that we previously resized
+		// Get Some more bytes
+		std::uint32_t indexToLoadDataAt = currentPool.dataCallbackReadAheadBuffer.size();
+		if (numberOfBytesNeeded <= currentPool.autoScaleAdditionalObjectLengthBytes)
+		{
+			currentPool.autoScaleAdditionalObjectLengthBytes -= numberOfBytesNeeded;
+			currentPool.dataCallbackReadAheadBuffer.resize(currentPool.dataCallbackReadAheadBuffer.size() + numberOfBytesNeeded);
+		}
+		else
+		{
+			currentPool.dataCallbackReadAheadBuffer.resize(currentPool.dataCallbackReadAheadBuffer.size() + currentPool.autoScaleAdditionalObjectLengthBytes);
+			currentPool.autoScaleCurrentObjectBytesRemaining -= currentPool.autoScaleAdditionalObjectLengthBytes;
+			currentPool.autoScaleAdditionalObjectLengthBytes = 0;
+		}
+		retVal = currentPool.dataCallback(callbackIndex,
+		                                  bytesOffset + indexToLoadDataAt - 1,
+		                                  numberOfBytesNeeded,
+		                                  &currentPool.dataCallbackReadAheadBuffer[currentPool.dataCallbackReadAheadBuffer.size() - numberOfBytesNeeded],
+		                                  parentVTClient);
+
+		if (retVal)
+		{
+			if (((currentPool.autoScaleAdditionalObjectLengthBytes < numberOfBytesNeeded) &&
+			     (currentPool.dataCallbackReadAheadBuffer.size() < numberOfBytesNeeded)) ||
+			    (currentPool.autoScaleCurrentObjectBytesRemaining < numberOfBytesNeeded))
+			{
+				// That's it for this object. Need to gather the next object in order to
+				// have enough bytes to pass back to the transport layer.
+				std::uint32_t offsetToStartOfNextObject = currentPool.autoScaleDataIndex - currentPool.autoScaleCurrentObjectBytesRemaining;
+				currentPool.autoScaleCurrentObjectBytesRemaining = 0;
+				retVal = process_next_object_for_autoscaling(currentPool, true, callbackIndex, offsetToStartOfNextObject, numberOfBytesNeeded, chunkBuffer, parentPointer);
+			}
+			else
+			{
+				memcpy(chunkBuffer, &currentPool.dataCallbackReadAheadBuffer[0], numberOfBytesNeeded);
 			}
 		}
 		return retVal;
@@ -3965,7 +4072,7 @@ namespace isobus
 
 			default:
 			{
-				CANStackLogger::CAN_stack_log("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + static_cast<int>(type));
+				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + static_cast<int>(type));
 			}
 			break;
 		}
@@ -4265,7 +4372,7 @@ namespace isobus
 
 			default:
 			{
-				CANStackLogger::CAN_stack_log("[VT]: Cannot autoscale object pool due to unknown object total length - type " + static_cast<int>(buffer[2]));
+				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object total length - type " + static_cast<int>(buffer[2]));
 			}
 			break;
 		}
@@ -4290,11 +4397,6 @@ namespace isobus
 		{
 			switch (type)
 			{
-				case ObjectType::WorkingSet:
-				{
-				}
-				break;
-
 				case ObjectType::DataMask:
 				{
 					const std::uint8_t childrenToFollow = buffer[6];
@@ -4505,6 +4607,8 @@ namespace isobus
 
 				default:
 				{
+					CANStackLogger::debug("[VT]: Skipping resize of non-resizable object type " +
+					                      isobus::to_string(static_cast<int>(type)));
 					retVal = false;
 				}
 				break;
