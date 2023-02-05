@@ -3582,23 +3582,23 @@ namespace isobus
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
-				if (ObjectType::Key == static_cast<ObjectType>(poolIterator[2]))
+				if (VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2]))
 				{
 					retVal &= resize_object(&poolIterator[0],
 					                        static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight),
-					                        static_cast<ObjectType>(poolIterator[2]));
+					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 				else
 				{
 					retVal &= resize_object(&poolIterator[0],
 					                        static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension),
-					                        static_cast<ObjectType>(poolIterator[2]));
+					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
 				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0]);
 				if (retVal)
 				{
-					if (get_is_object_scalable(static_cast<ObjectType>(*(poolIterator + 2))))
+					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
 					{
 						CANStackLogger::debug("[VT]: Resized an object: " +
 						                      isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
@@ -3623,43 +3623,43 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::get_is_object_scalable(ObjectType type) const
+	bool VirtualTerminalClient::get_is_object_scalable(VirtualTerminalObjectType type) const
 	{
 		bool retVal = false;
 
 		switch (type)
 		{
-			case ObjectType::WorkingSet:
+			case VirtualTerminalObjectType::WorkingSet:
 			{
 				retVal = false;
 			}
 			break;
 
-			case ObjectType::DataMask:
-			case ObjectType::AlarmMask:
-			case ObjectType::Container:
-			case ObjectType::Key:
-			case ObjectType::Button:
-			case ObjectType::InputBoolean:
-			case ObjectType::InputString:
-			case ObjectType::InputNumber:
-			case ObjectType::InputList:
-			case ObjectType::OutputString:
-			case ObjectType::OutputNumber:
-			case ObjectType::OutputList:
-			case ObjectType::OutputLine:
-			case ObjectType::OutputRectangle:
-			case ObjectType::OutputEllipse:
-			case ObjectType::OutputPolygon:
-			case ObjectType::OutputMeter:
-			case ObjectType::OutputLinearBarGraph:
-			case ObjectType::OutputArchedBarGraph:
-			case ObjectType::PictureGraphic:
-			case ObjectType::AuxiliaryFunctionType1:
-			case ObjectType::AuxiliaryInputType1:
-			case ObjectType::AuxiliaryFunctionType2:
-			case ObjectType::AuxiliaryInputType2:
-			case ObjectType::FontAttributes:
+			case VirtualTerminalObjectType::DataMask:
+			case VirtualTerminalObjectType::AlarmMask:
+			case VirtualTerminalObjectType::Container:
+			case VirtualTerminalObjectType::Key:
+			case VirtualTerminalObjectType::Button:
+			case VirtualTerminalObjectType::InputBoolean:
+			case VirtualTerminalObjectType::InputString:
+			case VirtualTerminalObjectType::InputNumber:
+			case VirtualTerminalObjectType::InputList:
+			case VirtualTerminalObjectType::OutputString:
+			case VirtualTerminalObjectType::OutputNumber:
+			case VirtualTerminalObjectType::OutputList:
+			case VirtualTerminalObjectType::OutputLine:
+			case VirtualTerminalObjectType::OutputRectangle:
+			case VirtualTerminalObjectType::OutputEllipse:
+			case VirtualTerminalObjectType::OutputPolygon:
+			case VirtualTerminalObjectType::OutputMeter:
+			case VirtualTerminalObjectType::OutputLinearBarGraph:
+			case VirtualTerminalObjectType::OutputArchedBarGraph:
+			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
+			case VirtualTerminalObjectType::AuxiliaryInputType1:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
+			case VirtualTerminalObjectType::FontAttributes:
 			{
 				retVal = true;
 			}
@@ -4517,157 +4517,154 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_minimum_object_length(ObjectType type) const
+	std::uint32_t VirtualTerminalClient::get_minimum_object_length(VirtualTerminalObjectType type) const
 	{
 		std::uint32_t retVal = 0;
 
 		switch (type)
 		{
-			case ObjectType::WorkingSet:
+			case VirtualTerminalObjectType::WorkingSet:
 			{
 				retVal = 10;
 			}
 			break;
 
-			case ObjectType::OutputList:
-			case ObjectType::ExternalReferenceNAME:
+			case VirtualTerminalObjectType::OutputList:
+			case VirtualTerminalObjectType::ExternalReferenceNAME:
+			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 12;
 			}
 			break;
 
-			case ObjectType::AlarmMask:
-			case ObjectType::Container:
+			case VirtualTerminalObjectType::AlarmMask:
+			case VirtualTerminalObjectType::Container:
+			case VirtualTerminalObjectType::KeyGroup:
 			{
 				retVal = 10;
 			}
 			break;
 
-			case ObjectType::ExternalObjectPointer:
+			case VirtualTerminalObjectType::ExternalObjectPointer:
 			{
 				retVal = 9;
 			}
 			break;
 
-			case ObjectType::KeyGroup:
-			{
-				retVal = 4;
-			}
-			break;
-
-			case ObjectType::SoftKeyMask:
+			case VirtualTerminalObjectType::SoftKeyMask:
+			case VirtualTerminalObjectType::ColourMap:
 			{
 				retVal = 6;
 			}
 			break;
 
-			case ObjectType::Key:
-			case ObjectType::NumberVariable:
-			case ObjectType::InputAttributes:
+			case VirtualTerminalObjectType::Key:
+			case VirtualTerminalObjectType::NumberVariable:
+			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 7;
 			}
 			break;
 
-			case ObjectType::Button:
-			case ObjectType::InputBoolean:
-			case ObjectType::OutputRectangle:
-			case ObjectType::InputList:
-			case ObjectType::ExternalObjectDefinition:
+			case VirtualTerminalObjectType::Button:
+			case VirtualTerminalObjectType::InputBoolean:
+			case VirtualTerminalObjectType::OutputRectangle:
+			case VirtualTerminalObjectType::InputList:
+			case VirtualTerminalObjectType::ExternalObjectDefinition:
 			{
 				retVal = 13;
 			}
 			break;
 
-			case ObjectType::InputString:
+			case VirtualTerminalObjectType::InputString:
 			{
 				retVal = 19;
 			}
 			break;
 
-			case ObjectType::InputNumber:
+			case VirtualTerminalObjectType::InputNumber:
 			{
 				retVal = 38;
 			}
 			break;
 
-			case ObjectType::OutputString:
+			case VirtualTerminalObjectType::OutputString:
 			{
 				retVal = 17;
 			}
 			break;
 
-			case ObjectType::OutputNumber:
+			case VirtualTerminalObjectType::OutputNumber:
 			{
 				retVal = 29;
 			}
 			break;
 
-			case ObjectType::OutputLine:
+			case VirtualTerminalObjectType::OutputLine:
 			{
 				retVal = 11;
 			}
 			break;
 
-			case ObjectType::OutputEllipse:
+			case VirtualTerminalObjectType::OutputEllipse:
 			{
 				retVal = 15;
 			}
 			break;
 
-			case ObjectType::OutputPolygon:
+			case VirtualTerminalObjectType::OutputPolygon:
 			{
 				retVal = 14;
 			}
 			break;
 
-			case ObjectType::OutputMeter:
+			case VirtualTerminalObjectType::OutputMeter:
 			{
 				retVal = 21;
 			}
 			break;
 
-			case ObjectType::OutputLinearBarGraph:
+			case VirtualTerminalObjectType::OutputLinearBarGraph:
 			{
 				retVal = 24;
 			}
 			break;
 
-			case ObjectType::OutputArchedBarGraph:
+			case VirtualTerminalObjectType::OutputArchedBarGraph:
 			{
 				retVal = 27;
 			}
 			break;
 
-			case ObjectType::PictureGraphic:
-			case ObjectType::Animation:
+			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::Animation:
+			case VirtualTerminalObjectType::WindowMask:
 			{
 				retVal = 17;
 			}
 			break;
 
-			case ObjectType::StringVariable:
-			case ObjectType::ExtendedInputAttributes:
-			case ObjectType::ObjectPointer:
-			case ObjectType::Macro:
-			case ObjectType::ColourMap:
-			case ObjectType::ObjectLabelRefrence:
+			case VirtualTerminalObjectType::StringVariable:
+			case VirtualTerminalObjectType::ExtendedInputAttributes:
+			case VirtualTerminalObjectType::ObjectPointer:
+			case VirtualTerminalObjectType::Macro:
 			{
 				retVal = 5;
 			}
 			break;
 
-			case ObjectType::FontAttributes:
+			case VirtualTerminalObjectType::FontAttributes:
+			case VirtualTerminalObjectType::LineAttributes:
+			case VirtualTerminalObjectType::FillAttributes:
+			case VirtualTerminalObjectType::DataMask:
 			{
 				retVal = 8;
 			}
 			break;
 
-			case ObjectType::LineAttributes:
-			case ObjectType::FillAttributes:
-			case ObjectType::DataMask:
+			case VirtualTerminalObjectType::GraphicsContext:
 			{
-				retVal = 8;
+				retVal = 34;
 			}
 			break;
 
@@ -4682,12 +4679,12 @@ namespace isobus
 
 	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer)
 	{
-		auto currentObjectType = static_cast<ObjectType>(buffer[2]);
+		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
 
 		switch (currentObjectType)
 		{
-			case ObjectType::WorkingSet:
+			case VirtualTerminalObjectType::WorkingSet:
 			{
 				const std::uint32_t sizeOfChildObjects = (buffer[7] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[8] * 2);
@@ -4696,7 +4693,7 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::DataMask:
+			case VirtualTerminalObjectType::DataMask:
 			{
 				const std::uint32_t sizeOfChildObjects = (buffer[6] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[7] * 2);
@@ -4704,8 +4701,8 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::AlarmMask:
-			case ObjectType::Container:
+			case VirtualTerminalObjectType::AlarmMask:
+			case VirtualTerminalObjectType::Container:
 			{
 				const std::uint32_t sizeOfChildObjects = (buffer[8] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[9] * 2);
@@ -4713,7 +4710,7 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::SoftKeyMask:
+			case VirtualTerminalObjectType::SoftKeyMask:
 			{
 				const std::uint32_t sizeOfChildObjects = (buffer[4] * 2);
 				const std::uint32_t sizeOfMacros = (buffer[5] * 2);
@@ -4721,7 +4718,7 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::Key:
+			case VirtualTerminalObjectType::Key:
 			{
 				const std::uint32_t sizeOfChildObjects = (buffer[5] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[6] * 2);
@@ -4729,7 +4726,7 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::Button:
+			case VirtualTerminalObjectType::Button:
 			{
 				const std::uint32_t sizeOfChildObjects = (buffer[11] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
@@ -4737,14 +4734,14 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::InputBoolean:
+			case VirtualTerminalObjectType::InputBoolean:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::InputString:
+			case VirtualTerminalObjectType::InputString:
 			{
 				const std::uint32_t sizeOfValue = buffer[16];
 				const std::uint32_t sizeOfMacros = (buffer[18 + sizeOfValue] * 2);
@@ -4752,14 +4749,14 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::InputNumber:
+			case VirtualTerminalObjectType::InputNumber:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[37] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::InputList:
+			case VirtualTerminalObjectType::InputList:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
 				const std::uint32_t sizeOfListObjectIDs = (buffer[10] * 2);
@@ -4767,7 +4764,7 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::OutputString:
+			case VirtualTerminalObjectType::OutputString:
 			{
 				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[14]) | static_cast<uint16_t>(buffer[15] << 8));
 				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
@@ -4775,14 +4772,14 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::OutputNumber:
+			case VirtualTerminalObjectType::OutputNumber:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[28] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::OutputList:
+			case VirtualTerminalObjectType::OutputList:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[11] * 2);
 				const std::uint32_t sizeOfListObjectIDs = (buffer[10] * 2);
@@ -4790,28 +4787,28 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::OutputLine:
+			case VirtualTerminalObjectType::OutputLine:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[10] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::OutputRectangle:
+			case VirtualTerminalObjectType::OutputRectangle:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[12] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::OutputEllipse:
+			case VirtualTerminalObjectType::OutputEllipse:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[14] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::OutputPolygon:
+			case VirtualTerminalObjectType::OutputPolygon:
 			{
 				const std::uint32_t sizeOfPoints = (buffer[12] * 4);
 				const std::uint32_t sizeOfMacros = (buffer[13] * 2);
@@ -4819,28 +4816,28 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::OutputMeter:
+			case VirtualTerminalObjectType::OutputMeter:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[20] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::OutputLinearBarGraph:
+			case VirtualTerminalObjectType::OutputLinearBarGraph:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[23] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::OutputArchedBarGraph:
+			case VirtualTerminalObjectType::OutputArchedBarGraph:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[26] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::PictureGraphic:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
 				const std::uint32_t sizeOfRawData = (static_cast<std::uint32_t>(buffer[12]) |
@@ -4851,34 +4848,34 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::ObjectPointer:
-			case ObjectType::NumberVariable:
-			case ObjectType::GraphicsContext:
-			case ObjectType::ExternalReferenceNAME:
-			case ObjectType::ExternalObjectPointer:
-			case ObjectType::AuxiliaryControlDesignatorType2:
+			case VirtualTerminalObjectType::ObjectPointer:
+			case VirtualTerminalObjectType::NumberVariable:
+			case VirtualTerminalObjectType::GraphicsContext:
+			case VirtualTerminalObjectType::ExternalReferenceNAME:
+			case VirtualTerminalObjectType::ExternalObjectPointer:
+			case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
 			{
 				// No additional length
 			}
 			break;
 
-			case ObjectType::StringVariable:
+			case VirtualTerminalObjectType::StringVariable:
 			{
 				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[3]) | static_cast<uint16_t>(buffer[4]) << 8);
 				retVal += sizeOfValue;
 			}
 			break;
 
-			case ObjectType::FontAttributes:
-			case ObjectType::LineAttributes:
-			case ObjectType::FillAttributes:
+			case VirtualTerminalObjectType::FontAttributes:
+			case VirtualTerminalObjectType::LineAttributes:
+			case VirtualTerminalObjectType::FillAttributes:
 			{
 				const std::uint32_t sizeOfMacros = (buffer[7] * 2);
 				retVal += sizeOfMacros;
 			}
 			break;
 
-			case ObjectType::InputAttributes:
+			case VirtualTerminalObjectType::InputAttributes:
 			{
 				const std::uint32_t sizeOfValidationString = buffer[4];
 				const std::uint32_t sizeOfMacros = (buffer[5 + sizeOfValidationString] * 2);
@@ -4886,28 +4883,28 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::ExtendedInputAttributes:
+			case VirtualTerminalObjectType::ExtendedInputAttributes:
 			{
 				const std::uint32_t numberOfCodePlanes = buffer[5];
 				retVal += (numberOfCodePlanes * 2); // Doesn't include the character ranges, need to handle those externally
 			}
 			break;
 
-			case ObjectType::Macro:
+			case VirtualTerminalObjectType::Macro:
 			{
 				const std::uint32_t numberOfMacroBytes = (static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8));
 				retVal += numberOfMacroBytes;
 			}
 			break;
 
-			case ObjectType::ColourMap:
+			case VirtualTerminalObjectType::ColourMap:
 			{
 				const std::uint32_t numberIndexes = (static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8));
 				retVal += numberIndexes;
 			}
 			break;
 
-			case ObjectType::WindowMask:
+			case VirtualTerminalObjectType::WindowMask:
 			{
 				const std::uint32_t sizeOfReferences = (buffer[14] * 2);
 				const std::uint32_t numberObjects = (buffer[15] * 6);
@@ -4916,7 +4913,7 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::KeyGroup:
+			case VirtualTerminalObjectType::KeyGroup:
 			{
 				const std::uint32_t numberObjects = (buffer[8] * 2);
 				const std::uint32_t sizeOfMacros = (buffer[9] * 2);
@@ -4924,21 +4921,21 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::ObjectLabelRefrence:
+			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				const std::uint32_t sizeOfLabeledObjects = ((static_cast<uint16_t>(buffer[4]) | static_cast<uint16_t>(buffer[5]) << 8) * 7);
 				retVal += sizeOfLabeledObjects;
 			}
 			break;
 
-			case ObjectType::ExternalObjectDefinition:
+			case VirtualTerminalObjectType::ExternalObjectDefinition:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[12] * 2);
 				retVal += sizeOfObjects;
 			}
 			break;
 
-			case ObjectType::Animation:
+			case VirtualTerminalObjectType::Animation:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[15] * 6);
 				const std::uint32_t sizeOfMacros = (buffer[16] * 2);
@@ -4946,16 +4943,16 @@ namespace isobus
 			}
 			break;
 
-			case ObjectType::AuxiliaryFunctionType1:
-			case ObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[5] * 6);
 				retVal += sizeOfObjects;
 			}
 			break;
 
-			case ObjectType::AuxiliaryInputType1:
-			case ObjectType::AuxiliaryInputType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType1:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[6] * 6);
 				retVal += sizeOfObjects;
@@ -4981,7 +4978,7 @@ namespace isobus
 		buffer[6] = (height >> 8);
 	}
 
-	bool VirtualTerminalClient::resize_object(std::uint8_t *buffer, float scaleFactor, ObjectType type)
+	bool VirtualTerminalClient::resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type)
 	{
 		bool retVal = false;
 
@@ -4989,7 +4986,7 @@ namespace isobus
 		{
 			switch (type)
 			{
-				case ObjectType::DataMask:
+				case VirtualTerminalObjectType::DataMask:
 				{
 					const std::uint8_t childrenToFollow = buffer[6];
 
@@ -5006,7 +5003,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::AlarmMask:
+				case VirtualTerminalObjectType::AlarmMask:
 				{
 					const std::uint8_t childrenToFollow = buffer[8];
 
@@ -5023,7 +5020,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::Container:
+				case VirtualTerminalObjectType::Container:
 				{
 					std::uint8_t childrenToFollow = buffer[8];
 
@@ -5045,7 +5042,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::Button:
+				case VirtualTerminalObjectType::Button:
 				{
 					std::uint8_t childrenToFollow = buffer[11];
 
@@ -5066,7 +5063,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::InputBoolean:
+				case VirtualTerminalObjectType::InputBoolean:
 				{
 					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
 
@@ -5077,13 +5074,13 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::InputString:
-				case ObjectType::InputNumber:
-				case ObjectType::InputList:
-				case ObjectType::OutputString:
-				case ObjectType::OutputNumber:
-				case ObjectType::OutputList:
-				case ObjectType::OutputLinearBarGraph:
+				case VirtualTerminalObjectType::InputString:
+				case VirtualTerminalObjectType::InputNumber:
+				case VirtualTerminalObjectType::InputList:
+				case VirtualTerminalObjectType::OutputString:
+				case VirtualTerminalObjectType::OutputNumber:
+				case VirtualTerminalObjectType::OutputList:
+				case VirtualTerminalObjectType::OutputLinearBarGraph:
 				{
 					// Modify the object in memory
 					process_standard_object_height_and_width(buffer, scaleFactor);
@@ -5091,9 +5088,9 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::OutputLine:
-				case ObjectType::OutputRectangle:
-				case ObjectType::OutputEllipse:
+				case VirtualTerminalObjectType::OutputLine:
+				case VirtualTerminalObjectType::OutputRectangle:
+				case VirtualTerminalObjectType::OutputEllipse:
 				{
 					// Modify the object in memory
 					auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);
@@ -5106,7 +5103,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::OutputPolygon:
+				case VirtualTerminalObjectType::OutputPolygon:
 				{
 					const std::uint8_t numberOfPoints = buffer[12];
 
@@ -5127,8 +5124,8 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::OutputMeter:
-				case ObjectType::PictureGraphic:
+				case VirtualTerminalObjectType::OutputMeter:
+				case VirtualTerminalObjectType::PictureGraphic:
 				{
 					// Modify the object in memory
 					auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
@@ -5138,7 +5135,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::OutputArchedBarGraph:
+				case VirtualTerminalObjectType::OutputArchedBarGraph:
 				{
 					// Modify the object in memory
 					process_standard_object_height_and_width(buffer, scaleFactor);
@@ -5150,7 +5147,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::Animation:
+				case VirtualTerminalObjectType::Animation:
 				{
 					std::uint8_t childrenToFollow = buffer[15];
 
@@ -5171,7 +5168,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::Key:
+				case VirtualTerminalObjectType::Key:
 				{
 					const std::uint8_t childrenToFollow = buffer[5];
 
@@ -5188,16 +5185,16 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::FontAttributes:
+				case VirtualTerminalObjectType::FontAttributes:
 				{
 					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
 					retVal = true;
 				}
 				break;
 
-				case ObjectType::AuxiliaryFunctionType1:
-				case ObjectType::AuxiliaryFunctionType2:
-				case ObjectType::AuxiliaryInputType2:
+				case VirtualTerminalObjectType::AuxiliaryFunctionType1:
+				case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+				case VirtualTerminalObjectType::AuxiliaryInputType2:
 				{
 					std::uint8_t childrenToFollow = buffer[5];
 
@@ -5214,7 +5211,7 @@ namespace isobus
 				}
 				break;
 
-				case ObjectType::AuxiliaryInputType1:
+				case VirtualTerminalObjectType::AuxiliaryInputType1:
 				{
 					std::uint8_t childrenToFollow = buffer[6];
 
