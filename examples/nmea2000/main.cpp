@@ -38,7 +38,7 @@ void signal_handler(int)
 {
 	CANHardwareInterface::stop();
 	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
-	_exit(EXIT_FAILURE);
+	_Exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()
