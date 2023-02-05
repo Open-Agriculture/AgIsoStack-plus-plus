@@ -53,9 +53,61 @@ public:
 	{
 		return resize_object(buffer, scaleFactor, type);
 	}
+
+	void test_wrapper_set_supported_fonts(std::uint8_t smallFontsBitfield, std::uint8_t largeFontsBitfield)
+	{
+		smallFontSizesBitfield = smallFontsBitfield;
+		largeFontSizesBitfield = largeFontsBitfield;
+	}
+
+	static std::vector<std::uint8_t> staticTestPool;
+
+	static bool testWrapperDataChunkCallback(std::uint32_t,
+	                                         std::uint32_t bytesOffset,
+	                                         std::uint32_t numberOfBytesNeeded,
+	                                         std::uint8_t *chunkBuffer,
+	                                         void *)
+	{
+		memcpy(chunkBuffer, &staticTestPool.data()[bytesOffset], numberOfBytesNeeded);
+		return true;
+	}
 };
 
-TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscaling)
+std::vector<std::uint8_t> DerivedTestVtClient::staticTestPool;
+
+TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
+{
+	NAME clientNAME(0);
+	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+
+	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+
+	EXPECT_EQ(false, clientUnderTest.get_is_initialized());
+	EXPECT_EQ(false, clientUnderTest.get_is_connected());
+
+	clientUnderTest.initialize(false);
+
+	EXPECT_EQ(true, clientUnderTest.get_is_initialized());
+
+	EXPECT_EQ(false, clientUnderTest.get_has_adjustable_volume_output());
+	EXPECT_EQ(false, clientUnderTest.get_multiple_frequency_audio_output());
+	EXPECT_EQ(false, clientUnderTest.get_support_pointing_device_with_pointing_message());
+	EXPECT_EQ(false, clientUnderTest.get_support_touchscreen_with_pointing_message());
+	EXPECT_EQ(false, clientUnderTest.get_support_intermediate_coordinates_during_drag_operations());
+	EXPECT_EQ(0, clientUnderTest.get_number_y_pixels());
+	EXPECT_EQ(0, clientUnderTest.get_number_x_pixels());
+	EXPECT_EQ(VirtualTerminalClient::VTVersion::ReservedOrUnknown, clientUnderTest.get_connected_vt_version());
+
+	clientUnderTest.terminate();
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 {
 	NAME clientNAME(0);
 	clientNAME.set_arbitrary_address_capable(true);
@@ -88,6 +140,104 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscaling)
 
 	// Test invalid pool index
 	clientUnderTest.set_object_pool_scaling(36, 64, 99);
+
+	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	// Test invalid soft key width
+	clientUnderTest.set_object_pool_scaling(36, 64, 0);
+
+	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	clientUnderTest.set_object_pool_scaling(0, 240, 240);
+
+	// Check functionality of get_any_pool_needs_scaling
+	EXPECT_EQ(true, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	// Full scaling test using the example pool
+	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
+{
+	NAME clientNAME(0);
+	clientNAME.set_arbitrary_address_capable(true);
+	clientNAME.set_industry_group(1);
+	clientNAME.set_device_class(0);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::OilSystemMonitor));
+	clientNAME.set_identity_number(1);
+	clientNAME.set_ecu_instance(1);
+	clientNAME.set_function_instance(0);
+	clientNAME.set_device_class_instance(0);
+	clientNAME.set_manufacturer_code(69);
+
+	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+
+	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+
+	// Actual tests start here
+	DerivedTestVtClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+	EXPECT_NE(0, DerivedTestVtClient::staticTestPool.size());
+
+	clientUnderTest.register_object_pool_data_chunk_callback(0, VirtualTerminalClient::VTVersion::Version3, DerivedTestVtClient::staticTestPool.size(), DerivedTestVtClient::testWrapperDataChunkCallback);
+
+	clientUnderTest.set_object_pool_scaling(0, 240, 240);
+
+	// Check functionality of get_any_pool_needs_scaling
+	EXPECT_EQ(true, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	// Full scaling test using the example pool
+	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
+{
+	NAME clientNAME(0);
+	clientNAME.set_arbitrary_address_capable(true);
+	clientNAME.set_industry_group(1);
+	clientNAME.set_device_class(0);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::OilSystemMonitor));
+	clientNAME.set_identity_number(1);
+	clientNAME.set_ecu_instance(1);
+	clientNAME.set_function_instance(0);
+	clientNAME.set_device_class_instance(0);
+	clientNAME.set_manufacturer_code(69);
+
+	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+
+	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+
+	// Actual tests start here
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+	EXPECT_NE(0, testPool.size());
+
+	clientUnderTest.set_object_pool(0, VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
+
+	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	// Test invalid pool index
+	clientUnderTest.set_object_pool_scaling(36, 64, 99);
+
+	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	// Test invalid soft key width
+	clientUnderTest.set_object_pool_scaling(0, 64, 0);
+
+	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
+
+	// Test invalid data mask key width
+	clientUnderTest.set_object_pool_scaling(0, 0, 64);
 
 	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
 
@@ -154,6 +304,9 @@ TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExternalReferenceNAME));
 	EXPECT_EQ(9, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExternalObjectPointer));
 	EXPECT_EQ(17, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::Animation));
+
+	// Don't support proprietary objects for autoscaling
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ManufacturerDefined11));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
@@ -170,6 +323,9 @@ TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size16x16, 0.00005f), VirtualTerminalClient::FontSize::Size6x8);
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size6x8, 0.00005f), VirtualTerminalClient::FontSize::Size6x8);
 
+	// Check 75% scaling
+	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size128x192, 0.75f), VirtualTerminalClient::FontSize::Size96x128);
+
 	// Check some easy 200% scaling cases
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size8x8, 2.0f), VirtualTerminalClient::FontSize::Size16x16);
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size16x16, 2.0f), VirtualTerminalClient::FontSize::Size32x32);
@@ -181,6 +337,92 @@ TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
 
 	// Check some partial upscaling
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size16x16, 1.5f), VirtualTerminalClient::FontSize::Size16x24);
+
+	// Set and test supported Fonts
+	clientUnderTest.test_wrapper_set_supported_fonts(0b01010101, 0b01010101);
+
+	// Small fonts
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size6x8));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size8x8));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size8x12));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size12x16));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size16x16));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size16x24));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size24x32));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size32x32));
+
+	// Large fonts
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size32x48));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size48x64));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size64x64));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size64x96));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size96x128));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size128x128));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size128x192));
+
+	// Remapping to the available fonts
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size6x8)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size8x8)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x12, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size8x12)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x12, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size12x16)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size16x16, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size16x16));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size16x16, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size16x24));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size24x32, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size24x32));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size24x32, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size32x32));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size32x48, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size32x48));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size32x48, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size48x64));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size64x64, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size64x64));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size64x64, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size64x96));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size96x128, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size96x128));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size96x128, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x128));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size128x192, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0b10101010, 0b10101010);
+	// Small fonts
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size6x8));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size8x8));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size8x12));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size12x16));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size16x16));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size16x24));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size24x32));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size32x32));
+
+	// Large fonts
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size32x48));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size48x64));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size64x64));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size64x96));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size96x128));
+	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size128x128));
+	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size128x192));
+
+	// Remapping to the available fonts
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size6x8)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size8x8)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size8x12)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size12x16, clientUnderTest.test_wrapper_get_font_or_next_smallest_font((VirtualTerminalClient::FontSize::Size12x16)));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size12x16, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size16x16));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size16x24, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size16x24));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size16x24, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size24x32));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size32x32, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size32x32));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size32x32, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size32x48));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size48x64, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size48x64));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size48x64, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size64x64));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size64x96, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size64x96));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size64x96, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size96x128));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size128x128, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x128));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size128x128, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
+
+	// It doesn't really make sense to test the hardcoded scales against the same arbitrary boundaries I made up, so just loop through all remappings.
+	// If we discover good scale factors from real testing we can add them here instead.
+	for (std::uint8_t i = 0; i <= static_cast<std::uint8_t>(VirtualTerminalClient::FontSize::Size128x192); i++)
+	{
+		for (float j = 0.0f; j <= 24.0f; j += 0.05f)
+		{
+			clientUnderTest.test_wrapper_remap_font_to_scale(static_cast<VirtualTerminalClient::FontSize>(i), j);
+		}
+	}
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputArchedBarGraph)
@@ -416,12 +658,24 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputList)
 		0xFF,
 		0xFF,
 		0xFF,
-		0xFF,
-		0xFF,
+		0x00,
+		0x00,
+		0x00,
 		0x00
 	};
 
 	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+
+	// Check object length
+	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+
+	// Add a macro and re-check the length
+	testObject[11] = 1;
+	EXPECT_EQ(14, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+
+	// Add a full list of child objects and re-check the length
+	testObject[10] = 255;
+	EXPECT_EQ(524, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputList));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -430,4 +684,55 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputList)
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 2.0f, VirtualTerminalObjectType::OutputList));
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, ResizeInputBoolean)
+{
+	constexpr std::uint16_t testWidth = 50;
+	std::uint8_t testObject[] = {
+		0x00,
+		0x01,
+		0x07,
+		0x00,
+		testWidth & 0xFF,
+		(testWidth >> 8),
+		0xFF,
+		0xFF,
+		0xFF,
+		0xFF,
+		0x00,
+		0x00,
+		0x00,
+		0x00,
+		0x00
+	};
+
+	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+
+	// Check object length
+	EXPECT_EQ(13, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+
+	// Add a macro and re-check the length
+	testObject[12] = 1;
+	EXPECT_EQ(15, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+
+	// Cant really resize these since the width is a max value. Should remain the same.
+	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 2.0f, VirtualTerminalObjectType::InputBoolean));
+	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, TestNumberBytesInInvalidObjects)
+{
+	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+
+	// Test some unsupported objects
+	for (auto i = static_cast<std::uint8_t>(VirtualTerminalObjectType::ManufacturerDefined1); i < static_cast<std::uint8_t>(VirtualTerminalObjectType::Reserved); i++)
+	{
+		std::uint8_t testObject[] = {
+			0x00,
+			0x01,
+			i
+		};
+		EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+	}
 }
