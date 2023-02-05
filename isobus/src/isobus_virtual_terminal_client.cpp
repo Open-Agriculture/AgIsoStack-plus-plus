@@ -1350,7 +1350,7 @@ namespace isobus
 			case FontSize::Size128x128:
 			case FontSize::Size128x192:
 			{
-				retVal = (0 != (largeFontSizesBitfield & (1 << (static_cast<std::uint8_t>(value) - static_cast<std::uint8_t>(FontSize::Size32x48) + 1))));
+				retVal = (0 != (largeFontSizesBitfield & (1 << (static_cast<std::uint8_t>(value) - static_cast<std::uint8_t>(FontSize::Size32x48)))));
 			}
 			break;
 		}
