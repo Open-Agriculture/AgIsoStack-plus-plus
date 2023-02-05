@@ -16,7 +16,7 @@ void signal_handler(int)
 {
 	isobus::DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions();
 	CANHardwareInterface::stop();
-	_exit(EXIT_FAILURE);
+	_Exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()

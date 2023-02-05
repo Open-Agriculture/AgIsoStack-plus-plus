@@ -26,7 +26,7 @@ void signal_handler(int)
 	{
 		TestVirtualTerminalClient->terminate();
 	}
-	_exit(EXIT_FAILURE);
+	_Exit(EXIT_FAILURE);
 }
 
 void update_CAN_network()
