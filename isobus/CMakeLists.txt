@@ -57,7 +57,8 @@ set(ISOBUS_INCLUDE
     "can_extended_transport_protocol.hpp"
     "isobus_diagnostic_protocol.hpp"
     "can_parameter_group_number_request_protocol.hpp"
-    "nmea2000_fast_packet_protocol.hpp")
+    "nmea2000_fast_packet_protocol.hpp"
+    "isobus_virtual_terminal_objects.hpp")
 
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})

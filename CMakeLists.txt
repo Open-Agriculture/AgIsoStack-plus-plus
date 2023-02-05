@@ -102,9 +102,13 @@ if(BUILD_TESTING)
 
   # Set test source files
   set(TEST_SRC
-      test/identifier_tests.cpp test/dm_13_tests.cpp
-      test/core_network_management_tests.cpp test/virtual_can_plugin_tests.cpp
-      test/address_claim_tests.cpp test/can_name_tests.cpp)
+      test/identifier_tests.cpp
+      test/dm_13_tests.cpp
+      test/core_network_management_tests.cpp
+      test/virtual_can_plugin_tests.cpp
+      test/address_claim_tests.cpp
+      test/can_name_tests.cpp
+      test/vt_client_tests.cpp)
 
   add_executable(unit_tests ${TEST_SRC})
   target_link_libraries(
