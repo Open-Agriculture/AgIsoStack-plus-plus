@@ -13,6 +13,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 
 #include <algorithm>
+#include <cassert>
 
 namespace isobus
 {
@@ -68,17 +69,17 @@ namespace isobus
 		}
 	}
 
-	std::uint32_t PartneredControlFunction::get_number_parameter_group_number_callbacks() const
+	std::size_t PartneredControlFunction::get_number_parameter_group_number_callbacks() const
 	{
 		return parameterGroupNumberCallbacks.size();
 	}
 
-	std::uint32_t PartneredControlFunction::get_number_name_filters() const
+	std::size_t PartneredControlFunction::get_number_name_filters() const
 	{
 		return NAMEFilterList.size();
 	}
 
-	bool PartneredControlFunction::get_name_filter_parameter(std::uint32_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const
+	bool PartneredControlFunction::get_name_filter_parameter(std::size_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const
 	{
 		bool retVal = false;
 
@@ -91,11 +92,11 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t PartneredControlFunction::get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter)
+	std::size_t PartneredControlFunction::get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter)
 	{
-		std::uint32_t retVal = 0;
+		std::size_t retVal = 0;
 
-		for (uint32_t i = 0; i < NAMEFilterList.size(); i++)
+		for (std::size_t i = 0; i < NAMEFilterList.size(); i++)
 		{
 			if (parameter == NAMEFilterList[i].get_parameter())
 			{
@@ -191,7 +192,7 @@ namespace isobus
 		return retVal;
 	}
 
-	PartneredControlFunction *PartneredControlFunction::get_partnered_control_function(std::uint32_t index)
+	PartneredControlFunction *PartneredControlFunction::get_partnered_control_function(std::size_t index)
 	{
 		PartneredControlFunction *retVal = nullptr;
 
@@ -205,20 +206,15 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t PartneredControlFunction::get_number_partnered_control_functions()
+	std::size_t PartneredControlFunction::get_number_partnered_control_functions()
 	{
 		return partneredControlFunctionList.size();
 	}
 
-	ParameterGroupNumberCallbackData PartneredControlFunction::get_parameter_group_number_callback(std::uint32_t index) const
+	ParameterGroupNumberCallbackData &PartneredControlFunction::get_parameter_group_number_callback(std::size_t index)
 	{
-		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr);
-
-		if (index < get_number_parameter_group_number_callbacks())
-		{
-			retVal = parameterGroupNumberCallbacks[index];
-		}
-		return retVal;
+		assert(index < get_number_parameter_group_number_callbacks());
+		return parameterGroupNumberCallbacks[index];
 	}
 
 } // namespace isobus

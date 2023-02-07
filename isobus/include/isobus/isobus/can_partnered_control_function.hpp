@@ -64,23 +64,23 @@ namespace isobus
 
 		/// @brief Returns the number of parameter group number callbacks associated with this control function
 		/// @returns The number of parameter group number callbacks associated with this control function
-		std::uint32_t get_number_parameter_group_number_callbacks() const;
+		std::size_t get_number_parameter_group_number_callbacks() const;
 
 		/// @brief Returns the number of NAME filter objects that describe the identity of this control function
 		/// @returns The number of NAME filter objects that describe the identity of this control function
-		std::uint32_t get_number_name_filters() const;
+		std::size_t get_number_name_filters() const;
 
 		/// @brief Returns the number of NAME filters with a specific NAME parameter component, like manufacturer code
 		/// @param[in] parameter The NAME parameter to check against
 		/// @returns The number of NAME filters with a specific NAME parameter component
-		std::uint32_t get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter);
+		std::size_t get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter);
 
 		/// @brief Returns a NAME filter by index
 		/// @param[in] index The index of the filter to get
 		/// @param[out] parameter The returned parameter type
 		/// @param[out] filterValue The raw value of the filter associated with the `parameter`
 		/// @returns true if a filter was returned successfully, false if the index was out of range
-		bool get_name_filter_parameter(std::uint32_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const;
+		bool get_name_filter_parameter(std::size_t index, NAME::NAMEParameters &parameter, std::uint32_t &filterValue) const;
 
 		/// @brief Checks to see if a NAME matches this CF's NAME filters
 		/// @param[in] NAMEToCheck The NAME to check against this control function's filters
@@ -90,19 +90,19 @@ namespace isobus
 		/// @brief Gets a PartneredControlFunction by index
 		/// @param[in] index The index of the PartneredControlFunction to get
 		/// @returns a PartneredControlFunction at the index specified from `partneredControlFunctionList`
-		static PartneredControlFunction *get_partnered_control_function(std::uint32_t index);
+		static PartneredControlFunction *get_partnered_control_function(std::size_t index);
 
 		/// @brief Returns the number of created partner control functions
 		/// @returns The number of created partner control functions from the static list of all of them
-		static std::uint32_t get_number_partnered_control_functions();
+		static std::size_t get_number_partnered_control_functions();
 
 	private:
 		friend class CANNetworkManager; ///< Allows the network manager to use get_parameter_group_number_callback
 
 		/// @brief Returns a parameter group number associated with this control function by index
-		/// @param[in] index  The index from which to get the PGN callback data object
-		/// @returns The PGN callback data associated with the index that was passed in
-		ParameterGroupNumberCallbackData get_parameter_group_number_callback(std::uint32_t index) const;
+		/// @param[in] index The index from which to get the PGN callback data object
+		/// @returns A reference to the PGN callback data object at the index specified
+		ParameterGroupNumberCallbackData &get_parameter_group_number_callback(std::size_t index);
 
 		static std::vector<PartneredControlFunction *> partneredControlFunctionList; ///< A list of all created partnered control functions
 		static bool anyPartnerNeedsInitializing; ///< A way for the network manager to know if it needs to parse the partner list to match partners with existing CFs
