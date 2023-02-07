@@ -373,12 +373,11 @@ void CANHardwareInterface::can_thread_function()
 	while (threadsStarted)
 	{
 		std::unique_lock<std::mutex> lMutex(threadMutex);
+		threadConditionVariable.wait(lMutex);
 		CanHardware *pCANHardware;
 
 		if (threadsStarted)
 		{
-			threadConditionVariable.wait(lMutex, [] { return true; }); // Always wake up
-
 			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
 			{
 				pCANHardware = hardwareChannels[i];

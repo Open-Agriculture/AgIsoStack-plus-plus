@@ -696,7 +696,7 @@ namespace isobus
 			      (NULL_CAN_ADDRESS == message->get_identifier().get_source_address()))))
 			{
 				// Message destined to global
-				for (std::uint32_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
+				for (std::size_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
 				{
 					if ((message->get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
 					    (nullptr != get_global_parameter_group_number_callback(i).get_callback()))
@@ -709,12 +709,12 @@ namespace isobus
 			else
 			{
 				// Message is destination specific
-				for (std::uint32_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
+				for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
 				{
 					if (messageDestination == InternalControlFunction::get_internal_control_function(i))
 					{
 						// Message is destined to us
-						for (std::uint32_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
+						for (std::size_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
 						{
 							PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
 
@@ -722,7 +722,7 @@ namespace isobus
 							    (currentControlFunction->get_can_port() == message->get_can_port_index()))
 							{
 								// Message matches CAN port for a partnered control function
-								for (std::uint32_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
+								for (std::size_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
 								{
 									if ((message->get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
 									    (nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
