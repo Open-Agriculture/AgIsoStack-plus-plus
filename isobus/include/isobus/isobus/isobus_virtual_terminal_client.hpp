@@ -1499,7 +1499,7 @@ namespace isobus
 
 		/// @brief Returns if the specified object type can be scaled
 		/// @returns true if the object is inherently scalable
-		bool get_is_object_scalable(VirtualTerminalObjectType type) const;
+		static bool get_is_object_scalable(VirtualTerminalObjectType type);
 
 		/// @brief Returns the closest font to the one you passed in, in decending order
 		/// @param[in] originalFont The original font that you want to scale
@@ -1511,22 +1511,22 @@ namespace isobus
 		/// @param[in] originalFont The font to scale
 		/// @param[in] scaleFactor The factor by which to attempt scaling the font
 		/// @returns A scaled font, depending on what the VT has available
-		FontSize remap_font_to_scale(FontSize originalFont, float scaleFactor) const;
+		static FontSize remap_font_to_scale(FontSize originalFont, float scaleFactor);
 
 		/// @brief Returns the minimum length that the specified object could possibly require in bytes
 		/// @param[in] type The VT object type to check
 		/// @returns The minimum number of bytes that the specified object might use
-		std::uint32_t get_minimum_object_length(VirtualTerminalObjectType type) const;
+		static std::uint32_t get_minimum_object_length(VirtualTerminalObjectType type);
 
 		/// @brief Returns the total number of bytes in the VT object located at the specified memory location
 		/// @param[in] buffer A pointer to the start of the VT object
 		/// @returns The total number of bytes present in the VT object at the specified location
-		std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer);
+		static std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer);
 
 		/// @brief Resizes the most common VT object format by some scale factor
 		/// @param[in] buffer A pointer to the start of the VT object
 		/// @param[in] scaleFactor The scale factor to use when scaling the object, with 1.0 being the original scale
-		void process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor) const;
+		static void process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor);
 
 		/// @brief Resizes a single VT object by some scale factor
 		/// @param[in] buffer A pointer to the start of the VT object
@@ -1581,6 +1581,7 @@ namespace isobus
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
 		std::vector<AuxiliaryInputDevice> auxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::thread *workerThread; ///< The worker thread that updates this interface
+		bool firstTimeInState; ///< Stores if the current update cycle is the first time a state machine state has been processed
 		bool initialized; ///< Stores the client initialization state
 		bool sendWorkingSetMaintenenace; ///< Used internally to enable and disable cyclic sending of the maintenance message
 		bool shouldTerminate; ///< Used to determine if the client should exit and join the worker thread

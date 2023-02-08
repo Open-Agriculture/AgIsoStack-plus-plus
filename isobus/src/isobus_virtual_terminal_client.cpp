@@ -15,6 +15,7 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 
 namespace isobus
@@ -46,6 +47,7 @@ namespace isobus
 	  stateMachineTimestamp_ms(0),
 	  lastWorkingSetMaintenanceTimestamp_ms(0),
 	  workerThread(nullptr),
+	  firstTimeInState(false),
 	  initialized(false),
 	  sendWorkingSetMaintenenace(false),
 	  shouldTerminate(false),
@@ -1538,11 +1540,10 @@ namespace isobus
 	                                                    std::uint32_t originalDataMaskDimensions_px,
 	                                                    std::uint32_t originalSoftKyeDesignatorHeight_px)
 	{
-		if (poolIndex < objectPools.size())
-		{
-			objectPools[poolIndex].autoScaleDataMaskOriginalDimension = originalDataMaskDimensions_px;
-			objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
-		}
+		// You have to call set_object_pool or register_object_pool_data_chunk_callback before calling this function
+		assert(poolIndex < objectPools.size());
+		objectPools[poolIndex].autoScaleDataMaskOriginalDimension = originalDataMaskDimensions_px;
+		objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
 	}
 
 	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value)
@@ -1574,6 +1575,8 @@ namespace isobus
 
 	void VirtualTerminalClient::update()
 	{
+		StateMachineState previousStateMachineState = state; // Save state to see if it changes this update
+
 		if (nullptr != partnerControlFunction)
 		{
 			switch (state)
@@ -1829,6 +1832,18 @@ namespace isobus
 				{
 					bool allPoolsProcessed = true;
 
+					if (firstTimeInState)
+					{
+						if (get_any_pool_needs_scaling())
+						{
+							// Scale object pools before upload.
+							if (!scale_object_pools())
+							{
+								set_state(StateMachineState::Failed);
+							}
+						}
+					}
+
 					for (std::uint32_t i = 0; i < objectPools.size(); i++)
 					{
 						if (((nullptr != objectPools[i].objectPoolDataPointer) ||
@@ -1842,19 +1857,17 @@ namespace isobus
 
 							if (CurrentObjectPoolUploadState::Uninitialized == currentObjectPoolState)
 							{
-								bool transmitSuccessful;
-
 								if (!objectPools[i].uploaded)
 								{
-									transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-									                                                                    nullptr,
-									                                                                    objectPools[i].objectPoolSize + 1, // Account for Mux byte
-									                                                                    myControlFunction.get(),
-									                                                                    partnerControlFunction.get(),
-									                                                                    CANIdentifier::CANPriority::PriorityLowest7,
-									                                                                    process_callback,
-									                                                                    this,
-									                                                                    process_internal_object_pool_upload_callback);
+									bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+									                                                                         nullptr,
+									                                                                         objectPools[i].objectPoolSize + 1, // Account for Mux byte
+									                                                                         myControlFunction.get(),
+									                                                                         partnerControlFunction.get(),
+									                                                                         CANIdentifier::CANPriority::PriorityLowest7,
+									                                                                         process_callback,
+									                                                                         this,
+									                                                                         process_internal_object_pool_upload_callback);
 
 									if (transmitSuccessful)
 									{
@@ -1958,6 +1971,11 @@ namespace isobus
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
 		}
 		txFlags.process_all_flags();
+
+		if (state == previousStateMachineState)
+		{
+			firstTimeInState = false;
+		}
 	}
 
 	bool VirtualTerminalClient::send_delete_object_pool()
@@ -2382,6 +2400,12 @@ namespace isobus
 	void VirtualTerminalClient::set_state(StateMachineState value)
 	{
 		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
+
+		if (value != state)
+		{
+			firstTimeInState = true;
+		}
+
 		state = value;
 
 		if (StateMachineState::Disconnected == value)
@@ -3102,22 +3126,7 @@ namespace isobus
 								}
 								else
 								{
-									if (parentVT->get_any_pool_needs_scaling())
-									{
-										// Scale object pools before upload.
-										if (parentVT->scale_object_pools())
-										{
-											parentVT->set_state(StateMachineState::UploadObjectPool);
-										}
-										else
-										{
-											parentVT->set_state(StateMachineState::Failed);
-										}
-									}
-									else
-									{
-										parentVT->set_state(StateMachineState::UploadObjectPool);
-									}
+									parentVT->set_state(StateMachineState::UploadObjectPool);
 								}
 							}
 						}
@@ -3617,13 +3626,13 @@ namespace isobus
 					                      " with size " +
 					                      isobus::to_string(static_cast<int>(objectSize)));
 				}
-				poolIterator += get_number_bytes_in_object(&poolIterator[0]);
+				poolIterator += objectSize;
 			}
 		}
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::get_is_object_scalable(VirtualTerminalObjectType type) const
+	bool VirtualTerminalClient::get_is_object_scalable(VirtualTerminalObjectType type)
 	{
 		bool retVal = false;
 
@@ -3685,7 +3694,7 @@ namespace isobus
 		return retVal;
 	}
 
-	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor) const
+	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor)
 	{
 		static constexpr float SCALE_FACTOR_POSITIVE_FUDGE = 1.05f;
 		static constexpr float SCALE_FACTOR_NEGATIVE_FUDGE = 0.95f;
@@ -4517,7 +4526,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_minimum_object_length(VirtualTerminalObjectType type) const
+	std::uint32_t VirtualTerminalClient::get_minimum_object_length(VirtualTerminalObjectType type)
 	{
 		std::uint32_t retVal = 0;
 
@@ -4968,7 +4977,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalClient::process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor) const
+	void VirtualTerminalClient::process_standard_object_height_and_width(std::uint8_t *buffer, float scaleFactor)
 	{
 		auto width = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[3]) | (static_cast<std::uint16_t>(buffer[4]) << 8))) * scaleFactor);
 		auto height = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[5]) | (static_cast<std::uint16_t>(buffer[6]) << 8))) * scaleFactor);

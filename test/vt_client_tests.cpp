@@ -8,10 +8,10 @@
 
 using namespace isobus;
 
-class DerivedTestVtClient : public VirtualTerminalClient
+class DerivedTestVTClient : public VirtualTerminalClient
 {
 public:
-	DerivedTestVtClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
+	DerivedTestVTClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  VirtualTerminalClient(partner, clientSource){};
 
 	bool test_wrapper_get_any_pool_needs_scaling() const
@@ -73,7 +73,7 @@ public:
 	}
 };
 
-std::vector<std::uint8_t> DerivedTestVtClient::staticTestPool;
+std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
 
 TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 {
@@ -86,7 +86,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 
 	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
 
-	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	EXPECT_EQ(false, clientUnderTest.get_is_initialized());
 	EXPECT_EQ(false, clientUnderTest.get_is_connected());
@@ -128,7 +128,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 
 	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
 
-	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
 	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
@@ -138,13 +138,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 
 	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
 
-	// Test invalid pool index
-	clientUnderTest.set_object_pool_scaling(36, 64, 99);
-
-	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
-
 	// Test invalid soft key width
-	clientUnderTest.set_object_pool_scaling(36, 64, 0);
+	clientUnderTest.set_object_pool_scaling(0, 64, 0);
 
 	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
 
@@ -178,13 +173,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 
 	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
 
-	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	DerivedTestVtClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
-	EXPECT_NE(0, DerivedTestVtClient::staticTestPool.size());
+	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
 
-	clientUnderTest.register_object_pool_data_chunk_callback(0, VirtualTerminalClient::VTVersion::Version3, DerivedTestVtClient::staticTestPool.size(), DerivedTestVtClient::testWrapperDataChunkCallback);
+	clientUnderTest.register_object_pool_data_chunk_callback(0, VirtualTerminalClient::VTVersion::Version3, DerivedTestVTClient::staticTestPool.size(), DerivedTestVTClient::testWrapperDataChunkCallback);
 
 	clientUnderTest.set_object_pool_scaling(0, 240, 240);
 
@@ -216,18 +211,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 
 	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
 
-	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
 	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
 	EXPECT_NE(0, testPool.size());
 
 	clientUnderTest.set_object_pool(0, VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
-
-	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
-
-	// Test invalid pool index
-	clientUnderTest.set_object_pool_scaling(36, 64, 99);
 
 	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
 
@@ -261,7 +251,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 
 	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
 
-	DerivedTestVtClient clientUnderTest(vtPartner, internalECU);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// These values come from the ISO standard directly
 	EXPECT_EQ(10, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::WorkingSet));
@@ -311,7 +301,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 
 TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
 {
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	// Check some easy 50% scaling cases
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size128x128, 0.5f), VirtualTerminalClient::FontSize::Size64x64);
@@ -459,7 +449,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputArchedBarGraph)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputArchedBarGraph));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -501,7 +491,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLinearBarGraph)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputLinearBarGraph));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -515,7 +505,6 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLinearBarGraph)
 TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputMeter)
 {
 	constexpr std::uint16_t testWidth = 200;
-	constexpr std::uint16_t testHeight = 100;
 	std::uint8_t testObject[] = {
 		0x00,
 		0x01,
@@ -540,7 +529,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputMeter)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputMeter));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -570,7 +559,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputPolygon)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputPolygon));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -603,7 +592,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputEllipse)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputEllipse));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
@@ -632,7 +621,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLine)
 		0xFF
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputLine));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
@@ -664,7 +653,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputList)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	// Check object length
 	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
@@ -707,7 +696,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeInputBoolean)
 		0x00
 	};
 
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	// Check object length
 	EXPECT_EQ(13, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
@@ -723,7 +712,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeInputBoolean)
 
 TEST(VIRTUAL_TERMINAL_TESTS, TestNumberBytesInInvalidObjects)
 {
-	DerivedTestVtClient clientUnderTest(nullptr, nullptr);
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	// Test some unsupported objects
 	for (auto i = static_cast<std::uint8_t>(VirtualTerminalObjectType::ManufacturerDefined1); i < static_cast<std::uint8_t>(VirtualTerminalObjectType::Reserved); i++)
