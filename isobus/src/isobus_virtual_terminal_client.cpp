@@ -37,7 +37,7 @@ namespace isobus
 	  smallFontSizesBitfield(0),
 	  largeFontSizesBitfield(0),
 	  fontStylesBitfield(0),
-	  supportedGraphicsMode(GraphicMode::TwoHundredFiftySixColor),
+	  supportedGraphicsMode(GraphicMode::TwoHundredFiftySixColour),
 	  xPixels(0),
 	  yPixels(0),
 	  hardwareFeaturesBitfield(0),
@@ -479,12 +479,12 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_change_background_colour(std::uint16_t objectID, std::uint8_t color)
+	bool VirtualTerminalClient::send_change_background_colour(std::uint16_t objectID, std::uint8_t colour)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangeBackgroundColourCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             color,
+			                                             colour,
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF,
@@ -567,12 +567,12 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_change_font_attributes(std::uint16_t objectID, std::uint8_t color, FontSize size, std::uint8_t type, std::uint8_t styleBitfield)
+	bool VirtualTerminalClient::send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             color,
+			                                             colour,
 			                                             static_cast<std::uint8_t>(size),
 			                                             type,
 			                                             styleBitfield,
@@ -585,12 +585,12 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_change_line_attributes(std::uint16_t objectID, std::uint8_t color, std::uint8_t width, std::uint16_t lineArtBitmask)
+	bool VirtualTerminalClient::send_change_line_attributes(std::uint16_t objectID, std::uint8_t colour, std::uint8_t width, std::uint16_t lineArtBitmask)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangeLineAttributesCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             color,
+			                                             colour,
 			                                             static_cast<std::uint8_t>(width),
 			                                             static_cast<std::uint8_t>(lineArtBitmask & 0xFF),
 			                                             static_cast<std::uint8_t>(lineArtBitmask >> 8),
@@ -603,13 +603,13 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t color, std::uint16_t fillPatternObjectID)
+	bool VirtualTerminalClient::send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t colour, std::uint16_t fillPatternObjectID)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::ChangeFillAttributesCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
 			                                             static_cast<std::uint8_t>(fillType),
-			                                             color,
+			                                             colour,
 			                                             static_cast<std::uint8_t>(fillPatternObjectID & 0xFF),
 			                                             static_cast<std::uint8_t>(fillPatternObjectID >> 8),
 			                                             0xFF };
@@ -801,7 +801,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_select_color_map_or_palette(std::uint16_t objectID)
+	bool VirtualTerminalClient::send_select_colour_map_or_palette(std::uint16_t objectID)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::SelectColourMapCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
@@ -892,13 +892,13 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_set_foreground_colour(std::uint16_t objectID, std::uint8_t color)
+	bool VirtualTerminalClient::send_set_foreground_colour(std::uint16_t objectID, std::uint8_t colour)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetForegroundColor),
-			                                             color,
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetForegroundColour),
+			                                             colour,
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF };
@@ -910,13 +910,13 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_set_background_colour(std::uint16_t objectID, std::uint8_t color)
+	bool VirtualTerminalClient::send_set_background_colour(std::uint16_t objectID, std::uint8_t colour)
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::GraphicsContextCommand),
 			                                             static_cast<std::uint8_t>(objectID & 0xFF),
 			                                             static_cast<std::uint8_t>(objectID >> 8),
-			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetBackgroundColor),
-			                                             color,
+			                                             static_cast<std::uint8_t>(GraphicsContextSubCommandID::SetBackgroundColour),
+			                                             colour,
 			                                             0xFF,
 			                                             0xFF,
 			                                             0xFF };
@@ -3067,7 +3067,7 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForGetHardwareResponse == parentVT->state)
 							{
-								if (message->get_uint8_at(2) <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColor))
+								if (message->get_uint8_at(2) <= static_cast<std::uint8_t>(GraphicMode::TwoHundredFiftySixColour))
 								{
 									parentVT->supportedGraphicsMode = static_cast<GraphicMode>(message->get_uint8_at(2));
 								}

@@ -126,8 +126,8 @@ namespace isobus
 		enum class FillType : std::uint8_t
 		{
 			NoFill = 0, ///< No fill will be applied
-			FillWithLineColor = 1, ///< Fill with the color of the outline of the shape
-			FillWithSpecifiedColorInFillColorAttribute = 2, ///< Fill with the color specified by a fill attribute
+			FillWithLineColour = 1, ///< Fill with the colour of the outline of the shape
+			FillWithSpecifiedColourInFillColourAttribute = 2, ///< Fill with the colour specified by a fill attribute
 			FillWithPatternGivenByFillPatternAttribute = 3 ///< Fill with a patter provided by a fill pattern attribute
 		};
 
@@ -183,7 +183,7 @@ namespace isobus
 			OnChangeActiveMask = 7, ///< Event on changing the active mask
 			OnChangeSoftKeyMask = 8, ///< Event on change of the soft key mask
 			OnChangeAttribute = 9, ///< Event on change of an attribute value
-			OnChangeBackgroundColor = 10, ///< Event on change of a background color
+			OnChangeBackgroundColour = 10, ///< Event on change of a background colour
 			OnChangeFontAttributes = 11, ///< Event on change of a font attribute
 			OnChangeLineAttributes = 12, ///< Event on change of a line attribute
 			OnChangeFillAttributes = 13, ///< Event on change of a fill attribute
@@ -211,8 +211,8 @@ namespace isobus
 		enum class GraphicMode : std::uint8_t
 		{
 			Monochrome = 0, ///< Monochromatic graphics mode (1 bit)
-			SixteenColour = 1, ///< 16 Color mode (4 bit)
-			TwoHundredFiftySixColor = 2 ///< 256 Color mode (8 bit)
+			SixteenColour = 1, ///< 16 Colour mode (4 bit)
+			TwoHundredFiftySixColour = 2 ///< 256 Colour mode (8 bit)
 		};
 
 		/// @brief Enumerates the various auxiliary input function types
@@ -520,11 +520,11 @@ namespace isobus
 		/// @returns true if the message was sent successfully
 		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight);
 
-		/// @brief Sends the change background color command
+		/// @brief Sends the change background colour command
 		/// @param[in] objectID The ID of the target object
-		/// @param[in] color The new background color of the object
+		/// @param[in] colour The new background colour of the object
 		/// @returns true if the message was sent successfully
-		bool send_change_background_colour(std::uint16_t objectID, std::uint8_t color);
+		bool send_change_background_colour(std::uint16_t objectID, std::uint8_t colour);
 
 		/// @brief Sends the change numeric value command
 		/// @details The size of the object shall not be changed by this command. Only the object indicated in the
@@ -566,30 +566,30 @@ namespace isobus
 		/// @brief Sends the change font attributes command
 		/// @details This command is used to change the Font Attributes in a Font Attributes object.
 		/// @param[in] objectID The ID of the target object
-		/// @param[in] color See the standard VT colour palette for more details
+		/// @param[in] colour See the standard VT colour palette for more details
 		/// @param[in] size Font size
 		/// @param[in] type Font Type
 		/// @param[in] styleBitfield The font style encoded as a bitfield
 		/// @returns true if the message was sent successfully
-		bool send_change_font_attributes(std::uint16_t objectID, std::uint8_t color, FontSize size, std::uint8_t type, std::uint8_t styleBitfield);
+		bool send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield);
 
 		/// @brief Sends the change line attributes command
 		/// @details This command is used to change the Line Attributes in a Line Attributes object.
 		/// @param[in] objectID The ID of the target object
-		/// @param[in] color See the standard VT colour palette for more details
+		/// @param[in] colour See the standard VT colour palette for more details
 		/// @param[in] width The line width
 		/// @param[in] lineArtBitmask The line art, encoded as a bitfield (See ISO11783-6 for details)
 		/// @returns true if the message was sent successfully
-		bool send_change_line_attributes(std::uint16_t objectID, std::uint8_t color, std::uint8_t width, std::uint16_t lineArtBitmask);
+		bool send_change_line_attributes(std::uint16_t objectID, std::uint8_t colour, std::uint8_t width, std::uint16_t lineArtBitmask);
 
 		/// @brief Sends the change fill attributes command
 		/// @details This command is used to change the Fill Attributes in a Fill Attributes object.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] fillType The fill type
-		/// @param[in] color See the standard VT colour palette for more details
+		/// @param[in] colour See the standard VT colour palette for more details
 		/// @param[in] fillPatternObjectID Object ID to a fill pattern or NULL_OBJECT_ID
 		/// @returns true if the message was sent successfully
-		bool send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t color, std::uint16_t fillPatternObjectID);
+		bool send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t colour, std::uint16_t fillPatternObjectID);
 
 		/// @brief Sends the change active mask command
 		/// @details This command is used to change the active mask of a Working Set
@@ -685,10 +685,10 @@ namespace isobus
 		/// @returns true if the message was sent successfully
 		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute);
 
-		/// @brief Sends the select color map or palette command
+		/// @brief Sends the select colour map or palette command
 		/// @param[in] objectID The object to select
 		/// @returns true if the message was sent successfully
-		bool send_select_color_map_or_palette(std::uint16_t objectID);
+		bool send_select_colour_map_or_palette(std::uint16_t objectID);
 
 		/// @brief Sends the execute extended macro command
 		/// @details Executes an extended macro
@@ -719,21 +719,21 @@ namespace isobus
 		/// @returns true if the message was sent successfully
 		bool send_move_graphics_cursor(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
 
-		/// @brief Sends the set foreground color command
+		/// @brief Sends the set foreground colour command
 		/// @details This command modifies the foreground colour
 		/// attribute.The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
-		/// @param[in] color See standard color palette, 0-255
+		/// @param[in] colour See standard colour palette, 0-255
 		/// @returns true if the message was sent successfully
-		bool send_set_foreground_colour(std::uint16_t objectID, std::uint8_t color);
+		bool send_set_foreground_colour(std::uint16_t objectID, std::uint8_t colour);
 
-		/// @brief Sends the set background color command
+		/// @brief Sends the set background colour command
 		/// @details This command modifies the background colour
 		/// attribute.The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
-		/// @param[in] color See standard color palette, 0-255
+		/// @param[in] colour See standard colour palette, 0-255
 		/// @returns true if the message was sent successfully
-		bool send_set_background_colour(std::uint16_t objectID, std::uint8_t color);
+		bool send_set_background_colour(std::uint16_t objectID, std::uint8_t colour);
 
 		/// @brief Sends the set line attributes object id
 		/// @details This command modifies the Output Line object
@@ -1168,8 +1168,8 @@ namespace isobus
 		{
 			SetGraphicsCursor = 0x00, ///< Sets the graphics cursor x/y attributes
 			MoveGraphicsCursor = 0x01, ///< Moves the cursor relative to current location
-			SetForegroundColor = 0x02, ///< Sets the foreground color
-			SetBackgroundColor = 0x03, ///< Sets the background color
+			SetForegroundColour = 0x02, ///< Sets the foreground colour
+			SetBackgroundColour = 0x03, ///< Sets the background colour
 			SetLineAttributesObjectID = 0x04, ///< Sets the line attribute object ID
 			SetFillAttributesObjectID = 0x05, ///< Sets the fill attribute object ID
 			SetFontAttributesObjectID = 0x06, ///< Sets the font attribute object ID
