@@ -5,12 +5,15 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <iterator>
 #include <memory>
 
 using namespace std;
+
+static std::atomic_bool running = { true };
 
 void nmea2k_callback(isobus::CANMessage *message, void *)
 {
@@ -36,9 +39,7 @@ void nmea2k_transmit_complete_callback(std::uint32_t parameterGroupNumber,
 
 void signal_handler(int)
 {
-	CANHardwareInterface::stop();
-	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
-	_Exit(EXIT_FAILURE);
+	running = false;
 }
 
 void update_CAN_network()
@@ -114,7 +115,7 @@ int main()
 		testMessageData[i] = i;
 	}
 
-	while (true)
+	while (running)
 	{
 		// Send a fast packet message
 		isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, &TestInternalECU, nullptr, isobus::CANIdentifier::PriorityLowest7, nmea2k_transmit_complete_callback);
@@ -124,5 +125,6 @@ int main()
 	}
 
 	CANHardwareInterface::stop();
+	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 	return 0;
 }
