@@ -10,23 +10,20 @@
 #include "console_logger.cpp"
 #include "object_pool_ids.h"
 
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <memory>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
+static std::atomic_bool running = { true };
 
 using namespace std;
 
 void signal_handler(int)
 {
-	CANHardwareInterface::stop();
-	if (nullptr != TestVirtualTerminalClient)
-	{
-		TestVirtualTerminalClient->terminate();
-	}
-	_Exit(EXIT_FAILURE);
+	running = false;
 }
 
 void update_CAN_network()
@@ -119,12 +116,13 @@ int main()
 	TestVirtualTerminalClient->register_auxiliary_input_event_callback(handle_aux_input);
 	TestVirtualTerminalClient->initialize(true);
 
-	while (true)
+	while (running)
 	{
 		// CAN stack runs in other threads. Do nothing forever.
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 
+	TestVirtualTerminalClient->terminate();
 	CANHardwareInterface::stop();
 	return 0;
 }

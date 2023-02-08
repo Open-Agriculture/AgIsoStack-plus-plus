@@ -7,6 +7,7 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
 
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <iterator>
@@ -14,13 +15,13 @@
 
 static constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
 static constexpr std::uint32_t ETP_TEST_SIZE = 2048;
+static std::atomic_bool running = { true };
 
 using namespace std;
 
 void signal_handler(int)
 {
-	CANHardwareInterface::stop();
-	_Exit(EXIT_FAILURE);
+	running = false;
 }
 
 void update_CAN_network()
@@ -103,14 +104,14 @@ int main()
 	}
 
 	// Send a classic CAN message to a specific destination(8 bytes or less)
-	if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU, &TestPartner))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU, &TestPartner))
 	{
 		cout << "Sent a normal CAN Message with length 8" << endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
 	}
 
 	// Send a classic CAN message to global (0xFF) (8 bytes or less)
-	if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU))
 	{
 		cout << "Sent a broadcast CAN Message with length 8" << endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
@@ -121,6 +122,11 @@ int main()
 	// This will take a long time
 	for (std::uint32_t i = 9; i <= MAX_TP_SIZE_BYTES; i++)
 	{
+		if (!running)
+		{
+			break;
+		}
+
 		// Send message
 		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, &TestInternalECU, &TestPartner))
 		{
@@ -140,6 +146,11 @@ int main()
 	// This will take a very long time
 	for (std::uint32_t i = 9; i <= MAX_TP_SIZE_BYTES; i++)
 	{
+		if (!running)
+		{
+			break;
+		}
+
 		// Send message
 		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, &TestInternalECU))
 		{
@@ -155,7 +166,7 @@ int main()
 
 	// ETP Example
 	// Send one ETP message
-	if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, ETP_TEST_SIZE, &TestInternalECU, &TestPartner))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, ETP_TEST_SIZE, &TestInternalECU, &TestPartner))
 	{
 		cout << "Started ETP Session with length " << ETP_TEST_SIZE << endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));

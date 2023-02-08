@@ -6,6 +6,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <memory>
@@ -13,13 +14,13 @@
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;
 static isobus::ControlFunction *repetitionRateRequestor = nullptr;
+static std::atomic_bool running = { true };
 
 using namespace std;
 
 void signal_handler(int)
 {
-	CANHardwareInterface::stop();
-	_Exit(EXIT_FAILURE);
+	running = false;
 }
 
 void update_CAN_network()
@@ -172,7 +173,7 @@ int main()
 		isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), TestInternalECU.get(), nullptr);
 	}
 
-	while (true)
+	while (running)
 	{
 		if (0xFFFFFFFF != propARepetitionRate_ms)
 		{

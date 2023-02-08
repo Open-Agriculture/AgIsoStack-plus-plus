@@ -5,6 +5,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"
 
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <iterator>
@@ -12,11 +13,11 @@
 
 using namespace std;
 
+static std::atomic_bool running = { true };
+
 void signal_handler(int)
 {
-	isobus::DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions();
-	CANHardwareInterface::stop();
-	_Exit(EXIT_FAILURE);
+	running = false;
 }
 
 void update_CAN_network()
@@ -76,7 +77,7 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
 	//! @todo Check this instead of asuming it is done
@@ -126,12 +127,13 @@ int main()
 		diagnosticProtocol->clear_inactive_diagnostic_trouble_codes(); // All messages should now be clear!
 	}
 
-	while (true)
+	while (running)
 	{
 		// CAN stack runs in other threads. Do nothing forever.
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 
 	CANHardwareInterface::stop();
+	isobus::DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions();
 	return 0;
 }
