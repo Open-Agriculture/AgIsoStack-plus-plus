@@ -37,6 +37,9 @@ public:
 	/// @param[in] receiveOwnMessages If `true`, the driver will receive its own messages.
 	VirtualCANPlugin(const std::string channel = "", const bool receiveOwnMessages = false);
 
+	/// @brief Destructor for the virtual CAN driver
+	virtual ~VirtualCANPlugin();
+
 	/// @brief Returns if the socket connection is valid
 	/// @returns `true` if connected, `false` if not connected
 	bool get_is_valid() const override;
@@ -61,6 +64,10 @@ public:
 	/// @returns `true` if the frame was written, otherwise `false`
 	bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
 
+	/// @brief Allows us to write messages as if we received them from the bus
+	/// @param[in] canFrame The frame to write to the bus
+	void write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame);
+
 private:
 	/// @brief A struct holding information about a virtual CAN device
 	struct VirtualDevice
@@ -78,7 +85,7 @@ private:
 	const bool receiveOwnMessages; ///< If `true`, the driver will receive its own messages
 
 	std::shared_ptr<VirtualDevice> ourDevice; ///< A pointer to the virtual device of this instance
-	bool running; ///< If `true`, the driver is running
+	std::atomic_bool running; ///< If `true`, the driver is running
 };
 
 #endif // VIRTUAL_CAN_PLUGIN_HPP
