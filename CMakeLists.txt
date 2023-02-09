@@ -108,7 +108,8 @@ if(BUILD_TESTING)
       test/virtual_can_plugin_tests.cpp
       test/address_claim_tests.cpp
       test/can_name_tests.cpp
-      test/vt_client_tests.cpp)
+      test/vt_client_tests.cpp
+      test/language_command_interface_tests.cpp)
 
   add_executable(unit_tests ${TEST_SRC})
   target_link_libraries(
