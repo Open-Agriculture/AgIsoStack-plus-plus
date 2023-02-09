@@ -28,6 +28,7 @@ jobs:
     name: Setup
     runs-on: ubuntu-latest
     needs: approve
+    if: ${{ needs.approve.result == 'success' || needs.approve.result == 'skipped' }}
     steps:
       - name: Set up Python 3.8 for gcovr
         uses: actions/setup-python@v4
