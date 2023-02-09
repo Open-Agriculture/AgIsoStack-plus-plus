@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <map>
+#include <unordered_map>
 
 namespace isobus
 {
@@ -3700,828 +3702,210 @@ namespace isobus
 		static constexpr float SCALE_FACTOR_NEGATIVE_FUDGE = 0.95f;
 		FontSize retVal = originalFont;
 
-		switch (originalFont)
+		if (scaleFactor > SCALE_FACTOR_POSITIVE_FUDGE || scaleFactor < SCALE_FACTOR_NEGATIVE_FUDGE)
 		{
-			case FontSize::Size6x8:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 23.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 21.3f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 15.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 11.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 10.6f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 7.95f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 5.3f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 2.6f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 1.30f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-				}
-			}
-			break;
+			const std::unordered_map<FontSize, std::map<float, FontSize, std::greater<float>>> FONT_SCALING_MAPPER{
+				{ FontSize::Size6x8,
+				  { { 23.95f, FontSize::Size128x192 },
+				    { 21.30f, FontSize::Size128x128 },
+				    { 15.95f, FontSize::Size96x128 },
+				    { 11.95f, FontSize::Size64x96 },
+				    { 10.60f, FontSize::Size64x64 },
+				    { 7.95f, FontSize::Size48x64 },
+				    { 5.95f, FontSize::Size32x48 },
+				    { 5.30f, FontSize::Size32x32 },
+				    { 3.95f, FontSize::Size24x32 },
+				    { 2.95f, FontSize::Size16x24 },
+				    { 2.60f, FontSize::Size16x16 },
+				    { 1.95f, FontSize::Size12x16 },
+				    { 1.45f, FontSize::Size8x12 },
+				    { 1.30f, FontSize::Size8x8 } } },
+				{ FontSize::Size8x8,
+				  { { 23.95f, FontSize::Size128x192 },
+				    { 15.95f, FontSize::Size128x128 },
+				    { 11.95f, FontSize::Size64x96 },
+				    { 7.95f, FontSize::Size64x64 },
+				    { 5.95f, FontSize::Size32x48 },
+				    { 3.95f, FontSize::Size32x32 },
+				    { 2.95f, FontSize::Size16x24 },
+				    { 1.95f, FontSize::Size16x16 },
+				    { 1.45f, FontSize::Size8x12 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size8x12,
+				  { { 15.95f, FontSize::Size128x192 },
+				    { 11.95f, FontSize::Size96x128 },
+				    { 7.95f, FontSize::Size64x96 },
+				    { 5.95f, FontSize::Size48x64 },
+				    { 3.95f, FontSize::Size32x48 },
+				    { 2.95f, FontSize::Size24x32 },
+				    { 1.95f, FontSize::Size16x24 },
+				    { 1.45f, FontSize::Size12x16 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size12x16,
+				  { { 11.95f, FontSize::Size128x192 },
+				    { 10.60f, FontSize::Size128x128 },
+				    { 7.95f, FontSize::Size96x128 },
+				    { 5.95f, FontSize::Size64x96 },
+				    { 5.30f, FontSize::Size64x64 },
+				    { 3.95f, FontSize::Size48x64 },
+				    { 2.95f, FontSize::Size32x48 },
+				    { 2.60f, FontSize::Size32x32 },
+				    { 1.95f, FontSize::Size24x32 },
+				    { 1.45f, FontSize::Size16x24 },
+				    { 1.30f, FontSize::Size16x16 },
+				    { 0.75f, FontSize::Size8x12 },
+				    { 0.67f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size16x16,
+				  { { 11.95f, FontSize::Size128x192 },
+				    { 7.95f, FontSize::Size128x128 },
+				    { 5.95f, FontSize::Size64x96 },
+				    { 3.95f, FontSize::Size64x64 },
+				    { 2.95f, FontSize::Size32x48 },
+				    { 1.95f, FontSize::Size32x32 },
+				    { 1.45f, FontSize::Size16x24 },
+				    { 0.75f, FontSize::Size8x12 },
+				    { 0.50f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size16x24,
+				  { { 7.95f, FontSize::Size128x128 },
+				    { 5.95f, FontSize::Size96x128 },
+				    { 3.95f, FontSize::Size64x96 },
+				    { 2.95f, FontSize::Size48x64 },
+				    { 1.95f, FontSize::Size32x48 },
+				    { 1.45f, FontSize::Size24x32 },
+				    { 0.75f, FontSize::Size12x16 },
+				    { 0.50f, FontSize::Size8x12 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size24x32,
+				  { { 5.95f, FontSize::Size128x192 },
+				    { 5.30f, FontSize::Size128x128 },
+				    { 3.95f, FontSize::Size96x128 },
+				    { 2.95f, FontSize::Size64x96 },
+				    { 2.60f, FontSize::Size64x64 },
+				    { 1.95f, FontSize::Size48x64 },
+				    { 1.45f, FontSize::Size32x48 },
+				    { 1.30f, FontSize::Size32x32 },
+				    { 0.75f, FontSize::Size16x24 },
+				    { 0.60f, FontSize::Size16x16 },
+				    { 0.50f, FontSize::Size12x16 },
+				    { 0.37f, FontSize::Size8x12 },
+				    { 0.30f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size32x32,
+				  { { 5.95f, FontSize::Size128x192 },
+				    { 3.95f, FontSize::Size128x128 },
+				    { 2.95f, FontSize::Size64x96 },
+				    { 1.95f, FontSize::Size64x64 },
+				    { 1.45f, FontSize::Size32x48 },
+				    { 0.75f, FontSize::Size16x24 },
+				    { 0.50f, FontSize::Size16x16 },
+				    { 0.37f, FontSize::Size8x12 },
+				    { 0.20f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size32x48,
+				  { { 3.95f, FontSize::Size128x192 },
+				    { 2.95f, FontSize::Size96x128 },
+				    { 1.95f, FontSize::Size64x96 },
+				    { 1.45f, FontSize::Size48x64 },
+				    { 0.75f, FontSize::Size24x32 },
+				    { 0.50f, FontSize::Size16x24 },
+				    { 0.37f, FontSize::Size12x16 },
+				    { 0.20f, FontSize::Size8x12 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size48x64,
+				  { { 2.95f, FontSize::Size128x192 },
+				    { 2.60f, FontSize::Size128x128 },
+				    { 1.95f, FontSize::Size96x128 },
+				    { 1.45f, FontSize::Size64x96 },
+				    { 1.30f, FontSize::Size64x64 },
+				    { 0.75f, FontSize::Size32x48 },
+				    { 0.60f, FontSize::Size32x32 },
+				    { 0.50f, FontSize::Size24x32 },
+				    { 0.37f, FontSize::Size16x24 },
+				    { 0.33f, FontSize::Size16x16 },
+				    { 0.25f, FontSize::Size12x16 },
+				    { 0.18f, FontSize::Size8x12 },
+				    { 0.16f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size64x64,
+				  { { 2.95f, FontSize::Size128x192 },
+				    { 1.95f, FontSize::Size128x128 },
+				    { 1.45f, FontSize::Size64x96 },
+				    { 0.75f, FontSize::Size32x48 },
+				    { 0.50f, FontSize::Size32x32 },
+				    { 0.37f, FontSize::Size16x24 },
+				    { 0.25f, FontSize::Size16x16 },
+				    { 0.18f, FontSize::Size8x12 },
+				    { 0.12f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size64x96,
+				  { { 1.95f, FontSize::Size128x192 },
+				    { 1.45f, FontSize::Size96x128 },
+				    { 0.75f, FontSize::Size48x64 },
+				    { 0.50f, FontSize::Size32x48 },
+				    { 0.37f, FontSize::Size24x32 },
+				    { 0.25f, FontSize::Size16x24 },
+				    { 0.18f, FontSize::Size12x16 },
+				    { 0.12f, FontSize::Size8x12 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size96x128,
+				  { { 1.45f, FontSize::Size128x192 },
+				    { 1.30f, FontSize::Size128x128 },
+				    { 0.75f, FontSize::Size64x96 },
+				    { 0.60f, FontSize::Size64x64 },
+				    { 0.50f, FontSize::Size48x64 },
+				    { 0.37f, FontSize::Size32x48 },
+				    { 0.33f, FontSize::Size32x32 },
+				    { 0.25f, FontSize::Size24x32 },
+				    { 0.18f, FontSize::Size16x24 },
+				    { 0.16f, FontSize::Size16x16 },
+				    { 0.125f, FontSize::Size12x16 },
+				    { 0.09f, FontSize::Size8x12 },
+				    { 0.08f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size128x128,
+				  { { 1.45f, FontSize::Size128x192 },
+				    { 0.75f, FontSize::Size64x96 },
+				    { 0.50f, FontSize::Size64x64 },
+				    { 0.37f, FontSize::Size32x48 },
+				    { 0.25f, FontSize::Size32x32 },
+				    { 0.18f, FontSize::Size16x24 },
+				    { 0.125f, FontSize::Size16x16 },
+				    { 0.09f, FontSize::Size8x12 },
+				    { 0.06f, FontSize::Size8x8 },
+				    { 0.0f, FontSize::Size6x8 } } },
+				{ FontSize::Size128x192,
+				  { { 0.75f, FontSize::Size96x128 },
+				    { 0.50f, FontSize::Size64x96 },
+				    { 0.37f, FontSize::Size48x64 },
+				    { 0.25f, FontSize::Size32x48 },
+				    { 0.18f, FontSize::Size24x32 },
+				    { 0.125f, FontSize::Size16x24 },
+				    { 0.09f, FontSize::Size12x16 },
+				    { 0.06f, FontSize::Size8x12 },
+				    { 0.0f, FontSize::Size6x8 } } }
+			};
 
-			case FontSize::Size8x8:
+			auto iterator = FONT_SCALING_MAPPER.find(originalFont);
+			if (iterator != FONT_SCALING_MAPPER.end())
 			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
+				for (auto &pair : iterator->second)
 				{
-					if (scaleFactor >= 23.95f)
+					if (scaleFactor >= pair.first)
 					{
-						retVal = FontSize::Size128x192;
+						retVal = pair.second;
+						break;
 					}
-					else if (scaleFactor >= 15.95f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 11.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 7.95f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					retVal = FontSize::Size6x8;
 				}
 			}
-			break;
 
-			case FontSize::Size8x12:
+			if (retVal == originalFont)
 			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 15.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 11.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 7.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					retVal = FontSize::Size6x8;
-				}
+				// Unknown font? Newer version than we support of the ISO standard? Or scaling factor out of range?
+				CANStackLogger::error("[VT]: Unable to scale font type " + isobus::to_string(static_cast<int>(originalFont)) +
+				                      " with scale factor " + isobus::to_string(scaleFactor) + ". Returning original font.");
 			}
-			break;
-
-			case FontSize::Size12x16:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 11.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 10.6f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 7.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 5.3f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 2.6f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 1.3f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.67f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size16x16:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 11.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 7.95f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size16x24:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 7.95f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size24x32:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 5.3f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 2.6f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 1.3f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.6f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.3f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size32x32:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 5.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.2f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size32x48:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 3.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.2f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size48x64:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 2.6f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 1.3f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 0.6f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.33f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 0.25f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.18f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.16f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size64x64:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 2.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.25f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 0.18f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.12f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size64x96:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 1.95f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 0.25f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.18f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.12f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size96x128:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-					else if (scaleFactor >= 1.3f)
-					{
-						retVal = FontSize::Size128x128;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 0.6f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 0.33f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 0.25f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 0.18f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.16f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 0.125f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.09f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.08f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size128x128:
-			{
-				if (scaleFactor >= SCALE_FACTOR_POSITIVE_FUDGE)
-				{
-					if (scaleFactor >= 1.45f)
-					{
-						retVal = FontSize::Size128x192;
-					}
-				}
-				else if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size64x64;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 0.25f)
-					{
-						retVal = FontSize::Size32x32;
-					}
-					else if (scaleFactor >= 0.18f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.125f)
-					{
-						retVal = FontSize::Size16x16;
-					}
-					else if (scaleFactor >= 0.09f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else if (scaleFactor >= 0.06f)
-					{
-						retVal = FontSize::Size8x8;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			case FontSize::Size128x192:
-			{
-				if (scaleFactor <= SCALE_FACTOR_NEGATIVE_FUDGE)
-				{
-					if (scaleFactor >= 0.75f)
-					{
-						retVal = FontSize::Size96x128;
-					}
-					else if (scaleFactor >= 0.5f)
-					{
-						retVal = FontSize::Size64x96;
-					}
-					else if (scaleFactor >= 0.37f)
-					{
-						retVal = FontSize::Size48x64;
-					}
-					else if (scaleFactor >= 0.25f)
-					{
-						retVal = FontSize::Size32x48;
-					}
-					else if (scaleFactor >= 0.18f)
-					{
-						retVal = FontSize::Size24x32;
-					}
-					else if (scaleFactor >= 0.125f)
-					{
-						retVal = FontSize::Size16x24;
-					}
-					else if (scaleFactor >= 0.09f)
-					{
-						retVal = FontSize::Size12x16;
-					}
-					else if (scaleFactor >= 0.06f)
-					{
-						retVal = FontSize::Size8x12;
-					}
-					else
-					{
-						retVal = FontSize::Size6x8;
-					}
-				}
-			}
-			break;
-
-			default:
-			{
-				// Unknown font? Newer version than we support of the ISO standard?
-				CANStackLogger::error("[VT]: Cannot scale font of unknown type " +
-				                      isobus::to_string(static_cast<int>(originalFont)));
-			}
-			break;
 		}
 		return retVal;
 	}
