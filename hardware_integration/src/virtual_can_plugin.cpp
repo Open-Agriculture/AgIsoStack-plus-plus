@@ -20,6 +20,11 @@ VirtualCANPlugin::VirtualCANPlugin(const std::string channel, const bool receive
 	channels[channel].push_back(ourDevice);
 }
 
+VirtualCANPlugin::~VirtualCANPlugin()
+{
+	close();
+}
+
 bool VirtualCANPlugin::get_is_valid() const
 {
 	return running;
@@ -58,6 +63,13 @@ bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canF
 		}
 	}
 	return retVal;
+}
+
+void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame)
+{
+	const std::lock_guard<std::mutex> lock(mutex);
+	ourDevice->queue.push_back(canFrame);
+	ourDevice->condition.notify_one();
 }
 
 bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
