@@ -14,303 +14,286 @@
 
 #include <algorithm>
 
-std::thread *CANHardwareInterface::can_thread = nullptr;
-std::thread *CANHardwareInterface::updateCANLibPeriodicThread = nullptr;
+std::unique_ptr<std::thread> CANHardwareInterface::canThread;
+std::unique_ptr<std::thread> CANHardwareInterface::periodicUpdateThread;
 std::condition_variable CANHardwareInterface::threadConditionVariable;
-std::vector<CANHardwareInterface::CanHardware *> CANHardwareInterface::hardwareChannels;
+std::vector<std::unique_ptr<CANHardwareInterface::CANHardware>> CANHardwareInterface::hardwareChannels;
 std::vector<CANHardwareInterface::RawCanMessageCallbackInfo> CANHardwareInterface::rxCallbacks;
-std::vector<CANHardwareInterface::CanLibUpdateCallbackInfo> CANHardwareInterface::canLibUpdateCallbacks;
+std::vector<CANHardwareInterface::CanLibUpdateCallbackInfo> CANHardwareInterface::periodicUpdateCallbacks;
 std::mutex CANHardwareInterface::hardwareChannelsMutex;
 std::mutex CANHardwareInterface::threadMutex;
-std::mutex CANHardwareInterface::rxCallbackMutex;
-std::mutex CANHardwareInterface::canLibNeedsUpdateMutex;
-std::mutex CANHardwareInterface::canLibUpdateCallbacksMutex;
-bool CANHardwareInterface::threadsStarted = false;
-bool CANHardwareInterface::canLibNeedsUpdate = false;
-std::uint32_t CANHardwareInterface::canLibUpdatePeriod = CANLIB_UPDATE_RATE;
-CANHardwareInterface CANHardwareInterface::CAN_HARDWARE_INTERFACE;
+std::mutex CANHardwareInterface::rxCallbacksMutex;
+std::mutex CANHardwareInterface::periodicUpdateCallbacksMutex;
+std::atomic_bool CANHardwareInterface::threadsStarted = false;
+std::atomic_bool CANHardwareInterface::canLibNeedsUpdate = false;
+std::uint32_t CANHardwareInterface::canLibUpdatePeriod = PERIODIC_UPDATE_INTERVAL;
 
 bool isobus::send_can_message_to_hardware(HardwareInterfaceCANFrame frame)
 {
 	return CANHardwareInterface::transmit_can_message(frame);
 }
 
-CANHardwareInterface::RawCanMessageCallbackInfo::RawCanMessageCallbackInfo() :
-  callback(nullptr),
-  parent(nullptr)
-{
-}
-
-bool CANHardwareInterface::RawCanMessageCallbackInfo::operator==(const RawCanMessageCallbackInfo &obj)
+bool CANHardwareInterface::RawCanMessageCallbackInfo::operator==(const RawCanMessageCallbackInfo &obj) const
 {
 	return ((obj.callback == this->callback) && (obj.parent == this->parent));
 }
 
-CANHardwareInterface::CanLibUpdateCallbackInfo::CanLibUpdateCallbackInfo() :
-  callback(nullptr),
-  parent(nullptr)
-{
-}
-
-bool CANHardwareInterface::CanLibUpdateCallbackInfo::operator==(const CanLibUpdateCallbackInfo &obj)
+bool CANHardwareInterface::CanLibUpdateCallbackInfo::operator==(const CanLibUpdateCallbackInfo &obj) const
 {
 	return ((obj.callback == this->callback) && (obj.parent == this->parent));
 }
 
-CANHardwareInterface::CANHardwareInterface()
+bool CANHardwareInterface::set_number_of_can_channels(uint8_t value)
 {
-}
+	std::lock_guard<std::mutex> lock(hardwareChannelsMutex);
 
-CANHardwareInterface::~CANHardwareInterface()
-{
-	set_number_of_can_channels(0);
-}
-
-bool CANHardwareInterface::assign_can_channel_frame_handler(std::uint8_t aCANChannel, std::shared_ptr<CANHardwarePlugin> driver)
-{
-	bool retVal = false;
-
-	if (hardwareChannelsMutex.try_lock())
+	if (threadsStarted)
 	{
-		if ((!threadsStarted) &&
-		    (aCANChannel < hardwareChannels.size()))
-		{
-			if ((nullptr == hardwareChannels[aCANChannel]->frameHandler) ||
-			    (driver == hardwareChannels[aCANChannel]->frameHandler))
-			{
-				retVal = true;
-				hardwareChannels[aCANChannel]->frameHandler = driver;
-			}
-		}
-		hardwareChannelsMutex.unlock();
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot set number of channels after interface is started.");
+		return false;
 	}
-	return retVal;
-}
 
-uint8_t CANHardwareInterface::get_number_of_can_channels()
-{
-	return static_cast<uint8_t>(hardwareChannels.size() & std::numeric_limits<std::uint8_t>::max());
-}
-
-bool CANHardwareInterface::set_number_of_can_channels(uint8_t aValue)
-{
-	CanHardware *pCANHardware;
-	bool retVal = false;
-
-	if (hardwareChannelsMutex.try_lock())
+	while (value > hardwareChannels.size())
 	{
-		if (!threadsStarted)
-		{
-			while (aValue > hardwareChannels.size())
-			{
-				pCANHardware = new CanHardware();
-				pCANHardware->receiveMessageThread = nullptr;
-				pCANHardware->frameHandler = nullptr;
-
-				hardwareChannels.push_back(pCANHardware);
-			}
-
-			while (aValue < hardwareChannels.size())
-			{
-				pCANHardware = hardwareChannels.back();
-				hardwareChannels.pop_back();
-				delete pCANHardware;
-			}
-			retVal = true;
-		}
-		hardwareChannelsMutex.unlock();
+		hardwareChannels.push_back(std::make_unique<CANHardware>());
+		hardwareChannels.back()->receiveMessageThread = nullptr;
+		hardwareChannels.back()->frameHandler = nullptr;
 	}
-	return retVal;
+	while (value < hardwareChannels.size())
+	{
+		hardwareChannels.pop_back();
+	}
+	return true;
+}
+
+bool CANHardwareInterface::assign_can_channel_frame_handler(std::uint8_t channelIndex, std::shared_ptr<CANHardwarePlugin> driver)
+{
+	std::lock_guard<std::mutex> lock(hardwareChannelsMutex);
+
+	if (threadsStarted)
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot assign frame handlers after interface is started.");
+		return false;
+	}
+
+	if (channelIndex >= hardwareChannels.size())
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Unable to set frame handler at channel " + isobus::to_string(channelIndex) +
+		                              ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set. " +
+		                              "Use set_number_of_can_channels() to increase the number of channels before assigning frame handlers.");
+		return false;
+	}
+
+	if (nullptr != hardwareChannels[channelIndex]->frameHandler)
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Unable to set frame handler at channel " + isobus::to_string(channelIndex) + ", because it is already assigned.");
+		return false;
+	}
+
+	hardwareChannels[channelIndex]->frameHandler = driver;
+	return true;
+}
+
+std::uint8_t CANHardwareInterface::get_number_of_can_channels()
+{
+	return static_cast<std::uint8_t>(hardwareChannels.size() & std::numeric_limits<std::uint8_t>::max());
+}
+
+bool CANHardwareInterface::unassign_can_channel_frame_handler(std::uint8_t channelIndex)
+{
+	std::lock_guard<std::mutex> lock(hardwareChannelsMutex);
+
+	if (threadsStarted)
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot remove frame handlers after interface is started.");
+		return false;
+	}
+
+	if (channelIndex >= hardwareChannels.size())
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Unable to remove frame handler at channel " + isobus::to_string(channelIndex) +
+		                              ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set.");
+		return false;
+	}
+
+	if (nullptr == hardwareChannels[channelIndex]->frameHandler)
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Unable to remove frame handler at channel " + isobus::to_string(channelIndex) + ", because it is not assigned.");
+		return false;
+	}
+
+	hardwareChannels[channelIndex]->frameHandler = nullptr;
+	return true;
 }
 
 bool CANHardwareInterface::start()
 {
-	bool retVal = false;
+	std::lock_guard<std::mutex> lock(hardwareChannelsMutex);
 
-	if (hardwareChannelsMutex.try_lock())
+	if (threadsStarted)
 	{
-		if (!threadsStarted)
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot start interface more than once.");
+		return false;
+	}
+
+	canThread = std::make_unique<std::thread>(can_thread_function);
+	periodicUpdateThread = std::make_unique<std::thread>(update_can_lib_periodic_function);
+
+	threadsStarted = true;
+
+	for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
+	{
+		if (nullptr != hardwareChannels[i]->frameHandler)
 		{
-			threadsStarted = true;
-			retVal = true;
-			can_thread = new std::thread(can_thread_function);
-			updateCANLibPeriodicThread = new std::thread(update_can_lib_periodic_function);
+			hardwareChannels[i]->frameHandler->open();
 
-			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
+			if (hardwareChannels[i]->frameHandler->get_is_valid())
 			{
-				if (nullptr != hardwareChannels[i]->frameHandler)
-				{
-					hardwareChannels[i]->frameHandler->open();
-
-					if (hardwareChannels[i]->frameHandler->get_is_valid())
-					{
-						hardwareChannels[i]->receiveMessageThread = new std::thread(receive_message_thread_function, i);
-					}
-				}
+				hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_message_thread_function, i);
 			}
 		}
-		hardwareChannelsMutex.unlock();
 	}
-	return retVal;
+
+	return true;
 }
 
 bool CANHardwareInterface::stop()
 {
-	bool retVal = false;
-
-	if (hardwareChannelsMutex.try_lock())
+	if (!threadsStarted)
 	{
-		if (threadsStarted)
-		{
-			threadsStarted = false;
-			retVal = true;
-
-			if (nullptr != can_thread)
-			{
-				if (can_thread->joinable())
-				{
-					hardwareChannelsMutex.unlock();
-					threadConditionVariable.notify_all();
-					can_thread->join();
-					hardwareChannelsMutex.lock();
-				}
-				delete can_thread;
-				can_thread = nullptr;
-			}
-
-			if (nullptr != updateCANLibPeriodicThread)
-			{
-				if (updateCANLibPeriodicThread->joinable())
-				{
-					updateCANLibPeriodicThread->join();
-				}
-				delete updateCANLibPeriodicThread;
-				updateCANLibPeriodicThread = nullptr;
-			}
-
-			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
-			{
-				if (nullptr != hardwareChannels[i]->frameHandler)
-				{
-					hardwareChannels[i]->frameHandler->close();
-				}
-			}
-
-			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
-			{
-				if (nullptr != hardwareChannels[i]->receiveMessageThread)
-				{
-					if (hardwareChannels[i]->receiveMessageThread->joinable())
-					{
-						hardwareChannels[i]->receiveMessageThread->join();
-					}
-					delete hardwareChannels[i]->receiveMessageThread;
-					hardwareChannels[i]->receiveMessageThread = nullptr;
-				}
-				hardwareChannels[i]->messagesToBeTransmittedMutex.lock();
-
-				while (0 != hardwareChannels[i]->messagesToBeTransmitted.size())
-				{
-					hardwareChannels[i]->messagesToBeTransmitted.erase(hardwareChannels[i]->messagesToBeTransmitted.begin());
-				}
-				hardwareChannels[i]->messagesToBeTransmittedMutex.unlock();
-
-				hardwareChannels[i]->receivedMessagesMutex.lock();
-				hardwareChannels[i]->receivedMessages.clear();
-				hardwareChannels[i]->receivedMessagesMutex.unlock();
-			}
-		}
-		hardwareChannelsMutex.unlock();
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot stop interface before it is started.");
+		return false;
 	}
 
-	if (rxCallbackMutex.try_lock())
+	threadsStarted = false;
+	if (nullptr != canThread)
 	{
-		for (std::uint32_t i = 0; i < rxCallbacks.size(); i++)
+		if (canThread->joinable())
 		{
-			rxCallbacks.pop_back();
+			threadConditionVariable.notify_all();
+			canThread->join();
 		}
-		rxCallbackMutex.unlock();
+		canThread = nullptr;
 	}
 
-	if (canLibUpdateCallbacksMutex.try_lock())
+	if (nullptr != periodicUpdateThread)
 	{
-		for (std::uint32_t i = 0; i < canLibUpdateCallbacks.size(); i++)
+		if (periodicUpdateThread->joinable())
 		{
-			canLibUpdateCallbacks.pop_back();
+			periodicUpdateThread->join();
 		}
-		canLibUpdateCallbacksMutex.unlock();
+		periodicUpdateThread = nullptr;
 	}
-	return retVal;
+
+	std::unique_lock<std::mutex> channelsLock(hardwareChannelsMutex);
+	std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](std::unique_ptr<CANHardware> &channel) {
+		if (nullptr != channel->frameHandler)
+		{
+			channel->frameHandler->close();
+		}
+		if (nullptr != channel->receiveMessageThread)
+		{
+			if (channel->receiveMessageThread->joinable())
+			{
+				channel->receiveMessageThread->join();
+			}
+			channel->receiveMessageThread = nullptr;
+		}
+		if (nullptr != channel->frameHandler)
+		{
+			channel->frameHandler = nullptr;
+		}
+		std::unique_lock<std::mutex> transmittingLock(channel->messagesToBeTransmittedMutex);
+		channel->messagesToBeTransmitted.clear();
+		transmittingLock.unlock();
+
+		std::unique_lock<std::mutex> receivingLock(channel->receivedMessagesMutex);
+		channel->receivedMessages.clear();
+		receivingLock.unlock();
+	});
+	channelsLock.unlock();
+
+	std::unique_lock<std::mutex> rxCallbackLock(rxCallbacksMutex);
+	rxCallbacks.clear();
+	rxCallbackLock.unlock();
+
+	std::unique_lock<std::mutex> periodicUpdateCallbackLock(periodicUpdateCallbacksMutex);
+	periodicUpdateCallbacks.clear();
+	periodicUpdateCallbackLock.unlock();
+	return true;
 }
 
-bool CANHardwareInterface::transmit_can_message(isobus::HardwareInterfaceCANFrame &packet)
+bool CANHardwareInterface::transmit_can_message(const isobus::HardwareInterfaceCANFrame &packet)
 {
-	std::uint8_t lChannel = packet.channel;
-	bool retVal = false;
-
-	if ((lChannel < hardwareChannels.size()) &&
-	    (threadsStarted) &&
-	    (nullptr != hardwareChannels[lChannel]->frameHandler) &&
-	    (hardwareChannels[lChannel]->frameHandler->get_is_valid()))
+	if (!threadsStarted)
 	{
-		hardwareChannels[lChannel]->messagesToBeTransmittedMutex.lock();
-		hardwareChannels[lChannel]->messagesToBeTransmitted.push_back(packet);
-		hardwareChannels[lChannel]->messagesToBeTransmittedMutex.unlock();
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message before interface is started.");
+		return false;
+	}
+
+	if (packet.channel >= hardwareChannels.size())
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(packet.channel) +
+		                              ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set.");
+		return false;
+	}
+
+	std::unique_ptr<CANHardware> &channel = hardwareChannels[packet.channel];
+	if (nullptr == channel->frameHandler)
+	{
+		isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(packet.channel) + ", because it is not assigned.");
+		return false;
+	}
+
+	if (channel->frameHandler->get_is_valid())
+	{
+		std::lock_guard<std::mutex> lock(channel->messagesToBeTransmittedMutex);
+		channel->messagesToBeTransmitted.push_back(packet);
 
 		threadConditionVariable.notify_all();
-
-		retVal = true;
+		return true;
 	}
-	return retVal;
+	return false;
 }
 
 bool CANHardwareInterface::add_raw_can_message_rx_callback(void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer), void *parent)
 {
-	bool retVal = false;
-	RawCanMessageCallbackInfo callbackInfo;
+	std::lock_guard<std::mutex> lock(rxCallbacksMutex);
 
+	RawCanMessageCallbackInfo callbackInfo;
 	callbackInfo.callback = callback;
 	callbackInfo.parent = parent;
 
-	rxCallbackMutex.lock();
-
-	if ((nullptr != callback) && (rxCallbacks.end() == find(rxCallbacks.begin(), rxCallbacks.end(), callbackInfo)))
+	if ((nullptr != callback) && (rxCallbacks.end() == std::find(rxCallbacks.begin(), rxCallbacks.end(), callbackInfo)))
 	{
 		rxCallbacks.push_back(callbackInfo);
-		retVal = true;
+		return true;
 	}
-
-	rxCallbackMutex.unlock();
-
-	return retVal;
+	return false;
 }
 
 bool CANHardwareInterface::remove_raw_can_message_rx_callback(void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer), void *parent)
 {
-	bool retVal = false;
-	RawCanMessageCallbackInfo callbackInfo;
+	std::lock_guard<std::mutex> lock(rxCallbacksMutex);
 
+	RawCanMessageCallbackInfo callbackInfo;
 	callbackInfo.callback = callback;
 	callbackInfo.parent = parent;
 
-	rxCallbackMutex.lock();
-
 	if (nullptr != callback)
 	{
-		std::vector<RawCanMessageCallbackInfo>::iterator callbackLocation;
-		callbackLocation = std::find(rxCallbacks.begin(), rxCallbacks.end(), callbackInfo);
+		auto callbackLocation = std::find(rxCallbacks.begin(), rxCallbacks.end(), callbackInfo);
 
 		if (rxCallbacks.end() != callbackLocation)
 		{
 			rxCallbacks.erase(callbackLocation);
-			retVal = true;
+			return true;
 		}
 	}
 
-	rxCallbackMutex.unlock();
-
-	return retVal;
+	return false;
 }
+
 void CANHardwareInterface::set_can_driver_update_period(std::uint32_t value)
 {
 	canLibUpdatePeriod = value;
@@ -318,50 +301,40 @@ void CANHardwareInterface::set_can_driver_update_period(std::uint32_t value)
 
 bool CANHardwareInterface::add_can_lib_update_callback(void (*callback)(), void *parentPointer)
 {
-	bool retVal = false;
-	CanLibUpdateCallbackInfo callbackInfo;
+	std::lock_guard<std::mutex> lock(periodicUpdateCallbacksMutex);
 
+	CanLibUpdateCallbackInfo callbackInfo;
 	callbackInfo.callback = callback;
 	callbackInfo.parent = parentPointer;
 
-	canLibUpdateCallbacksMutex.lock();
-
-	if ((nullptr != callback) && (canLibUpdateCallbacks.end() == find(canLibUpdateCallbacks.begin(), canLibUpdateCallbacks.end(), callbackInfo)))
+	if ((nullptr != callback) && (periodicUpdateCallbacks.end() == std::find(periodicUpdateCallbacks.begin(), periodicUpdateCallbacks.end(), callbackInfo)))
 	{
-		canLibUpdateCallbacks.push_back(callbackInfo);
-		retVal = true;
+		periodicUpdateCallbacks.push_back(callbackInfo);
+		return true;
 	}
 
-	canLibUpdateCallbacksMutex.unlock();
-
-	return retVal;
+	return false;
 }
 
 bool CANHardwareInterface::remove_can_lib_update_callback(void (*callback)(), void *parentPointer)
 {
-	bool retVal = false;
-	CanLibUpdateCallbackInfo callbackInfo;
+	std::lock_guard<std::mutex> lock(periodicUpdateCallbacksMutex);
 
+	CanLibUpdateCallbackInfo callbackInfo;
 	callbackInfo.callback = callback;
 	callbackInfo.parent = parentPointer;
 
-	canLibUpdateCallbacksMutex.lock();
-
 	if (nullptr != callback)
 	{
-		std::vector<CanLibUpdateCallbackInfo>::iterator callbackLocation;
-		callbackLocation = std::find(canLibUpdateCallbacks.begin(), canLibUpdateCallbacks.end(), callbackInfo);
+		auto callbackLocation = std::find(periodicUpdateCallbacks.begin(), periodicUpdateCallbacks.end(), callbackInfo);
 
-		if (canLibUpdateCallbacks.end() != callbackLocation)
+		if (periodicUpdateCallbacks.end() != callbackLocation)
 		{
-			canLibUpdateCallbacks.erase(callbackLocation);
-			retVal = true;
+			periodicUpdateCallbacks.erase(callbackLocation);
+			return true;
 		}
 	}
-
-	canLibUpdateCallbacksMutex.unlock();
-
-	return retVal;
+	return false;
 }
 
 void CANHardwareInterface::can_thread_function()
@@ -372,128 +345,115 @@ void CANHardwareInterface::can_thread_function()
 
 	while (threadsStarted)
 	{
-		std::unique_lock<std::mutex> lMutex(threadMutex);
-		threadConditionVariable.wait(lMutex);
-		CanHardware *pCANHardware;
+		std::unique_lock<std::mutex> threadLock(threadMutex);
+		threadConditionVariable.wait(threadLock);
 
 		if (threadsStarted)
 		{
 			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
 			{
-				pCANHardware = hardwareChannels[i];
+				hardwareChannels[i]->receivedMessagesMutex.lock();
+				bool processNextMessage = (!hardwareChannels[i]->receivedMessages.empty());
+				hardwareChannels[i]->receivedMessagesMutex.unlock();
 
-				if (nullptr != pCANHardware)
+				while (processNextMessage)
 				{
-					pCANHardware->receivedMessagesMutex.lock();
-					bool processNextMessage = (!pCANHardware->receivedMessages.empty());
-					pCANHardware->receivedMessagesMutex.unlock();
+					isobus::HardwareInterfaceCANFrame tempCanFrame;
 
-					while (processNextMessage)
+					hardwareChannels[i]->receivedMessagesMutex.lock();
+					tempCanFrame = hardwareChannels[i]->receivedMessages.front();
+					hardwareChannels[i]->receivedMessages.pop_front();
+					processNextMessage = (!hardwareChannels[i]->receivedMessages.empty());
+					hardwareChannels[i]->receivedMessagesMutex.unlock();
+
+					rxCallbacksMutex.lock();
+					for (std::uint32_t j = 0; j < rxCallbacks.size(); j++)
 					{
-						isobus::HardwareInterfaceCANFrame tempCanFrame;
-
-						pCANHardware->receivedMessagesMutex.lock();
-						tempCanFrame = pCANHardware->receivedMessages.front();
-						pCANHardware->receivedMessages.pop_front();
-						processNextMessage = (!pCANHardware->receivedMessages.empty());
-						pCANHardware->receivedMessagesMutex.unlock();
-
-						rxCallbackMutex.lock();
-						for (std::uint32_t j = 0; j < rxCallbacks.size(); j++)
+						if (nullptr != rxCallbacks[j].callback)
 						{
-							if (nullptr != rxCallbacks[j].callback)
-							{
-								rxCallbacks[j].callback(tempCanFrame, rxCallbacks[j].parent);
-							}
+							rxCallbacks[j].callback(tempCanFrame, rxCallbacks[j].parent);
 						}
-						rxCallbackMutex.unlock();
 					}
+					rxCallbacksMutex.unlock();
 				}
 			}
 
-			if (get_clear_can_lib_needs_update())
+			if (canLibNeedsUpdate)
 			{
-				canLibUpdateCallbacksMutex.lock();
-				for (std::uint32_t j = 0; j < canLibUpdateCallbacks.size(); j++)
+				periodicUpdateCallbacksMutex.lock();
+				for (std::uint32_t j = 0; j < periodicUpdateCallbacks.size(); j++)
 				{
-					if (nullptr != canLibUpdateCallbacks[j].callback)
+					if (nullptr != periodicUpdateCallbacks[j].callback)
 					{
-						canLibUpdateCallbacks[j].callback();
+						periodicUpdateCallbacks[j].callback();
 					}
 				}
-				canLibUpdateCallbacksMutex.unlock();
+				periodicUpdateCallbacksMutex.unlock();
 			}
 
 			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
 			{
-				pCANHardware = hardwareChannels[i];
-				if (nullptr != pCANHardware)
+				hardwareChannels[i]->messagesToBeTransmittedMutex.lock();
+				isobus::HardwareInterfaceCANFrame packet;
+				bool sendPacket = false;
+
+				for (std::uint32_t j = 0; j < hardwareChannels[i]->messagesToBeTransmitted.size(); j++)
 				{
-					pCANHardware->messagesToBeTransmittedMutex.lock();
-					isobus::HardwareInterfaceCANFrame packet;
-					bool sendPacket = false;
+					sendPacket = false;
 
-					for (std::uint32_t j = 0; j < pCANHardware->messagesToBeTransmitted.size(); j++)
+					if (0 != hardwareChannels[i]->messagesToBeTransmitted.size())
 					{
-						sendPacket = false;
-
-						if (0 != pCANHardware->messagesToBeTransmitted.size())
-						{
-							packet = pCANHardware->messagesToBeTransmitted.front();
-							sendPacket = true;
-						}
-
-						if (sendPacket)
-						{
-							if (transmit_can_message_from_buffer(packet))
-							{
-								pCANHardware->messagesToBeTransmitted.pop_front();
-							}
-							else
-							{
-								break;
-							}
-							// Todo, notify CAN lib that we sent, or did not send, each packet
-						}
+						packet = hardwareChannels[i]->messagesToBeTransmitted.front();
+						sendPacket = true;
 					}
-					pCANHardware->messagesToBeTransmittedMutex.unlock();
+
+					if (sendPacket)
+					{
+						if (transmit_can_message_from_buffer(packet))
+						{
+							hardwareChannels[i]->messagesToBeTransmitted.pop_front();
+						}
+						else
+						{
+							break;
+						}
+						// Todo, notify CAN lib that we sent, or did not send, each packet
+					}
 				}
+				hardwareChannels[i]->messagesToBeTransmittedMutex.unlock();
 			}
 		}
 	}
 }
 
-void CANHardwareInterface::receive_message_thread_function(uint8_t aCANChannel)
+void CANHardwareInterface::receive_message_thread_function(std::uint8_t channelIndex)
 {
-	CanHardware *pCANHardware;
 	isobus::HardwareInterfaceCANFrame tempCanFrame;
 
 	hardwareChannelsMutex.lock();
+	// Wait until everything is running
 	hardwareChannelsMutex.unlock();
 
-	if (aCANChannel < hardwareChannels.size())
+	if (channelIndex < hardwareChannels.size())
 	{
-		pCANHardware = hardwareChannels[aCANChannel];
-
 		while ((threadsStarted) &&
-		       (nullptr != pCANHardware) &&
-		       (nullptr != pCANHardware->frameHandler))
+		       (nullptr != hardwareChannels[channelIndex]->frameHandler))
 		{
-			if (pCANHardware->frameHandler->get_is_valid())
+			if (hardwareChannels[channelIndex]->frameHandler->get_is_valid())
 			{
 				// Socket or other hardware still open
-				if (pCANHardware->frameHandler->read_frame(tempCanFrame))
+				if (hardwareChannels[channelIndex]->frameHandler->read_frame(tempCanFrame))
 				{
-					tempCanFrame.channel = aCANChannel;
-					pCANHardware->receivedMessagesMutex.lock();
-					pCANHardware->receivedMessages.push_back(tempCanFrame);
-					pCANHardware->receivedMessagesMutex.unlock();
+					tempCanFrame.channel = channelIndex;
+					hardwareChannels[channelIndex]->receivedMessagesMutex.lock();
+					hardwareChannels[channelIndex]->receivedMessages.push_back(tempCanFrame);
+					hardwareChannels[channelIndex]->receivedMessagesMutex.unlock();
 					threadConditionVariable.notify_all();
 				}
 			}
 			else
 			{
-				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[CAN Rx Thread]: CAN Channel " + isobus::to_string(aCANChannel) + " appears to be invalid.");
+				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[CAN Rx Thread]: CAN Channel " + isobus::to_string(channelIndex) + " appears to be invalid.");
 				std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Arbitrary, but don't want to infinite loop on the validity check.
 			}
 		}
@@ -515,33 +475,14 @@ bool CANHardwareInterface::transmit_can_message_from_buffer(isobus::HardwareInte
 
 void CANHardwareInterface::update_can_lib_periodic_function()
 {
-	const std::uint32_t UPDATE_RATE = canLibUpdatePeriod;
 	hardwareChannelsMutex.lock();
+	// Wait until everything is running
 	hardwareChannelsMutex.unlock();
 
 	while (threadsStarted)
 	{
-		set_can_lib_needs_update();
+		canLibNeedsUpdate = true;
 		threadConditionVariable.notify_all();
-		std::this_thread::sleep_for(std::chrono::milliseconds(UPDATE_RATE));
+		std::this_thread::sleep_for(std::chrono::milliseconds(canLibUpdatePeriod));
 	}
-}
-
-void CANHardwareInterface::set_can_lib_needs_update()
-{
-	canLibNeedsUpdateMutex.lock();
-	canLibNeedsUpdate = true;
-	canLibNeedsUpdateMutex.unlock();
-}
-
-bool CANHardwareInterface::get_clear_can_lib_needs_update()
-{
-	bool retVal = false;
-
-	canLibNeedsUpdateMutex.lock();
-	retVal = canLibNeedsUpdate;
-	canLibNeedsUpdate = false;
-	canLibNeedsUpdateMutex.unlock();
-
-	return retVal;
 }

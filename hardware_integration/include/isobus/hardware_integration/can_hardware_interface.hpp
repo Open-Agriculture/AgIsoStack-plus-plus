@@ -38,33 +38,27 @@ public:
 	class CanLibUpdateCallbackInfo
 	{
 	public:
-		/// @brief Constructs a `CanLibUpdateCallbackInfo`, sets default values
-		CanLibUpdateCallbackInfo();
-
 		/// @brief Allows easy comparison of callback data
 		/// @param obj the object to compare against
-		bool operator==(const CanLibUpdateCallbackInfo &obj);
+		bool operator==(const CanLibUpdateCallbackInfo &obj) const;
 
-		void (*callback)(); ///< The callback
-		void *parent; ///< Context variable, the owner of the callback
+		void (*callback)() = nullptr; ///< The callback
+		void *parent = nullptr; ///< Context variable, the owner of the callback
 	};
 
 	/// @brief A class to store information about Rx callbacks
 	class RawCanMessageCallbackInfo
 	{
 	public:
-		/// @brief Constructs a `RawCanMessageCallbackInfo`, sets default values
-		RawCanMessageCallbackInfo();
-
 		/// @brief Allows easy comparison of callback data
 		/// @param obj the object to compare against
-		bool operator==(const RawCanMessageCallbackInfo &obj);
+		bool operator==(const RawCanMessageCallbackInfo &obj) const;
 
-		void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer); ///< The callback
-		void *parent; ///< Context variable, the owner of the callback
+		void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer) = nullptr; ///< The callback
+		void *parent = nullptr; ///< Context variable, the owner of the callback
 	};
 
-	static CANHardwareInterface CAN_HARDWARE_INTERFACE; ///< Static singleton instance of this class
+	CANHardwareInterface() = delete;
 
 	/// @brief Returns the number of configured CAN channels that the class is managing
 	/// @returns The number of configured CAN channels that the class is managing
@@ -74,17 +68,23 @@ public:
 	/// @details Allocates the proper number of `CanHardware` objects to track
 	/// each CAN channel's Tx and Rx message queues. If you pass in a smaller number than what was
 	/// already configured, it will delete the unneeded `CanHardware` objects.
-	/// @note All changes to channel count will be ignored if `start` has been called and the threads are running
+	/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
 	/// @param value The number of CAN channels to manage
 	/// @returns `true` if the channel count was set, otherwise `false`.
 	static bool set_number_of_can_channels(std::uint8_t value);
 
 	/// @brief Assigns a CAN driver to a channel
-	/// @param[in] aCANChannel The channel to assign to
+	/// @param[in] channelIndex The channel to assign to
 	/// @param[in] canDriver The driver to assign to the channel
-	/// @note All changes to driver assignment will be ignored if `start` has been called and the threads are running
+	/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
 	/// @returns `true` if the driver was assigned to the channel, otherwise `false`
-	static bool assign_can_channel_frame_handler(std::uint8_t aCANChannel, std::shared_ptr<CANHardwarePlugin> canDriver);
+	static bool assign_can_channel_frame_handler(std::uint8_t channelIndex, std::shared_ptr<CANHardwarePlugin> canDriver);
+
+	/// @brief Removes a CAN driver from a channel
+	/// @param[in] channelIndex The channel to remove the driver from
+	/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
+	/// @returns `true` if the driver was removed from the channel, otherwise `false`
+	static bool unassign_can_channel_frame_handler(std::uint8_t channelIndex);
 
 	/// @brief Starts the threads for managing the CAN stack and CAN drivers
 	/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
@@ -97,7 +97,7 @@ public:
 	/// @brief Called externally, adds a message to a CAN channel's Tx queue
 	/// @param[in] packet The packet to add to the Tx queue
 	/// @returns `true` if the packet was accepted, otherwise `false` (maybe wrong channel assigned)
-	static bool transmit_can_message(isobus::HardwareInterfaceCANFrame &packet);
+	static bool transmit_can_message(const isobus::HardwareInterfaceCANFrame &packet);
 
 	/// @brief Adds an Rx callback. The added callback will be called any time a CAN message is received.
 	/// @param[in] callback The callback to add
@@ -116,7 +116,7 @@ public:
 	/// @note All changes to the update delay will be ignored if `start` has been called and the threads are running
 	static void set_can_driver_update_period(std::uint32_t value);
 
-	/// @brief Adds a periodic udpate callback
+	/// @brief Adds a periodic update callback
 	/// @param[in] callback The callback to add
 	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
 	/// @returns `true` if the callback was added, `false` if it was already in the list
@@ -129,14 +129,8 @@ public:
 	static bool remove_can_lib_update_callback(void (*callback)(), void *parentPointer);
 
 private:
-	/// @brief Private constructor, prevents more of these classes from being needlessly created
-	CANHardwareInterface();
-
-	/// @brief Private destructor
-	~CANHardwareInterface();
-
 	/// @brief Stores the Tx/Rx queues, mutexes, and driver needed to run a single CAN channel
-	struct CanHardware
+	struct CANHardware
 	{
 		std::mutex messagesToBeTransmittedMutex; ///< Mutex to protect the Tx queue
 		std::deque<isobus::HardwareInterfaceCANFrame> messagesToBeTransmitted; ///< Tx message queue for a CAN channel
@@ -144,20 +138,20 @@ private:
 		std::mutex receivedMessagesMutex; ///< Mutex to protect the Rx queue
 		std::deque<isobus::HardwareInterfaceCANFrame> receivedMessages; ///< Rx message queue for a CAN channel
 
-		std::thread *receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
+		std::unique_ptr<std::thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
 
 		std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel
 	};
 
 	/// @brief The default update interval for the CAN stack. Mostly arbitrary
-	static constexpr std::uint32_t CANLIB_UPDATE_RATE = 4;
+	static constexpr std::uint32_t PERIODIC_UPDATE_INTERVAL = 4;
 
 	/// @brief The main CAN thread executes this function. Does most of the work of this class
 	static void can_thread_function();
 
 	/// @brief The receive thread(s) execute this function
-	/// @param[in] aCANChannel The associated CAN channel for the thread
-	static void receive_message_thread_function(std::uint8_t aCANChannel);
+	/// @param[in] channelIndex The associated CAN channel for the thread
+	static void receive_message_thread_function(std::uint8_t channelIndex);
 
 	/// @brief Attempts to write a frame using the driver assigned to a packet's channel
 	/// @param[in] packet The packet to try and write to the bus
@@ -166,28 +160,20 @@ private:
 	/// @brief The periodic update thread executes this function
 	static void update_can_lib_periodic_function();
 
-	/// @brief This function sets the `canLibNeedsUpdate` variable and deals with its mutex
-	static void set_can_lib_needs_update();
+	static std::unique_ptr<std::thread> canThread; ///< The main CAN thread
+	static std::unique_ptr<std::thread> periodicUpdateThread; ///< A thread that periodically wakes up to update the CAN stack
 
-	/// @brief This returns and clears the `canLibNeedsUpdate` variable plus deals with its mutex
-	/// @returns The state of `canLibNeedsUpdate` before it was cleared
-	static bool get_clear_can_lib_needs_update();
-
-	static std::thread *can_thread; ///< The main CAN thread
-	static std::thread *updateCANLibPeriodicThread; ///< A thread that periodically wakes up to update the CAN stack
-
-	static std::vector<CanHardware *> hardwareChannels; ///< A list of all CAN channel's metadata
+	static std::vector<std::unique_ptr<CANHardware>> hardwareChannels; ///< A list of all CAN channel's metadata
 	static std::vector<RawCanMessageCallbackInfo> rxCallbacks; ///< A list of all registered Rx callbacks
-	static std::vector<CanLibUpdateCallbackInfo> canLibUpdateCallbacks; ///< A list of all registered periodic update callbacks
+	static std::vector<CanLibUpdateCallbackInfo> periodicUpdateCallbacks; ///< A list of all registered periodic update callbacks
 
 	static std::mutex hardwareChannelsMutex; ///< Mutex to protect `hardwareChannels`
 	static std::mutex threadMutex; ///< A mutex for the main CAN thread
-	static std::mutex rxCallbackMutex; ///< A mutex for protecting the `rxCallbacks`
-	static std::mutex canLibNeedsUpdateMutex; ///< A mutex for protecting the `canLibNeedsUpdate` variable
-	static std::mutex canLibUpdateCallbacksMutex; ///< A mutex for protecting the `canLibUpdateCallbacks`
-	static std::condition_variable threadConditionVariable; ///< A condition variable to allow for signaling the CAN thread from `updateCANLibPeriodicThread`
-	static bool threadsStarted; ///< Stores if `start` has been called yet
-	static bool canLibNeedsUpdate; ///< Stores if the CAN thread needs to update the CAN stack this iteration
+	static std::mutex rxCallbacksMutex; ///< A mutex for protecting the `rxCallbacks`
+	static std::mutex periodicUpdateCallbacksMutex; ///< A mutex for protecting the `periodicUpdateCallbacks`
+	static std::condition_variable threadConditionVariable; ///< A condition variable to allow for signaling the CAN thread from `periodicUpdateThread`
+	static std::atomic_bool threadsStarted; ///< Stores if `start` has been called yet
+	static std::atomic_bool canLibNeedsUpdate; ///< Stores if the CAN thread needs to update the CAN stack this iteration
 	static std::uint32_t canLibUpdatePeriod; ///< The period between calls to the CAN stack update function in milliseconds
 };
 
