@@ -32,6 +32,7 @@ namespace isobus
 		ProductIdentification = 0xFC8D,
 		DiagnosticProtocolIdentification = 0xFD32,
 		WorkingSetMaster = 0xFE0D,
+		LanguageCommand = 0xFE0F,
 		ECUIdentificationInformation = 0xFDC5,
 		DiagnosticMessage1 = 0xFECA,
 		DiagnosticMessage2 = 0xFECB,
