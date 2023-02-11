@@ -7,20 +7,9 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_language_command_interface.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 using namespace isobus;
-
-// A log sink for the CAN stack
-class CustomLogger : public isobus::CANStackLogger
-{
-public:
-	void sink_CAN_stack_log(CANStackLogger::LoggingLevel, const std::string &) override
-	{
-		// Do nothing
-	}
-};
-
-static CustomLogger logger;
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 {
@@ -34,14 +23,13 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 	EXPECT_EQ(0, interfaceUnderTest.get_language_command_timestamp());
 	interfaceUnderTest.initialize(); // double init
 	EXPECT_EQ(true, interfaceUnderTest.get_initialized());
-	interfaceUnderTest.send_request_language_command();
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, InvalidICF)
 {
 	LanguageCommandInterface interfaceUnderTest(nullptr);
 	interfaceUnderTest.initialize();
-	interfaceUnderTest.send_request_language_command();
+	ASSERT_FALSE(interfaceUnderTest.send_request_language_command());
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
@@ -55,14 +43,17 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
 
 	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
 	LanguageCommandInterface interfaceUnderTest(internalECU, vtPartner);
-	ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(internalECU); // Pre-assign our ICF
 	interfaceUnderTest.initialize();
-	interfaceUnderTest.send_request_language_command();
+	ASSERT_TRUE(interfaceUnderTest.get_initialized());
+	// Technically our address is bad, so this should still not send
+	//! @todo Test with valid address
+	ASSERT_FALSE(interfaceUnderTest.send_request_language_command());
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
 {
 	LanguageCommandInterface interfaceUnderTest(nullptr);
+	ASSERT_FALSE(interfaceUnderTest.get_initialized());
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
@@ -123,39 +114,61 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ(LanguageCommandInterface::PressureUnits::Reserved, interfaceUnderTest.get_commanded_pressure_units());
 	EXPECT_EQ(LanguageCommandInterface::ForceUnits::ImperialUS, interfaceUnderTest.get_commanded_force_units());
 	EXPECT_EQ(LanguageCommandInterface::UnitSystem::Metric, interfaceUnderTest.get_commanded_generic_units());
-	EXPECT_LT(interfaceUnderTest.get_language_command_timestamp(), 100000);
+	EXPECT_LT(SystemTiming::get_timestamp_ms() - interfaceUnderTest.get_language_command_timestamp(), 1);
 
+	// Use the language code as a way to assert against if we processed the message.
+	// In other words, if it stays "de" then we didn't accept the message, and if it changed, we did
+	testData2[0] = 'f';
+	testData2[1] = 'r';
 	testData2[6] = 75;
 	testData2[7] = 37;
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 	// Cover bad reserved bytes
 	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	// We still accept the message with strange reserved bytes, but would have printed an error
+	EXPECT_EQ("fr", interfaceUnderTest.get_language_code());
+	//! @todo assert that an warning log message came through
 
+	testData2[0] = 'u';
+	testData2[1] = 's';
 	testData2[6] = 0xFF;
 	testData2[7] = 37;
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 	// Cover bad one bad reserved byte
 	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	EXPECT_EQ("us", interfaceUnderTest.get_language_code());
+	//! @todo assert that an warning log message came through
 
+	testData2[0] = 'p';
+	testData2[1] = 'l';
 	testData2[6] = 43;
 	testData2[7] = 0xFF;
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 	// Cover bad one bad reserved byte
 	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
+	//! @todo assert that an warning log message came through
 
 	// Cover null message
 	interfaceUnderTest.process_rx_message(nullptr, &interfaceUnderTest);
+	// The old language code should still be there
+	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 
 	// Cover null parent
+	testData2[0] = 'r';
+	testData2[1] = 'u';
+	testData2[6] = 0xFF;
+	testData2[7] = 0xFF;
+	testMessage.set_data_size(0); // Resets the CAN message data vector
+	testMessage.set_data(testData2, 8);
 	interfaceUnderTest.process_rx_message(&testMessage, nullptr);
+	// Message should have been discarded
+	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 
 	// Cover all null parameters
 	interfaceUnderTest.process_rx_message(nullptr, nullptr);
-
-	// Cover some logger conditions
-	CANStackLogger::set_can_stack_logger_sink(&logger);
-	interfaceUnderTest.process_rx_message(nullptr, nullptr);
+	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 }

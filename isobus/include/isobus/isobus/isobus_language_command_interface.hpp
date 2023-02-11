@@ -2,7 +2,7 @@
 /// @file isobus_language_command_interface.hpp
 ///
 /// @brief Defines a set of values found in the isobus language command message from
-/// iso11783-7 commonly used in VT and TC communication
+/// ISO11783-7 commonly used in VT and TC communication
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2023 Adrian Del Grosso
@@ -160,13 +160,13 @@ namespace isobus
 		/// @return `true` if initialize has been called, otherwise false
 		bool get_initialized() const;
 
-		/// @brief Sends a PGN request for the language command PGN to the interface's parnter, or the global address
-		/// Depending on if you set a partner when constructing the object
+		/// @brief Sends a PGN request for the language command PGN to the interface's partner, or the global address
+		/// depending on if you set a partner when constructing the object
 		/// @return `true` if the message was sent, otherwise `false`
 		bool send_request_language_command() const;
 
 		/// @brief Returns the commanded language code parsed from the last language command
-		/// @note If you do not suppor the returned language, your default shall be used
+		/// @note If you do not support the returned language, your default shall be used
 		/// @return The commanded language code (usually 2 characters length)
 		std::string get_language_code() const;
 
