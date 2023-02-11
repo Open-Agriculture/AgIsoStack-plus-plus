@@ -40,8 +40,15 @@ namespace isobus
 	InternalControlFunction::~InternalControlFunction()
 	{
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		auto thisObject = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), this);
-		*thisObject = nullptr; // Don't erase, just null it out. Erase could cause a double free.
+		if (0 != internalControlFunctionList.size())
+		{
+			auto thisObject = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), this);
+
+			if (internalControlFunctionList.end() != thisObject)
+			{
+				*thisObject = nullptr; // Don't erase, just null it out. Erase could cause a double free.
+			}
+		}
 	}
 
 	InternalControlFunction *InternalControlFunction::get_internal_control_function(std::uint32_t index)
