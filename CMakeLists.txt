@@ -103,7 +103,7 @@ if(BUILD_TESTING)
   # Set test source files
   set(TEST_SRC
       test/identifier_tests.cpp
-      test/dm_13_tests.cpp
+      test/diagnostic_protocol_tests.cpp
       test/core_network_management_tests.cpp
       test/virtual_can_plugin_tests.cpp
       test/address_claim_tests.cpp

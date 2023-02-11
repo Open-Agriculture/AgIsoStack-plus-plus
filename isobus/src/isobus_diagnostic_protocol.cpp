@@ -133,7 +133,6 @@ namespace isobus
 		if (retVal)
 		{
 			DiagnosticProtocol *newProtocol = new DiagnosticProtocol(internalControlFunction);
-			diagnosticProtocolList.push_back(newProtocol);
 			// PGN protocol will check for duplicates, so no worries if there's already a request protocol registered.
 			ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(internalControlFunction);
 			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(internalControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2), process_parameter_group_number_request, newProtocol);
@@ -170,11 +169,11 @@ namespace isobus
 
 	void DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions()
 	{
-		for (isobus::DiagnosticProtocol *protocol : diagnosticProtocolList)
+		while (0 != diagnosticProtocolList.size())
 		{
-			// First, remove callbacks from PGN requests
-			protocol->deregister_all_pgns();
-			delete protocol;
+			DiagnosticProtocol *tempProtocol = diagnosticProtocolList.front();
+			tempProtocol->deregister_all_pgns();
+			delete tempProtocol; // The destructor removes it from the list, so just deleting it is enough to prune it
 		}
 	}
 
