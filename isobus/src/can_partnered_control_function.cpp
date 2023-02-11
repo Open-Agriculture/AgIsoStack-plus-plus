@@ -49,9 +49,16 @@ namespace isobus
 	PartneredControlFunction::~PartneredControlFunction()
 	{
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		auto thisObject = std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), this);
-		*thisObject = nullptr; // Don't erase, in case the object was already deleted. Just make room for a new partner.
-		CANNetworkManager::CANNetwork.on_partner_deleted(this, {}); // Tell the network manager to purge this partner from all tables
+		if (0 != partneredControlFunctionList.size())
+		{
+			auto thisObject = std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), this);
+
+			if (partneredControlFunctionList.end() != thisObject)
+			{
+				*thisObject = nullptr; // Don't erase, in case the object was already deleted. Just make room for a new partner.
+				CANNetworkManager::CANNetwork.on_partner_deleted(this, {}); // Tell the network manager to purge this partner from all tables
+			}
+		}
 	}
 
 	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
