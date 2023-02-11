@@ -34,9 +34,20 @@ namespace isobus
 	{
 		if (!initialized)
 		{
-			ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(myControlFunction);
-			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
-			initialized = true;
+			if (nullptr != myControlFunction)
+			{
+				ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(myControlFunction);
+				CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
+				initialized = true;
+			}
+			else
+			{
+				CANStackLogger::error("[VT/TC]: Language command interface is missing an internal control function, and will not be functional.");
+			}
+		}
+		else
+		{
+			CANStackLogger::warn("[VT/TC]: Language command interface has been initialized, but is being initialized again.");
 		}
 	}
 

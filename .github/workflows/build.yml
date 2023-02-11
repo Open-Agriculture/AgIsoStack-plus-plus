@@ -59,7 +59,7 @@ jobs:
         run: ctest -C ${{ env.BUILD_TYPE }}
       - name: Collect coverage into one XML report
         run: |
-          gcovr --sonarqube > coverage.xml
+          gcovr --sonarqube --exclude-throw-branches > coverage.xml
       - name: Run sonar-scanner
         if: "${{ env.SONAR_TOKEN != '' }}"
         run: |
