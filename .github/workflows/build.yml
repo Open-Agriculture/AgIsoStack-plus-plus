@@ -7,12 +7,6 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
-env:
-  BUILD_TYPE: Release
-  BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
 jobs:
   approve:
     name: Approve
@@ -27,9 +21,14 @@ jobs:
   build_test_analyze:
     name: Build, Test and Analyze
     runs-on: ubuntu-latest
+    env:
+      BUILD_TYPE: Release
+      BUILD_WRAPPER_OUT_DIR: build-wrapper-output
+
     needs: approve
     # Only run if the approve job succeeded or was skipped, as it continues on error
     if: ${{ always() && needs.approve.result == 'success' || needs.approve.result == 'skipped' }} 
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -61,11 +60,23 @@ jobs:
         run: |
           gcovr --sonarqube --exclude-throw-branches > coverage.xml
       - name: Run sonar-scanner
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         if: "${{ env.SONAR_TOKEN != '' }}"
         run: |
           sonar-scanner \
             --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
             --define sonar.coverageReportPaths=coverage.xml
+            --define sonar.pullrequest.github.repository=${{ github.event.pull_request.base.repo.full_name }} \
+            --define sonar.scm.revision=${{ github.event.pull_request.head.sha }}
+            --define sonar.pullrequest.key=$PR_NUMBER \
+            --define sonar.pullrequest.branch=$PR_HEAD_REF \
+            --define sonar.pullrequest.base=$PR_BASE_REF
+          echo "SonarCloud analysis finished for PR '$PR_NUMBER' for merge into '$PR_HEAD_REF' from '$PR_BASE_REF'"
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
         with:
