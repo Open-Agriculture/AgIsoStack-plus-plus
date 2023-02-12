@@ -9,6 +9,7 @@
 #ifndef CAN_HARDWARE_INTERFACE_HPP
 #define CAN_HARDWARE_INTERFACE_HPP
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <cstring>
@@ -34,30 +35,6 @@
 class CANHardwareInterface
 {
 public:
-	/// @brief A class to store information about CAN lib update callbacks
-	class CanLibUpdateCallbackInfo
-	{
-	public:
-		/// @brief Allows easy comparison of callback data
-		/// @param obj the object to compare against
-		bool operator==(const CanLibUpdateCallbackInfo &obj) const;
-
-		void (*callback)() = nullptr; ///< The callback
-		void *parent = nullptr; ///< Context variable, the owner of the callback
-	};
-
-	/// @brief A class to store information about Rx callbacks
-	class RawCanMessageCallbackInfo
-	{
-	public:
-		/// @brief Allows easy comparison of callback data
-		/// @param obj the object to compare against
-		bool operator==(const RawCanMessageCallbackInfo &obj) const;
-
-		void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer) = nullptr; ///< The callback
-		void *parent = nullptr; ///< Context variable, the owner of the callback
-	};
-
 	CANHardwareInterface() = delete;
 
 	/// @brief Returns the number of configured CAN channels that the class is managing
@@ -129,6 +106,30 @@ public:
 	static bool remove_can_lib_update_callback(void (*callback)(), void *parentPointer);
 
 private:
+	/// @brief A class to store information about CAN lib update callbacks
+	class CanLibUpdateCallbackInfo
+	{
+	public:
+		/// @brief Allows easy comparison of callback data
+		/// @param obj the object to compare against
+		bool operator==(const CanLibUpdateCallbackInfo &obj) const;
+
+		void (*callback)() = nullptr; ///< The callback
+		void *parent = nullptr; ///< Context variable, the owner of the callback
+	};
+
+	/// @brief A class to store information about Rx callbacks
+	class RawCanMessageCallbackInfo
+	{
+	public:
+		/// @brief Allows easy comparison of callback data
+		/// @param obj the object to compare against
+		bool operator==(const RawCanMessageCallbackInfo &obj) const;
+
+		void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer) = nullptr; ///< The callback
+		void *parent = nullptr; ///< Context variable, the owner of the callback
+	};
+
 	/// @brief Stores the Tx/Rx queues, mutexes, and driver needed to run a single CAN channel
 	struct CANHardware
 	{
