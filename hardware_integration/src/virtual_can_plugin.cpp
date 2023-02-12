@@ -22,7 +22,9 @@ VirtualCANPlugin::VirtualCANPlugin(const std::string channel, const bool receive
 
 VirtualCANPlugin::~VirtualCANPlugin()
 {
-	close();
+	// Prevent a deadlock in the read_frame() function
+	running = false;
+	ourDevice->condition.notify_one();
 }
 
 bool VirtualCANPlugin::get_is_valid() const
@@ -65,7 +67,7 @@ bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canF
 	return retVal;
 }
 
-void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame)
+void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const
 {
 	const std::lock_guard<std::mutex> lock(mutex);
 	ourDevice->queue.push_back(canFrame);

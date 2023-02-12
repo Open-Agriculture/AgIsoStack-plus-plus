@@ -67,7 +67,7 @@ public:
 
 	/// @brief Allows us to write messages as if we received them from the bus
 	/// @param[in] canFrame The frame to write to the bus
-	void write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame);
+	void write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const;
 
 private:
 	/// @brief A struct holding information about a virtual CAN device
