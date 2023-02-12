@@ -382,29 +382,32 @@ void CANHardwareInterface::can_thread_function()
 			{
 				pCANHardware = hardwareChannels[i];
 
-				pCANHardware->receivedMessagesMutex.lock();
-				bool processNextMessage = (!pCANHardware->receivedMessages.empty());
-				pCANHardware->receivedMessagesMutex.unlock();
-
-				while (processNextMessage)
+				if (nullptr != pCANHardware)
 				{
-					isobus::HardwareInterfaceCANFrame tempCanFrame;
-
 					pCANHardware->receivedMessagesMutex.lock();
-					tempCanFrame = pCANHardware->receivedMessages.front();
-					pCANHardware->receivedMessages.pop_front();
-					processNextMessage = (!pCANHardware->receivedMessages.empty());
+					bool processNextMessage = (!pCANHardware->receivedMessages.empty());
 					pCANHardware->receivedMessagesMutex.unlock();
 
-					rxCallbackMutex.lock();
-					for (std::uint32_t j = 0; j < rxCallbacks.size(); j++)
+					while (processNextMessage)
 					{
-						if (nullptr != rxCallbacks[j].callback)
+						isobus::HardwareInterfaceCANFrame tempCanFrame;
+
+						pCANHardware->receivedMessagesMutex.lock();
+						tempCanFrame = pCANHardware->receivedMessages.front();
+						pCANHardware->receivedMessages.pop_front();
+						processNextMessage = (!pCANHardware->receivedMessages.empty());
+						pCANHardware->receivedMessagesMutex.unlock();
+
+						rxCallbackMutex.lock();
+						for (std::uint32_t j = 0; j < rxCallbacks.size(); j++)
 						{
-							rxCallbacks[j].callback(tempCanFrame, rxCallbacks[j].parent);
+							if (nullptr != rxCallbacks[j].callback)
+							{
+								rxCallbacks[j].callback(tempCanFrame, rxCallbacks[j].parent);
+							}
 						}
+						rxCallbackMutex.unlock();
 					}
-					rxCallbackMutex.unlock();
 				}
 			}
 
@@ -424,34 +427,37 @@ void CANHardwareInterface::can_thread_function()
 			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
 			{
 				pCANHardware = hardwareChannels[i];
-				pCANHardware->messagesToBeTransmittedMutex.lock();
-				isobus::HardwareInterfaceCANFrame packet;
-				bool sendPacket = false;
-
-				for (std::uint32_t j = 0; j < pCANHardware->messagesToBeTransmitted.size(); j++)
+				if (nullptr != pCANHardware)
 				{
-					sendPacket = false;
+					pCANHardware->messagesToBeTransmittedMutex.lock();
+					isobus::HardwareInterfaceCANFrame packet;
+					bool sendPacket = false;
 
-					if (0 != pCANHardware->messagesToBeTransmitted.size())
+					for (std::uint32_t j = 0; j < pCANHardware->messagesToBeTransmitted.size(); j++)
 					{
-						packet = pCANHardware->messagesToBeTransmitted.front();
-						sendPacket = true;
-					}
+						sendPacket = false;
 
-					if (sendPacket)
-					{
-						if (transmit_can_message_from_buffer(packet))
+						if (0 != pCANHardware->messagesToBeTransmitted.size())
 						{
-							pCANHardware->messagesToBeTransmitted.pop_front();
+							packet = pCANHardware->messagesToBeTransmitted.front();
+							sendPacket = true;
 						}
-						else
+
+						if (sendPacket)
 						{
-							break;
+							if (transmit_can_message_from_buffer(packet))
+							{
+								pCANHardware->messagesToBeTransmitted.pop_front();
+							}
+							else
+							{
+								break;
+							}
+							// Todo, notify CAN lib that we sent, or did not send, each packet
 						}
-						// Todo, notify CAN lib that we sent, or did not send, each packet
 					}
+					pCANHardware->messagesToBeTransmittedMutex.unlock();
 				}
-				pCANHardware->messagesToBeTransmittedMutex.unlock();
 			}
 		}
 	}
@@ -470,6 +476,7 @@ void CANHardwareInterface::receive_message_thread_function(uint8_t aCANChannel)
 		pCANHardware = hardwareChannels[aCANChannel];
 
 		while ((threadsStarted) &&
+		       (nullptr != pCANHardware) &&
 		       (nullptr != pCANHardware->frameHandler))
 		{
 			if (pCANHardware->frameHandler->get_is_valid())
