@@ -35,8 +35,6 @@
 class CANHardwareInterface
 {
 public:
-	CANHardwareInterface() = delete;
-
 	/// @brief Returns the number of configured CAN channels that the class is managing
 	/// @returns The number of configured CAN channels that the class is managing
 	static std::uint8_t get_number_of_can_channels();
@@ -144,6 +142,16 @@ private:
 		std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel
 	};
 
+	/// @brief Singleton instance of the CANHardwareInterface class
+	/// @details This is a little hack that allows to have the destructor called
+	static CANHardwareInterface SINGLETON;
+
+	/// @brief Constructor for the CANHardwareInterface class
+	CANHardwareInterface() = default;
+
+	/// @brief Deconstructor for the CANHardwareInterface class
+	virtual ~CANHardwareInterface();
+
 	/// @brief The default update interval for the CAN stack. Mostly arbitrary
 	static constexpr std::uint32_t PERIODIC_UPDATE_INTERVAL = 4;
 
@@ -160,6 +168,9 @@ private:
 
 	/// @brief The periodic update thread executes this function
 	static void update_can_lib_periodic_function();
+
+	/// @brief Stops all threads related to the hardware interface
+	static void stop_threads();
 
 	static std::unique_ptr<std::thread> canThread; ///< The main CAN thread
 	static std::unique_ptr<std::thread> periodicUpdateThread; ///< A thread that periodically wakes up to update the CAN stack

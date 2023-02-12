@@ -28,6 +28,13 @@ std::atomic_bool CANHardwareInterface::threadsStarted = { false };
 std::atomic_bool CANHardwareInterface::canLibNeedsUpdate = { false };
 std::uint32_t CANHardwareInterface::canLibUpdatePeriod = PERIODIC_UPDATE_INTERVAL;
 
+CANHardwareInterface CANHardwareInterface::SINGLETON;
+
+CANHardwareInterface::~CANHardwareInterface()
+{
+	stop_threads();
+}
+
 bool isobus::send_can_message_to_hardware(HardwareInterfaceCANFrame frame)
 {
 	return CANHardwareInterface::transmit_can_message(frame);
@@ -164,41 +171,10 @@ bool CANHardwareInterface::stop()
 		isobus::CANStackLogger::error("[HardwareInterface] Cannot stop interface before it is started.");
 		return false;
 	}
-
-	threadsStarted = false;
-	if (nullptr != canThread)
-	{
-		if (canThread->joinable())
-		{
-			threadConditionVariable.notify_all();
-			canThread->join();
-		}
-		canThread = nullptr;
-	}
-
-	if (nullptr != periodicUpdateThread)
-	{
-		if (periodicUpdateThread->joinable())
-		{
-			periodicUpdateThread->join();
-		}
-		periodicUpdateThread = nullptr;
-	}
+	stop_threads();
 
 	std::unique_lock<std::mutex> channelsLock(hardwareChannelsMutex);
-	std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](std::unique_ptr<CANHardware> &channel) {
-		if (nullptr != channel->frameHandler)
-		{
-			channel->frameHandler->close();
-		}
-		if (nullptr != channel->receiveMessageThread)
-		{
-			if (channel->receiveMessageThread->joinable())
-			{
-				channel->receiveMessageThread->join();
-			}
-			channel->receiveMessageThread = nullptr;
-		}
+	std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
 		if (nullptr != channel->frameHandler)
 		{
 			channel->frameHandler = nullptr;
@@ -238,7 +214,7 @@ bool CANHardwareInterface::transmit_can_message(const isobus::HardwareInterfaceC
 		return false;
 	}
 
-	std::unique_ptr<CANHardware> &channel = hardwareChannels[packet.channel];
+	const std::unique_ptr<CANHardware> &channel = hardwareChannels[packet.channel];
 	if (nullptr == channel->frameHandler)
 	{
 		isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(packet.channel) + ", because it is not assigned.");
@@ -346,7 +322,7 @@ void CANHardwareInterface::can_thread_function()
 	while (threadsStarted)
 	{
 		std::unique_lock<std::mutex> threadLock(threadMutex);
-		threadConditionVariable.wait(threadLock);
+		threadConditionVariable.wait_for(threadLock, std::chrono::seconds(1)); // Timeout after 1 second
 
 		if (threadsStarted)
 		{
@@ -486,4 +462,42 @@ void CANHardwareInterface::update_can_lib_periodic_function()
 		threadConditionVariable.notify_all();
 		std::this_thread::sleep_for(std::chrono::milliseconds(canLibUpdatePeriod));
 	}
+}
+
+void CANHardwareInterface::stop_threads()
+{
+	threadsStarted = false;
+	if (nullptr != canThread)
+	{
+		if (canThread->joinable())
+		{
+			threadConditionVariable.notify_all();
+			canThread->join();
+		}
+		canThread = nullptr;
+	}
+
+	if (nullptr != periodicUpdateThread)
+	{
+		if (periodicUpdateThread->joinable())
+		{
+			periodicUpdateThread->join();
+		}
+		periodicUpdateThread = nullptr;
+	}
+
+	std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
+		if (nullptr != channel->frameHandler)
+		{
+			channel->frameHandler->close();
+		}
+		if (nullptr != channel->receiveMessageThread)
+		{
+			if (channel->receiveMessageThread->joinable())
+			{
+				channel->receiveMessageThread->join();
+			}
+			channel->receiveMessageThread = nullptr;
+		}
+	});
 }
