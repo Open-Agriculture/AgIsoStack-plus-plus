@@ -14,6 +14,7 @@
 #include "isobus/isobus/can_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <map>

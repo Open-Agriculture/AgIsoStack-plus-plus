@@ -107,7 +107,7 @@ if(BUILD_TESTING)
       test/core_network_management_tests.cpp
       test/virtual_can_plugin_tests.cpp
       test/address_claim_tests.cpp
-      test/can_name_tests.cpp 
+      test/can_name_tests.cpp
       test/hardware_interface_tests.cpp
       test/vt_client_tests.cpp
       test/language_command_interface_tests.cpp)

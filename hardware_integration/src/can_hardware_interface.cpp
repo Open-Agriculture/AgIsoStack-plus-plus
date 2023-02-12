@@ -24,8 +24,8 @@ std::mutex CANHardwareInterface::hardwareChannelsMutex;
 std::mutex CANHardwareInterface::threadMutex;
 std::mutex CANHardwareInterface::rxCallbacksMutex;
 std::mutex CANHardwareInterface::periodicUpdateCallbacksMutex;
-std::atomic_bool CANHardwareInterface::threadsStarted = false;
-std::atomic_bool CANHardwareInterface::canLibNeedsUpdate = false;
+std::atomic_bool CANHardwareInterface::threadsStarted = { false };
+std::atomic_bool CANHardwareInterface::canLibNeedsUpdate = { false };
 std::uint32_t CANHardwareInterface::canLibUpdatePeriod = PERIODIC_UPDATE_INTERVAL;
 
 bool isobus::send_can_message_to_hardware(HardwareInterfaceCANFrame frame)
@@ -141,7 +141,7 @@ bool CANHardwareInterface::start()
 
 	threadsStarted = true;
 
-	for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
+	for (std::size_t i = 0; i < hardwareChannels.size(); i++)
 	{
 		if (nullptr != hardwareChannels[i]->frameHandler)
 		{
@@ -149,7 +149,7 @@ bool CANHardwareInterface::start()
 
 			if (hardwareChannels[i]->frameHandler->get_is_valid())
 			{
-				hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_message_thread_function, i);
+				hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_message_thread_function, static_cast<std::uint8_t>(i));
 			}
 		}
 	}
@@ -350,7 +350,7 @@ void CANHardwareInterface::can_thread_function()
 
 		if (threadsStarted)
 		{
-			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
+			for (std::size_t i = 0; i < hardwareChannels.size(); i++)
 			{
 				hardwareChannels[i]->receivedMessagesMutex.lock();
 				bool processNextMessage = (!hardwareChannels[i]->receivedMessages.empty());
@@ -367,7 +367,7 @@ void CANHardwareInterface::can_thread_function()
 					hardwareChannels[i]->receivedMessagesMutex.unlock();
 
 					rxCallbacksMutex.lock();
-					for (std::uint32_t j = 0; j < rxCallbacks.size(); j++)
+					for (std::size_t j = 0; j < rxCallbacks.size(); j++)
 					{
 						if (nullptr != rxCallbacks[j].callback)
 						{
@@ -380,8 +380,9 @@ void CANHardwareInterface::can_thread_function()
 
 			if (canLibNeedsUpdate)
 			{
+				canLibNeedsUpdate = false;
 				periodicUpdateCallbacksMutex.lock();
-				for (std::uint32_t j = 0; j < periodicUpdateCallbacks.size(); j++)
+				for (std::size_t j = 0; j < periodicUpdateCallbacks.size(); j++)
 				{
 					if (nullptr != periodicUpdateCallbacks[j].callback)
 					{
@@ -391,13 +392,13 @@ void CANHardwareInterface::can_thread_function()
 				periodicUpdateCallbacksMutex.unlock();
 			}
 
-			for (std::uint32_t i = 0; i < hardwareChannels.size(); i++)
+			for (std::size_t i = 0; i < hardwareChannels.size(); i++)
 			{
 				hardwareChannels[i]->messagesToBeTransmittedMutex.lock();
 				isobus::HardwareInterfaceCANFrame packet;
 				bool sendPacket = false;
 
-				for (std::uint32_t j = 0; j < hardwareChannels[i]->messagesToBeTransmitted.size(); j++)
+				for (std::size_t j = 0; j < hardwareChannels[i]->messagesToBeTransmitted.size(); j++)
 				{
 					sendPacket = false;
 
