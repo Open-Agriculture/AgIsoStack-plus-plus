@@ -70,9 +70,9 @@ jobs:
         run: |
           sonar-scanner \
             --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
-            --define sonar.coverageReportPaths=coverage.xml
+            --define sonar.coverageReportPaths=coverage.xml \
             --define sonar.pullrequest.github.repository=${{ github.event.pull_request.base.repo.full_name }} \
-            --define sonar.scm.revision=${{ github.event.pull_request.head.sha }}
+            --define sonar.scm.revision=${{ github.event.pull_request.head.sha }} \
             --define sonar.pullrequest.key=$PR_NUMBER \
             --define sonar.pullrequest.branch=$PR_HEAD_REF \
             --define sonar.pullrequest.base=$PR_BASE_REF
