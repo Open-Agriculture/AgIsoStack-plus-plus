@@ -112,7 +112,8 @@ if(BUILD_TESTING)
       test/can_name_tests.cpp
       test/hardware_interface_tests.cpp
       test/vt_client_tests.cpp
-      test/language_command_interface_tests.cpp)
+      test/language_command_interface_tests.cpp
+      test/tc_client_tests.cpp)
 
   add_executable(unit_tests ${TEST_SRC})
   target_link_libraries(
