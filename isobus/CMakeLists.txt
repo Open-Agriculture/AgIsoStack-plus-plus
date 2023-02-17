@@ -33,7 +33,8 @@ set(ISOBUS_SRC
     "can_parameter_group_number_request_protocol.cpp"
     "nmea2000_fast_packet_protocol.cpp"
     "isobus_language_command_interface.cpp"
-    "isobus_task_controller_client_objects.cpp")
+    "isobus_task_controller_client_objects.cpp"
+    "isobus_task_controller_client.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})

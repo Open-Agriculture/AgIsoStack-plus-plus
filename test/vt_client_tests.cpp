@@ -132,6 +132,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 
 	// Actual tests start here
 	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+
+	if (0 == testPool.size())
+	{
+		// Try a different path to mitigate differences between how IDEs run the unit test
+		testPool = isobus::IOPFileInterface::read_iop_file("examples/vt_version_3_object_pool/VT3TestPool.iop");
+	}
+
 	EXPECT_NE(0, testPool.size());
 
 	clientUnderTest.set_object_pool(0, VirtualTerminalClient::VTVersion::Version3, &testPool);
@@ -177,6 +184,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 
 	// Actual tests start here
 	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+
+	if (0 == DerivedTestVTClient::staticTestPool.size())
+	{
+		// Try a different path to mitigate differences between how IDEs run the unit test
+		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("examples/vt_version_3_object_pool/VT3TestPool.iop");
+	}
+
 	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
 
 	clientUnderTest.register_object_pool_data_chunk_callback(0, VirtualTerminalClient::VTVersion::Version3, DerivedTestVTClient::staticTestPool.size(), DerivedTestVTClient::testWrapperDataChunkCallback);
@@ -215,6 +229,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 
 	// Actual tests start here
 	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+
+	if (0 == testPool.size())
+	{
+		// Try a different path to mitigate differences between how IDEs run the unit test
+		testPool = isobus::IOPFileInterface::read_iop_file("examples/vt_version_3_object_pool/VT3TestPool.iop");
+	}
+
 	EXPECT_NE(0, testPool.size());
 
 	clientUnderTest.set_object_pool(0, VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
