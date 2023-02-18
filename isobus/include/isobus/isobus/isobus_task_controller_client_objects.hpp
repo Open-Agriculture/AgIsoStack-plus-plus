@@ -18,6 +18,16 @@ namespace isobus
 	/// @brief A namespace that contains the generic task controller objects
 	namespace task_controller_object
 	{
+		// @brief Enumerates the different kinds of DDOP objects
+		enum class ObjectTypes
+		{
+			Device, ///< The root object. Each device shall have one single Device
+			DeviceElement, ///< Subcomponent of a device. Has multiple sub-types
+			DeviceProcessData, ///< Contains a single process data variable definition
+			DeviceProperty, ///< A device property element
+			DeviceValuePresentation ///< Contains the presentation information to display the value of a DeviceProcessData or DeviceProperty object
+		};
+
 		/// @brief A base class for a Task Controller Object
 		class Object
 		{
@@ -25,11 +35,11 @@ namespace isobus
 			/// @brief Constructor for the TC object base class
 			/// @param[in] objectDesignator Descriptive text for this object, UTF-8 encoded, 32 characters max
 			/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
-			Object(std::u32string objectDesignator, std::uint16_t uniqueID);
+			Object(std::string objectDesignator, std::uint16_t uniqueID);
 
 			/// @brief Returns the Descriptive text for this object, UTF-8 encoded, 32 characters max
 			/// @returns Descriptive text for this object, UTF-8 encoded, 32 characters max
-			std::u32string get_designator() const;
+			std::string get_designator() const;
 
 			/// @brief Returns the object ID of the object
 			/// @returns The object ID of the object
@@ -39,8 +49,28 @@ namespace isobus
 			/// @returns the XML namespace for the object
 			virtual std::string get_table_id() const = 0;
 
-		private:
-			std::u32string designator; ///< UTF-8 Descriptive text to identify this object. Max length of 32.
+			/// @brief Returns the derived TC object type fot the object
+			/// @returns The derived TC object type for this object
+			virtual ObjectTypes get_object_type() const = 0;
+
+			/// @brief Returns the binary representation of the TC object, or an empty vector if object is invalid
+			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
+			virtual std::vector<std::uint8_t> get_binary_object() const = 0;
+
+			/// @brief The max allowable "valid" object ID
+			static constexpr std::uint16_t MAX_OBJECT_ID = 65534;
+
+			/// @brief Special ID used to indicate no object
+			static constexpr std::uint16_t NULL_OBJECT_ID = 65535;
+
+			/// @brief Defines the max length of a designator (in bytes)
+			static constexpr std::size_t MAX_DESIGNATOR_LENGTH = 128;
+
+			/// @brief Defines the max length of a designator (in bytes) for TCs older than version 4
+			static constexpr std::size_t MAX_DESIGNATOR_LEGACY_LENGTH = 32;
+
+		protected:
+			std::string designator; ///< UTF-8 Descriptive text to identify this object. Max length of 32.
 			std::uint16_t objectID; ///< Unique object ID in the DDOP
 		};
 
@@ -50,18 +80,18 @@ namespace isobus
 		{
 		public:
 			/// @brief Constructor for a device object
-			/// @param[in] deviceDesignator Descriptive text for the object, UTF-8, 32 chars max
-			/// @param[in] deviceSoftwareVersion Software version indicating text
-			/// @param[in] deviceSerialNumber Device and manufacturer-specific serial number of the Device
-			/// @param[in] deviceStructureLabel This label allows the device to identify the current version of the device descriptor object pool
-			/// @param[in] deviceLocalizationLabel Defined by the language command PGN
-			/// @param[in] deviceExtendedStructureLabel Continuation of the Label given by Device to identify the Device descriptor Structure
+			/// @param[in] deviceDesignator Descriptive text for the object, UTF-8, 32-128 chars max depending on TC version
+			/// @param[in] deviceSoftwareVersion Software version indicating text (UTF-8)
+			/// @param[in] deviceSerialNumber Device and manufacturer-specific serial number of the Device (UTF-8)
+			/// @param[in] deviceStructureLabel This label allows the device to identify the current version of the device descriptor object pool (byte array /ascii)
+			/// @param[in] deviceLocalizationLabel Defined by the language command PGN (ascii / byte array)
+			/// @param[in] deviceExtendedStructureLabel Continuation of the Label given by Device to identify the Device descriptor Structure (byte array)
 			/// @param[in] clientIsoNAME NAME of client device as defined in ISO 11783-5
-			DeviceObject(std::u32string deviceDesignator,
-			             std::u32string deviceSoftwareVersion,
-			             std::u32string deviceSerialNumber,
-			             std::array<std::uint8_t, 7> deviceStructureLabel,
-			             std::array<std::uint8_t, 7> deviceLocalizationLabel,
+			DeviceObject(std::string deviceDesignator,
+			             std::string deviceSoftwareVersion,
+			             std::string deviceSerialNumber,
+			             std::string deviceStructureLabel,
+			             std::string deviceLocalizationLabel,
 			             std::vector<std::uint8_t> &deviceExtendedStructureLabel,
 			             std::uint64_t clientIsoNAME);
 
@@ -69,17 +99,25 @@ namespace isobus
 			/// @returns the XML namespace for the object
 			std::string get_table_id() const override;
 
+			/// @brief Returns the object type
+			/// @returns The object type for this object (Object::Device)
+			ObjectTypes get_object_type() const override;
+
+			/// @brief Returns the binary representation of the TC object, or an empty vector if object is invalid
+			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
+			std::vector<std::uint8_t> get_binary_object() const override;
+
 			/// @brief Returns the serial number for the device
 			/// @returns The serial number for the device
-			std::u32string get_serial_number() const;
+			std::string get_serial_number() const;
 
 			/// @brief Returns the structure label for this DDOP
 			/// @returns The structure label for this DDOP
-			std::array<std::uint8_t, 7> get_structure_label() const;
+			std::string get_structure_label() const;
 
 			/// @brief Returns the localization label for this DDOP
 			/// @returns The  localization label for this DDOP
-			std::array<std::uint8_t, 7> get_localization_label() const;
+			std::string get_localization_label() const;
 
 			/// @brief Returns the extended structure label (if applicable)
 			/// @returns The extended structure label (if applicable)
@@ -89,12 +127,18 @@ namespace isobus
 			/// @returns The raw ISO NAME associated with this DDOP
 			std::uint64_t get_iso_name() const;
 
+			/// @brief Defines the max length of the device structure label and device localization label (in bytes)
+			static constexpr std::size_t MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH = 7;
+
+			/// @brief Defines the max length of the device extended structure label (in bytes)
+			static constexpr std::size_t MAX_EXTENDED_STRUCTURE_LABEL_LENGTH = 32;
+
 		private:
 			static const std::string tableID; ///< XML element namespace for device.
-			std::u32string serialNumber; ///< Device and manufacturer-specific serial number of the Device
-			std::u32string softwareVersion; ///< Software version of the device
-			std::array<std::uint8_t, 7> structureLabel; ///< Label given by device to identify the device descriptor structure
-			std::array<std::uint8_t, 7> localizationLabel; ///< Label given by device to identify the device descriptor localization
+			std::string serialNumber; ///< Device and manufacturer-specific serial number of the Device
+			std::string softwareVersion; ///< Software version of the device
+			std::string structureLabel; ///< Label given by device to identify the device descriptor structure
+			std::string localizationLabel; ///< Label given by device to identify the device descriptor localization
 			std::vector<std::uint8_t> extendedStructureLabel; ///< Continuation of the Label given by Device to identify the Device descriptor Structure
 			std::uint64_t NAME; ///< The NAME of client device as defined in ISO 11783-5. MUST match your address claim
 		};
@@ -118,12 +162,12 @@ namespace isobus
 			};
 
 			/// @brief Constructor for a DeviceElementObject
-			/// @param[in] deviceElementDesignator Descriptive text for the object, UTF-8, 32 chars max
+			/// @param[in] deviceElementDesignator Descriptive text for the object, UTF-8, 32-128 chars max depending on TC version
 			/// @param[in] deviceElementNumber The Element number for process data variable	addressing
 			/// @param[in] parentObjectID Object ID of parent DeviceElementObject or DeviceObject in order to establish a hierarchical order of DeviceElements
 			/// @param[in] deviceEelementType The type of element, such as "device" or "bin"
 			/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
-			DeviceElementObject(std::u32string deviceElementDesignator,
+			DeviceElementObject(std::string deviceElementDesignator,
 			                    std::uint16_t deviceElementNumber,
 			                    std::uint16_t parentObjectID,
 			                    Type deviceEelementType,
@@ -132,6 +176,14 @@ namespace isobus
 			/// @brief Returns the XML namespace for the object
 			/// @returns The string "DET", the XML namespace for the DeviceElementObject
 			std::string get_table_id() const override;
+
+			/// @brief Returns the object type
+			/// @returns The object type for this object (Object::DeviceElement)
+			ObjectTypes get_object_type() const override;
+
+			/// @brief Returns the binary representation of the TC object, or an empty vector if object is invalid
+			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
+			std::vector<std::uint8_t> get_binary_object() const override;
 
 			/// @brief Returns the element number
 			/// @returns The element number
@@ -144,6 +196,19 @@ namespace isobus
 			/// @brief Returns the type of the element object
 			/// @returns The type of the element object
 			Type get_type() const;
+
+			/// @brief This function can be called to add an object as a child of this object.
+			/// @note You should only add Device or Device Element objects as children of this object
+			/// @param[in] childID The object ID of the child to reference from this object
+			void add_reference_to_child_object(std::uint16_t childID);
+
+			/// @brief Returns the number of child objects added with `add_reference_to_child_object`
+			/// @returns The number of child objects added with `add_reference_to_child_object`
+			std::size_t get_number_child_objects() const;
+
+			/// @brief Returns a child object ID by index
+			/// @returns Child object ID by index, or NULL_OBJECT_ID if the index is out of range
+			std::uint16_t get_child_object_id(std::size_t index);
 
 		private:
 			static const std::string tableID; ///< XML element namespace for DeviceElement.
@@ -184,7 +249,7 @@ namespace isobus
 			/// @param[in] processDataProperties A bitset of properties associated to this object. Some combination of `PropertiesBit`
 			/// @param[in] processDataTriggerMethods A bitset of available trigger methods, built from some combination of `AvailableTriggerMethods`
 			/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
-			DeviceProcessDataObject(std::u32string processDataDesignator,
+			DeviceProcessDataObject(std::string processDataDesignator,
 			                        std::uint16_t processDataDDI,
 			                        std::uint16_t deviceValuePresentationObjectID,
 			                        std::uint8_t processDataProperties,
@@ -194,6 +259,14 @@ namespace isobus
 			/// @brief Returns the XML element namespace for DeviceProcess-Data.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcess-Data.
 			std::string get_table_id() const override;
+
+			/// @brief Returns the object type
+			/// @returns The object type for this object (Object::DeviceProcessData)
+			ObjectTypes get_object_type() const override;
+
+			/// @brief Returns the binary representation of the TC object, or an empty vector if object is invalid
+			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
+			std::vector<std::uint8_t> get_binary_object() const override;
 
 			/// @brief Returns the DDI
 			/// @returns the DDI for this property
@@ -231,7 +304,7 @@ namespace isobus
 			/// @param[in] propertyDDI Identifier of property (DDI) according to definitions in Annex B and ISO 11783 - 11.
 			/// @param[in] valuePresentationObject Object identifier of DeviceValuePresentationObject, or NULL object ID
 			/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
-			DevicePropertyObject(std::u32string propertyDesignator,
+			DevicePropertyObject(std::string propertyDesignator,
 			                     std::int32_t propertyValue,
 			                     std::uint16_t propertyDDI,
 			                     std::uint16_t valuePresentationObject,
@@ -240,6 +313,14 @@ namespace isobus
 			/// @brief Returns the XML element namespace for DeviceProperty.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.
 			std::string get_table_id() const override;
+
+			/// @brief Returns the object type
+			/// @returns The object type for this object (Object::DeviceProperty)
+			ObjectTypes get_object_type() const override;
+
+			/// @brief Returns the binary representation of the TC object, or an empty vector if object is invalid
+			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
+			std::vector<std::uint8_t> get_binary_object() const override;
 
 			/// @brief Returns the property's value
 			/// @returns The property's value
@@ -255,7 +336,7 @@ namespace isobus
 
 			/// @brief Returns the object identifier of an associated DeviceValuePresentationObject
 			/// @returns The object identifier of an associated DeviceValuePresentationObject
-			std::uint16_t get_device_value_presentation_object() const;
+			std::uint16_t get_device_value_presentation_object_id() const;
 
 		private:
 			static const std::string tableID; ///< XML element namespace for DeviceProperty.
@@ -277,7 +358,7 @@ namespace isobus
 			/// @param[in] scaleFactor Scale to be applied to the value for presentation.
 			/// @param[in] numberDecimals Specifies the number of decimals to display after the decimal point.
 			/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
-			DeviceValuePresentationObject(std::u32string unitDesignator,
+			DeviceValuePresentationObject(std::string unitDesignator,
 			                              std::int32_t offsetValue,
 			                              float scaleFactor,
 			                              std::uint8_t numberDecimals,
@@ -286,6 +367,14 @@ namespace isobus
 			/// @brief Returns the XML element namespace for DeviceValuePresentation.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.
 			std::string get_table_id() const override;
+
+			/// @brief Returns the object type
+			/// @returns The object type for this object (Object::DeviceValuePresentation)
+			ObjectTypes get_object_type() const override;
+
+			/// @brief Returns the binary representation of the TC object, or an empty vector if object is invalid
+			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
+			std::vector<std::uint8_t> get_binary_object() const override;
 
 			/// @brief Returns the offset that is applied to the value for presentation
 			/// @returns The offset that is applied to the value for presentation
