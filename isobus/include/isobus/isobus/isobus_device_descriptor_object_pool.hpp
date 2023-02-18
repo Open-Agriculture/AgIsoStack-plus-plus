@@ -1,0 +1,134 @@
+//================================================================================================
+/// @file isobus_device_descriptor_object_pool.hpp
+///
+/// @brief Defines an interface for creating a Task Controller DDOP.
+/// @author Adrian Del Grosso
+///
+/// @copyright 2023 Adrian Del Grosso
+//================================================================================================
+
+#ifndef ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HPP
+#define ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HPP
+
+#include "isobus/isobus/isobus_task_controller_client_objects.hpp"
+
+#include <memory>
+
+namespace isobus
+{
+	/// @brief Defines a device descriptor object pool
+	/// @details This class can be used to build up a task conroller DDOP by adding objects to it
+	/// in a heierarchy, then calling generate_binary_object_pool to get the object pool in
+	/// binary form.
+	/// @note To ensure maximum compatibility with task controllers, it may be best to stick to
+	/// limits that were defined for TC 3 and older when providing things like labels for
+	/// device element designators.
+	class DeviceDescriptorObjectPool
+	{
+		/// @brief Default constructor for a DDOP. Sets TC compatibility to version 4.
+		DeviceDescriptorObjectPool() = default;
+
+		/// @brief This constructor allows customization of the TC compatibility level
+		/// @param[in] taskControllerServerVersion The version of TC server to support with this DDOP
+		DeviceDescriptorObjectPool(std::uint8_t taskControllerServerVersion);
+
+		/// @brief Adds a device object to the DDOP
+		/// @note There can only be one of these per DDOP
+		/// @attention Pay close attention to which values are UTF-8 and which are byte arrays
+		/// @param[in] deviceDesignator Descriptive text for the object, UTF-8, 32 chars max
+		/// @param[in] deviceSoftwareVersion Software version indicating text
+		/// @param[in] deviceSerialNumber Device and manufacturer-specific serial number of the Device (UTF-8)
+		/// @param[in] deviceStructureLabel This label allows the device to identify the current version of the device descriptor object pool
+		/// @param[in] deviceLocalizationLabel Defined by the language command PGN
+		/// @param[in] deviceExtendedStructureLabel Continuation of the Label given by Device to identify the Device descriptor Structure
+		/// @param[in] clientIsoNAME NAME of client device as defined in ISO 11783-5
+		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
+		bool AddDevice(std::string deviceDesignator,
+		               std::string deviceSoftwareVersion,
+		               std::string deviceSerialNumber,
+		               std::string deviceStructureLabel,
+		               std::string deviceLocalizationLabel,
+		               std::vector<std::uint8_t> &deviceExtendedStructureLabel,
+		               std::uint64_t clientIsoNAME);
+
+		/// @brief Adds a device element object to the DDOP
+		/// @param[in] deviceElementDesignator Descriptive text for the object, UTF-8, 32-128 chars max depending on TC version
+		/// @param[in] deviceElementNumber The Element number for process data variable	addressing
+		/// @param[in] parentObjectID Object ID of parent DeviceElementObject or DeviceObject in order to establish a hierarchical order of DeviceElements
+		/// @param[in] deviceEelementType The type of element, such as "device" or "bin"
+		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
+		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
+		bool AddDeviceElement(std::string deviceElementDesignator,
+		                      std::uint16_t deviceElementNumber,
+		                      std::uint16_t parentObjectID,
+		                      task_controller_object::DeviceElementObject::Type deviceEelementType,
+		                      std::uint16_t uniqueID);
+
+		/// @brief Adds a device process data object to the DDOP
+		/// @param[in] processDataDesignator Descriptive text for the object, UTF-8, 32-128 chars max
+		/// @param[in] processDataDDI Identifier of process data variable (DDI) according to definitions in Annex B and ISO 11783 - 11
+		/// @param[in] deviceValuePresentationObjectID Object identifier of a DeviceValuePresentationObject, or the null ID
+		/// @param[in] processDataProperties A bitset of properties associated to this object. Some combination of `PropertiesBit`
+		/// @param[in] processDataTriggerMethods A bitset of available trigger methods, built from some combination of `AvailableTriggerMethods`
+		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
+		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
+		bool AddDeviceProcessData(std::string processDataDesignator,
+		                          std::uint16_t processDataDDI,
+		                          std::uint16_t deviceValuePresentationObjectID,
+		                          std::uint8_t processDataProperties,
+		                          std::uint8_t processDataTriggerMethods,
+		                          std::uint16_t uniqueID);
+
+		/// @brief Adds a device property object to the DDOP
+		/// @param[in] propertyDesignator Descriptive text for the object, UTF-8, 32-128 chars max
+		/// @param[in] propertyValue The value of the property
+		/// @param[in] propertyDDI Identifier of property (DDI) according to definitions in Annex B and ISO 11783 - 11.
+		/// @param[in] valuePresentationObject Object identifier of DeviceValuePresentationObject, or NULL object ID
+		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
+		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
+		bool AddDeviceProperty(std::string propertyDesignator,
+		                       std::int32_t propertyValue,
+		                       std::uint16_t propertyDDI,
+		                       std::uint16_t valuePresentationObject,
+		                       std::uint16_t uniqueID);
+
+		/// @brief Adds a device value presentation object to the DDOP
+		/// @param[in] unitDesignator Unit designator for this value presentation
+		/// @param[in] offsetValue Offset to be applied to the value for presentation.
+		/// @param[in] scaleFactor Scale to be applied to the value for presentation.
+		/// @param[in] numberDecimals Specifies the number of decimals to display after the decimal point.
+		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
+		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
+		bool AddDeviceValuePresentation(std::string unitDesignator,
+		                                std::int32_t offsetValue,
+		                                float scaleFactor,
+		                                std::uint8_t numberDecimals,
+		                                std::uint16_t uniqueID);
+
+		/// Constructs a binary DDOP using the objects that were previously added
+		/// @param[in,out] resultantPool The binary representation of the DDOP, or an empty vector if this function returns false
+		/// @returns `true` if the object pool was generated and is valid, otherwise `false`.
+		bool generate_binary_object_pool(std::vector<std::uint8_t> &resultantPool);
+
+		/// @brief Gets an object from the DDOP that corresponds to a certain object ID
+		/// @returns Pointer to the object matching the provided ID, or nullptr if no match was found
+		task_controller_object::Object *get_object_by_id(std::uint16_t objectID);
+
+	private:
+		/// @brief Checks to see that all parent object IDs correspond to an object in this DDOP
+		/// @returns `true` if all object IDs were validated, otherwise `false`
+		bool resolve_parent_ids_to_objects();
+
+		/// @brief Checks the DDOP to see if an object ID has already been used
+		/// @param[in] uniqueID The ID to check against in the DDOP for uniqueness
+		/// @returns true if the object ID parameter is unique in the DDOP, otherwise false
+		bool check_object_id_unique(std::uint16_t uniqueID) const;
+
+		static constexpr std::uint8_t MAX_TC_VERSION_SUPPORTED = 4; ///< The max TC version a DDOP object can support as of today
+
+		std::vector<std::unique_ptr<task_controller_object::Object>> objectList; ///< Maintains a list of all added objects
+		std::uint8_t taskControllerCompatabilityLevel = MAX_TC_VERSION_SUPPORTED; ///< Stores the max TC version
+	};
+} // namespace isobus
+
+#endif // ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HPP

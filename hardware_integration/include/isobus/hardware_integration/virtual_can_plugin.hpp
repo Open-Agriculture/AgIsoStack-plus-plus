@@ -68,7 +68,7 @@ public:
 	/// @brief Allows us to write messages as if we received them from the bus
 	/// @param[in] canFrame The frame to write to the bus
 	void write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const;
-	
+
 	/// @brief Returns if the internal message queue is empty or not
 	/// @returns `true` if the internal message queue is empty, otherwise false
 	bool get_queue_empty() const;
