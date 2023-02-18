@@ -25,14 +25,38 @@ namespace isobus
 			Disconnected, ///< Not communicating with the TC
 			WaitForStartUpDelay, ///< Client is waiting for the mandatory 6s startup delay
 			WaitForServerStatusMessage, ///< Client is waiting to identify the TC via reception of a valid status message
-			BeginSendingWorkingSetMaster, ///< Client initating communication with TC by sending the working set master message
+			SendWorkingSetMaster, ///< Client initating communication with TC by sending the working set master message
 			SendStatusMessage,
 			RequestVersion,
 			WaitForRequestVersionResponse,
 			WaitForRequestVersionFromServer,
 			SendRequestVersionResponse,
 			RequestLanguage,
-			WaitForLanguageResponse
+			WaitForLanguageResponse,
+			Connected
+		};
+
+		/// @brief Enumerates the different task controller versions
+		enum class Version : std::uint8_t
+		{
+			DraftInternationalStandard = 0, ///< The version of the DIS (draft International Standard).
+			FinalDraftInternationalStandardFirstEdition = 1, ///< The version of the FDIS.1 (final draft International Standard, first edition).
+			FirstPublishedEdition = 2, ///< The version of the FDIS.2 and the first edition published ss an International Standard.
+			SecondEditionDraft = 3, ///< The version of the second edition published as a draft International Standard(E2.DIS).
+			SecondPublishedEdition = 4, ///< The version of the second edition published as the final draft International Standard(E2.FDIS) and as the International Standard(E2.IS)
+			Unknown = 0xFF
+		};
+
+		enum class ServerOptions : std::uint8_t
+		{
+			SupportsDocumentation = 0x01,
+			SupportsTCGEOWithoutPositionBasedControl = 0x02,
+			SupportsTCGEOWithPositionBasedControl = 0x04,
+			SupportsPeerControlAssignment = 0x08,
+			SupportsImplementSectionControlFunctionality = 0x10,
+			ReservedOption1 = 0x20,
+			ReservedOption2 = 0x40,
+			ReservedOption3 = 0x80
 		};
 
 		/// @brief The constructor for a TaskControllerClient
@@ -44,14 +68,66 @@ namespace isobus
 		~TaskControllerClient();
 
 		// Setup Functions
-		/// @brief This function starts the state machine. Call this once you have created your DDOP and are ready to connect.
+		/// @brief This function starts the state machine. Call this once you have created your DDOP, set up the client capabilities, and are ready to connect.
 		/// @param[in] spawnThread The client will start a thread to manage itself if this parameter is true. Otherwise you must update it cyclically
 		/// by calling the `update` function.
 		void initialize(bool spawnThread);
 
+		/// @brief A convenient way to set all client options at once instead of calling the individual setters
+		/// @details This function sets up the parameters that the client will report to the TC server.
+		/// These parameters should be tailored to your specific application.
+		/// @param[in] numberBoomsSupported Configures the max number of booms the client supports
+		/// @param[in] numberSectionsSupported Configures the max number of sections supported by the client for section control
+		/// @param[in] numberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
+		/// @param[in] supportsDocumentation Denotes if your app supports documentation
+		/// @param[in] supportsTCGEOWithoutPositionBasedControl Denotes if your app supports TC-GEO without position based control
+		/// @param[in] supportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
+		/// @param[in] supportsPeerControlAssignment Denotes if your app supports peer control assignment
+		/// @param[in] supportsImplementSectionControl Denotes if your app supports implement section control
+		void configure(std::uint8_t numberBoomsSupported,
+		               std::uint8_t numberSectionsSupported,
+		               std::uint8_t numberChannelsSupportedForPositionBasedControl,
+		               bool supportsDocumentation,
+		               bool supportsTCGEOWithoutPositionBasedControl,
+		               bool supportsTCGEOWithPositionBasedControl,
+		               bool supportsPeerControlAssignment,
+		               bool supportsImplementSectionControl);
+
 		// Calling this will stop the worker thread if it exists
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
+
+		/// @brief Returns the previously configured number of booms supported by the client
+		/// @returns The previously configured number of booms supported by the client
+		std::uint8_t get_number_booms_supported() const;
+
+		/// @brief Returns the previously configured number of section supported by the client
+		/// @returns The previously configured number of booms supported by the client
+		std::uint8_t get_number_sections_supported() const;
+
+		/// @brief Returns the previously configured number of channels supported for position based control
+		/// @returns The previously configured number of channels supported for position based control
+		std::uint8_t get_number_channels_supported_for_position_based_control() const;
+
+		/// @brief Returns if the client has been configured to report that it supports documentation to the TC
+		/// @returns `true` if the client has been configured to report that it supports documentation, otherwise `false`
+		bool get_supports_documentation() const;
+
+		/// @brief Returns if the client has been configured to report that it supports TC-GEO without position based control to the TC
+		/// @returns `true` if the client has been configured to report that it supports TC-GEO without position based control, otherwise `false`
+		bool get_supports_tcgeo_without_position_based_control() const;
+
+		/// @brief Returns if the client has been configured to report that it supports TC-GEO with position based control to the TC
+		/// @returns `true` if the client has been configured to report that it supports TC-GEO with position based control, otherwise `false`
+		bool get_supports_tcgeo_with_position_based_control() const;
+
+		/// @brief Returns if the client has been configured to report that it supports peer control assignment to the TC
+		/// @returns `true` if the client has been configured to report that it supports peer control assignment, otherwise `false`
+		bool get_supports_peer_control_assignment() const;
+
+		/// @brief Returns if the client has been configured to report that it supports implement section control to the TC
+		/// @returns `true` if the client has been configured to report that it supports implement section control, otherwise `false`
+		bool get_supports_implement_section_control() const;
 
 		/// @brief Returns if the client has been initialized
 		/// @note This does not mean that the client is connected to the TC server
@@ -65,6 +141,31 @@ namespace isobus
 		/// @brief Returns the current state machine state
 		/// @returns The current internal state machine state
 		StateMachineState get_state() const;
+
+		/// @brief Returns the number of booms that the connected TC supports for section control
+		/// @returns Number of booms that the connected TC supports for section control
+		std::uint8_t get_connected_tc_number_booms_supported() const;
+
+		/// @brief Returns the number of sections that the connected TC supports for section control
+		/// @returns Number of sections that the connected TC supports for section control
+		std::uint8_t get_connected_tc_number_sections_supported() const;
+
+		/// @brief Returns the number of channels that the connected TC supports for position control
+		/// @returns Number of channels that the connected TC supports for position control
+		std::uint8_t get_connected_tc_number_channels_supported() const;
+
+		/// @brief Returns the maximum boot time in seconds reported by the connected TC
+		/// @returns Maximum boot time (seconds) reported by the connected TC, or 0xFF if that info is not available.
+		std::uint8_t get_connected_tc_max_boot_time() const;
+
+		/// @brief Returns if the connected TC supports a certain option
+		/// @param[in] option The option to check against
+		/// @returns `true` if the option was reported as "supported" by the TC, otherwise `false`
+		bool get_connected_tc_option_supported(ServerOptions option) const;
+
+		/// @brief Returns the version of the connected task controller
+		/// @returns The version reported by the connected task controller
+		Version get_connected_tc_version() const;
 
 		/// @brief The cyclic update function for this interface.
 		/// @note This function may be called by the TC worker thread if you called
@@ -129,6 +230,18 @@ namespace isobus
 		/// @param[in] parentPointer A context variable to find the relevant TC client class
 		static void process_rx_message(CANMessage *message, void *parentPointer);
 
+		/// @brief Sends the response to a request for version from the TC
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_request_version_response() const;
+
+		/// @brief Sends the status message to the TC
+		/// @returns `true` if the message was sent, otherwise false
+		bool send_status() const;
+
+		/// @brief Sends the version request message to the TC
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_version_request() const;
+
 		/// @brief Sends the working set master message
 		/// @returns `true` if the message was sent, otherwise false
 		bool send_working_set_master() const;
@@ -138,18 +251,37 @@ namespace isobus
 		void set_state(StateMachineState newState);
 
 		static constexpr std::uint32_t SIX_SECOND_TIMEOUT_MS = 6000; ///< The startup delay time defined in the standard
+		static constexpr std::uint16_t TWO_SECOND_TIMEOUT_MS = 2000; ///< Used for sending the status message to the TC
 
+	private:
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)
 		std::uint32_t controlFunctionValidTimestamp_ms = 0; ///< A timestamp to track when (in milliseconds) our internal control function becomes valid
+		std::uint32_t statusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we sent a status message to the TC
 		std::uint8_t numberOfWorkingSetMembers = 1; ///< The number of working set members that will be reported in the working set master message
 		std::uint8_t tcStatusBitfield = 0; ///< The last received TC/DL status from the status message
 		std::uint8_t sourceAddressOfCommandBeingExecuted = 0; ///< Source address of client for which the current command is being executed
 		std::uint8_t commandBeingExecuted = 0; ///< The current command the TC is executing as reported in the status message
+		std::uint8_t serverVersion = 0; ///< The detected version of the TC Server
+		std::uint8_t maxServerBootTime_s = 0; ///< Maximum number of seconds from a power cycle to transmission of first “Task Controller Status message” or 0xFF
+		std::uint8_t serverOptionsByte1 = 0; ///< The options specified in ISO 11783-10 that this TC, DL, or client meets (The definition of this byte is introduced in ISO11783-10 version 3)
+		std::uint8_t serverOptionsByte2 = 0; ///< Reserved for ISO assignment, should be zero or 0xFF.
+		std::uint8_t serverNumberOfBoomsForSectionControl = 0; ///< When reported by the TC, this is the maximum number of section control booms that are supported
+		std::uint8_t serverNumberOfSectionsForSectionControl = 0; ///< When reported by the TC, this is the maximum number of sections that are supported (or 0xFF for version 2 and earlier).
+		std::uint8_t serverNumberOfChannelsForPositionBasedControl = 0; ///< When reported by the TC, this is the maximum number of individual control channels that is supported
+		std::uint8_t numberBoomsSupported = 0; ///< Stores the number of booms this client supports for section control
+		std::uint8_t numberSectionsSupported = 0; ///< Stores the number of sections this client supports for section control
+		std::uint8_t numberChannelsSupportedForPositionBasedControl = 0; ///< Stores the number of channels this client supports for position based control
 		bool initialized = false; ///< Tracks the initialization state of the interface instance
 		bool shouldTerminate = false; ///< This variable tells the worker thread to exit
+		bool enableStatusMessage = false; ///< Enables sending the status message to the TC cyclically
+		bool supportsDocumentation = false; ///< Determines if the client reports documentation support to the TC
+		bool supportsTCGEOWithoutPositionBasedControl = false; ///< Determines if the client reports TC-GEO without position control capability to the TC
+		bool supportsTCGEOWithPositionBasedControl = false; ///< Determines if the client reports TC-GEO with position control capability to the TC
+		bool supportsPeerControlAssignment = false; ///< Determines if the client reports peer control assignment capability to the TC
+		bool supportsImplementSectionControl = false; ///< Determines if the client reports implement section control capability to the TC
 	};
 } // namespace isobus
 

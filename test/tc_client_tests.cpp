@@ -28,6 +28,16 @@ public:
 	{
 		return TaskControllerClient::get_state();
 	}
+
+	bool test_wrapper_send_version_request() const
+	{
+		return TaskControllerClient::send_version_request();
+	}
+
+	bool test_wrapper_send_request_version_response() const
+	{
+		return TaskControllerClient::send_request_version_response();
+	}
 };
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
@@ -97,15 +107,68 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	testPlugin->read_frame(testFrame);
 
+	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
-	ASSERT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xFE0D);
-	ASSERT_EQ(testFrame.data[0], 1); // 1 Working set member by default
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xFE0D);
+	EXPECT_EQ(testFrame.data[0], 1); // 1 Working set member by default
 
 	for (std::uint_fast8_t i = 1; i < 8; i++)
 	{
 		// Check Reserved Bytes
 		ASSERT_EQ(testFrame.data[i], 0xFF);
 	}
+
+	// Test Version Request Message
+	EXPECT_TRUE(interfaceUnderTest.test_wrapper_send_version_request());
+
+	testPlugin->read_frame(testFrame);
+
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0x00, testFrame.data[0]);
+
+	for (std::uint_fast8_t i = 1; i < 8; i++)
+	{
+		// Check Reserved Bytes
+		ASSERT_EQ(testFrame.data[i], 0xFF);
+	}
+
+	// Test status message
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendStatusMessage);
+	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendStatusMessage);
+	interfaceUnderTest.update();
+
+	testPlugin->read_frame(testFrame);
+
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0xFF, testFrame.data[0]); // Mux
+	EXPECT_EQ(0xFF, testFrame.data[1]); // Element number
+	EXPECT_EQ(0xFF, testFrame.data[2]); // DDI
+	EXPECT_EQ(0xFF, testFrame.data[3]); // DDI
+	EXPECT_EQ(0x00, testFrame.data[4]); // Status
+	EXPECT_EQ(0x00, testFrame.data[5]); // 0 Reserved
+	EXPECT_EQ(0x00, testFrame.data[6]); // 0 Reserved
+	EXPECT_EQ(0x00, testFrame.data[7]); // 0 Reserved
+
+	// Test version response
+	interfaceUnderTest.configure(1, 2, 3, true, true, true, true, true);
+	interfaceUnderTest.test_wrapper_send_request_version_response();
+	testPlugin->read_frame(testFrame);
+
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0x10, testFrame.data[0]); // Mux
+	EXPECT_EQ(0x04, testFrame.data[1]); // Version
+	EXPECT_EQ(0xFF, testFrame.data[2]); // Must be 0xFF
+	EXPECT_EQ(0x1F, testFrame.data[3]); // Options
+	EXPECT_EQ(0x00, testFrame.data[4]); // Must be zero
+	EXPECT_EQ(0x01, testFrame.data[5]); // Booms
+	EXPECT_EQ(0x02, testFrame.data[6]); // Sections
+	EXPECT_EQ(0x03, testFrame.data[7]); // Channels
 
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
@@ -202,11 +265,11 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	// End boilerplate
 
 	// Check initial state
-	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
 	// Check Transition out of status message wait state
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
-	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
 
 	// Send a status message and confirm we move on to the next state.
 	testFrame.identifier = 0x18CBFFF7;
@@ -220,18 +283,101 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[7] = 0xFF; // Reserved
 	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(15));
+	CANNetworkManager::CANNetwork.update();
 
-	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginSendingWorkingSetMaster);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendWorkingSetMaster);
 
 	// Test Request Language state
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestLanguage);
 	interfaceUnderTest.update();
 
-	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForLanguageResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForLanguageResponse);
+
+	// Test Version Response State
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestVersionResponse);
+	interfaceUnderTest.update();
+
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionResponse);
+
+	// Send the version response to the client as the TC server
+	// Send a status message and confirm we move on to the next state.
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x10; // Mux
+	testFrame.data[1] = 0x04; // Version number (Version 4)
+	testFrame.data[2] = 0xFF; // Max boot time (Not available)
+	testFrame.data[3] = 0b0011111; // Supports all options
+	testFrame.data[4] = 0x00; // Reserved options = 0
+	testFrame.data[5] = 0x01; // Number of booms for section control (1)
+	testFrame.data[6] = 0x20; // Number of sections for section control (32)
+	testFrame.data[7] = 0x10; // Number channels for position based control (16)
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+
+	CANNetworkManager::CANNetwork.update();
+
+	// Test the values parsed in this state machine state
+	EXPECT_EQ(TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer, interfaceUnderTest.test_wrapper_get_state());
+	EXPECT_EQ(TaskControllerClient::Version::SecondPublishedEdition, interfaceUnderTest.get_connected_tc_version());
+	EXPECT_EQ(0xFF, interfaceUnderTest.get_connected_tc_max_boot_time());
+	EXPECT_EQ(true, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::SupportsDocumentation));
+	EXPECT_EQ(true, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::SupportsImplementSectionControlFunctionality));
+	EXPECT_EQ(true, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::SupportsPeerControlAssignment));
+	EXPECT_EQ(true, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::SupportsTCGEOWithPositionBasedControl));
+	EXPECT_EQ(true, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::SupportsTCGEOWithoutPositionBasedControl));
+	EXPECT_EQ(false, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::ReservedOption1));
+	EXPECT_EQ(false, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::ReservedOption2));
+	EXPECT_EQ(false, interfaceUnderTest.get_connected_tc_option_supported(TaskControllerClient::ServerOptions::ReservedOption3));
+	EXPECT_EQ(1, interfaceUnderTest.get_connected_tc_number_booms_supported());
+	EXPECT_EQ(32, interfaceUnderTest.get_connected_tc_number_sections_supported());
+	EXPECT_EQ(16, interfaceUnderTest.get_connected_tc_number_channels_supported());
+
+	// Test Status Message State
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendStatusMessage);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendStatusMessage);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestVersion);
+
+	// Test transition to disconnect from NACK
+	// Send a NACK
+	testFrame.identifier = 0x18E883F7;
+	testFrame.data[0] = 0x01; // N-ACK
+	testFrame.data[1] = 0xFF;
+	testFrame.data[2] = 0xFF;
+	testFrame.data[3] = 0xFF;
+	testFrame.data[4] = 0x83; // Address
+	testFrame.data[5] = 0x00; // PGN
+	testFrame.data[6] = 0xCB; // PGN
+	testFrame.data[7] = 0x00; // PGN
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
 	//! @Todo Add other states
 
 	interfaceUnderTest.terminate();
 	CANHardwareInterface::stop();
+}
+
+TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
+{
+	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
+
+	// Set and test the basic settings for the client
+	interfaceUnderTest.configure(6, 64, 32, false, false, false, false, false);
+	EXPECT_EQ(6, interfaceUnderTest.get_number_booms_supported());
+	EXPECT_EQ(64, interfaceUnderTest.get_number_sections_supported());
+	EXPECT_EQ(32, interfaceUnderTest.get_number_channels_supported_for_position_based_control());
+	EXPECT_EQ(false, interfaceUnderTest.get_supports_documentation());
+	EXPECT_EQ(false, interfaceUnderTest.get_supports_implement_section_control());
+	EXPECT_EQ(false, interfaceUnderTest.get_supports_peer_control_assignment());
+	EXPECT_EQ(false, interfaceUnderTest.get_supports_tcgeo_without_position_based_control());
+	EXPECT_EQ(false, interfaceUnderTest.get_supports_tcgeo_with_position_based_control());
+	interfaceUnderTest.configure(255, 255, 255, true, true, true, true, true);
+	EXPECT_EQ(255, interfaceUnderTest.get_number_booms_supported());
+	EXPECT_EQ(255, interfaceUnderTest.get_number_sections_supported());
+	EXPECT_EQ(255, interfaceUnderTest.get_number_channels_supported_for_position_based_control());
+	EXPECT_EQ(true, interfaceUnderTest.get_supports_documentation());
+	EXPECT_EQ(true, interfaceUnderTest.get_supports_implement_section_control());
+	EXPECT_EQ(true, interfaceUnderTest.get_supports_peer_control_assignment());
+	EXPECT_EQ(true, interfaceUnderTest.get_supports_tcgeo_without_position_based_control());
+	EXPECT_EQ(true, interfaceUnderTest.get_supports_tcgeo_with_position_based_control());
 }
