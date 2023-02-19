@@ -21,13 +21,13 @@ namespace isobus
 		assert(taskControllerCompatabilityLevel <= MAX_TC_VERSION_SUPPORTED);
 	}
 
-	bool DeviceDescriptorObjectPool::AddDevice(std::string deviceDesignator,
-	                                           std::string deviceSoftwareVersion,
-	                                           std::string deviceSerialNumber,
-	                                           std::string deviceStructureLabel,
-	                                           std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
-	                                           std::vector<std::uint8_t> deviceExtendedStructureLabel,
-	                                           std::uint64_t clientIsoNAME)
+	bool DeviceDescriptorObjectPool::add_device(std::string deviceDesignator,
+	                                            std::string deviceSoftwareVersion,
+	                                            std::string deviceSerialNumber,
+	                                            std::string deviceStructureLabel,
+	                                            std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
+	                                            std::vector<std::uint8_t> deviceExtendedStructureLabel,
+	                                            std::uint64_t clientIsoNAME)
 	{
 		bool retVal = true;
 
@@ -126,11 +126,11 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DeviceDescriptorObjectPool::AddDeviceElement(std::string deviceElementDesignator,
-	                                                  std::uint16_t deviceElementNumber,
-	                                                  std::uint16_t parentObjectID,
-	                                                  task_controller_object::DeviceElementObject::Type deviceEelementType,
-	                                                  std::uint16_t uniqueID)
+	bool DeviceDescriptorObjectPool::add_device_element(std::string deviceElementDesignator,
+	                                                    std::uint16_t deviceElementNumber,
+	                                                    std::uint16_t parentObjectID,
+	                                                    task_controller_object::DeviceElementObject::Type deviceEelementType,
+	                                                    std::uint16_t uniqueID)
 	{
 		bool retVal = check_object_id_unique(uniqueID);
 
@@ -170,12 +170,12 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DeviceDescriptorObjectPool::AddDeviceProcessData(std::string processDataDesignator,
-	                                                      std::uint16_t processDataDDI,
-	                                                      std::uint16_t deviceValuePresentationObjectID,
-	                                                      std::uint8_t processDataProperties,
-	                                                      std::uint8_t processDataTriggerMethods,
-	                                                      std::uint16_t uniqueID)
+	bool DeviceDescriptorObjectPool::add_device_process_data(std::string processDataDesignator,
+	                                                         std::uint16_t processDataDDI,
+	                                                         std::uint16_t deviceValuePresentationObjectID,
+	                                                         std::uint8_t processDataProperties,
+	                                                         std::uint8_t processDataTriggerMethods,
+	                                                         std::uint16_t uniqueID)
 	{
 		bool retVal = check_object_id_unique(uniqueID);
 
@@ -232,11 +232,11 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DeviceDescriptorObjectPool::AddDeviceProperty(std::string propertyDesignator,
-	                                                   std::int32_t propertyValue,
-	                                                   std::uint16_t propertyDDI,
-	                                                   std::uint16_t valuePresentationObject,
-	                                                   std::uint16_t uniqueID)
+	bool DeviceDescriptorObjectPool::add_device_property(std::string propertyDesignator,
+	                                                     std::int32_t propertyValue,
+	                                                     std::uint16_t propertyDDI,
+	                                                     std::uint16_t valuePresentationObject,
+	                                                     std::uint16_t uniqueID)
 	{
 		bool retVal = check_object_id_unique(uniqueID);
 
@@ -285,11 +285,11 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DeviceDescriptorObjectPool::AddDeviceValuePresentation(std::string unitDesignator,
-	                                                            std::int32_t offsetValue,
-	                                                            float scaleFactor,
-	                                                            std::uint8_t numberDecimals,
-	                                                            std::uint16_t uniqueID)
+	bool DeviceDescriptorObjectPool::add_device_value_presentation(std::string unitDesignator,
+	                                                               std::int32_t offsetValue,
+	                                                               float scaleFactor,
+	                                                               std::uint8_t numberDecimals,
+	                                                               std::uint16_t uniqueID)
 	{
 		bool retVal = check_object_id_unique(uniqueID);
 

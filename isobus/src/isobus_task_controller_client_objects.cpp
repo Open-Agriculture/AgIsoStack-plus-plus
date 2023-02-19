@@ -10,9 +10,9 @@
 
 #include "isobus/utility/platform_endianness.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
-#include <algorithm>
 
 namespace isobus
 {
