@@ -44,13 +44,13 @@ namespace isobus
 		/// @param[in] deviceExtendedStructureLabel Continuation of the Label given by Device to identify the Device descriptor Structure
 		/// @param[in] clientIsoNAME NAME of client device as defined in ISO 11783-5
 		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
-		bool AddDevice(std::string deviceDesignator,
-		               std::string deviceSoftwareVersion,
-		               std::string deviceSerialNumber,
-		               std::string deviceStructureLabel,
-		               std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
-		               std::vector<std::uint8_t> deviceExtendedStructureLabel,
-		               std::uint64_t clientIsoNAME);
+		bool add_device(std::string deviceDesignator,
+		                std::string deviceSoftwareVersion,
+		                std::string deviceSerialNumber,
+		                std::string deviceStructureLabel,
+		                std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
+		                std::vector<std::uint8_t> deviceExtendedStructureLabel,
+		                std::uint64_t clientIsoNAME);
 
 		/// @brief Adds a device element object to the DDOP
 		/// @param[in] deviceElementDesignator Descriptive text for the object, UTF-8, 32-128 chars max depending on TC version
@@ -59,11 +59,11 @@ namespace isobus
 		/// @param[in] deviceEelementType The type of element, such as "device" or "bin"
 		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
 		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
-		bool AddDeviceElement(std::string deviceElementDesignator,
-		                      std::uint16_t deviceElementNumber,
-		                      std::uint16_t parentObjectID,
-		                      task_controller_object::DeviceElementObject::Type deviceEelementType,
-		                      std::uint16_t uniqueID);
+		bool add_device_element(std::string deviceElementDesignator,
+		                        std::uint16_t deviceElementNumber,
+		                        std::uint16_t parentObjectID,
+		                        task_controller_object::DeviceElementObject::Type deviceEelementType,
+		                        std::uint16_t uniqueID);
 
 		/// @brief Adds a device process data object to the DDOP
 		/// @param[in] processDataDesignator Descriptive text for the object, UTF-8, 32-128 chars max
@@ -73,12 +73,12 @@ namespace isobus
 		/// @param[in] processDataTriggerMethods A bitset of available trigger methods, built from some combination of `AvailableTriggerMethods`
 		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
 		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
-		bool AddDeviceProcessData(std::string processDataDesignator,
-		                          std::uint16_t processDataDDI,
-		                          std::uint16_t deviceValuePresentationObjectID,
-		                          std::uint8_t processDataProperties,
-		                          std::uint8_t processDataTriggerMethods,
-		                          std::uint16_t uniqueID);
+		bool add_device_process_data(std::string processDataDesignator,
+		                             std::uint16_t processDataDDI,
+		                             std::uint16_t deviceValuePresentationObjectID,
+		                             std::uint8_t processDataProperties,
+		                             std::uint8_t processDataTriggerMethods,
+		                             std::uint16_t uniqueID);
 
 		/// @brief Adds a device property object to the DDOP
 		/// @param[in] propertyDesignator Descriptive text for the object, UTF-8, 32-128 chars max
@@ -87,11 +87,11 @@ namespace isobus
 		/// @param[in] valuePresentationObject Object identifier of DeviceValuePresentationObject, or NULL object ID
 		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
 		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
-		bool AddDeviceProperty(std::string propertyDesignator,
-		                       std::int32_t propertyValue,
-		                       std::uint16_t propertyDDI,
-		                       std::uint16_t valuePresentationObject,
-		                       std::uint16_t uniqueID);
+		bool add_device_property(std::string propertyDesignator,
+		                         std::int32_t propertyValue,
+		                         std::uint16_t propertyDDI,
+		                         std::uint16_t valuePresentationObject,
+		                         std::uint16_t uniqueID);
 
 		/// @brief Adds a device value presentation object to the DDOP
 		/// @param[in] unitDesignator Unit designator for this value presentation
@@ -100,11 +100,11 @@ namespace isobus
 		/// @param[in] numberDecimals Specifies the number of decimals to display after the decimal point.
 		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
 		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
-		bool AddDeviceValuePresentation(std::string unitDesignator,
-		                                std::int32_t offsetValue,
-		                                float scaleFactor,
-		                                std::uint8_t numberDecimals,
-		                                std::uint16_t uniqueID);
+		bool add_device_value_presentation(std::string unitDesignator,
+		                                   std::int32_t offsetValue,
+		                                   float scaleFactor,
+		                                   std::uint8_t numberDecimals,
+		                                   std::uint16_t uniqueID);
 
 		/// Constructs a binary DDOP using the objects that were previously added
 		/// @param[in,out] resultantPool The binary representation of the DDOP, or an empty vector if this function returns false

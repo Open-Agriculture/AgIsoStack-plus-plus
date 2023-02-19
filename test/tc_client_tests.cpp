@@ -70,6 +70,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	ASSERT_TRUE(internalECU->get_address_valid());
 
+	CANHardwareInterface::stop_recieve_threads();
+
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
@@ -105,7 +107,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	// Test Working Set Master Message
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_working_set_master());
 
-	testPlugin->read_frame(testFrame);
+	ASSERT_TRUE(testPlugin->read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -119,9 +121,9 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	}
 
 	// Test Version Request Message
-	EXPECT_TRUE(interfaceUnderTest.test_wrapper_send_version_request());
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_version_request());
 
-	testPlugin->read_frame(testFrame);
+	ASSERT_TRUE(testPlugin->read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -155,7 +157,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test version response
 	interfaceUnderTest.configure(1, 2, 3, true, true, true, true, true);
-	interfaceUnderTest.test_wrapper_send_request_version_response();
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
 	testPlugin->read_frame(testFrame);
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
@@ -228,6 +230,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	}
 
 	ASSERT_TRUE(internalECU->get_address_valid());
+
+	CANHardwareInterface::stop_recieve_threads();
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
