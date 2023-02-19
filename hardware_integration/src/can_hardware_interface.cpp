@@ -26,6 +26,7 @@ std::mutex CANHardwareInterface::rxCallbacksMutex;
 std::mutex CANHardwareInterface::periodicUpdateCallbacksMutex;
 std::atomic_bool CANHardwareInterface::threadsStarted = { false };
 std::atomic_bool CANHardwareInterface::canLibNeedsUpdate = { false };
+std::atomic_bool CANHardwareInterface::stopRxThreads = { false };
 std::uint32_t CANHardwareInterface::canLibUpdatePeriod = PERIODIC_UPDATE_INTERVAL;
 
 CANHardwareInterface CANHardwareInterface::SINGLETON;
@@ -313,6 +314,28 @@ bool CANHardwareInterface::remove_can_lib_update_callback(void (*callback)(), vo
 	return false;
 }
 
+bool CANHardwareInterface::stop_recieve_threads()
+{
+	bool retVal = false;
+
+	if (threadsStarted)
+	{
+		stopRxThreads = true;
+		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
+			if (nullptr != channel->receiveMessageThread)
+			{
+				if (channel->receiveMessageThread->joinable())
+				{
+					channel->receiveMessageThread->join();
+				}
+				channel->receiveMessageThread = nullptr;
+			}
+		});
+		retVal = true;
+	}
+	return retVal;
+}
+
 void CANHardwareInterface::can_thread_function()
 {
 	hardwareChannelsMutex.lock();
@@ -414,7 +437,8 @@ void CANHardwareInterface::receive_message_thread_function(std::uint8_t channelI
 	if (channelIndex < hardwareChannels.size())
 	{
 		while ((threadsStarted) &&
-		       (nullptr != hardwareChannels[channelIndex]->frameHandler))
+		       (nullptr != hardwareChannels[channelIndex]->frameHandler) &&
+		       (!stopRxThreads))
 		{
 			if (hardwareChannels[channelIndex]->frameHandler->get_is_valid())
 			{
@@ -467,6 +491,7 @@ void CANHardwareInterface::update_can_lib_periodic_function()
 void CANHardwareInterface::stop_threads()
 {
 	threadsStarted = false;
+	stopRxThreads = false;
 	if (nullptr != canThread)
 	{
 		if (canThread->joinable())

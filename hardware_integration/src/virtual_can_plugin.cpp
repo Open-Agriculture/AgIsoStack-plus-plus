@@ -77,7 +77,7 @@ void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfac
 bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 {
 	std::unique_lock<std::mutex> lock(mutex);
-	ourDevice->condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });
+	ourDevice->condition.wait_for(lock, std::chrono::milliseconds(100), [this] { return !running || !ourDevice->queue.empty(); });
 	if (!ourDevice->queue.empty())
 	{
 		canFrame = ourDevice->queue.front();

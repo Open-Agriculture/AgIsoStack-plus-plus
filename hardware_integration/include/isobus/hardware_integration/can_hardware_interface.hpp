@@ -103,6 +103,10 @@ public:
 	/// @returns `true` if the callback was removed, `false` if no callback matched the two parameters
 	static bool remove_can_lib_update_callback(void (*callback)(), void *parentPointer);
 
+	/// @brief Stops only the recieve threads for each channel. Useful for testing. Keeps the Tx and main threads running.
+	/// @returns `true` if the receive threads were joined
+	static bool stop_recieve_threads();
+
 private:
 	/// @brief A class to store information about CAN lib update callbacks
 	class CanLibUpdateCallbackInfo
@@ -186,6 +190,7 @@ private:
 	static std::condition_variable threadConditionVariable; ///< A condition variable to allow for signaling the CAN thread from `periodicUpdateThread`
 	static std::atomic_bool threadsStarted; ///< Stores if `start` has been called yet
 	static std::atomic_bool canLibNeedsUpdate; ///< Stores if the CAN thread needs to update the CAN stack this iteration
+	static std::atomic_bool stopRxThreads; ///< Disables receive threads for testing purposes
 	static std::uint32_t canLibUpdatePeriod; ///< The period between calls to the CAN stack update function in milliseconds
 };
 

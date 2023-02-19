@@ -76,5 +76,10 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 	EXPECT_EQ(message_count, 1);
 
+	// Test disabling Rx threads
+	EXPECT_EQ(true, CANHardwareInterface::stop_recieve_threads());
+
 	CANHardwareInterface::stop();
+
+	EXPECT_EQ(false, CANHardwareInterface::stop_recieve_threads());
 }
