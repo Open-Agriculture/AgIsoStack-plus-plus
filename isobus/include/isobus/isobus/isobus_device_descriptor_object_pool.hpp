@@ -25,6 +25,7 @@ namespace isobus
 	/// device element designators.
 	class DeviceDescriptorObjectPool
 	{
+	public:
 		/// @brief Default constructor for a DDOP. Sets TC compatibility to version 4.
 		DeviceDescriptorObjectPool() = default;
 
@@ -47,8 +48,8 @@ namespace isobus
 		               std::string deviceSoftwareVersion,
 		               std::string deviceSerialNumber,
 		               std::string deviceStructureLabel,
-		               std::string deviceLocalizationLabel,
-		               std::vector<std::uint8_t> &deviceExtendedStructureLabel,
+		               std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
+		               std::vector<std::uint8_t> deviceExtendedStructureLabel,
 		               std::uint64_t clientIsoNAME);
 
 		/// @brief Adds a device element object to the DDOP

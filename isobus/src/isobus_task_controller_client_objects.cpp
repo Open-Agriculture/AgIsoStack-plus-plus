@@ -11,6 +11,8 @@
 #include "isobus/utility/platform_endianness.hpp"
 
 #include <array>
+#include <cstring>
+#include <algorithm>
 
 namespace isobus
 {
@@ -38,7 +40,7 @@ namespace isobus
 		                           std::string deviceSoftwareVersion,
 		                           std::string deviceSerialNumber,
 		                           std::string deviceStructureLabel,
-		                           std::string deviceLocalizationLabel,
+		                           std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> &deviceLocalizationLabel,
 		                           std::vector<std::uint8_t> &deviceExtendedStructureLabel,
 		                           std::uint64_t clientIsoNAME) :
 		  Object(deviceDesignator, 0),
@@ -140,7 +142,7 @@ namespace isobus
 			return structureLabel;
 		}
 
-		std::string DeviceObject::get_localization_label() const
+		std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> DeviceObject::get_localization_label() const
 		{
 			return localizationLabel;
 		}
