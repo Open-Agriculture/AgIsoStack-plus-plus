@@ -12,7 +12,6 @@
 
 namespace isobus
 {
-
 	/// @brief Returns if the platform is little endian
 	/// @returns `true` if the platform is little endian, otherwise false
 	bool isLittleEndian();

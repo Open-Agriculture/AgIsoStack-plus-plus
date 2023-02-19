@@ -139,6 +139,35 @@ namespace isobus
 		return genericUnitSystem;
 	}
 
+	const std::array<std::uint8_t, 7> LanguageCommandInterface::get_localization_raw_data() const
+	{
+		std::array<std::uint8_t, 7> retVal = { 0 };
+
+		if (languageCode.size() >= 2)
+		{
+			retVal[0] = languageCode[0];
+			retVal[1] = languageCode[1];
+		}
+		else
+		{
+			retVal[0] = ' ';
+			retVal[1] = ' ';
+		}
+		retVal[2] = ((static_cast<std::uint8_t>(timeFormat) << 4) |
+		             (static_cast<std::uint8_t>(decimalSymbol) << 6));
+		retVal[3] = static_cast<std::uint8_t>(dateFormat);
+		retVal[4] = (static_cast<std::uint8_t>(massUnitSystem) |
+		             (static_cast<std::uint8_t>(volumeUnitSystem) << 2) |
+		             (static_cast<std::uint8_t>(areaUnitSystem) << 4) |
+		             (static_cast<std::uint8_t>(distanceUnitSystem) << 6));
+		retVal[5] = (static_cast<std::uint8_t>(genericUnitSystem) |
+		             (static_cast<std::uint8_t>(forceUnitSystem) << 2) |
+		             (static_cast<std::uint8_t>(pressureUnitSystem) << 4) |
+		             (static_cast<std::uint8_t>(temperatureUnitSystem) << 6));
+		retVal[6] = 0xFF;
+		return retVal;
+	}
+
 	void LanguageCommandInterface::process_rx_message(CANMessage *message, void *parentPointer)
 	{
 		auto *parentInterface = reinterpret_cast<LanguageCommandInterface *>(parentPointer);

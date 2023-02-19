@@ -18,7 +18,7 @@ namespace isobus
 	/// @brief A namespace that contains the generic task controller objects
 	namespace task_controller_object
 	{
-		// @brief Enumerates the different kinds of DDOP objects
+		/// @brief Enumerates the different kinds of DDOP objects
 		enum class ObjectTypes
 		{
 			Device, ///< The root object. Each device shall have one single Device
@@ -91,7 +91,7 @@ namespace isobus
 			             std::string deviceSoftwareVersion,
 			             std::string deviceSerialNumber,
 			             std::string deviceStructureLabel,
-			             std::string deviceLocalizationLabel,
+			             std::array<std::uint8_t, 7> &deviceLocalizationLabel,
 			             std::vector<std::uint8_t> &deviceExtendedStructureLabel,
 			             std::uint64_t clientIsoNAME);
 
@@ -117,7 +117,7 @@ namespace isobus
 
 			/// @brief Returns the localization label for this DDOP
 			/// @returns The  localization label for this DDOP
-			std::string get_localization_label() const;
+			std::array<std::uint8_t, 7> get_localization_label() const;
 
 			/// @brief Returns the extended structure label (if applicable)
 			/// @returns The extended structure label (if applicable)
@@ -138,7 +138,7 @@ namespace isobus
 			std::string serialNumber; ///< Device and manufacturer-specific serial number of the Device
 			std::string softwareVersion; ///< Software version of the device
 			std::string structureLabel; ///< Label given by device to identify the device descriptor structure
-			std::string localizationLabel; ///< Label given by device to identify the device descriptor localization
+			std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> &localizationLabel; ///< Label given by device to identify the device descriptor localization
 			std::vector<std::uint8_t> extendedStructureLabel; ///< Continuation of the Label given by Device to identify the Device descriptor Structure
 			std::uint64_t NAME; ///< The NAME of client device as defined in ISO 11783-5. MUST match your address claim
 		};

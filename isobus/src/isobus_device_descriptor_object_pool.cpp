@@ -25,8 +25,8 @@ namespace isobus
 	                                           std::string deviceSoftwareVersion,
 	                                           std::string deviceSerialNumber,
 	                                           std::string deviceStructureLabel,
-	                                           std::string deviceLocalizationLabel,
-	                                           std::vector<std::uint8_t> &deviceExtendedStructureLabel,
+	                                           std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
+	                                           std::vector<std::uint8_t> deviceExtendedStructureLabel,
 	                                           std::uint64_t clientIsoNAME)
 	{
 		bool retVal = true;
@@ -94,13 +94,6 @@ namespace isobus
 				                     " Please verify your DDOP configuration meets this requirement.");
 			}
 
-			if (deviceLocalizationLabel.size() > task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
-			{
-				CANStackLogger::warn("[DDOP]: Device localization label " +
-				                     deviceLocalizationLabel +
-				                     " is greater than the max length of 7. Value will be truncated.");
-				deviceLocalizationLabel.resize(task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH);
-			}
 			if (deviceStructureLabel.size() > task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
 			{
 				CANStackLogger::warn("[DDOP]: Device structure label " +
@@ -114,11 +107,7 @@ namespace isobus
 				deviceExtendedStructureLabel.resize(task_controller_object::DeviceObject::MAX_EXTENDED_STRUCTURE_LABEL_LENGTH);
 			}
 
-			if (deviceLocalizationLabel.size() < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
-			{
-				CANStackLogger::warn("[DDOP]: Device localization label must be exactly 7 bytes long. Label will be padded with spaces when DDOP binary is generated.");
-			}
-			else if (deviceLocalizationLabel[6] != 0xFF)
+			if (deviceLocalizationLabel[6] != 0xFF)
 			{
 				CANStackLogger::warn("[DDOP]: Device localization label byte 7 must be the reserved value 0xFF. This value will be enforced when DDOP binary is generated.");
 			}
@@ -365,7 +354,7 @@ namespace isobus
 			retVal = true;
 			for (auto &currentObject : objectList)
 			{
-				auto &objectBinary = currentObject->get_binary_object();
+				auto objectBinary = currentObject->get_binary_object();
 
 				if (objectBinary.size() != 0)
 				{
