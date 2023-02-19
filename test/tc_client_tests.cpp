@@ -42,10 +42,11 @@ public:
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 {
-	auto testPlugin = std::make_shared<VirtualCANPlugin>("", true);
+	VirtualCANPlugin serverTC;
+	serverTC.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, testPlugin);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::add_can_lib_update_callback(
 	  [] {
 		  CANNetworkManager::CANNetwork.update();
@@ -69,8 +70,6 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	}
 
 	ASSERT_TRUE(internalECU->get_address_valid());
-
-	CANHardwareInterface::stop_recieve_threads();
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
@@ -98,16 +97,16 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state
-	while (!testPlugin->get_queue_empty())
+	while (!serverTC.get_queue_empty())
 	{
-		testPlugin->read_frame(testFrame);
+		serverTC.read_frame(testFrame);
 	}
-	ASSERT_TRUE(testPlugin->get_queue_empty());
+	ASSERT_TRUE(serverTC.get_queue_empty());
 
 	// Test Working Set Master Message
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_working_set_master());
 
-	ASSERT_TRUE(testPlugin->read_frame(testFrame));
+	ASSERT_TRUE(serverTC.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -123,7 +122,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	// Test Version Request Message
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_version_request());
 
-	ASSERT_TRUE(testPlugin->read_frame(testFrame));
+	ASSERT_TRUE(serverTC.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -141,7 +140,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendStatusMessage);
 	interfaceUnderTest.update();
 
-	testPlugin->read_frame(testFrame);
+	serverTC.read_frame(testFrame);
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -158,7 +157,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	// Test version response
 	interfaceUnderTest.configure(1, 2, 3, true, true, true, true, true);
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
-	testPlugin->read_frame(testFrame);
+	serverTC.read_frame(testFrame);
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -202,10 +201,11 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
 TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 {
 	// Boilerplate...
-	auto testPlugin = std::make_shared<VirtualCANPlugin>("", true);
+	VirtualCANPlugin serverTC;
+	serverTC.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, testPlugin);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::add_can_lib_update_callback(
 	  [] {
 		  CANNetworkManager::CANNetwork.update();
@@ -230,8 +230,6 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	}
 
 	ASSERT_TRUE(internalECU->get_address_valid());
-
-	CANHardwareInterface::stop_recieve_threads();
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
@@ -260,11 +258,11 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state
-	while (!testPlugin->get_queue_empty())
+	while (!serverTC.get_queue_empty())
 	{
-		testPlugin->read_frame(testFrame);
+		serverTC.read_frame(testFrame);
 	}
-	ASSERT_TRUE(testPlugin->get_queue_empty());
+	ASSERT_TRUE(serverTC.get_queue_empty());
 
 	// End boilerplate
 
