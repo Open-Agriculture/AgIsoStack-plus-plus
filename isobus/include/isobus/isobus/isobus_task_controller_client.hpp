@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/isobus_device_descriptor_object_pool.hpp"
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
@@ -33,7 +34,22 @@ namespace isobus
 			SendRequestVersionResponse,
 			RequestLanguage,
 			WaitForLanguageResponse,
-			Connected
+			ProcessDDOP,
+			RequestStructureLabel,
+			WaitForStructureLabelResponse,
+			RequestLocalizationLabel,
+			WaitForLocalizationLabelResponse,
+			SendDeleteObjectPool,
+			WaitForDeleteObjectPoolResponse,
+			SendRequestTransferObjectPool,
+			WaitForRequestTransferObjectPoolResponse,
+			TransferDDOP,
+			WaitForObjectPoolTransferResponse,
+			SendObjectPoolActivate,
+			WaitForObjectPoolActivateResponse,
+			Connected,
+			DeactivateObjectPool,
+			WaitForObjectPoolDeactivateResponse
 		};
 
 		/// @brief Enumerates the different task controller versions
@@ -84,7 +100,8 @@ namespace isobus
 		/// @param[in] supportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
 		/// @param[in] supportsPeerControlAssignment Denotes if your app supports peer control assignment
 		/// @param[in] supportsImplementSectionControl Denotes if your app supports implement section control
-		void configure(std::uint8_t numberBoomsSupported,
+		void configure(std::shared_ptr<DeviceDescriptorObjectPool> DDOP,
+		               std::uint8_t numberBoomsSupported,
 		               std::uint8_t numberSectionsSupported,
 		               std::uint8_t numberChannelsSupportedForPositionBasedControl,
 		               bool supportsDocumentation,
@@ -225,10 +242,58 @@ namespace isobus
 			ChangeDesignatorResponse = 0x0D ///< Sent in response to Change Designator message
 		};
 
+		/// @brief The data callback passed to the network manger's send function for the transport layer messages
+		/// @details We upload the data with callbacks to avoid making yet another complete copy of the pool to
+		/// accommodate the multiplexor that needs to get passed to the transport layer message's first byte.
+		/// @param[in] callbackIndex The number of times the callback has been called
+		/// @param[in] bytesOffset The byte offset at which to get pool data
+		/// @param[in] numberOfBytesNeeded The number of bytes the protocol needs to send another frame (usually 7)
+		/// @param[out] chunkBuffer A pointer through which the data should be returned to the protocol
+		/// @param[in] parentPointer A context variable that is passed back through the callback
+		/// @returns true if the data was successfully returned via the callback
+		static bool process_internal_object_pool_upload_callback(std::uint32_t callbackIndex,
+		                                                         std::uint32_t bytesOffset,
+		                                                         std::uint32_t numberOfBytesNeeded,
+		                                                         std::uint8_t *chunkBuffer,
+		                                                         void *parentPointer);
+
 		/// @brief Processes a CAN message destined for any TC client
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant TC client class
 		static void process_rx_message(CANMessage *message, void *parentPointer);
+
+		/// @brief The callback passed to the network manager's send function to know when a Tx is completed
+		static void process_tx_callback(std::uint32_t parameterGroupNumber,
+		                                std::uint32_t dataLength,
+		                                InternalControlFunction *sourceControlFunction,
+		                                ControlFunction *destinationControlFunction,
+		                                bool successful,
+		                                void *parentPointer);
+
+		/// @brief Sends a request to the TC for its localization label
+		/// @details The Request Localization Label message allows the client to determine the availability of the requested
+		/// device descriptor localization at the TC or DL.If the requested localization label is present,
+		/// a localization label message with the requested localization label shall be transmitted by the TC or DL
+		/// to the sender of the Request Localization Label message. Otherwise, a localization label message with all
+		/// localization label bytes set to value = 0xFF shall be transmitted by the TC or DL to the sender of the
+		/// Request Localization Label message.
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_request_localization_label() const;
+
+		/// @brief Sends a request to the TC indicating we wish to transfer an object pool
+		/// @details The Request Object-pool Transfer message allows the client to determine whether it is allowed to
+		/// transfer(part of) the device descriptor object pool to the TC or DL.
+		/// @returns `true` if the message was sent, otherwise false
+		bool send_request_object_pool_transfer() const;
+
+		/// @brief Sends a request to the TC for its structure label
+		/// @details The Request Structure Label message allows the client to determine the availability of the requested
+		/// device descriptor structure at the TC. If the requested structure label is present, a structure label
+		/// message with the requested structure label shall be transmitted by the TC or DL to the sender
+		/// of the Request Structure Label message. Otherwise, a structure label message with 7 structure
+		/// label bytes set to value = 0xFF shall be transmitted by the TC or DL to the sender of the Request Structure Label message
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_request_structure_label() const;
 
 		/// @brief Sends the response to a request for version from the TC
 		/// @returns `true` if the message was sent, otherwise `false`
@@ -256,6 +321,8 @@ namespace isobus
 	private:
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
+		std::shared_ptr<DeviceDescriptorObjectPool> clientDDOP; ///< Stores the DDOP for upload to the TC (if needed)
+		std::vector<std::uint8_t> binaryDDOP; ///< Stores the DDOP in binary form after it has been generated
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)
 		std::uint32_t controlFunctionValidTimestamp_ms = 0; ///< A timestamp to track when (in milliseconds) our internal control function becomes valid

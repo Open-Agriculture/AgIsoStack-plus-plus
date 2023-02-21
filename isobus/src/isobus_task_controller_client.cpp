@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cassert>
+#include <cstring>
 
 namespace isobus
 {
@@ -50,7 +51,8 @@ namespace isobus
 		}
 	}
 
-	void TaskControllerClient::configure(std::uint8_t maxNumberBoomsSupported,
+	void TaskControllerClient::configure(std::shared_ptr<DeviceDescriptorObjectPool> DDOP,
+	                                     std::uint8_t maxNumberBoomsSupported,
 	                                     std::uint8_t maxNumberSectionsSupported,
 	                                     std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
 	                                     bool reportToTCSupportsDocumentation,
@@ -59,14 +61,25 @@ namespace isobus
 	                                     bool reportToTCSupportsPeerControlAssignment,
 	                                     bool reportToTCSupportsImplementSectionControl)
 	{
-		numberBoomsSupported = maxNumberBoomsSupported;
-		numberSectionsSupported = maxNumberSectionsSupported;
-		numberChannelsSupportedForPositionBasedControl = maxNumberChannelsSupportedForPositionBasedControl;
-		supportsDocumentation = reportToTCSupportsDocumentation;
-		supportsTCGEOWithoutPositionBasedControl = reportToTCSupportsTCGEOWithoutPositionBasedControl;
-		supportsTCGEOWithPositionBasedControl = reportToTCSupportsTCGEOWithPositionBasedControl;
-		supportsPeerControlAssignment = reportToTCSupportsPeerControlAssignment;
-		supportsImplementSectionControl = reportToTCSupportsImplementSectionControl;
+		if (StateMachineState::Disconnected == get_state())
+		{
+			assert(nullptr != DDOP); // Client will not work without a DDOP.
+			binaryDDOP.clear();
+			clientDDOP = DDOP;
+			numberBoomsSupported = maxNumberBoomsSupported;
+			numberSectionsSupported = maxNumberSectionsSupported;
+			numberChannelsSupportedForPositionBasedControl = maxNumberChannelsSupportedForPositionBasedControl;
+			supportsDocumentation = reportToTCSupportsDocumentation;
+			supportsTCGEOWithoutPositionBasedControl = reportToTCSupportsTCGEOWithoutPositionBasedControl;
+			supportsTCGEOWithPositionBasedControl = reportToTCSupportsTCGEOWithPositionBasedControl;
+			supportsPeerControlAssignment = reportToTCSupportsPeerControlAssignment;
+			supportsImplementSectionControl = reportToTCSupportsImplementSectionControl;
+		}
+		else
+		{
+			// We don't want someone to erase our object pool or something while it is being used.
+			CANStackLogger::error("[TC]: Cannot reconfigure TC client while it is running!");
+		}
 	}
 
 	void TaskControllerClient::terminate()
@@ -166,7 +179,7 @@ namespace isobus
 			{
 				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout waiting for TC status message. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout waiting for TC status message. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -180,7 +193,7 @@ namespace isobus
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout sending working set master message. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout sending working set master message. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -197,7 +210,7 @@ namespace isobus
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout sending first status message. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout sending first status message. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -211,7 +224,7 @@ namespace isobus
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout sending version request message. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout sending version request message. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -221,7 +234,7 @@ namespace isobus
 			{
 				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout waiting for version request response. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout waiting for version request response. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -245,7 +258,7 @@ namespace isobus
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout sending version request response. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout sending version request response. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -259,7 +272,7 @@ namespace isobus
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout trying to send request for language command message. Resetting client conenction.");
+					CANStackLogger::error("[TC]: Timeout trying to send request for language command message. Resetting client connection.");
 					set_state(StateMachineState::Disconnected);
 				}
 			}
@@ -270,7 +283,94 @@ namespace isobus
 				if ((SystemTiming::get_time_elapsed_ms(languageCommandInterface.get_language_command_timestamp()) < SIX_SECOND_TIMEOUT_MS) &&
 				    ("" != languageCommandInterface.get_language_code()))
 				{
-					// set_state() Todo
+					set_state(StateMachineState::ProcessDDOP);
+				}
+			}
+			break;
+
+			case StateMachineState::ProcessDDOP:
+			{
+				assert(0 != clientDDOP->size()); // Need to have a valid object pool!
+				if (0 == binaryDDOP.size())
+				{
+					// Binary DDOP has not been generated before.
+					if (clientDDOP->generate_binary_object_pool(binaryDDOP))
+					{
+						CANStackLogger::debug("[TC]: DDOP Generated, size: " + isobus::to_string(static_cast<int>(binaryDDOP.size())));
+						set_state(StateMachineState::RequestStructureLabel);
+					}
+					else
+					{
+						CANStackLogger::error("[TC]: Cannot proceed with connection to TC due to invalid DDOP. Check log for [DDOP] events. TC client will now terminate.");
+						this->terminate();
+					}
+				}
+			}
+			break;
+
+			case StateMachineState::RequestStructureLabel:
+			{
+				if (send_request_structure_label())
+				{
+					set_state(StateMachineState::WaitForStructureLabelResponse);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout trying to send request for TC structure label. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForStructureLabelResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for TC structure label. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::RequestLocalizationLabel:
+			{
+				if (send_request_localization_label())
+				{
+					set_state(StateMachineState::WaitForLocalizationLabelResponse);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout trying to send request for TC localization label. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForLocalizationLabelResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for TC localization label. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::SendDeleteObjectPool:
+			{
+			}
+			break;
+
+			case StateMachineState::SendRequestTransferObjectPool:
+			{
+				if (send_request_object_pool_transfer())
+				{
+					set_state(StateMachineState::WaitForRequestTransferObjectPoolResponse);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout trying to send request to transfer object pool. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
 				}
 			}
 			break;
@@ -367,6 +467,155 @@ namespace isobus
 						}
 						break;
 
+						case ProcessDataCommands::DeviceDescriptor:
+						{
+							switch (static_cast<DeviceDescriptorCommands>(messageData[0] >> 4))
+							{
+								case DeviceDescriptorCommands::StructureLabel:
+								{
+									if (StateMachineState::WaitForStructureLabelResponse == parentTC->get_state())
+									{
+										if ((0xFF == messageData[1]) &&
+										    (0xFF == messageData[2]) &&
+										    (0xFF == messageData[3]) &&
+										    (0xFF == messageData[4]) &&
+										    (0xFF == messageData[5]) &&
+										    (0xFF == messageData[6]) &&
+										    (0xFF == messageData[7]) &&
+										    (CAN_DATA_LENGTH == messageData.size()))
+										{
+											// TC has no structure label for us. Need to upload the DDOP.
+											parentTC->set_state(StateMachineState::SendRequestTransferObjectPool);
+										}
+										else
+										{
+											std::string tcStructure;
+
+											for (std::size_t i = 1; i < messageData.size(); i++)
+											{
+												tcStructure.push_back(messageData[i]);
+											}
+
+											if (tcStructure.size() > 40)
+											{
+												CANStackLogger::warn("[TC]: Structure Label from TC exceeds the max length allowed by ISO11783-10");
+											}
+											task_controller_object::Object *deviceObject = parentTC->clientDDOP->get_object_by_id(0);
+											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
+											assert(nullptr != deviceObject);
+											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
+											if (reinterpret_cast<task_controller_object::DeviceObject *>(deviceObject)->get_structure_label() == tcStructure)
+											{
+												// Structure label matched. No upload needed yet.
+												CANStackLogger::debug("[TC]: Task controller structure labels match");
+												parentTC->set_state(StateMachineState::RequestLocalizationLabel);
+											}
+											else
+											{
+												// Structure label did not match. Need to delete current DDOP and re-upload.
+												CANStackLogger::info("[TC]: Task controller structure labels do not match. DDOP will be deleted and reuploaded.");
+												parentTC->set_state(StateMachineState::SendDeleteObjectPool);
+											}
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[TC]: Structure label message received, but ignored due to current state machine state.");
+									}
+								}
+								break;
+
+								case DeviceDescriptorCommands::LocalizationLabel:
+								{
+									// Right now, we'll just reload the pool if the localization doesn't match, but
+									// in the future we should permit modifications to the localization and DVP objects
+									//! @todo Localization label partial pool handling
+									if (StateMachineState::WaitForStructureLabelResponse == parentTC->get_state())
+									{
+										if ((0xFF == messageData[1]) &&
+										    (0xFF == messageData[2]) &&
+										    (0xFF == messageData[3]) &&
+										    (0xFF == messageData[4]) &&
+										    (0xFF == messageData[5]) &&
+										    (0xFF == messageData[6]) &&
+										    (0xFF == messageData[7]) &&
+										    (CAN_DATA_LENGTH == messageData.size()))
+										{
+											// TC has no localization label for us. Need to upload the DDOP.
+											parentTC->set_state(StateMachineState::SendRequestTransferObjectPool);
+										}
+										else
+										{
+											task_controller_object::Object *deviceObject = parentTC->clientDDOP->get_object_by_id(0);
+											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
+											assert(nullptr != deviceObject);
+											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
+
+											auto ddopLabel = reinterpret_cast<task_controller_object::DeviceObject *>(deviceObject)->get_localization_label();
+											bool labelsMatch = true;
+
+											for (std::uint_fast8_t i = 0; i < (CAN_DATA_LENGTH - 1); i++)
+											{
+												if (messageData[i] != ddopLabel[i])
+												{
+													labelsMatch = false;
+													break;
+												}
+											}
+
+											if (labelsMatch)
+											{
+												// DDOP labels all matched
+												CANStackLogger::debug("[TC]: Task controller localization labels match");
+												parentTC->set_state(StateMachineState::SendObjectPoolActivate);
+											}
+											else
+											{
+												// Labels didn't match. Reupload
+												CANStackLogger::info("[TC]: Task controller localization labels do not match. DDOP will be deleted and reuploaded.");
+												parentTC->set_state(StateMachineState::SendDeleteObjectPool);
+											}
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[TC]: Localization label message received, but ignored due to current state machine state.");
+									}
+								}
+								break;
+
+								case DeviceDescriptorCommands::RequestObjectPoolTransferResponse:
+								{
+									if (StateMachineState::WaitForRequestTransferObjectPoolResponse == parentTC->get_state())
+									{
+										if (0 == messageData[1])
+										{
+											// Because there is overhead associated with object storage, it is impossible to predict whether there is enough memory available, technically.
+											CANStackLogger::debug("[TC]: Server indicates there may be enough memory available.");
+											parentTC->set_state(StateMachineState::TransferDDOP);
+										}
+										else
+										{
+											CANStackLogger::error("[TC]: Server states that there is not enough memory available for our DDOP. Client will terminate.");
+											parentTC->terminate();
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[TC]: Request Object-pool Transfer Response message received, but ignored due to current state machine state.");
+									}
+								}
+								break;
+
+								default:
+								{
+									CANStackLogger::warn("[TC]: Unsupported device descriptor command message received. Message will be dropped.");
+								}
+								break;
+							}
+						}
+						break;
+
 						case ProcessDataCommands::StatusMessage:
 						{
 							// Many values in the status message were undefined in version 2 and before, so the
@@ -396,6 +645,129 @@ namespace isobus
 				break;
 			}
 		}
+	}
+
+	bool TaskControllerClient::process_internal_object_pool_upload_callback(std::uint32_t callbackIndex,
+	                                                                        std::uint32_t bytesOffset,
+	                                                                        std::uint32_t numberOfBytesNeeded,
+	                                                                        std::uint8_t *chunkBuffer,
+	                                                                        void *parentPointer)
+	{
+		auto parentTCClient = static_cast<TaskControllerClient *>(parentPointer);
+		bool retVal = false;
+
+		// These assertions should never fail, but if they do, please consider reporting it on our GitHub page
+		// along with a CAN trace and accompanying CANStackLogger output of the issue.
+		assert(nullptr != parentTCClient);
+		assert(nullptr != chunkBuffer);
+		assert(0 != numberOfBytesNeeded);
+
+		if ((bytesOffset + numberOfBytesNeeded) <= parentTCClient->binaryDDOP.size() + 1)
+		{
+			retVal = true;
+			if (0 == bytesOffset)
+			{
+				chunkBuffer[0] = static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+				  (static_cast<std::uint8_t>(DeviceDescriptorCommands::ObjectPoolTransfer) << 4);
+				memcpy(&chunkBuffer[1], &parentTCClient->binaryDDOP[bytesOffset], numberOfBytesNeeded - 1);
+			}
+			else
+			{
+				// Subtract off 1 to account for the mux in the first byte of the message
+				memcpy(chunkBuffer, &parentTCClient->binaryDDOP[bytesOffset - 1], numberOfBytesNeeded);
+			}
+		}
+		else
+		{
+			CANStackLogger::error("[TC]: DDOP internal data callback received out of range request.");
+		}
+		return retVal;
+	}
+
+	void TaskControllerClient::process_tx_callback(std::uint32_t parameterGroupNumber,
+	                                               std::uint32_t,
+	                                               InternalControlFunction *,
+	                                               ControlFunction *destinationControlFunction,
+	                                               bool successful,
+	                                               void *parentPointer)
+	{
+		if ((nullptr != parentPointer) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData) == parameterGroupNumber) &&
+		    (nullptr != destinationControlFunction))
+		{
+			TaskControllerClient *parent = reinterpret_cast<TaskControllerClient *>(parentPointer);
+
+			if (StateMachineState::TransferDDOP == parent->get_state())
+			{
+				if (successful)
+				{
+					parent->set_state(StateMachineState::SendObjectPoolActivate);
+				}
+				else
+				{
+					CANStackLogger::error("[TC]: DDOP upload did not complete. Resetting.");
+					parent->set_state(StateMachineState::Disconnected);
+				}
+			}
+		}
+	}
+
+	bool TaskControllerClient::send_request_localization_label() const
+	{
+		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+			                                                               (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestLocalizationLabel) << 4),
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF };
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get());
+	}
+
+	bool TaskControllerClient::send_request_object_pool_transfer() const
+	{
+		std::size_t binaryPoolSize = binaryDDOP.size();
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+			                                                           (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestObjectPoolTransfer) << 4),
+			                                                         static_cast<std::uint8_t>(binaryPoolSize & 0xFF),
+			                                                         static_cast<std::uint8_t>((binaryPoolSize >> 8) & 0xFF),
+			                                                         static_cast<std::uint8_t>((binaryPoolSize >> 16) & 0xFF),
+			                                                         static_cast<std::uint8_t>((binaryPoolSize >> 24) & 0xFF),
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF };
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get());
+	}
+
+	bool TaskControllerClient::send_request_structure_label() const
+	{
+		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+			                                                               (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestStructureLabel) << 4),
+			                                                             0xFF, // When all bytes are 0xFF, the TC will tell us about the latest structure label
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF };
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get());
 	}
 
 	bool TaskControllerClient::send_request_version_response() const

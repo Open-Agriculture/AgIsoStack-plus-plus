@@ -115,6 +115,10 @@ namespace isobus
 		/// @returns Pointer to the object matching the provided ID, or nullptr if no match was found
 		task_controller_object::Object *get_object_by_id(std::uint16_t objectID);
 
+		/// @brief Returns the number of objects in the DDOP
+		/// @returns The number of objects in the DDOP
+		std::size_t size() const;
+
 	private:
 		/// @brief Checks to see that all parent object IDs correspond to an object in this DDOP
 		/// @returns `true` if all object IDs were validated, otherwise `false`

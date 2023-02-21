@@ -44,6 +44,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 {
 	VirtualCANPlugin serverTC;
 	serverTC.open();
+	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
@@ -155,7 +156,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	EXPECT_EQ(0x00, testFrame.data[7]); // 0 Reserved
 
 	// Test version response
-	interfaceUnderTest.configure(1, 2, 3, true, true, true, true, true);
+	interfaceUnderTest.configure(blankDDOP, 1, 2, 3, true, true, true, true, true);
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
 	serverTC.read_frame(testFrame);
 
@@ -362,9 +363,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
+	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 
 	// Set and test the basic settings for the client
-	interfaceUnderTest.configure(6, 64, 32, false, false, false, false, false);
+	interfaceUnderTest.configure(blankDDOP, 6, 64, 32, false, false, false, false, false);
 	EXPECT_EQ(6, interfaceUnderTest.get_number_booms_supported());
 	EXPECT_EQ(64, interfaceUnderTest.get_number_sections_supported());
 	EXPECT_EQ(32, interfaceUnderTest.get_number_channels_supported_for_position_based_control());
@@ -373,7 +375,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
 	EXPECT_EQ(false, interfaceUnderTest.get_supports_peer_control_assignment());
 	EXPECT_EQ(false, interfaceUnderTest.get_supports_tcgeo_without_position_based_control());
 	EXPECT_EQ(false, interfaceUnderTest.get_supports_tcgeo_with_position_based_control());
-	interfaceUnderTest.configure(255, 255, 255, true, true, true, true, true);
+	interfaceUnderTest.configure(blankDDOP, 255, 255, 255, true, true, true, true, true);
 	EXPECT_EQ(255, interfaceUnderTest.get_number_booms_supported());
 	EXPECT_EQ(255, interfaceUnderTest.get_number_sections_supported());
 	EXPECT_EQ(255, interfaceUnderTest.get_number_channels_supported_for_position_based_control());
