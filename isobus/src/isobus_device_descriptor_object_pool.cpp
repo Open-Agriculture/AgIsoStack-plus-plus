@@ -390,6 +390,11 @@ namespace isobus
 		return retVal;
 	}
 
+	std::size_t DeviceDescriptorObjectPool::size() const
+	{
+		return objectList.size();
+	}
+
 	bool DeviceDescriptorObjectPool::resolve_parent_ids_to_objects()
 	{
 		bool retVal = true;
