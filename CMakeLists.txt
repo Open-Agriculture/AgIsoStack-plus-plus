@@ -69,6 +69,7 @@ if(BUILD_EXAMPLES)
   add_subdirectory("examples/pgn_requests")
   add_subdirectory("examples/nmea2000")
   add_subdirectory("examples/vt_aux_n")
+  add_subdirectory("examples/task_controller_client")
 endif()
 
 if(BUILD_TESTING)
