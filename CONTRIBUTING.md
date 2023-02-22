@@ -1,10 +1,12 @@
 # Contributing to ISOBUS++
 
-We accept public contributions that follow our code of conduct, pass all automated pre-merge checks, and pass a manual code review by a repo maintainer.
+We warmly welcome you to Isobus++! Contributing to our open source repository implementing the ISOBUS (ISO11783) standard in the agricultural industry can involve anything from adding new features, improving existing code, fixing bugs, or even just helping to test and document the project. We greatly appreciate any contributions you can make to help drive progress and innovation in this field. Thank you for your interest and support!
 
-## What Are The Requirements?
+We accept all public contributions that adhere to our code of conduct. Additionally, for PR's we require the pass of all automated pre-merge checks, and a manual code review by a repository maintainer to ensure that our high code quality and project standards are maintained.
 
-Our style rules and PR reviews are based loosely on Autosar's `Guidelines for the use of the C++14 language in critical and safety-related systems` and `MISRA C++` suggestions and try to ensure the highest quality possible.
+## What Are Our Guidelines?
+
+Our code style rules and PR reviews are based loosely on Autosar's `Guidelines for the use of the C++14 language in critical and safety-related systems` and `MISRA C++` suggestions and try to ensure the highest quality possible.
 
 * Contributions must follow the style defined in our `.clang-format` and `.cmake-format` files. You can ensure you pass this check by running `find . -iname *.hpp -o -iname *.cpp | xargs clang-format -i` and `find . -name CMakeLists.txt | xargs cmake-format -i` at the root of the repo before submitting your PR.
 * Contributions should follow these additional style requirements, which will be checked in code reviews.
@@ -18,16 +20,17 @@ Our style rules and PR reviews are based loosely on Autosar's `Guidelines for th
 	* No `using namespace` directives are allowed in header files
 	* Constructors with a single parameter shall be marked `explicit`
 	* Where possible, append `const` to functions that do not modify class member variables
-	* Where possible, delcare variables as `constexpr` if their value can be determined at compile time
+	* Where possible, declare variables as `constexpr` if their value can be determined at compile time
 	* Only those characters specified in the C++ Language Standard basic source character set shall be used in the source code except within the text of a wide string.
 	* In general, prefer C++ over C, though exceptions may be granted if needed
 	* This list of style items is not exhaustive, and some best practices such as include guards will also be checked in our PR reviews.
 * Doxygen should compile with no warnings when run at the root of the project with the command `doxygen doxyfile`
 * Absolutely no code shall be added that is under a more strict license than MIT or which has not had conditions met to be distributed under our license
 * Builds must pass the compilation github action
-* C++14 or earlier is required to help provide the maximum compatibility to all "modern" compilers
+* Only features present in C++14 can be used to help provide the maximum compatibility to all "modern" compilers
+* Aim for 80% code coverage on new code, but prioritize effective high-quality tests over achieving this percentage.
 
-These rules are not meant to be exclusionary or difficult to follow. Our only goal is to maximize the code quality in the project. It's also OK if you miss some of these items in your PR on your first or second try, we'll help you get your PR up to this standard. We want your contibutions!
+These rules are not meant to be exclusionary or difficult to follow. Our only goal is to maximize the code quality in the project. It's also OK if you miss some of these items in your PR on your first or second try, we'll help you get your PR up to this standard. We want your contributions!
 
 ## Setting up a Development Environment With GUI
 
