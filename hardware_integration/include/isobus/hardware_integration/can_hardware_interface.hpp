@@ -95,13 +95,13 @@ public:
 	/// @param[in] callback The callback to add
 	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
 	/// @returns `true` if the callback was added, `false` if it was already in the list
-	static bool add_can_lib_update_callback(void (*callback)(), void *parentPointer);
+	static bool add_can_lib_update_callback(void (*callback)(void *parentPointer), void *parentPointer);
 
 	/// @brief Removes a periodic update callback
 	/// @param[in] callback The callback to remove
 	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
 	/// @returns `true` if the callback was removed, `false` if no callback matched the two parameters
-	static bool remove_can_lib_update_callback(void (*callback)(), void *parentPointer);
+	static bool remove_can_lib_update_callback(void (*callback)(void *parentPointer), void *parentPointer);
 
 private:
 	/// @brief A class to store information about CAN lib update callbacks
@@ -112,7 +112,7 @@ private:
 		/// @param obj the object to compare against
 		bool operator==(const CanLibUpdateCallbackInfo &obj) const;
 
-		void (*callback)() = nullptr; ///< The callback
+		void (*callback)(void *parentPointer) = nullptr; ///< The callback
 		void *parent = nullptr; ///< Context variable, the owner of the callback
 	};
 
