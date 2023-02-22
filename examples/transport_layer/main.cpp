@@ -24,7 +24,7 @@ void signal_handler(int)
 	running = false;
 }
 
-void update_CAN_network()
+void update_CAN_network(void *parentPointer)
 {
 	isobus::CANNetworkManager::CANNetwork.update();
 }

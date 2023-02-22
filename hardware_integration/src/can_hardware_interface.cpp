@@ -275,7 +275,7 @@ void CANHardwareInterface::set_can_driver_update_period(std::uint32_t value)
 	canLibUpdatePeriod = value;
 }
 
-bool CANHardwareInterface::add_can_lib_update_callback(void (*callback)(), void *parentPointer)
+bool CANHardwareInterface::add_can_lib_update_callback(void (*callback)(void *parentPointer), void *parentPointer)
 {
 	std::lock_guard<std::mutex> lock(periodicUpdateCallbacksMutex);
 
@@ -292,7 +292,7 @@ bool CANHardwareInterface::add_can_lib_update_callback(void (*callback)(), void 
 	return false;
 }
 
-bool CANHardwareInterface::remove_can_lib_update_callback(void (*callback)(), void *parentPointer)
+bool CANHardwareInterface::remove_can_lib_update_callback(void (*callback)(void *parentPointer), void *parentPointer)
 {
 	std::lock_guard<std::mutex> lock(periodicUpdateCallbacksMutex);
 
@@ -362,7 +362,7 @@ void CANHardwareInterface::can_thread_function()
 				{
 					if (nullptr != periodicUpdateCallbacks[j].callback)
 					{
-						periodicUpdateCallbacks[j].callback();
+						periodicUpdateCallbacks[j].callback(periodicUpdateCallbacks[j].parent);
 					}
 				}
 				periodicUpdateCallbacksMutex.unlock();
