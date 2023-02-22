@@ -390,6 +390,11 @@ namespace isobus
 		return retVal;
 	}
 
+	void DeviceDescriptorObjectPool::clear()
+	{
+		objectList.clear();
+	}
+
 	std::size_t DeviceDescriptorObjectPool::size() const
 	{
 		return objectList.size();

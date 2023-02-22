@@ -17,6 +17,9 @@
 
 namespace isobus
 {
+	class VirtualTerminalClient; // Forward declaring VT client
+
+	/// @brief A class to manage a client connection to a ISOBUS field computer's task controller or data logger
 	class TaskControllerClient
 	{
 	public:
@@ -27,29 +30,30 @@ namespace isobus
 			WaitForStartUpDelay, ///< Client is waiting for the mandatory 6s startup delay
 			WaitForServerStatusMessage, ///< Client is waiting to identify the TC via reception of a valid status message
 			SendWorkingSetMaster, ///< Client initating communication with TC by sending the working set master message
-			SendStatusMessage,
-			RequestVersion,
-			WaitForRequestVersionResponse,
-			WaitForRequestVersionFromServer,
-			SendRequestVersionResponse,
-			RequestLanguage,
-			WaitForLanguageResponse,
-			ProcessDDOP,
-			RequestStructureLabel,
-			WaitForStructureLabelResponse,
-			RequestLocalizationLabel,
-			WaitForLocalizationLabelResponse,
-			SendDeleteObjectPool,
-			WaitForDeleteObjectPoolResponse,
-			SendRequestTransferObjectPool,
-			WaitForRequestTransferObjectPoolResponse,
-			TransferDDOP,
-			WaitForObjectPoolTransferResponse,
-			SendObjectPoolActivate,
-			WaitForObjectPoolActivateResponse,
-			Connected,
-			DeactivateObjectPool,
-			WaitForObjectPoolDeactivateResponse
+			SendStatusMessage, ///< Enables sending the status message
+			RequestVersion, ///< Requests the TC version and related data from the TC
+			WaitForRequestVersionResponse, ///< Waiting for the TC to respond to a request for its version
+			WaitForRequestVersionFromServer, ///< Waiting to see if the TC will request our version (optional)
+			SendRequestVersionResponse, ///< Sending our response to the TC's request for out version information
+			RequestLanguage, ///< Client is requesting the language command PGN from the TC
+			WaitForLanguageResponse, ///< Waiting for a response to our request for the language command PGN
+			ProcessDDOP, ///< Client is processing the DDOP into a binary DDOP and validating object IDs in the pool
+			RequestStructureLabel, ///< Client is requesting the DDOP structure label that the TC has (if any)
+			WaitForStructureLabelResponse, ///< Client is waiting for the TC to respond to our request for its structure label
+			RequestLocalizationLabel, ///< Client is requesting the DDOP localization label the TC has for us (if any)
+			WaitForLocalizationLabelResponse, ///< Waiting for a response to our request for the localization label from the TC
+			SendDeleteObjectPool, ///< Client is sending a request to the TC to delete its current copy of our object pool
+			WaitForDeleteObjectPoolResponse, ///< Waiting for a response to our request to delete our object pool off the TC
+			SendRequestTransferObjectPool, ///< Client is requesting to transfer the DDOP to the TC
+			WaitForRequestTransferObjectPoolResponse, ///< Waiting for a response to our request to transfer the DDOP to the TC
+			BeginTransferDDOP, ///< Client is initiating the DDOP transfer
+			WaitForDDOPTransfer, ///< The DDOP transfer in ongoing. Client is waiting for a callback from the transport layer.
+			WaitForObjectPoolTransferResponse, ///< DDOP has transferred. Waiting for a response to our object pool transfer.
+			SendObjectPoolActivate, ///< Client is sending the activate object pool message
+			WaitForObjectPoolActivateResponse, ///< Client is waiting for a response to its request to activate the object pool
+			Connected, ///< TC is connected
+			DeactivateObjectPool, ///< Client is shutting down and is therefore sending the deactivate object pool message
+			WaitForObjectPoolDeactivateResponse ///< Client is waiting for a response to the deactivate object pool message
 		};
 
 		/// @brief Enumerates the different task controller versions
@@ -63,6 +67,7 @@ namespace isobus
 			Unknown = 0xFF
 		};
 
+		/// @brief Enumerates the bits stored in our version data that we send to the TC when handshaking
 		enum class ServerOptions : std::uint8_t
 		{
 			SupportsDocumentation = 0x01,
@@ -78,7 +83,8 @@ namespace isobus
 		/// @brief The constructor for a TaskControllerClient
 		/// @param[in] partner The TC server control function
 		/// @param[in] clientSource The internal control function to communicate from
-		TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource);
+		/// @param[in] primaryVT Pointer to our primary VT. This is optional (can be nullptr), but should be provided if possible to provide the best compatibility to TC < version 4.
+		TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<VirtualTerminalClient> primaryVT);
 
 		/// @brief Destructor for the client
 		~TaskControllerClient();
@@ -154,6 +160,13 @@ namespace isobus
 		/// @brief Check whether the client is connected to the TC server
 		/// @returns true if cconnected, false otherwise
 		bool get_is_connected() const;
+
+		/// @brief Returns if a task is active as indicated by the TC
+		/// @attention Some TCs will report they are always in a task rather than properly reporting this.
+		/// For example, John Deere TCs have a bad habit of doing this.
+		/// Use caution before relying on the TC's task status.
+		/// @returns `true` if the TC is connected and the TC is reporting it is in a task, otherwise `false`
+		bool get_is_task_active() const;
 
 		/// @brief Returns the current state machine state
 		/// @returns The current internal state machine state
@@ -270,6 +283,28 @@ namespace isobus
 		                                bool successful,
 		                                void *parentPointer);
 
+		/// @brief Sends the delete object pool command to the TC
+		/// @details This is a message to delete the device descriptor object pool for the client that sends this message. The
+		/// Object pool Delete message enables a client to delete the entire device descriptor object pool before sending an
+		/// updated or changed device descriptor object pool with the object pool transfer message.
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_delete_object_pool() const;
+
+		/// @brief Sends a process data message with 1 mux byte and all 0xFFs as payload
+		/// @details This just reduces code duplication by consolidating common message formats
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_generic_process_data(std::uint8_t multiplexor) const;
+
+		/// @brief Sends the activate object pool message
+		/// @details This message is sent by a client to complete its connection procedure to a TC
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_object_pool_activate() const;
+
+		/// @brief Sends the deactivate object pool message
+		/// @details This message is sent by a client to disconnect from a TC
+		/// @returns `true` if the message was sent otherwise `false`
+		bool send_object_pool_deactivate() const;
+
 		/// @brief Sends a request to the TC for its localization label
 		/// @details The Request Localization Label message allows the client to determine the availability of the requested
 		/// device descriptor localization at the TC or DL.If the requested localization label is present,
@@ -315,18 +350,24 @@ namespace isobus
 		/// @param[in] newState The new state for the state machine
 		void set_state(StateMachineState newState);
 
+		/// @brief The worker thread will execute this function when it runs, if applicable
+		void worker_thread_function();
+
 		static constexpr std::uint32_t SIX_SECOND_TIMEOUT_MS = 6000; ///< The startup delay time defined in the standard
 		static constexpr std::uint16_t TWO_SECOND_TIMEOUT_MS = 2000; ///< Used for sending the status message to the TC
 
 	private:
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
+		std::shared_ptr<VirtualTerminalClient> primaryVirtualTerminal; ///< A pointer to the primary VT. Used for TCs < version 4
 		std::shared_ptr<DeviceDescriptorObjectPool> clientDDOP; ///< Stores the DDOP for upload to the TC (if needed)
 		std::vector<std::uint8_t> binaryDDOP; ///< Stores the DDOP in binary form after it has been generated
+		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)
 		std::uint32_t controlFunctionValidTimestamp_ms = 0; ///< A timestamp to track when (in milliseconds) our internal control function becomes valid
 		std::uint32_t statusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we sent a status message to the TC
+		std::uint32_t serverStatusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we received a status message from the TC
 		std::uint8_t numberOfWorkingSetMembers = 1; ///< The number of working set members that will be reported in the working set master message
 		std::uint8_t tcStatusBitfield = 0; ///< The last received TC/DL status from the status message
 		std::uint8_t sourceAddressOfCommandBeingExecuted = 0; ///< Source address of client for which the current command is being executed

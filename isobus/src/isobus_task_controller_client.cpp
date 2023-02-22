@@ -3,19 +3,22 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
 #include <array>
 #include <cassert>
 #include <cstring>
+#include <thread>
 
 namespace isobus
 {
-	TaskControllerClient::TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
+	TaskControllerClient::TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<VirtualTerminalClient> primaryVT) :
 	  languageCommandInterface(clientSource, partner),
 	  partnerControlFunction(partner),
-	  myControlFunction(clientSource)
+	  myControlFunction(clientSource),
+	  primaryVirtualTerminal(primaryVT)
 	{
 	}
 
@@ -33,7 +36,11 @@ namespace isobus
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
-		languageCommandInterface.initialize();
+
+		if (!languageCommandInterface.get_initialized())
+		{
+			languageCommandInterface.initialize();
+		}
 
 		if (shouldTerminate)
 		{
@@ -45,7 +52,7 @@ namespace isobus
 		{
 			if (spawnThread)
 			{
-				//workerThread = new std::thread([this]() { worker_thread_function(); }); TODO
+				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
 			initialized = true;
 		}
@@ -154,14 +161,23 @@ namespace isobus
 		return (StateMachineState::Connected == currentState);
 	}
 
+	bool TaskControllerClient::get_is_task_active() const
+	{
+		return (get_is_connected() && (0 != (0x01 & tcStatusBitfield)));
+	}
+
 	void TaskControllerClient::update()
 	{
 		switch (currentState)
 		{
 			case StateMachineState::Disconnected:
 			{
-				// Waiting to initiate communication, or conditions to communicate not met.
 				enableStatusMessage = false;
+
+				if (nullptr != clientDDOP)
+				{
+					set_state(StateMachineState::WaitForStartUpDelay);
+				}
 			}
 			break;
 
@@ -358,6 +374,25 @@ namespace isobus
 
 			case StateMachineState::SendDeleteObjectPool:
 			{
+				if (send_delete_object_pool())
+				{
+					set_state(StateMachineState::WaitForDeleteObjectPoolResponse);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout trying to send delete object pool message. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForDeleteObjectPoolResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for delete object pool response. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
 			}
 			break;
 
@@ -375,9 +410,91 @@ namespace isobus
 			}
 			break;
 
+			case StateMachineState::BeginTransferDDOP:
+			{
+				if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+				                                                   nullptr,
+				                                                   binaryDDOP.size() + 1, // Account for Mux byte
+				                                                   myControlFunction.get(),
+				                                                   partnerControlFunction.get(),
+				                                                   CANIdentifier::CANPriority::PriorityLowest7,
+				                                                   process_tx_callback,
+				                                                   this,
+				                                                   process_internal_object_pool_upload_callback))
+				{
+					set_state(StateMachineState::WaitForDDOPTransfer);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout trying to begin the object pool upload. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForDDOPTransfer:
+			{
+				// Waiting...
+			}
+			break;
+
+			case StateMachineState::SendObjectPoolActivate:
+			{
+				if (send_object_pool_activate())
+				{
+					set_state(StateMachineState::WaitForObjectPoolActivateResponse);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout trying to activate object pool. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForObjectPoolActivateResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for activate object pool response. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
 			case StateMachineState::Connected:
 			{
-				//! @todo check server status timestamp
+				if (SystemTiming::time_expired_ms(serverStatusMessageTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Server Status Message Timeout. The TC may be offline.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
+			case StateMachineState::DeactivateObjectPool:
+			{
+				if (send_object_pool_deactivate())
+				{
+					set_state(StateMachineState::WaitForObjectPoolDeactivateResponse);
+				}
+				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout sending object pool deactivate. Client terminated.");
+					set_state(StateMachineState::Disconnected);
+					terminate();
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForObjectPoolDeactivateResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for deactivate object pool response. Client terminated.");
+					set_state(StateMachineState::Disconnected);
+					terminate();
+				}
 			}
 			break;
 
@@ -449,7 +566,7 @@ namespace isobus
 									                      isobus::to_string(static_cast<int>(messageData[6])) +
 									                      " sections, and " +
 									                      isobus::to_string(static_cast<int>(messageData[7])) +
-									                      "position based control channels.");
+									                      " position based control channels.");
 
 									if (StateMachineState::WaitForRequestVersionResponse == parentTC->get_state())
 									{
@@ -592,7 +709,7 @@ namespace isobus
 										{
 											// Because there is overhead associated with object storage, it is impossible to predict whether there is enough memory available, technically.
 											CANStackLogger::debug("[TC]: Server indicates there may be enough memory available.");
-											parentTC->set_state(StateMachineState::TransferDDOP);
+											parentTC->set_state(StateMachineState::BeginTransferDDOP);
 										}
 										else
 										{
@@ -603,6 +720,77 @@ namespace isobus
 									else
 									{
 										CANStackLogger::warn("[TC]: Request Object-pool Transfer Response message received, but ignored due to current state machine state.");
+									}
+								}
+								break;
+
+								case DeviceDescriptorCommands::ObjectPoolActivateDeactivateResponse:
+								{
+									if (0 == messageData[1])
+									{
+										CANStackLogger::info("[TC]: DDOP Activated without error.");
+										parentTC->set_state(StateMachineState::Connected);
+									}
+									else
+									{
+										CANStackLogger::error("[TC]: DDOP was not activated.");
+										if (0x01 & messageData[1])
+										{
+											CANStackLogger::error("[TC]: There are errors in the DDOP. Faulting parent ID: " +
+											                      isobus::to_string(static_cast<int>(static_cast<std::uint16_t>(messageData[2]) |
+											                                                         static_cast<std::uint16_t>(messageData[3] << 8))) +
+											                      " Faulting object: " +
+											                      isobus::to_string(static_cast<int>(static_cast<std::uint16_t>(messageData[4]) |
+											                                                         static_cast<std::uint16_t>(messageData[5] << 8))));
+											if (0x01 & messageData[6])
+											{
+												CANStackLogger::error("[TC]: Method or attribute not supported by the TC");
+											}
+											if (0x02 & messageData[6])
+											{
+												// In theory, we check for this before upload, so this should be nearly impossible.
+												CANStackLogger::error("[TC]: Unknown object reference (missing object)");
+											}
+											if (0x04 & messageData[6])
+											{
+												CANStackLogger::error("[TC]: Unknown error (Any other error)");
+											}
+											if (0x08 & messageData[6])
+											{
+												CANStackLogger::error("[TC]: Device descriptor object pool was deleted from volatile memory");
+											}
+											if (0xF0 & messageData[6])
+											{
+												CANStackLogger::warn("[TC]: The TC sent illegal errors in the reserved bits of the response.");
+											}
+										}
+										if (0x02 & messageData[1])
+										{
+											CANStackLogger::error("[TC]: Task Controller ran out of memory during activation.");
+										}
+										if (0x04 & messageData[1])
+										{
+											CANStackLogger::error("[TC]: Task Controller indicates an unknown error occurred.");
+										}
+										if (0x08 & messageData[1])
+										{
+											CANStackLogger::error("[TC]: A different DDOP with the same structure label already exists in the TC.");
+										}
+										if (0xF0 & messageData[1])
+										{
+											CANStackLogger::warn("[TC]: The TC sent illegal errors in the reserved bits of the response.");
+										}
+									}
+								}
+								break;
+
+								case DeviceDescriptorCommands::ObjectPoolDeleteResponse:
+								{
+									// Message content of this is unreliable, the standard is ambigious on what to even check.
+									// Plus, if the delete failed, the recourse is the same, always proceed.
+									if (StateMachineState::WaitForDeleteObjectPoolResponse == parentTC->get_state())
+									{
+										parentTC->set_state(StateMachineState::SendRequestTransferObjectPool);
 									}
 								}
 								break;
@@ -624,10 +812,17 @@ namespace isobus
 							parentTC->tcStatusBitfield = messageData[4];
 							parentTC->sourceAddressOfCommandBeingExecuted = messageData[5];
 							parentTC->commandBeingExecuted = messageData[6];
+							parentTC->serverStatusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
 							if (StateMachineState::WaitForServerStatusMessage == parentTC->currentState)
 							{
 								parentTC->set_state(StateMachineState::SendWorkingSetMaster);
 							}
+						}
+						break;
+
+						case ProcessDataCommands::ClientTask:
+						{
+							CANStackLogger::warn("[TC]: Server sent the client task message, which is not meant to be sent by servers.");
 						}
 						break;
 
@@ -697,7 +892,7 @@ namespace isobus
 		{
 			TaskControllerClient *parent = reinterpret_cast<TaskControllerClient *>(parentPointer);
 
-			if (StateMachineState::TransferDDOP == parent->get_state())
+			if (StateMachineState::WaitForDDOPTransfer == parent->get_state())
 			{
 				if (successful)
 				{
@@ -712,23 +907,59 @@ namespace isobus
 		}
 	}
 
-	bool TaskControllerClient::send_request_localization_label() const
+	bool TaskControllerClient::send_delete_object_pool() const
 	{
-		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
-			                                                               (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestLocalizationLabel) << 4),
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF };
+		return send_generic_process_data(static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+		                                 (static_cast<std::uint8_t>(DeviceDescriptorCommands::ObjectPoolDelete) << 4));
+	}
+
+	bool TaskControllerClient::send_generic_process_data(std::uint8_t multiplexor) const
+	{
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { multiplexor,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF };
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
 		                                                      myControlFunction.get(),
 		                                                      partnerControlFunction.get());
+	}
+
+	bool TaskControllerClient::send_object_pool_activate() const
+	{
+		return send_generic_process_data(static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+		                                 (static_cast<std::uint8_t>(DeviceDescriptorCommands::ObjectPoolActivateDeactivate) << 4));
+	}
+
+	bool TaskControllerClient::send_object_pool_deactivate() const
+	{
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+			                                                           (static_cast<std::uint8_t>(DeviceDescriptorCommands::ObjectPoolActivateDeactivate) << 4),
+			                                                         0x00,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF };
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get());
+	}
+
+	bool TaskControllerClient::send_request_localization_label() const
+	{
+		return send_generic_process_data(static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+		                                 (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestLocalizationLabel) << 4));
 	}
 
 	bool TaskControllerClient::send_request_object_pool_transfer() const
@@ -753,21 +984,9 @@ namespace isobus
 
 	bool TaskControllerClient::send_request_structure_label() const
 	{
-		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
-			                                                               (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestStructureLabel) << 4),
-			                                                             0xFF, // When all bytes are 0xFF, the TC will tell us about the latest structure label
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF };
-
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get());
+		// When all bytes are 0xFF, the TC will tell us about the latest structure label
+		return send_generic_process_data(static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
+		                                 (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestStructureLabel) << 4));
 	}
 
 	bool TaskControllerClient::send_request_version_response() const
@@ -812,20 +1031,7 @@ namespace isobus
 
 	bool TaskControllerClient::send_version_request() const
 	{
-		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(TechnicalDataMessageCommands::ParameterRequestVersion),
-			                                                         0xFF,
-			                                                         0xFF,
-			                                                         0xFF,
-			                                                         0xFF,
-			                                                         0xFF,
-			                                                         0xFF,
-			                                                         0xFF };
-
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get());
+		return send_generic_process_data(static_cast<std::uint8_t>(TechnicalDataMessageCommands::ParameterRequestVersion));
 	}
 
 	bool TaskControllerClient::send_working_set_master() const
@@ -845,6 +1051,19 @@ namespace isobus
 		{
 			stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 			currentState = newState;
+		}
+	}
+
+	void TaskControllerClient::worker_thread_function()
+	{
+		for (;;)
+		{
+			if (shouldTerminate)
+			{
+				break;
+			}
+			update();
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		}
 	}
 

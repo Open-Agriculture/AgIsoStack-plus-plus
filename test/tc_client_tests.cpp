@@ -38,6 +38,21 @@ public:
 	{
 		return TaskControllerClient::send_request_version_response();
 	}
+
+	bool test_wrapper_send_request_structure_label() const
+	{
+		return TaskControllerClient::send_request_structure_label();
+	}
+
+	bool test_wrapper_send_request_localization_label() const
+	{
+		return TaskControllerClient::send_request_localization_label();
+	}
+
+	bool test_wrapper_send_delete_object_pool() const
+	{
+		return TaskControllerClient::send_delete_object_pool();
+	}
 };
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
@@ -156,6 +171,21 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	EXPECT_EQ(0x00, testFrame.data[7]); // 0 Reserved
 
 	// Test version response
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
+	serverTC.read_frame(testFrame);
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0x10, testFrame.data[0]); // Mux
+	EXPECT_EQ(0x04, testFrame.data[1]); // Version
+	EXPECT_EQ(0xFF, testFrame.data[2]); // Must be 0xFF
+	EXPECT_EQ(0x00, testFrame.data[3]); // Options
+	EXPECT_EQ(0x00, testFrame.data[4]); // Must be zero
+	EXPECT_EQ(0x00, testFrame.data[5]); // Booms
+	EXPECT_EQ(0x00, testFrame.data[6]); // Sections
+	EXPECT_EQ(0x00, testFrame.data[7]); // Channels
+
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected);
 	interfaceUnderTest.configure(blankDDOP, 1, 2, 3, true, true, true, true, true);
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
 	serverTC.read_frame(testFrame);
@@ -171,6 +201,42 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	EXPECT_EQ(0x01, testFrame.data[5]); // Booms
 	EXPECT_EQ(0x02, testFrame.data[6]); // Sections
 	EXPECT_EQ(0x03, testFrame.data[7]); // Channels
+
+	// Test Request structure label
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_structure_label());
+	serverTC.read_frame(testFrame);
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0x01, testFrame.data[0]);
+	for (std::uint_fast8_t i = 1; i < 7; i++)
+	{
+		EXPECT_EQ(0xFF, testFrame.data[i]);
+	}
+
+	// Test Request localization label
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_localization_label());
+	serverTC.read_frame(testFrame);
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0x21, testFrame.data[0]);
+	for (std::uint_fast8_t i = 1; i < 7; i++)
+	{
+		EXPECT_EQ(0xFF, testFrame.data[i]);
+	}
+
+	// Test Delete Object Pool
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_delete_object_pool());
+	serverTC.read_frame(testFrame);
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0xA1, testFrame.data[0]);
+	for (std::uint_fast8_t i = 1; i < 7; i++)
+	{
+		EXPECT_EQ(0xFF, testFrame.data[i]);
+	}
 
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
@@ -353,6 +419,49 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test send structure request state
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestStructureLabel);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestStructureLabel);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+
+	// Test send localization request state
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestLocalizationLabel);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLocalizationLabel);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForLocalizationLabelResponse);
+
+	// Test send delete object pool states
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendDeleteObjectPool);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendDeleteObjectPool);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDeleteObjectPoolResponse);
+	// Send a response
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0xB1; // Mux
+	testFrame.data[1] = 0xFF; // Ambigious
+	testFrame.data[2] = 0xFF; // Ambigious
+	testFrame.data[3] = 0xFF; // error details are not available
+	testFrame.data[4] = 0xFF; // Reserved
+	testFrame.data[5] = 0xFF; // Reserved
+	testFrame.data[6] = 0xFF; // Reserved
+	testFrame.data[7] = 0xFF; // Reserved
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestTransferObjectPool);
+
+	// Test send activate object pool state
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendObjectPoolActivate);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolActivateResponse);
+
+	// Test send deactivate object pool state
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::DeactivateObjectPool);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::DeactivateObjectPool);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolDeactivateResponse);
 
 	//! @Todo Add other states
 
