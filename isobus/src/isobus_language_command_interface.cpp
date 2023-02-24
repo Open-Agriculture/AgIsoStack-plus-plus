@@ -51,6 +51,11 @@ namespace isobus
 		}
 	}
 
+	void LanguageCommandInterface::set_partner(std::shared_ptr<PartneredControlFunction> filteredControlFunction)
+	{
+		myPartner = filteredControlFunction;
+	}
+
 	bool LanguageCommandInterface::get_initialized() const
 	{
 		return initialized;

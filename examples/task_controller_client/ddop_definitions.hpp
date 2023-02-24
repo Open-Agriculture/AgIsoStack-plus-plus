@@ -18,7 +18,9 @@ enum class SprayerDDOPObjectIDs : std::uint16_t
 	Device = 0,
 
 	MainDeviceElement,
+
 	DeviceActualWorkState,
+	RequestDefaultProcessData,
 	DeviceTotalTime,
 
 	Connector,

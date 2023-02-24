@@ -40,8 +40,8 @@ namespace isobus
 		                           std::string deviceSoftwareVersion,
 		                           std::string deviceSerialNumber,
 		                           std::string deviceStructureLabel,
-		                           std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> &deviceLocalizationLabel,
-		                           std::vector<std::uint8_t> &deviceExtendedStructureLabel,
+		                           std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
+		                           std::vector<std::uint8_t> deviceExtendedStructureLabel,
 		                           std::uint64_t clientIsoNAME) :
 		  Object(deviceDesignator, 0),
 		  serialNumber(deviceSerialNumber),
@@ -103,7 +103,7 @@ namespace isobus
 			}
 			for (std::uint_fast8_t i = 0; i < MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
 			{
-				if (structureLabel.size() < i)
+				if (i < structureLabel.size())
 				{
 					retVal.push_back(structureLabel[i]);
 				}
@@ -112,9 +112,9 @@ namespace isobus
 					retVal.push_back(' ');
 				}
 			}
-			for (std::uint_fast8_t i = 0; i < MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH - 1; i++)
+			for (std::uint_fast8_t i = 0; i < MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
 			{
-				if (localizationLabel.size() < i)
+				if (i < localizationLabel.size())
 				{
 					retVal.push_back(localizationLabel[i]);
 				}
@@ -123,12 +123,11 @@ namespace isobus
 					retVal.push_back(' ');
 				}
 			}
-			retVal.push_back(0xFF);
-			retVal.push_back(extendedStructureLabel.size());
-			for (std::size_t i = 0; i < extendedStructureLabel.size(); i++)
-			{
-				retVal.push_back(extendedStructureLabel[i]);
-			}
+			//retVal.push_back(static_cast<std::uint8_t>(extendedStructureLabel.size()));
+			//for (std::size_t i = 0; i < extendedStructureLabel.size(); i++)
+			//{
+			//	retVal.push_back(extendedStructureLabel[i]);
+			//}
 			return retVal;
 		}
 
@@ -204,7 +203,9 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>((elementNumber >> 8) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>(parentObject & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((parentObject >> 8) & 0xFF));
-			retVal.push_back(referenceList.size());
+			std::uint16_t tempSize = referenceList.size();
+			retVal.push_back(referenceList.size() & 0xFF);
+			retVal.push_back((referenceList.size() >> 8) & 0xFF);
 			for (std::size_t i = 0; i < referenceList.size(); i++)
 			{
 				retVal.push_back(static_cast<std::uint8_t>(referenceList[i] & 0xFF));

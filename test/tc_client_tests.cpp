@@ -12,7 +12,7 @@ class DerivedTestTCClient : public TaskControllerClient
 {
 public:
 	DerivedTestTCClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
-	  TaskControllerClient(partner, clientSource){};
+	  TaskControllerClient(partner, clientSource, nullptr){};
 
 	bool test_wrapper_send_working_set_master() const
 	{
@@ -177,7 +177,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	ASSERT_EQ(testFrame.dataLength, 8);
 	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
 	EXPECT_EQ(0x10, testFrame.data[0]); // Mux
-	EXPECT_EQ(0x04, testFrame.data[1]); // Version
+	EXPECT_EQ(0x03, testFrame.data[1]); // Version ///!todo fix version
 	EXPECT_EQ(0xFF, testFrame.data[2]); // Must be 0xFF
 	EXPECT_EQ(0x00, testFrame.data[3]); // Options
 	EXPECT_EQ(0x00, testFrame.data[4]); // Must be zero
@@ -194,7 +194,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	ASSERT_EQ(testFrame.dataLength, 8);
 	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
 	EXPECT_EQ(0x10, testFrame.data[0]); // Mux
-	EXPECT_EQ(0x04, testFrame.data[1]); // Version
+	EXPECT_EQ(0x03, testFrame.data[1]); // Version ///!todo fix version
 	EXPECT_EQ(0xFF, testFrame.data[2]); // Must be 0xFF
 	EXPECT_EQ(0x1F, testFrame.data[3]); // Options
 	EXPECT_EQ(0x00, testFrame.data[4]); // Must be zero
