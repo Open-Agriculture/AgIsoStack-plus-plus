@@ -191,16 +191,6 @@ namespace isobus
 			}
 			break;
 
-			case StateMachineState::WaitForServerStatusMessage:
-			{
-				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
-				{
-					CANStackLogger::error("[TC]: Timeout waiting for TC status message. Resetting client connection.");
-					set_state(StateMachineState::Disconnected);
-				}
-			}
-			break;
-
 			case StateMachineState::SendWorkingSetMaster:
 			{
 				if (send_working_set_master())
@@ -282,7 +272,20 @@ namespace isobus
 
 			case StateMachineState::RequestLanguage:
 			{
-				if (languageCommandInterface.send_request_language_command())
+				if ((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
+					(nullptr == primaryVirtualTerminal))
+				{
+					languageCommandInterface.set_partner(nullptr); // TC might not reply and no VT specified, so just see if anyone knows.
+					CANStackLogger::warn("[TC]: The TC is < version 4 but no VT was provided. Language data will be requested globally, which might not be ideal.");
+				}
+
+				if ((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
+				    (nullptr != primaryVirtualTerminal) &&
+				    (primaryVirtualTerminal->languageCommandInterface.send_request_language_command()))
+				{
+					set_state(StateMachineState::WaitForLanguageResponse);
+				}
+				else if (languageCommandInterface.send_request_language_command())
 				{
 					set_state(StateMachineState::WaitForLanguageResponse);
 				}
@@ -412,7 +415,7 @@ namespace isobus
 
 			case StateMachineState::BeginTransferDDOP:
 			{
-				if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+				if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
 				                                                   nullptr,
 				                                                   binaryDDOP.size() + 1, // Account for Mux byte
 				                                                   myControlFunction.get(),
@@ -433,8 +436,19 @@ namespace isobus
 			break;
 
 			case StateMachineState::WaitForDDOPTransfer:
+			case StateMachineState::WaitForServerStatusMessage:
 			{
 				// Waiting...
+			}
+			break;
+
+			case StateMachineState::WaitForObjectPoolTransferResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for object pool transfer response. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
 			}
 			break;
 
@@ -546,6 +560,19 @@ namespace isobus
 						{
 							switch (static_cast<TechnicalDataMessageCommands>(messageData[0] >> 4))
 							{
+								case TechnicalDataMessageCommands::ParameterRequestVersion:
+								{
+									if (StateMachineState::WaitForRequestVersionFromServer == parentTC->get_state())
+									{
+										parentTC->set_state(StateMachineState::SendRequestVersionResponse);
+									}
+									else
+									{
+										CANStackLogger::warn("[TC]: Server requested version information at a strange time.");
+									}
+								}
+								break;
+
 								case TechnicalDataMessageCommands::ParameterVersion:
 								{
 									parentTC->serverVersion = messageData[1];
@@ -560,7 +587,9 @@ namespace isobus
 									{
 										CANStackLogger::warn("[TC]: Server version is newer than client's maximum supported version.");
 									}
-									CANStackLogger::debug("[TC]: TC Server supports " +
+									CANStackLogger::debug("[TC]: TC Server supports version " +
+									                      isobus::to_string(static_cast<int>(messageData[1])) +
+									                      " with " +
 									                      isobus::to_string(static_cast<int>(messageData[5])) +
 									                      " booms, " +
 									                      isobus::to_string(static_cast<int>(messageData[6])) +
@@ -780,6 +809,9 @@ namespace isobus
 										{
 											CANStackLogger::warn("[TC]: The TC sent illegal errors in the reserved bits of the response.");
 										}
+										parentTC->set_state(StateMachineState::Disconnected);
+										CANStackLogger::error("[TC]: Client terminated.");
+										parentTC->terminate();
 									}
 								}
 								break;
@@ -795,6 +827,36 @@ namespace isobus
 								}
 								break;
 
+								case DeviceDescriptorCommands::ObjectPoolTransferResponse:
+								{
+									if (StateMachineState::WaitForObjectPoolTransferResponse == parentTC->get_state())
+									{
+										if (0 == messageData[1])
+										{
+											CANStackLogger::debug("[TC]: DDOP upload completed with no errors.");
+											parentTC->set_state(StateMachineState::SendObjectPoolActivate);
+										}
+										else
+										{
+											if (0x01 == messageData[1])
+											{
+												CANStackLogger::error("[TC]: DDOP upload completed but TC ran out of memory during transfer.");
+											}
+											else
+											{
+												CANStackLogger::error("[TC]: DDOP upload completed but TC had some unknown error.");
+											}
+											CANStackLogger::error("[TC]: Client terminated.");
+											parentTC->terminate();
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[TC]: Recieved unexpected object pool transfer response");
+									}
+								}
+								break;
+
 								default:
 								{
 									CANStackLogger::warn("[TC]: Unsupported device descriptor command message received. Message will be dropped.");
@@ -806,16 +868,19 @@ namespace isobus
 
 						case ProcessDataCommands::StatusMessage:
 						{
-							// Many values in the status message were undefined in version 2 and before, so the
-							// standard explicitly tells us to ignore those attributes. The only things that really
-							// matter are that we got the mesesage, and bytes 5, 6 and 7.
-							parentTC->tcStatusBitfield = messageData[4];
-							parentTC->sourceAddressOfCommandBeingExecuted = messageData[5];
-							parentTC->commandBeingExecuted = messageData[6];
-							parentTC->serverStatusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
-							if (StateMachineState::WaitForServerStatusMessage == parentTC->currentState)
+							if (parentTC->partnerControlFunction->get_NAME() == message->get_source_control_function()->get_NAME())
 							{
-								parentTC->set_state(StateMachineState::SendWorkingSetMaster);
+								// Many values in the status message were undefined in version 2 and before, so the
+								// standard explicitly tells us to ignore those attributes. The only things that really
+								// matter are that we got the mesesage, and bytes 5, 6 and 7.
+								parentTC->tcStatusBitfield = messageData[4];
+								parentTC->sourceAddressOfCommandBeingExecuted = messageData[5];
+								parentTC->commandBeingExecuted = messageData[6];
+								parentTC->serverStatusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
+								if (StateMachineState::WaitForServerStatusMessage == parentTC->currentState)
+								{
+									parentTC->set_state(StateMachineState::SendWorkingSetMaster);
+								}
 							}
 						}
 						break;
@@ -896,7 +961,7 @@ namespace isobus
 			{
 				if (successful)
 				{
-					parent->set_state(StateMachineState::SendObjectPoolActivate);
+					parent->set_state(StateMachineState::WaitForObjectPoolTransferResponse);
 				}
 				else
 				{
@@ -992,7 +1057,7 @@ namespace isobus
 	bool TaskControllerClient::send_request_version_response() const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { (static_cast<std::uint8_t>(TechnicalDataMessageCommands::ParameterVersion) << 4),
-			                                                         static_cast<std::uint8_t>(Version::SecondPublishedEdition),
+			                                                         static_cast<std::uint8_t>(Version::SecondEditionDraft),
 			                                                         0xFF, // Must be 0xFF when a client sends it (boot time)
 			                                                         static_cast<std::uint8_t>(static_cast<std::uint8_t>(supportsDocumentation) |
 			                                                                                   (static_cast<std::uint8_t>(supportsTCGEOWithoutPositionBasedControl) << 1) |

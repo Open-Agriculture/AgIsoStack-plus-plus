@@ -156,6 +156,10 @@ namespace isobus
 		/// if needed.
 		void initialize();
 
+		/// @brief Changes the partner being used by the interface to a new partner
+		/// @param[in] filteredControlFunction The new partner to communicate with
+		void set_partner(std::shared_ptr<PartneredControlFunction> filteredControlFunction);
+
 		/// @brief Returns if initialize has been called yet
 		/// @return `true` if initialize has been called, otherwise false
 		bool get_initialized() const;
