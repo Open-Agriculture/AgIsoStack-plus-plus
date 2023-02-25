@@ -45,6 +45,8 @@ int main()
 	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
 	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
+	canDriver = std::make_shared<MacCANPCANPlugin>(PCAN_USBBUS1);
 #endif
 	if (nullptr == canDriver)
 	{

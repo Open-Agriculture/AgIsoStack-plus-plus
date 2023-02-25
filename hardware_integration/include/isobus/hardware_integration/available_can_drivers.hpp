@@ -34,4 +34,8 @@
 #include "isobus/hardware_integration/innomaker_usb2can_windows_plugin.hpp"
 #endif
 
+#ifdef ISOBUS_MACCANPCAN_AVAILABLE
+#include "isobus/hardware_integration/mac_can_pcan_plugin.hpp"
+#endif
+
 #endif // AVAILABLE_CAN_DRIVERS_HPP
