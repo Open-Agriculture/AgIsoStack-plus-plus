@@ -4063,7 +4063,7 @@ namespace isobus
 
 			default:
 			{
-				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + static_cast<int>(type));
+				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + isobus::to_string(static_cast<int>(type)));
 			}
 			break;
 		}
@@ -4354,7 +4354,7 @@ namespace isobus
 
 			default:
 			{
-				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object total length - type " + static_cast<int>(buffer[2]));
+				CANStackLogger::error("[VT]: Cannot autoscale object pool due to unknown object total length - type " + isobus::to_string(static_cast<int>(buffer[2])));
 			}
 			break;
 		}

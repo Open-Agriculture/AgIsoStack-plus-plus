@@ -19,6 +19,7 @@ A default CAN driver plug-in will be selected for you based on your OS, but when
 
 * `-DCAN_DRIVER=SocketCAN` Will compile with Socket CAN support (This is the default for Linux)
 * `-DCAN_DRIVER=WindowsPCANBasic` Will compile with windows support for the PEAK PCAN drivers (This is the default for Windows)
+* `-DCAN_DRIVER=MacCANPCAN` Will compile with support for the MacCAN PEAK PCAN driver (This is the default for Mac OS)
 * `-DCAN_DRIVER=TWAI` Will compile with support for the ESP TWAI driver
 * `-DCAN_DRIVER=MCP2515` Will compile with support for the MCP2515 CAN controller
 

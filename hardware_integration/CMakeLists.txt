@@ -10,6 +10,8 @@ set(HARDWARE_INTEGRATION_INCLUDE_DIR "include/isobus/hardware_integration")
 if(NOT CAN_DRIVER)
   if(WIN32)
     set(CAN_DRIVER "WindowsPCANBasic")
+  elseif(APPLE)
+    set(CAN_DRIVER "MacCANPCAN")
   else()
     set(CAN_DRIVER "SocketCAN")
   endif()
@@ -57,6 +59,19 @@ if("MCP2515" IN_LIST CAN_DRIVER)
     list(APPEND HARDWARE_INTEGRATION_SRC "spi_interface_esp.cpp")
     list(APPEND HARDWARE_INTEGRATION_INCLUDE "spi_interface_esp.hpp")
   endif()
+endif()
+if("MacCANPCAN" IN_LIST CAN_DRIVER)
+  message(
+    AUTHOR_WARNING
+      "Use of the MacCAN driver is governed by their eula. Visit their webside mac-can.com to download the library and follow the included instructions."
+  )
+  message(
+    AUTHOR_WARNING
+      "If you get a popup from your OS saying it can't run the driver, you may need to add a security exception to your Mac. This is not something we can control."
+  )
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "PCBUSB.h")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "mac_can_pcan_plugin.hpp")
+  list(APPEND HARDWARE_INTEGRATION_SRC "mac_can_pcan_plugin.cpp")
 endif()
 if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
   message(
@@ -168,6 +183,12 @@ if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
         "Windows InnoMaker USB2CAN Selected but no supported processor arch was detected. Only x64 and x86 are supported."
     )
   endif()
+endif()
+
+if("MacCANPCAN" IN_LIST CAN_DRIVER)
+  target_link_libraries(
+    HardwareIntegration
+    PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Mac/libPCBUSB.0.12.dylib)
 endif()
 
 # Mark the compiled CAN drivers available to other modules. In the form:

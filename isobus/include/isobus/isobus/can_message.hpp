@@ -44,6 +44,9 @@ namespace isobus
 		/// @param[in] CANPort The can channel index the message uses
 		CANMessage(std::uint8_t CANPort);
 
+		/// @brief Destructor for a CAN message
+		virtual ~CANMessage() = default;
+
 		/// @brief Returns the CAN message type
 		/// @returns The type of the CAN message
 		Type get_type() const;
