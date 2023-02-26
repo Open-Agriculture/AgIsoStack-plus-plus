@@ -429,11 +429,21 @@ namespace isobus
 		void remove_auxiliary_function_event_callback(AuxiliaryFunctionCallback value);
 
 		/// @brief Set the model identification code of our auxiliary input device.
-		/// @details The model identification code is used to allow other devices indentify
+		/// @details The model identification code is used to allow other devices identify
 		/// whether our device differs from a previous versions. If the model identification code
 		/// is different, the preferred assignments are reset.
 		/// @param[in] modelIdentificationCode The model identification code
 		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
+
+		/// @brief Add a new auxiliary input to be managed by this virtual terminal object.
+		/// @details This function should be called for each auxiliary input that is available in the pool,
+		/// and will receive updates using update_auxiliary_input().
+		/// @param[in] auxiliaryInputID The ID of the auxiliary input
+		void add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
+
+		/// @brief Remove an auxiliary input from the pool of managed auxiliary inputs.
+		/// @param[in] auxiliaryInputID The ID of the auxiliary input
+		void remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
 
 		/// @brief Update the state of an auxiliary input. This should be called when
 		/// the value of an auxiliary input changes.
@@ -1279,7 +1289,7 @@ namespace isobus
 		};
 
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY = 1000; ///< The delay between the auxiliary input status messages, in milliseconds
-		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY_INTERACTION = 500; ///< The delay between the auxiliary input status messages when the input is interacted with, in milliseconds
+		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY_INTERACTION = 50; ///< The delay between the auxiliary input status messages when the input is interacted with, in milliseconds
 
 		/// @brief Get whether the VT has enabled the learn mode for the auxiliary input
 		/// @returns true if the VT has enabled the learn mode for the auxiliary input
@@ -1641,6 +1651,7 @@ namespace isobus
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode; ///< The model identification code of this input device
+		bool auxiliaryInputEnabled = false; ///< Stores if the auxiliary input device is enabled
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 		std::thread *workerThread; ///< The worker thread that updates this interface
 		bool firstTimeInState; ///< Stores if the current update cycle is the first time a state machine state has been processed

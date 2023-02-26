@@ -315,20 +315,34 @@ namespace isobus
 		if (state == StateMachineState::Disconnected)
 		{
 			ourModelIdentificationCode = modelIdentificationCode;
+			auxiliaryInputEnabled = true;
 		}
 		else
 		{
-			CANStackLogger::CAN_stack_log("[AUX-N] Error setting model identification code... can only be changed when disconnected");
+			CANStackLogger::error("[AUX-N] Error setting model identification code... can only be changed when disconnected");
+		}
+	}
+
+	void VirtualTerminalClient::add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
+	{
+		ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
+	}
+
+	void VirtualTerminalClient::remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
+	{
+		if (ourAuxiliaryInputs.count(auxiliaryInputID))
+		{
+			ourAuxiliaryInputs.erase(auxiliaryInputID);
+			CANStackLogger::debug("[AUX-N] Removed auxiliary input with ID: " + isobus::to_string(static_cast<int>(auxiliaryInputID)));
 		}
 	}
 
 	void VirtualTerminalClient::update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked)
 	{
-		/// @todo remove this temporary workaround when the VT client can read which objects are passed to the VT (#65)
 		if (!ourAuxiliaryInputs.count(auxiliaryInputID))
 		{
-			ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
-			CANStackLogger::CAN_stack_log("[AUX-N] Inserted new auxiliary input with ID: " + isobus::to_string(static_cast<int>(auxiliaryInputID)));
+			CANStackLogger::warn("[AUX-N] Auxiliary input with ID '" + isobus::to_string(static_cast<int>(auxiliaryInputID)) + "' has not been registered. Ignoring update");
+			return;
 		}
 
 		if (state == StateMachineState::Connected)
@@ -2019,9 +2033,9 @@ namespace isobus
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
 		}
 		if ((sendAuxiliaryMaintenance) &&
+		    (auxiliaryInputEnabled) &&
 		    (SystemTiming::time_expired_ms(lastAuxiliaryMaintenanceTimestamp_ms, AUXILIARY_MAINTENANCE_TIMEOUT_MS)))
 		{
-			/// @todo Only set this flag if the object pool contains a 'Auxiliary Input Type 2 Object' (#65)
 			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendAuxiliaryMaintenance));
 		}
@@ -2036,11 +2050,6 @@ namespace isobus
 	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
 	{
 		return 0x40 == (busyCodesBitfield && 0x40);
-	}
-
-	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
-	{
-		return 0x40 == (busyCodesBitfield & 0x40);
 	}
 
 	bool VirtualTerminalClient::send_delete_object_pool()
@@ -2510,7 +2519,7 @@ namespace isobus
 	{
 		bool retVal = false;
 		AuxiliaryInputState &state = ourAuxiliaryInputs.at(objectID);
-		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs
+		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs on interaction
 		if (SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY) ||
 		    (state.hasInteraction && !get_auxiliary_input_learn_mode_enabled() && SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
 		{
@@ -2776,14 +2785,11 @@ namespace isobus
 
 				case TransmitFlags::SendAuxiliaryMaintenance:
 				{
-					if (vtClient->objectPools.size() > 0)
-					{
-						transmitSuccessful = vtClient->send_auxiliary_input_maintenance();
+					transmitSuccessful = vtClient->send_auxiliary_input_maintenance();
 
-						if (transmitSuccessful)
-						{
-							vtClient->lastAuxiliaryMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
-						}
+					if (transmitSuccessful)
+					{
+						vtClient->lastAuxiliaryMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
 					}
 				}
 				break;

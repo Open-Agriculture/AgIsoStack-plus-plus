@@ -3,7 +3,6 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 
@@ -93,15 +92,15 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("vtpooldata.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("aux_functions_pooldata.iop");
 
 	if (0 != testPool.size())
 	{
-		std::cout << "Loaded object pool from vtpooldata.iop" << std::endl;
+		std::cout << "Loaded object pool from aux_functions_pooldata.iop" << std::endl;
 	}
 	else
 	{
-		std::cout << "Failed to load object pool from vtpooldata.iop" << std::endl;
+		std::cout << "Failed to load object pool from aux_functions_pooldata.iop" << std::endl;
 		return -3;
 	}
 
