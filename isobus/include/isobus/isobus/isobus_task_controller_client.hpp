@@ -15,6 +15,9 @@
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
+#include <list>
+#include <thread>
+
 namespace isobus
 {
 	class VirtualTerminalClient; // Forward declaring VT client
@@ -80,6 +83,18 @@ namespace isobus
 			ReservedOption3 = 0x80
 		};
 
+		/// @brief A callback for handling a value request command from the TC
+		typedef bool (*RequestValueCommandCallback)(std::uint16_t elementNumber,
+		                                            std::uint16_t DDI,
+		                                            std::uint32_t &processVariableValue,
+		                                            void *parentPointer);
+
+		/// @brief A callback for handling a set value command from the TC
+		typedef bool (*ValueCommandCallback)(std::uint16_t elementNumber,
+		                                     std::uint16_t DDI,
+		                                     std::uint32_t processVariableValue,
+		                                     void *parentPointer);
+
 		/// @brief The constructor for a TaskControllerClient
 		/// @param[in] partner The TC server control function
 		/// @param[in] clientSource The internal control function to communicate from
@@ -95,9 +110,33 @@ namespace isobus
 		/// by calling the `update` function.
 		void initialize(bool spawnThread);
 
+		/// @brief This adds a callback that will be called when the TC requests the value of one of your variables.
+		/// @details The task controller will often send a request for the value of a process data variable.
+		/// When the stack recieves those messages, it will call this callback to request the value from your
+		/// application. You must provide the value at that time for the associated process data variable identified
+		/// by its element number and DDI.
+		/// @param[in] callback The callback to add
+		void add_request_value_callback(RequestValueCommandCallback callback);
+
+		/// @brief Adds a callback that will be called when the TC commands a new value for one of your variables.
+		/// @details The task controller will often send a command to set one of your process data variables to a new value.
+		/// This callback will get called when that happens, and you will need to set the variable to the commanded value in your
+		/// application.
+		/// @param[in] callback The callback to add
+		void add_value_command_callback(ValueCommandCallback callback);
+
+		/// @brief Removes the specified callback from the list of value request callbacks
+		/// @param[in] callback The callback to remove
+		void remove_request_value_callback(RequestValueCommandCallback callback);
+
+		/// @brief Removes the specified callback from the list of value command callbacks
+		/// @param[in] callback The callback to remove
+		void remove_value_command_callback(ValueCommandCallback callback);
+
 		/// @brief A convenient way to set all client options at once instead of calling the individual setters
 		/// @details This function sets up the parameters that the client will report to the TC server.
 		/// These parameters should be tailored to your specific application.
+		/// @param[in] DDOP The device descriptor object pool to upload to the TC
 		/// @param[in] numberBoomsSupported Configures the max number of booms the client supports
 		/// @param[in] numberSectionsSupported Configures the max number of sections supported by the client for section control
 		/// @param[in] numberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
@@ -270,6 +309,9 @@ namespace isobus
 		                                                         std::uint8_t *chunkBuffer,
 		                                                         void *parentPointer);
 
+		/// @brief Processes queued TC requests and commands. Calls the user's callbacks if needed.
+		void process_queued_commands();
+
 		/// @brief Processes a CAN message destined for any TC client
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant TC client class
@@ -305,6 +347,12 @@ namespace isobus
 		/// @returns `true` if the message was sent otherwise `false`
 		bool send_object_pool_deactivate() const;
 
+		/// @brief Sends a Process Data ACK
+		/// @param[in] elementNumber The element number being acked
+		/// @param[in] ddi The DDI being acked
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_pdack(std::uint16_t elementNumber, std::uint16_t ddi) const;
+
 		/// @brief Sends a request to the TC for its localization label
 		/// @details The Request Localization Label message allows the client to determine the availability of the requested
 		/// device descriptor localization at the TC or DL.If the requested localization label is present,
@@ -338,6 +386,10 @@ namespace isobus
 		/// @returns `true` if the message was sent, otherwise false
 		bool send_status() const;
 
+		/// @brief Sends the value command message for a specific DDI/Element number combo
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::uint32_t value) const;
+
 		/// @brief Sends the version request message to the TC
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_version_request() const;
@@ -357,11 +409,25 @@ namespace isobus
 		static constexpr std::uint16_t TWO_SECOND_TIMEOUT_MS = 2000; ///< Used for sending the status message to the TC
 
 	private:
+		/// @brief Stores data related to requests and commands from the TC
+		struct ProcessDataCallbackInfo
+		{
+			std::uint32_t processDataValue; ///< The value of the value set command
+			std::uint16_t elementNumber; ///< The element number for the command
+			std::uint16_t ddi; ///< The DDI for the command
+			bool ackRequested; ///< Stores if the TC used the mux that also requires a PDACK
+		};
+
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 		std::shared_ptr<VirtualTerminalClient> primaryVirtualTerminal; ///< A pointer to the primary VT. Used for TCs < version 4
 		std::shared_ptr<DeviceDescriptorObjectPool> clientDDOP; ///< Stores the DDOP for upload to the TC (if needed)
 		std::vector<std::uint8_t> binaryDDOP; ///< Stores the DDOP in binary form after it has been generated
+		std::vector<RequestValueCommandCallback> requestValueCallbacks; ///< A list of callbacks that will be called when the TC requests a process data value
+		std::vector<ValueCommandCallback> valueCommandsCallbacks; ///< A list of callbacks that will be called when the TC sets a process data value
+		std::list<ProcessDataCallbackInfo> queuedValueRequests; ///< A list of queued value requests that will be processed on the next update
+		std::list<ProcessDataCallbackInfo> queuedValueCommands; ///< A list of queued value commands that will be processed on the next update
+		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)

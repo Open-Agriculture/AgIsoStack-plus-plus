@@ -23,6 +23,7 @@
 namespace isobus
 {
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
+	  languageCommandInterface(clientSource, partner),
 	  partnerControlFunction(partner),
 	  myControlFunction(clientSource),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this),
@@ -81,6 +82,10 @@ namespace isobus
 
 		if (!initialized)
 		{
+			if (!languageCommandInterface.get_initialized())
+			{
+				languageCommandInterface.initialize();
+			}
 			if (spawnThread)
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });

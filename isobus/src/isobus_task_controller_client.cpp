@@ -7,6 +7,7 @@
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstring>
@@ -55,6 +56,40 @@ namespace isobus
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
 			initialized = true;
+		}
+	}
+
+	void TaskControllerClient::add_request_value_callback(RequestValueCommandCallback callback)
+	{
+		const std::lock_guard<std::mutex> lock(clientMutex);
+		requestValueCallbacks.push_back(callback);
+	}
+
+	void TaskControllerClient::add_value_command_callback(ValueCommandCallback callback)
+	{
+		const std::lock_guard<std::mutex> lock(clientMutex);
+		valueCommandsCallbacks.push_back(callback);
+	}
+
+	void TaskControllerClient::remove_request_value_callback(RequestValueCommandCallback callback)
+	{
+		const std::lock_guard<std::mutex> lock(clientMutex);
+		auto callbackLocation = std::find(requestValueCallbacks.begin(), requestValueCallbacks.end(), callback);
+
+		if (requestValueCallbacks.end() != callbackLocation)
+		{
+			requestValueCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void TaskControllerClient::remove_value_command_callback(ValueCommandCallback callback)
+	{
+		const std::lock_guard<std::mutex> lock(clientMutex);
+		auto callbackLocation = std::find(valueCommandsCallbacks.begin(), valueCommandsCallbacks.end(), callback);
+
+		if (valueCommandsCallbacks.end() != callbackLocation)
+		{
+			valueCommandsCallbacks.erase(callbackLocation);
 		}
 	}
 
@@ -273,7 +308,7 @@ namespace isobus
 			case StateMachineState::RequestLanguage:
 			{
 				if ((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
-					(nullptr == primaryVirtualTerminal))
+				    (nullptr == primaryVirtualTerminal))
 				{
 					languageCommandInterface.set_partner(nullptr); // TC might not reply and no VT specified, so just see if anyone knows.
 					CANStackLogger::warn("[TC]: The TC is < version 4 but no VT was provided. Language data will be requested globally, which might not be ideal.");
@@ -483,6 +518,10 @@ namespace isobus
 					CANStackLogger::error("[TC]: Server Status Message Timeout. The TC may be offline.");
 					set_state(StateMachineState::Disconnected);
 				}
+				else
+				{
+					process_queued_commands();
+				}
 			}
 			break;
 
@@ -524,6 +563,47 @@ namespace isobus
 		    (send_status()))
 		{
 			statusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
+		}
+	}
+
+	void TaskControllerClient::process_queued_commands()
+	{
+		std::lock_guard<std::mutex> lock(clientMutex);
+		bool transmitSuccessful = true;
+
+		while ((0 != queuedValueRequests.size()) && transmitSuccessful)
+		{
+			auto currentRequest = queuedValueRequests.front();
+
+			for (auto &currentCallback : requestValueCallbacks)
+			{
+				std::uint32_t newValue = 0;
+				if (currentCallback(currentRequest.elementNumber, currentRequest.ddi, newValue, this))
+				{
+					transmitSuccessful = send_value_command(currentRequest.elementNumber, currentRequest.ddi, newValue);
+					break;
+				}
+			}
+			queuedValueRequests.pop_front();
+		}
+		while ((0 != queuedValueCommands.size()) && transmitSuccessful)
+		{
+			auto currentRequest = queuedValueCommands.front();
+
+			for (auto &currentCallback : valueCommandsCallbacks)
+			{
+				if (currentCallback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, this))
+				{
+					break;
+				}
+			}
+			queuedValueCommands.pop_front();
+
+			//! @todo process PDACKs better
+			if (currentRequest.ackRequested)
+			{
+				transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
+			}
 		}
 	}
 
@@ -891,8 +971,69 @@ namespace isobus
 						}
 						break;
 
+						case ProcessDataCommands::RequestValue:
+						{
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							requestData.ackRequested = false;
+							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 8));
+							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							parentTC->queuedValueRequests.push_back(requestData);
+						}
+						break;
+
+						case ProcessDataCommands::Value:
+						{
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							requestData.ackRequested = false;
+							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 8));
+							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							parentTC->queuedValueCommands.push_back(requestData);
+						}
+						break;
+
+						case ProcessDataCommands::SetValueAndAcknowledge:
+						{
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							requestData.ackRequested = true;
+							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 8));
+							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							parentTC->queuedValueCommands.push_back(requestData);
+						}
+						break;
+
+						case ProcessDataCommands::ProcessDataAcknowledge:
+						{
+							if (0 != messageData[4])
+							{
+								CANStackLogger::warn("[TC]: TC sent us a PDNACK");
+							}
+						}
+						break;
+
 						default:
 						{
+							CANStackLogger::warn("[TC]: Unhandled process data message!");
 						}
 						break;
 					}
@@ -907,7 +1048,7 @@ namespace isobus
 		}
 	}
 
-	bool TaskControllerClient::process_internal_object_pool_upload_callback(std::uint32_t callbackIndex,
+	bool TaskControllerClient::process_internal_object_pool_upload_callback(std::uint32_t,
 	                                                                        std::uint32_t bytesOffset,
 	                                                                        std::uint32_t numberOfBytesNeeded,
 	                                                                        std::uint8_t *chunkBuffer,
@@ -1021,6 +1162,24 @@ namespace isobus
 		                                                      partnerControlFunction.get());
 	}
 
+	bool TaskControllerClient::send_pdack(std::uint16_t elementNumber, std::uint16_t ddi) const
+	{
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(static_cast<std::uint8_t>(ProcessDataCommands::ProcessDataAcknowledge) |
+			                                                                                   static_cast<std::uint8_t>(elementNumber & 0x0F)),
+			                                                         static_cast<std::uint8_t>(elementNumber >> 4),
+			                                                         static_cast<std::uint8_t>(ddi & 0xFF),
+			                                                         static_cast<std::uint8_t>(ddi >> 8),
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF,
+			                                                         0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get());
+	}
+
 	bool TaskControllerClient::send_request_localization_label() const
 	{
 		return send_generic_process_data(static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
@@ -1087,6 +1246,24 @@ namespace isobus
 			                                                         0x00, // Reserved (0)
 			                                                         0x00 }; // Reserved (0)
 
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get());
+	}
+
+	bool TaskControllerClient::send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::uint32_t value) const
+	{
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(static_cast<std::uint8_t>(ProcessDataCommands::Value) |
+			                                                                                   (static_cast<std::uint8_t>(elementNumber & 0x0F) << 4)),
+			                                                         static_cast<std::uint8_t>(elementNumber >> 4),
+			                                                         static_cast<std::uint8_t>(ddi & 0xFF),
+			                                                         static_cast<std::uint8_t>(ddi >> 8),
+			                                                         static_cast<std::uint8_t>(value),
+			                                                         static_cast<std::uint8_t>(value >> 8),
+			                                                         static_cast<std::uint8_t>(value >> 16),
+			                                                         static_cast<std::uint8_t>(value >> 24) };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
