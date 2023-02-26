@@ -297,7 +297,15 @@ namespace isobus
 
 	void VirtualTerminalClient::register_auxiliary_function_event_callback(AuxiliaryFunctionCallback value)
 	{
-		auxiliaryFunctionCallbacks.push_back(value);
+		if (state == StateMachineState::Disconnected)
+		{
+			auxiliaryFunctionCallbacks.push_back(value);
+		}
+		else
+		{
+			// Limitation right now due to the preferred assignment command relying on the presence of auxiliary function callbacks
+			CANStackLogger::error("[AUX-N] Error registering auxiliary function callback... can only be done when disconnected");
+		}
 	}
 
 	void VirtualTerminalClient::remove_auxiliary_function_event_callback(AuxiliaryFunctionCallback value)
@@ -2049,7 +2057,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
 	{
-		return 0x40 == (busyCodesBitfield && 0x40);
+		return 0x40 == (busyCodesBitfield & 0x40);
 	}
 
 	bool VirtualTerminalClient::send_delete_object_pool()
@@ -2430,7 +2438,6 @@ namespace isobus
 	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment()
 	{
 		//! @todo load preferred assignment from saved configuration
-		//! @todo only send command if there is an Auxiliary Function Type 2 object in the object pool (#65)
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
 		if (buffer.size() < CAN_DATA_LENGTH)
 		{
@@ -3438,13 +3445,18 @@ namespace isobus
 								{
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
 									parentVT->set_state(StateMachineState::Connected);
-									if (parentVT->send_auxiliary_functions_preferred_assignment())
+
+									//! @todo maybe a better way available than relying on aux function callbacks registered?
+									if (!parentVT->auxiliaryFunctionCallbacks.empty())
 									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments after LoadVersionCommand.");
-									}
-									else
-									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments after LoadVersionCommand.");
+										if (parentVT->send_auxiliary_functions_preferred_assignment())
+										{
+											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments after LoadVersionCommand.");
+										}
+										else
+										{
+											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments after LoadVersionCommand.");
+										}
 									}
 								}
 								else
@@ -3558,13 +3570,17 @@ namespace isobus
 									{
 										parentVT->set_state(StateMachineState::Connected);
 									}
-									if (parentVT->send_auxiliary_functions_preferred_assignment())
+									//! @todo maybe a better way available than relying on aux function callbacks registered?
+									if (!parentVT->auxiliaryFunctionCallbacks.empty())
 									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments after EndOfObjectPoolMessage.");
-									}
-									else
-									{
-										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments after EndOfObjectPoolMessage.");
+										if (parentVT->send_auxiliary_functions_preferred_assignment())
+										{
+											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[AUX-N]: Sent preferred assignments after EndOfObjectPoolMessage.");
+										}
+										else
+										{
+											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Failed to send preferred assignments after EndOfObjectPoolMessage.");
+										}
 									}
 								}
 								else

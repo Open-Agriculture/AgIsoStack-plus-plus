@@ -87,7 +87,7 @@ int main()
 	TestDeviceNAME.set_device_class(0);
 	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::SteeringControl));
 	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(0);
+	TestDeviceNAME.set_ecu_instance(1);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
