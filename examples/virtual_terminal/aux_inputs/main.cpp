@@ -80,15 +80,19 @@ void simulate_slider_move()
 
 void update_CAN_network()
 {
-	if (isobus::SystemTiming::time_expired_ms(lastButtonTimestamp, BUTTON_CYCLIC_DELAY))
+	if (nullptr != TestVirtualTerminalClient &&
+	    !TestVirtualTerminalClient->get_auxiliary_input_learn_mode_enabled())
 	{
-		lastButtonTimestamp = isobus::SystemTiming::get_timestamp_ms();
-		simulate_button_press();
-	}
-	if (isobus::SystemTiming::time_expired_ms(lastSliderTimestamp, B2_CYCLIC_DELAY))
-	{
-		lastSliderTimestamp = isobus::SystemTiming::get_timestamp_ms();
-		simulate_slider_move();
+		if (isobus::SystemTiming::time_expired_ms(lastButtonTimestamp, BUTTON_CYCLIC_DELAY))
+		{
+			lastButtonTimestamp = isobus::SystemTiming::get_timestamp_ms();
+			simulate_button_press();
+		}
+		if (isobus::SystemTiming::time_expired_ms(lastSliderTimestamp, B2_CYCLIC_DELAY))
+		{
+			lastSliderTimestamp = isobus::SystemTiming::get_timestamp_ms();
+			simulate_slider_move();
+		}
 	}
 
 	isobus::CANNetworkManager::CANNetwork.update();
@@ -116,6 +120,8 @@ int main()
 	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
 	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
+	canDriver = std::make_shared<MacCANPCANPlugin>(PCAN_USBBUS1);
 #endif
 	if (nullptr == canDriver)
 	{
@@ -149,7 +155,7 @@ int main()
 	TestDeviceNAME.set_device_class(0);
 	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::SteeringControl));
 	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(0);
+	TestDeviceNAME.set_ecu_instance(1);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
@@ -171,7 +177,7 @@ int main()
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1D, 0);
+	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1E, 0);
 	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);

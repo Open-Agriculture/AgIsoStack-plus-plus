@@ -331,6 +331,11 @@ namespace isobus
 		}
 	}
 
+	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
+	{
+		return 0x40 == (busyCodesBitfield & 0x40);
+	}
+
 	void VirtualTerminalClient::add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
 		ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
@@ -2055,11 +2060,6 @@ namespace isobus
 		}
 	}
 
-	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
-	{
-		return 0x40 == (busyCodesBitfield & 0x40);
-	}
-
 	bool VirtualTerminalClient::send_delete_object_pool()
 	{
 		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand),
@@ -3094,41 +3094,13 @@ namespace isobus
 
 								bool hasError = false;
 								bool isAlreadyAssigned = false;
-								if (DEFAULT_NAME == isoName)
+								if (DEFAULT_NAME == isoName && 0x1F == functionType)
 								{
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
+									if (NULL_OBJECT_ID == inputObjectID)
 									{
-										aux.functions.clear();
-										if (storeAsPreferred)
+										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 										{
-											//! @todo save preferred assignment to persistent configuration
-										}
-									}
-									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned all functions");
-								}
-								else if (0x1F == functionType)
-								{
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-									{
-										if (aux.name == isoName)
-										{
-											aux.functions.clear();
-											if (storeAsPreferred)
-											{
-												//! @todo save preferred assignment to persistent configuration
-											}
-											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
-											break;
-										}
-									}
-								}
-								else if (NULL_OBJECT_ID == inputObjectID)
-								{
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-									{
-										if (aux.name == isoName)
-										{
-											for (auto iter = aux.functions.begin(); iter != aux.functions.end(); iter++)
+											for (auto iter = aux.functions.begin(); iter != aux.functions.end();)
 											{
 												if (iter->functionObjectID == functionObjectID)
 												{
@@ -3139,28 +3111,19 @@ namespace isobus
 													}
 													CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 												}
+												else
+												{
+													++iter;
+												}
 											}
 										}
 									}
-								}
-								else if (NULL_OBJECT_ID == functionObjectID)
-								{
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
+									else if (NULL_OBJECT_ID == functionObjectID)
 									{
-										if (aux.name == isoName)
+										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 										{
-											for (auto iter = aux.functions.begin(); iter != aux.functions.end(); iter++)
-											{
-												if (iter->inputObjectID == inputObjectID)
-												{
-													aux.functions.erase(iter);
-													if (storeAsPreferred)
-													{
-														//! @todo save preferred assignment to persistent configuration
-													}
-													CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
-												}
-											}
+											aux.functions.clear();
+											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned all functions");
 										}
 									}
 								}
