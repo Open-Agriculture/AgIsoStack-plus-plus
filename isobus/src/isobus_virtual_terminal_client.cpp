@@ -320,15 +320,7 @@ namespace isobus
 
 	void VirtualTerminalClient::set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode)
 	{
-		if (state == StateMachineState::Disconnected)
-		{
-			ourModelIdentificationCode = modelIdentificationCode;
-			auxiliaryInputEnabled = true;
-		}
-		else
-		{
-			CANStackLogger::error("[AUX-N] Error setting model identification code... can only be changed when disconnected");
-		}
+		ourModelIdentificationCode = modelIdentificationCode;
 	}
 
 	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
@@ -2046,7 +2038,7 @@ namespace isobus
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
 		}
 		if ((sendAuxiliaryMaintenance) &&
-		    (auxiliaryInputEnabled) &&
+		    (!ourAuxiliaryInputs.empty()) &&
 		    (SystemTiming::time_expired_ms(lastAuxiliaryMaintenanceTimestamp_ms, AUXILIARY_MAINTENANCE_TIMEOUT_MS)))
 		{
 			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
