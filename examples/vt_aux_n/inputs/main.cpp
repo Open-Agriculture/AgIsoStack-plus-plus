@@ -1,32 +1,22 @@
+#include "isobus/hardware_integration/available_can_drivers.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
+
+#include "console_logger.cpp"
 #include "object_pool_ids.h"
 
-#ifdef WIN32
-#include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
-static PCANBasicWindowsPlugin canDriver(PCAN_USBBUS1);
-#else
-#include "isobus/hardware_integration/socket_can_interface.hpp"
-static SocketCANInterface canDriver("can0");
-#endif
-
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <memory>
 
-static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = nullptr;
+//! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
-std::vector<isobus::NAMEFilter> vtNameFilters;
-const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-static std::vector<std::uint8_t> testPool;
-
 static constexpr std::uint64_t MODEL_IDENTIFICATION_CODE = 1; ///< The model identification code of 'our' input device, this should be increased when changes are made to the input(s) definitions
 
 static constexpr std::uint64_t BUTTON_CYCLIC_DELAY = 3500; ///< 1 second between button presses
@@ -40,29 +30,13 @@ static std::uint16_t buttonTransitions = 0;
 static constexpr std::uint16_t SLIDER_MAX_POSITION = 0xFAFF;
 static bool backToZero = false;
 static std::uint16_t sliderPosition = 0;
+static std::atomic_bool running = { true };
 
 using namespace std;
 
-// A log sink for the CAN stack
-class CustomLogger : public isobus::CANStackLogger
+void signal_handler(int)
 {
-public:
-	void LogCANLibWarning(const std::string &text) override
-	{
-		std::cout << text << std::endl; // Write the text to stdout
-	}
-};
-
-static CustomLogger logger;
-
-void signal_handler(int signum)
-{
-	CANHardwareInterface::stop();
-	if (nullptr != TestVirtualTerminalClient)
-	{
-		TestVirtualTerminalClient->terminate();
-	}
-	exit(signum);
+	running = false;
 }
 
 void simulate_button_press()
@@ -125,15 +99,40 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 }
 
-void setup()
+// This callback will provide us with event driven notifications of auxiliary input from the stack
+void handle_aux_input(isobus::VirtualTerminalClient::AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, isobus::VirtualTerminalClient *)
 {
-	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
-	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, &canDriver);
+	std::cout << "Auxiliary function event received: (" << function.functionObjectID << ", " << function.inputObjectID << ", " << static_cast<int>(function.functionType) << "), value1: " << value1 << ", value2: " << value2 << std::endl;
+}
 
-	if ((!CANHardwareInterface::start()) || (!canDriver.get_is_valid()))
+int main()
+{
+	std::signal(SIGINT, signal_handler);
+
+	std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
+#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
+	canDriver = std::make_shared<SocketCANInterface>("can0");
+#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#endif
+	if (nullptr == canDriver)
 	{
-		std::cout << "Failed to connect to the socket. The interface might be down." << std::endl;
+		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
+		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
+		return -1;
+	}
+
+	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
+	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info); // Change this to Debug to see more information
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+
+	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+	{
+		std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
+		return -2;
 	}
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -143,57 +142,52 @@ void setup()
 
 	isobus::NAME TestDeviceNAME(0);
 
-	// Make sure you change these for your device!!!!
-	// This is an example device that is using a manufacturer code that is currently unused at time of writing
+	//! Make sure you change these for your device!!!!
+	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(1);
 	TestDeviceNAME.set_device_class(0);
 	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::SteeringControl));
 	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(1);
+	TestDeviceNAME.set_ecu_instance(0);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
-	vtNameFilters.push_back(testFilter);
 
-	testPool = isobus::IOPFileInterface::read_iop_file("vtpooldata.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("aux_inputs_pooldata.iop");
 
 	if (0 != testPool.size())
 	{
-		std::cout << "Loaded object pool from vtpooldata.iop" << std::endl;
+		std::cout << "Loaded object pool from aux_inputs_pooldata.iop" << std::endl;
 	}
 	else
 	{
-		std::cout << "Failed to load object pool from vtpooldata.iop" << std::endl;
+		std::cout << "Failed to load object pool from aux_inputs_pooldata.iop" << std::endl;
+		return -3;
 	}
 
 	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
 	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
 
-	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1D, 0);
-	TestPartnerVT = std::make_shared<isobus ::PartneredControlFunction>(0, vtNameFilters);
+	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
+	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1D, 0);
+	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
 	TestVirtualTerminalClient->set_auxiliary_input_model_identification_code(MODEL_IDENTIFICATION_CODE);
-
-	/// @todo Remove this once the VT client is able to know which objects are uploaded to the VT (#65)
-	/// This is a temporary workaround to make sure the VT client knows which inputs are available
-	std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
+	TestVirtualTerminalClient->add_auxiliary_input_object_id(AUXN_INPUT_SLIDER);
+	TestVirtualTerminalClient->add_auxiliary_input_object_id(AUXN_INPUT_BUTTON);
 	TestVirtualTerminalClient->initialize(true);
-	std::signal(SIGINT, signal_handler);
-}
 
-int main()
-{
-	setup();
-
-	while (true)
+	while (running)
 	{
 		// CAN stack runs in other threads. Do nothing forever.
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 
+	TestVirtualTerminalClient->terminate();
 	CANHardwareInterface::stop();
 	return 0;
 }
