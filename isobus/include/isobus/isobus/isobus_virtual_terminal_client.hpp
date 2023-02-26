@@ -1651,7 +1651,6 @@ namespace isobus
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode; ///< The model identification code of this input device
-		bool auxiliaryInputEnabled = false; ///< Stores if the auxiliary input device is enabled
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 		std::thread *workerThread; ///< The worker thread that updates this interface
 		bool firstTimeInState; ///< Stores if the current update cycle is the first time a state machine state has been processed
