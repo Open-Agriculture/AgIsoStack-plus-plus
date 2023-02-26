@@ -204,9 +204,9 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>(parentObject & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((parentObject >> 8) & 0xFF));
 			std::uint16_t tempSize = referenceList.size();
-			retVal.push_back(referenceList.size() & 0xFF);
-			retVal.push_back((referenceList.size() >> 8) & 0xFF);
-			for (std::size_t i = 0; i < referenceList.size(); i++)
+			retVal.push_back(tempSize & 0xFF);
+			retVal.push_back((tempSize >> 8) & 0xFF);
+			for (std::size_t i = 0; i < tempSize; i++)
 			{
 				retVal.push_back(static_cast<std::uint8_t>(referenceList[i] & 0xFF));
 				retVal.push_back(static_cast<std::uint8_t>((referenceList[i] >> 8) & 0xFF));

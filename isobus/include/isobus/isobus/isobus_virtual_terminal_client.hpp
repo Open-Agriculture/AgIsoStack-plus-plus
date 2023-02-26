@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
@@ -1071,6 +1072,9 @@ namespace isobus
 		/// @details This class can spawn a thread, or you can supply your own to run this function.
 		/// To configure that behavior, see the initialize function.
 		void update();
+
+		/// @brief Used to determine the language and unit systems in use by the VT server
+		LanguageCommandInterface languageCommandInterface;
 
 	protected:
 		/// @brief The internal state machine state of the VT client
