@@ -18,6 +18,7 @@ target_link_libraries(
 add_custom_command(
   TARGET VTAuxFunctionsExample
   POST_BUILD
+  COMMENT "Copying aux_inputs_pooldata.iop to build directory"
   COMMAND
     ${CMAKE_COMMAND} -E copy
     ${CMAKE_CURRENT_SOURCE_DIR}/aux_functions_pooldata.iop

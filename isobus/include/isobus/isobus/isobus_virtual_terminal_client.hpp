@@ -435,6 +435,10 @@ namespace isobus
 		/// @param[in] modelIdentificationCode The model identification code
 		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
 
+		/// @brief Get whether the VT has enabled the learn mode for the auxiliary input
+		/// @returns true if the VT has enabled the learn mode for the auxiliary input
+		bool get_auxiliary_input_learn_mode_enabled() const;
+
 		/// @brief Add a new auxiliary input to be managed by this virtual terminal object.
 		/// @details This function should be called for each auxiliary input that is available in the pool,
 		/// and will receive updates using update_auxiliary_input().
@@ -1290,10 +1294,6 @@ namespace isobus
 
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY = 1000; ///< The delay between the auxiliary input status messages, in milliseconds
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY_INTERACTION = 50; ///< The delay between the auxiliary input status messages when the input is interacted with, in milliseconds
-
-		/// @brief Get whether the VT has enabled the learn mode for the auxiliary input
-		/// @returns true if the VT has enabled the learn mode for the auxiliary input
-		bool get_auxiliary_input_learn_mode_enabled() const;
 
 		// Object Pool Managment
 		/// @brief Sends the delete object pool message

@@ -131,12 +131,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 
 	if (0 == testPool.size())
 	{
 		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("examples/vt_version_3_object_pool/VT3TestPool.iop");
+		testPool = isobus::IOPFileInterface::read_iop_file("examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 	}
 
 	EXPECT_NE(0, testPool.size());
@@ -183,12 +183,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 
 	if (0 == DerivedTestVTClient::staticTestPool.size())
 	{
 		// Try a different path to mitigate differences between how IDEs run the unit test
-		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("examples/vt_version_3_object_pool/VT3TestPool.iop");
+		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 	}
 
 	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
@@ -228,12 +228,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/vt_version_3_object_pool/VT3TestPool.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 
 	if (0 == testPool.size())
 	{
 		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("examples/vt_version_3_object_pool/VT3TestPool.iop");
+		testPool = isobus::IOPFileInterface::read_iop_file("examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 	}
 
 	EXPECT_NE(0, testPool.size());
