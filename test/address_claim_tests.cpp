@@ -23,7 +23,7 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	CANHardwareInterface::start();
 
 	CANHardwareInterface::add_can_lib_update_callback(
-	  [] {
+	  [](void *) {
 		  CANNetworkManager::CANNetwork.update();
 	  },
 	  nullptr);
