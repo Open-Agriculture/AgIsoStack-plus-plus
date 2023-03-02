@@ -24,6 +24,11 @@ public:
 		TaskControllerClient::set_state(newState);
 	}
 
+	void test_wrapper_set_state(TaskControllerClient::StateMachineState newState, std::uint32_t timestamp_ms)
+	{
+		TaskControllerClient::set_state(newState, timestamp_ms);
+	}
+
 	TaskControllerClient::StateMachineState test_wrapper_get_state() const
 	{
 		return TaskControllerClient::get_state();
@@ -335,6 +340,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 
 	// Check initial state
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
 	// Check Transition out of status message wait state
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
@@ -346,7 +353,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[1] = 0xFF; // Element number, set to not available
 	testFrame.data[2] = 0xFF; // DDI (N/A)
 	testFrame.data[3] = 0xFF; // DDI (N/A)
-	testFrame.data[4] = 0x00; // Status
+	testFrame.data[4] = 0x01; // Status (task active)
 	testFrame.data[5] = 0x00; // Command address
 	testFrame.data[6] = 0x00; // Command
 	testFrame.data[7] = 0xFF; // Reserved
@@ -356,11 +363,31 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendWorkingSetMaster);
 
+	// Test Send Working Set Master State
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendStatusMessage);
+
 	// Test Request Language state
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestLanguage);
 	interfaceUnderTest.update();
 
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForLanguageResponse);
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForLanguageResponse, 0);
+
+	// Test wait for language response state
+	testFrame.identifier = 0x18FE0FF7;
+	testFrame.data[0] = 'e';
+	testFrame.data[1] = 'n',
+	testFrame.data[2] = 0b00001111;
+	testFrame.data[3] = 0x04;
+	testFrame.data[4] = 0b01011010;
+	testFrame.data[5] = 0b00000100;
+	testFrame.data[6] = 0xFF;
+	testFrame.data[7] = 0xFF;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::ProcessDDOP);
 
 	// Test Version Response State
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestVersionResponse);
@@ -463,6 +490,159 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolDeactivateResponse);
 
+	// Test task state when not connected
+	EXPECT_EQ(false, interfaceUnderTest.get_is_task_active());
+
+	// Test Connected State
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+	EXPECT_EQ(true, interfaceUnderTest.get_is_connected());
+	EXPECT_EQ(true, interfaceUnderTest.get_is_task_active());
+
+	// Test WaitForRequestVersionFromServer State
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer);
+	// Send a request for version
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x00; // Mux
+	testFrame.data[1] = 0xFF; // Reserved
+	testFrame.data[2] = 0xFF; // Reserved
+	testFrame.data[3] = 0xFF; // Reserved
+	testFrame.data[4] = 0xFF; // Reserved
+	testFrame.data[5] = 0xFF; // Reserved
+	testFrame.data[6] = 0xFF; // Reserved
+	testFrame.data[7] = 0xFF; // Reserved
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestVersionResponse);
+	// Test strange technical command doesn't change the state
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer);
+	// Send a request for version
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x40; // Mux
+	testFrame.data[1] = 0xFF; // Reserved
+	testFrame.data[2] = 0xFF; // Reserved
+	testFrame.data[3] = 0xFF; // Reserved
+	testFrame.data[4] = 0xFF; // Reserved
+	testFrame.data[5] = 0xFF; // Reserved
+	testFrame.data[6] = 0xFF; // Reserved
+	testFrame.data[7] = 0xFF; // Reserved
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer);
+
+	// Test WaitForStructureLabelResponse State
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	// Send a request for version
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x11; // Mux
+	testFrame.data[1] = 0xFF; // No Label
+	testFrame.data[2] = 0xFF; // No Label
+	testFrame.data[3] = 0xFF; // No Label
+	testFrame.data[4] = 0xFF; // No Label
+	testFrame.data[5] = 0xFF; // No Label
+	testFrame.data[6] = 0xFF; // No Label
+	testFrame.data[7] = 0xFF; // No Label
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestTransferObjectPool);
+
+	// Need a DDOP to test some states...
+	auto testDDOP = std::make_shared<DeviceDescriptorObjectPool>();
+	ASSERT_NE(nullptr, testDDOP);
+
+	// Make a test pool, don't care about our ISO NAME, Localization label, or extended structure label for this test
+	// Set up device
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected);
+	ASSERT_EQ(true, testDDOP->add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", { 0x01 }, std::vector<std::uint8_t>(), 0));
+	interfaceUnderTest.configure(testDDOP, 6, 64, 32, false, false, false, false, false);
+
+	// Now try it with a valid structure label
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	// Send a structure label
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x11; // Mux
+	testFrame.data[1] = 0x04; // A valid label technically
+	testFrame.data[2] = 0xFF;
+	testFrame.data[3] = 0xFF;
+	testFrame.data[4] = 0xFF;
+	testFrame.data[5] = 0xFF;
+	testFrame.data[6] = 0xFF;
+	testFrame.data[7] = 0xFF;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendDeleteObjectPool);
+
+	// Now try it with a matching structure label
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	// Send a structure label
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x11; // Mux
+	testFrame.data[1] = 'I';
+	testFrame.data[2] = '+';
+	testFrame.data[3] = '+';
+	testFrame.data[4] = '1';
+	testFrame.data[5] = '.';
+	testFrame.data[6] = '0';
+	testFrame.data[7] = ' ';
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLocalizationLabel);
+
+	// Test wait for object pool transfer response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse);
+	// Send a response with good data
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x71; // Mux
+	testFrame.data[1] = 0x00;
+	testFrame.data[2] = 0xFF;
+	testFrame.data[3] = 0xFF;
+	testFrame.data[4] = 0xFF;
+	testFrame.data[5] = 0xFF;
+	testFrame.data[6] = 0xFF;
+	testFrame.data[7] = 0xFF;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
+
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse);
+	// Send a response with bad data
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x71; // Mux
+	testFrame.data[1] = 0x01; // Ran out of memory!
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
+	interfaceUnderTest.initialize(false); // Fix the interface after terminate was called
+
+	// Test wait for request object pool transfer response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestTransferObjectPoolResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestTransferObjectPoolResponse);
+	// Send a response with good data
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x51; // Mux
+	testFrame.data[1] = 0x00;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginTransferDDOP);
+
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestTransferObjectPoolResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestTransferObjectPoolResponse);
+	// Send a response with bad data
+	testFrame.identifier = 0x18CB83F7;
+	testFrame.data[0] = 0x51; // Mux
+	testFrame.data[1] = 0x01; // Not enough memory!
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginTransferDDOP);
+	interfaceUnderTest.initialize(false); // Fix the interface after terminate was called
+
 	//! @Todo Add other states
 
 	interfaceUnderTest.terminate();
@@ -493,4 +673,150 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
 	EXPECT_EQ(true, interfaceUnderTest.get_supports_peer_control_assignment());
 	EXPECT_EQ(true, interfaceUnderTest.get_supports_tcgeo_without_position_based_control());
 	EXPECT_EQ(true, interfaceUnderTest.get_supports_tcgeo_with_position_based_control());
+}
+
+TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
+{
+	NAME clientNAME(0);
+	clientNAME.set_industry_group(2);
+	clientNAME.set_ecu_instance(1);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
+	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x84, 0);
+
+	ASSERT_FALSE(internalECU->get_address_valid());
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+
+	DerivedTestTCClient interfaceUnderTest(vtPartner, internalECU);
+	interfaceUnderTest.initialize(false);
+
+	// Wait a while to build up some run time for testing timeouts later
+	while (SystemTiming::get_timestamp_ms() < 6000)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	}
+
+	// Test disconnecting from trying to send working set master
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendWorkingSetMaster, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendWorkingSetMaster);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from trying to send status message
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendStatusMessage, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendStatusMessage);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from trying to send request version message
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestVersion, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestVersion);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from trying to send request structure label message
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestStructureLabel, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestStructureLabel);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from trying to send request localization label message
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestLocalizationLabel, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLocalizationLabel);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from waiting for request version response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestVersionResponse, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from waiting for structure label response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForStructureLabelResponse, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForStructureLabelResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting from sending delete object pool
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendDeleteObjectPool, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendDeleteObjectPool);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting while waiting for object pool delete response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForDeleteObjectPoolResponse, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDeleteObjectPoolResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting while waiting for sending request to transfer the DDOP
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendRequestTransferObjectPool, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestTransferObjectPool);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test disconnecting while trying to send the DDOP
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::BeginTransferDDOP, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginTransferDDOP);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test startup delay
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForStartUpDelay, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForStartUpDelay);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
+
+	// Test no timeout when waiting for the status message initially
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForServerStatusMessage, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForServerStatusMessage);
+
+	// Test no timeout when waiting for Tx to complete. We will get a callback from transport layer for this
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForDDOPTransfer, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDDOPTransfer);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDDOPTransfer);
+
+	// Test timeout waiting for object pool transfer response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForRequestTransferObjectPoolResponse, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestTransferObjectPoolResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test timeout trying to send object pool activation
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendObjectPoolActivate, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test timeout waiting to activate object pool
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForObjectPoolActivateResponse, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolActivateResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test timeout while connected
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test trying to deactivate object pool
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::DeactivateObjectPool, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::DeactivateObjectPool);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	// Test trying to deactivate object pool
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForObjectPoolDeactivateResponse, 0);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolDeactivateResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 }

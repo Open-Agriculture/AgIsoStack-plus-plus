@@ -402,6 +402,12 @@ namespace isobus
 		/// @param[in] newState The new state for the state machine
 		void set_state(StateMachineState newState);
 
+		/// @brief Changes the internal state machine state and updates the associated timestamp to the specified one
+		/// @note This is intended for testing purposes only
+		/// @param[in] newState The new state for the state machine
+		/// @param[in] timestamp The new value for the state machine timestamp (in milliseconds)
+		void set_state(StateMachineState newState, std::uint32_t timestamp);
+
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
