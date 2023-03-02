@@ -137,12 +137,12 @@ namespace isobus
 
 			shouldTerminate = true;
 
-			//if (nullptr != workerThread)
-			//{
-			//	workerThread->join();
-			//	delete workerThread;
-			//	workerThread = nullptr;
-			//}
+			if (nullptr != workerThread)
+			{
+				workerThread->join();
+				delete workerThread;
+				workerThread = nullptr;
+			}
 		}
 	}
 
@@ -448,6 +448,16 @@ namespace isobus
 			}
 			break;
 
+			case StateMachineState::WaitForRequestTransferObjectPoolResponse:
+			{
+				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TC]: Timeout waiting for request transfer object pool response. Resetting client connection.");
+					set_state(StateMachineState::Disconnected);
+				}
+			}
+			break;
+
 			case StateMachineState::BeginTransferDDOP:
 			{
 				if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
@@ -726,11 +736,20 @@ namespace isobus
 											{
 												CANStackLogger::warn("[TC]: Structure Label from TC exceeds the max length allowed by ISO11783-10");
 											}
+											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
 											task_controller_object::Object *deviceObject = parentTC->clientDDOP->get_object_by_id(0);
 											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
 											assert(nullptr != deviceObject);
 											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
-											if (reinterpret_cast<task_controller_object::DeviceObject *>(deviceObject)->get_structure_label() == tcStructure)
+
+											std::string tempLabel = reinterpret_cast<task_controller_object::DeviceObject *>(deviceObject)->get_structure_label();
+
+											while (tempLabel.size() < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
+											{
+												tempLabel.push_back(' ');
+											}
+
+											if (tempLabel == tcStructure)
 											{
 												// Structure label matched. No upload needed yet.
 												CANStackLogger::debug("[TC]: Task controller structure labels match");
@@ -772,6 +791,7 @@ namespace isobus
 										}
 										else
 										{
+											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
 											task_controller_object::Object *deviceObject = parentTC->clientDDOP->get_object_by_id(0);
 											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
 											assert(nullptr != deviceObject);
@@ -1294,6 +1314,12 @@ namespace isobus
 			stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 			currentState = newState;
 		}
+	}
+
+	void TaskControllerClient::set_state(StateMachineState newState, std::uint32_t timestamp)
+	{
+		stateMachineTimestamp_ms = timestamp;
+		currentState = newState;
 	}
 
 	void TaskControllerClient::worker_thread_function()
