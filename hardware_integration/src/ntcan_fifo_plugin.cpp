@@ -18,8 +18,8 @@
 NTCANFIFOPlugin::NTCANFIFOPlugin(int channel) :
   net(channel),
   timestampFreq(1),
-  timestamp(0),
-  unix(std::chrono::system_clock::now()),
+  timestampOff(0),
+  handle(0),
   openResult(NTCAN_SUCCESS)
 {
 }
@@ -57,10 +57,10 @@ void NTCANFIFOPlugin::open()
 
 		if (NTCAN_SUCCESS == openResult)
 		{
-			openResult = canStatus(handle, NTCAN_FEATURE_TIMESTAMP, &status);
+			openResult = canStatus(handle, &status);
 		}
 		
-		if (NTCAN_FEATURE_TIMESTAMP == status.features & NTCAN_FEATURE_TIMESTAMP)
+		if (NTCAN_FEATURE_TIMESTAMP == (status.features & NTCAN_FEATURE_TIMESTAMP))
 		{
 			if (NTCAN_SUCCESS == openResult)
 			{
@@ -76,7 +76,7 @@ void NTCANFIFOPlugin::open()
 			{
 				auto now = std::chrono::system_clock::now();
 				auto unix = now.time_since_epoch();
-				uint64_t millis = std::chrono::duration_cast<std::chrono::microseconds>(since_epoch);
+				uint64_t millis = std::chrono::duration_cast<std::chrono::microseconds>(unix).count();
 				timestampOff = millis - timestamp;
 			}
 		}
@@ -126,8 +126,8 @@ bool NTCANFIFOPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 	{
 		canFrame.dataLength = msgCanMessage.len;
 		memcpy(canFrame.data, msgCanMessage.data, msgCanMessage.len);
-		canFrame.identifier = msgCanMessage.id & 0x1FFFFFFF;
-		canFrame.isExtendedFrame = (NTCAN_20B_BASE == msgCanMessage.id & NTCAN_20B_BASE);
+		canFrame.identifier = (msgCanMessage.id & 0x1FFFFFFF);
+		canFrame.isExtendedFrame = (NTCAN_20B_BASE == (msgCanMessage.id & NTCAN_20B_BASE));
 		canFrame.timestamp_us = msgCanMessage.timestamp * 1000000 / timestampFreq + timestampOff;
 		retVal = true;
 	}
