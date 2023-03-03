@@ -11,8 +11,10 @@
 #ifndef DDOP_DEFINITIONS_HPP
 #define DDOP_DEFINITIONS_HPP
 
+/// @brief Max 16 sections in this example
 static constexpr std::size_t NUMBER_SECTIONS_TO_CREATE = 16;
 
+/// @brief Enumerates unique IDs in the example DDOP
 enum class SprayerDDOPObjectIDs : std::uint16_t
 {
 	Device = 0,
@@ -52,12 +54,18 @@ enum class SprayerDDOPObjectIDs : std::uint16_t
 	LiquidProduct,
 	TankCapacity,
 	TankVolume,
+	LifetimeApplicationVolumeTotal,
+	PrescriptionControlState,
+	ActualCulturalPractice,
+	TargetRate,
+	ActualRate,
 
 	AreaPresentation,
 	TimePresentation,
 	ShortWidthPresentation,
 	LongWidthPresentation,
-	VolumePresentation
+	VolumePresentation,
+	VolumePerAreaPresentation
 };
 
 #endif // DDOP_DEFINITIONS_HPP

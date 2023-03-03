@@ -61,7 +61,7 @@ bool create_example_sprayer_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectP
 	retVal &= poolToPopulate->add_device_process_data("Connector Y", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ConnectorYOffset));
 	retVal &= poolToPopulate->add_device_property("Type", 9, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ConnectorType), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ConnectorType));
 
-	//// Set up Boom
+	// Set up Boom
 	retVal &= poolToPopulate->add_device_element("Boom", elementCounter++, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), isobus::task_controller_object::DeviceElementObject::Type::Function, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::SprayBoom));
 	retVal &= poolToPopulate->add_device_property("Offset X", 0, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetX), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::BoomXOffset));
 	retVal &= poolToPopulate->add_device_property("Offset Y", 0, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::BoomYOffset));
@@ -70,13 +70,18 @@ bool create_example_sprayer_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectP
 	retVal &= poolToPopulate->add_device_process_data("Setpoint Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointWorkState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::SetpointWorkState));
 	retVal &= poolToPopulate->add_device_process_data("Area Total", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::TotalArea), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::AreaPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::AreaTotal));
 
-	//// Set up bin/tank
+	// Set up bin/tank
 	retVal &= poolToPopulate->add_device_element("Product", elementCounter++, 9, isobus::task_controller_object::DeviceElementObject::Type::Bin, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LiquidProduct));
 	retVal &= poolToPopulate->add_device_process_data("Tank Capacity", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::MaximumVolumeContent), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankCapacity));
 	retVal &= poolToPopulate->add_device_process_data("Tank Volume", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualVolumeContent), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankVolume));
+	retVal &= poolToPopulate->add_device_process_data("Lifetime Total Volume", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::LifetimeApplicationTotalVolume), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LifetimeApplicationVolumeTotal));
+	retVal &= poolToPopulate->add_device_process_data("Rx Control State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::PrescriptionControlState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::PrescriptionControlState));
+	retVal &= poolToPopulate->add_device_process_data("Target Rate", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointVolumePerAreaApplicationRate), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePerAreaPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TargetRate));
+	retVal &= poolToPopulate->add_device_process_data("Actual Rate", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualVolumePerAreaApplicationRate), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePerAreaPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ActualRate));
+	retVal &= poolToPopulate->add_device_property("Operation Type", 3, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCulturalPractice), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ActualCulturalPractice));
 
-	//// Set up sections for section control
-	//// Using 7 ft sections
+	// Set up sections for section control
+	// Using 7 ft sections
 	for (std::size_t i = 0; i < NUMBER_SECTIONS; i++)
 	{
 		retVal &= poolToPopulate->add_device_element("Section " + isobus::to_string(static_cast<int>(i)), elementCounter++, 9, isobus::task_controller_object::DeviceElementObject::Type::Section, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::Section1) + i);
@@ -97,6 +102,7 @@ bool create_example_sprayer_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectP
 	retVal &= poolToPopulate->add_device_value_presentation("m^2", 0, 1.0f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::AreaPresentation));
 	retVal &= poolToPopulate->add_device_value_presentation("L", 0, 0.001f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePresentation));
 	retVal &= poolToPopulate->add_device_value_presentation("minutes", 0, 1.0f, 1, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TimePresentation));
+	retVal &= poolToPopulate->add_device_value_presentation("L/ha", 0, 0.001f, 1, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePerAreaPresentation));
 
 	// Add child linkages to device elements if all objects were added OK
 	if (retVal)
@@ -127,6 +133,11 @@ bool create_example_sprayer_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectP
 
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankCapacity));
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankVolume));
+		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LifetimeApplicationVolumeTotal));
+		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::PrescriptionControlState));
+		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ActualCulturalPractice));
+		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TargetRate));
+		product->add_reference_to_child_object(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ActualRate));
 	}
 	return retVal;
 }
@@ -136,6 +147,26 @@ bool request_value_command_callback(std::uint16_t elementNumber,
                                     std::uint32_t &value,
                                     void *parentPointer)
 {
+	switch (DDI)
+	{
+		case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::MaximumVolumeContent):
+		{
+			value = 4542494; // 1200 Gallons in ml
+		}
+		break;
+
+		case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualVolumeContent):
+		{
+			value = 3785000; // 1000 Gal in ml;
+		}
+		break;
+
+		default:
+		{
+			value = 0;
+		}
+		break;
+	}
 	return true;
 }
 
@@ -188,7 +219,7 @@ int main()
 	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(2);
-	TestDeviceNAME.set_device_class(2);
+	TestDeviceNAME.set_device_class(6);
 	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::RateControl));
 	TestDeviceNAME.set_identity_number(2);
 	TestDeviceNAME.set_ecu_instance(0);
