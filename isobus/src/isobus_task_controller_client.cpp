@@ -345,7 +345,7 @@ namespace isobus
 			case StateMachineState::ProcessDDOP:
 			{
 				assert(0 != clientDDOP->size()); // Need to have a valid object pool!
-				if (0 == binaryDDOP.size())
+				if (binaryDDOP.empty())
 				{
 					// Binary DDOP has not been generated before.
 					if (clientDDOP->generate_binary_object_pool(binaryDDOP))
@@ -462,7 +462,7 @@ namespace isobus
 			{
 				if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
 				                                                   nullptr,
-				                                                   binaryDDOP.size() + 1, // Account for Mux byte
+				                                                   static_cast<std::uint32_t>(binaryDDOP.size() + 1), // Account for Mux byte
 				                                                   myControlFunction.get(),
 				                                                   partnerControlFunction.get(),
 				                                                   CANIdentifier::CANPriority::PriorityLowest7,
@@ -997,7 +997,7 @@ namespace isobus
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = false;
-							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 8));
+							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
 							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
@@ -1014,7 +1014,7 @@ namespace isobus
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = false;
-							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 8));
+							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
 							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
@@ -1031,7 +1031,7 @@ namespace isobus
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = true;
-							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 8));
+							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
 							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
@@ -1185,7 +1185,7 @@ namespace isobus
 	bool TaskControllerClient::send_pdack(std::uint16_t elementNumber, std::uint16_t ddi) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(static_cast<std::uint8_t>(ProcessDataCommands::ProcessDataAcknowledge) |
-			                                                                                   static_cast<std::uint8_t>(elementNumber & 0x0F)),
+			                                                                                   static_cast<std::uint8_t>(elementNumber & 0x0F) << 4),
 			                                                         static_cast<std::uint8_t>(elementNumber >> 4),
 			                                                         static_cast<std::uint8_t>(ddi & 0xFF),
 			                                                         static_cast<std::uint8_t>(ddi >> 8),
