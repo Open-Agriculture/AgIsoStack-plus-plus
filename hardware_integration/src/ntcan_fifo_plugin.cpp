@@ -24,10 +24,6 @@ NTCANFIFOPlugin::NTCANFIFOPlugin(int channel) :
 {
 }
 
-NTCANFIFOPlugin::~NTCANFIFOPlugin()
-{
-}
-
 bool NTCANFIFOPlugin::get_is_valid() const
 {
 	return (NTCAN_SUCCESS == openResult);
@@ -40,19 +36,20 @@ void NTCANFIFOPlugin::close()
 
 void NTCANFIFOPlugin::open()
 {
-	uint32_t mode = 0;
-	int32_t txQueueSize = 8;
-	int32_t rxQueueSize = 8;
-	int32_t txTimeOut = 100;
-	int32_t rxTimeOut = 1000;
-	CAN_IF_STATUS status {0};
-	uint64_t timestamp = 0;
-	int ids;
+	{
+		std::uint32_t mode = 0;
+		std::int32_t txQueueSize = 8;
+		std::int32_t rxQueueSize = 8;
+		std::int32_t txTimeOut = 100;
+		std::int32_t rxTimeOut = 1000;
 
-	openResult = canOpen(net, mode, txQueueSize, rxQueueSize, txTimeOut, rxTimeOut, &handle);
+		openResult = canOpen(net, mode, txQueueSize, rxQueueSize, txTimeOut, rxTimeOut, &handle);
+	}
 
 	if (NTCAN_SUCCESS == openResult)
 	{
+		CAN_IF_STATUS status {0};
+
 		openResult = canSetBaudrate(handle, NTCAN_BAUD_250);
 
 		if (NTCAN_SUCCESS == openResult)
@@ -62,6 +59,7 @@ void NTCANFIFOPlugin::open()
 		
 		if (NTCAN_FEATURE_TIMESTAMP == (status.features & NTCAN_FEATURE_TIMESTAMP))
 		{
+			std::uint64_t timestamp = 0;
 			if (NTCAN_SUCCESS == openResult)
 			{
 				openResult = canIoctl(handle, NTCAN_IOCTL_GET_TIMESTAMP_FREQ, &timestampFreq);
@@ -76,16 +74,16 @@ void NTCANFIFOPlugin::open()
 			{
 				auto now = std::chrono::system_clock::now();
 				auto unix = now.time_since_epoch();
-				uint64_t millis = std::chrono::duration_cast<std::chrono::microseconds>(unix).count();
+				long long millis = std::chrono::duration_cast<std::chrono::microseconds>(unix).count();
 				timestampOff = millis - timestamp;
 			}
 		}
 			
 		if (NTCAN_SUCCESS == openResult)
 		{
-			ids = 0x800;
+			std::int32_t ids = (1 << 11);
 			openResult = canIdRegionAdd(handle, 0, &ids);
-			if (NTCAN_SUCCESS == openResult && ids != 0x800)
+			if (NTCAN_SUCCESS == openResult && ids != (1 << 11))
 			{
 				openResult = NTCAN_INSUFFICIENT_RESOURCES;
 			}
@@ -93,9 +91,10 @@ void NTCANFIFOPlugin::open()
 		
 		if (NTCAN_SUCCESS == openResult)
 		{
-			ids = 0x20000000;
+			std::int32_t ids = (1 << 29);
+			// Address 0, with the wide address flag.
 			openResult = canIdRegionAdd(handle, 0 | NTCAN_20B_BASE, &ids);
-			if (NTCAN_SUCCESS == openResult && ids != 0x20000000)
+			if (NTCAN_SUCCESS == openResult && ids != (1 << 29))
 			{
 				openResult = NTCAN_INSUFFICIENT_RESOURCES;
 			}
@@ -118,7 +117,7 @@ bool NTCANFIFOPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 	NTCAN_RESULT result;
 	CMSG_T msgCanMessage {0};
 	bool retVal = false;
-	int32_t count = 1;
+	std::int32_t count = 1;
 
 	result = canReadT(handle, &msgCanMessage, &count, nullptr);
 
@@ -126,7 +125,7 @@ bool NTCANFIFOPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 	{
 		canFrame.dataLength = msgCanMessage.len;
 		memcpy(canFrame.data, msgCanMessage.data, msgCanMessage.len);
-		canFrame.identifier = (msgCanMessage.id & 0x1FFFFFFF);
+		canFrame.identifier = (msgCanMessage.id & ((1 << 29) - 1));
 		canFrame.isExtendedFrame = (NTCAN_20B_BASE == (msgCanMessage.id & NTCAN_20B_BASE));
 		canFrame.timestamp_us = msgCanMessage.timestamp * 1000000 / timestampFreq + timestampOff;
 		retVal = true;
@@ -142,9 +141,9 @@ bool NTCANFIFOPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFr
 {
 	NTCAN_RESULT result;
 	CMSG_T msgCanMessage {0};
-	int32_t count = 1;
+	std::int32_t count = 1;
 
-	msgCanMessage.id = canFrame.isExtendedFrame ? canFrame.identifier | NTCAN_20B_BASE : canFrame.identifier;
+	msgCanMessage.id = canFrame.isExtendedFrame ? (canFrame.identifier | NTCAN_20B_BASE) : canFrame.identifier;
 	msgCanMessage.len = canFrame.dataLength;
 	memcpy(msgCanMessage.data, canFrame.data, canFrame.dataLength);
 

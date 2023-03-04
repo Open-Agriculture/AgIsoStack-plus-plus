@@ -31,7 +31,7 @@ public:
 	explicit NTCANFIFOPlugin(int channel);
 
 	/// @brief The destructor for NTCANFIFOPlugin
-	virtual ~NTCANFIFOPlugin();
+	virtual ~NTCANFIFOPlugin() = default;
 
 	/// @brief Returns if the connection with the hardware is valid
 	/// @returns `true` if connected, `false` if not connected
@@ -55,8 +55,8 @@ public:
 
 private:
 	int net;
-	uint64_t timestampFreq;
-	uint64_t timestampOff;
+	std::uint64_t timestampFreq;
+	std::uint64_t timestampOff;
 	NTCAN_HANDLE handle; ///< The handle as defined in the NTCAN FIFO driver API
 	NTCAN_RESULT openResult; ///< Stores the result of the call to begin CAN communication. Used for is_valid check later.
 };
