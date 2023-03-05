@@ -775,7 +775,7 @@ namespace isobus
 									// Right now, we'll just reload the pool if the localization doesn't match, but
 									// in the future we should permit modifications to the localization and DVP objects
 									//! @todo Localization label partial pool handling
-									if (StateMachineState::WaitForStructureLabelResponse == parentTC->get_state())
+									if (StateMachineState::WaitForLocalizationLabelResponse == parentTC->get_state())
 									{
 										if ((0xFF == messageData[1]) &&
 										    (0xFF == messageData[2]) &&
