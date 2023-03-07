@@ -175,6 +175,11 @@ namespace isobus
 			return writeOffset;
 		}
 	
+		unsigned int get_written_bytes() const
+		{
+			return (writeOffset + 7) / 8;
+		}
+	
 		template <typename T>
 		bool write(T const & data)
 		{
