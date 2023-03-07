@@ -202,17 +202,14 @@ namespace isobus
 					return false;
 				}
 				// Move in the new data.
-				*data = (*data & ~(255 << output)) | ((buffer[byte] >> input) << output);
+				*data = (*data & (255 >> space)) | ((buffer[byte] >> input) << output);
+				if (space >= bits)
+				{
+					space -= bits;
+					break;
+				}
 				if (space > remaining)
 				{
-					if (remaining >= bits)
-					{
-						bits = 0;
-					}
-					else
-					{
-						bits -= remaining;
-					}
 					space -= remaining;
 					output = 8 - space;
 					remaining = 0;
@@ -221,51 +218,31 @@ namespace isobus
 				}
 				else if (remaining > space)
 				{
-					if (space >= bits)
-					{
-						bits = 0;
-					}
-					else
-					{
-						bits -= space;
-					}
+					bits -= space;
 					remaining -= space;
 					input = 8 - remaining;
 					space = 8;
 					output = 0;
 					++data;
-					if (bits)
-					{
-						*data = 0;
-					}
+					*data = 0;
 				}
 				else
 				{
-					if (remaining >= bits)
-					{
-						bits = 0;
-					}
-					else
-					{
-						bits -= space;
-					}
+					bits -= space;
 					// Perfectly matched.
 					remaining = 8;
 					input = 0;
 					space = 8;
 					output = 0;
 					++data;
-					if (bits)
-					{
-						*data = 0;
-					}
+					*data = 0;
 					++byte;
 				}
 			}
-			if (output)
+			if (space)
 			{
 				// Bits left to mask.
-				*data = *data & ~(255 << output);
+				*data = *data & (255 >> space);
 			}
 			return true;
 		}
