@@ -95,7 +95,7 @@ namespace isobus
 						writeOffset = revert;
 						return false;
 					}
-					buffer[byte] = data++;
+					buffer[byte] = *data++;
 					byte += 1;
 					bits -= 8;
 				}
@@ -271,6 +271,18 @@ namespace isobus
 		}
 
 	public:
+		GroupBuilder()
+		{
+			buffer[0] = 255;
+			buffer[1] = 255;
+			buffer[2] = 255;
+			buffer[3] = 255;
+			buffer[4] = 255;
+			buffer[5] = 255;
+			buffer[6] = 255;
+			buffer[7] = 255;
+		}
+
 		unsigned int get_written_bits() const
 		{
 			return writeOffset;
@@ -447,7 +459,7 @@ namespace isobus
 		bool read<char *>(char * & data)
 		{
 			// Read until NULL.
-			return read((unsigned char *)data);
+			return read<unsigned char*>((unsigned char * &)data);
 		}
 
 		template <>
@@ -478,7 +490,7 @@ namespace isobus
 		bool read<char *>(char * & data, unsigned int bits)
 		{
 			// It is a bit awkward to specify how much of a string to read.
-			return read((unsigned char *)data, bits);
+			return read((unsigned char * &)data, bits);
 		}
 
 		template <>
@@ -510,6 +522,19 @@ namespace isobus
 		{
 			// Easy!
 			readOffset += bits;
+		}
+
+		unsigned int get_data(unsigned char output[8])
+		{
+			output[0] = buffer[0];
+			output[1] = buffer[1];
+			output[2] = buffer[2];
+			output[3] = buffer[3];
+			output[4] = buffer[4];
+			output[5] = buffer[5];
+			output[6] = buffer[6];
+			output[7] = buffer[7];
+			return get_written_bytes();
 		}
 	};
 }
