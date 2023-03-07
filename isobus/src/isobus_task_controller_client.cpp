@@ -359,6 +359,11 @@ namespace isobus
 						this->terminate();
 					}
 				}
+				else
+				{
+					CANStackLogger::debug("[TC]: Using previously generated DDOP binary");
+					set_state(StateMachineState::RequestStructureLabel);
+				}
 			}
 			break;
 
@@ -623,7 +628,7 @@ namespace isobus
 		    (nullptr != parentPointer) &&
 		    (CAN_DATA_LENGTH <= message->get_data_length()))
 		{
-			TaskControllerClient *parentTC = static_cast<TaskControllerClient *>(parentPointer);
+			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
 			std::vector<std::uint8_t> &messageData = message->get_data();
 
 			switch (message->get_identifier().get_parameter_group_number())
@@ -802,7 +807,7 @@ namespace isobus
 
 											for (std::uint_fast8_t i = 0; i < (CAN_DATA_LENGTH - 1); i++)
 											{
-												if (messageData[i] != ddopLabel[i])
+												if (messageData[i + 1] != ddopLabel[i])
 												{
 													labelsMatch = false;
 													break;
@@ -855,63 +860,81 @@ namespace isobus
 
 								case DeviceDescriptorCommands::ObjectPoolActivateDeactivateResponse:
 								{
-									if (0 == messageData[1])
+									if (StateMachineState::WaitForObjectPoolActivateResponse == parentTC->get_state())
 									{
-										CANStackLogger::info("[TC]: DDOP Activated without error.");
-										parentTC->set_state(StateMachineState::Connected);
-									}
-									else
-									{
-										CANStackLogger::error("[TC]: DDOP was not activated.");
-										if (0x01 & messageData[1])
+										if (0 == messageData[1])
 										{
-											CANStackLogger::error("[TC]: There are errors in the DDOP. Faulting parent ID: " +
-											                      isobus::to_string(static_cast<int>(static_cast<std::uint16_t>(messageData[2]) |
-											                                                         static_cast<std::uint16_t>(messageData[3] << 8))) +
-											                      " Faulting object: " +
-											                      isobus::to_string(static_cast<int>(static_cast<std::uint16_t>(messageData[4]) |
-											                                                         static_cast<std::uint16_t>(messageData[5] << 8))));
-											if (0x01 & messageData[6])
+											CANStackLogger::info("[TC]: DDOP Activated without error.");
+											parentTC->set_state(StateMachineState::Connected);
+										}
+										else
+										{
+											CANStackLogger::error("[TC]: DDOP was not activated.");
+											if (0x01 & messageData[1])
 											{
-												CANStackLogger::error("[TC]: Method or attribute not supported by the TC");
+												CANStackLogger::error("[TC]: There are errors in the DDOP. Faulting parent ID: " +
+												                      isobus::to_string(static_cast<int>(static_cast<std::uint16_t>(messageData[2]) |
+												                                                         static_cast<std::uint16_t>(messageData[3] << 8))) +
+												                      " Faulting object: " +
+												                      isobus::to_string(static_cast<int>(static_cast<std::uint16_t>(messageData[4]) |
+												                                                         static_cast<std::uint16_t>(messageData[5] << 8))));
+												if (0x01 & messageData[6])
+												{
+													CANStackLogger::error("[TC]: Method or attribute not supported by the TC");
+												}
+												if (0x02 & messageData[6])
+												{
+													// In theory, we check for this before upload, so this should be nearly impossible.
+													CANStackLogger::error("[TC]: Unknown object reference (missing object)");
+												}
+												if (0x04 & messageData[6])
+												{
+													CANStackLogger::error("[TC]: Unknown error (Any other error)");
+												}
+												if (0x08 & messageData[6])
+												{
+													CANStackLogger::error("[TC]: Device descriptor object pool was deleted from volatile memory");
+												}
+												if (0xF0 & messageData[6])
+												{
+													CANStackLogger::warn("[TC]: The TC sent illegal errors in the reserved bits of the response.");
+												}
 											}
-											if (0x02 & messageData[6])
+											if (0x02 & messageData[1])
 											{
-												// In theory, we check for this before upload, so this should be nearly impossible.
-												CANStackLogger::error("[TC]: Unknown object reference (missing object)");
+												CANStackLogger::error("[TC]: Task Controller ran out of memory during activation.");
 											}
-											if (0x04 & messageData[6])
+											if (0x04 & messageData[1])
 											{
-												CANStackLogger::error("[TC]: Unknown error (Any other error)");
+												CANStackLogger::error("[TC]: Task Controller indicates an unknown error occurred.");
 											}
-											if (0x08 & messageData[6])
+											if (0x08 & messageData[1])
 											{
-												CANStackLogger::error("[TC]: Device descriptor object pool was deleted from volatile memory");
+												CANStackLogger::error("[TC]: A different DDOP with the same structure label already exists in the TC.");
 											}
-											if (0xF0 & messageData[6])
+											if (0xF0 & messageData[1])
 											{
 												CANStackLogger::warn("[TC]: The TC sent illegal errors in the reserved bits of the response.");
 											}
+											parentTC->set_state(StateMachineState::Disconnected);
+											CANStackLogger::error("[TC]: Client terminated.");
+											parentTC->terminate();
 										}
-										if (0x02 & messageData[1])
+									}
+									else if (StateMachineState::WaitForObjectPoolDeactivateResponse == parentTC->get_state())
+									{
+										if (0 == messageData[1])
 										{
-											CANStackLogger::error("[TC]: Task Controller ran out of memory during activation.");
+											CANStackLogger::info("[TC]: Object pool deactivated OK.");
 										}
-										if (0x04 & messageData[1])
+										else
 										{
-											CANStackLogger::error("[TC]: Task Controller indicates an unknown error occurred.");
+											CANStackLogger::error("[TC]: Object pool deactivation error.");
 										}
-										if (0x08 & messageData[1])
-										{
-											CANStackLogger::error("[TC]: A different DDOP with the same structure label already exists in the TC.");
-										}
-										if (0xF0 & messageData[1])
-										{
-											CANStackLogger::warn("[TC]: The TC sent illegal errors in the reserved bits of the response.");
-										}
-										parentTC->set_state(StateMachineState::Disconnected);
-										CANStackLogger::error("[TC]: Client terminated.");
-										parentTC->terminate();
+									}
+									else
+									{
+										CANStackLogger::warn("[TC]: Object pool activate/deactivate response received at a strange time. Message dropped.");
 									}
 								}
 								break;
@@ -1116,7 +1139,7 @@ namespace isobus
 		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData) == parameterGroupNumber) &&
 		    (nullptr != destinationControlFunction))
 		{
-			TaskControllerClient *parent = reinterpret_cast<TaskControllerClient *>(parentPointer);
+			auto parent = reinterpret_cast<TaskControllerClient *>(parentPointer);
 
 			if (StateMachineState::WaitForDDOPTransfer == parent->get_state())
 			{

@@ -79,7 +79,7 @@ namespace isobus
 		class DeviceObject : public Object
 		{
 		public:
-			/// @brief Constructor for a device object
+			/// @brief Constructor for a DeviceObject
 			/// @param[in] deviceDesignator Descriptive text for the object, UTF-8, 32-128 chars max depending on TC version
 			/// @param[in] deviceSoftwareVersion Software version indicating text (UTF-8)
 			/// @param[in] deviceSerialNumber Device and manufacturer-specific serial number of the Device (UTF-8)
@@ -94,6 +94,9 @@ namespace isobus
 			             std::array<std::uint8_t, 7> deviceLocalizationLabel,
 			             std::vector<std::uint8_t> deviceExtendedStructureLabel,
 			             std::uint64_t clientIsoNAME);
+
+			/// @brief Destructor for a DeviceObject
+			virtual ~DeviceObject() = default;
 
 			/// @brief Returns the XML namespace for the object
 			/// @returns the XML namespace for the object
@@ -172,6 +175,9 @@ namespace isobus
 			                    std::uint16_t parentObjectID,
 			                    Type deviceEelementType,
 			                    std::uint16_t uniqueID);
+
+			/// @brief Destructor for a DeviceElementObject
+			virtual ~DeviceElementObject() = default;
 
 			/// @brief Returns the XML namespace for the object
 			/// @returns The string "DET", the XML namespace for the DeviceElementObject
@@ -256,6 +262,9 @@ namespace isobus
 			                        std::uint8_t processDataTriggerMethods,
 			                        std::uint16_t uniqueID);
 
+			/// @brief Destructor for a DeviceProcessDataObject
+			virtual ~DeviceProcessDataObject() = default;
+
 			/// @brief Returns the XML element namespace for DeviceProcess-Data.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcess-Data.
 			std::string get_table_id() const override;
@@ -310,6 +319,9 @@ namespace isobus
 			                     std::uint16_t valuePresentationObject,
 			                     std::uint16_t uniqueID);
 
+			/// @brief Destructor for a DevicePropertyObject
+			virtual ~DevicePropertyObject() = default;
+
 			/// @brief Returns the XML element namespace for DeviceProperty.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.
 			std::string get_table_id() const override;
@@ -363,6 +375,9 @@ namespace isobus
 			                              float scaleFactor,
 			                              std::uint8_t numberDecimals,
 			                              std::uint16_t uniqueID);
+
+			/// @brief Destructor for a DeviceValuePresentationObject
+			virtual ~DeviceValuePresentationObject() = default;
 
 			/// @brief Returns the XML element namespace for DeviceValuePresentation.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.

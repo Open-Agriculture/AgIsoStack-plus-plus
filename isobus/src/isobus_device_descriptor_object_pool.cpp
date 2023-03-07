@@ -356,7 +356,7 @@ namespace isobus
 			{
 				auto objectBinary = currentObject->get_binary_object();
 
-				if (objectBinary.size() != 0)
+				if (!objectBinary.empty())
 				{
 					resultantPool.insert(resultantPool.end(), objectBinary.begin(), objectBinary.end());
 				}
@@ -371,6 +371,7 @@ namespace isobus
 		else
 		{
 			CANStackLogger::error("[DDOP]: Failed to resolve all object IDs in DDOP. Your DDOP contains invalid object references.");
+			retVal = false;
 		}
 		return retVal;
 	}
@@ -447,9 +448,10 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::warn("[DDOP]: Object " +
-						                     isobus::to_string(static_cast<int>(currentObject->get_object_id())) +
-						                     " is an orphan. It's parent is 0xFFFF!");
+						CANStackLogger::error("[DDOP]: Object " +
+						                      isobus::to_string(static_cast<int>(currentObject->get_object_id())) +
+						                      " is an orphan. It's parent is 0xFFFF!");
+						retVal = false;
 					}
 
 					if (retVal)
