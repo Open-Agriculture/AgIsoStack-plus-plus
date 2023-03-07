@@ -74,4 +74,4 @@ Non-CMake:
 
 If you are not using CMake, just make sure to add all the files from the 'ISO11783-CAN-Stack/isobus' folder, the 'ISO11783-CAN-Stack/hardware_integration' folder, and the 'ISO11783-CAN-Stack/utility' folder to your project so they all get compiled. 
 
-You'll want to make sure the 'ISO11783-CAN-Stack/isobus/include/isobus/isobus' folder is part of your include pathm as well as 'ISO11783-CAN-Stack/utility/include/isobus/utility' and 'ISO11783-CAN-Stack/hardware_integration/include/isobus/hardware_integration'.
+You'll want to make sure the 'ISO11783-CAN-Stack/isobus/include/isobus/isobus' folder is part of your include path as well as 'ISO11783-CAN-Stack/utility/include/isobus/utility' and 'ISO11783-CAN-Stack/hardware_integration/include/isobus/hardware_integration'.
