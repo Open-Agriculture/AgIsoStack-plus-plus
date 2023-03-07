@@ -219,6 +219,21 @@ TEST(DDOP_TESTS, DeviceElementDesignatorTests)
 	EXPECT_EQ(128, tempPD->get_designator().size());
 
 	EXPECT_EQ(tempPD->get_table_id(), "DET");
+
+	// Now test that a parent of the device element is not null
+	EXPECT_EQ(true, testDDOPVersion4_2.add_device_element("Super Junk Element", 0xFFFF, 0xFFFF, task_controller_object::DeviceElementObject::Type::Bin, 65530));
+	std::vector<std::uint8_t> binaryDDOP;
+	EXPECT_EQ(false, testDDOPVersion4_2.generate_binary_object_pool(binaryDDOP));
+
+	// Test invalid parent
+	EXPECT_EQ(true, testDDOPVersion4.add_device_property("asasdfasdf", 4, 5, 0xFFFF, 12347));
+	EXPECT_EQ(true, testDDOPVersion4.add_device_element("asldkfy", 714, 12347, task_controller_object::DeviceElementObject::Type::Bin, 7786));
+	EXPECT_EQ(false, testDDOPVersion4.generate_binary_object_pool(binaryDDOP));
+
+	// Test missing parent
+	EXPECT_EQ(true, testDDOPVersion3.add_device_property("asasdfasdf", 4, 5, 0xFFFF, 12347));
+	EXPECT_EQ(true, testDDOPVersion3.add_device_element("asldkfy", 714, 8467, task_controller_object::DeviceElementObject::Type::Bin, 7786));
+	EXPECT_EQ(false, testDDOPVersion3.generate_binary_object_pool(binaryDDOP));
 }
 
 TEST(DDOP_TESTS, ProcessDataTests)

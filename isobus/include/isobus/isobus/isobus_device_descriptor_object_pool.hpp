@@ -31,7 +31,7 @@ namespace isobus
 
 		/// @brief This constructor allows customization of the TC compatibility level
 		/// @param[in] taskControllerServerVersion The version of TC server to support with this DDOP
-		DeviceDescriptorObjectPool(std::uint8_t taskControllerServerVersion);
+		explicit DeviceDescriptorObjectPool(std::uint8_t taskControllerServerVersion);
 
 		/// @brief Adds a device object to the DDOP
 		/// @note There can only be one of these per DDOP
