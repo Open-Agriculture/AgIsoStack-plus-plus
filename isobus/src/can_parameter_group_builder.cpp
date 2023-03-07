@@ -292,24 +292,39 @@ namespace isobus
 
 		bool pad(unsigned int bits, bool value = true)
 		{
-			// Only use a single bit for booleans.
 			unsigned int revert = writeOffset;
 			unsigned char data = value ? 255 : 0;
-			while (bits > 8)
+			unsigned int byte = get_write_byte_offset();
+			unsigned int bit = get_write_bit_offset();
+			unsigned int remaining = 8 - bit;
+			unsigned char mask = 255 >> remaining;
+			writeOffset += bits;
+			for ( ; ; )
 			{
-				if (!write_bits(&data, 8))
+				if (byte == 8)
 				{
 					writeOffset = revert;
 					return false;
 				}
-				bits -= 8;
-			}
-			if (bits)
-			{
-				if (!write_bits(&data, bits))
+				buffer[byte] = (buffer[byte] & mask) | (data << bit);
+				if (remaining > bits)
 				{
-					writeOffset = revert;
-					return false;
+					// Weirdly we need a second masking here, to keep untouched bits as `1`.
+					buffer[byte] |= 255 << (bits + bit);
+					break;
+				}
+				else if (remaining == bits)
+				{
+					// Done.
+					break;
+				}
+				else
+				{
+					bits -= remaining;
+					bit = 0;
+					remaining = 8;
+					mask = 0;
+					++byte;
 				}
 			}
 			return true;
