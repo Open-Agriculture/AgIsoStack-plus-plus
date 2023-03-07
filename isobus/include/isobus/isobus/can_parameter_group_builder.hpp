@@ -440,6 +440,8 @@ namespace isobus
 		template <typename T>
 		bool read(T & data, unsigned int bits)
 		{
+			// Clear the memory, since we may not be reading the full width.
+			memset(&data, 0, sizeof(T));
 			return read_bits((unsigned char *)&data, bits);
 		}
 
@@ -452,6 +454,7 @@ namespace isobus
 				data = !!bits;
 				return true;
 			}
+			data = false;
 			return false;
 		}
 
@@ -474,6 +477,7 @@ namespace isobus
 				if (!read_bits(ptr, 8))
 				{
 					readOffset = revert;
+					*data = '\0';
 					return false;
 				}
 				if (*ptr == 0)
@@ -510,6 +514,7 @@ namespace isobus
 				if (!read_bits(ptr, 8))
 				{
 					readOffset = revert;
+					*data = '\0';
 					return false;
 				}
 				bits -= 8;
