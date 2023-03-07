@@ -63,6 +63,11 @@ namespace isobus
 				// byte cases.
 				unsigned char mask = (1 << bit) - 1;
 				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+				if (writeOffset % 8 != 0)
+				{
+					// Mask the top bits to hide excess data.
+					buffer[byte] |= 255 << (writeOffset % 8);
+				}
 				return true;
 			}
 			
@@ -83,6 +88,7 @@ namespace isobus
 					bits -= 8;
 				}
 				while (bits);
+				// No additional masking required in this case.
 				return true;
 			}
 	
@@ -132,6 +138,11 @@ namespace isobus
 			if (bits == 0)
 			{
 				// Nothing left to copy.
+				if (writeOffset % 8 != 0)
+				{
+					// Mask the top bits to hide excess data.
+					buffer[byte] |= 255 << (writeOffset % 8);
+				}
 				return true;
 			}
 
@@ -148,6 +159,11 @@ namespace isobus
 				// The final output spans two bytes of input.
 				++data;
 				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+			}
+			if (writeOffset % 8 != 0)
+			{
+				// Mask the top bits to hide excess data.
+				buffer[byte] |= 255 << (writeOffset % 8);
 			}
 			
 			return true;
