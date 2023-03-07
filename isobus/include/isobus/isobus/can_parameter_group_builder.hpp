@@ -525,8 +525,13 @@ namespace isobus
 
 		bool skip(unsigned int bits)
 		{
-			// Easy!
 			readOffset += bits;
+			if (readOffset > 8 * 8)
+			{
+				readOffset -= bits;
+				return false;
+			}
+			return true;
 		}
 
 		unsigned int get_data(unsigned char output[8])
