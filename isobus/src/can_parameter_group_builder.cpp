@@ -20,11 +20,23 @@ namespace isobus
 			// Which byte to write to.
 			return writeOffset / 8;
 		}
-		
+
 		unsigned int get_write_bit_offset() const
 		{
 			// Which bit to write to in the current byte.
 			return writeOffset % 8;
+		}
+
+		unsigned int get_read_byte_offset() const
+		{
+			// Which byte to read from.
+			return readOffset / 8;
+		}
+
+		unsigned int get_read_bit_offset() const
+		{
+			// Which bit to read from in the current byte.
+			return readOffset % 8;
 		}
 
 		bool write_bits(unsigned char const * data, unsigned int bits)
@@ -70,7 +82,7 @@ namespace isobus
 				}
 				return true;
 			}
-			
+
 			// Whole bytes (one byte is often handled above.)
 			if (bit == 0 && bits % 8 == 0)
 			{
@@ -91,11 +103,11 @@ namespace isobus
 				// No additional masking required in this case.
 				return true;
 			}
-	
+
 			// ----------------------------------------
 			//  Stage one - fill out the current byte.
 			// ----------------------------------------
-			
+
 			// All this data can come from the first byte of the input.
 			if (byte == 8)
 			{
@@ -110,11 +122,11 @@ namespace isobus
 			buffer[byte] = (buffer[byte] & mask) | (*data << bit);
 			bits -= remaining;
 			++byte;
-			
+
 			// -------------------------------
 			//  Stage two - copy whole bytes.
 			// -------------------------------
-	
+
 			while (bits > 8)
 			{
 				if (byte == 8)
@@ -133,7 +145,7 @@ namespace isobus
 			// -------------------------------
 			//  Stage three - copy whole bytes.
 			// -------------------------------
-			
+
 			// `bits` is number of bits left.  It may or may not span a byte boundary in the input.
 			if (bits == 0)
 			{
@@ -165,7 +177,7 @@ namespace isobus
 				// Mask the top bits to hide excess data.
 				buffer[byte] |= 255 << (writeOffset % 8);
 			}
-			
+
 			return true;
 		}
 
@@ -174,12 +186,22 @@ namespace isobus
 		{
 			return writeOffset;
 		}
-	
+
 		unsigned int get_written_bytes() const
 		{
 			return (writeOffset + 7) / 8;
 		}
-	
+
+		unsigned int get_read_bits() const
+		{
+			return readOffset;
+		}
+
+		unsigned int get_read_bytes() const
+		{
+			return (readOffset + 7) / 8;
+		}
+
 		template <typename T>
 		bool write(T const & data)
 		{
@@ -195,32 +217,8 @@ namespace isobus
 		template <>
 		bool write<bool>(bool const & data)
 		{
-			if (data)
-			{
-				unsigned char one = 255;
-				return write_bits(&one, 1);
-			}
-			else
-			{
-				unsigned char naught = 0;
-				return write_bits(&naught, 1);
-			}
-		}
-
-		template <>
-		bool write<char *>(bool const & data)
-		{
-			// Only use a single bit for booleans.
-			if (data)
-			{
-				unsigned char one = 255;
-				return write_bits(&one, 1);
-			}
-			else
-			{
-				unsigned char naught = 0;
-				return write_bits(&naught, 1);
-			}
+			unsigned char bits = data ? 255 : 0;
+			return write_bits(&bits, 1);
 		}
 
 		template <>
@@ -273,6 +271,7 @@ namespace isobus
 					writeOffset = revert;
 					return false;
 				}
+				++data;
 			}
 			if (includeNull)
 			{
@@ -314,6 +313,99 @@ namespace isobus
 				}
 			}
 			return true;
+		}
+
+		template <typename T>
+		bool read(T & data)
+		{
+			return read_bits((unsigned char *)&data, sizeof (T) * 8);
+		}
+
+		template <typename T>
+		bool read(T & data, unsigned int bits)
+		{
+			return read_bits((unsigned char *)&data, bits);
+		}
+
+		template <>
+		bool read<bool>(bool & data)
+		{
+			unsigned char bits = 0;
+			if (read_bits(&bits, 1))
+			{
+				data = !!bits;
+				return true;
+			}
+			return false;
+		}
+
+		template <>
+		bool read<char *>(char * & data)
+		{
+			// Read until NULL.
+			return read((unsigned char *)data);
+		}
+
+		template <>
+		bool read<unsigned char *>(unsigned char * & data)
+		{
+			// Read until NULL.
+			unsigned int revert = readOffset;
+			// Don't modify `data`!
+			unsigned char * ptr = data;
+			for ( ; ; )
+			{
+				if (!read_bits(ptr, 8))
+				{
+					readOffset = revert;
+					return false;
+				}
+				if (*ptr == 0)
+				{
+					// Found a NULL byte.
+					break;
+				}
+				++ptr;
+			}
+			return true;
+		}
+
+		template <>
+		bool read<char *>(char * & data, unsigned int bits)
+		{
+			// It is a bit awkward to specify how much of a string to read.
+			return read((unsigned char *)data, bits);
+		}
+
+		template <>
+		bool read<unsigned char *>(unsigned char * & data, unsigned int bits)
+		{
+			if (bits % 8 != 0)
+			{
+				// This requires normal string sizes.
+				return false;
+			}
+			// Don't modify `data`!
+			unsigned char * ptr = data;
+			// Don't write NULL, just assume the caller handles that.
+			unsigned int revert = readOffset;
+			while (bits)
+			{
+				if (!read_bits(ptr, 8))
+				{
+					readOffset = revert;
+					return false;
+				}
+				bits -= 8;
+				++ptr;
+			}
+			return true;
+		}
+
+		bool skip(unsigned int bits)
+		{
+			// Easy!
+			readOffset += bits;
 		}
 	};
 }
