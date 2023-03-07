@@ -52,7 +52,7 @@ namespace isobus
 			// character.
 			unsigned int revert = writeOffset;
 			unsigned int byte = get_write_byte_offset();
-			unsigned int bit = get_write_bit_offset();
+			unsigned int offset = get_write_bit_offset();
 			// Adjust first, and revert later.
 			writeOffset += bits;
 
@@ -61,7 +61,7 @@ namespace isobus
 			// -------------------------------
 
 			// How much space is there left in this byte?
-			unsigned int remaining = 8 - bit;
+			unsigned int remaining = 8 - offset;
 			if (remaining >= bits)
 			{
 				if (byte == 8)
@@ -73,8 +73,8 @@ namespace isobus
 				// Everything will fit in the current byte, which must mean there's at most one byte
 				// of data to write.  Hence we put this version first because it covers more single
 				// byte cases.
-				unsigned char mask = (1 << bit) - 1;
-				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+				unsigned char mask = (1 << offset) - 1;
+				buffer[byte] = (buffer[byte] & mask) | (*data << offset);
 				if (writeOffset % 8 != 0)
 				{
 					// Mask the top bits to hide excess data.
@@ -84,7 +84,7 @@ namespace isobus
 			}
 
 			// Whole bytes (one byte is often handled above.)
-			if (bit == 0 && bits % 8 == 0)
+			if (offset == 0 && bits % 8 == 0)
 			{
 				// Whole bytes, which are aligned.
 				do
@@ -118,8 +118,8 @@ namespace isobus
 			// Everything will fit in the current byte, which must mean there's at most one byte
 			// of data to write.  Hence we put this version first because it covers more single
 			// byte cases.
-			unsigned char mask = (1 << bit) - 1;
-			buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+			unsigned char mask = (1 << offset) - 1;
+			buffer[byte] = (buffer[byte] & mask) | (*data << offset);
 			bits -= remaining;
 			++byte;
 
@@ -137,7 +137,7 @@ namespace isobus
 				}
 				buffer[byte] = (*data >> remaining);
 				++data;
-				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+				buffer[byte] = (buffer[byte] & mask) | (*data << offset);
 				bits -= 8;
 				++byte;
 			}
@@ -166,11 +166,11 @@ namespace isobus
 				return false;
 			}
 			buffer[byte] = (*data >> remaining);
-			if (bit < bits)
+			if (offset < bits)
 			{
 				// The final output spans two bytes of input.
 				++data;
-				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+				buffer[byte] = (buffer[byte] & mask) | (*data << offset);
 			}
 			if (writeOffset % 8 != 0)
 			{
@@ -178,6 +178,95 @@ namespace isobus
 				buffer[byte] |= 255 << (writeOffset % 8);
 			}
 
+			return true;
+		}
+		
+		bool read_bits(unsigned char * data, unsigned int bits)
+		{
+			unsigned int revert = readOffset;
+			unsigned int byte = get_read_byte_offset();
+			unsigned int input = get_read_bit_offset();
+			unsigned int remaining = 8 - input;
+			unsigned int output = 0;
+			unsigned int space = 8 - output;
+			// Mark as read, even though we actually haven't yet.
+			readOffset += bits;
+			// Initialise the current destination byte.
+			*data = 0;
+			while (bits)
+			{
+				if (byte == 8)
+				{
+					// Ran out of data.
+					readOffset = revert;
+					return false;
+				}
+				// Move in the new data.
+				*data = (*data & ~(255 << output)) | ((buffer[byte] >> input) << output);
+				if (space > remaining)
+				{
+					if (remaining >= bits)
+					{
+						bits = 0;
+					}
+					else
+					{
+						bits -= remaining;
+					}
+					space -= remaining;
+					output = 8 - space;
+					remaining = 0;
+					input = 0;
+					++byte;
+				}
+				else if (remaining > space)
+				{
+					if (space >= bits)
+					{
+						bits = 0;
+					}
+					else
+					{
+						bits -= space;
+					}
+					remaining -= space;
+					input = 8 - remaining;
+					space = 8;
+					output = 0;
+					++data;
+					if (bits)
+					{
+						*data = 0;
+					}
+				}
+				else
+				{
+					if (remaining >= bits)
+					{
+						bits = 0;
+					}
+					else
+					{
+						bits -= space;
+					}
+					// Perfectly matched.
+					remaining = 8;
+					input = 0;
+					space = 8;
+					output = 0;
+					++data;
+					if (bits)
+					{
+						*data = 0;
+					}
+					++byte;
+				}
+			}
+			if (output)
+			{
+				// Bits left to mask.
+				*data = *data & ~(255 << output);
+			}
 			return true;
 		}
 
@@ -295,8 +384,8 @@ namespace isobus
 			unsigned int revert = writeOffset;
 			unsigned char data = value ? 255 : 0;
 			unsigned int byte = get_write_byte_offset();
-			unsigned int bit = get_write_bit_offset();
-			unsigned int remaining = 8 - bit;
+			unsigned int offset = get_write_bit_offset();
+			unsigned int remaining = 8 - offset;
 			unsigned char mask = 255 >> remaining;
 			writeOffset += bits;
 			for ( ; ; )
@@ -306,11 +395,11 @@ namespace isobus
 					writeOffset = revert;
 					return false;
 				}
-				buffer[byte] = (buffer[byte] & mask) | (data << bit);
+				buffer[byte] = (buffer[byte] & mask) | (data << offset);
 				if (remaining > bits)
 				{
 					// Weirdly we need a second masking here, to keep untouched bits as `1`.
-					buffer[byte] |= 255 << (bits + bit);
+					buffer[byte] |= 255 << (bits + offset);
 					break;
 				}
 				else if (remaining == bits)
@@ -321,7 +410,7 @@ namespace isobus
 				else
 				{
 					bits -= remaining;
-					bit = 0;
+					offset = 0;
 					remaining = 8;
 					mask = 0;
 					++byte;
