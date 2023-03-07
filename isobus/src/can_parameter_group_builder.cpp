@@ -11,33 +11,154 @@ namespace isobus
 	class GroupBuilder
 	{
 	private:
-		int bitOffset = 0;
-		char data[8];
+		int writeOffset = 0;
+		int readOffset = 0;
+		unsigned char buffer[8];
 
-		unsigned int get_byte_offset() const
+		unsigned int get_write_byte_offset() const
 		{
 			// Which byte to write to.
-			return bitOffset / 8;
+			return writeOffset / 8;
 		}
 		
-		unsigned int get_bit_offset() const
+		unsigned int get_write_bit_offset() const
 		{
 			// Which bit to write to in the current byte.
-			return bitOffset % 8;
+			return writeOffset % 8;
 		}
 
 		bool write_bits(unsigned char const * data, unsigned int bits)
 		{
+			if (bits == 0)
+			{
+				// Err, OK, I guess...
+				return true;
+			}
 			// First make a backup of the current write position, so that if there is an error
 			// writing some data we can roll back the entire change.  This is replicated in the
 			// string writing code because it has to roll back the entire string, not just the last
 			// character.
-			unsigned int revert = bitOffset;
+			unsigned int revert = writeOffset;
+			unsigned int byte = get_write_byte_offset();
+			unsigned int bit = get_write_bit_offset();
+			// Adjust first, and revert later.
+			writeOffset += bits;
+
+			// -------------------------------
+			//  Stage naught - trivial cases.
+			// -------------------------------
+
+			// How much space is there left in this byte?
+			unsigned int remaining = 8 - bit;
+			if (remaining >= bits)
+			{
+				if (byte == 8)
+				{
+					// Out of space for an eight byte packet.
+					writeOffset = revert;
+					return false;
+				}
+				// Everything will fit in the current byte, which must mean there's at most one byte
+				// of data to write.  Hence we put this version first because it covers more single
+				// byte cases.
+				unsigned char mask = (1 << bit) - 1;
+				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+				return true;
+			}
+			
+			// Whole bytes (one byte is often handled above.)
+			if (bit == 0 && bits % 8 == 0)
+			{
+				// Whole bytes, which are aligned.
+				do
+				{
+					if (byte == 8)
+					{
+						// Out of space for an eight byte packet.
+						writeOffset = revert;
+						return false;
+					}
+					buffer[byte] = data++;
+					byte += 1;
+					bits -= 8;
+				}
+				while (bits);
+				return true;
+			}
+	
+			// ----------------------------------------
+			//  Stage one - fill out the current byte.
+			// ----------------------------------------
+			
+			// All this data can come from the first byte of the input.
+			if (byte == 8)
+			{
+				// Out of space for an eight byte packet.
+				writeOffset = revert;
+				return false;
+			}
+			// Everything will fit in the current byte, which must mean there's at most one byte
+			// of data to write.  Hence we put this version first because it covers more single
+			// byte cases.
+			unsigned char mask = (1 << bit) - 1;
+			buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+			bits -= remaining;
+			++byte;
+			
+			// -------------------------------
+			//  Stage two - copy whole bytes.
+			// -------------------------------
+	
+			while (bits > 8)
+			{
+				if (byte == 8)
+				{
+					// Out of space for an eight byte packet.
+					writeOffset = revert;
+					return false;
+				}
+				buffer[byte] = (*data >> remaining);
+				++data;
+				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+				bits -= 8;
+				++byte;
+			}
+
+			// -------------------------------
+			//  Stage three - copy whole bytes.
+			// -------------------------------
+			
+			// `bits` is number of bits left.  It may or may not span a byte boundary in the input.
+			if (bits == 0)
+			{
+				// Nothing left to copy.
+				return true;
+			}
+
+			// I'm sure this code can be compressed with the code above.
+			if (byte == 8)
+			{
+				// Out of space for an eight byte packet.
+				writeOffset = revert;
+				return false;
+			}
+			buffer[byte] = (*data >> remaining);
+			if (bit < bits)
+			{
+				// The final output spans two bytes of input.
+				++data;
+				buffer[byte] = (buffer[byte] & mask) | (*data << bit);
+			}
 			
 			return true;
 		}
 
 	public:
+		unsigned int get_written_bits() const
+		{
+			return writeOffset;
+		}
+	
 		template <typename T>
 		bool write(T const & data)
 		{
@@ -123,12 +244,12 @@ namespace isobus
 		{
 			// Base case.  Write each byte separately so they don't get put in little-endian, which
 			// makes no sense for strings.
-			unsigned int revert = bitOffset;
+			unsigned int revert = writeOffset;
 			while (*data)
 			{
 				if (!write_bits(data, 8))
 				{
-					bitOffset = revert;
+					writeOffset = revert;
 					return false;
 				}
 			}
@@ -137,7 +258,7 @@ namespace isobus
 				unsigned char naught = 0;
 				if (!write_bits(&naught, 8))
 				{
-					bitOffset = revert;
+					writeOffset = revert;
 					return false;
 				}
 			}
@@ -152,13 +273,13 @@ namespace isobus
 		bool pad(unsigned int bits, bool value = true)
 		{
 			// Only use a single bit for booleans.
-			unsigned int revert = bitOffset;
+			unsigned int revert = writeOffset;
 			unsigned char data = value ? 255 : 0;
 			while (bits > 8)
 			{
 				if (!write_bits(&data, 8))
 				{
-					bitOffset = revert;
+					writeOffset = revert;
 					return false;
 				}
 				bits -= 8;
@@ -167,7 +288,7 @@ namespace isobus
 			{
 				if (!write_bits(&data, bits))
 				{
-					bitOffset = revert;
+					writeOffset = revert;
 					return false;
 				}
 			}
