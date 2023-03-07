@@ -8,7 +8,7 @@ namespace isobus
 	// one byte.  Why even specify the scheme if it isn't used?
 	//
 	// I wrote a huge amount of this file once, then somehow it vanished.  I don't know how!
-	class GroupBuilder
+	class ParameterGroupBuilder
 	{
 	private:
 		int writeOffset = 0;
