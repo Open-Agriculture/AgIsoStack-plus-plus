@@ -1399,4 +1399,22 @@ namespace isobus
 		return retVal;
 	}
 
+	bool TaskControllerClient::request_task_controller_identification() const
+	{
+		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::TechnicalCapabilities) |
+			                                                               (static_cast<std::uint8_t>(TechnicalDataMessageCommands::IdentifyTaskController) << 4),
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF,
+			                                                             0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      nullptr);
+	}
+
 } // namespace isobus
