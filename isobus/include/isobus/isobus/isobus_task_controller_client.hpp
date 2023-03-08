@@ -236,6 +236,11 @@ namespace isobus
 		/// @returns The version reported by the connected task controller
 		Version get_connected_tc_version() const;
 
+		/// @brief Sends a broadcast request to TCs to identify themseleves.
+		/// @details Upon receipt of this message, the TC shall display, for a period of 3 s, the TC Number
+		/// @returns `true` if the message was sent, otherwise `false`
+		bool request_task_controller_identification() const;
+
 		/// @brief The cyclic update function for this interface.
 		/// @note This function may be called by the TC worker thread if you called
 		/// initialize with a parameter of `true`, otherwise you must call it

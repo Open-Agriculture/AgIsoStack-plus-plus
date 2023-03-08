@@ -87,6 +87,11 @@ public:
 	{
 		TaskControllerClient::process_tx_callback(parameterGroupNumber, dataLength, sourceControlFunction, destinationControlFunction, successful, parentPointer);
 	}
+
+	bool test_wrapper_request_task_controller_identification() const
+	{
+		return TaskControllerClient::request_task_controller_identification();
+	}
 };
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
@@ -297,6 +302,21 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	EXPECT_EQ(0x22, testFrame.data[5]);
 	EXPECT_EQ(0x00, testFrame.data[6]);
 	EXPECT_EQ(0x00, testFrame.data[7]);
+
+	// Test identify TC
+	ASSERT_TRUE(interfaceUnderTest.test_wrapper_request_task_controller_identification());
+	serverTC.read_frame(testFrame);
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
+	EXPECT_EQ(0x20, testFrame.data[0]);
+	EXPECT_EQ(0xFF, testFrame.data[1]);
+	EXPECT_EQ(0xFF, testFrame.data[2]);
+	EXPECT_EQ(0xFF, testFrame.data[3]);
+	EXPECT_EQ(0xFF, testFrame.data[4]);
+	EXPECT_EQ(0xFF, testFrame.data[5]);
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
 
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
