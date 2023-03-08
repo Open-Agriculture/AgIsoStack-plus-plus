@@ -695,7 +695,7 @@ namespace isobus
 										0xFF,
 										0xFF
 									};
-									std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+									std::uint32_t numberBytesLeft = (session->sessionMessage.get_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
 
 									if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
 									{
