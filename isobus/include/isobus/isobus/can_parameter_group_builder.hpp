@@ -231,14 +231,28 @@ namespace isobus
 	public:
 		ParameterGroupBuilder()
 		{
-			buffer[0] = 255;
-			buffer[1] = 255;
-			buffer[2] = 255;
-			buffer[3] = 255;
-			buffer[4] = 255;
-			buffer[5] = 255;
-			buffer[6] = 255;
-			buffer[7] = 255;
+			unsigned int i = 0;
+			while (i != 8)
+			{
+				buffer[i] = 255;
+				++i;
+			}
+		}
+
+		ParameterGroupBuilder(unsigned char *data, unsigned int len)
+		{
+			unsigned int i = 0;
+			while (i != len)
+			{
+				buffer[i] = data[i];
+				++i;
+			}
+			while (i != 8)
+			{
+				buffer[i] = 255;
+				++i;
+			}
+			writeOffset = len * 8;
 		}
 
 		unsigned int get_written_bits() const
