@@ -15,7 +15,7 @@ namespace isobus
 	private:
 		int writeOffset = 0;
 		int readOffset = 0;
-		unsigned char buffer[8];
+		std::vector<unsigned char> buffer;
 
 		unsigned int get_write_byte_offset() const
 		{
@@ -54,13 +54,9 @@ namespace isobus
 			// character.
 			unsigned int byte = get_write_byte_offset();
 			unsigned int offset = get_write_bit_offset();
-			// Adjust first, and revert later.
+			// Adjust the size, ensure the buffer is large enough, and initialise new values.
 			writeOffset += bits;
-			if (writeOffset > 64)
-			{
-				writeOffset -= bits;
-				return false;
-			}
+			buffer.resize((writeOffset + 7) / 8, 255);
 
 			// -------------------------------
 			//  Stage naught - trivial cases.
@@ -172,12 +168,6 @@ namespace isobus
 				readOffset -= bits;
 				return false;
 			}
-			if (readOffset > 64)
-			{
-				// Trying to read too much data.
-				readOffset -= bits;
-				return false;
-			}
 			// Initialise the current destination byte.
 			*data = 0;
 			while (bits)
@@ -239,20 +229,10 @@ namespace isobus
 			}
 		}
 
-		ParameterGroupBuilder(unsigned char *data, unsigned int len)
+		ParameterGroupBuilder(std::vector<unsigned char> const &data)
 		{
-			unsigned int i = 0;
-			while (i != len)
-			{
-				buffer[i] = data[i];
-				++i;
-			}
-			while (i != 8)
-			{
-				buffer[i] = 255;
-				++i;
-			}
-			writeOffset = len * 8;
+			buffer = data;
+			writeOffset = data.size() * 8;
 		}
 
 		unsigned int get_written_bits() const
@@ -371,12 +351,8 @@ namespace isobus
 			unsigned int remaining = 8 - offset;
 			unsigned char mask = 255 >> remaining;
 			writeOffset += bits;
-			if (writeOffset > 64)
-			{
-				writeOffset -= bits;
-				return false;
-			}
-			for ( ; ; )
+			buffer.resize((writeOffset + 7) / 8, 255);
+			for (;;)
 			{
 				buffer[byte] = (buffer[byte] & mask) | (data << offset);
 				if (remaining > bits)
@@ -497,7 +473,7 @@ namespace isobus
 		bool skip(unsigned int bits)
 		{
 			readOffset += bits;
-			if (readOffset > 64)
+			if (readOffset > writeOffset)
 			{
 				readOffset -= bits;
 				return false;
@@ -505,16 +481,9 @@ namespace isobus
 			return true;
 		}
 
-		unsigned int get_data(unsigned char output[8])
+		unsigned int get_data(std::vector<unsigned char> &output)
 		{
-			output[0] = buffer[0];
-			output[1] = buffer[1];
-			output[2] = buffer[2];
-			output[3] = buffer[3];
-			output[4] = buffer[4];
-			output[5] = buffer[5];
-			output[6] = buffer[6];
-			output[7] = buffer[7];
+			output = buffer;
 			return get_written_bytes();
 		}
 	};
