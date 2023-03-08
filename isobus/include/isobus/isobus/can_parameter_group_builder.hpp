@@ -1,3 +1,5 @@
+#pragma once
+
 namespace isobus
 {
 	// Note that this class currently only works for packets eight bytes or fewer, because that is
@@ -248,7 +250,7 @@ namespace isobus
 		}
 
 	public:
-		GroupBuilder()
+		ParameterGroupBuilder()
 		{
 			buffer[0] = 255;
 			buffer[1] = 255;
