@@ -52,11 +52,15 @@ namespace isobus
 			// writing some data we can roll back the entire change.  This is replicated in the
 			// string writing code because it has to roll back the entire string, not just the last
 			// character.
-			unsigned int revert = writeOffset;
 			unsigned int byte = get_write_byte_offset();
 			unsigned int offset = get_write_bit_offset();
 			// Adjust first, and revert later.
 			writeOffset += bits;
+			if (writeOffset > 64)
+			{
+				writeOffset -= bits;
+				return false;
+			}
 
 			// -------------------------------
 			//  Stage naught - trivial cases.
@@ -66,12 +70,6 @@ namespace isobus
 			unsigned int remaining = 8 - offset;
 			if (remaining >= bits)
 			{
-				if (byte == 8)
-				{
-					// Out of space for an eight byte packet.
-					writeOffset = revert;
-					return false;
-				}
 				// Everything will fit in the current byte, which must mean there's at most one byte
 				// of data to write.  Hence we put this version first because it covers more single
 				// byte cases.
@@ -91,12 +89,6 @@ namespace isobus
 				// Whole bytes, which are aligned.
 				do
 				{
-					if (byte == 8)
-					{
-						// Out of space for an eight byte packet.
-						writeOffset = revert;
-						return false;
-					}
 					buffer[byte] = *data++;
 					byte += 1;
 					bits -= 8;
@@ -111,12 +103,6 @@ namespace isobus
 			// ----------------------------------------
 
 			// All this data can come from the first byte of the input.
-			if (byte == 8)
-			{
-				// Out of space for an eight byte packet.
-				writeOffset = revert;
-				return false;
-			}
 			// Everything will fit in the current byte, which must mean there's at most one byte
 			// of data to write.  Hence we put this version first because it covers more single
 			// byte cases.
@@ -131,12 +117,6 @@ namespace isobus
 
 			while (bits > 8)
 			{
-				if (byte == 8)
-				{
-					// Out of space for an eight byte packet.
-					writeOffset = revert;
-					return false;
-				}
 				buffer[byte] = (*data >> remaining);
 				++data;
 				buffer[byte] = (buffer[byte] & mask) | (*data << offset);
@@ -161,12 +141,6 @@ namespace isobus
 			}
 
 			// I'm sure this code can be compressed with the code above.
-			if (byte == 8)
-			{
-				// Out of space for an eight byte packet.
-				writeOffset = revert;
-				return false;
-			}
 			buffer[byte] = (*data >> remaining);
 			if (offset < bits)
 			{
@@ -185,7 +159,6 @@ namespace isobus
 		
 		bool read_bits(unsigned char * data, unsigned int bits)
 		{
-			unsigned int revert = readOffset;
 			unsigned int byte = get_read_byte_offset();
 			unsigned int input = get_read_bit_offset();
 			unsigned int remaining = 8 - input;
@@ -193,16 +166,22 @@ namespace isobus
 			unsigned int space = 8 - output;
 			// Mark as read, even though we actually haven't yet.
 			readOffset += bits;
+			if (readOffset > writeOffset)
+			{
+				// Trying to read too much data.
+				readOffset -= bits;
+				return false;
+			}
+			if (readOffset > 64)
+			{
+				// Trying to read too much data.
+				readOffset -= bits;
+				return false;
+			}
 			// Initialise the current destination byte.
 			*data = 0;
 			while (bits)
 			{
-				if (byte == 8)
-				{
-					// Ran out of data.
-					readOffset = revert;
-					return false;
-				}
 				// Move in the new data.
 				*data = (*data & (255 >> space)) | ((buffer[byte] >> input) << output);
 				if (space >= bits)
