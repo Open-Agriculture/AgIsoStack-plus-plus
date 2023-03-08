@@ -424,6 +424,7 @@ namespace isobus
 		struct ProcessDataCallbackInfo
 		{
 			std::uint32_t processDataValue; ///< The value of the value set command
+			std::uint32_t lastValue; ///< Used for measurement commands to store timestamp or previous values
 			std::uint16_t elementNumber; ///< The element number for the command
 			std::uint16_t ddi; ///< The DDI for the command
 			bool ackRequested; ///< Stores if the TC used the mux that also requires a PDACK
@@ -438,6 +439,7 @@ namespace isobus
 		std::vector<ValueCommandCallback> valueCommandsCallbacks; ///< A list of callbacks that will be called when the TC sets a process data value
 		std::list<ProcessDataCallbackInfo> queuedValueRequests; ///< A list of queued value requests that will be processed on the next update
 		std::list<ProcessDataCallbackInfo> queuedValueCommands; ///< A list of queued value commands that will be processed on the next update
+		std::list<ProcessDataCallbackInfo> measurementTimeIntervalCommands; ///< A list of measurement commands that will be processed on a time interval
 		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state

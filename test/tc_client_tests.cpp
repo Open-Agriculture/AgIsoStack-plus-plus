@@ -1340,4 +1340,27 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	EXPECT_EQ(commandedDDI, 0);
 	EXPECT_EQ(commandedElement, 0);
 	EXPECT_EQ(commandedValue, 0);
+
+	// Test time interval measurement commands
+	interfaceUnderTest.add_request_value_callback(request_value_command_callback);
+	interfaceUnderTest.add_value_command_callback(value_command_callback);
+	// Create a command
+	testFrame.identifier = 0x18CB86F7;
+	testFrame.data[0] = 0xA4;
+	testFrame.data[1] = 0x05;
+	testFrame.data[2] = 0x19;
+	testFrame.data[3] = 0x38;
+	testFrame.data[4] = 0x01; // 1ms
+	testFrame.data[5] = 0x00;
+	testFrame.data[6] = 0x00;
+	testFrame.data[7] = 0x00;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
+	interfaceUnderTest.update();
+	EXPECT_EQ(true, valueRequested);
+	EXPECT_EQ(requestedDDI, 0x3819);
 }

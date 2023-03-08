@@ -620,6 +620,28 @@ namespace isobus
 				transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
 			}
 		}
+		for (auto &measurementTimeCommand : measurementTimeIntervalCommands)
+		{
+			if (SystemTiming::time_expired_ms(measurementTimeCommand.lastValue, measurementTimeCommand.processDataValue))
+			{
+				// Time to update this time interval variable
+				transmitSuccessful = false;
+				for (auto &currentCallback : requestValueCallbacks)
+				{
+					std::uint32_t newValue = 0;
+					if (currentCallback(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue, this))
+					{
+						transmitSuccessful = send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue);
+						break;
+					}
+				}
+
+				if (transmitSuccessful)
+				{
+					measurementTimeCommand.lastValue = SystemTiming::get_timestamp_ms();
+				}
+			}
+		}
 	}
 
 	void TaskControllerClient::process_rx_message(CANMessage *message, void *parentPointer)
@@ -1016,7 +1038,7 @@ namespace isobus
 
 						case ProcessDataCommands::RequestValue:
 						{
-							ProcessDataCallbackInfo requestData = { 0, 0, 0, false };
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = false;
@@ -1033,7 +1055,7 @@ namespace isobus
 
 						case ProcessDataCommands::Value:
 						{
-							ProcessDataCallbackInfo requestData = { 0, 0, 0, false };
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = false;
@@ -1050,7 +1072,7 @@ namespace isobus
 
 						case ProcessDataCommands::SetValueAndAcknowledge:
 						{
-							ProcessDataCallbackInfo requestData = { 0, 0, 0, false };
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = true;
@@ -1062,6 +1084,23 @@ namespace isobus
 							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
 							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
 							parentTC->queuedValueCommands.push_back(requestData);
+						}
+						break;
+
+						case ProcessDataCommands::MeasurementTimeInterval:
+						{
+							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
+							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							commandData.lastValue = SystemTiming::get_timestamp_ms();
+							parentTC->measurementTimeIntervalCommands.push_back(commandData);
 						}
 						break;
 
