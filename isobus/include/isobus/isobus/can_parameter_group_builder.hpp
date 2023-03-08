@@ -365,20 +365,19 @@ namespace isobus
 
 		bool pad(unsigned int bits, bool value = true)
 		{
-			unsigned int revert = writeOffset;
 			unsigned char data = value ? 255 : 0;
 			unsigned int byte = get_write_byte_offset();
 			unsigned int offset = get_write_bit_offset();
 			unsigned int remaining = 8 - offset;
 			unsigned char mask = 255 >> remaining;
 			writeOffset += bits;
+			if (writeOffset > 64)
+			{
+				writeOffset -= bits;
+				return false;
+			}
 			for ( ; ; )
 			{
-				if (byte == 8)
-				{
-					writeOffset = revert;
-					return false;
-				}
 				buffer[byte] = (buffer[byte] & mask) | (data << offset);
 				if (remaining > bits)
 				{
@@ -498,7 +497,7 @@ namespace isobus
 		bool skip(unsigned int bits)
 		{
 			readOffset += bits;
-			if (readOffset > 8 * 8)
+			if (readOffset > 64)
 			{
 				readOffset -= bits;
 				return false;
