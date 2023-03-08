@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 namespace isobus
 {
 	// Note that this class currently only works for packets eight bytes or fewer, because that is
@@ -13,35 +15,35 @@ namespace isobus
 	class ParameterGroupBuilder
 	{
 	private:
-		int writeOffset = 0;
-		int readOffset = 0;
-		std::vector<unsigned char> buffer;
+		std::size_t writeOffset = 0;
+		std::size_t readOffset = 0;
+		std::vector<std::uint8_t> buffer;
 
-		unsigned int get_write_byte_offset() const
+		std::size_t get_write_byte_offset() const
 		{
 			// Which byte to write to.
 			return writeOffset / 8;
 		}
 
-		unsigned int get_write_bit_offset() const
+		std::size_t get_write_bit_offset() const
 		{
 			// Which bit to write to in the current byte.
 			return writeOffset % 8;
 		}
 
-		unsigned int get_read_byte_offset() const
+		std::size_t get_read_byte_offset() const
 		{
 			// Which byte to read from.
 			return readOffset / 8;
 		}
 
-		unsigned int get_read_bit_offset() const
+		std::size_t get_read_bit_offset() const
 		{
 			// Which bit to read from in the current byte.
 			return readOffset % 8;
 		}
 
-		bool write_bits(unsigned char const * data, unsigned int bits)
+		bool write_bits(std::uint8_t const * data, std::size_t bits)
 		{
 			if (bits == 0)
 			{
@@ -52,8 +54,8 @@ namespace isobus
 			// writing some data we can roll back the entire change.  This is replicated in the
 			// string writing code because it has to roll back the entire string, not just the last
 			// character.
-			unsigned int byte = get_write_byte_offset();
-			unsigned int offset = get_write_bit_offset();
+			std::size_t byte = get_write_byte_offset();
+			std::size_t offset = get_write_bit_offset();
 			// Adjust the size, ensure the buffer is large enough, and initialise new values.
 			writeOffset += bits;
 			buffer.resize((writeOffset + 7) / 8, 255);
@@ -63,13 +65,13 @@ namespace isobus
 			// -------------------------------
 
 			// How much space is there left in this byte?
-			unsigned int remaining = 8 - offset;
+			std::size_t remaining = 8 - offset;
 			if (remaining >= bits)
 			{
 				// Everything will fit in the current byte, which must mean there's at most one byte
 				// of data to write.  Hence we put this version first because it covers more single
 				// byte cases.
-				unsigned char mask = (1 << offset) - 1;
+				std::uint8_t mask = (1 << offset) - 1;
 				buffer[byte] = (buffer[byte] & mask) | (*data << offset);
 				if (writeOffset % 8 != 0)
 				{
@@ -102,7 +104,7 @@ namespace isobus
 			// Everything will fit in the current byte, which must mean there's at most one byte
 			// of data to write.  Hence we put this version first because it covers more single
 			// byte cases.
-			unsigned char mask = (1 << offset) - 1;
+			std::uint8_t mask = (1 << offset) - 1;
 			buffer[byte] = (buffer[byte] & mask) | (*data << offset);
 			bits -= remaining;
 			++byte;
@@ -153,13 +155,13 @@ namespace isobus
 			return true;
 		}
 		
-		bool read_bits(unsigned char * data, unsigned int bits)
+		bool read_bits(std::uint8_t * data, std::size_t bits)
 		{
-			unsigned int byte = get_read_byte_offset();
-			unsigned int input = get_read_bit_offset();
-			unsigned int remaining = 8 - input;
-			unsigned int output = 0;
-			unsigned int space = 8 - output;
+			std::size_t byte = get_read_byte_offset();
+			std::size_t input = get_read_bit_offset();
+			std::size_t remaining = 8 - input;
+			std::size_t output = 0;
+			std::size_t space = 8 - output;
 			// Mark as read, even though we actually haven't yet.
 			readOffset += bits;
 			if (readOffset > writeOffset)
@@ -219,38 +221,34 @@ namespace isobus
 		}
 
 	public:
-		ParameterGroupBuilder()
+		ParameterGroupBuilder() :
+		  buffer()
 		{
-			unsigned int i = 0;
-			while (i != 8)
-			{
-				buffer[i] = 255;
-				++i;
-			}
 		}
 
-		ParameterGroupBuilder(std::vector<unsigned char> const &data)
+		ParameterGroupBuilder(std::vector<std::uint8_t> const &data) :
+		  buffer()
 		{
 			buffer = data;
 			writeOffset = data.size() * 8;
 		}
 
-		unsigned int get_written_bits() const
+		std::size_t get_written_bits() const
 		{
 			return writeOffset;
 		}
 
-		unsigned int get_written_bytes() const
+		std::size_t get_written_bytes() const
 		{
 			return (writeOffset + 7) / 8;
 		}
 
-		unsigned int get_read_bits() const
+		std::size_t get_read_bits() const
 		{
 			return readOffset;
 		}
 
-		unsigned int get_read_bytes() const
+		std::size_t get_read_bytes() const
 		{
 			return (readOffset + 7) / 8;
 		}
@@ -258,19 +256,19 @@ namespace isobus
 		template <typename T>
 		bool write(T const & data)
 		{
-			return write_bits((unsigned char const *)&data, sizeof (T) * 8);
+			return write_bits((std::uint8_t const *)&data, sizeof (T) * 8);
 		}
 
 		template <typename T>
-		bool write(T const & data, unsigned int bits)
+		bool write(T const & data, std::size_t bits)
 		{
-			return write_bits((unsigned char const *)&data, bits);
+			return write_bits((std::uint8_t const *)&data, bits);
 		}
 
 		template <>
 		bool write<bool>(bool const & data)
 		{
-			unsigned char bits = data ? 255 : 0;
+			std::uint8_t bits = data ? 255 : 0;
 			return write_bits(&bits, 1);
 		}
 
@@ -278,45 +276,45 @@ namespace isobus
 		bool write<char const *>(char const * const & data)
 		{
 			// What should the default for including NULL be?
-			return write((unsigned char const *)data, false);
+			return write((std::uint8_t const *)data, false);
 		}
 
 		template <>
 		bool write<char *>(char * const & data)
 		{
 			// What should the default for including NULL be?
-			return write((unsigned char const *)data, false);
+			return write((std::uint8_t const *)data, false);
 		}
 
 		template <>
-		bool write<unsigned char const *>(unsigned char const * const & data)
+		bool write<std::uint8_t const *>(std::uint8_t const * const & data)
 		{
 			// What should the default for including NULL be?
-			return write((unsigned char const *)data, false);
+			return write((std::uint8_t const *)data, false);
 		}
 
 		template <>
-		bool write<unsigned char *>(unsigned char * const & data)
+		bool write<std::uint8_t *>(std::uint8_t * const & data)
 		{
 			// What should the default for including NULL be?
-			return write((unsigned char const *)data, false);
+			return write((std::uint8_t const *)data, false);
 		}
 
 		bool write(char const * data, bool includeNull)
 		{
-			return write((unsigned char const *)data, includeNull);
+			return write((std::uint8_t const *)data, includeNull);
 		}
 
 		bool write(char * data, bool includeNull)
 		{
-			return write((unsigned char const *)data, includeNull);
+			return write((std::uint8_t const *)data, includeNull);
 		}
 
-		bool write(unsigned char const * data, bool includeNull)
+		bool write(std::uint8_t const * data, bool includeNull)
 		{
 			// Base case.  Write each byte separately so they don't get put in little-endian, which
 			// makes no sense for strings.
-			unsigned int revert = writeOffset;
+			std::size_t revert = writeOffset;
 			while (*data)
 			{
 				if (!write_bits(data, 8))
@@ -328,7 +326,7 @@ namespace isobus
 			}
 			if (includeNull)
 			{
-				unsigned char naught = 0;
+				std::uint8_t naught = 0;
 				if (!write_bits(&naught, 8))
 				{
 					writeOffset = revert;
@@ -338,18 +336,18 @@ namespace isobus
 			return true;
 		}
 
-		bool write(unsigned char * data, bool includeNull)
+		bool write(std::uint8_t * data, bool includeNull)
 		{
-			return write((unsigned char const *)data, includeNull);
+			return write((std::uint8_t const *)data, includeNull);
 		}
 
-		bool pad(unsigned int bits, bool value = true)
+		bool pad(std::size_t bits, bool value = true)
 		{
-			unsigned char data = value ? 255 : 0;
-			unsigned int byte = get_write_byte_offset();
-			unsigned int offset = get_write_bit_offset();
-			unsigned int remaining = 8 - offset;
-			unsigned char mask = 255 >> remaining;
+			std::uint8_t data = value ? 255 : 0;
+			std::size_t byte = get_write_byte_offset();
+			std::size_t offset = get_write_bit_offset();
+			std::size_t remaining = 8 - offset;
+			std::uint8_t mask = 255 >> remaining;
 			writeOffset += bits;
 			buffer.resize((writeOffset + 7) / 8, 255);
 			for (;;)
@@ -381,21 +379,21 @@ namespace isobus
 		template <typename T>
 		bool read(T & data)
 		{
-			return read_bits((unsigned char *)&data, sizeof (T) * 8);
+			return read_bits((std::uint8_t *)&data, sizeof (T) * 8);
 		}
 
 		template <typename T>
-		bool read(T & data, unsigned int bits)
+		bool read(T & data, std::size_t bits)
 		{
 			// Clear the memory, since we may not be reading the full width.
 			memset(&data, 0, sizeof(T));
-			return read_bits((unsigned char *)&data, bits);
+			return read_bits((std::uint8_t *)&data, bits);
 		}
 
 		template <>
 		bool read<bool>(bool & data)
 		{
-			unsigned char bits = 0;
+			std::uint8_t bits = 0;
 			if (read_bits(&bits, 1))
 			{
 				data = !!bits;
@@ -409,16 +407,16 @@ namespace isobus
 		bool read<char *>(char * & data)
 		{
 			// Read until NULL.
-			return read<unsigned char*>((unsigned char * &)data);
+			return read<std::uint8_t*>((std::uint8_t * &)data);
 		}
 
 		template <>
-		bool read<unsigned char *>(unsigned char * & data)
+		bool read<std::uint8_t *>(std::uint8_t * & data)
 		{
 			// Read until NULL.
-			unsigned int revert = readOffset;
+			std::size_t revert = readOffset;
 			// Don't modify `data`!
-			unsigned char * ptr = data;
+			std::uint8_t * ptr = data;
 			for ( ; ; )
 			{
 				if (!read_bits(ptr, 8))
@@ -438,14 +436,14 @@ namespace isobus
 		}
 
 		template <>
-		bool read<char *>(char * & data, unsigned int bits)
+		bool read<char *>(char * & data, std::size_t bits)
 		{
 			// It is a bit awkward to specify how much of a string to read.
-			return read((unsigned char * &)data, bits);
+			return read((std::uint8_t * &)data, bits);
 		}
 
 		template <>
-		bool read<unsigned char *>(unsigned char * & data, unsigned int bits)
+		bool read<std::uint8_t *>(std::uint8_t * & data, std::size_t bits)
 		{
 			if (bits % 8 != 0)
 			{
@@ -453,9 +451,9 @@ namespace isobus
 				return false;
 			}
 			// Don't modify `data`!
-			unsigned char * ptr = data;
+			std::uint8_t * ptr = data;
 			// Don't write NULL, just assume the caller handles that.
-			unsigned int revert = readOffset;
+			std::size_t revert = readOffset;
 			while (bits)
 			{
 				if (!read_bits(ptr, 8))
@@ -470,7 +468,7 @@ namespace isobus
 			return true;
 		}
 
-		bool skip(unsigned int bits)
+		bool skip(std::size_t bits)
 		{
 			readOffset += bits;
 			if (readOffset > writeOffset)
@@ -481,10 +479,12 @@ namespace isobus
 			return true;
 		}
 
-		unsigned int get_data(std::vector<unsigned char> &output)
+		std::size_t get_data(std::vector<std::uint8_t> &output)
 		{
+			size_t size = get_written_bytes();
 			output = buffer;
-			return get_written_bytes();
+			output.resize(size);
+			return size;
 		}
 	};
 }
