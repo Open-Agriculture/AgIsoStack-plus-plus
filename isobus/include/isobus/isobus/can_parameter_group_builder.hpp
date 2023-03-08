@@ -486,6 +486,18 @@ namespace isobus
 			output.resize(size);
 			return size;
 		}
+
+		void reset_read()
+		{
+			readOffset = 0;
+		}
+
+		void reset_write()
+		{
+			readOffset = 0;
+			writeOffset = 0;
+			buffer.clear();
+		}
 	};
 }
 
