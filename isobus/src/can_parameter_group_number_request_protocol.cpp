@@ -238,7 +238,7 @@ namespace isobus
 
 						const std::lock_guard<std::mutex> lock(pgnRequestMutex);
 
-						for (auto repetitionRateCallback : repetitionRateCallbacks)
+						for (auto &repetitionRateCallback : repetitionRateCallbacks)
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
@@ -274,7 +274,7 @@ namespace isobus
 
 						const std::lock_guard<std::mutex> lock(pgnRequestMutex);
 
-						for (auto pgnRequestCallback : pgnRequestCallbacks)
+						for (auto &pgnRequestCallback : pgnRequestCallbacks)
 						{
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&
