@@ -85,7 +85,7 @@ namespace isobus
 		diagnosticProtocolList.push_back(this);
 		ecuIdentificationFields.resize(static_cast<std::size_t>(ECUIdentificationFields::NumberOfFields));
 
-		for (auto ecuIDField : ecuIdentificationFields)
+		for (auto &ecuIDField : ecuIdentificationFields)
 		{
 			ecuIDField = "*";
 		}
@@ -538,7 +538,7 @@ namespace isobus
 		flash = FlashState::Solid;
 		lampOn = false;
 
-		for (auto dtc : activeDTCList)
+		for (auto &dtc : activeDTCList)
 		{
 			switch (targetLamp)
 			{
@@ -643,7 +643,7 @@ namespace isobus
 		flash = FlashState::Solid;
 		lampOn = false;
 
-		for (auto dtc : inactiveDTCList)
+		for (auto &dtc : inactiveDTCList)
 		{
 			switch (targetLamp)
 			{
@@ -973,7 +973,7 @@ namespace isobus
 	{
 		std::string ecuIdString = "";
 
-		for (auto stringComponent : ecuIdentificationFields)
+		for (auto &stringComponent : ecuIdentificationFields)
 		{
 			ecuIdString.append(stringComponent);
 		}
@@ -1143,7 +1143,7 @@ namespace isobus
 									tempDM22Data.nack = true;
 
 									// Since we didn't find the DTC in the active list, we check the inactive to determine the proper NACK reason
-									for (auto dtc : inactiveDTCList)
+									for (auto &dtc : inactiveDTCList)
 									{
 										if ((tempDM22Data.suspectParameterNumber == dtc.suspectParameterNumber) &&
 										    (tempDM22Data.failureModeIdentifier == dtc.failureModeIdentifier))
@@ -1187,7 +1187,7 @@ namespace isobus
 									tempDM22Data.nack = true;
 
 									// Since we didn't find the DTC in the inactive list, we check the active to determine the proper NACK reason
-									for (auto dtc : activeDTCList)
+									for (auto &dtc : activeDTCList)
 									{
 										if ((tempDM22Data.suspectParameterNumber == dtc.suspectParameterNumber) &&
 										    (tempDM22Data.failureModeIdentifier == dtc.failureModeIdentifier))

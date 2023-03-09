@@ -193,7 +193,7 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			for (auto formerSessions : sessionHistory)
+			for (auto &formerSessions : sessionHistory)
 			{
 				if ((formerSessions.isoName == session->sessionMessage.get_source_control_function()->get_NAME()) &&
 				    (formerSessions.parameterGroupNumber == session->sessionMessage.get_identifier().get_parameter_group_number()))
@@ -244,7 +244,7 @@ namespace isobus
 			{
 				bool pgnNeedsParsing = false;
 
-				for (auto callback : parameterGroupNumberCallbacks)
+				for (auto &callback : parameterGroupNumberCallbacks)
 				{
 					if (callback.get_parameter_group_number() == message->get_identifier().get_parameter_group_number())
 					{
@@ -277,7 +277,7 @@ namespace isobus
 							{
 								// Complete
 								// Find the appropriate callback and let them know
-								for (auto callback : parameterGroupNumberCallbacks)
+								for (auto &callback : parameterGroupNumberCallbacks)
 								{
 									if (callback.get_parameter_group_number() == currentSession->sessionMessage.get_identifier().get_parameter_group_number())
 									{
