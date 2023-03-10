@@ -19,8 +19,8 @@
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 static constexpr std::uint64_t MODEL_IDENTIFICATION_CODE = 1; ///< The model identification code of 'our' input device, this should be increased when changes are made to the input(s) definitions
 
-static constexpr std::uint64_t BUTTON_CYCLIC_DELAY = 3500; ///< 1 second between button presses
-static constexpr std::uint64_t B2_CYCLIC_DELAY = 1000; ///< 3.5 seconds between slider movements
+static constexpr std::uint64_t BUTTON_CYCLIC_DELAY = 3500; ///< 3.5 seconds between button presses
+static constexpr std::uint64_t SLIDER_CYCLIC_DELAY = 1000; ///< 1 second between slider movements
 static std::uint64_t lastButtonTimestamp = 0;
 static std::uint64_t lastSliderTimestamp = 0;
 
@@ -32,8 +32,6 @@ static bool backToZero = false;
 static std::uint16_t sliderPosition = 0;
 static std::atomic_bool running = { true };
 
-using namespace std;
-
 void signal_handler(int)
 {
 	running = false;
@@ -43,7 +41,6 @@ void simulate_button_press()
 {
 	buttonPressed = !buttonPressed;
 	TestVirtualTerminalClient->update_auxiliary_input(AUXN_INPUT_BUTTON, buttonPressed, buttonTransitions);
-	// std::cout << "Auxiliary Button input value change send (pressed: " << buttonPressed << ", transitions: " << buttonTransitions << ")" << std::endl;
 	buttonTransitions++;
 }
 
@@ -75,10 +72,9 @@ void simulate_slider_move()
 		}
 	}
 	TestVirtualTerminalClient->update_auxiliary_input(AUXN_INPUT_SLIDER, sliderPosition, 0xFFFF);
-	// std::cout << "Auxiliary slider input value change send (value1: " << sliderPosition << ")" << std::endl;
 }
 
-void update_CAN_network()
+void update_CAN_network(void *)
 {
 	if (nullptr != TestVirtualTerminalClient &&
 	    !TestVirtualTerminalClient->get_auxiliary_input_learn_mode_enabled())
@@ -88,7 +84,7 @@ void update_CAN_network()
 			lastButtonTimestamp = isobus::SystemTiming::get_timestamp_ms();
 			simulate_button_press();
 		}
-		if (isobus::SystemTiming::time_expired_ms(lastSliderTimestamp, B2_CYCLIC_DELAY))
+		if (isobus::SystemTiming::time_expired_ms(lastSliderTimestamp, SLIDER_CYCLIC_DELAY))
 		{
 			lastSliderTimestamp = isobus::SystemTiming::get_timestamp_ms();
 			simulate_slider_move();

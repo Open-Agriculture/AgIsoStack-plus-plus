@@ -1376,33 +1376,33 @@ namespace isobus
 
 		/// @brief Sends the end of object pool message
 		/// @returns true if the message was sent
-		bool send_end_of_object_pool();
+		bool send_end_of_object_pool() const;
 
 		/// @brief Sends the working set master message
 		/// @returns true if the message was sent
-		bool send_working_set_master();
+		bool send_working_set_master() const;
 
 		/// @brief Send the preferred auxiliary control type 2 assignment command
 		/// @returns true if the message was sent successfully
-		bool send_auxiliary_functions_preferred_assignment();
+		bool send_auxiliary_functions_preferred_assignment() const;
 
 		/// @brief Send the auxiliary control type 2 assignment reponse message
 		/// @param[in] functionObjectID The object ID of the function
 		/// @param[in] hasError true if the assignment failed
 		/// @param[in] isAlreadyAssigned true if the function is already assigned
 		/// @returns true if the message was sent successfully
-		bool send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned);
+		bool send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned) const;
 
 		/// @brief Send the auxiliary control type 2 maintenance message
 		/// @returns true if the message was sent successfully
-		bool send_auxiliary_input_maintenance();
+		bool send_auxiliary_input_maintenance() const;
 
 		/// @brief Send the auxiliary input status type 2 enable response
 		/// @param[in] objectID The object ID of the input
 		/// @param[in] isEnabled true if the input is enabled
 		/// @param[in] hasError true if the enable failed
 		/// @returns true if the message was sent successfully
-		bool send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool hasError);
+		bool send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool hasError) const;
 
 		/// @brief Send the auxiliary control type 2 status message for all inputs if applicable
 		void update_auxiliary_input_status();

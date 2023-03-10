@@ -2391,7 +2391,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::send_end_of_object_pool()
+	bool VirtualTerminalClient::send_end_of_object_pool() const
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::EndOfObjectPoolMessage),
 			                                             0xFF,
@@ -2409,7 +2409,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_working_set_master()
+	bool VirtualTerminalClient::send_working_set_master() const
 	{
 		constexpr std::uint8_t buffer[CAN_DATA_LENGTH] = { 0x01,
 			                                                 0xFF,
@@ -2427,7 +2427,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment()
+	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment() const
 	{
 		//! @todo load preferred assignment from saved configuration
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
@@ -2443,7 +2443,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned)
+	bool VirtualTerminalClient::send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned) const
 	{
 		std::uint8_t errorCode = 0;
 		if (hasError)
@@ -2470,7 +2470,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_auxiliary_input_maintenance()
+	bool VirtualTerminalClient::send_auxiliary_input_maintenance() const
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage),
 			                                             static_cast<std::uint8_t>(ourModelIdentificationCode),
@@ -2488,7 +2488,7 @@ namespace isobus
 		                                                      CANIdentifier::Priority3);
 	}
 
-	bool VirtualTerminalClient::send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool invalidObjectID)
+	bool VirtualTerminalClient::send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool invalidObjectID) const
 	{
 		const std::uint8_t buffer[CAN_DATA_LENGTH] = { static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand),
 			                                             static_cast<std::uint8_t>(objectID),
@@ -2520,7 +2520,9 @@ namespace isobus
 		AuxiliaryInputState &state = ourAuxiliaryInputs.at(objectID);
 		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs on interaction
 		if (SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY) ||
-		    (state.hasInteraction && !get_auxiliary_input_learn_mode_enabled() && SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
+		    (state.hasInteraction &&
+		     !get_auxiliary_input_learn_mode_enabled() &&
+		     SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
 		{
 			state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
 
@@ -3121,44 +3123,40 @@ namespace isobus
 								}
 								else
 								{
-									bool found = false;
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
+									auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [isoName](const AssignedAuxiliaryInputDevice &aux) {
+										return aux.name == isoName;
+									});
+									if (result != std::end(parentVT->assignedAuxiliaryInputDevices))
 									{
-										if (aux.name == isoName)
+										if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
 										{
-											found = true;
-											if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
+											AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
+											auto location = std::find(result->functions.begin(), result->functions.end(), assignment);
+											if (location == std::end(result->functions))
 											{
-												AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
-												auto location = std::find(aux.functions.begin(), aux.functions.end(), assignment);
-												if (aux.functions.end() == location)
+												result->functions.push_back(assignment);
+												if (storeAsPreferred)
 												{
-													aux.functions.push_back(assignment);
-													if (storeAsPreferred)
-													{
-														//! @todo save preferred assignment to persistent configuration
-													}
-													CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
+													//! @todo save preferred assignment to persistent configuration
 												}
-												else
-												{
-													hasError = true;
-													isAlreadyAssigned = true;
-													CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
-												}
+												CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
 											else
 											{
 												hasError = true;
-												CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
+												isAlreadyAssigned = true;
+												CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 											}
-											break;
+										}
+										else
+										{
+											hasError = true;
+											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
 										}
 									}
-									if (false == found)
+									else
 									{
 										hasError = true;
-										//! @todo prettier logging of NAME
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 									}
 								}
@@ -3189,12 +3187,12 @@ namespace isobus
 							}
 							for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 							{
-								for (AssignedAuxiliaryFunction &assignment : aux.functions)
+								auto result = std::find_if(aux.functions.begin(), aux.functions.end(), [inputObjectID](AssignedAuxiliaryFunction &assignment) {
+									return assignment.inputObjectID == inputObjectID;
+								});
+								if (aux.functions.end() != result)
 								{
-									if (assignment.inputObjectID == inputObjectID)
-									{
-										parentVT->process_auxiliary_input_callback(assignment, value1, value2, parentVT);
-									}
+									parentVT->process_auxiliary_input_callback(*result, value1, value2, parentVT);
 								}
 							}
 						}
@@ -3204,15 +3202,13 @@ namespace isobus
 						{
 							std::uint16_t inputObjectID = message->get_uint16_at(1);
 							bool shouldEnable = message->get_bool_at(3, 0);
-							bool isInvalidObjectID = true;
-							for (auto &input : parentVT->ourAuxiliaryInputs)
+							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [inputObjectID](std::pair<std::uint16_t, AuxiliaryInputState> &input) {
+								return input.first == inputObjectID;
+							});
+							bool isInvalidObjectID = (result == std::end(parentVT->ourAuxiliaryInputs));
+							if (!isInvalidObjectID)
 							{
-								if (inputObjectID == input.first)
-								{
-									input.second.enabled = shouldEnable;
-									isInvalidObjectID = false;
-									break;
-								}
+								result->second.enabled = shouldEnable;
 							}
 							parentVT->send_auxiliary_input_status_enable_response(inputObjectID, isInvalidObjectID ? false : shouldEnable, isInvalidObjectID);
 						}
@@ -3569,19 +3565,13 @@ namespace isobus
 
 							if (ready)
 							{
-								bool found = false;
-								for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-								{
-									if (aux.modelIdentificationCode == modelIdentificationCode)
-									{
-										found = true;
-									}
-								}
-								if (false == found)
+								auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [modelIdentificationCode](const AssignedAuxiliaryInputDevice &aux) {
+									return aux.modelIdentificationCode == modelIdentificationCode;
+								});
+								if (result == std::end(parentVT->assignedAuxiliaryInputDevices))
 								{
 									AssignedAuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
 									parentVT->assignedAuxiliaryInputDevices.push_back(inputDevice);
-									//! @todo prettier logging of NAME
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + std::to_string(modelIdentificationCode));
 								}
 							}
