@@ -69,6 +69,7 @@ namespace isobus
 	void TransportProtocolManager::process_message(CANMessage *const message)
 	{
 		if ((nullptr != message) &&
+		    (nullptr != message->get_source_control_function()) &&
 		    ((nullptr == message->get_destination_control_function()) ||
 		     (nullptr != CANNetworkManager::CANNetwork.get_internal_control_function(message->get_destination_control_function()))))
 		{
