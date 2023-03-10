@@ -9,8 +9,10 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(TaskControllerClientExample main.cpp console_logger.cpp
-                                           ddop_definitions.hpp)
+add_executable(
+  TaskControllerClientExample
+  main.cpp console_logger.cpp section_control_implement_sim.cpp
+  section_control_implement_sim.hpp)
 target_link_libraries(
   TaskControllerClientExample
   PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads

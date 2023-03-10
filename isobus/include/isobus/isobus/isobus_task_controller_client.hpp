@@ -116,22 +116,26 @@ namespace isobus
 		/// application. You must provide the value at that time for the associated process data variable identified
 		/// by its element number and DDI.
 		/// @param[in] callback The callback to add
-		void add_request_value_callback(RequestValueCommandCallback callback);
+		/// @param[in] parentPointer A generic context variable that will be passed into the associated callback when it gets called
+		void add_request_value_callback(RequestValueCommandCallback callback, void *parentPointer);
 
 		/// @brief Adds a callback that will be called when the TC commands a new value for one of your variables.
 		/// @details The task controller will often send a command to set one of your process data variables to a new value.
 		/// This callback will get called when that happens, and you will need to set the variable to the commanded value in your
 		/// application.
 		/// @param[in] callback The callback to add
-		void add_value_command_callback(ValueCommandCallback callback);
+		/// @param[in] parentPointer A generic context variable that will be passed into the associated callback when it gets called
+		void add_value_command_callback(ValueCommandCallback callback, void *parentPointer);
 
 		/// @brief Removes the specified callback from the list of value request callbacks
 		/// @param[in] callback The callback to remove
-		void remove_request_value_callback(RequestValueCommandCallback callback);
+		/// @param[in] parentPointer parent pointer associated to the callback being removed
+		void remove_request_value_callback(RequestValueCommandCallback callback, void *parentPointer);
 
 		/// @brief Removes the specified callback from the list of value command callbacks
 		/// @param[in] callback The callback to remove
-		void remove_value_command_callback(ValueCommandCallback callback);
+		/// @param[in] parentPointer parent pointer associated to the callback being removed
+		void remove_value_command_callback(ValueCommandCallback callback, void *parentPointer);
 
 		/// @brief A convenient way to set all client options at once instead of calling the individual setters
 		/// @details This function sets up the parameters that the client will report to the TC server.
@@ -314,8 +318,14 @@ namespace isobus
 		                                                         std::uint8_t *chunkBuffer,
 		                                                         void *parentPointer);
 
+		/// @brief Clears all queued TC commands and responses
+		void clear_queues();
+
 		/// @brief Processes queued TC requests and commands. Calls the user's callbacks if needed.
 		void process_queued_commands();
+
+		/// @brief Processes measurement threshold/interval commands
+		void process_queued_threshold_commands();
 
 		/// @brief Processes a CAN message destined for any TC client
 		/// @param[in] message The CAN message being received
@@ -423,11 +433,35 @@ namespace isobus
 		/// @brief Stores data related to requests and commands from the TC
 		struct ProcessDataCallbackInfo
 		{
+			/// @brief Allows easy comparison of callback data
+			/// @param obj the object to compare against
+			bool operator==(const ProcessDataCallbackInfo &obj) const;
 			std::uint32_t processDataValue; ///< The value of the value set command
 			std::uint32_t lastValue; ///< Used for measurement commands to store timestamp or previous values
 			std::uint16_t elementNumber; ///< The element number for the command
 			std::uint16_t ddi; ///< The DDI for the command
 			bool ackRequested; ///< Stores if the TC used the mux that also requires a PDACK
+			bool thresholdPassed; ///< Used when the structure is being used to track measurement command thresholds to know if the threshold has been passed
+		};
+
+		/// @brief Stores a TC value command callback along with its parent pointer
+		struct RequestValueCommandCallbackInfo
+		{
+			/// @brief Allows easy comparison of callback data
+			/// @param obj the object to compare against
+			bool operator==(const RequestValueCommandCallbackInfo &obj) const;
+			RequestValueCommandCallback callback = nullptr; ///< The callback itself
+			void *parent; ///< The parent pointer, generic context value
+		};
+
+		/// @brief Stores a TC value command callback along with its parent pointer
+		struct ValueCommandCallbackInfo
+		{
+			/// @brief Allows easy comparison of callback data
+			/// @param obj the object to compare against
+			bool operator==(const ValueCommandCallbackInfo &obj) const;
+			ValueCommandCallback callback; ///< The callback itself
+			void *parent; ///< The parent pointer, generic context value
 		};
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
@@ -435,11 +469,14 @@ namespace isobus
 		std::shared_ptr<VirtualTerminalClient> primaryVirtualTerminal; ///< A pointer to the primary VT. Used for TCs < version 4
 		std::shared_ptr<DeviceDescriptorObjectPool> clientDDOP; ///< Stores the DDOP for upload to the TC (if needed)
 		std::vector<std::uint8_t> binaryDDOP; ///< Stores the DDOP in binary form after it has been generated
-		std::vector<RequestValueCommandCallback> requestValueCallbacks; ///< A list of callbacks that will be called when the TC requests a process data value
-		std::vector<ValueCommandCallback> valueCommandsCallbacks; ///< A list of callbacks that will be called when the TC sets a process data value
+		std::vector<RequestValueCommandCallbackInfo> requestValueCallbacks; ///< A list of callbacks that will be called when the TC requests a process data value
+		std::vector<ValueCommandCallbackInfo> valueCommandsCallbacks; ///< A list of callbacks that will be called when the TC sets a process data value
 		std::list<ProcessDataCallbackInfo> queuedValueRequests; ///< A list of queued value requests that will be processed on the next update
 		std::list<ProcessDataCallbackInfo> queuedValueCommands; ///< A list of queued value commands that will be processed on the next update
 		std::list<ProcessDataCallbackInfo> measurementTimeIntervalCommands; ///< A list of measurement commands that will be processed on a time interval
+		std::list<ProcessDataCallbackInfo> measurementMinimumThresholdCommands; ///< A list of measurement commands that will be processed when the value drops below a threshold
+		std::list<ProcessDataCallbackInfo> measurementMaximumThresholdCommands; ///< A list of measurement commands that will be processed when the value above a threshold
+		std::list<ProcessDataCallbackInfo> measurementOnChangeThresholdCommands; ///< A list of measurement commands that will be processed when the value changes by the specified amount
 		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state

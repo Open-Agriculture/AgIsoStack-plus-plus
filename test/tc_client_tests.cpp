@@ -103,7 +103,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::add_can_lib_update_callback(
-	  [] {
+	  [](void *) {
 		  CANNetworkManager::CANNetwork.update();
 	  },
 	  nullptr);
@@ -354,7 +354,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::add_can_lib_update_callback(
-	  [] {
+	  [](void *) {
 		  CANNetworkManager::CANNetwork.update();
 	  },
 	  nullptr);
@@ -1147,7 +1147,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::add_can_lib_update_callback(
-	  [] {
+	  [](void *) {
 		  CANNetworkManager::CANNetwork.update();
 	  },
 	  nullptr);
@@ -1205,8 +1205,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	// End boilerplate **********************************
 
 	interfaceUnderTest.configure(blankDDOP, 1, 32, 32, true, false, true, false, true);
-	interfaceUnderTest.add_request_value_callback(request_value_command_callback);
-	interfaceUnderTest.add_value_command_callback(value_command_callback);
+	interfaceUnderTest.add_request_value_callback(request_value_command_callback, nullptr);
+	interfaceUnderTest.add_value_command_callback(value_command_callback, nullptr);
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
 
 	// Status message
@@ -1291,7 +1291,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	valueRequested = false;
 	requestedDDI = 0;
 	requestedElement = 0;
-	interfaceUnderTest.remove_request_value_callback(request_value_command_callback);
+	interfaceUnderTest.remove_request_value_callback(request_value_command_callback, nullptr);
 
 	// Create a request for a value.
 	testFrame.identifier = 0x18CB86F7;
@@ -1319,7 +1319,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	commandedDDI = 0;
 	commandedElement = 0;
 	commandedValue = 0x0;
-	interfaceUnderTest.remove_value_command_callback(value_command_callback);
+	interfaceUnderTest.remove_value_command_callback(value_command_callback, nullptr);
 
 	// Create a command for a value.
 	testFrame.identifier = 0x18CB86F7;
@@ -1342,8 +1342,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	EXPECT_EQ(commandedValue, 0);
 
 	// Test time interval measurement commands
-	interfaceUnderTest.add_request_value_callback(request_value_command_callback);
-	interfaceUnderTest.add_value_command_callback(value_command_callback);
+	interfaceUnderTest.add_request_value_callback(request_value_command_callback, nullptr);
+	interfaceUnderTest.add_value_command_callback(value_command_callback, nullptr);
 	// Create a command
 	testFrame.identifier = 0x18CB86F7;
 	testFrame.data[0] = 0xA4;
@@ -1363,4 +1363,77 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	interfaceUnderTest.update();
 	EXPECT_EQ(true, valueRequested);
 	EXPECT_EQ(requestedDDI, 0x3819);
+
+	// Toggle states to clear the commands list
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendStatusMessage); // Arbitrary
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected); // Clear commands
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected); // Arbitrary
+	valueRequested = false;
+	requestedDDI = 0;
+	requestedElement = 0;
+
+	// Create on change thresholds
+	testFrame.identifier = 0x18CB86F7;
+	testFrame.data[0] = 0xA8;
+	testFrame.data[1] = 0x05;
+	testFrame.data[2] = 0x19;
+	testFrame.data[3] = 0x39;
+	testFrame.data[4] = 0x01; // Change value of 1
+	testFrame.data[5] = 0x00;
+	testFrame.data[6] = 0x00;
+	testFrame.data[7] = 0x00;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+
+	EXPECT_EQ(true, valueRequested);
+	EXPECT_EQ(requestedDDI, 0x3919);
+
+	// Toggle states to clear the commands list
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected); // Clear commands
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected); // Arbitrary
+	valueRequested = false;
+	requestedDDI = 0;
+	requestedElement = 0;
+
+	// Create max thresholds
+	testFrame.identifier = 0x18CB86F7;
+	testFrame.data[0] = 0xA7;
+	testFrame.data[1] = 0x05;
+	testFrame.data[2] = 0x19;
+	testFrame.data[3] = 0x3A;
+	testFrame.data[4] = 0x10; // Max of 16
+	testFrame.data[5] = 0x00;
+	testFrame.data[6] = 0x00;
+	testFrame.data[7] = 0x00;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+
+	EXPECT_EQ(true, valueRequested);
+	EXPECT_EQ(requestedDDI, 0x3A19);
+
+	// Toggle states to clear the commands list
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected); // Clear commands
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected); // Arbitrary
+	valueRequested = false;
+	requestedDDI = 0;
+	requestedElement = 0;
+
+	// Create min thresholds
+	testFrame.identifier = 0x18CB86F7;
+	testFrame.data[0] = 0xA6;
+	testFrame.data[1] = 0x05;
+	testFrame.data[2] = 0x19;
+	testFrame.data[3] = 0x3B;
+	testFrame.data[4] = 0x10; // Min of 16
+	testFrame.data[5] = 0x00;
+	testFrame.data[6] = 0x00;
+	testFrame.data[7] = 0x00;
+	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+
+	EXPECT_EQ(true, valueRequested);
+	EXPECT_EQ(requestedDDI, 0x3B19);
 }

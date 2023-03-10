@@ -59,22 +59,28 @@ namespace isobus
 		}
 	}
 
-	void TaskControllerClient::add_request_value_callback(RequestValueCommandCallback callback)
+	void TaskControllerClient::add_request_value_callback(RequestValueCommandCallback callback, void *parentPointer)
 	{
 		const std::lock_guard<std::mutex> lock(clientMutex);
-		requestValueCallbacks.push_back(callback);
+
+		RequestValueCommandCallbackInfo callbackData = { callback, parentPointer };
+		requestValueCallbacks.push_back(callbackData);
 	}
 
-	void TaskControllerClient::add_value_command_callback(ValueCommandCallback callback)
+	void TaskControllerClient::add_value_command_callback(ValueCommandCallback callback, void *parentPointer)
 	{
 		const std::lock_guard<std::mutex> lock(clientMutex);
-		valueCommandsCallbacks.push_back(callback);
+
+		ValueCommandCallbackInfo callbackData = { callback, parentPointer };
+		valueCommandsCallbacks.push_back(callbackData);
 	}
 
-	void TaskControllerClient::remove_request_value_callback(RequestValueCommandCallback callback)
+	void TaskControllerClient::remove_request_value_callback(RequestValueCommandCallback callback, void *parentPointer)
 	{
 		const std::lock_guard<std::mutex> lock(clientMutex);
-		auto callbackLocation = std::find(requestValueCallbacks.begin(), requestValueCallbacks.end(), callback);
+
+		RequestValueCommandCallbackInfo callbackData = { callback, parentPointer };
+		auto callbackLocation = std::find(requestValueCallbacks.begin(), requestValueCallbacks.end(), callbackData);
 
 		if (requestValueCallbacks.end() != callbackLocation)
 		{
@@ -82,10 +88,12 @@ namespace isobus
 		}
 	}
 
-	void TaskControllerClient::remove_value_command_callback(ValueCommandCallback callback)
+	void TaskControllerClient::remove_value_command_callback(ValueCommandCallback callback, void *parentPointer)
 	{
 		const std::lock_guard<std::mutex> lock(clientMutex);
-		auto callbackLocation = std::find(valueCommandsCallbacks.begin(), valueCommandsCallbacks.end(), callback);
+
+		ValueCommandCallbackInfo callbackData = { callback, parentPointer };
+		auto callbackLocation = std::find(valueCommandsCallbacks.begin(), valueCommandsCallbacks.end(), callbackData);
 
 		if (valueCommandsCallbacks.end() != callbackLocation)
 		{
@@ -536,6 +544,7 @@ namespace isobus
 				else
 				{
 					process_queued_commands();
+					process_queued_threshold_commands();
 				}
 			}
 			break;
@@ -581,6 +590,31 @@ namespace isobus
 		}
 	}
 
+	bool TaskControllerClient::ProcessDataCallbackInfo::operator==(const ProcessDataCallbackInfo &obj) const
+	{
+		return ((obj.ddi == this->ddi) && (obj.elementNumber == this->elementNumber));
+	}
+
+	bool TaskControllerClient::RequestValueCommandCallbackInfo::operator==(const RequestValueCommandCallbackInfo &obj) const
+	{
+		return (obj.callback == this->callback) && (obj.parent == this->parent);
+	}
+
+	bool TaskControllerClient::ValueCommandCallbackInfo::operator==(const ValueCommandCallbackInfo &obj) const
+	{
+		return (obj.callback == this->callback) && (obj.parent == this->parent);
+	}
+
+	void TaskControllerClient::clear_queues()
+	{
+		queuedValueRequests.clear();
+		queuedValueCommands.clear();
+		measurementTimeIntervalCommands.clear();
+		measurementMinimumThresholdCommands.clear();
+		measurementMaximumThresholdCommands.clear();
+		measurementOnChangeThresholdCommands.clear();
+	}
+
 	void TaskControllerClient::process_queued_commands()
 	{
 		std::lock_guard<std::mutex> lock(clientMutex);
@@ -593,7 +627,7 @@ namespace isobus
 			for (auto &currentCallback : requestValueCallbacks)
 			{
 				std::uint32_t newValue = 0;
-				if (currentCallback(currentRequest.elementNumber, currentRequest.ddi, newValue, this))
+				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, newValue, currentCallback.parent))
 				{
 					transmitSuccessful = send_value_command(currentRequest.elementNumber, currentRequest.ddi, newValue);
 					break;
@@ -607,7 +641,7 @@ namespace isobus
 
 			for (auto &currentCallback : valueCommandsCallbacks)
 			{
-				if (currentCallback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, this))
+				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, currentCallback.parent))
 				{
 					break;
 				}
@@ -620,6 +654,12 @@ namespace isobus
 				transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
 			}
 		}
+	}
+
+	void TaskControllerClient::process_queued_threshold_commands()
+	{
+		bool transmitSuccessful = false;
+
 		for (auto &measurementTimeCommand : measurementTimeIntervalCommands)
 		{
 			if (SystemTiming::time_expired_ms(measurementTimeCommand.lastValue, measurementTimeCommand.processDataValue))
@@ -629,7 +669,7 @@ namespace isobus
 				for (auto &currentCallback : requestValueCallbacks)
 				{
 					std::uint32_t newValue = 0;
-					if (currentCallback(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue, this))
+					if (currentCallback.callback(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue, currentCallback.parent))
 					{
 						transmitSuccessful = send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue);
 						break;
@@ -639,6 +679,90 @@ namespace isobus
 				if (transmitSuccessful)
 				{
 					measurementTimeCommand.lastValue = SystemTiming::get_timestamp_ms();
+				}
+			}
+		}
+		for (auto &measurementMaxCommand : measurementMaximumThresholdCommands)
+		{
+			// Get the current process data value
+			std::uint32_t newValue = 0;
+			for (auto &currentCallback : requestValueCallbacks)
+			{
+				if (currentCallback.callback(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue, currentCallback.parent))
+				{
+					break;
+				}
+			}
+
+			if (!measurementMaxCommand.thresholdPassed)
+			{
+				if ((newValue > measurementMaxCommand.processDataValue) &&
+				    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+				{
+					measurementMaxCommand.thresholdPassed = true;
+				}
+			}
+			else
+			{
+				if (newValue < measurementMaxCommand.processDataValue)
+				{
+					measurementMaxCommand.thresholdPassed = false;
+				}
+			}
+		}
+		for (auto &measurementMinCommand : measurementMinimumThresholdCommands)
+		{
+			// Get the current process data value
+			std::uint32_t newValue = 0;
+			for (auto &currentCallback : requestValueCallbacks)
+			{
+				if (currentCallback.callback(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue, currentCallback.parent))
+				{
+					break;
+				}
+			}
+
+			if (!measurementMinCommand.thresholdPassed)
+			{
+				if ((newValue < measurementMinCommand.processDataValue) &&
+				    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+				{
+					measurementMinCommand.thresholdPassed = true;
+				}
+			}
+			else
+			{
+				if (newValue > measurementMinCommand.processDataValue)
+				{
+					measurementMinCommand.thresholdPassed = false;
+				}
+			}
+		}
+		for (auto &measurementChangeCommand : measurementOnChangeThresholdCommands)
+		{
+			// Get the current process data value
+			std::uint32_t newValue = 0;
+			for (auto &currentCallback : requestValueCallbacks)
+			{
+				if (currentCallback.callback(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue, currentCallback.parent))
+				{
+					break;
+				}
+			}
+
+			std::int64_t lowerLimit = (static_cast<int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
+			if (lowerLimit < 0)
+			{
+				lowerLimit = 0;
+			}
+
+			if ((newValue != measurementChangeCommand.lastValue) &&
+			    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
+			     (newValue <= lowerLimit)))
+			{
+				if (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue))
+				{
+					measurementChangeCommand.lastValue = newValue;
 				}
 			}
 		}
@@ -1038,7 +1162,7 @@ namespace isobus
 
 						case ProcessDataCommands::RequestValue:
 						{
-							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false };
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = false;
@@ -1055,7 +1179,7 @@ namespace isobus
 
 						case ProcessDataCommands::Value:
 						{
-							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false };
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = false;
@@ -1072,7 +1196,7 @@ namespace isobus
 
 						case ProcessDataCommands::SetValueAndAcknowledge:
 						{
-							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false };
+							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							requestData.ackRequested = true;
@@ -1089,7 +1213,7 @@ namespace isobus
 
 						case ProcessDataCommands::MeasurementTimeInterval:
 						{
-							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false };
+							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
 							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
 
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
@@ -1100,7 +1224,130 @@ namespace isobus
 							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
 							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
 							commandData.lastValue = SystemTiming::get_timestamp_ms();
-							parentTC->measurementTimeIntervalCommands.push_back(commandData);
+
+							auto previousCommand = std::find(parentTC->measurementTimeIntervalCommands.begin(), parentTC->measurementTimeIntervalCommands.end(), commandData);
+							if (parentTC->measurementTimeIntervalCommands.end() == previousCommand)
+							{
+								parentTC->measurementTimeIntervalCommands.push_back(commandData);
+								CANStackLogger::debug("[TC]: TC Requests element: " +
+								                      isobus::to_string(static_cast<int>(commandData.elementNumber)) +
+								                      " DDI: " +
+								                      isobus::to_string(static_cast<int>(commandData.ddi)) +
+								                      " every: " +
+								                      isobus::to_string(static_cast<int>(commandData.processDataValue)) +
+								                      " milliseconds.");
+							}
+							else
+							{
+								// Use the existing one and update the value
+								previousCommand->processDataValue = commandData.processDataValue;
+								CANStackLogger::debug("[TC]: TC Altered time interval request for element: " +
+								                      isobus::to_string(static_cast<int>(commandData.elementNumber)) +
+								                      " DDI: " +
+								                      isobus::to_string(static_cast<int>(commandData.ddi)) +
+								                      " every: " +
+								                      isobus::to_string(static_cast<int>(commandData.processDataValue)) +
+								                      " milliseconds.");
+							}
+						}
+						break;
+
+						case ProcessDataCommands::MeasurementMaximumWithinThreshold:
+						{
+							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
+							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+
+							auto previousCommand = std::find(parentTC->measurementMaximumThresholdCommands.begin(), parentTC->measurementMaximumThresholdCommands.end(), commandData);
+							if (parentTC->measurementMaximumThresholdCommands.end() == previousCommand)
+							{
+								parentTC->measurementMaximumThresholdCommands.push_back(commandData);
+								CANStackLogger::debug("[TC]: TC Requests element: " +
+								                      isobus::to_string(static_cast<int>(commandData.elementNumber)) +
+								                      " DDI: " +
+								                      isobus::to_string(static_cast<int>(commandData.ddi)) +
+								                      " when it is above the raw value: " +
+								                      isobus::to_string(static_cast<int>(commandData.processDataValue)));
+							}
+							else
+							{
+								// Just update the existing one with the new value
+								previousCommand->processDataValue = commandData.processDataValue;
+								previousCommand->thresholdPassed = false;
+							}
+						}
+						break;
+
+						case ProcessDataCommands::MeasurementMinimumWithinThreshold:
+						{
+							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
+							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+
+							auto previousCommand = std::find(parentTC->measurementMinimumThresholdCommands.begin(), parentTC->measurementMinimumThresholdCommands.end(), commandData);
+							if (parentTC->measurementMinimumThresholdCommands.end() == previousCommand)
+							{
+								parentTC->measurementMinimumThresholdCommands.push_back(commandData);
+								CANStackLogger::debug("[TC]: TC Requests Element " +
+								                      isobus::to_string(static_cast<int>(commandData.elementNumber)) +
+								                      " DDI: " +
+								                      isobus::to_string(static_cast<int>(commandData.ddi)) +
+								                      " when it is below the raw value: " +
+								                      isobus::to_string(static_cast<int>(commandData.processDataValue)));
+							}
+							else
+							{
+								// Just update the existing one with the new value
+								previousCommand->processDataValue = commandData.processDataValue;
+								previousCommand->thresholdPassed = false;
+							}
+						}
+						break;
+
+						case ProcessDataCommands::MeasurementChangeThreshold:
+						{
+							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
+							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
+
+							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
+							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
+							  (static_cast<std::uint16_t>(messageData[3]) << 8);
+							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
+							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
+							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
+							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+
+							auto previousCommand = std::find(parentTC->measurementOnChangeThresholdCommands.begin(), parentTC->measurementOnChangeThresholdCommands.end(), commandData);
+							if (parentTC->measurementOnChangeThresholdCommands.end() == previousCommand)
+							{
+								parentTC->measurementOnChangeThresholdCommands.push_back(commandData);
+								CANStackLogger::debug("[TC]: TC Requests element " +
+								                      isobus::to_string(static_cast<int>(commandData.elementNumber)) +
+								                      " DDI: " +
+								                      isobus::to_string(static_cast<int>(commandData.ddi)) +
+								                      " on change by at least: " +
+								                      isobus::to_string(static_cast<int>(commandData.processDataValue)));
+							}
+							else
+							{
+								// Just update the existing one with the new value
+								previousCommand->processDataValue = commandData.processDataValue;
+								previousCommand->thresholdPassed = false;
+							}
 						}
 						break;
 
@@ -1375,6 +1622,11 @@ namespace isobus
 		{
 			stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 			currentState = newState;
+
+			if (StateMachineState::Disconnected == newState)
+			{
+				clear_queues();
+			}
 		}
 	}
 
