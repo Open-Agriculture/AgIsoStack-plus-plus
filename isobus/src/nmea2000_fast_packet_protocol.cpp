@@ -53,15 +53,15 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction)
 	{
-		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent, destinationFunction));
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
 	}
 
-	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction)
 	{
-		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, destinationFunction);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
 		if (parameterGroupNumberCallbacks.end() != callbackLocation)
 		{

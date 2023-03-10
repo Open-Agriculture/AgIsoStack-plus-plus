@@ -51,16 +51,20 @@ namespace isobus
 		/// destined for. Whatever you pass in `parent` will be passed back to you in the callback. In theory, you could use
 		/// that variable for passing any arbitrary data through the callback also.
 		/// You can add as many callbacks as you want, and can use the same function for multiple PGNs if you want.
+		/// Also optionally you may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN you want to use to communicate, or `CANLibParameterGroupNumber::Any`
 		/// @param[in] callback The function you want to get called when a message is received with parameterGroupNumber from this CF
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
-		void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Removes a callback matching *exactly* the parameters passed in
 		/// @param[in] parameterGroupNumber The PGN associated with the callback being removed
 		/// @param[in] callback The callback function being removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
-		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Returns the number of parameter group number callbacks associated with this control function
 		/// @returns The number of parameter group number callbacks associated with this control function

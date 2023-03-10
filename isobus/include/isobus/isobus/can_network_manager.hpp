@@ -58,32 +58,44 @@ namespace isobus
 		void add_control_function(std::uint8_t CANPort, ControlFunction *newControlFunction, std::uint8_t CFAddress, CANLibBadge<AddressClaimStateMachine>);
 
 		/// @brief This is how you register a callback for any PGN destined for the global address (0xFF)
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is recieved from the global address (0xFF)
 		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.
-		void add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief This is how you remove a callback for any PGN destined for the global address (0xFF)
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN of the callback to remove
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
-		void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Returns the number of global PGN callbacks that have been registered with the network manager
 		/// @returns The number of global PGN callbacks that have been registered with the network manager
 		std::uint32_t get_number_global_parameter_group_number_callbacks() const;
 
 		/// @brief Registers a callback for ANY control function sending the associated PGN
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is recieved from any control function
 		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.
-		void add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief This is how you remove a callback added with add_any_control_function_parameter_group_number_callback
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN of the callback to remove
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
-		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
 		/// @returns An internal control function casted from the passed in control function
@@ -133,18 +145,24 @@ namespace isobus
 		friend class CANLibProtocol;
 
 		/// @brief Adds a PGN callback for a protocol class
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN to register for
 		/// @param[in] callback The callback to call when the PGN is received
 		/// @param[in] parentPointer A generic context variable that helps identify what object the callback was destined for
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
 		/// @returns `true` if the callback was added, otherwise `false`
-		bool add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
+		bool add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Removes a PGN callback for a protocol class
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN to register for
 		/// @param[in] callback The callback to call when the PGN is received
 		/// @param[in] parentPointer A generic context variable that helps identify what object the callback was destined for
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
 		/// @returns `true` if the callback was removed, otherwise `false`
-		bool remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
+		bool remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Sends a CAN message using raw addresses. Used only by the stack.
 		/// @param[in] portIndex The CAN channel index to send the message from

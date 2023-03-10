@@ -46,16 +46,22 @@ namespace isobus
 		void initialize(CANLibBadge<CANNetworkManager>) override;
 
 		/// @brief Similar to add_parameter_group_number_callback but tells the stack to parse those PGNs as Fast Packet
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
 		/// @param[in] callback The callback that the stack will call when a matching message is received
 		/// @param[in] parent Generic context variable
-		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
-		// @brief Removes a callback previously added with register_multipacket_message_callback
+		/// @brief Removes a callback previously added with register_multipacket_message_callback
+		/// @details You may pass a destination `InternalControlFunction`, which will filter for only those messages
+		/// that target this source/destination pair (see https://github.com/ad3154/Isobus-plus-plus/issues/206).
 		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
 		/// @param[in] callback The callback that the stack will call when a matching message is received
 		/// @param[in] parent Generic context variable
-		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] destinationFunction An optional internal function destination to filter messages by
+		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction = nullptr);
 
 		/// @brief Used to send CAN messages using fast packet
 		/// @details You have to use this function instead of the network manager

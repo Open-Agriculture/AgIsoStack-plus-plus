@@ -66,7 +66,7 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN you want to register a callback for
 		/// @param[in] callback The function you want the stack to call when it gets receives a message with a matching PGN
 		/// @param[in] parentPointer A generic variable that can provide context to which object the callback was meant for
-		ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer);
+		ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *destinationFunction);
 
 		/// @brief A copy constructor for holding callback data
 		/// @param[in] oldObj The object to copy from
@@ -90,6 +90,10 @@ namespace isobus
 		/// @returns The callback pointer for this data object
 		CANLibCallback get_callback() const;
 
+		/// @brief Returns the optional destination internal function
+		/// @returns The optional destination internal function for this data object
+		InternalControlFunction *get_destination_control_function() const;
+
 		/// @brief Returns the parent pointer for this data object
 		void *get_parent() const;
 
@@ -97,6 +101,7 @@ namespace isobus
 		CANLibCallback mCallback; ///< The callback that will get called when a matching PGN is received
 		std::uint32_t mParameterGroupNumber; ///< The PGN assocuiated with this callback
 		void *mParent; ///< A generic variable that can provide context to which object the callback was meant for
+		InternalControlFunction *mDestinationFunction; ///< An optional filter for source/destination function pairs
 	};
 } // namespace isobus
 

@@ -47,14 +47,14 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction)
 	{
-		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent, destinationFunction));
 	}
 
-	void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction)
 	{
-		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, destinationFunction);
 		auto callbackLocation = std::find(globalParameterGroupNumberCallbacks.begin(), globalParameterGroupNumberCallbacks.end(), tempObject);
 		if (globalParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -67,15 +67,15 @@ namespace isobus
 		return globalParameterGroupNumberCallbacks.size();
 	}
 
-	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction)
 	{
 		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-		anyControlFunctionParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		anyControlFunctionParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent, destinationFunction));
 	}
 
-	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *destinationFunction)
 	{
-		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, destinationFunction);
 		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
 		auto callbackLocation = std::find(anyControlFunctionParameterGroupNumberCallbacks.begin(), anyControlFunctionParameterGroupNumberCallbacks.end(), tempObject);
 		if (anyControlFunctionParameterGroupNumberCallbacks.end() != callbackLocation)
@@ -241,7 +241,7 @@ namespace isobus
 
 	ParameterGroupNumberCallbackData CANNetworkManager::get_global_parameter_group_number_callback(std::uint32_t index) const
 	{
-		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr);
+		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr, nullptr);
 
 		if (index < get_number_global_parameter_group_number_callbacks())
 		{
@@ -318,10 +318,10 @@ namespace isobus
 		}
 	}
 
-	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
+	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *destinationFunction)
 	{
 		bool retVal = false;
-		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer);
+		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer, destinationFunction);
 
 		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 
@@ -333,10 +333,10 @@ namespace isobus
 		return retVal;
 	}
 
-	bool CANNetworkManager::remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
+	bool CANNetworkManager::remove_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *destinationFunction)
 	{
 		bool retVal = false;
-		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer);
+		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer, destinationFunction);
 
 		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 
@@ -724,11 +724,14 @@ namespace isobus
 								// Message matches CAN port for a partnered control function
 								for (std::size_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
 								{
-									if ((message->get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
-									    (nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()))
+									ParameterGroupNumberCallbackData &callbackData = currentControlFunction->get_parameter_group_number_callback(k);
+									if ((message->get_identifier().get_parameter_group_number() == callbackData.get_parameter_group_number()) &&
+									    (nullptr != callbackData.get_callback()) &&
+									    ((nullptr == callbackData.get_destination_control_function()) ||
+									    (message->get_destination_control_function() == callbackData.get_destination_control_function())))
 									{
 										// We have a callback matching this message
-										currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, currentControlFunction->get_parameter_group_number_callback(k).get_parent());
+										callbackData.get_callback()(message, callbackData.get_parent());
 									}
 								}
 							}
