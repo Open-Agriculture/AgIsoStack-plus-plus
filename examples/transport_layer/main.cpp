@@ -106,14 +106,14 @@ int main()
 	// Send a classic CAN message to a specific destination(8 bytes or less)
 	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU, &TestPartner))
 	{
-		cout << "Sent a normal CAN Message with length 8" << endl;
+		std::cout << "Sent a normal CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
 	}
 
 	// Send a classic CAN message to global (0xFF) (8 bytes or less)
 	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU))
 	{
-		cout << "Sent a broadcast CAN Message with length 8" << endl;
+		std::cout << "Sent a broadcast CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
 	}
 
@@ -130,11 +130,11 @@ int main()
 		// Send message
 		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, &TestInternalECU, &TestPartner))
 		{
-			cout << "Started TP CM Session with length " << i << endl;
+			std::cout << "Started TP CM Session with length " << i << std::endl;
 		}
 		else
 		{
-			cout << "Failed starting TP CM Session with length " << i << endl;
+			std::cout << "Failed starting TP CM Session with length " << i << std::endl;
 		}
 		// Wait for this session to complete before starting the next
 		// This sleep value is arbitrary
@@ -154,11 +154,11 @@ int main()
 		// Send message
 		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, &TestInternalECU))
 		{
-			cout << "Started BAM Session with length " << i << endl;
+			std::cout << "Started BAM Session with length " << i << std::endl;
 		}
 		else
 		{
-			cout << "Failed starting BAM Session with length " << i << endl;
+			std::cout << "Failed starting BAM Session with length " << i << std::endl;
 		}
 		// Wait for this session to complete before starting the next, or it will fail as only 1 BAM session is possible at a time
 		std::this_thread::sleep_for(std::chrono::milliseconds(2 * (isobus::CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames() * ((i + 1) / 7))));
@@ -168,7 +168,7 @@ int main()
 	// Send one ETP message
 	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, ETP_TEST_SIZE, &TestInternalECU, &TestPartner))
 	{
-		cout << "Started ETP Session with length " << ETP_TEST_SIZE << endl;
+		std::cout << "Started ETP Session with length " << ETP_TEST_SIZE << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 	}
 
