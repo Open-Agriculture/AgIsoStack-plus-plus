@@ -3090,7 +3090,15 @@ namespace isobus
 								bool isAlreadyAssigned = false;
 								if (DEFAULT_NAME == isoName && 0x1F == functionType)
 								{
-									if (NULL_OBJECT_ID == inputObjectID)
+									if (NULL_OBJECT_ID == functionObjectID)
+									{
+										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
+										{
+											aux.functions.clear();
+										}
+										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned all functions");
+									}
+									else if (NULL_OBJECT_ID == inputObjectID)
 									{
 										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 										{
@@ -3112,18 +3120,10 @@ namespace isobus
 											}
 										}
 									}
-									else if (NULL_OBJECT_ID == functionObjectID)
-									{
-										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-										{
-											aux.functions.clear();
-											CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N] Unassigned all functions");
-										}
-									}
 								}
 								else
 								{
-									auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [isoName](const AssignedAuxiliaryInputDevice &aux) {
+									auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [&isoName](const AssignedAuxiliaryInputDevice &aux) {
 										return aux.name == isoName;
 									});
 									if (result != std::end(parentVT->assignedAuxiliaryInputDevices))
@@ -3187,7 +3187,7 @@ namespace isobus
 							}
 							for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 							{
-								auto result = std::find_if(aux.functions.begin(), aux.functions.end(), [inputObjectID](AssignedAuxiliaryFunction &assignment) {
+								auto result = std::find_if(aux.functions.begin(), aux.functions.end(), [&inputObjectID](const AssignedAuxiliaryFunction &assignment) {
 									return assignment.inputObjectID == inputObjectID;
 								});
 								if (aux.functions.end() != result)
@@ -3202,7 +3202,7 @@ namespace isobus
 						{
 							std::uint16_t inputObjectID = message->get_uint16_at(1);
 							bool shouldEnable = message->get_bool_at(3, 0);
-							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [inputObjectID](std::pair<std::uint16_t, AuxiliaryInputState> &input) {
+							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [&inputObjectID](const std::pair<std::uint16_t, AuxiliaryInputState> &input) {
 								return input.first == inputObjectID;
 							});
 							bool isInvalidObjectID = (result == std::end(parentVT->ourAuxiliaryInputs));
@@ -3565,7 +3565,7 @@ namespace isobus
 
 							if (ready)
 							{
-								auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [modelIdentificationCode](const AssignedAuxiliaryInputDevice &aux) {
+								auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [&modelIdentificationCode](const AssignedAuxiliaryInputDevice &aux) {
 									return aux.modelIdentificationCode == modelIdentificationCode;
 								});
 								if (result == std::end(parentVT->assignedAuxiliaryInputDevices))
