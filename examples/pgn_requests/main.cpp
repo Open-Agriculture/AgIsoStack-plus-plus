@@ -16,8 +16,6 @@ static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;
 static isobus::ControlFunction *repetitionRateRequestor = nullptr;
 static std::atomic_bool running = { true };
 
-using namespace std;
-
 void signal_handler(int)
 {
 	running = false;

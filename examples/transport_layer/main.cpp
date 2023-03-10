@@ -17,8 +17,6 @@ static constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
 static constexpr std::uint32_t ETP_TEST_SIZE = 2048;
 static std::atomic_bool running = { true };
 
-using namespace std;
-
 void signal_handler(int)
 {
 	running = false;

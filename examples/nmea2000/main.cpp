@@ -11,8 +11,6 @@
 #include <iterator>
 #include <memory>
 
-using namespace std;
-
 static std::atomic_bool running = { true };
 
 void nmea2k_callback(isobus::CANMessage *message, void *)

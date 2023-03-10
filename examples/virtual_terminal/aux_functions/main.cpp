@@ -18,8 +18,6 @@
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 static std::atomic_bool running = { true };
 
-using namespace std;
-
 void signal_handler(int)
 {
 	running = false;
