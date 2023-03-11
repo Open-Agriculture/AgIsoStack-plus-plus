@@ -129,7 +129,7 @@ namespace isobus
 	bool DeviceDescriptorObjectPool::add_device_element(std::string deviceElementDesignator,
 	                                                    std::uint16_t deviceElementNumber,
 	                                                    std::uint16_t parentObjectID,
-	                                                    task_controller_object::DeviceElementObject::Type deviceEelementType,
+	                                                    task_controller_object::DeviceElementObject::Type deviceElementType,
 	                                                    std::uint16_t uniqueID)
 	{
 		bool retVal = check_object_id_unique(uniqueID);
@@ -158,7 +158,7 @@ namespace isobus
 			objectList.emplace_back(new task_controller_object::DeviceElementObject(deviceElementDesignator,
 			                                                                        deviceElementNumber,
 			                                                                        parentObjectID,
-			                                                                        deviceEelementType,
+			                                                                        deviceElementType,
 			                                                                        uniqueID));
 		}
 		else
@@ -376,15 +376,15 @@ namespace isobus
 		return retVal;
 	}
 
-	task_controller_object::Object *DeviceDescriptorObjectPool::get_object_by_id(std::uint16_t objectID)
+	std::weak_ptr<task_controller_object::Object> DeviceDescriptorObjectPool::get_object_by_id(std::uint16_t objectID)
 	{
-		task_controller_object::Object *retVal = nullptr;
+		std::weak_ptr<task_controller_object::Object> retVal;
 
 		for (auto &currentObject : objectList)
 		{
 			if (currentObject->get_object_id() == objectID)
 			{
-				retVal = currentObject.get();
+				retVal = currentObject;
 				break;
 			}
 		}
@@ -416,8 +416,8 @@ namespace isobus
 					auto currentDeviceElement = reinterpret_cast<task_controller_object::DeviceElementObject *>(currentObject.get());
 					if (task_controller_object::Object::NULL_OBJECT_ID != currentDeviceElement->get_parent_object())
 					{
-						task_controller_object::Object *parent = get_object_by_id(currentDeviceElement->get_parent_object());
-						if (nullptr != parent)
+						auto parent = get_object_by_id(currentDeviceElement->get_parent_object()).lock();
+						if (nullptr != parent.get())
 						{
 							switch (parent->get_object_type())
 							{
@@ -459,8 +459,8 @@ namespace isobus
 						// Process children now that parent has been validated
 						for (std::size_t i = 0; i < currentDeviceElement->get_number_child_objects(); i++)
 						{
-							task_controller_object::Object *child = get_object_by_id(currentDeviceElement->get_child_object_id(i));
-							if (nullptr == child)
+							auto child = get_object_by_id(currentDeviceElement->get_child_object_id(i)).lock();
+							if (nullptr == child.get())
 							{
 								CANStackLogger::error("[DDOP]: Object " +
 								                      isobus::to_string(static_cast<int>(currentDeviceElement->get_child_object_id(i))) +
@@ -479,8 +479,8 @@ namespace isobus
 
 					if (task_controller_object::Object::NULL_OBJECT_ID != currentProcessData->get_device_value_presentation_object_id())
 					{
-						task_controller_object::Object *child = get_object_by_id(currentProcessData->get_device_value_presentation_object_id());
-						if (nullptr == child)
+						auto child = get_object_by_id(currentProcessData->get_device_value_presentation_object_id()).lock();
+						if (nullptr == child.get())
 						{
 							CANStackLogger::error("[DDOP]: Object " +
 							                      isobus::to_string(static_cast<int>(currentProcessData->get_device_value_presentation_object_id())) +
@@ -498,8 +498,8 @@ namespace isobus
 
 					if (task_controller_object::Object::NULL_OBJECT_ID != currentProperty->get_device_value_presentation_object_id())
 					{
-						task_controller_object::Object *child = get_object_by_id(currentProperty->get_device_value_presentation_object_id());
-						if (nullptr == child)
+						auto child = get_object_by_id(currentProperty->get_device_value_presentation_object_id()).lock();
+						if (nullptr == child.get())
 						{
 							CANStackLogger::error("[DDOP]: Object " +
 							                      isobus::to_string(static_cast<int>(currentProperty->get_device_value_presentation_object_id())) +

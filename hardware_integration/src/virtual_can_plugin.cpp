@@ -89,6 +89,6 @@ bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 
 bool VirtualCANPlugin::get_queue_empty() const
 {
-	const std::unique_lock<std::mutex> lock(mutex);
-	return (0 == ourDevice->queue.size());
+	const std::lock_guard<std::mutex> lock(mutex);
+	return ourDevice->queue.empty();
 }

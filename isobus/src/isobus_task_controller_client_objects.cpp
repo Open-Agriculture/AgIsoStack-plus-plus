@@ -435,7 +435,7 @@ namespace isobus
 			std::array<std::uint8_t, sizeof(float)> floatBytes = { 0 };
 			memcpy(floatBytes.data(), &scale, sizeof(float));
 
-			if (isBigEndian())
+			if (is_big_endian())
 			{
 				std::reverse(floatBytes.begin(), floatBytes.end());
 			}

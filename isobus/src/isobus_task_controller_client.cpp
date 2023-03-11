@@ -620,7 +620,7 @@ namespace isobus
 		std::lock_guard<std::mutex> lock(clientMutex);
 		bool transmitSuccessful = true;
 
-		while ((0 != queuedValueRequests.size()) && transmitSuccessful)
+		while (!queuedValueRequests.empty() && transmitSuccessful)
 		{
 			auto currentRequest = queuedValueRequests.front();
 
@@ -635,7 +635,7 @@ namespace isobus
 			}
 			queuedValueRequests.pop_front();
 		}
-		while ((0 != queuedValueCommands.size()) && transmitSuccessful)
+		while (!queuedValueCommands.empty() && transmitSuccessful)
 		{
 			auto currentRequest = queuedValueCommands.front();
 
@@ -888,12 +888,14 @@ namespace isobus
 												CANStackLogger::warn("[TC]: Structure Label from TC exceeds the max length allowed by ISO11783-10");
 											}
 											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
-											task_controller_object::Object *deviceObject = parentTC->clientDDOP->get_object_by_id(0);
+											auto weakDeviceObject = parentTC->clientDDOP->get_object_by_id(0);
 											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
-											assert(nullptr != deviceObject);
+											assert(!weakDeviceObject.expired());
+											auto deviceObject = weakDeviceObject.lock();
+											assert(nullptr != deviceObject.get());
 											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
 
-											std::string tempLabel = reinterpret_cast<task_controller_object::DeviceObject *>(deviceObject)->get_structure_label();
+											std::string tempLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_structure_label();
 
 											while (tempLabel.size() < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
 											{
@@ -943,12 +945,12 @@ namespace isobus
 										else
 										{
 											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
-											task_controller_object::Object *deviceObject = parentTC->clientDDOP->get_object_by_id(0);
+											auto deviceObject = parentTC->clientDDOP->get_object_by_id(0).lock();
 											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
 											assert(nullptr != deviceObject);
 											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
 
-											auto ddopLabel = reinterpret_cast<task_controller_object::DeviceObject *>(deviceObject)->get_localization_label();
+											auto ddopLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_localization_label();
 											bool labelsMatch = true;
 
 											for (std::uint_fast8_t i = 0; i < (CAN_DATA_LENGTH - 1); i++)

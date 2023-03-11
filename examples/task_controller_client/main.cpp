@@ -33,7 +33,7 @@ void update_CAN_network(void *)
 
 void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
 {
-	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
+	isobus::CANNetworkManager::can_lib_process_rx_message(rawFrame, parentPointer);
 }
 
 int main()
@@ -47,6 +47,8 @@ int main()
 	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
 	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
+	canDriver = std::make_shared<MacCANPCANPlugin>(PCAN_USBBUS1);
 #endif
 	if (nullptr == canDriver)
 	{
@@ -87,8 +89,8 @@ int main()
 
 	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerTC = std::make_shared<isobus::PartneredControlFunction>(0, tcNameFilters);
+	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	auto TestPartnerTC = std::make_shared<isobus::PartneredControlFunction>(0, tcNameFilters);
 
 	TestTCClient = std::make_shared<isobus::TaskControllerClient>(TestPartnerTC, TestInternalECU, nullptr);
 

@@ -151,7 +151,7 @@ public:
 	/// @param[in] poolToPopulate A pointer to the DDOP that will be populated
 	/// @param[in] clientName The ISO NAME to generate the DDOP for
 	/// @returns true if the DDOP was successfully created, otherwise false
-	bool create_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectPool> poolToPopulate, isobus::NAME clientName);
+	bool create_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectPool> poolToPopulate, isobus::NAME clientName) const;
 
 	/// @brief A callback that will be used by the TC client to read values
 	/// @param[in] elementNumber The element number associated to the value being requested

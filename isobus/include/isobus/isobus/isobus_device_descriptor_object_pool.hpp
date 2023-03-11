@@ -17,8 +17,8 @@
 namespace isobus
 {
 	/// @brief Defines a device descriptor object pool
-	/// @details This class can be used to build up a task conroller DDOP by adding objects to it
-	/// in a heierarchy, then calling generate_binary_object_pool to get the object pool in
+	/// @details This class can be used to build up a task controller DDOP by adding objects to it
+	/// in a hierarchy, then calling generate_binary_object_pool to get the object pool in
 	/// binary form.
 	/// @note To ensure maximum compatibility with task controllers, it may be best to stick to
 	/// limits that were defined for TC 3 and older when providing things like labels for
@@ -56,13 +56,13 @@ namespace isobus
 		/// @param[in] deviceElementDesignator Descriptive text for the object, UTF-8, 32-128 chars max depending on TC version
 		/// @param[in] deviceElementNumber The Element number for process data variable	addressing
 		/// @param[in] parentObjectID Object ID of parent DeviceElementObject or DeviceObject in order to establish a hierarchical order of DeviceElements
-		/// @param[in] deviceEelementType The type of element, such as "device" or "bin"
+		/// @param[in] deviceElementType The type of element, such as "device" or "bin"
 		/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
 		/// @returns `true` if the object was added to the DDOP, `false` if the object cannot be added (duplicate or some other error)
 		bool add_device_element(std::string deviceElementDesignator,
 		                        std::uint16_t deviceElementNumber,
 		                        std::uint16_t parentObjectID,
-		                        task_controller_object::DeviceElementObject::Type deviceEelementType,
+		                        task_controller_object::DeviceElementObject::Type deviceElementType,
 		                        std::uint16_t uniqueID);
 
 		/// @brief Adds a device process data object to the DDOP
@@ -113,7 +113,7 @@ namespace isobus
 
 		/// @brief Gets an object from the DDOP that corresponds to a certain object ID
 		/// @returns Pointer to the object matching the provided ID, or nullptr if no match was found
-		task_controller_object::Object *get_object_by_id(std::uint16_t objectID);
+		std::weak_ptr<task_controller_object::Object> get_object_by_id(std::uint16_t objectID);
 
 		/// @brief Clears the DDOP back to an empty state
 		void clear();
@@ -134,7 +134,7 @@ namespace isobus
 
 		static constexpr std::uint8_t MAX_TC_VERSION_SUPPORTED = 4; ///< The max TC version a DDOP object can support as of today
 
-		std::vector<std::unique_ptr<task_controller_object::Object>> objectList; ///< Maintains a list of all added objects
+		std::vector<std::shared_ptr<task_controller_object::Object>> objectList; ///< Maintains a list of all added objects
 		std::uint8_t taskControllerCompatabilityLevel = MAX_TC_VERSION_SUPPORTED; ///< Stores the max TC version
 	};
 } // namespace isobus
