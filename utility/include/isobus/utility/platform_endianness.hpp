@@ -14,11 +14,11 @@ namespace isobus
 {
 	/// @brief Returns if the platform is little endian
 	/// @returns `true` if the platform is little endian, otherwise false
-	bool isLittleEndian();
+	bool is_little_endian();
 
 	/// @brief Returns if the platform is big endian
 	/// @returns `true` if the platform is big endian, otherwise false
-	bool isBigEndian();
+	bool is_big_endian();
 
 } // namespace isobus
 

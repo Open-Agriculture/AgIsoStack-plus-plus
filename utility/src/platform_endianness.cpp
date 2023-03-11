@@ -13,15 +13,15 @@
 
 namespace isobus
 {
-	bool isLittleEndian()
+	bool is_little_endian()
 	{
 		std::int32_t number = 1;
 		auto numPtr = reinterpret_cast<char *>(&number);
 		return (numPtr[0] == 1);
 	}
 
-	bool isBigEndian()
+	bool is_big_endian()
 	{
-		return (false == isLittleEndian());
+		return (false == is_little_endian());
 	}
 } // namespace isobus

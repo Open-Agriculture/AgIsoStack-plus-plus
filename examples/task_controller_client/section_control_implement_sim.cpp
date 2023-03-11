@@ -60,15 +60,15 @@ void SectionControlImplementSimulator::set_target_work_state(bool value)
 
 constexpr std::uint32_t SectionControlImplementSimulator::get_prescription_control_state() const
 {
-	return 1;
+	return 1; // AUTO mode
 }
 
 constexpr std::uint32_t SectionControlImplementSimulator::get_section_control_state() const
 {
-	return 1;
+	return 1; // AUTO mode
 }
 
-bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectPool> poolToPopulate, isobus::NAME clientName)
+bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectPool> poolToPopulate, isobus::NAME clientName) const
 {
 	bool retVal = true;
 	std::uint16_t elementCounter = 0;
@@ -114,13 +114,13 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 
 	// Set up sections for section control
 	// Using 7 ft sections
-	for (std::size_t i = 0; i < NUMBER_SECTIONS; i++)
+	for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS; i++)
 	{
 		retVal &= poolToPopulate->add_device_element("Section " + isobus::to_string(static_cast<int>(i)), elementCounter++, 9, isobus::task_controller_object::DeviceElementObject::Type::Section, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
 		retVal &= poolToPopulate->add_device_property("Offset X", -20, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetX), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Offset Y", ((-BOOM_WIDTH) / 2) + (i * SECTION_WIDTH) + (SECTION_WIDTH / 2), static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Width", 2 * 1067, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
-		auto section = reinterpret_cast<isobus::task_controller_object::DeviceElementObject *>(poolToPopulate->get_object_by_id(i + static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1)));
+		auto section = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(i + static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1)).lock());
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
@@ -139,10 +139,10 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	// Add child linkages to device elements if all objects were added OK
 	if (retVal)
 	{
-		auto sprayer = reinterpret_cast<isobus::task_controller_object::DeviceElementObject *>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement)));
-		auto connector = reinterpret_cast<isobus::task_controller_object::DeviceElementObject *>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Connector)));
-		auto boom = reinterpret_cast<isobus::task_controller_object::DeviceElementObject *>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SprayBoom)));
-		auto product = reinterpret_cast<isobus::task_controller_object::DeviceElementObject *>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LiquidProduct)));
+		auto sprayer = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement)).lock());
+		auto connector = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Connector)).lock());
+		auto boom = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SprayBoom)).lock());
+		auto product = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LiquidProduct)).lock());
 
 		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
 		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceTotalTime));
@@ -159,7 +159,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16));
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SectionControlState));
 
-		for (std::size_t i = 0; i < NUMBER_SECTIONS; i++)
+		for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS; i++)
 		{
 			boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
 		}
@@ -199,13 +199,13 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SectionControlState):
 			{
-				value = 1; // AUTO mode
+				value = sim->get_section_control_state();
 			}
 			break;
 
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::PrescriptionControlState):
 			{
-				value = 1; // AUTO mode
+				value = sim->get_prescription_control_state();
 			}
 			break;
 
