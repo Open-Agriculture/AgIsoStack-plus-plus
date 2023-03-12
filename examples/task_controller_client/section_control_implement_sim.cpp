@@ -72,9 +72,9 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 {
 	bool retVal = true;
 	std::uint16_t elementCounter = 0;
-	constexpr std::int32_t NUMBER_SECTIONS = 16;
 	constexpr std::int32_t BOOM_WIDTH = 36576; // 120ft
-	constexpr std::int32_t SECTION_WIDTH = (BOOM_WIDTH / NUMBER_SECTIONS);
+	assert(0 != get_number_of_sections()); // You need at least 1 section for this example
+	const std::int32_t SECTION_WIDTH = (BOOM_WIDTH / get_number_of_sections());
 	poolToPopulate->clear();
 
 	// English, decimal point, 12 hour time, ddmmyyyy, all units imperial
@@ -114,19 +114,26 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 
 	// Set up sections for section control
 	// Using 7 ft sections
-	for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS; i++)
+	for (std::uint_fast8_t i = 0; i < get_number_of_sections(); i++)
 	{
+		std::int32_t individualSectionWidth = BOOM_WIDTH / get_number_of_sections();
 		retVal &= poolToPopulate->add_device_element("Section " + isobus::to_string(static_cast<int>(i)), elementCounter++, 9, isobus::task_controller_object::DeviceElementObject::Type::Section, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
 		retVal &= poolToPopulate->add_device_property("Offset X", -20, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetX), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Offset Y", ((-BOOM_WIDTH) / 2) + (i * SECTION_WIDTH) + (SECTION_WIDTH / 2), static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
-		retVal &= poolToPopulate->add_device_property("Width", 2 * 1067, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
+		retVal &= poolToPopulate->add_device_property("Width", individualSectionWidth, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
 		auto section = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(i + static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1)).lock());
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
 	}
-	retVal &= poolToPopulate->add_device_process_data("Actual Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCondensedWorkingState1To16));
-	retVal &= poolToPopulate->add_device_process_data("Setpoint Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16));
+
+	std::uint16_t sectionCounter = 0;
+	while (sectionCounter < get_number_of_sections())
+	{
+		retVal &= poolToPopulate->add_device_process_data("Actual Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
+		retVal &= poolToPopulate->add_device_process_data("Setpoint Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
+		sectionCounter += NUMBER_SECTIONS_PER_CONDENSED_MESSAGE;
+	}
 
 	//// Set up presentations
 	retVal &= poolToPopulate->add_device_value_presentation("mm", 0, 1.0f, 0, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ShortWidthPresentation));
@@ -155,11 +162,17 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BoomYOffset));
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BoomZOffset));
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualWorkingWidth));
-		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCondensedWorkingState1To16));
-		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16));
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SectionControlState));
 
-		for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS; i++)
+		sectionCounter = 0;
+		while (sectionCounter < get_number_of_sections())
+		{
+			boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
+			boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
+			sectionCounter += NUMBER_SECTIONS_PER_CONDENSED_MESSAGE;
+		}
+
+		for (std::uint_fast8_t i = 0; i < get_number_of_sections(); i++)
 		{
 			boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
 		}
@@ -226,13 +239,19 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState225_240):
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState241_256):
 			{
-				constexpr std::uint8_t NUMBER_SECTIONS_PER_CONDENSED_MESSAGE = 16;
 				std::uint16_t sectionIndexOffset = NUMBER_SECTIONS_PER_CONDENSED_MESSAGE * (DDI - static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 				value = 0;
 
 				for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS_PER_CONDENSED_MESSAGE; i++)
 				{
-					value |= ((true == sim->get_section_state(i + sectionIndexOffset)) ? static_cast<std::uint32_t>(0x01) : static_cast<std::uint32_t>(0x00)) << (2 * i);
+					if ((i + (sectionIndexOffset)) < sim->get_number_of_sections())
+					{
+						value |= ((true == sim->get_section_state(i + sectionIndexOffset)) ? static_cast<std::uint32_t>(0x01) : static_cast<std::uint32_t>(0x00)) << (2 * i);
+					}
+					else
+					{
+						value |= (static_cast<std::uint32_t>(0x03) << (2 * i));
+					}
 				}
 			}
 			break;
@@ -289,7 +308,6 @@ bool SectionControlImplementSimulator::value_command_callback(std::uint16_t,
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState225_240):
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState241_256):
 			{
-				constexpr std::uint8_t NUMBER_SECTIONS_PER_CONDENSED_MESSAGE = 16;
 				std::uint16_t sectionIndexOffset = NUMBER_SECTIONS_PER_CONDENSED_MESSAGE * (DDI - static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16));
 
 				for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS_PER_CONDENSED_MESSAGE; i++)
