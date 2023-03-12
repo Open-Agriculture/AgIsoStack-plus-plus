@@ -21,18 +21,47 @@ namespace isobus
 	///
 	/// @brief A dispatcher that notifies listeners when an event is invoked.
 	//================================================================================================
-	template<typename E>
+	template<typename... E>
 	class EventDispatcher
 	{
 	public:
 		/// @brief Register a callback to be invoked when the event is invoked.
 		/// @param callback The callback to register.
 		/// @return A shared pointer to the callback.
-		std::shared_ptr<std::function<void(const E &)>> add_listener(std::function<void(const E &)> &callback)
+		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &...)> &callback)
 		{
-			auto shared = std::make_shared<std::function<void(const E &)>>(callback);
+			auto shared = std::make_shared<std::function<void(const E &...)>>(callback);
 			callbacks.push_back(shared);
 			return shared;
+		}
+
+		/// @brief Register a callback to be invoked when the event is invoked.
+		/// @param callback The callback to register.
+		/// @param context The context object to pass through to the callback.
+		/// @return A shared pointer to the contextless callback.
+		template<typename C>
+		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &..., const C &)> &callback, std::weak_ptr<C> context)
+		{
+			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
+				if (auto contextPtr = context.lock())
+				{
+					callback(args..., *contextPtr);
+				}
+			};
+			return add_listener(callbackWrapper);
+		}
+
+		/// @brief Register an unsafe callback to be invoked when the event is invoked.
+		/// @param callback The callback to register.
+		/// @param context The context object to pass through to the callback.
+		/// @return A shared pointer to the contextless callback.
+		template<typename C>
+		std::shared_ptr<std::function<void(const E &...)>> add_unsafe_listener(std::function<void(const E &..., std::weak_ptr<C>)> &callback, std::weak_ptr<C> context)
+		{
+			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
+				callback(args..., context);
+			};
+			return add_listener(callbackWrapper);
 		}
 
 		/// @brief Get the number of listeners registered to this event.
@@ -45,7 +74,7 @@ namespace isobus
 		/// @brief Invokes an event and notify all listeners.
 		/// @param args The arguments to pass to the listeners.
 		/// @return True if the event was successfully invoked, false otherwise.
-		bool invoke(E &&args)
+		bool invoke(E &&...args)
 		{
 			// Remove all callbacks that are gone, only if we are not dispatching.
 			if (0 == concurrent_invokes_count)
@@ -69,10 +98,11 @@ namespace isobus
 				std::size_t current = 0;
 				while (current < callbacks.size())
 				{
-					if (auto callback = callbacks[current++].lock())
+					if (auto callback = callbacks[current].lock())
 					{
-						(*callback)(args);
+						(*callback)(std::forward<E>(args)...);
 					}
+					current++;
 				}
 				concurrent_invokes_count--;
 			}
@@ -85,7 +115,7 @@ namespace isobus
 		}
 
 	private:
-		std::vector<std::weak_ptr<std::function<void(const E &)>>> callbacks; ///< The callbacks to invoke
+		std::vector<std::weak_ptr<std::function<void(const E &...)>>> callbacks; ///< The callbacks to invoke
 		std::atomic<std::uint32_t> concurrent_invokes_count = { 0 }; ///< The number of concurrent invoke calls in progress
 	};
 } // namespace isobus

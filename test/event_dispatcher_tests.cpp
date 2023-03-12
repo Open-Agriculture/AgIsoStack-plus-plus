@@ -3,6 +3,7 @@
 #include "isobus/utility/event_dispatcher.hpp"
 
 #include <chrono>
+#include <memory>
 #include <thread>
 
 using namespace isobus;
@@ -46,6 +47,82 @@ TEST(EVENT_DISPATCHER_TESTS, InvokeEvent)
 
 	dispatcher.invoke({ true });
 	ASSERT_EQ(count, 1);
+
+	dispatcher.invoke({ true });
+	ASSERT_EQ(count, 2);
+}
+
+TEST(EVENT_DISPATCHER_TESTS, MultipleArguments)
+{
+	EventDispatcher<bool, int, float> dispatcher;
+
+	int count = 0;
+	std::function<void(const bool &, const int &, const float &)> callback = [&count](bool value, int value2, float value3) {
+		ASSERT_TRUE(value);
+		ASSERT_EQ(value2, 42);
+		ASSERT_EQ(value3, 3.14f);
+		count += 1;
+	};
+	auto listener = dispatcher.add_listener(callback);
+
+	dispatcher.invoke(true, 42, 3.14f);
+	ASSERT_EQ(count, 1);
+
+	dispatcher.invoke(true, 42, 3.14f);
+	ASSERT_EQ(count, 2);
+}
+
+TEST(EVENT_DISPATCHER_TESTS, InvokeContextEvent)
+{
+	EventDispatcher<bool> dispatcher;
+
+	int count = 0;
+	std::function<void(const bool &, const int &)> callback = [&count](bool value, int context) {
+		ASSERT_TRUE(value);
+		ASSERT_EQ(context, 42);
+		count += 1;
+	};
+	auto context = std::make_shared<int>(42);
+	auto listener = dispatcher.add_listener<int>(callback, context);
+
+	dispatcher.invoke({ true });
+	ASSERT_EQ(count, 1);
+
+	dispatcher.invoke({ true });
+	ASSERT_EQ(count, 2);
+
+	context = nullptr;
+
+	dispatcher.invoke({ true });
+	ASSERT_EQ(count, 2);
+}
+
+TEST(EVENT_DISPATCHER_TESTS, InvokeUnsafeContextEvent)
+{
+	EventDispatcher<bool> dispatcher;
+
+	int count = 0;
+	std::function<void(const bool &, std::weak_ptr<int>)> callback = [&count](bool value, std::weak_ptr<int> context) {
+		if (count == 0)
+		{
+			ASSERT_FALSE(context.expired());
+			ASSERT_EQ(*context.lock(), 42);
+		}
+		else
+		{
+			ASSERT_TRUE(context.expired());
+		}
+		ASSERT_TRUE(value);
+		count += 1;
+	};
+
+	auto context = std::make_shared<int>(42);
+	auto listener = dispatcher.add_unsafe_listener<int>(callback, context);
+
+	dispatcher.invoke({ true });
+	ASSERT_EQ(count, 1);
+
+	context = nullptr;
 
 	dispatcher.invoke({ true });
 	ASSERT_EQ(count, 2);
