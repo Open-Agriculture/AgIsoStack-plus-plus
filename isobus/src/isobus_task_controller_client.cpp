@@ -896,11 +896,9 @@ namespace isobus
 												CANStackLogger::warn("[TC]: Structure Label from TC exceeds the max length allowed by ISO11783-10");
 											}
 											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
-											auto weakDeviceObject = parentTC->clientDDOP->get_object_by_id(0);
 											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
-											assert(!weakDeviceObject.expired());
-											auto deviceObject = weakDeviceObject.lock();
-											assert(nullptr != deviceObject.get());
+											auto deviceObject = parentTC->clientDDOP->get_object_by_id(0);
+											assert(nullptr != deviceObject);
 											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
 
 											std::string tempLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_structure_label();
@@ -953,7 +951,7 @@ namespace isobus
 										else
 										{
 											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
-											auto deviceObject = parentTC->clientDDOP->get_object_by_id(0).lock();
+											auto deviceObject = parentTC->clientDDOP->get_object_by_id(0);
 											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
 											assert(nullptr != deviceObject);
 											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());

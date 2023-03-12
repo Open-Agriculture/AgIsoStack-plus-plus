@@ -121,7 +121,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 		retVal &= poolToPopulate->add_device_property("Offset X", -20, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetX), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Offset Y", ((-BOOM_WIDTH) / 2) + (i * SECTION_WIDTH) + (SECTION_WIDTH / 2), static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Width", individualSectionWidth, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
-		auto section = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(i + static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1)).lock());
+		auto section = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(i + static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1)));
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		section->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
@@ -146,10 +146,10 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	// Add child linkages to device elements if all objects were added OK
 	if (retVal)
 	{
-		auto sprayer = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement)).lock());
-		auto connector = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Connector)).lock());
-		auto boom = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SprayBoom)).lock());
-		auto product = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LiquidProduct)).lock());
+		auto sprayer = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement)));
+		auto connector = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Connector)));
+		auto boom = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SprayBoom)));
+		auto product = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LiquidProduct)));
 
 		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
 		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceTotalTime));
