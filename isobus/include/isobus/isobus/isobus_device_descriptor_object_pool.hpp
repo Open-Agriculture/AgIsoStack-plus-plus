@@ -113,7 +113,7 @@ namespace isobus
 
 		/// @brief Gets an object from the DDOP that corresponds to a certain object ID
 		/// @returns Pointer to the object matching the provided ID, or nullptr if no match was found
-		std::weak_ptr<task_controller_object::Object> get_object_by_id(std::uint16_t objectID);
+		std::shared_ptr<task_controller_object::Object> get_object_by_id(std::uint16_t objectID);
 
 		/// @brief Sets the TC version to use when generating a binary DDOP.
 		/// @note If you do not call this, TC version 4 is used by default
