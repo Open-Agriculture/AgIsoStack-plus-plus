@@ -256,7 +256,10 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 			break;
 		}
 	}
-	return true; // You would want to return false in a real controller if a value could not be retrieved
+	// The actual use of the return value here is for the TC client to know if it needs to keep calling more callbacks to search
+	// for one that can satisfy the element number + DDI combination it needs.
+	// But in the example this is the only value command callback, so we always want to return true.
+	return true;
 }
 
 bool SectionControlImplementSimulator::value_command_callback(std::uint16_t,
@@ -314,5 +317,8 @@ bool SectionControlImplementSimulator::value_command_callback(std::uint16_t,
 			break;
 		}
 	}
-	return true; // In a real controller, you would want to return false if you couldn't set something
+	// The actual use of the return value here is for the TC client to know if it needs to keep calling more callbacks to search
+	// for one that can satisfy the element number + DDI combination it needs.
+	// But in the example this is the only value command callback, so we always want to return true.
+	return true;
 }
