@@ -811,6 +811,12 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestStructureLabel);
 
+	// Try sending the DDOP
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::BeginTransferDDOP);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginTransferDDOP);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDDOPTransfer);
+
 	// Switch to a trash DDOP
 	auto testJunkDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 	ASSERT_NE(nullptr, testJunkDDOP);
@@ -861,6 +867,12 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+
+	// Test version request state
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestVersion);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestVersion);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionResponse);
 
 	//! @Todo Add other states
 
@@ -1082,6 +1094,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse);
 
 	// Test timeout waiting to send request version response
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendRequestVersionResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestVersionResponse);
+	interfaceUnderTest.update();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestVersionResponse);
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendRequestVersionResponse, 0);
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestVersionResponse);
 	interfaceUnderTest.update();
