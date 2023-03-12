@@ -2,6 +2,19 @@
 
 ![Features](docs/images/features.png)
 
+![TaskController](docs/images/taskController.png)
+
+## About This Library
+
+Isobus++ is an MIT licensed hardware agnostic ISOBUS (ISO11783) and SAE J1939 CAN stack written in C++.
+
+The library transparently supports the entire ISOBUS/J1939 transport layer, automatic address claiming, and many of the high level ISOBUS protocols, such as:
+
+* Task Controller Client
+* Virtual Terminal Client (aka Universal Terminal)
+* ISOBUS Diagnostic Protocols
+* NMEA 2000 Fast Packet
+
 ## Getting Started
 
 Check out the [tutorial website](https://isobus-plus-plus.readthedocs.io/en/latest/) for information on ISOBUS basics, how to download this library, and how to use it. The tutorials contain in-depth examples and explanations to help get your ISOBUS or J1939 project going quickly.
