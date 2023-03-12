@@ -175,6 +175,8 @@ public:
 	                                   void *parentPointer);
 
 private:
+	static constexpr std::uint8_t NUMBER_SECTIONS_PER_CONDENSED_MESSAGE = 16; ///< Number of section states in a condensed working state message
+
 	std::vector<bool> sectionStates; ///< Stores the commanded section states as a set of boolean values
 	std::uint32_t targetRate = 0; ///< The target rate
 	bool setpointWorkState = true; ///< The overall work state
