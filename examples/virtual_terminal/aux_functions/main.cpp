@@ -3,6 +3,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 
@@ -34,9 +35,9 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 }
 
 // This callback will provide us with event driven notifications of auxiliary input from the stack
-void handle_aux_input(isobus::VirtualTerminalClient::AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, isobus::VirtualTerminalClient *)
+void handle_aux_function_input(const isobus::VirtualTerminalClient::AuxiliaryFunctionEvent &event)
 {
-	std::cout << "Auxiliary function event received: (" << function.functionObjectID << ", " << function.inputObjectID << ", " << static_cast<int>(function.functionType) << "), value1: " << value1 << ", value2: " << value2 << std::endl;
+	std::cout << "Auxiliary function event received: (" << event.function.functionObjectID << ", " << event.function.inputObjectID << ", " << static_cast<int>(event.function.functionType) << "), value1: " << event.value1 << ", value2: " << event.value2 << std::endl;
 }
 
 int main()
@@ -107,12 +108,12 @@ int main()
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1D, 0);
-	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1D, 0);
+	auto TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
-	TestVirtualTerminalClient->register_auxiliary_function_event_callback(handle_aux_input);
+	auto auxFunctionListener = TestVirtualTerminalClient->add_auxiliary_function_event_listener(handle_aux_function_input);
 	TestVirtualTerminalClient->initialize(true);
 
 	while (running)

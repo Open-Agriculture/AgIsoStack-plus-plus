@@ -13,8 +13,10 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
+#include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -290,146 +292,170 @@ namespace isobus
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
 
-		// Basic Interaction
-		/// @brief A typedef for a generic key event for convenience
-		typedef void (*VTKeyEventCallback)(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic pointing event, for convenience
-		typedef void (*VTPointingEventCallback)(KeyActivationCode keyEvent,
-		                                        std::uint16_t xPosition,
-		                                        std::uint16_t yPosition,
-		                                        std::uint16_t parentMaskObjectID,
-		                                        VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT input object selection callback for convenience
-		typedef void (*VTSelectInputObjectCallback)(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT ESC message callback for convenience
-		typedef void (*VTESCMessageCallback)(std::uint16_t objectID, ESCMessageErrorCode errorCode, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT change numeric value callback for convenience
-		typedef void (*VTChangeNumericValueCallback)(std::uint16_t objectID, std::uint32_t value, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT change active mask callback for convenience
-		typedef void (*VTChangeActiveMaskCallback)(std::uint16_t maskObjectID,
-		                                           std::uint16_t errorObjectID,
-		                                           std::uint16_t parentObjectID,
-		                                           bool missingObjects,
-		                                           bool maskOrChildHasErrors,
-		                                           bool anyOtherEror,
-		                                           bool poolDeleted,
-		                                           VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT change soft key mask callback for convenience
-		typedef void (*VTChangeSoftKeyMaskCallback)(std::uint16_t dataOrAlarmMaskObjectID,
-		                                            std::uint16_t softKeyMaskObjectID,
-		                                            bool missingObjects,
-		                                            bool maskOrChildHasErrors,
-		                                            bool anyOtherEror,
-		                                            bool poolDeleted,
-		                                            VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT change string value callback for convenience
-		typedef void (*VTChangeStringValueCallback)(std::uint16_t objectID, std::string value, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT on user-layout hide/show callback for convenience
-		typedef void (*VTUserLayoutHideShowCallback)(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for a generic VT control audio signal termination callback for convenience
-		typedef void (*VTAudioSignalTerminationCallback)(bool isTerminated, VirtualTerminalClient *parentPointer);
-		/// @brief A typedef for an auxilary function event for convenience
-		typedef void (*AuxiliaryFunctionCallback)(AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, VirtualTerminalClient *parentPointer);
+		/// @brief A struct for storing information of a VT key input event
+		struct VTKeyEvent
+		{
+			KeyActivationCode keyEvent; ///< The key event
+			std::uint8_t keyNumber; ///< The key number
+			std::uint16_t objectID; ///< The object ID
+			std::uint16_t parentObjectID; ///< The parent object ID
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		// Callbacks for events that happen on the VT
-		/// @brief Allows you to register for a callback when a softkey is pressed or released
-		/// @param[in] value The callback to register
-		void register_vt_soft_key_event_callback(VTKeyEventCallback value);
+		/// @brief A struct for storing information of a VT pointing event
+		struct VTPointingEvent
+		{
+			KeyActivationCode keyEvent; ///< The key event
+			std::uint16_t xPosition; ///< The x position
+			std::uint16_t yPosition; ///< The y position
+			std::uint16_t parentObjectID; ///< The parent object ID
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to remove a callback for when a softkey is pressed or released
-		/// @param[in] value The callback to remove
-		void remove_vt_soft_key_event_callback(VTKeyEventCallback value);
+		/// @brief A struct for storing information of a VT input object selection event
+		struct VTSelectInputObjectEvent
+		{
+			std::uint16_t objectID; ///< The object ID
+			bool objectSelected; ///< Whether the object is selected
+			bool objectOpenForInput; ///< Whether the object is open for input
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to register for a callback when a button is pressed or released
-		/// @param[in] value The callback to register
-		void register_vt_button_event_callback(VTKeyEventCallback value);
+		/// @brief A struct for storing information of a VT ESC message event
+		struct VTESCMessageEvent
+		{
+			std::uint16_t objectID; ///< The object ID
+			ESCMessageErrorCode errorCode; ///< The error code
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to remove a callback when a button is pressed or released
-		/// @param[in] value The callback to remove
-		void remove_vt_button_event_callback(VTKeyEventCallback value);
+		/// @brief A struct for storing information of a VT change numeric value event
+		struct VTChangeNumericValueEvent
+		{
+			std::uint16_t objectID; ///< The object ID
+			std::uint32_t value; ///< The value
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to register for a callback when a pointing event is "pressed or released"
-		/// @param[in] value The callback to register
-		void register_vt_pointing_event_callback(VTPointingEventCallback value);
+		/// @brief A struct for storing information of a VT change active mask event
+		struct VTChangeActiveMaskEvent
+		{
+			std::uint16_t maskObjectID; ///< The mask object ID
+			std::uint16_t errorObjectID; ///< The error object ID
+			std::uint16_t parentObjectID; ///< The parent object ID
+			bool missingObjects; ///< Whether there are missing objects
+			bool maskOrChildHasErrors; ///< Whether the mask or child has errors
+			bool anyOtherError; ///< Whether there are any other errors
+			bool poolDeleted; ///< Whether the pool has been deleted
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to remove a callback when a pointing event is "pressed or released"
-		/// @param[in] value The callback to remove
-		void remove_vt_pointing_event_callback(VTPointingEventCallback value);
+		/// @brief A struct for storing information of a VT change soft key mask event
+		struct VTChangeSoftKeyMaskEvent
+		{
+			std::uint16_t dataOrAlarmMaskObjectID; ///< The data or alarm mask object ID
+			std::uint16_t softKeyMaskObjectID; ///< The soft key mask object ID
+			bool missingObjects; ///< Whether there are missing objects
+			bool maskOrChildHasErrors; ///< Whether the mask or child has errors
+			bool anyOtherError; ///< Whether there are any other errors
+			bool poolDeleted; ///< Whether the pool has been deleted
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to register for a callback when an input object event is triggered
-		/// @param[in] value The callback to register
-		void register_vt_select_input_object_event_callback(VTSelectInputObjectCallback value);
+		/// @brief A struct for storing information of a VT change string value event
+		struct VTChangeStringValueEvent
+		{
+			std::uint16_t objectID; ///< The object ID
+			std::string value; ///< The value
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to remove an input object event callback
-		/// @param[in] value The callback to remove
-		void remove_vt_selection_input_object_event_callback(VTSelectInputObjectCallback value);
+		/// @brief A struct for storing information of a VT on user-layout hide/show event
+		struct VTUserLayoutHideShowEvent
+		{
+			std::uint16_t objectID; ///< The object ID
+			bool isHidden; ///< Whether the object is hidden
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to register for a callback when an ESC message is received, e.g. an open object input is closed
-		/// @param[in] value The callback to register
-		void register_vt_esc_message_event_callback(VTESCMessageCallback value);
+		/// @brief A struct for storing information of a VT control audio signal termination event
+		struct VTAudioSignalTerminationEvent
+		{
+			bool isTerminated; ///< Whether the audio signal is terminated
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to remove an ESC message callback
-		/// @param[in] value The callback to remove
-		void remove_vt_esc_message_event_callback(VTESCMessageCallback value);
+		/// @brief A struct for storing information of an auxilary function event
+		struct AuxiliaryFunctionEvent
+		{
+			AssignedAuxiliaryFunction function; ///< The function
+			std::uint16_t value1; ///< The first value
+			std::uint16_t value2; ///< The second value
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+		};
 
-		/// @brief Allows you to register for a callback when a numeric value is changed in an input object
-		/// @param[in] value The callback to register
-		void register_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value);
+		/// @brief Add a listener for when a soft key is pressed or released
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_soft_key_event_listener(std::function<void(const VTKeyEvent &)> callback);
 
-		/// @brief Allows you to remove a numeric value change callback
-		/// @param[in] value The callback to remove
-		void remove_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value);
+		/// @brief Add a listener for when a button is pressed or released
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_button_event_listener(std::function<void(const VTKeyEvent &)> callback);
 
-		/// @brief Allows you to register for a callback when the active mask is changed
+		/// @brief Add a listener for when a pointing event is "pressed or released"
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_pointing_event_listener(std::function<void(const VTPointingEvent &)> callback);
+
+		/// @brief Add a listener for when an input object event is triggered
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_select_input_object_event_listener(std::function<void(const VTSelectInputObjectEvent &)> callback);
+
+		/// @brief Add a listener for when an ESC message is received, e.g. an open object input is closed
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_esc_message_event_listener(std::function<void(const VTESCMessageEvent &)> callback);
+
+		/// @brief Add a listener for when a numeric value is changed in an input object
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_change_numeric_value_event_listener(std::function<void(const VTChangeNumericValueEvent &)> callback);
+
+		/// @brief Add a listener for when the active mask is changed
 		/// @details The VT sends this whenever there are missing object references or errors in the mask.
-		/// @param[in] value The callback to register
-		void register_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value);
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_change_active_mask_event_listener(std::function<void(const VTChangeActiveMaskEvent &)> callback);
 
-		/// @brief Allows you to remove a callback when the active mask is changed
-		/// @param[in] value The callback to remove
-		void remove_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value);
-
-		/// @brief Allows you to register for a callback when the soft key mask is changed
+		/// @brief Add a listener for when the soft key mask is changed
 		/// @details The VT sends this whenever there are missing object references or errors in the mask.
-		/// @param[in] value The callback to register
-		void register_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value);
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_change_soft_key_mask_event_listener(std::function<void(const VTChangeSoftKeyMaskEvent &)> callback);
 
-		/// @brief Allows you to remove a callback when the soft key mask is changed
-		/// @param[in] value The callback to remove
-		void remove_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value);
-
-		/// @brief Allows you to register for a callback when a string value is changed
+		/// @brief Add a listener for when a string value is changed
 		/// @details The object could be either the input string object or the referenced string variable object.
-		/// @param[in] value The callback to register
-		void register_vt_change_string_value_event_callback(VTChangeStringValueCallback value);
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_change_string_value_event_listener(std::function<void(const VTChangeStringValueEvent &)> callback);
 
-		/// @brief Allows you to remove a callback when a string value is changed
-		/// @param[in] value The callback to remove
-		void remove_vt_change_string_value_event_callback(VTChangeStringValueCallback value);
+		/// @brief Add a listener for when a user-layout object is hidden or shown
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_user_layout_hide_show_event_listener(std::function<void(const VTUserLayoutHideShowEvent &)> callback);
 
-		/// @brief Allows you to register for a callback when a user-layout object is hidden or shown
-		/// @param[in] value The callback to register
-		void register_vt_user_layout_hide_show_event_callback(VTUserLayoutHideShowCallback value);
+		/// @brief Add a listener for when an audio signal is terminated
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_vt_control_audio_signal_termination_event_listener(std::function<void(const VTAudioSignalTerminationEvent &)> callback);
 
-		/// @brief Allows you to remove a callback when a user-layout object is hidden or shown
-		/// @param[in] value The callback to remove
-		void remove_vt_user_layout_hide_show_callback(VTUserLayoutHideShowCallback value);
-
-		/// @brief Allows you to register for a callback when an audio signal is terminated
-		/// @param[in] value The callback to register
-		void register_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value);
-
-		/// @brief Allows you to remove a callback when an audio signal is terminated
-		/// @param[in] value The callback to remove
-		void remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value);
-
-		/// @brief Allows you to register for a callback for when a change in auxiliary input is received
-		/// @param[in] value The AuxiliaryFunctionCallback to register
-		void register_auxiliary_function_event_callback(AuxiliaryFunctionCallback value);
-
-		/// @brief Allows you to remove a callback when for a change in auxiliary input is received
-		/// @param[in] value The AuxiliaryFunctionCallback to remove
-		void remove_auxiliary_function_event_callback(AuxiliaryFunctionCallback value);
+		/// @brief Add a listener for for when a change in auxiliary input for a function is received
+		/// @param[in] callback The callback to be invoked
+		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
+		std::shared_ptr<void> add_auxiliary_function_event_listener(std::function<void(const AuxiliaryFunctionEvent &)> callback);
 
 		/// @brief Set the model identification code of our auxiliary input device.
 		/// @details The model identification code is used to allow other devices identify
@@ -1419,114 +1445,6 @@ namespace isobus
 		/// @param[in] value The new state for the state machine
 		void set_state(StateMachineState value);
 
-		/// @brief Calls all registered callbacks for button events
-		/// @param[in] keyEvent The button event
-		/// @param[in] keyNumber They key number
-		/// @param[in] objectID The object ID of the button
-		/// @param[in] parentObjectID The object ID of the parent object
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_button_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for softkey events
-		/// @param[in] keyEvent The softkey event
-		/// @param[in] keyNumber They key number
-		/// @param[in] objectID The object ID of the softkey
-		/// @param[in] parentObjectID The object ID of the parent object
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_softkey_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for pointing events
-		/// @param[in] keyEvent The event's signal
-		/// @param[in] xPosition The pointing event X position
-		/// @param[in] yPosition The pointing event Y position
-		/// @param[in] parentMaskObjectID Object ID of the parent mask
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_pointing_event_callback(KeyActivationCode keyEvent,
-		                                     std::uint16_t xPosition,
-		                                     std::uint16_t yPosition,
-		                                     std::uint16_t parentMaskObjectID,
-		                                     VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for pointing events
-		/// @param[in] objectID The object ID of the event's source object
-		/// @param[in] objectSelected Denotes if the object is selected
-		/// @param[in] objectOpenForInput Denotes if the input object is open for input
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_select_input_object_callback(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for esc message events
-		/// @param[in] objectID The object ID where input was aborted
-		/// @param[in] errorCode The error code
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_esc_message_callback(std::uint16_t objectID, ESCMessageErrorCode errorCode, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for change numeric value events
-		/// @param[in] objectID The object ID of the numeric object
-		/// @param[in] value The new value of the numeric object
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_change_numeric_value_callback(std::uint16_t objectID, std::uint32_t value, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for change active mask events
-		/// @param[in] maskObjectID The object ID of the mask object
-		/// @param[in] errorObjectID The object ID of the error object
-		/// @param[in] parentObjectID The object ID of the parent object
-		/// @param[in] missingObjects Denotes if the mask object is missing objects
-		/// @param[in] maskOrChildHasErrors Denotes if the mask object or a child has errors
-		/// @param[in] anyOtherEror Denotes if any other error exists
-		/// @param[in] poolDeleted Denotes if the pool is deleted
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_change_active_mask_callback(std::uint16_t maskObjectID,
-		                                         std::uint16_t errorObjectID,
-		                                         std::uint16_t parentObjectID,
-		                                         bool missingObjects,
-		                                         bool maskOrChildHasErrors,
-		                                         bool anyOtherEror,
-		                                         bool poolDeleted,
-		                                         VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for change soft key mask events
-		/// @param[in] dataOrAlarmMaskObjectID The object ID of the data or alarm mask object
-		/// @param[in] softKeyMaskObjectID The object ID of the soft key mask object
-		/// @param[in] missingObjects Denotes if the mask object is missing objects
-		/// @param[in] maskOrChildHasErrors Denotes if the mask object or a child has errors
-		/// @param[in] anyOtherEror Denotes if any other error exists
-		/// @param[in] poolDeleted Denotes if the pool is deleted
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_change_soft_key_mask_callback(std::uint16_t dataOrAlarmMaskObjectID,
-		                                           std::uint16_t softKeyMaskObjectID,
-		                                           bool missingObjects,
-		                                           bool maskOrChildHasErrors,
-		                                           bool anyOtherEror,
-		                                           bool poolDeleted,
-		                                           VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for change string value events
-		/// @param[in] objectID The object ID of the string object
-		/// @param[in] value The new value of the string object
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_change_string_value_callback(std::uint16_t objectID, std::string value, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for user layout hide/show events
-		/// @param[in] objectID The object ID of the user layout object
-		/// @param[in] isHidden Denotes if the user layout is hidden
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_user_layout_hide_show_callback(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for control audio signal termination events
-		/// @param[in] isTerminated Denotes if the audio signal is terminated
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_audio_signal_termination_callback(bool isTerminated, VirtualTerminalClient *parentPointer);
-
-		/// @brief Calls all registered callbacks for auxiliary input
-		/// @param[in] function The function of the auxiliary input object
-		/// @param[in] value1 The new value1 of the auxiliary input object
-		/// @param[in] value2 The new value2 of the auxiliary input object
-		/// @param[in] parentPointer A context variable that is passed back through the callback
-		void process_auxiliary_input_callback(AssignedAuxiliaryFunction function,
-		                                      std::uint32_t value1,
-		                                      std::uint32_t value2,
-		                                      VirtualTerminalClient *parentPointer);
-
 		/// @brief Processes the internal Tx flags
 		/// @param[in] flag The flag to process
 		/// @param[in] parent A context variable to find the relevant VT client class
@@ -1663,18 +1581,18 @@ namespace isobus
 		bool shouldTerminate; ///< Used to determine if the client should exit and join the worker thread
 
 		// Activation event callbacks
-		std::vector<VTKeyEventCallback> buttonEventCallbacks; ///< A list of all button event callbacks
-		std::vector<VTKeyEventCallback> softKeyEventCallbacks; ///< A list of all soft key event callbacks
-		std::vector<VTPointingEventCallback> pointingEventCallbacks; ///< A list of all pointing event callbacks
-		std::vector<VTSelectInputObjectCallback> selectInputObjectCallbacks; ///< A list of all select input object callbacks
-		std::vector<VTESCMessageCallback> escMessageCallbacks; ///< A list of all ESC event callbacks
-		std::vector<VTChangeNumericValueCallback> changeNumericValueCallbacks; ///< A list of all change numeric value callbacks
-		std::vector<VTChangeActiveMaskCallback> changeActiveMaskCallbacks; ///< A list of all change active mask callbacks
-		std::vector<VTChangeSoftKeyMaskCallback> changeSoftKeyMaskCallbacks; ///< A list of all change soft key mask callbacks
-		std::vector<VTChangeStringValueCallback> changeStringValueCallbacks; ///< A list of all change string value callbacks
-		std::vector<VTUserLayoutHideShowCallback> userLayoutHideShowCallbacks; ///< A list of all user layout hide/show callbacks
-		std::vector<VTAudioSignalTerminationCallback> audioSignalTerminationCallbacks; ///< A list of all control audio signal termination callbacks
-		std::vector<AuxiliaryFunctionCallback> auxiliaryFunctionCallbacks; ///< A list of all auxiliary function callbacks
+		EventDispatcher<VTKeyEvent> softKeyEventDispatcher; ///< A list of all soft key event callbacks
+		EventDispatcher<VTKeyEvent> buttonEventDispatcher; ///< A list of all button event callbacks
+		EventDispatcher<VTPointingEvent> pointingEventDispatcher; ///< A list of all pointing event callbacks
+		EventDispatcher<VTSelectInputObjectEvent> selectInputObjectEventDispatcher; ///< A list of all select input object callbacks
+		EventDispatcher<VTESCMessageEvent> escMessageEventDispatcher; ///< A list of all ESC event callbacks
+		EventDispatcher<VTChangeNumericValueEvent> changeNumericValueEventDispatcher; ///< A list of all change numeric value callbacks
+		EventDispatcher<VTChangeActiveMaskEvent> changeActiveMaskEventDispatcher; ///< A list of all change active mask callbacks
+		EventDispatcher<VTChangeSoftKeyMaskEvent> changeSoftKeyMaskEventDispatcher; ///< A list of all change soft key mask callbacks
+		EventDispatcher<VTChangeStringValueEvent> changeStringValueEventDispatcher; ///< A list of all change string value callbacks
+		EventDispatcher<VTUserLayoutHideShowEvent> userLayoutHideShowEventDispatcher; ///< A list of all user layout hide/show callbacks
+		EventDispatcher<VTAudioSignalTerminationEvent> audioSignalTerminationEventDispatcher; ///< A list of all control audio signal termination callbacks
+		EventDispatcher<AuxiliaryFunctionEvent> auxiliaryFunctionEventDispatcher; ///< A list of all auxiliary function callbacks
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback; ///< The callback to use to get pool data

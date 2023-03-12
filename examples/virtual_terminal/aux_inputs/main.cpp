@@ -99,12 +99,6 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 }
 
-// This callback will provide us with event driven notifications of auxiliary input from the stack
-void handle_aux_input(isobus::VirtualTerminalClient::AssignedAuxiliaryFunction function, std::uint16_t value1, std::uint16_t value2, isobus::VirtualTerminalClient *)
-{
-	std::cout << "Auxiliary function event received: (" << function.functionObjectID << ", " << function.inputObjectID << ", " << static_cast<int>(function.functionType) << "), value1: " << value1 << ", value2: " << value2 << std::endl;
-}
-
 int main()
 {
 	std::signal(SIGINT, signal_handler);

@@ -13,6 +13,7 @@
 
 #include "isobus/hardware_integration/innomaker_usb2can_windows_plugin.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <thread>
 
