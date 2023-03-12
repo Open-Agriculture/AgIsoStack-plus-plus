@@ -481,7 +481,6 @@ namespace isobus
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)
-		std::uint32_t controlFunctionValidTimestamp_ms = 0; ///< A timestamp to track when (in milliseconds) our internal control function becomes valid
 		std::uint32_t statusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we sent a status message to the TC
 		std::uint32_t serverStatusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we received a status message from the TC
 		std::uint8_t numberOfWorkingSetMembers = 1; ///< The number of working set members that will be reported in the working set master message

@@ -117,7 +117,8 @@ namespace isobus
 			                                                                 deviceStructureLabel,
 			                                                                 deviceLocalizationLabel,
 			                                                                 deviceExtendedStructureLabel,
-			                                                                 clientIsoNAME));
+			                                                                 clientIsoNAME,
+			                                                                 (taskControllerCompatabilityLevel >= 4)));
 		}
 		else
 		{
@@ -389,6 +390,30 @@ namespace isobus
 			}
 		}
 		return retVal;
+	}
+
+	void DeviceDescriptorObjectPool::set_task_controller_compatibility_level(std::uint8_t tcVersion)
+	{
+		assert(tcVersion <= MAX_TC_VERSION_SUPPORTED); // You can't set the version higher than the max
+
+		taskControllerCompatabilityLevel = tcVersion;
+
+		// Manipulate the device object if it exists
+		auto deviceObject = std::static_pointer_cast<task_controller_object::DeviceObject>(get_object_by_id(0).lock());
+		if (nullptr != deviceObject)
+		{
+			deviceObject->set_use_extended_structure_label(taskControllerCompatabilityLevel >= 4);
+		}
+	}
+
+	std::uint8_t DeviceDescriptorObjectPool::get_task_controller_compatibility_level() const
+	{
+		return taskControllerCompatabilityLevel;
+	}
+
+	std::uint8_t DeviceDescriptorObjectPool::get_max_supported_task_controller_version()
+	{
+		return MAX_TC_VERSION_SUPPORTED;
 	}
 
 	void DeviceDescriptorObjectPool::clear()

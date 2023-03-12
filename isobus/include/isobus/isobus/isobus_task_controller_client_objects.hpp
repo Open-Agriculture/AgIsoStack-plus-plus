@@ -87,13 +87,15 @@ namespace isobus
 			/// @param[in] deviceLocalizationLabel Defined by the language command PGN (ascii / byte array)
 			/// @param[in] deviceExtendedStructureLabel Continuation of the Label given by Device to identify the Device descriptor Structure (byte array)
 			/// @param[in] clientIsoNAME NAME of client device as defined in ISO 11783-5
+			/// @param[in] shouldUseExtendedStructureLabel If the device should include the extended structure label during binary serialization
 			DeviceObject(std::string deviceDesignator,
 			             std::string deviceSoftwareVersion,
 			             std::string deviceSerialNumber,
 			             std::string deviceStructureLabel,
 			             std::array<std::uint8_t, 7> deviceLocalizationLabel,
 			             std::vector<std::uint8_t> deviceExtendedStructureLabel,
-			             std::uint64_t clientIsoNAME);
+			             std::uint64_t clientIsoNAME,
+			             bool shouldUseExtendedStructureLabel);
 
 			/// @brief Destructor for a DeviceObject
 			virtual ~DeviceObject() = default;
@@ -130,6 +132,17 @@ namespace isobus
 			/// @returns The raw ISO NAME associated with this DDOP
 			std::uint64_t get_iso_name() const;
 
+			/// @brief Returns if the class will append the extended structure label to its serialized form
+			/// @details This is TC version 4 behavior. For version 3, this should return false.
+			/// @returns `true` if the class will append the extended structure label to its serialized form, otherwise `false`
+			bool get_use_extended_structure_label() const;
+
+			/// @brief Sets the class' behavior for dealing with the extended structure label.
+			/// @details When this is set to true, the class will use TC version 4 behavior for the extended structure label.
+			/// When it is false, it will use < version 4 behavior (the label will not be included in the binary object).
+			/// @param[in] shouldUseExtendedStructureLabel `true` to use version 4 behavior, `false` to use earlier version behavior
+			void set_use_extended_structure_label(bool shouldUseExtendedStructureLabel);
+
 			/// @brief Defines the max length of the device structure label and device localization label (in bytes)
 			static constexpr std::size_t MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH = 7;
 
@@ -144,6 +157,7 @@ namespace isobus
 			std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> localizationLabel; ///< Label given by device to identify the device descriptor localization
 			std::vector<std::uint8_t> extendedStructureLabel; ///< Continuation of the Label given by Device to identify the Device descriptor Structure
 			std::uint64_t NAME; ///< The NAME of client device as defined in ISO 11783-5. MUST match your address claim
+			bool useExtendedStructureLabel; ///< Tells the device if it should generate binary info using the extended structure label or ignore it
 		};
 
 		/// @brief DeviceElementObject is the object definition of the XML element DeviceElement.

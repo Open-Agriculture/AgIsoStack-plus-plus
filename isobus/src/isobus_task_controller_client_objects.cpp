@@ -42,14 +42,16 @@ namespace isobus
 		                           std::string deviceStructureLabel,
 		                           std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> deviceLocalizationLabel,
 		                           std::vector<std::uint8_t> deviceExtendedStructureLabel,
-		                           std::uint64_t clientIsoNAME) :
+		                           std::uint64_t clientIsoNAME,
+		                           bool shouldUseExtendedStructureLabel) :
 		  Object(deviceDesignator, 0),
 		  serialNumber(deviceSerialNumber),
 		  softwareVersion(deviceSoftwareVersion),
 		  structureLabel(deviceStructureLabel),
 		  localizationLabel(deviceLocalizationLabel),
 		  extendedStructureLabel(deviceExtendedStructureLabel),
-		  NAME(clientIsoNAME)
+		  NAME(clientIsoNAME),
+		  useExtendedStructureLabel(shouldUseExtendedStructureLabel)
 		{
 		}
 
@@ -123,11 +125,14 @@ namespace isobus
 					retVal.push_back(' ');
 				}
 			}
-			//retVal.push_back(static_cast<std::uint8_t>(extendedStructureLabel.size()));
-			//for (std::size_t i = 0; i < extendedStructureLabel.size(); i++)
-			//{
-			//	retVal.push_back(extendedStructureLabel[i]);
-			//}
+			if (useExtendedStructureLabel)
+			{
+				retVal.push_back(static_cast<std::uint8_t>(extendedStructureLabel.size()));
+				for (std::size_t i = 0; i < extendedStructureLabel.size(); i++)
+				{
+					retVal.push_back(extendedStructureLabel[i]);
+				}
+			}
 			return retVal;
 		}
 
@@ -154,6 +159,16 @@ namespace isobus
 		std::uint64_t DeviceObject::get_iso_name() const
 		{
 			return NAME;
+		}
+
+		bool DeviceObject::get_use_extended_structure_label() const
+		{
+			return useExtendedStructureLabel;
+		}
+
+		void DeviceObject::set_use_extended_structure_label(bool shouldUseExtendedStructureLabel)
+		{
+			useExtendedStructureLabel = shouldUseExtendedStructureLabel;
 		}
 
 		const std::string DeviceElementObject::tableID = "DET";

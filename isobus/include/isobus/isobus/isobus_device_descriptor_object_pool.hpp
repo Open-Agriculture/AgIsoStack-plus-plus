@@ -115,6 +115,19 @@ namespace isobus
 		/// @returns Pointer to the object matching the provided ID, or nullptr if no match was found
 		std::weak_ptr<task_controller_object::Object> get_object_by_id(std::uint16_t objectID);
 
+		/// @brief Sets the TC version to use when generating a binary DDOP.
+		/// @note If you do not call this, TC version 4 is used by default
+		/// @param[in] tcVersion The version of TC you are targeting for this DDOP
+		void set_task_controller_compatibility_level(std::uint8_t tcVersion);
+
+		/// @brief Returns the current TC version used when generating a binary DDOP.
+		/// @returns the current TC version used when generating a binary DDOP.
+		std::uint8_t get_task_controller_compatibility_level() const;
+
+		/// @brief Returns The maximum TC version supported by the CAN stack's DDOP generator
+		/// @returns The maximum TC version supported by the CAN stack's DDOP generator
+		static std::uint8_t get_max_supported_task_controller_version();
+
 		/// @brief Clears the DDOP back to an empty state
 		void clear();
 

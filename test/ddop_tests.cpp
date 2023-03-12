@@ -157,6 +157,9 @@ TEST(DDOP_TESTS, DeviceTests)
 	// Test object type
 	EXPECT_EQ(tempPD->get_object_type(), task_controller_object::ObjectTypes::Device);
 
+	// Test extended label is ignored on v3
+	EXPECT_EQ(false, std::static_pointer_cast<task_controller_object::DeviceObject>(tempPD)->get_use_extended_structure_label());
+
 	EXPECT_EQ(true, testDDOPVersion4.add_device("This is an even longer designator that should get truncated ideally to 128 characters in length but in reality not very many TCs will support this kind of long designator", "1.0.0", "198sdbfaysdfafg987egrn9a87werhiyuawn23", "I++1.0", testLanguageInterface.get_localization_raw_data(), veryLongExtendedStructureLabel, 0));
 
 	// Test that the Device Designator was truncated to 128
@@ -170,7 +173,10 @@ TEST(DDOP_TESTS, DeviceTests)
 	// Test structure label is truncated and not empty
 	EXPECT_EQ(std::static_pointer_cast<task_controller_object::DeviceObject>(tempPD)->get_extended_structure_label().size(), 32);
 
-	EXPECT_EQ(true, testDDOPVersion4_2.add_device("This is a long designator that is larger than 32 but smaller than 128, which should warn the user but be tolerated", "1.0.0", "1211111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111113", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	// Add an extended structure label to this one
+	std::vector<std::uint8_t> testExtendedLabel = { 'T', 'E', 'S', 'T' };
+
+	EXPECT_EQ(true, testDDOPVersion4_2.add_device("This is a long designator that is larger than 32 but smaller than 128, which should warn the user but be tolerated", "1.0.0", "1211111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111113", "I++1.0", testLanguageInterface.get_localization_raw_data(), testExtendedLabel, 0));
 
 	// Test that the Device Designator allowed
 	tempPD = testDDOPVersion4_2.get_object_by_id(0).lock();
@@ -184,6 +190,17 @@ TEST(DDOP_TESTS, DeviceTests)
 	EXPECT_NE(true, testDDOPVersion4_2.add_device("This is a long designator that is larger than 32 but smaller than 128, which should warn the user but be tolerated", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 
 	EXPECT_EQ(tempPD->get_table_id(), "DVC");
+
+	// Check extended structure label used in version 4
+	EXPECT_EQ(testDDOPVersion4_2.get_task_controller_compatibility_level(), 4);
+	EXPECT_EQ(true, std::static_pointer_cast<task_controller_object::DeviceObject>(tempPD)->get_use_extended_structure_label());
+
+	// Try to lower the compatibility level to 3
+	testDDOPVersion4_2.set_task_controller_compatibility_level(3);
+	EXPECT_EQ(testDDOPVersion4_2.get_task_controller_compatibility_level(), 3);
+	EXPECT_EQ(false, std::static_pointer_cast<task_controller_object::DeviceObject>(tempPD)->get_use_extended_structure_label());
+
+	EXPECT_EQ(testDDOPVersion4_2.get_max_supported_task_controller_version(), 4);
 }
 
 TEST(DDOP_TESTS, DeviceElementDesignatorTests)

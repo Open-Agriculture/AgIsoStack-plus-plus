@@ -216,7 +216,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	ASSERT_EQ(testFrame.dataLength, 8);
 	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
 	EXPECT_EQ(0x10, testFrame.data[0]); // Mux
-	EXPECT_EQ(0x03, testFrame.data[1]); // Version ///!todo fix version
+	EXPECT_EQ(0x04, testFrame.data[1]); // Version (4 - Second Edition)
 	EXPECT_EQ(0xFF, testFrame.data[2]); // Must be 0xFF
 	EXPECT_EQ(0x00, testFrame.data[3]); // Options
 	EXPECT_EQ(0x00, testFrame.data[4]); // Must be zero
@@ -233,7 +233,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	ASSERT_EQ(testFrame.dataLength, 8);
 	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xCB00);
 	EXPECT_EQ(0x10, testFrame.data[0]); // Mux
-	EXPECT_EQ(0x03, testFrame.data[1]); // Version ///!todo fix version
+	EXPECT_EQ(0x04, testFrame.data[1]); // Version (4 - Second Edition)
 	EXPECT_EQ(0xFF, testFrame.data[2]); // Must be 0xFF
 	EXPECT_EQ(0x1F, testFrame.data[3]); // Options
 	EXPECT_EQ(0x00, testFrame.data[4]); // Must be zero

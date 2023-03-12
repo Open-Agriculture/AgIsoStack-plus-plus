@@ -353,6 +353,14 @@ namespace isobus
 			case StateMachineState::ProcessDDOP:
 			{
 				assert(0 != clientDDOP->size()); // Need to have a valid object pool!
+
+				if (serverVersion < clientDDOP->get_task_controller_compatibility_level())
+				{
+					clientDDOP->set_task_controller_compatibility_level(serverVersion); // Manipulate the DDOP slightly if needed to upload a version compatible DDOP
+					CANStackLogger::info("[TC]: DDOP will be generated using the server's version instead of the specified version. New version: " +
+					                     isobus::to_string(static_cast<int>(serverVersion)));
+				}
+
 				if (binaryDDOP.empty())
 				{
 					// Binary DDOP has not been generated before.
@@ -1547,7 +1555,7 @@ namespace isobus
 	bool TaskControllerClient::send_request_version_response() const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { (static_cast<std::uint8_t>(TechnicalDataMessageCommands::ParameterVersion) << 4),
-			                                                         static_cast<std::uint8_t>(Version::SecondEditionDraft),
+			                                                         static_cast<std::uint8_t>(Version::SecondPublishedEdition),
 			                                                         0xFF, // Must be 0xFF when a client sends it (boot time)
 			                                                         static_cast<std::uint8_t>(static_cast<std::uint8_t>(supportsDocumentation) |
 			                                                                                   (static_cast<std::uint8_t>(supportsTCGEOWithoutPositionBasedControl) << 1) |
