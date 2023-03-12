@@ -116,7 +116,8 @@ if(BUILD_TESTING)
       test/vt_client_tests.cpp
       test/language_command_interface_tests.cpp
       test/tc_client_tests.cpp
-      test/ddop_tests.cpp)
+      test/ddop_tests.cpp
+      test/event_dispatcher_tests.cpp)
 
   add_executable(unit_tests ${TEST_SRC})
   target_link_libraries(

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <unordered_map>
 
@@ -130,192 +131,64 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::register_vt_soft_key_event_callback(VTKeyEventCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_soft_key_event_listener(std::function<void(const VTKeyEvent &)> callback)
 	{
-		softKeyEventCallbacks.push_back(value);
+		return softKeyEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::remove_vt_soft_key_event_callback(VTKeyEventCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_button_event_listener(std::function<void(const VTKeyEvent &)> callback)
 	{
-		auto callbackLocation = std::find(softKeyEventCallbacks.begin(), softKeyEventCallbacks.end(), value);
-
-		if (softKeyEventCallbacks.end() != callbackLocation)
-		{
-			softKeyEventCallbacks.erase(callbackLocation);
-		}
+		return buttonEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::register_vt_button_event_callback(VTKeyEventCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_pointing_event_listener(std::function<void(const VTPointingEvent &)> callback)
 	{
-		buttonEventCallbacks.push_back(value);
+		return pointingEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::remove_vt_button_event_callback(VTKeyEventCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_select_input_object_event_listener(std::function<void(const VTSelectInputObjectEvent &)> callback)
 	{
-		auto callbackLocation = std::find(buttonEventCallbacks.begin(), buttonEventCallbacks.end(), value);
-
-		if (buttonEventCallbacks.end() != callbackLocation)
-		{
-			buttonEventCallbacks.erase(callbackLocation);
-		}
+		return selectInputObjectEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::register_vt_pointing_event_callback(VTPointingEventCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_esc_message_event_listener(std::function<void(const VTESCMessageEvent &)> callback)
 	{
-		pointingEventCallbacks.push_back(value);
+		return escMessageEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::remove_vt_pointing_event_callback(VTPointingEventCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_numeric_value_event_listener(std::function<void(const VTChangeNumericValueEvent &)> callback)
 	{
-		auto callbackLocation = std::find(pointingEventCallbacks.begin(), pointingEventCallbacks.end(), value);
-
-		if (pointingEventCallbacks.end() != callbackLocation)
-		{
-			pointingEventCallbacks.erase(callbackLocation);
-		}
+		return changeNumericValueEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::register_vt_select_input_object_event_callback(VTSelectInputObjectCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_active_mask_event_listener(std::function<void(const VTChangeActiveMaskEvent &)> callback)
 	{
-		selectInputObjectCallbacks.push_back(value);
+		return changeActiveMaskEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::remove_vt_selection_input_object_event_callback(VTSelectInputObjectCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_soft_key_mask_event_listener(std::function<void(const VTChangeSoftKeyMaskEvent &)> callback)
 	{
-		auto callbackLocation = std::find(selectInputObjectCallbacks.begin(), selectInputObjectCallbacks.end(), value);
-
-		if (selectInputObjectCallbacks.end() != callbackLocation)
-		{
-			selectInputObjectCallbacks.erase(callbackLocation);
-		}
+		return changeSoftKeyMaskEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::register_vt_esc_message_event_callback(VTESCMessageCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_string_value_event_listener(std::function<void(const VTChangeStringValueEvent &)> callback)
 	{
-		escMessageCallbacks.push_back(value);
+		return changeStringValueEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::remove_vt_esc_message_event_callback(VTESCMessageCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_user_layout_hide_show_event_listener(std::function<void(const VTUserLayoutHideShowEvent &)> callback)
 	{
-		auto callbackLocation = std::find(escMessageCallbacks.begin(), escMessageCallbacks.end(), value);
-
-		if (escMessageCallbacks.end() != callbackLocation)
-		{
-			escMessageCallbacks.erase(callbackLocation);
-		}
+		return userLayoutHideShowEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::register_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_vt_control_audio_signal_termination_event_listener(std::function<void(const VTAudioSignalTerminationEvent &)> callback)
 	{
-		changeNumericValueCallbacks.push_back(value);
+		return audioSignalTerminationEventDispatcher.add_listener(callback);
 	}
 
-	void VirtualTerminalClient::remove_vt_change_numeric_value_event_callback(VTChangeNumericValueCallback value)
+	std::shared_ptr<void> VirtualTerminalClient::add_auxiliary_function_event_listener(std::function<void(const AuxiliaryFunctionEvent &)> callback)
 	{
-		auto callbackLocation = std::find(changeNumericValueCallbacks.begin(), changeNumericValueCallbacks.end(), value);
-
-		if (changeNumericValueCallbacks.end() != callbackLocation)
-		{
-			changeNumericValueCallbacks.erase(callbackLocation);
-		}
-	}
-
-	void VirtualTerminalClient::register_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value)
-	{
-		changeActiveMaskCallbacks.push_back(value);
-	}
-
-	void VirtualTerminalClient::remove_vt_change_active_mask_event_callback(VTChangeActiveMaskCallback value)
-	{
-		auto callbackLocation = std::find(changeActiveMaskCallbacks.begin(), changeActiveMaskCallbacks.end(), value);
-
-		if (changeActiveMaskCallbacks.end() != callbackLocation)
-		{
-			changeActiveMaskCallbacks.erase(callbackLocation);
-		}
-	}
-
-	void VirtualTerminalClient::register_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value)
-	{
-		changeSoftKeyMaskCallbacks.push_back(value);
-	}
-
-	void VirtualTerminalClient::remove_vt_change_soft_key_mask_event_callback(VTChangeSoftKeyMaskCallback value)
-	{
-		auto callbackLocation = std::find(changeSoftKeyMaskCallbacks.begin(), changeSoftKeyMaskCallbacks.end(), value);
-
-		if (changeSoftKeyMaskCallbacks.end() != callbackLocation)
-		{
-			changeSoftKeyMaskCallbacks.erase(callbackLocation);
-		}
-	}
-
-	void VirtualTerminalClient::register_vt_change_string_value_event_callback(VTChangeStringValueCallback value)
-	{
-		changeStringValueCallbacks.push_back(value);
-	}
-
-	void VirtualTerminalClient::remove_vt_change_string_value_event_callback(VTChangeStringValueCallback value)
-	{
-		auto callbackLocation = std::find(changeStringValueCallbacks.begin(), changeStringValueCallbacks.end(), value);
-
-		if (changeStringValueCallbacks.end() != callbackLocation)
-		{
-			changeStringValueCallbacks.erase(callbackLocation);
-		}
-	}
-
-	void VirtualTerminalClient::register_vt_user_layout_hide_show_event_callback(VTUserLayoutHideShowCallback value)
-	{
-		userLayoutHideShowCallbacks.push_back(value);
-	}
-
-	void VirtualTerminalClient::remove_vt_user_layout_hide_show_callback(VTUserLayoutHideShowCallback value)
-	{
-		auto callbackLocation = std::find(userLayoutHideShowCallbacks.begin(), userLayoutHideShowCallbacks.end(), value);
-
-		if (userLayoutHideShowCallbacks.end() != callbackLocation)
-		{
-			userLayoutHideShowCallbacks.erase(callbackLocation);
-		}
-	}
-
-	void VirtualTerminalClient::register_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value)
-	{
-		audioSignalTerminationCallbacks.push_back(value);
-	}
-
-	void VirtualTerminalClient::remove_vt_control_audio_signal_termination_event_callback(VTAudioSignalTerminationCallback value)
-	{
-		auto callbackLocation = std::find(audioSignalTerminationCallbacks.begin(), audioSignalTerminationCallbacks.end(), value);
-
-		if (audioSignalTerminationCallbacks.end() != callbackLocation)
-		{
-			audioSignalTerminationCallbacks.erase(callbackLocation);
-		}
-	}
-
-	void VirtualTerminalClient::register_auxiliary_function_event_callback(AuxiliaryFunctionCallback value)
-	{
-		if (state == StateMachineState::Disconnected)
-		{
-			auxiliaryFunctionCallbacks.push_back(value);
-		}
-		else
-		{
-			// Limitation right now due to the preferred assignment command relying on the presence of auxiliary function callbacks
-			CANStackLogger::error("[AUX-N] Error registering auxiliary function callback... can only be done when disconnected");
-		}
-	}
-
-	void VirtualTerminalClient::remove_auxiliary_function_event_callback(AuxiliaryFunctionCallback value)
-	{
-		auto callbackLocation = std::find(auxiliaryFunctionCallbacks.begin(), auxiliaryFunctionCallbacks.end(), value);
-
-		if (auxiliaryFunctionCallbacks.end() != callbackLocation)
-		{
-			auxiliaryFunctionCallbacks.erase(callbackLocation);
-		}
+		return auxiliaryFunctionEventDispatcher.add_listener(callback);
 	}
 
 	void VirtualTerminalClient::set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode)
@@ -2597,168 +2470,6 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::process_button_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->buttonEventCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->buttonEventCallbacks[i])
-			{
-				parentPointer->buttonEventCallbacks[i](keyEvent, keyNumber, objectID, parentObjectID, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_softkey_event_callback(KeyActivationCode keyEvent, std::uint8_t keyNumber, std::uint16_t objectID, std::uint16_t parentObjectID, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->softKeyEventCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->softKeyEventCallbacks[i])
-			{
-				parentPointer->softKeyEventCallbacks[i](keyEvent, keyNumber, objectID, parentObjectID, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_pointing_event_callback(KeyActivationCode keyEvent,
-	                                                            std::uint16_t xPosition,
-	                                                            std::uint16_t yPosition,
-	                                                            std::uint16_t parentMaskObjectID,
-	                                                            VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->pointingEventCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->pointingEventCallbacks[i])
-			{
-				parentPointer->pointingEventCallbacks[i](keyEvent, xPosition, yPosition, parentMaskObjectID, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_select_input_object_callback(std::uint16_t objectID, bool objectSelected, bool objectOpenForInput, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->selectInputObjectCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->selectInputObjectCallbacks[i])
-			{
-				parentPointer->selectInputObjectCallbacks[i](objectID, objectSelected, objectOpenForInput, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_esc_message_callback(std::uint16_t objectID, ESCMessageErrorCode errorCode, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->escMessageCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->escMessageCallbacks[i])
-			{
-				parentPointer->escMessageCallbacks[i](objectID, errorCode, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_change_numeric_value_callback(std::uint16_t objectID, std::uint32_t value, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->changeNumericValueCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->changeNumericValueCallbacks[i])
-			{
-				parentPointer->changeNumericValueCallbacks[i](objectID, value, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_change_active_mask_callback(std::uint16_t maskObjectID,
-	                                                                std::uint16_t errorObjectID,
-	                                                                std::uint16_t parentObjectID,
-	                                                                bool missingObjects,
-	                                                                bool maskOrChildHasErrors,
-	                                                                bool anyOtherEror,
-	                                                                bool poolDeleted,
-	                                                                VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->changeActiveMaskCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->changeActiveMaskCallbacks[i])
-			{
-				parentPointer->changeActiveMaskCallbacks[i](maskObjectID,
-				                                            errorObjectID,
-				                                            parentObjectID,
-				                                            missingObjects,
-				                                            maskOrChildHasErrors,
-				                                            anyOtherEror,
-				                                            poolDeleted,
-				                                            parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_change_soft_key_mask_callback(std::uint16_t dataOrAlarmMaskObjectID,
-	                                                                  std::uint16_t softKeyMaskObjectID,
-	                                                                  bool missingObjects,
-	                                                                  bool maskOrChildHasErrors,
-	                                                                  bool anyOtherEror,
-	                                                                  bool poolDeleted,
-	                                                                  VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->changeSoftKeyMaskCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->changeSoftKeyMaskCallbacks[i])
-			{
-				parentPointer->changeSoftKeyMaskCallbacks[i](dataOrAlarmMaskObjectID,
-				                                             softKeyMaskObjectID,
-				                                             missingObjects,
-				                                             maskOrChildHasErrors,
-				                                             anyOtherEror,
-				                                             poolDeleted,
-				                                             parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_change_string_value_callback(std::uint16_t objectID, std::string value, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->changeStringValueCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->changeStringValueCallbacks[i])
-			{
-				parentPointer->changeStringValueCallbacks[i](objectID, value, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_user_layout_hide_show_callback(std::uint16_t objectID, bool isHidden, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->userLayoutHideShowCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->userLayoutHideShowCallbacks[i])
-			{
-				parentPointer->userLayoutHideShowCallbacks[i](objectID, isHidden, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_audio_signal_termination_callback(bool isTerminated, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->audioSignalTerminationCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->audioSignalTerminationCallbacks[i])
-			{
-				parentPointer->audioSignalTerminationCallbacks[i](isTerminated, parentPointer);
-			}
-		}
-	}
-
-	void VirtualTerminalClient::process_auxiliary_input_callback(AssignedAuxiliaryFunction function, std::uint32_t value1, std::uint32_t value2, VirtualTerminalClient *parentPointer)
-	{
-		for (std::size_t i = 0; i < parentPointer->auxiliaryFunctionCallbacks.size(); i++)
-		{
-			if (nullptr != parentPointer->auxiliaryFunctionCallbacks[i])
-			{
-				parentPointer->auxiliaryFunctionCallbacks[i](function, value1, value2, parentPointer);
-			}
-		}
-	}
-
 	void VirtualTerminalClient::process_flags(std::uint32_t flag, void *parent)
 	{
 		if ((flag <= static_cast<std::uint32_t>(TransmitFlags::NumberFlags)) &&
@@ -2849,7 +2560,7 @@ namespace isobus
 									//! @todo process TAN
 								}
 
-								parentVT->process_softkey_event_callback(static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT);
+								parentVT->softKeyEventDispatcher.invoke({ static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT });
 							}
 						}
 						break;
@@ -2866,7 +2577,7 @@ namespace isobus
 								{
 									//! @todo process TAN
 								}
-								parentVT->process_button_event_callback(static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT);
+								parentVT->buttonEventDispatcher.invoke({ static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT });
 							}
 						}
 						break;
@@ -2893,11 +2604,7 @@ namespace isobus
 
 							if (touchState <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
-								parentVT->process_pointing_event_callback(static_cast<KeyActivationCode>(touchState),
-								                                          xPosition,
-								                                          yPosition,
-								                                          partenMaskObjectID,
-								                                          parentVT);
+								parentVT->pointingEventDispatcher.invoke({ static_cast<KeyActivationCode>(touchState), xPosition, yPosition, partenMaskObjectID, parentVT });
 							}
 						}
 						break;
@@ -2918,7 +2625,7 @@ namespace isobus
 								//! @todo process TAN
 							}
 
-							parentVT->process_select_input_object_callback(objectID, objectSelected, objectOpenForInput, parentVT);
+							parentVT->selectInputObjectEventDispatcher.invoke({ objectID, objectSelected, objectOpenForInput, parentVT });
 						}
 						break;
 
@@ -2934,7 +2641,7 @@ namespace isobus
 									//! @todo process TAN
 								}
 
-								parentVT->process_esc_message_callback(objectID, static_cast<ESCMessageErrorCode>(errorCode), parentVT);
+								parentVT->escMessageEventDispatcher.invoke({ objectID, static_cast<ESCMessageErrorCode>(errorCode), parentVT });
 							}
 						}
 						break;
@@ -2948,7 +2655,7 @@ namespace isobus
 							{
 								//! @todo process TAN
 							}
-							parentVT->process_change_numeric_value_callback(objectID, value, parentVT);
+							parentVT->changeNumericValueEventDispatcher.invoke({ objectID, value, parentVT });
 						}
 						break;
 
@@ -2964,14 +2671,14 @@ namespace isobus
 							std::uint16_t errorObjectID = message->get_uint16_at(4);
 							std::uint16_t parentObjectID = message->get_uint16_at(6);
 
-							parentVT->process_change_active_mask_callback(maskObjectID,
-							                                              errorObjectID,
-							                                              parentObjectID,
-							                                              missingObjects,
-							                                              maskOrChildHasErrors,
-							                                              anyOtherError,
-							                                              poolDeleted,
-							                                              parentVT);
+							parentVT->changeActiveMaskEventDispatcher.invoke({ maskObjectID,
+							                                                   errorObjectID,
+							                                                   parentObjectID,
+							                                                   missingObjects,
+							                                                   maskOrChildHasErrors,
+							                                                   anyOtherError,
+							                                                   poolDeleted,
+							                                                   parentVT });
 						}
 						break;
 
@@ -2985,13 +2692,13 @@ namespace isobus
 							bool anyOtherError = message->get_bool_at(5, 4);
 							bool poolDeleted = message->get_bool_at(5, 5);
 
-							parentVT->process_change_soft_key_mask_callback(dataOrAlarmMaskID,
-							                                                softKeyMaskID,
-							                                                missingObjects,
-							                                                maskOrChildHasErrors,
-							                                                anyOtherError,
-							                                                poolDeleted,
-							                                                parentVT);
+							parentVT->changeSoftKeyMaskEventDispatcher.invoke({ dataOrAlarmMaskID,
+							                                                    softKeyMaskID,
+							                                                    missingObjects,
+							                                                    maskOrChildHasErrors,
+							                                                    anyOtherError,
+							                                                    poolDeleted,
+							                                                    parentVT });
 						}
 						break;
 
@@ -3001,7 +2708,7 @@ namespace isobus
 							std::uint8_t stringLength = message->get_uint8_at(3);
 							std::string value = std::string(message->get_data().begin() + 4, message->get_data().begin() + 4 + stringLength);
 
-							parentVT->process_change_string_value_callback(objectID, value, parentVT);
+							parentVT->changeStringValueEventDispatcher.invoke({ objectID, value, parentVT });
 						}
 						break;
 
@@ -3010,14 +2717,14 @@ namespace isobus
 							std::uint16_t objectID = message->get_uint16_at(1);
 							bool hidden = !message->get_bool_at(3, 0);
 
-							parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
+							parentVT->userLayoutHideShowEventDispatcher.invoke({ objectID, hidden, parentVT });
 
 							// There could be two layout messages in one packet
 							objectID = message->get_uint16_at(4);
 							if (objectID != NULL_OBJECT_ID)
 							{
 								hidden = !message->get_bool_at(6, 0);
-								parentVT->process_user_layout_hide_show_callback(objectID, hidden, parentVT);
+								parentVT->userLayoutHideShowEventDispatcher.invoke({ objectID, hidden, parentVT });
 							}
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
@@ -3031,7 +2738,7 @@ namespace isobus
 						{
 							bool terminated = message->get_bool_at(1, 0);
 
-							parentVT->process_audio_signal_termination_callback(terminated, parentVT);
+							parentVT->audioSignalTerminationEventDispatcher.invoke({ terminated, parentVT });
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
@@ -3192,7 +2899,7 @@ namespace isobus
 								});
 								if (aux.functions.end() != result)
 								{
-									parentVT->process_auxiliary_input_callback(*result, value1, value2, parentVT);
+									parentVT->auxiliaryFunctionEventDispatcher.invoke({ *result, value1, value2, parentVT });
 								}
 							}
 						}
@@ -3398,7 +3105,7 @@ namespace isobus
 									parentVT->set_state(StateMachineState::Connected);
 
 									//! @todo maybe a better way available than relying on aux function callbacks registered?
-									if (!parentVT->auxiliaryFunctionCallbacks.empty())
+									if (parentVT->auxiliaryFunctionEventDispatcher.get_listener_count() > 0)
 									{
 										if (parentVT->send_auxiliary_functions_preferred_assignment())
 										{
@@ -3522,7 +3229,7 @@ namespace isobus
 										parentVT->set_state(StateMachineState::Connected);
 									}
 									//! @todo maybe a better way available than relying on aux function callbacks registered?
-									if (!parentVT->auxiliaryFunctionCallbacks.empty())
+									if (parentVT->auxiliaryFunctionEventDispatcher.get_listener_count() > 0)
 									{
 										if (parentVT->send_auxiliary_functions_preferred_assignment())
 										{

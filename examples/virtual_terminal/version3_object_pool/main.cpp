@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <functional>
 #include <iostream>
 #include <memory>
 
@@ -35,15 +36,15 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 }
 
 // This callback will provide us with event driven notifications of button presses from the stack
-void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, std::uint8_t, std::uint16_t objectID, std::uint16_t, isobus::VirtualTerminalClient *)
+void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {
 	static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
 
-	switch (keyEvent)
+	switch (event.keyEvent)
 	{
 		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
 		{
-			switch (objectID)
+			switch (event.objectID)
 			{
 				case Plus_Button:
 				{
@@ -152,8 +153,8 @@ int main()
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
-	TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
-	TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
+	auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
+	auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
 	TestVirtualTerminalClient->initialize(true);
 
 	while (running)
