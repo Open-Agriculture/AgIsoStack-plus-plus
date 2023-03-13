@@ -40,12 +40,12 @@ namespace isobus
 		/// @param context The context object to pass through to the callback.
 		/// @return A shared pointer to the contextless callback.
 		template<typename C>
-		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &..., const C &)> &callback, std::weak_ptr<C> context)
+		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &..., std::shared_ptr<C>)> &callback, std::weak_ptr<C> context)
 		{
 			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
 				if (auto contextPtr = context.lock())
 				{
-					callback(args..., *contextPtr);
+					callback(args..., contextPtr);
 				}
 			};
 			return add_listener(callbackWrapper);
