@@ -77,9 +77,9 @@ TEST(EVENT_DISPATCHER_TESTS, InvokeContextEvent)
 	EventDispatcher<bool> dispatcher;
 
 	int count = 0;
-	std::function<void(const bool &, const int &)> callback = [&count](bool value, int context) {
+	std::function<void(const bool &, std::shared_ptr<int>)> callback = [&count](bool value, std::shared_ptr<int> context) {
 		ASSERT_TRUE(value);
-		ASSERT_EQ(context, 42);
+		ASSERT_EQ(*context, 42);
 		count += 1;
 	};
 	auto context = std::make_shared<int>(42);
