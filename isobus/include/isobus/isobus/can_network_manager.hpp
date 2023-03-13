@@ -8,8 +8,8 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#ifndef CAN_NETWORK_MANAGER
-#define CAN_NETWORK_MANAGER
+#ifndef CAN_NETWORK_MANAGER_HPP
+#define CAN_NETWORK_MANAGER_HPP
 
 #include "isobus/isobus/can_address_claim_state_machine.hpp"
 #include "isobus/isobus/can_badge.hpp"
@@ -115,8 +115,7 @@ namespace isobus
 
 		/// @brief Process the CAN Rx queue
 		/// @param[in] rxFrame Frame to process
-		/// @param[in] parentClass A generic context variable
-		static void can_lib_process_rx_message(HardwareInterfaceCANFrame &rxFrame, void *parentClass);
+		static void process_receive_can_message_frame(const HardwareInterfaceCANFrame &rxFrame);
 
 		/// @brief Informs the network manager that a partner was deleted so that it can be purged from the address/cf tables
 		/// @param[in] partner Pointer to the partner being deleted
@@ -185,7 +184,7 @@ namespace isobus
 
 		/// @brief Creates new control function classes based on the frames coming in from the bus
 		/// @param[in] rxFrame Raw frames coming in from the bus
-		void update_control_functions(HardwareInterfaceCANFrame &rxFrame);
+		void update_control_functions(const HardwareInterfaceCANFrame &rxFrame);
 
 		/// @brief Checks if new partners have been created and matches them to existing control functions
 		void update_new_partners();
@@ -278,4 +277,4 @@ namespace isobus
 
 } // namespace isobus
 
-#endif // CAN_NETWORK_MANAGER
+#endif // CAN_NETWORK_MANAGER_HPP

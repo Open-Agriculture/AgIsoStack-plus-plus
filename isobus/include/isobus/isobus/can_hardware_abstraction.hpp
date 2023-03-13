@@ -7,8 +7,8 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#ifndef CAN_HARDWARE_ABSTRACTION
-#define CAN_HARDWARE_ABSTRACTION
+#ifndef CAN_HARDWARE_ABSTRACTION_HPP
+#define CAN_HARDWARE_ABSTRACTION_HPP
 
 #include "isobus/isobus/can_frame.hpp"
 
@@ -16,10 +16,17 @@
 
 namespace isobus
 {
-	/// @brief The abstraction layer between the hardware and the stack
+	/// @brief The sending abstraction layer between the hardware and the stack
 	/// @param[in] frame The frame to transmit from the hardware
-	bool send_can_message_to_hardware(HardwareInterfaceCANFrame frame);
+	bool send_can_message_frame_to_hardware(const HardwareInterfaceCANFrame &frame);
+
+	/// @brief The receiving abstraction layer between the hardware and the stack
+	/// @param[in] frame The frame to receive from the hardware
+	void receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &frame);
+
+	/// @brief The periodic update abstraction layer between the hardware and the stack
+	void periodic_update_from_hardware();
 
 } // namespace isobus
 
-#endif // CAN_HARDWARE_ABSTRACTION
+#endif // CAN_HARDWARE_ABSTRACTION_HPP

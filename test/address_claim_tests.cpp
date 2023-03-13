@@ -22,17 +22,6 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	CANHardwareInterface::assign_can_channel_frame_handler(1, secondDevice);
 	CANHardwareInterface::start();
 
-	CANHardwareInterface::add_can_lib_update_callback(
-	  [](void *) {
-		  CANNetworkManager::CANNetwork.update();
-	  },
-	  nullptr);
-	CANHardwareInterface::add_raw_can_message_rx_callback(
-	  [](HardwareInterfaceCANFrame &rxFrame, void *parentPointer) {
-		  CANNetworkManager::CANNetwork.can_lib_process_rx_message(rxFrame, parentPointer);
-	  },
-	  nullptr);
-
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	NAME firstName(0);
