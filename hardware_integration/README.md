@@ -20,7 +20,7 @@ Let's discuss how these components work. Then, we'll go over how you can write y
 The CAN stack relies on a couple of functions being defined externally to function. This boundary keeps the core stack completely isolated from the hardware layer. Thus, the content of the `isobus` folder can function entirely on its own if that meets your needs better than using the built in hardware interface layer.
 These functions are:
 
-* `bool send_can_message_to_hardware(HardwareInterfaceCANFrame frame);`
+* `bool send_can_message_frame_to_hardware(const HardwareInterfaceCANFrame &frame);`
 	- This is how the CAN stack will send a frame to the actual hardware.
 	- This is already defined in `CANHardwareInterface` and wraps the actual CAN driver calls.
 	- `CANHardwareInterface` Stores these frames in a queue that will be fed to your underlying CAN driver.

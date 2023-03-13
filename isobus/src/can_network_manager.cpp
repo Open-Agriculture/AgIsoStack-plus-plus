@@ -250,7 +250,17 @@ namespace isobus
 		return retVal;
 	}
 
-	void CANNetworkManager::can_lib_process_rx_message(HardwareInterfaceCANFrame &rxFrame, void *)
+	void isobus::receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &rxFrame)
+	{
+		CANNetworkManager::process_receive_can_message_frame(rxFrame);
+	}
+
+	void isobus::periodic_update_from_hardware()
+	{
+		CANNetworkManager::CANNetwork.update();
+	}
+
+	void CANNetworkManager::process_receive_can_message_frame(const HardwareInterfaceCANFrame &rxFrame)
 	{
 		CANLibManagedMessage tempCANMessage(rxFrame.channel);
 
@@ -428,7 +438,7 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::update_control_functions(HardwareInterfaceCANFrame &rxFrame)
+	void CANNetworkManager::update_control_functions(const HardwareInterfaceCANFrame &rxFrame)
 	{
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
@@ -764,7 +774,7 @@ namespace isobus
 		if ((DEFAULT_IDENTIFIER != tempFrame.identifier) &&
 		    (portIndex < CAN_PORT_MAXIMUM))
 		{
-			retVal = send_can_message_to_hardware(tempFrame);
+			retVal = send_can_message_frame_to_hardware(tempFrame);
 		}
 		return retVal;
 	}

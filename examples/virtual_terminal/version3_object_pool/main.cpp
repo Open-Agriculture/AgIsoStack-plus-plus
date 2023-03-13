@@ -30,11 +30,6 @@ void update_CAN_network(void *)
 	isobus::CANNetworkManager::CANNetwork.update();
 }
 
-void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-{
-	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-}
-
 // This callback will provide us with event driven notifications of button presses from the stack
 void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {
@@ -113,9 +108,6 @@ int main()
 		std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
 		return -2;
 	}
-
-	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-	CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 

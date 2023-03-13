@@ -21,6 +21,7 @@
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
+#include "isobus/utility/event_dispatcher.hpp"
 
 //================================================================================================
 /// @class CANHardwareInterface
@@ -69,65 +70,36 @@ public:
 	/// @returns `true` if the threads were stopped, otherwise `false`
 	static bool stop();
 
+	/// @brief Checks if the CAN stack and CAN drivers are running
+	/// @returns `true` if the threads are running, otherwise `false`
+	static bool is_running();
+
 	/// @brief Called externally, adds a message to a CAN channel's Tx queue
 	/// @param[in] packet The packet to add to the Tx queue
 	/// @returns `true` if the packet was accepted, otherwise `false` (maybe wrong channel assigned)
 	static bool transmit_can_message(const isobus::HardwareInterfaceCANFrame &packet);
 
-	/// @brief Adds an Rx callback. The added callback will be called any time a CAN message is received.
-	/// @param[in] callback The callback to add
-	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
-	/// @returns `true` if the callback was added, `false` if it was already in the list
-	static bool add_raw_can_message_rx_callback(void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer), void *parentPointer);
+	/// @brief Get the event dispatcher for when a CAN message frame is received from hardware event
+	/// @returns The event dispatcher which can be used to register callbacks/listeners to
+	static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> &get_can_frame_received_event_dispatcher();
 
-	/// @brief Removes a Rx callback
-	/// @param[in] callback The callback to remove
-	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
-	/// @returns `true` if the callback was removed, `false` if no callback matched the two parameters
-	static bool remove_raw_can_message_rx_callback(void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer), void *parentPointer);
+	/// @brief Get the event dispatcher for when a CAN message frame will be send to hardware event
+	/// @returns The event dispatcher which can be used to register callbacks/listeners to
+	static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> &get_can_frame_transmitted_event_dispatcher();
 
-	/// @brief Set the period between calls to the can lib update callback in milliseconds
-	/// @param[in] value The period between update calls in milliseconds
-	/// @note All changes to the update delay will be ignored if `start` has been called and the threads are running
-	static void set_can_driver_update_period(std::uint32_t value);
+	/// @brief Get the event dispatcher for when a periodic update is called
+	/// @returns The event dispatcher which can be used to register callbacks/listeners to
+	static isobus::EventDispatcher<> &get_periodic_update_event_dispatcher();
 
-	/// @brief Adds a periodic update callback
-	/// @param[in] callback The callback to add
-	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
-	/// @returns `true` if the callback was added, `false` if it was already in the list
-	static bool add_can_lib_update_callback(void (*callback)(void *parentPointer), void *parentPointer);
+	/// @brief Set the interval between periodic updates
+	/// @param[in] value The interval between update calls in milliseconds
+	static void set_periodic_update_interval(std::uint32_t value);
 
-	/// @brief Removes a periodic update callback
-	/// @param[in] callback The callback to remove
-	/// @param[in] parentPointer Generic context variable, usually a pointer to the owner class for this callback
-	/// @returns `true` if the callback was removed, `false` if no callback matched the two parameters
-	static bool remove_can_lib_update_callback(void (*callback)(void *parentPointer), void *parentPointer);
+	/// @brief Get the interval between periodic updates
+	/// @returns The interval between update calls in milliseconds
+	static std::uint32_t get_periodic_update_interval();
 
 private:
-	/// @brief A class to store information about CAN lib update callbacks
-	class CanLibUpdateCallbackInfo
-	{
-	public:
-		/// @brief Allows easy comparison of callback data
-		/// @param obj the object to compare against
-		bool operator==(const CanLibUpdateCallbackInfo &obj) const;
-
-		void (*callback)(void *parentPointer) = nullptr; ///< The callback
-		void *parent = nullptr; ///< Context variable, the owner of the callback
-	};
-
-	/// @brief A class to store information about Rx callbacks
-	class RawCanMessageCallbackInfo
-	{
-	public:
-		/// @brief Allows easy comparison of callback data
-		/// @param obj the object to compare against
-		bool operator==(const RawCanMessageCallbackInfo &obj) const;
-
-		void (*callback)(isobus::HardwareInterfaceCANFrame &rxFrame, void *parentPointer) = nullptr; ///< The callback
-		void *parent = nullptr; ///< Context variable, the owner of the callback
-	};
-
 	/// @brief Stores the Tx/Rx queues, mutexes, and driver needed to run a single CAN channel
 	struct CANHardware
 	{
@@ -156,7 +128,7 @@ private:
 	static constexpr std::uint32_t PERIODIC_UPDATE_INTERVAL = 4;
 
 	/// @brief The main CAN thread executes this function. Does most of the work of this class
-	static void can_thread_function();
+	static void update_thread_function();
 
 	/// @brief The receive thread(s) execute this function
 	/// @param[in] channelIndex The associated CAN channel for the thread
@@ -167,26 +139,25 @@ private:
 	static bool transmit_can_message_from_buffer(isobus::HardwareInterfaceCANFrame &packet);
 
 	/// @brief The periodic update thread executes this function
-	static void update_can_lib_periodic_function();
+	static void periodic_update_function();
 
 	/// @brief Stops all threads related to the hardware interface
 	static void stop_threads();
 
-	static std::unique_ptr<std::thread> canThread; ///< The main CAN thread
-	static std::unique_ptr<std::thread> periodicUpdateThread; ///< A thread that periodically wakes up to update the CAN stack
+	static std::unique_ptr<std::thread> updateThread; ///< The main thread
+	static std::unique_ptr<std::thread> wakeupThread; ///< A thread that periodically wakes up the `updateThread`
+	static std::condition_variable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
+	static std::atomic_bool stackNeedsUpdate; ///< Stores if the CAN thread needs to update the stack this iteration
+	static std::uint32_t periodicUpdateInterval; ///< The period between calls to the CAN stack update function in milliseconds
+
+	static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
+	static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
+	static isobus::EventDispatcher<> periodicUpdateEventDispatcher; ///< The event dispatcher for when a periodic update is called
 
 	static std::vector<std::unique_ptr<CANHardware>> hardwareChannels; ///< A list of all CAN channel's metadata
-	static std::vector<RawCanMessageCallbackInfo> rxCallbacks; ///< A list of all registered Rx callbacks
-	static std::vector<CanLibUpdateCallbackInfo> periodicUpdateCallbacks; ///< A list of all registered periodic update callbacks
-
 	static std::mutex hardwareChannelsMutex; ///< Mutex to protect `hardwareChannels`
-	static std::mutex threadMutex; ///< A mutex for the main CAN thread
-	static std::mutex rxCallbacksMutex; ///< A mutex for protecting the `rxCallbacks`
-	static std::mutex periodicUpdateCallbacksMutex; ///< A mutex for protecting the `periodicUpdateCallbacks`
-	static std::condition_variable threadConditionVariable; ///< A condition variable to allow for signaling the CAN thread from `periodicUpdateThread`
-	static std::atomic_bool threadsStarted; ///< Stores if `start` has been called yet
-	static std::atomic_bool canLibNeedsUpdate; ///< Stores if the CAN thread needs to update the CAN stack this iteration
-	static std::uint32_t canLibUpdatePeriod; ///< The period between calls to the CAN stack update function in milliseconds
+	static std::mutex updateMutex; ///< A mutex for the main thread
+	static std::atomic_bool threadsStarted; ///< Stores if the threads have been started
 };
 
 #endif // CAN_HARDWARE_INTERFACE_HPP
