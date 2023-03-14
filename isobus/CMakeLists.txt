@@ -42,7 +42,8 @@ set(ISOBUS_SRC
     "isobus_virtual_terminal_objects.cpp"
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp"
-    "can_message_data.cpp")
+    "can_message_data.cpp"
+    "isobus_virtual_terminal_objects.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
