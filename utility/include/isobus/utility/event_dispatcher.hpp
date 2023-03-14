@@ -9,9 +9,10 @@
 #ifndef EVENT_DISPATCHER_HPP
 #define EVENT_DISPATCHER_HPP
 
-#include <atomic>
+#include <algorithm>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace isobus
@@ -30,6 +31,7 @@ namespace isobus
 		/// @return A shared pointer to the callback.
 		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &...)> &callback)
 		{
+			std::lock_guard<std::mutex> lock(callbacksMutex);
 			auto shared = std::make_shared<std::function<void(const E &...)>>(callback);
 			callbacks.push_back(shared);
 			return shared;
@@ -66,57 +68,34 @@ namespace isobus
 
 		/// @brief Get the number of listeners registered to this event.
 		/// @return The number of listeners
-		std::size_t get_listener_count() const
+		std::size_t get_listener_count()
 		{
+			std::lock_guard<std::mutex> lock(callbacksMutex);
 			return callbacks.size();
 		}
 
 		/// @brief Invokes an event and notify all listeners.
 		/// @param args The arguments to pass to the listeners.
 		/// @return True if the event was successfully invoked, false otherwise.
-		bool invoke(E &&...args)
+		void invoke(E &&...args)
 		{
-			// Remove all callbacks that are gone, only if we are not dispatching.
-			if (0 == concurrent_invokes_count)
-			{
-				for (auto it = callbacks.begin(); it != callbacks.end();)
-				{
-					if (it->expired())
-					{
-						it = callbacks.erase(it);
-					}
-					else
-					{
-						++it;
-					}
-				}
-			}
+			std::lock_guard<std::mutex> lock(callbacksMutex);
+			auto removeResult = std::remove_if(callbacks.begin(), callbacks.end(), [](std::weak_ptr<std::function<void(const E &...)>> &callback) {
+				return callback.expired();
+			});
+			callbacks.erase(removeResult, callbacks.end());
 
-			concurrent_invokes_count++;
-			try
-			{
-				std::size_t current = 0;
-				while (current < callbacks.size())
+			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
+				if (auto callbackPtr = callback.lock())
 				{
-					if (auto callback = callbacks[current].lock())
-					{
-						(*callback)(std::forward<E>(args)...);
-					}
-					current++;
+					(*callbackPtr)(std::forward<E>(args)...);
 				}
-				concurrent_invokes_count--;
-			}
-			catch (...)
-			{
-				concurrent_invokes_count--;
-				return false;
-			}
-			return true;
+			});
 		}
 
 	private:
 		std::vector<std::weak_ptr<std::function<void(const E &...)>>> callbacks; ///< The callbacks to invoke
-		std::atomic<std::uint32_t> concurrent_invokes_count = { 0 }; ///< The number of concurrent invoke calls in progress
+		std::mutex callbacksMutex; ///< The mutex to protect the callbacks
 	};
 } // namespace isobus
 
