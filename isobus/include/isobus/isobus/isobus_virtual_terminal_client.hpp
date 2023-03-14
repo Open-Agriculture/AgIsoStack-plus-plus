@@ -289,8 +289,6 @@ namespace isobus
 			AuxiliaryTypeTwoFunctionType functionType; ///< The type of function
 		};
 
-		static constexpr std::uint16_t NULL_OBJECT_ID = 0xFFFF; ///< The NULL Object ID, usually drawn as blank space
-
 		/// @brief The constructor for a VirtualTerminalClient
 		/// @param[in] partner The VT server control function
 		/// @param[in] clientSource The internal control function to communicate from

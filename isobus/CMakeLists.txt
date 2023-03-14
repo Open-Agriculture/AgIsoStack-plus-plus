@@ -38,7 +38,8 @@ set(ISOBUS_SRC
     "isobus_task_controller_client.cpp"
     "isobus_device_descriptor_object_pool.cpp"
     "isobus_shortcut_button_interface.cpp"
-    "isobus_functionalities.cpp")
+    "isobus_functionalities.cpp"
+    "isobus_virtual_terminal_objects.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
