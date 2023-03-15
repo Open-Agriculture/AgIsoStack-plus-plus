@@ -3572,7 +3572,7 @@ namespace isobus
 								{
 									AssignedAuxiliaryInputDevice inputDevice{ message->get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
 									parentVT->assignedAuxiliaryInputDevices.push_back(inputDevice);
-									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + std::to_string(modelIdentificationCode));
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Info, "[AUX-N]: New auxiliary input device with name: " + isobus::to_string(inputDevice.name) + " and model identification code: " + isobus::to_string(modelIdentificationCode));
 								}
 							}
 						}

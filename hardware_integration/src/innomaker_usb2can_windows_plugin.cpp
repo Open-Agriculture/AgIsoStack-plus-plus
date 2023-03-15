@@ -235,7 +235,7 @@ void InnoMakerUSB2CANWindowsPlugin::open()
 
 			default:
 			{
-				isobus::CANStackLogger::error("[InnoMaker-Windows] Unsupported baudrate with index " + std::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
+				isobus::CANStackLogger::error("[InnoMaker-Windows] Unsupported baudrate with index " + isobus::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
 				return;
 			}
 			break;
@@ -245,7 +245,7 @@ void InnoMakerUSB2CANWindowsPlugin::open()
 	}
 	else
 	{
-		isobus::CANStackLogger::error("[InnoMaker-Windows] No device found on channel " + std::to_string(channel));
+		isobus::CANStackLogger::error("[InnoMaker-Windows] No device found on channel " + isobus::to_string(channel));
 	}
 }
 
@@ -272,7 +272,7 @@ bool InnoMakerUSB2CANWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame
 		InnoMakerUsb2CanLib::innomaker_tx_context *txc = driverInstance->innomaker_get_tx_context(txContexts.get(), frame.echo_id);
 		if (nullptr == txc)
 		{
-			isobus::CANStackLogger::warn("[InnoMaker-Windows] Received frame with bad echo ID: " + std::to_string(static_cast<int>(frame.echo_id)));
+			isobus::CANStackLogger::warn("[InnoMaker-Windows] Received frame with bad echo ID: " + isobus::to_string(static_cast<int>(frame.echo_id)));
 			return false;
 		}
 		driverInstance->innomaker_free_tx_context(txc);
