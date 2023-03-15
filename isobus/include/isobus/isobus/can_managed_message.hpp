@@ -26,7 +26,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for the CANLibManagedMessage
 		/// @param[in] CANPort The can channel index the message uses
-		CANLibManagedMessage(std::uint8_t CANPort);
+		explicit CANLibManagedMessage(std::uint8_t CANPort);
 
 		/// @brief Sets the message data to the value supplied. Creates a copy.
 		/// @param[in] dataBuffer The data payload

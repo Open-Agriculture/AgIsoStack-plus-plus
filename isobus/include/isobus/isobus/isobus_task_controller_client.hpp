@@ -84,16 +84,16 @@ namespace isobus
 		};
 
 		/// @brief A callback for handling a value request command from the TC
-		typedef bool (*RequestValueCommandCallback)(std::uint16_t elementNumber,
-		                                            std::uint16_t DDI,
-		                                            std::uint32_t &processVariableValue,
-		                                            void *parentPointer);
+		using RequestValueCommandCallback = bool (*)(std::uint16_t elementNumber,
+		                                             std::uint16_t DDI,
+		                                             std::uint32_t &processVariableValue,
+		                                             void *parentPointer);
 
 		/// @brief A callback for handling a set value command from the TC
-		typedef bool (*ValueCommandCallback)(std::uint16_t elementNumber,
-		                                     std::uint16_t DDI,
-		                                     std::uint32_t processVariableValue,
-		                                     void *parentPointer);
+		using ValueCommandCallback = bool (*)(std::uint16_t elementNumber,
+		                                      std::uint16_t DDI,
+		                                      std::uint32_t processVariableValue,
+		                                      void *parentPointer);
 
 		/// @brief The constructor for a TaskControllerClient
 		/// @param[in] partner The TC server control function

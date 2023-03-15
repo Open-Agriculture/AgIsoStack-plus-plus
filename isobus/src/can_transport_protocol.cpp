@@ -507,7 +507,7 @@ namespace isobus
 		}
 	}
 
-	bool TransportProtocolManager::send_broadcast_announce_message(TransportProtocolSession *session)
+	bool TransportProtocolManager::send_broadcast_announce_message(TransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -531,7 +531,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TransportProtocolManager::send_clear_to_send(TransportProtocolSession *session)
+	bool TransportProtocolManager::send_clear_to_send(TransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -567,7 +567,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TransportProtocolManager::send_request_to_send(TransportProtocolSession *session)
+	bool TransportProtocolManager::send_request_to_send(TransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -591,7 +591,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TransportProtocolManager::send_end_of_session_acknowledgement(TransportProtocolSession *session)
+	bool TransportProtocolManager::send_end_of_session_acknowledgement(TransportProtocolSession *session) const
 	{
 		bool retVal = false;
 

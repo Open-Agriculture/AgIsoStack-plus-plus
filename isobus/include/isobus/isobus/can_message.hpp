@@ -42,7 +42,7 @@ namespace isobus
 
 		/// @brief Constructor for a CAN message
 		/// @param[in] CANPort The can channel index the message uses
-		CANMessage(std::uint8_t CANPort);
+		explicit CANMessage(std::uint8_t CANPort);
 
 		/// @brief Destructor for a CAN message
 		virtual ~CANMessage() = default;

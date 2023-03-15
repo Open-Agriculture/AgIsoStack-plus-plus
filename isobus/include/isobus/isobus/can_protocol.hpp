@@ -35,6 +35,9 @@ namespace isobus
 		/// @brief The base class constructor for a CANLibProtocol
 		CANLibProtocol();
 
+		/// @brief Deleted copy constructor for a CANLibProtocol
+		CANLibProtocol(CANLibProtocol &) = delete;
+
 		/// @brief The base class destructor for a CANLibProtocol
 		virtual ~CANLibProtocol();
 

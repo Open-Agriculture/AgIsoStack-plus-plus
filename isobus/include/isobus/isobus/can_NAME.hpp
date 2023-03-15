@@ -347,7 +347,7 @@ namespace isobus
 		bool operator==(const NAME &obj) const;
 
 		/// @brief A structure that tracks the pair of a NAME parameter and associated value
-		typedef std::pair<const NAMEParameters, const std::uint32_t> NameParameterFilter;
+		using NameParameterFilter = std::pair<const NAMEParameters, const std::uint32_t>;
 
 		/// @brief Constructor for a NAME
 		/// @param[in] rawNAMEData The raw 64 bit NAME of an ECU

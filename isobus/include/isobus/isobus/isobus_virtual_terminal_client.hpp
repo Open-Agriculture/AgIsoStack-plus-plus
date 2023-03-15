@@ -266,6 +266,9 @@ namespace isobus
 		/// @param[in] clientSource The internal control function to communicate from
 		VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource);
 
+		/// @brief Deleted copy constructor for VirtualTerminalClient
+		VirtualTerminalClient(VirtualTerminalClient &) = delete;
+
 		/// @brief The destructor for the VirtualTerminalClient
 		~VirtualTerminalClient();
 

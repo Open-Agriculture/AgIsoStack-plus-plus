@@ -11,6 +11,7 @@
 #define CAN_ADDRESS_CLAIM_STATE_MACHINE_HPP
 
 #include "isobus/isobus/can_NAME.hpp"
+#include "isobus/isobus/can_constants.hpp"
 
 namespace isobus
 {
@@ -80,20 +81,20 @@ namespace isobus
 		void set_current_state(State value);
 
 		/// @brief Sends the PGN request for the address claim PGN
-		bool send_request_to_claim();
+		bool send_request_to_claim() const;
 
 		/// @brief Sends the address claim message
 		/// @param[in] address The address to claim
 		bool send_address_claim(std::uint8_t address);
 
 		NAME m_isoname; ///< The ISO NAME to claim as
-		State m_currentState; ///< The address claim state machine state
-		std::uint32_t m_timestamp_ms; ///< A generic timestamp in milliseconds used to find timeouts
+		State m_currentState = State::None; ///< The address claim state machine state
+		std::uint32_t m_timestamp_ms = 0; ///< A generic timestamp in milliseconds used to find timeouts
 		std::uint8_t m_portIndex; ///< The CAN channel index to claim on
 		std::uint8_t m_preferredAddress; ///< The address we'd prefer to claim as (we may not get it)
 		std::uint8_t m_randomClaimDelay_ms; ///< The random delay as required by the ISO11783 standard
-		std::uint8_t m_claimedAddress; ///< The actual address we ended up claiming
-		bool m_enabled; ///<  Enable/disable state for this state machine
+		std::uint8_t m_claimedAddress = NULL_CAN_ADDRESS; ///< The actual address we ended up claiming
+		bool m_enabled = true; ///<  Enable/disable state for this state machine
 	};
 
 } // namespace isobus

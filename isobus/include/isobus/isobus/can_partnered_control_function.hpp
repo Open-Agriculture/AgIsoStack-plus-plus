@@ -41,6 +41,9 @@ namespace isobus
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
 		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
 
+		/// @brief Deleted copy constructor for PartneredControlFunction to avoid slicing
+		PartneredControlFunction(PartneredControlFunction &) = delete;
+
 		/// @brief The destructor for PartneredControlFunction
 		virtual ~PartneredControlFunction();
 
