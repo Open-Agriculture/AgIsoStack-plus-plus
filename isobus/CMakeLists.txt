@@ -57,6 +57,10 @@ set(ISOBUS_INCLUDE
     "can_stack_logger.hpp"
     "can_network_configuration.hpp"
     "can_callbacks.hpp"
+    "can_frame.hpp"
+    "can_hardware_abstraction.hpp"
+    "can_internal_control_function.hpp"
+    "can_partnered_control_function.hpp"
     "isobus_virtual_terminal_client.hpp"
     "can_extended_transport_protocol.hpp"
     "isobus_diagnostic_protocol.hpp"
@@ -66,6 +70,7 @@ set(ISOBUS_INCLUDE
     "isobus_language_command_interface.hpp"
     "isobus_standard_data_description_indices.hpp"
     "isobus_task_controller_client_objects.hpp"
+    "isobus_task_controller_client.hpp"
     "isobus_device_descriptor_object_pool.hpp")
 
 # Prepend the include directory path to all the include files
