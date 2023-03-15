@@ -109,7 +109,7 @@ namespace isobus
 		ExtendedTransportProtocolManager();
 
 		/// @brief The destructor for the TransportProtocolManager
-		virtual ~ExtendedTransportProtocolManager();
+		~ExtendedTransportProtocolManager() final;
 
 		/// @brief The protocol's initializer function
 		void initialize(CANLibBadge<CANNetworkManager>) override;
@@ -182,14 +182,14 @@ namespace isobus
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
-		bool get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination);
+		bool get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination) const;
 
 		/// @brief Gets an ETP session from the passed in source and destination and PGN combination
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @param[in] parameterGroupNumber The PGN of the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
-		bool get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber);
+		bool get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber) const;
 
 		/// @brief Processes end of session callbacks
 		/// @param[in] session The session we've just completed
@@ -199,22 +199,22 @@ namespace isobus
 		/// @brief Sends the "end of message acknowledgement" message for the provided session
 		/// @param[in] session The session for which we're sending the EOM ACK
 		/// @returns true if the EOM was sent, false if sending was not successful
-		bool send_end_of_session_acknowledgement(ExtendedTransportProtocolSession *session); // ETP.CM_EOMA
+		bool send_end_of_session_acknowledgement(ExtendedTransportProtocolSession *session) const; // ETP.CM_EOMA
 
 		/// @brief Sends the "clear to send" message
 		/// @param[in] session The session for which we're sending the CTS
 		/// @returns true if the CTS was sent, false if sending was not successful
-		bool send_extended_connection_mode_clear_to_send(ExtendedTransportProtocolSession *session); // ETP.CM_CTS
+		bool send_extended_connection_mode_clear_to_send(ExtendedTransportProtocolSession *session) const; // ETP.CM_CTS
 
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
 		/// @returns true if the RTS was sent, false if sending was not successful
-		bool send_extended_connection_mode_request_to_send(const ExtendedTransportProtocolSession *session); // ETP.CM_RTS
+		bool send_extended_connection_mode_request_to_send(const ExtendedTransportProtocolSession *session) const; // ETP.CM_RTS
 
 		/// @brief Sends the data packet offset message for the supplied session
 		/// @param[in] session The session for which we're sending the EDPO
 		/// @returns true if the EDPO was sent, false if sending was not successful
-		bool send_extended_connection_mode_data_packet_offset(const ExtendedTransportProtocolSession *session); // ETP.CM_DPO
+		bool send_extended_connection_mode_data_packet_offset(const ExtendedTransportProtocolSession *session) const; // ETP.CM_DPO
 
 		/// @brief Sets the state machine state of the ETP session
 		/// @param[in] session The session to update

@@ -463,7 +463,7 @@ namespace isobus
 		}
 	}
 
-	bool ExtendedTransportProtocolManager::get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination)
+	bool ExtendedTransportProtocolManager::get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination) const
 	{
 		session = nullptr;
 
@@ -479,7 +479,7 @@ namespace isobus
 		return (nullptr != session);
 	}
 
-	bool ExtendedTransportProtocolManager::get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber)
+	bool ExtendedTransportProtocolManager::get_session(ExtendedTransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber) const
 	{
 		bool retVal = false;
 		session = nullptr;
@@ -508,7 +508,7 @@ namespace isobus
 		}
 	}
 
-	bool ExtendedTransportProtocolManager::send_end_of_session_acknowledgement(ExtendedTransportProtocolSession *session)
+	bool ExtendedTransportProtocolManager::send_end_of_session_acknowledgement(ExtendedTransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -533,7 +533,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ExtendedTransportProtocolManager::send_extended_connection_mode_clear_to_send(ExtendedTransportProtocolSession *session)
+	bool ExtendedTransportProtocolManager::send_extended_connection_mode_clear_to_send(ExtendedTransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -569,7 +569,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ExtendedTransportProtocolManager::send_extended_connection_mode_request_to_send(const ExtendedTransportProtocolSession *session)
+	bool ExtendedTransportProtocolManager::send_extended_connection_mode_request_to_send(const ExtendedTransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -593,7 +593,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ExtendedTransportProtocolManager::send_extended_connection_mode_data_packet_offset(const ExtendedTransportProtocolSession *session)
+	bool ExtendedTransportProtocolManager::send_extended_connection_mode_data_packet_offset(const ExtendedTransportProtocolSession *session) const
 	{
 		bool retVal = false;
 
@@ -804,9 +804,9 @@ namespace isobus
 				}
 				break;
 
-				case StateMachineState::None:
 				default:
 				{
+					// Nothing to do.
 				}
 				break;
 			}

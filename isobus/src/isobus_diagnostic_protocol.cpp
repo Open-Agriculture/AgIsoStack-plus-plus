@@ -46,14 +46,7 @@
 namespace isobus
 {
 	std::list<DiagnosticProtocol *> DiagnosticProtocol::diagnosticProtocolList;
-	constexpr DiagnosticProtocol::Network DiagnosticProtocol::J1939NetworkIndicies[DM13_NUMBER_OF_J1939_NETWORKS];
-
-	DiagnosticProtocol::DiagnosticTroubleCode::DiagnosticTroubleCode() :
-	  suspectParameterNumber(0xFFFFFFFF),
-	  failureModeIdentifier(static_cast<std::uint8_t>(FailureModeIdentifier::ConditionExists)),
-	  lampState(LampStatus::None)
-	{
-	}
+	constexpr std::array<DiagnosticProtocol::Network, DiagnosticProtocol::DM13_NUMBER_OF_J1939_NETWORKS> DiagnosticProtocol::J1939NetworkIndicies;
 
 	DiagnosticProtocol::DiagnosticTroubleCode::DiagnosticTroubleCode(std::uint32_t spn, FailureModeIdentifier fmi, LampStatus lamp) :
 	  suspectParameterNumber(spn),

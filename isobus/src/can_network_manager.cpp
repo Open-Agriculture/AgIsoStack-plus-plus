@@ -49,7 +49,7 @@ namespace isobus
 
 	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-		globalParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		globalParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent);
 	}
 
 	void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
@@ -62,7 +62,7 @@ namespace isobus
 		}
 	}
 
-	std::uint32_t CANNetworkManager::get_number_global_parameter_group_number_callbacks() const
+	std::size_t CANNetworkManager::get_number_global_parameter_group_number_callbacks() const
 	{
 		return globalParameterGroupNumberCallbacks.size();
 	}
@@ -70,7 +70,7 @@ namespace isobus
 	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
 		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-		anyControlFunctionParameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		anyControlFunctionParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent);
 	}
 
 	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
@@ -234,7 +234,7 @@ namespace isobus
 	                                             std::uint8_t priority,
 	                                             const void *data,
 	                                             std::uint32_t size,
-	                                             CANLibBadge<AddressClaimStateMachine>)
+	                                             CANLibBadge<AddressClaimStateMachine>) const
 	{
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 	}
@@ -580,7 +580,7 @@ namespace isobus
 	                                                             std::uint32_t parameterGroupNumber,
 	                                                             std::uint8_t priority,
 	                                                             const void *data,
-	                                                             std::uint32_t size)
+	                                                             std::uint32_t size) const
 	{
 		HardwareInterfaceCANFrame txFrame;
 		txFrame.identifier = DEFAULT_IDENTIFIER;
@@ -756,7 +756,7 @@ namespace isobus
 		}
 	}
 
-	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size)
+	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size) const
 	{
 		HardwareInterfaceCANFrame tempFrame = construct_frame(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 		bool retVal = false;

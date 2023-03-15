@@ -24,7 +24,7 @@ namespace isobus
 		mParent = oldObj.mParent;
 	}
 
-	bool ParameterGroupNumberCallbackData::operator==(const ParameterGroupNumberCallbackData &obj)
+	bool ParameterGroupNumberCallbackData::operator==(const ParameterGroupNumberCallbackData &obj) const
 	{
 		return ((obj.mCallback == this->mCallback) &&
 		        (obj.mParameterGroupNumber == this->mParameterGroupNumber) &&

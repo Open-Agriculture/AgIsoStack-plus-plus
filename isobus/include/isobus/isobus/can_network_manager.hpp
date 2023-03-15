@@ -71,7 +71,7 @@ namespace isobus
 
 		/// @brief Returns the number of global PGN callbacks that have been registered with the network manager
 		/// @returns The number of global PGN callbacks that have been registered with the network manager
-		std::uint32_t get_number_global_parameter_group_number_callbacks() const;
+		std::size_t get_number_global_parameter_group_number_callbacks() const;
 
 		/// @brief Registers a callback for ANY control function sending the associated PGN
 		/// @param[in] parameterGroupNumber The PGN you want to register for
@@ -162,7 +162,7 @@ namespace isobus
 		                          std::uint8_t priority,
 		                          const void *data,
 		                          std::uint32_t size,
-		                          CANLibBadge<AddressClaimStateMachine>);
+		                          CANLibBadge<AddressClaimStateMachine>) const;
 
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
 		/// @param[in] protocolMessage The completed protocol message
@@ -205,7 +205,7 @@ namespace isobus
 		                                          std::uint32_t parameterGroupNumber,
 		                                          std::uint8_t priority,
 		                                          const void *data,
-		                                          std::uint32_t size);
+		                                          std::uint32_t size) const;
 
 		/// @brief Returns a control function based on a CAN address and channel index
 		/// @param[in] CANPort The CAN channel index of the CAN message being processed
@@ -252,7 +252,7 @@ namespace isobus
 		                          std::uint32_t parameterGroupNumber,
 		                          std::uint8_t priority,
 		                          const void *data,
-		                          std::uint32_t size);
+		                          std::uint32_t size) const;
 
 		/// @brief Gets a PGN callback for the global address by index
 		/// @param[in] index The index of the callback to get

@@ -31,7 +31,7 @@ namespace isobus
 	private:
 		friend T; ///< Our best friend, T
 		//! @brief An empty function for our best friend <T>
-		CANLibBadge(){};
+		CANLibBadge() = default;
 	};
 	//! @endcond
 

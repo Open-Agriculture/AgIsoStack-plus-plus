@@ -40,6 +40,7 @@
 #include "isobus/isobus/can_protocol.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
+#include <array>
 #include <list>
 #include <memory>
 #include <string>
@@ -174,8 +175,7 @@ namespace isobus
 		{
 		public:
 			/// @brief Constructor for a DTC, sets default values at construction time
-			/// @param[in] internalControlFunction The internal control function to use for sending messages
-			DiagnosticTroubleCode();
+			DiagnosticTroubleCode() = default;
 
 			/// @brief Constructor for a DTC, sets all values explicitly
 			/// @param[in] spn The suspect parameter number
@@ -191,12 +191,12 @@ namespace isobus
 			///  @brief Returns the occurance count, which will be kept track of by the protocol
 			std::uint8_t get_occurrance_count() const;
 
-			std::uint32_t suspectParameterNumber; ///< This 19-bit number is used to identify the item for which diagnostics are being reported
-			std::uint8_t failureModeIdentifier; ///< The FMI defines the type of failure detected in the sub-system identified by an SPN
-			LampStatus lampState; ///< The J1939 lamp state for this DTC
+			std::uint32_t suspectParameterNumber = 0xFFFFFFFF; ///< This 19-bit number is used to identify the item for which diagnostics are being reported
+			std::uint8_t failureModeIdentifier = static_cast<std::uint8_t>(FailureModeIdentifier::ConditionExists); ///< The FMI defines the type of failure detected in the sub-system identified by an SPN
+			LampStatus lampState = LampStatus::None; ///< The J1939 lamp state for this DTC
 		private:
 			friend class DiagnosticProtocol; ///< Allow the protocol to have write access the occurance but require other to use getter only
-			std::uint8_t occuranceCount; ///< Number of times the DTC has been active (0 to 126 with 127 being not available)
+			std::uint8_t occuranceCount = 0; ///< Number of times the DTC has been active (0 to 126 with 127 being not available)
 		};
 
 		/// @brief Used to tell the CAN stack that diagnostic messages should be sent from the specified internal control function
@@ -383,17 +383,17 @@ namespace isobus
 		static constexpr std::uint8_t DM13_BITS_PER_NETWORK = 2; ///< Number of bits for the network SPNs
 
 		/// @brief Lists the J1939 networks by index rather than by definition in J1939-73 5.7.13
-		static constexpr Network J1939NetworkIndicies[DM13_NUMBER_OF_J1939_NETWORKS] = { Network::SAEJ1939Network1PrimaryVehicleNetwork,
-			                                                                               Network::SAEJ1939Network2,
-			                                                                               Network::SAEJ1939Network3,
-			                                                                               Network::SAEJ1939Network4,
-			                                                                               Network::SAEJ1939Network5,
-			                                                                               Network::SAEJ1939Network6,
-			                                                                               Network::SAEJ1939Network7,
-			                                                                               Network::SAEJ1939Network8,
-			                                                                               Network::SAEJ1939Network9,
-			                                                                               Network::SAEJ1939Network10,
-			                                                                               Network::SAEJ1939Network11 };
+		static constexpr std::array<Network, DM13_NUMBER_OF_J1939_NETWORKS> J1939NetworkIndicies = { Network::SAEJ1939Network1PrimaryVehicleNetwork,
+			                                                                                           Network::SAEJ1939Network2,
+			                                                                                           Network::SAEJ1939Network3,
+			                                                                                           Network::SAEJ1939Network4,
+			                                                                                           Network::SAEJ1939Network5,
+			                                                                                           Network::SAEJ1939Network6,
+			                                                                                           Network::SAEJ1939Network7,
+			                                                                                           Network::SAEJ1939Network8,
+			                                                                                           Network::SAEJ1939Network9,
+			                                                                                           Network::SAEJ1939Network10,
+			                                                                                           Network::SAEJ1939Network11 };
 
 		/// @brief The constructor for this protocol
 		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);

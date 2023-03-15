@@ -122,7 +122,7 @@ namespace isobus
 		TransportProtocolManager();
 
 		/// @brief The destructor for the TransportProtocolManager
-		virtual ~TransportProtocolManager();
+		~TransportProtocolManager() final;
 
 		/// @brief The protocol's initializer function
 		void initialize(CANLibBadge<CANNetworkManager>) override;
@@ -186,22 +186,22 @@ namespace isobus
 		/// @brief Sends the "broadcast announce" message
 		/// @param[in] session The session for which we're sending the BAM
 		/// @returns true if the BAM was sent, false if sending was not successful
-		bool send_broadcast_announce_message(TransportProtocolSession *session);
+		bool send_broadcast_announce_message(TransportProtocolSession *session) const;
 
 		/// @brief Sends the "clear to send" message
 		/// @param[in] session The session for which we're sending the CTS
 		/// @returns true if the CTS was sent, false if sending was not successful
-		bool send_clear_to_send(TransportProtocolSession *session);
+		bool send_clear_to_send(TransportProtocolSession *session) const;
 
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
 		/// @returns true if the RTS was sent, false if sending was not successful
-		bool send_request_to_send(TransportProtocolSession *session);
+		bool send_request_to_send(TransportProtocolSession *session) const;
 
 		/// @brief Sends the "end of message acknowledgement" message for the provided session
 		/// @param[in] session The session for which we're sending the EOM ACK
 		/// @returns true if the EOM was sent, false if sending was not successful
-		bool send_end_of_session_acknowledgement(TransportProtocolSession *session);
+		bool send_end_of_session_acknowledgement(TransportProtocolSession *session) const;
 
 		/// @brief Sets the state machine state of the TP session
 		/// @param[in] session The session to update

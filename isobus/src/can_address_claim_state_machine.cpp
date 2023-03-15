@@ -7,7 +7,6 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/can_address_claim_state_machine.hpp"
-#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -20,12 +19,8 @@ namespace isobus
 {
 	AddressClaimStateMachine::AddressClaimStateMachine(std::uint8_t preferredAddressValue, NAME ControlFunctionNAME, std::uint8_t portIndex) :
 	  m_isoname(ControlFunctionNAME),
-	  m_currentState(State::None),
-	  m_timestamp_ms(0),
 	  m_portIndex(portIndex),
-	  m_preferredAddress(preferredAddressValue),
-	  m_claimedAddress(NULL_CAN_ADDRESS),
-	  m_enabled(true)
+	  m_preferredAddress(preferredAddressValue)
 	{
 		assert(m_preferredAddress != BROADCAST_CAN_ADDRESS);
 		assert(m_preferredAddress != NULL_CAN_ADDRESS);
@@ -183,13 +178,11 @@ namespace isobus
 
 				case State::ContendForPreferredAddress:
 				{
-					// TODO
+					/// @todo Non-arbitratable address contention (there is not a good reason to use this, but we should add support anyways)
 				}
 				break;
 
 				default:
-				case State::AddressClaimingComplete:
-				case State::UnableToClaim:
 				{
 				}
 				break;
@@ -270,14 +263,14 @@ namespace isobus
 		m_currentState = value;
 	}
 
-	bool AddressClaimStateMachine::send_request_to_claim()
+	bool AddressClaimStateMachine::send_request_to_claim() const
 	{
 		bool retVal = false;
 
 		if (get_enabled())
 		{
 			const std::uint8_t addressClaimRequestLength = 3;
-			const std::uint32_t PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
+			const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
 			std::uint8_t dataBuffer[addressClaimRequestLength];
 
 			dataBuffer[0] = (PGN & std::numeric_limits<std::uint8_t>::max());

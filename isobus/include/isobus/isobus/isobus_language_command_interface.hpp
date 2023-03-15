@@ -147,6 +147,9 @@ namespace isobus
 		/// @param filteredControlFunction The control function you want to explicitly communicate with
 		LanguageCommandInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<PartneredControlFunction> filteredControlFunction);
 
+		/// @brief Deleted copy constructor for LanguageCommandInterface
+		LanguageCommandInterface(LanguageCommandInterface &) = delete;
+
 		/// @brief Destructor for the LanguageCommandInterface
 		~LanguageCommandInterface();
 

@@ -30,29 +30,29 @@ namespace isobus
 	/// @brief A callback for control functions to get CAN messages
 	typedef void (*CANLibCallback)(CANMessage *message, void *parentPointer);
 	/// @brief A callback to get chunks of data for transfer by a protocol
-	typedef bool (*DataChunkCallback)(std::uint32_t callbackIndex,
-	                                  std::uint32_t bytesOffset,
-	                                  std::uint32_t numberOfBytesNeeded,
-	                                  std::uint8_t *chunkBuffer,
-	                                  void *parentPointer);
-	/// @brief A callback for when a transmit is completed by the stack
-	typedef void (*TransmitCompleteCallback)(std::uint32_t parameterGroupNumber,
-	                                         std::uint32_t dataLength,
-	                                         InternalControlFunction *sourceControlFunction,
-	                                         ControlFunction *destinationControlFunction,
-	                                         bool successful,
-	                                         void *parentPointer);
-	/// @brief A callback for handling a PGN request
-	typedef bool (*PGNRequestCallback)(std::uint32_t parameterGroupNumber,
-	                                   ControlFunction *requestingControlFunction,
-	                                   bool &acknowledge,
-	                                   AcknowledgementType &acknowledgeType,
+	using DataChunkCallback = bool (*)(std::uint32_t callbackIndex,
+	                                   std::uint32_t bytesOffset,
+	                                   std::uint32_t numberOfBytesNeeded,
+	                                   std::uint8_t *chunkBuffer,
 	                                   void *parentPointer);
+	/// @brief A callback for when a transmit is completed by the stack
+	using TransmitCompleteCallback = void (*)(std::uint32_t parameterGroupNumber,
+	                                          std::uint32_t dataLength,
+	                                          InternalControlFunction *sourceControlFunction,
+	                                          ControlFunction *destinationControlFunction,
+	                                          bool successful,
+	                                          void *parentPointer);
+	/// @brief A callback for handling a PGN request
+	using PGNRequestCallback = bool (*)(std::uint32_t parameterGroupNumber,
+	                                    ControlFunction *requestingControlFunction,
+	                                    bool &acknowledge,
+	                                    AcknowledgementType &acknowledgeType,
+	                                    void *parentPointer);
 	/// @brief A callback for handling a request for repetition rate for a specific PGN
-	typedef bool (*PGNRequestForRepetitionRateCallback)(std::uint32_t parameterGroupNumber,
-	                                                    ControlFunction *requestingControlFunction,
-	                                                    std::uint32_t repetitionRate,
-	                                                    void *parentPointer);
+	using PGNRequestForRepetitionRateCallback = bool (*)(std::uint32_t parameterGroupNumber,
+	                                                     ControlFunction *requestingControlFunction,
+	                                                     std::uint32_t repetitionRate,
+	                                                     void *parentPointer);
 
 	//================================================================================================
 	/// @class ParameterGroupNumberCallbackData
@@ -75,7 +75,7 @@ namespace isobus
 		/// @brief Equality operator for this class
 		/// @param[in] obj The object to check equality against
 		/// @returns true if the objects have equivalent data
-		bool operator==(const ParameterGroupNumberCallbackData &obj);
+		bool operator==(const ParameterGroupNumberCallbackData &obj) const;
 
 		/// @brief Assignment operator for this class
 		/// @param[in] obj The object to assign data from

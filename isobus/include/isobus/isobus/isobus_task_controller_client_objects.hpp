@@ -37,6 +37,9 @@ namespace isobus
 			/// @param[in] uniqueID The object ID of the object. Must be unique in the DDOP.
 			Object(std::string objectDesignator, std::uint16_t uniqueID);
 
+			/// @brief Destructor for a TC Object
+			virtual ~Object() = default;
+
 			/// @brief Returns the Descriptive text for this object, UTF-8 encoded, 32 characters max
 			/// @returns Descriptive text for this object, UTF-8 encoded, 32 characters max
 			std::string get_designator() const;
@@ -98,7 +101,7 @@ namespace isobus
 			             bool shouldUseExtendedStructureLabel);
 
 			/// @brief Destructor for a DeviceObject
-			virtual ~DeviceObject() = default;
+			~DeviceObject() override = default;
 
 			/// @brief Returns the XML namespace for the object
 			/// @returns the XML namespace for the object
@@ -191,7 +194,7 @@ namespace isobus
 			                    std::uint16_t uniqueID);
 
 			/// @brief Destructor for a DeviceElementObject
-			virtual ~DeviceElementObject() = default;
+			~DeviceElementObject() override = default;
 
 			/// @brief Returns the XML namespace for the object
 			/// @returns The string "DET", the XML namespace for the DeviceElementObject
@@ -277,7 +280,7 @@ namespace isobus
 			                        std::uint16_t uniqueID);
 
 			/// @brief Destructor for a DeviceProcessDataObject
-			virtual ~DeviceProcessDataObject() = default;
+			~DeviceProcessDataObject() override = default;
 
 			/// @brief Returns the XML element namespace for DeviceProcess-Data.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcess-Data.
@@ -334,7 +337,7 @@ namespace isobus
 			                     std::uint16_t uniqueID);
 
 			/// @brief Destructor for a DevicePropertyObject
-			virtual ~DevicePropertyObject() = default;
+			~DevicePropertyObject() override = default;
 
 			/// @brief Returns the XML element namespace for DeviceProperty.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.
@@ -391,7 +394,7 @@ namespace isobus
 			                              std::uint16_t uniqueID);
 
 			/// @brief Destructor for a DeviceValuePresentationObject
-			virtual ~DeviceValuePresentationObject() = default;
+			~DeviceValuePresentationObject() override = default;
 
 			/// @brief Returns the XML element namespace for DeviceValuePresentation.
 			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.

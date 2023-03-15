@@ -40,7 +40,7 @@ namespace isobus
 	InternalControlFunction::~InternalControlFunction()
 	{
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		if (0 != internalControlFunctionList.size())
+		if (!internalControlFunctionList.empty())
 		{
 			auto thisObject = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), this);
 
