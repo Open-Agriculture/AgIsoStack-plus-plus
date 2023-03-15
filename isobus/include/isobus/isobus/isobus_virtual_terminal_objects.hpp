@@ -13,6 +13,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace isobus
 {
@@ -90,7 +91,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a generic VT object. Sets up default values and the pointer to the member object pool
 		/// @param[in] memberObjectPool a pointer to the object tree that this object will be a member of
-		explicit VTObject(std::map<std::uint16_t, VTObject *> *memberObjectPool);
+		explicit VTObject(std::shared_ptr<std::map<std::uint16_t, VTObject *>> memberObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -168,7 +169,7 @@ namespace isobus
 		{
 		public:
 			/// @brief Default constructor for child object data with default values
-			ChildObjectData();
+			ChildObjectData() = default;
 
 			/// @brief Constructor that initializes all members with parameters
 			/// @param[in] objectId The object ID of this child object
@@ -177,12 +178,12 @@ namespace isobus
 			ChildObjectData(std::uint16_t objectId,
 			                std::int16_t x,
 			                std::int16_t y);
-			std::uint16_t id; ///< Object identifier. Shall be unique within the object pool.
-			std::int16_t xLocation; ///< Relative X location of the top left corner of the object
-			std::int16_t yLocation; ///< Relative Y location of the top left corner of the object
+			std::uint16_t id = NULL_OBJECT_ID; ///< Object identifier. Shall be unique within the object pool.
+			std::int16_t xLocation = 0; ///< Relative X location of the top left corner of the object
+			std::int16_t yLocation = 0; ///< Relative Y location of the top left corner of the object
 		};
 
-		std::map<std::uint16_t, VTObject *> *thisObjectPool; ///< A pointer to the rest of the object pool. Convenient for lookups by object ID.
+		std::shared_ptr<std::map<std::uint16_t, VTObject *>> thisObjectPool; ///< A pointer to the rest of the object pool. Convenient for lookups by object ID.
 		std::vector<ChildObjectData> children; ///< List of child objects
 		std::uint16_t objectID = NULL_OBJECT_ID; ///< Object identifier. Shall be unique within the object pool.
 		std::uint16_t width = 0; ///< The width of the object. Not always applicable, but often used.
@@ -197,7 +198,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a working set object
 		/// @param[in] parentObjectPool A pointer to the object pool this object is a member of
-		explicit WorkingSet(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit WorkingSet(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -228,11 +229,11 @@ namespace isobus
 		void set_active_mask(std::uint16_t value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 18; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<std::string> languageCodes; ///< A list of 2 character language codes, like "en"
-		std::uint16_t activeMask; ///< The currently active mask for this working set
-		bool selectable; ///< If this working set is selectable right now
+		std::uint16_t activeMask = NULL_OBJECT_ID; ///< The currently active mask for this working set
+		bool selectable = false; ///< If this working set is selectable right now
 	};
 
 	/// @brief The Data Mask describes the objects that will appear in the Data Mask area of the physical display.
@@ -241,7 +242,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a data mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit DataMask(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit DataMask(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -256,9 +257,9 @@ namespace isobus
 		bool get_is_valid() const override;
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 8; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t softKeyMask; ///< The object ID of a soft key mask, or the null object ID if none is to be rendered
+		std::uint16_t softKeyMask = NULL_OBJECT_ID; ///< The object ID of a soft key mask, or the null object ID if none is to be rendered
 	};
 
 	/// @brief Similar to a data mask, but takes priority and will be shown over data masks.
@@ -285,7 +286,7 @@ namespace isobus
 
 		/// @brief Constructor for a alarm mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit AlarmMask(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit AlarmMask(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -322,9 +323,9 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t softKeyMask; ///< Object ID of a soft key mask for this alarm mask, or the null ID
-		Priority maskPriority; ///< The priority of this mask
-		AcousticSignal signalPriority; ///< The acoustic signal priority for this mask
+		std::uint16_t softKeyMask = NULL_OBJECT_ID; ///< Object ID of a soft key mask for this alarm mask, or the null ID
+		Priority maskPriority = Priority::Low; ///< The priority of this mask
+		AcousticSignal signalPriority = AcousticSignal::None; ///< The acoustic signal priority for this mask
 	};
 
 	/// @brief The Container object is used to group objects for the purpose of moving, hiding or sharing the group.
@@ -335,7 +336,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a container object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Container(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit Container(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -372,7 +373,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a soft key mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit SoftKeyMask(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit SoftKeyMask(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -397,7 +398,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a key object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Key(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit Key(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -438,7 +439,7 @@ namespace isobus
 
 		/// @brief Constructor for a key group object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit KeyGroup(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit KeyGroup(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -479,8 +480,8 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t keyGroupIcon; ///< The VT may use	this in the proprietary mapping screen to represent the key group
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
+		std::uint16_t keyGroupIcon = NULL_OBJECT_ID; ///< The VT may use	this in the proprietary mapping screen to represent the key group
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 	};
 
 	/// @brief The Button object defines a button control.
@@ -504,7 +505,7 @@ namespace isobus
 
 		/// @brief Constructor for a button object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Button(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit Button(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -562,7 +563,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an input boolean object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputBoolean(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit InputBoolean(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -633,7 +634,7 @@ namespace isobus
 
 		/// @brief Constructor for a input string object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputString(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit InputString(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -732,7 +733,7 @@ namespace isobus
 
 		/// @brief Constructor for an input number object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit InputNumber(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -879,7 +880,7 @@ namespace isobus
 
 		/// @brief Constructor for an input list object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputList(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit InputList(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -955,7 +956,7 @@ namespace isobus
 
 		/// @brief Constructor for an output string object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputString(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputString(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1045,7 +1046,7 @@ namespace isobus
 
 		/// @brief Constructor for an output number object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		OutputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputNumber(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1147,7 +1148,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an output list object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputList(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputList(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1186,7 +1187,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an output line object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputLine(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputLine(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1235,7 +1236,7 @@ namespace isobus
 
 		/// @brief Constructor for an output rectangle object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputRectangle(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputRectangle(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1280,7 +1281,7 @@ namespace isobus
 
 		/// @brief Constructor for an output ellipse object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputEllipse(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputEllipse(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1355,7 +1356,7 @@ namespace isobus
 
 		/// @brief Constructor for an output polygon object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputPolygon(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputPolygon(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1409,7 +1410,7 @@ namespace isobus
 
 		/// @brief Constructor for an output meter object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputMeter(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputMeter(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1545,7 +1546,7 @@ namespace isobus
 
 		/// @brief Constructor for an output linear bar graph object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputLinearBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputLinearBarGraph(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1673,7 +1674,7 @@ namespace isobus
 
 		/// @brief Constructor for an output arched bar graph object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputArchedBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit OutputArchedBarGraph(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1827,7 +1828,7 @@ namespace isobus
 
 		/// @brief Constructor for a picture graphic (bitmap) object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit PictureGraphic(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit PictureGraphic(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1926,7 +1927,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a number variable object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit NumberVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit NumberVariable(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1960,7 +1961,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a string variable object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit StringVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit StringVariable(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2043,7 +2044,7 @@ namespace isobus
 
 		/// @brief Constructor for a font attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit FontAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit FontAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2114,7 +2115,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a line attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit LineAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit LineAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2157,7 +2158,7 @@ namespace isobus
 
 		/// @brief Constructor for a fill attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit FillAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit FillAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2200,7 +2201,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a input attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit InputAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2244,7 +2245,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an extended input attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit ExtendedInputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit ExtendedInputAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2281,8 +2282,9 @@ namespace isobus
 		class CodePlane
 		{
 		public:
+			CodePlane() = default;
 			std::vector<std::vector<wchar_t>> characterRanges; ///< A list of character ranges for this code plane
-			std::uint8_t numberOfCharacterRanges; ///< The number of expected character ranges for this code plane
+			std::uint8_t numberOfCharacterRanges = 0; ///< The number of expected character ranges for this code plane
 		};
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
 
@@ -2296,7 +2298,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a object pointer object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit ObjectPointer(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit ObjectPointer(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2353,7 +2355,7 @@ namespace isobus
 
 		/// @brief Constructor for a macro object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Macro(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit Macro(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2378,7 +2380,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a colour map object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit ColourMap(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		explicit ColourMap(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object

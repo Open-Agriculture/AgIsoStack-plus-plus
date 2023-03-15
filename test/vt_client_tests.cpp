@@ -139,7 +139,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
-	static constexpr std::uint16_t NULL_OBJECT_ID = isobus::VirtualTerminalClient::NULL_OBJECT_ID;
+	static constexpr std::uint16_t NULL_OBJECT_ID = isobus::NULL_OBJECT_ID;
 	EXPECT_EQ(NULL_OBJECT_ID, clientUnderTest.get_visible_data_mask());
 	EXPECT_EQ(NULL_OBJECT_ID, clientUnderTest.get_visible_soft_key_mask());
 

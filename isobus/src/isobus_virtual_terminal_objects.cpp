@@ -12,7 +12,7 @@
 
 namespace isobus
 {
-	VTObject::VTObject(std::map<std::uint16_t, VTObject *> *memberObjectPool) :
+	VTObject::VTObject(std::shared_ptr<std::map<std::uint16_t, VTObject *>> memberObjectPool) :
 	  thisObjectPool(memberObjectPool)
 	{
 		assert(nullptr != thisObjectPool);
@@ -106,13 +106,6 @@ namespace isobus
 		return retVal;
 	}
 
-	VTObject::ChildObjectData::ChildObjectData() :
-	  id(NULL_OBJECT_ID),
-	  xLocation(0),
-	  yLocation(0)
-	{
-	}
-
 	VTObject::ChildObjectData::ChildObjectData(std::uint16_t objectId,
 	                                           std::int16_t x,
 	                                           std::int16_t y) :
@@ -122,10 +115,8 @@ namespace isobus
 	{
 	}
 
-	WorkingSet::WorkingSet(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
-	  activeMask(NULL_OBJECT_ID),
-	  selectable(false)
+	WorkingSet::WorkingSet(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
+	  VTObject(parentObjectPool)
 	{
 	}
 
@@ -143,9 +134,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -201,9 +192,8 @@ namespace isobus
 		activeMask = value;
 	}
 
-	DataMask::DataMask(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
-	  softKeyMask(NULL_OBJECT_ID)
+	DataMask::DataMask(std::shared_ptr<std::map<std::uint16_t, VTObject *>> parentObjectPool) :
+	  VTObject(parentObjectPool)
 	{
 	}
 
@@ -221,7 +211,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -269,11 +259,8 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	AlarmMask::AlarmMask(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
-	  softKeyMask(0),
-	  maskPriority(Priority::Low),
-	  signalPriority(AcousticSignal::None)
+	AlarmMask::AlarmMask(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
+	  VTObject(parentObjectPool)
 	{
 	}
 
@@ -291,7 +278,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -323,6 +310,7 @@ namespace isobus
 					case VirtualTerminalObjectType::AuxiliaryInputType2:
 					case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -358,7 +346,7 @@ namespace isobus
 		signalPriority = value;
 	}
 
-	Container::Container(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	Container::Container(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  hidden(false)
 	{
@@ -378,7 +366,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -437,7 +425,7 @@ namespace isobus
 		hidden = value;
 	}
 
-	SoftKeyMask::SoftKeyMask(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	SoftKeyMask::SoftKeyMask(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool)
 	{
 	}
@@ -456,7 +444,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -483,7 +471,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	Key::Key(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	Key::Key(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  keyCode(0)
 	{
@@ -503,7 +491,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -554,9 +542,8 @@ namespace isobus
 		keyCode = value;
 	}
 
-	KeyGroup::KeyGroup(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
-	  keyGroupIcon(NULL_OBJECT_ID)
+	KeyGroup::KeyGroup(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
+	  VTObject(parentObjectPool)
 	{
 	}
 
@@ -574,7 +561,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -632,7 +619,7 @@ namespace isobus
 		}
 	}
 
-	Button::Button(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	Button::Button(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  borderColour(0),
 	  keyCode(0),
@@ -654,7 +641,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -736,7 +723,7 @@ namespace isobus
 		}
 	}
 
-	InputBoolean::InputBoolean(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	InputBoolean::InputBoolean(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  value(0),
 	  enabled(false)
@@ -757,7 +744,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -766,6 +753,7 @@ namespace isobus
 				{
 					case VirtualTerminalObjectType::NumberVariable:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -801,7 +789,7 @@ namespace isobus
 		enabled = value;
 	}
 
-	InputString::InputString(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	InputString::InputString(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  optionsBitfield(0),
 	  justificationBitfield(0),
@@ -824,7 +812,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -835,6 +823,7 @@ namespace isobus
 					case VirtualTerminalObjectType::FontAttributes:
 					case VirtualTerminalObjectType::InputAttributes:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -897,7 +886,7 @@ namespace isobus
 		justificationBitfield = value;
 	}
 
-	InputNumber::InputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	InputNumber::InputNumber(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  scale(0.0f),
 	  maximumValue(0),
@@ -926,7 +915,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1080,7 +1069,7 @@ namespace isobus
 		value = inputValue;
 	}
 
-	InputList::InputList(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	InputList::InputList(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  numberOfListItems(0),
 	  optionsBitfield(0),
@@ -1102,7 +1091,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1112,6 +1101,7 @@ namespace isobus
 					case VirtualTerminalObjectType::NumberVariable:
 					case VirtualTerminalObjectType::OutputString:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -1159,7 +1149,7 @@ namespace isobus
 		value = inputValue;
 	}
 
-	OutputString::OutputString(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputString::OutputString(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  optionsBitfield(0),
 	  justificationBitfield(0),
@@ -1181,7 +1171,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1191,6 +1181,7 @@ namespace isobus
 					case VirtualTerminalObjectType::StringVariable:
 					case VirtualTerminalObjectType::FontAttributes:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -1244,7 +1235,7 @@ namespace isobus
 		stringValue = value;
 	}
 
-	OutputNumber::OutputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputNumber::OutputNumber(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  scale(0.0f),
 	  offset(0),
@@ -1270,7 +1261,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1382,7 +1373,7 @@ namespace isobus
 		value = inputValue;
 	}
 
-	OutputList::OutputList(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputList::OutputList(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  numberOfListItems(0),
 	  value(0)
@@ -1403,7 +1394,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1443,7 +1434,7 @@ namespace isobus
 		value = aValue;
 	}
 
-	OutputLine::OutputLine(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputLine::OutputLine(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  lineDirection(0)
 	{
@@ -1458,7 +1449,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1497,7 +1488,7 @@ namespace isobus
 		lineDirection = value;
 	}
 
-	OutputRectangle::OutputRectangle(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputRectangle::OutputRectangle(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  lineSuppressionBitfield(0)
 	{
@@ -1517,7 +1508,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1527,6 +1518,7 @@ namespace isobus
 					case VirtualTerminalObjectType::LineAttributes:
 					case VirtualTerminalObjectType::FillAttributes:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -1552,7 +1544,7 @@ namespace isobus
 		lineSuppressionBitfield = value;
 	}
 
-	OutputEllipse::OutputEllipse(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputEllipse::OutputEllipse(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  ellipseType(0),
 	  startAngle(0),
@@ -1574,7 +1566,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1584,6 +1576,7 @@ namespace isobus
 					case VirtualTerminalObjectType::LineAttributes:
 					case VirtualTerminalObjectType::FillAttributes:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -1629,7 +1622,7 @@ namespace isobus
 		endAngle = value;
 	}
 
-	OutputPolygon::OutputPolygon(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputPolygon::OutputPolygon(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  polygonType(0)
 	{
@@ -1649,7 +1642,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1700,7 +1693,7 @@ namespace isobus
 		polygonType = static_cast<std::uint8_t>(value);
 	}
 
-	OutputMeter::OutputMeter(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputMeter::OutputMeter(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  minValue(0),
 	  maxValue(0),
@@ -1729,7 +1722,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1865,7 +1858,7 @@ namespace isobus
 		endAngle = value;
 	}
 
-	OutputLinearBarGraph::OutputLinearBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputLinearBarGraph::OutputLinearBarGraph(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  minValue(0),
 	  maxValue(0),
@@ -1893,7 +1886,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -1902,6 +1895,7 @@ namespace isobus
 				{
 					case VirtualTerminalObjectType::NumberVariable:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -2019,7 +2013,7 @@ namespace isobus
 		}
 	}
 
-	OutputArchedBarGraph::OutputArchedBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	OutputArchedBarGraph::OutputArchedBarGraph(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  barGraphWidth(0),
 	  minValue(0),
@@ -2049,7 +2043,7 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
 			VTObject *childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
@@ -2058,6 +2052,7 @@ namespace isobus
 				{
 					case VirtualTerminalObjectType::NumberVariable:
 					{
+						// Valid Child
 					}
 					break;
 
@@ -2195,7 +2190,7 @@ namespace isobus
 		targetValueReference = value;
 	}
 
-	PictureGraphic::PictureGraphic(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	PictureGraphic::PictureGraphic(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  numberOfBytesInRawData(0),
 	  actualWidth(0),
@@ -2315,7 +2310,7 @@ namespace isobus
 		transparencyColour = value;
 	}
 
-	NumberVariable::NumberVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	NumberVariable::NumberVariable(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  value(0)
 	{
@@ -2346,7 +2341,7 @@ namespace isobus
 		value = aValue;
 	}
 
-	StringVariable::StringVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	StringVariable::StringVariable(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool)
 	{
 	}
@@ -2376,7 +2371,7 @@ namespace isobus
 		value = aValue;
 	}
 
-	FontAttributes::FontAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	FontAttributes::FontAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  colour(0),
 	  size(0),
@@ -2450,7 +2445,7 @@ namespace isobus
 		colour = value;
 	}
 
-	LineAttributes::LineAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	LineAttributes::LineAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  lineArtBitpattern(0)
 	{
@@ -2481,7 +2476,7 @@ namespace isobus
 		lineArtBitpattern = value;
 	}
 
-	FillAttributes::FillAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	FillAttributes::FillAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  fillPattern(NULL_OBJECT_ID),
 	  type(FillType::NoFill)
@@ -2523,7 +2518,7 @@ namespace isobus
 		type = value;
 	}
 
-	InputAttributes::InputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	InputAttributes::InputAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  validationType(0)
 	{
@@ -2564,7 +2559,7 @@ namespace isobus
 		validationType = value;
 	}
 
-	ExtendedInputAttributes::ExtendedInputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	ExtendedInputAttributes::ExtendedInputAttributes(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool),
 	  validationType(0)
 	{
@@ -2605,7 +2600,7 @@ namespace isobus
 		validationType = value;
 	}
 
-	ObjectPointer::ObjectPointer(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	ObjectPointer::ObjectPointer(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool)
 	{
 	}
@@ -2625,7 +2620,7 @@ namespace isobus
 		return true;
 	}
 
-	Macro::Macro(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	Macro::Macro(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool)
 	{
 	}
@@ -2645,7 +2640,7 @@ namespace isobus
 		return true;
 	}
 
-	ColourMap::ColourMap(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
+	ColourMap::ColourMap(std::shared_ptr<std::map<std::uint16_t, VTObject *>>parentObjectPool) :
 	  VTObject(parentObjectPool)
 	{
 	}
