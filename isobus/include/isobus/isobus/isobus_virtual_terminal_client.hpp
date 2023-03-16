@@ -295,51 +295,52 @@ namespace isobus
 		/// @brief A struct for storing information of a VT key input event
 		struct VTKeyEvent
 		{
-			KeyActivationCode keyEvent; ///< The key event
-			std::uint8_t keyNumber; ///< The key number
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t objectID; ///< The object ID
 			std::uint16_t parentObjectID; ///< The parent object ID
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+			std::uint8_t keyNumber; ///< The key number
+			KeyActivationCode keyEvent; ///< The key event
 		};
 
 		/// @brief A struct for storing information of a VT pointing event
 		struct VTPointingEvent
 		{
-			KeyActivationCode keyEvent; ///< The key event
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t xPosition; ///< The x position
 			std::uint16_t yPosition; ///< The y position
 			std::uint16_t parentObjectID; ///< The parent object ID
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+			KeyActivationCode keyEvent; ///< The key event
 		};
 
 		/// @brief A struct for storing information of a VT input object selection event
 		struct VTSelectInputObjectEvent
 		{
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t objectID; ///< The object ID
 			bool objectSelected; ///< Whether the object is selected
 			bool objectOpenForInput; ///< Whether the object is open for input
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 		};
 
 		/// @brief A struct for storing information of a VT ESC message event
 		struct VTESCMessageEvent
 		{
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t objectID; ///< The object ID
 			ESCMessageErrorCode errorCode; ///< The error code
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 		};
 
 		/// @brief A struct for storing information of a VT change numeric value event
 		struct VTChangeNumericValueEvent
 		{
-			std::uint16_t objectID; ///< The object ID
-			std::uint32_t value; ///< The value
 			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+			std::uint32_t value; ///< The value
+			std::uint16_t objectID; ///< The object ID
 		};
 
 		/// @brief A struct for storing information of a VT change active mask event
 		struct VTChangeActiveMaskEvent
 		{
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t maskObjectID; ///< The mask object ID
 			std::uint16_t errorObjectID; ///< The error object ID
 			std::uint16_t parentObjectID; ///< The parent object ID
@@ -347,51 +348,50 @@ namespace isobus
 			bool maskOrChildHasErrors; ///< Whether the mask or child has errors
 			bool anyOtherError; ///< Whether there are any other errors
 			bool poolDeleted; ///< Whether the pool has been deleted
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 		};
 
 		/// @brief A struct for storing information of a VT change soft key mask event
 		struct VTChangeSoftKeyMaskEvent
 		{
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t dataOrAlarmMaskObjectID; ///< The data or alarm mask object ID
 			std::uint16_t softKeyMaskObjectID; ///< The soft key mask object ID
 			bool missingObjects; ///< Whether there are missing objects
 			bool maskOrChildHasErrors; ///< Whether the mask or child has errors
 			bool anyOtherError; ///< Whether there are any other errors
 			bool poolDeleted; ///< Whether the pool has been deleted
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 		};
 
 		/// @brief A struct for storing information of a VT change string value event
 		struct VTChangeStringValueEvent
 		{
-			std::uint16_t objectID; ///< The object ID
 			std::string value; ///< The value
 			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+			std::uint16_t objectID; ///< The object ID
 		};
 
 		/// @brief A struct for storing information of a VT on user-layout hide/show event
 		struct VTUserLayoutHideShowEvent
 		{
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t objectID; ///< The object ID
 			bool isHidden; ///< Whether the object is hidden
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 		};
 
 		/// @brief A struct for storing information of a VT control audio signal termination event
 		struct VTAudioSignalTerminationEvent
 		{
-			bool isTerminated; ///< Whether the audio signal is terminated
 			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
+			bool isTerminated; ///< Whether the audio signal is terminated
 		};
 
 		/// @brief A struct for storing information of an auxilary function event
 		struct AuxiliaryFunctionEvent
 		{
 			AssignedAuxiliaryFunction function; ///< The function
+			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 			std::uint16_t value1; ///< The first value
 			std::uint16_t value2; ///< The second value
-			VirtualTerminalClient *parentPointer; ///< A pointer to the parent VT client
 		};
 
 		/// @brief Add a listener for when a soft key is pressed or released
