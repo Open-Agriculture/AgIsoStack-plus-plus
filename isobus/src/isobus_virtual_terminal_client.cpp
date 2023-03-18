@@ -2560,7 +2560,7 @@ namespace isobus
 									//! @todo process TAN
 								}
 
-								parentVT->softKeyEventDispatcher.invoke({ static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT });
+								parentVT->softKeyEventDispatcher.invoke({ parentVT, objectID, parentObjectID, keyNumber, static_cast<KeyActivationCode>(keyCode) });
 							}
 						}
 						break;
@@ -2577,7 +2577,7 @@ namespace isobus
 								{
 									//! @todo process TAN
 								}
-								parentVT->buttonEventDispatcher.invoke({ static_cast<KeyActivationCode>(keyCode), keyNumber, objectID, parentObjectID, parentVT });
+								parentVT->buttonEventDispatcher.invoke({ parentVT, objectID, parentObjectID, keyNumber, static_cast<KeyActivationCode>(keyCode) });
 							}
 						}
 						break;
@@ -2588,12 +2588,12 @@ namespace isobus
 							std::uint16_t yPosition = message->get_uint16_at(3);
 
 							std::uint8_t touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
-							std::uint16_t partenMaskObjectID = NULL_OBJECT_ID;
+							std::uint16_t parentMaskObjectID = NULL_OBJECT_ID;
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
 								// VT version is at least 6
 								touchState = message->get_uint8_at(5) & 0x0F;
-								partenMaskObjectID = message->get_uint16_at(6);
+								parentMaskObjectID = message->get_uint16_at(6);
 								//! @todo process TAN
 							}
 							else if (parentVT->get_vt_version_supported(VTVersion::Version4))
@@ -2604,7 +2604,7 @@ namespace isobus
 
 							if (touchState <= static_cast<std::uint8_t>(KeyActivationCode::ButtonPressAborted))
 							{
-								parentVT->pointingEventDispatcher.invoke({ static_cast<KeyActivationCode>(touchState), xPosition, yPosition, partenMaskObjectID, parentVT });
+								parentVT->pointingEventDispatcher.invoke({ parentVT, xPosition, yPosition, parentMaskObjectID, static_cast<KeyActivationCode>(touchState) });
 							}
 						}
 						break;
@@ -2625,7 +2625,7 @@ namespace isobus
 								//! @todo process TAN
 							}
 
-							parentVT->selectInputObjectEventDispatcher.invoke({ objectID, objectSelected, objectOpenForInput, parentVT });
+							parentVT->selectInputObjectEventDispatcher.invoke({ parentVT, objectID, objectSelected, objectOpenForInput });
 						}
 						break;
 
@@ -2641,7 +2641,7 @@ namespace isobus
 									//! @todo process TAN
 								}
 
-								parentVT->escMessageEventDispatcher.invoke({ objectID, static_cast<ESCMessageErrorCode>(errorCode), parentVT });
+								parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, static_cast<ESCMessageErrorCode>(errorCode) });
 							}
 						}
 						break;
@@ -2655,7 +2655,7 @@ namespace isobus
 							{
 								//! @todo process TAN
 							}
-							parentVT->changeNumericValueEventDispatcher.invoke({ objectID, value, parentVT });
+							parentVT->changeNumericValueEventDispatcher.invoke({ parentVT, value, objectID });
 						}
 						break;
 
@@ -2671,14 +2671,14 @@ namespace isobus
 							std::uint16_t errorObjectID = message->get_uint16_at(4);
 							std::uint16_t parentObjectID = message->get_uint16_at(6);
 
-							parentVT->changeActiveMaskEventDispatcher.invoke({ maskObjectID,
+							parentVT->changeActiveMaskEventDispatcher.invoke({ parentVT,
+							                                                   maskObjectID,
 							                                                   errorObjectID,
 							                                                   parentObjectID,
 							                                                   missingObjects,
 							                                                   maskOrChildHasErrors,
 							                                                   anyOtherError,
-							                                                   poolDeleted,
-							                                                   parentVT });
+							                                                   poolDeleted });
 						}
 						break;
 
@@ -2692,13 +2692,13 @@ namespace isobus
 							bool anyOtherError = message->get_bool_at(5, 4);
 							bool poolDeleted = message->get_bool_at(5, 5);
 
-							parentVT->changeSoftKeyMaskEventDispatcher.invoke({ dataOrAlarmMaskID,
+							parentVT->changeSoftKeyMaskEventDispatcher.invoke({ parentVT,
+							                                                    dataOrAlarmMaskID,
 							                                                    softKeyMaskID,
 							                                                    missingObjects,
 							                                                    maskOrChildHasErrors,
 							                                                    anyOtherError,
-							                                                    poolDeleted,
-							                                                    parentVT });
+							                                                    poolDeleted });
 						}
 						break;
 
@@ -2708,7 +2708,7 @@ namespace isobus
 							std::uint8_t stringLength = message->get_uint8_at(3);
 							std::string value = std::string(message->get_data().begin() + 4, message->get_data().begin() + 4 + stringLength);
 
-							parentVT->changeStringValueEventDispatcher.invoke({ objectID, value, parentVT });
+							parentVT->changeStringValueEventDispatcher.invoke({ value, parentVT, objectID });
 						}
 						break;
 
@@ -2717,14 +2717,14 @@ namespace isobus
 							std::uint16_t objectID = message->get_uint16_at(1);
 							bool hidden = !message->get_bool_at(3, 0);
 
-							parentVT->userLayoutHideShowEventDispatcher.invoke({ objectID, hidden, parentVT });
+							parentVT->userLayoutHideShowEventDispatcher.invoke({ parentVT, objectID, hidden });
 
 							// There could be two layout messages in one packet
 							objectID = message->get_uint16_at(4);
 							if (objectID != NULL_OBJECT_ID)
 							{
 								hidden = !message->get_bool_at(6, 0);
-								parentVT->userLayoutHideShowEventDispatcher.invoke({ objectID, hidden, parentVT });
+								parentVT->userLayoutHideShowEventDispatcher.invoke({ parentVT, objectID, hidden });
 							}
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
@@ -2738,7 +2738,7 @@ namespace isobus
 						{
 							bool terminated = message->get_bool_at(1, 0);
 
-							parentVT->audioSignalTerminationEventDispatcher.invoke({ terminated, parentVT });
+							parentVT->audioSignalTerminationEventDispatcher.invoke({ parentVT, terminated });
 
 							if (parentVT->get_vt_version_supported(VTVersion::Version6))
 							{
@@ -2899,7 +2899,7 @@ namespace isobus
 								});
 								if (aux.functions.end() != result)
 								{
-									parentVT->auxiliaryFunctionEventDispatcher.invoke({ *result, value1, value2, parentVT });
+									parentVT->auxiliaryFunctionEventDispatcher.invoke({ *result, parentVT, value1, value2 });
 								}
 							}
 						}
