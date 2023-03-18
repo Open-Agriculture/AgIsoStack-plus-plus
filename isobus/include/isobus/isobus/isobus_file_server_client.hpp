@@ -9,11 +9,12 @@
 #ifndef ISOBUS_FILE_SERVER_CLIENT_HPP
 #define ISOBUS_FILE_SERVER_CLIENT_HPP
 
-#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
+#include <map>
 #include <memory>
 #include <thread>
 
@@ -54,7 +55,7 @@ namespace isobus
 			SendCloseFile, ///< Try to close the file
 			WaitForCloseFileResponse ///< Waiting for a response to our request to close a file
 		};
-		
+
 		/// @brief Enumerates the different ways a file or directory can be opened
 		enum class FileOpenMode : std::uint8_t
 		{
@@ -85,7 +86,7 @@ namespace isobus
 		};
 
 		/// @brief The different read-only states you can request for a file
-		enum class ReadOnlyAttributeCommand : std::uint8_t 
+		enum class ReadOnlyAttributeCommand : std::uint8_t
 		{
 			ClearReadOnly = 0, ///< Clears the read only attribute
 			SetReadOnly = 1, ///< Sets the read only attribute
@@ -102,12 +103,25 @@ namespace isobus
 		/// @brief Destructor for a FileServerClient
 		~FileServerClient();
 
+		/// @brief Requests to change the current directory
+		/// @param[in] path The directory path to change to
+		/// @returns true if the request was sent to the file server, otherwise false
 		bool change_directory(std::string &path);
 
+		/// @brief Returns the current directory that we're browsing on the server. Similar to running "pwd"
+		/// @returns Out current working directory on the server
 		std::string get_current_directory() const;
 
+		/// @brief Returns the state of a single file attribute
+		/// @param[in] handle File handle associated to the file whose attribute you want to check
+		/// @param[in] attributeToGet The attribute to check
+		/// @returns true if the selected attribute is set on the file
 		bool get_file_attribute(std::uint8_t handle, FileHandleAttributesBit attributeToGet);
 
+		/// @brief Sets a file's attributes
+		/// @param[in] filePath Path to the file to change attributes on
+		/// @param[in] hidden true to set the hidden attribute, false to show the file
+		/// @param[in] readOnly true to mark the file as read only, false to mark the file as writeable
 		bool set_file_attribute(std::string filePath, bool hidden, ReadOnlyAttributeCommand readOnly);
 
 		/// @brief Returns the file handle (if any) is accociated with a file path
@@ -115,6 +129,9 @@ namespace isobus
 		/// @returns The handle associated with the file path, or INVALID_FILE_HANDLE if no match was found
 		std::uint8_t get_file_handle(std::string filePath);
 
+		/// @brief Returns the state of a file that the client is managing
+		/// @param[in] handle A file handle associated to the file whose status you want retrieved.
+		/// @returns The state of the file associated to the handle you passed in
 		FileState get_file_state(std::uint8_t handle);
 
 		/// @brief Opens a file for interaction
@@ -131,6 +148,11 @@ namespace isobus
 		/// @returns `true` if the command was accepted and the interface will send the close file message
 		bool close_file(std::uint8_t handle);
 
+		/// @brief Writes data to a file associated with a handle
+		/// @note File must be open to write, and your handle must be valid.
+		/// @param[in] handle The file handle associated to the file you want to write to
+		/// @param[in] data A pointer to some data to write
+		/// @param[in] dataSize The amount of data to write in bytes
 		bool write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize);
 
 		// Setup Functions
@@ -154,8 +176,8 @@ namespace isobus
 		/// To configure that behavior, see the initialize function.
 		void update();
 
-	private:
-		// @brief The number of the edition or version of ISO 11783-13 with which the FS or client is compliant
+	protected:
+		/// @brief The number of the edition or version of ISO 11783-13 with which the FS or client is compliant
 		enum class VersionNumber : std::uint8_t
 		{
 			DraftEdition = 0, ///< Draft edition of the International Standard
@@ -197,7 +219,7 @@ namespace isobus
 		};
 
 		/// @brief The multiplexor byte options for the file server to client PGN
-		enum class FileServerToClientMultiplexor : std::uint8_t 
+		enum class FileServerToClientMultiplexor : std::uint8_t
 		{
 			FileServerStatus = 0x00, ///< The File Server Status message is sent by the FS to provide file server status information
 			GetFileServerPropertiesResponse = 0x01, ///< The Get File Server Properties Response message is sent by the FS to a client in response to the Get File Server Properties message.
@@ -218,7 +240,7 @@ namespace isobus
 		};
 
 		/// @brief The multiplexor byte options for the client to file server PGN
-		enum class ClientToFileServerMultiplexor : std::uint8_t 
+		enum class ClientToFileServerMultiplexor : std::uint8_t
 		{
 			ClientConnectionMaintenance = 0x00, ///< The Client Connection Maintenance message is sent by a client in order to maintain a connection with the FS
 			GetFileServerProperties = 0x01, ///< The Get File Server Properties message is sent by the client to request the FS properties.
@@ -242,27 +264,27 @@ namespace isobus
 		enum class TransmitFlags
 		{
 			ClientToServerStatus = 0, ///< Flag to send the maintenance message to the file server
-			
+
 			NumberFlags ///< The number of flags in this enumeration
 		};
 
-		// @brief A storage class to keep track of file metadata that the interface is managing
+		/// @brief A storage class to keep track of file metadata that the interface is managing
 		class FileInfo
 		{
 		public:
 			/// @brief Constructor for file info, sets default values
-			FileInfo();
+			FileInfo() = default;
 
 			std::string fileName; ///< The file name/path of this file
-			FileState state; ///< A sub-state-machine state for the file
-			FileOpenMode openMode; ///< The file open mode (read only, write only, etc)
-			FilePointerMode pointerMode; ///< Where the file pointer should be set for this file
-			std::uint32_t timstamp_ms; ///< A timestamp to track when file operations take too long
-			std::uint8_t attributesBitField; ///< The reported file attributes
-			std::uint8_t transactionNumberForRequest; ///< The TAN for the latest request corresponding to this file
-			std::uint8_t handle; ///< The file handle associated with this file
-			bool createIfNotPresent; ///< If the interface should create the file when opening it, if it does not exist
-			bool exclusiveAccess; ///< If exclusive access was requested for the file
+			FileState state = FileState::Uninitialized; ///< A sub-state-machine state for the file
+			FileOpenMode openMode = FileOpenMode::OpenFileForReadingOnly; ///< The file open mode (read only, write only, etc)
+			FilePointerMode pointerMode = FilePointerMode::AppendMode; ///< Where the file pointer should be set for this file
+			std::uint32_t timstamp_ms = 0; ///< A timestamp to track when file operations take too long
+			std::uint8_t attributesBitField = 0; ///< The reported file attributes
+			std::uint8_t transactionNumberForRequest = 0; ///< The TAN for the latest request corresponding to this file
+			std::uint8_t handle = INVALID_FILE_HANDLE; ///< The file handle associated with this file
+			bool createIfNotPresent = false; ///< If the interface should create the file when opening it, if it does not exist
+			bool exclusiveAccess = true; ///< If exclusive access was requested for the file
 		};
 
 		/// @brief Cleans up all open file's metadata, used when disconnected from the server
@@ -297,10 +319,10 @@ namespace isobus
 		/// @param[in] parentPointer A context variable that is passed back through the callback
 		/// @returns true if the data was successfully returned via the callback
 		static bool process_internal_file_write_callback(std::uint32_t callbackIndex,
-		                                                         std::uint32_t bytesOffset,
-		                                                         std::uint32_t numberOfBytesNeeded,
-		                                                         std::uint8_t *chunkBuffer,
-		                                                         void *parentPointer);
+		                                                 std::uint32_t bytesOffset,
+		                                                 std::uint32_t numberOfBytesNeeded,
+		                                                 std::uint8_t *chunkBuffer,
+		                                                 void *parentPointer);
 
 		/// @brief Sends the change current directory request message
 		/// @param[in] path The new path to change to
@@ -313,29 +335,35 @@ namespace isobus
 		/// When this message is no longer received by the FS for 6 s, the open files are closed and all Handles for that client become invalid.
 		/// The client's working directory is also lost and set back to the default.
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_client_connection_maintenance();
+		bool send_client_connection_maintenance() const;
 
 		/// @brief Sends the close file request message
 		/// @param[in] fileMetadata The file meta data structure used to send the message
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_close_file(FileInfo *fileMetadata);
+		bool send_close_file(std::shared_ptr<FileInfo> fileMetadata) const;
 
 		/// @brief Sends the get file server properties request message
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_get_file_server_properties();
+		bool send_get_file_server_properties() const;
 
 		/// @brief Sends the open file request message
 		/// @param[in] fileMetadata The file meta data structure used to send the message
 		/// @returns `true` if the message is sent, otherwise `false`
-		bool send_open_file(FileInfo *fileMetadata);
+		bool send_open_file(std::shared_ptr<FileInfo> fileMetadata) const;
 
 		/// @brief Sets the current file state and a transition timestamp
 		/// @param[in] state The new state
 		void set_state(StateMachineState state);
 
+		/// @brief Changes the internal state machine state and updates the associated timestamp to the specified one
+		/// @note This is intended for testing purposes only
+		/// @param[in] newState The new state for the state machine
+		/// @param[in] timestamp The new value for the state machine timestamp (in milliseconds)
+		void set_state(StateMachineState state, std::uint32_t timestamp_ms);
+
 		/// @brief Sets the current state machine state and a transition timestamp
 		/// @param[in] state The new state
-		void set_file_state(FileInfo *fileMetadata, FileState state);
+		void set_file_state(std::shared_ptr<FileInfo> fileMetadata, FileState state);
 
 		/// @brief Updates the sub-state-machines of each managed file
 		void update_open_files();
@@ -343,37 +371,39 @@ namespace isobus
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
+	private:
 		static constexpr std::uint32_t SERVER_STATUS_MESSAGE_TIMEOUT_MS = 6000; ///< The max time to wait for a server status message. After this time, we can assume it has shutdown.
 		static constexpr std::uint32_t CLIENT_STATUS_MESSAGE_REPETITION_RATE_MS = 2000; ///< The time interval to use when sending the client maintenance message
-		static constexpr std::uint32_t GENERAL_OPERATION_TIMEOUT = 1250; ///< The standard says that the timouts should be "rasonable" and to use the timeouts from TP and ETP, so I selected the t2/t3 timeout
+		static constexpr std::uint32_t GENERAL_OPERATION_TIMEOUT = 1250; ///< The standard says that the timouts should be "reasonable" and to use the timeouts from TP and ETP, so I selected the t2/t3 timeout
 		static constexpr std::uint8_t FILE_SERVER_BUSY_READING_BIT_MASK = 0x01; ///< A bitmask for reading the "busy reading" bit out of fileServerStatusBitfield
 		static constexpr std::uint8_t FILE_SERVER_BUSY_WRITING_BIT_MASK = 0x02; ///< A bitmask for reading the "busy writing" bit out of fileServerStatusBitfield
 		static constexpr std::uint8_t FILE_SERVER_CAPABILITIES_BIT_MASK = 0x01; ///< A bitmask for the multiple volume support bit in fileServerCapabilitiesBitfield
 		static constexpr CANIdentifier::CANPriority FILE_SERVER_MESSAGE_PRIORITY = CANIdentifier::CANPriority::PriorityLowest7; ///< All FS messages are sent with lowest priority
+		static const std::map<ErrorCode, std::string> ERROR_TO_STRING_MAP; ///< A map between error code and a string description
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 
-		std::thread *workerThread; ///< The worker thread that updates this interface
+		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		std::mutex metadataMutex; ///< Protects the TAN and file metadata list
-		std::list<FileInfo *> fileInfoList; ///< List of files the client interface knows about and is managing
+		std::list<std::shared_ptr<FileInfo>> fileInfoList; ///< List of files the client interface knows about and is managing
 		ProcessingFlags txFlags; ///< A retry mechanism for internal Tx messages
-		StateMachineState currentState; ///< The current state machine state
+		StateMachineState currentState = StateMachineState::Disconnected; ///< The current state machine state
 		std::string currentDirectory; ///< Maintatains our current working directory location
-		const std::uint8_t *currentFileWriteData; ///< A pointer to the data for any in-progress file write
+		const std::uint8_t *currentFileWriteData = nullptr; ///< A pointer to the data for any in-progress file write
 
-		std::uint32_t currentFileWriteSize; ///< The size of any in-progress file write
-		std::uint32_t stateMachineTimestamp_ms; ///< The timestamp for when the state machine state was last updated
-		std::uint32_t lastServerStatusTimestamp_ms; ///< The timstamp when we last got a status message from the server
-		std::uint8_t fileServerStatusBitfield; ///< The current status of the FS. Can be 0, or have bits set for busy either reading or writing
-		std::uint8_t numberFilesOpen; ///< The number of files that are currently open at the FS.
-		std::uint8_t maxNumberSimultaneouslyOpenFiles; ///< The maximum number of files that can be opened simultaneously on the FS
-		std::uint8_t fileServerCapabilitiesBitfield; ///< If the server supports only 1 volume or multiple volumes
-		std::uint8_t fileServerVersion; ///< The version of the standard that the file server complies to
-		std::uint8_t transactionNumber; ///< The TAN as specified in ISO 11783-13
-		std::uint8_t currentFileWriteHandle; ///< Used to keep track of if we're currently writing a file, and which file is being written.
-		bool initialized; ///< Stores the client initialization state
-		bool shouldTerminate; ///< Used to determine if the client should exit and join the worker thread
+		std::uint32_t currentFileWriteSize = 0; ///< The size of any in-progress file write
+		std::uint32_t stateMachineTimestamp_ms = 0; ///< The timestamp for when the state machine state was last updated
+		std::uint32_t lastServerStatusTimestamp_ms = 0; ///< The timstamp when we last got a status message from the server
+		std::uint8_t fileServerStatusBitfield = 0; ///< The current status of the FS. Can be 0, or have bits set for busy either reading or writing
+		std::uint8_t numberFilesOpen = 0; ///< The number of files that are currently open at the FS.
+		std::uint8_t maxNumberSimultaneouslyOpenFiles = 0; ///< The maximum number of files that can be opened simultaneously on the FS
+		std::uint8_t fileServerCapabilitiesBitfield = 0; ///< If the server supports only 1 volume or multiple volumes
+		std::uint8_t fileServerVersion = 0; ///< The version of the standard that the file server complies to
+		std::uint8_t transactionNumber = 0; ///< The TAN as specified in ISO 11783-13
+		std::uint8_t currentFileWriteHandle = INVALID_FILE_HANDLE; ///< Used to keep track of if we're currently writing a file, and which file is being written.
+		bool initialized = false; ///< Stores the client initialization state
+		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
 	};
 } // namespace isobus
 

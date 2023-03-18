@@ -8,42 +8,38 @@
 //================================================================================================
 #include "isobus/isobus/isobus_file_server_client.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
-#include "isobus/isobus/can_warning_logger.hpp"
 
 #include <cstring>
 
 namespace isobus
 {
-	FileServerClient::FileInfo::FileInfo() :
-	  state(FileState::Uninitialized),
-	  openMode(FileOpenMode::OpenFileForReadingOnly),
-	  pointerMode(FilePointerMode::AppendMode),
-	  timstamp_ms(0),
-	  transactionNumberForRequest(0),
-	  handle(INVALID_FILE_HANDLE),
-	  createIfNotPresent(false),
-	  exclusiveAccess(true)
-	{
-	}
+	const std::map<FileServerClient::ErrorCode, std::string> FileServerClient::ERROR_TO_STRING_MAP = {
+		{ ErrorCode::Success, "Success" },
+		{ ErrorCode::AccessDenied, "Access Denied" },
+		{ ErrorCode::InvalidAccess, "Invalid Access" },
+		{ ErrorCode::TooManyFilesOpen, "Too Many Files Open" },
+		{ ErrorCode::FilePathOrVolumeNotFound, "File Path or Volume Not Found" },
+		{ ErrorCode::InvalidHandle, "Invalid Handle" },
+		{ ErrorCode::InvalidGivenSourceName, "Invalid Given Source Name" },
+		{ ErrorCode::InvalidGivenDestinationName, "Invalid Given Destination Name" },
+		{ ErrorCode::VolumeOutOfFreeSpace, "Volume Out of Free Space" },
+		{ ErrorCode::FailureDuringAWriteOperation, "Failure During a Write Operation" },
+		{ ErrorCode::MediaNotPresent, "Media not Present" },
+		{ ErrorCode::FailureDuringAReadOperation, "Failure During a Read Operation" },
+		{ ErrorCode::FunctionNotSupported, "Function not Supported" },
+		{ ErrorCode::VolumeIsPossiblyNotInitialized, "Volume is Possibly not Initialized" },
+		{ ErrorCode::InvalidRequestLength, "Invalid Request Length" },
+		{ ErrorCode::OutOfMemory, "Out of Memory" },
+		{ ErrorCode::AnyOtherError, "Any Other Error" },
+		{ ErrorCode::FilePointerAtEndOfFile, "File Pointer at End of File" }
+	};
 
 	FileServerClient::FileServerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  partnerControlFunction(partner),
 	  myControlFunction(clientSource),
-	  workerThread(nullptr),
-	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this),
-	  currentState(StateMachineState::Disconnected),
-	  currentFileWriteData(nullptr),
-	  currentFileWriteSize(0),
-	  stateMachineTimestamp_ms(0),
-	  fileServerStatusBitfield(0),
-	  numberFilesOpen(0),
-	  maxNumberSimultaneouslyOpenFiles(0),
-	  fileServerCapabilitiesBitfield(0),
-	  fileServerVersion(0),
-	  transactionNumber(0),
-	  currentFileWriteHandle(INVALID_FILE_HANDLE),
-	  initialized(false)
+	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this)
 	{
 	}
 
@@ -144,7 +140,7 @@ namespace isobus
 
 		if (!fileAlreadyInList)
 		{
-			FileInfo *newFileMetadata = new FileInfo;
+			auto newFileMetadata = std::make_shared<FileInfo>();
 
 			newFileMetadata->fileName = fileName;
 			newFileMetadata->createIfNotPresent = createIfNotPresent;
@@ -158,14 +154,14 @@ namespace isobus
 
 			fileInfoList.push_back(newFileMetadata);
 		}
-		return (false == fileAlreadyInList);
+		return !fileAlreadyInList;
 	}
 
 	bool FileServerClient::close_file(std::uint8_t handle)
 	{
 		bool retVal = false;
 
-		const std::unique_lock<std::mutex> lock(metadataMutex);
+		const std::lock_guard<std::mutex> lock(metadataMutex);
 
 		for (auto file : fileInfoList)
 		{
@@ -187,7 +183,7 @@ namespace isobus
 
 		if ((INVALID_FILE_HANDLE == currentFileWriteHandle) &&
 		    (nullptr != data) &&
-			(0 != dataSize))
+		    (0 != dataSize))
 		{
 			for (auto file : fileInfoList)
 			{
@@ -275,8 +271,8 @@ namespace isobus
 
 				case StateMachineState::WaitForGetFileServerPropertiesResponse:
 				{
-					if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) || 
-						(SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
+					if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
+					    (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
 					{
 						set_state(StateMachineState::Disconnected);
 						lastServerStatusTimestamp_ms = 0;
@@ -321,7 +317,6 @@ namespace isobus
 
 				case StateMachineState::SendChangeDirectoryRequest:
 				{
-
 				}
 				break;
 
@@ -347,134 +342,18 @@ namespace isobus
 
 	void FileServerClient::clear_all_file_metadata()
 	{
-		std::unique_lock<std::mutex> lock(metadataMutex);
-
-		for (auto file : fileInfoList)
-		{
-			delete file;
-		}
+		const std::lock_guard<std::mutex> lock(metadataMutex);
 		fileInfoList.clear();
 	}
 
 	std::string FileServerClient::error_code_to_string(ErrorCode errorCode) const
 	{
-		std::string retVal;
+		std::string retVal = "Undefined Error"; // Perhaps the file server version is newer than we support?
 
-		switch (errorCode)
+		auto errorText = ERROR_TO_STRING_MAP.find(errorCode);
+		if (ERROR_TO_STRING_MAP.end() != errorText)
 		{
-			case ErrorCode::Success:
-			{
-				retVal = "Success";
-			}
-			break;
-
-			case ErrorCode::AccessDenied:
-			{
-				retVal = "Access Denied";
-			}
-			break;
-
-			case ErrorCode::InvalidAccess:
-			{
-				retVal = "Invalid Access";
-			}
-			break;
-
-			case ErrorCode::TooManyFilesOpen:
-			{
-				retVal = "Too Many Files Open";
-			}
-			break;
-
-			case ErrorCode::FilePathOrVolumeNotFound:
-			{
-				retVal = "File Path Or Volume Not Found";
-			}
-			break;
-
-			case ErrorCode::InvalidHandle:
-			{
-				retVal = "Invalid Handle";
-			}
-			break;
-
-			case ErrorCode::InvalidGivenSourceName:
-			{
-				retVal = "Invalid Given Source Name";
-			}
-			break;
-
-			case ErrorCode::InvalidGivenDestinationName:
-			{
-				retVal = "Invalid Given Destination Name";
-			}
-			break;
-
-			case ErrorCode::VolumeOutOfFreeSpace:
-			{
-				retVal = "Volume Out Of Free Space";
-			}
-			break;
-
-			case ErrorCode::FailureDuringAWriteOperation:
-			{
-				retVal = "Failure During A Write Operation";
-			}
-			break;
-
-			case ErrorCode::MediaNotPresent:
-			{
-				retVal = "Media Not Present";
-			}
-			break;
-
-			case ErrorCode::FailureDuringAReadOperation:
-			{
-				retVal = "Failure During A Read Operation";
-			}
-			break;
-
-			case ErrorCode::FunctionNotSupported:
-			{
-				retVal = "Function Not Supported";
-			}
-			break;
-
-			case ErrorCode::VolumeIsPossiblyNotInitialized:
-			{
-				retVal = "Volume Is Possibly Not Initialized";
-			}
-			break;
-
-			case ErrorCode::InvalidRequestLength:
-			{
-				retVal = "Invalid Request Length";
-			}
-			break;
-
-			case ErrorCode::OutOfMemory:
-			{
-				retVal = "Out Of Memory";
-			}
-			break;
-
-			case ErrorCode::AnyOtherError:
-			{
-				retVal = "Any Other Error";
-			}
-			break;
-
-			case ErrorCode::FilePointerAtEndOfFile:
-			{
-				retVal = "File Pointer At End Of File";
-			}
-			break;
-
-			default:
-			{
-				retVal = "Undefined";
-			}
-			break;
+			retVal = errorText->second;
 		}
 		return retVal;
 	}
@@ -496,7 +375,6 @@ namespace isobus
 				}
 				break;
 
-				case TransmitFlags::NumberFlags:
 				default:
 				{
 				}
@@ -518,7 +396,7 @@ namespace isobus
 		    ((message->get_source_control_function()->get_address() == partnerControlFunction->get_address()) ||
 		     (nullptr == message->get_destination_control_function())))
 		{
-			auto messageData = message->get_data();
+			auto &messageData = message->get_data();
 
 			switch (messageData[0])
 			{
@@ -528,7 +406,7 @@ namespace isobus
 					{
 						if (0 == lastServerStatusTimestamp_ms)
 						{
-							CANStackLogger::CAN_stack_log("[FS]: New file server status detected. State machine started.");
+							CANStackLogger::debug("[FS]: New file server status detected. State machine started.");
 						}
 
 						fileServerStatusBitfield = messageData[1];
@@ -543,11 +421,11 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[FS]: Detected malformed file server status message. DLC must be 8.");
+						CANStackLogger::warn("[FS]: Detected malformed file server status message. DLC must be 8.");
 					}
 				}
 				break;
-				
+
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::GetFileServerPropertiesResponse):
 				{
 					if (CAN_DATA_LENGTH == message->get_data_length())
@@ -561,12 +439,12 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::CAN_stack_log("[FS]: Received an unexpected response to get file server properties message");
+							CANStackLogger::warn("[FS]: Received an unexpected response to get file server properties message");
 						}
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[FS]: Detected malformed file server properties response message. DLC must be 8.");
+						CANStackLogger::warn("[FS]: Detected malformed file server properties response message. DLC must be 8.");
 					}
 				}
 				break;
@@ -582,7 +460,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[FS]: Detected malformed file server change current directory response message. DLC must be 8.");
+						CANStackLogger::warn("[FS]: Detected malformed file server change current directory response message. DLC must be 8.");
 					}
 				}
 				break;
@@ -609,7 +487,7 @@ namespace isobus
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("[FS]: Open file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
+									CANStackLogger::error("[FS]: Open file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
 								}
 
 								break;
@@ -618,12 +496,12 @@ namespace isobus
 
 						if (!foundMatchingFileInList)
 						{
-							CANStackLogger::CAN_stack_log("[FS]: Open file response TAN could not be matched with any known file. The message will be ignored.");
+							CANStackLogger::error("[FS]: Open file response TAN could not be matched with any known file. The message will be ignored.");
 						}
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[FS]: Detected malformed file server open file response message. DLC must be 8.");
+						CANStackLogger::warn("[FS]: Detected malformed file server open file response message. DLC must be 8.");
 					}
 				}
 				break;
@@ -646,12 +524,11 @@ namespace isobus
 
 								if (ErrorCode::Success == operationErrorState)
 								{
-									delete (*file);
 									fileInfoList.erase(file);
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("[FS]: Close file failed for file " + (*file)->fileName + " with error code: " + error_code_to_string(operationErrorState));
+									CANStackLogger::error("[FS]: Close file failed for file " + (*file)->fileName + " with error code: " + error_code_to_string(operationErrorState));
 								}
 								break;
 							}
@@ -659,12 +536,12 @@ namespace isobus
 
 						if (!foundMatchingFileInList)
 						{
-							CANStackLogger::CAN_stack_log("[FS]: Close file response TAN could not be matched with any known file. The message will be ignored.");
+							CANStackLogger::error("[FS]: Close file response TAN could not be matched with any known file. The message will be ignored.");
 						}
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[FS]: Detected malformed close file response message. DLC must be 8.");
+						CANStackLogger::warn("[FS]: Detected malformed close file response message. DLC must be 8.");
 					}
 				}
 				break;
@@ -693,12 +570,12 @@ namespace isobus
 									else
 									{
 										// This shouldn't be possible unless something very strange is happening... if you see this issue, consider filing an issue on GitHub
-										CANStackLogger::CAN_stack_log("[FS]: Write file transaction succeeded, but matching file is not in the correct state!");
+										CANStackLogger::error("[FS]: Write file transaction succeeded, but matching file is not in the correct state!");
 									}
 								}
 								else
 								{
-									CANStackLogger::CAN_stack_log("[FS]: Write file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
+									CANStackLogger::error("[FS]: Write file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
 								}
 								break;
 							}
@@ -706,12 +583,12 @@ namespace isobus
 
 						if (!foundMatchingFileInList)
 						{
-							CANStackLogger::CAN_stack_log("[FS]: Write file response TAN could not be matched with any known file. The message will be ignored.");
+							CANStackLogger::error("[FS]: Write file response TAN could not be matched with any known file. The message will be ignored.");
 						}
 					}
 					else
 					{
-						CANStackLogger::CAN_stack_log("[FS]: Detected malformed write file response message. DLC must be 8.");
+						CANStackLogger::warn("[FS]: Detected malformed write file response message. DLC must be 8.");
 					}
 				}
 				break;
@@ -810,7 +687,7 @@ namespace isobus
 			{
 				for (std::size_t i = buffer.size(); i < CAN_DATA_LENGTH; i++)
 				{
-					buffer.push_back(0xFF);		
+					buffer.push_back(0xFF);
 				}
 			}
 
@@ -824,7 +701,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool FileServerClient::send_client_connection_maintenance()
+	bool FileServerClient::send_client_connection_maintenance() const
 	{
 		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::ClientConnectionMaintenance),
 			                                                             static_cast<std::uint8_t>(VersionNumber::SecondPublishedEdition),
@@ -843,7 +720,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool FileServerClient::send_close_file(FileInfo *fileMetadata)
+	bool FileServerClient::send_close_file(std::shared_ptr<FileInfo> fileMetadata) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::CloseFileRequest),
 			                                                   fileMetadata->transactionNumberForRequest,
@@ -861,7 +738,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool FileServerClient::send_get_file_server_properties()
+	bool FileServerClient::send_get_file_server_properties() const
 	{
 		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::GetFileServerProperties),
 			                                                             0xFF,
@@ -880,7 +757,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool FileServerClient::send_open_file(FileInfo *fileMetadata)
+	bool FileServerClient::send_open_file(std::shared_ptr<FileInfo> fileMetadata) const
 	{
 		std::vector<std::uint8_t> buffer;
 		bool retVal = false;
@@ -926,7 +803,13 @@ namespace isobus
 		currentState = state;
 	}
 
-	void FileServerClient::set_file_state(FileInfo *fileMetadata, FileState state)
+	void FileServerClient::set_state(StateMachineState state, std::uint32_t timestamp_ms)
+	{
+		stateMachineTimestamp_ms = timestamp_ms;
+		currentState = state;
+	}
+
+	void FileServerClient::set_file_state(std::shared_ptr<FileInfo> fileMetadata, FileState state)
 	{
 		if (nullptr != fileMetadata)
 		{
@@ -947,6 +830,11 @@ namespace isobus
 					{
 						set_file_state(file, FileState::WaitForOpenFileResponse);
 					}
+					else if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
+					{
+						CANStackLogger::error("[FS]: Timeout trying to send an open file message.");
+						set_file_state(file, FileState::FileOpenFailed);
+					}
 				}
 				break;
 
@@ -954,6 +842,7 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
+						CANStackLogger::error("[FS]: Timeout waiting to an open file response message.");
 						set_file_state(file, FileState::FileOpenFailed);
 					}
 				}
@@ -964,6 +853,10 @@ namespace isobus
 					if (send_close_file(file))
 					{
 						set_file_state(file, FileState::WaitForCloseFileResponse);
+					}
+					else if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
+					{
+						CANStackLogger::error("[FS]: Timeout trying to send a close file message.");
 					}
 				}
 				break;

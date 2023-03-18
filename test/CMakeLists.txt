@@ -61,6 +61,7 @@ set(TEST_SRC
     can_message_tests.cpp
     heartbeat_tests.cpp
     tc_server_tests.cpp
+    file_server_client_tests.cpp
     helpers/control_function_helpers.cpp
     helpers/messaging_helpers.cpp)
 
