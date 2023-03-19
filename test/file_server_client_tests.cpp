@@ -47,6 +47,11 @@ public:
 	{
 		FileServerClient::set_state(newState, timestamp_ms);
 	}
+
+	bool test_wrapper_request_current_volume_status(std::string volumeName) const
+	{
+		return FileServerClient::request_current_volume_status(volumeName);
+	}
 };
 
 TEST(FILE_SERVER_CLIENT_TESTS, StateMachineTests)
@@ -170,4 +175,47 @@ TEST(FILE_SERVER_CLIENT_TESTS, MessageEncoding)
 		serverFS.read_frame(testFrame);
 	}
 	ASSERT_TRUE(serverFS.get_queue_empty());
+
+	EXPECT_EQ(true, interfaceUnderTest.test_wrapper_send_client_connection_maintenance());
+
+	ASSERT_TRUE(serverFS.read_frame(testFrame));
+
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xAA00);
+	EXPECT_EQ(0x00, testFrame.data[0]); // Mux
+	EXPECT_EQ(0x03, testFrame.data[1]); // Version
+
+	for (std::uint_fast8_t i = 2; i < 8; i++)
+	{
+		// Check Reserved Bytes
+		EXPECT_EQ(testFrame.data[i], 0xFF);
+	}
+
+	EXPECT_EQ(true, interfaceUnderTest.test_wrapper_send_get_file_server_properties());
+	ASSERT_TRUE(serverFS.read_frame(testFrame));
+
+	ASSERT_TRUE(testFrame.isExtendedFrame);
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xAA00);
+	EXPECT_EQ(0x01, testFrame.data[0]); // Mux
+	for (std::uint_fast8_t i = 1; i < 8; i++)
+	{
+		// Check Reserved Bytes
+		EXPECT_EQ(testFrame.data[i], 0xFF);
+	}
+
+	EXPECT_EQ(true, interfaceUnderTest.test_wrapper_request_current_volume_status("~/"));
+	ASSERT_TRUE(serverFS.read_frame(testFrame));
+
+	ASSERT_EQ(testFrame.dataLength, 8);
+	EXPECT_EQ(CANIdentifier(testFrame.identifier).get_parameter_group_number(), 0xAA00);
+	EXPECT_EQ(0x02, testFrame.data[0]); // Mux
+	EXPECT_EQ(0x00, testFrame.data[1]); // Mode
+	EXPECT_EQ(0x02, testFrame.data[2]); // Length LSB
+	EXPECT_EQ(0x00, testFrame.data[3]); // Length MSB
+	EXPECT_EQ('~', testFrame.data[4]); // Path
+	EXPECT_EQ('/', testFrame.data[5]); // Path
+	EXPECT_EQ(0xFF, testFrame.data[6]); // Reserved (due to length of 2)
+	EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved (due to length of 2)
 }

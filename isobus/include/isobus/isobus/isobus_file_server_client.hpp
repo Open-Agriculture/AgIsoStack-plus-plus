@@ -93,7 +93,26 @@ namespace isobus
 			DontCare = 3 ///< Leave the read only attribute alone as it is now
 		};
 
+		/// @brief Enumerates the statuses of the volume. (This parameter applies for Version 3 and later FS.)
+		enum class VolumeStatus : std::uint8_t
+		{
+			Present = 0, ///< Volume is present
+			InUse = 1, ///< Volume is in-use
+			PreparingForRemoval = 2, ///< This state will be maintained for at least 2 seconds before a volume is removed/ejected.
+			Removed = 3, ///< Volume is not present or has been ejected
+			Reserved = 4 ///< Start of the reserved range of statuses
+		};
+
 		static constexpr std::uint8_t INVALID_FILE_HANDLE = 0xFF; ///< Used to represent an invalid file handle
+
+		/// @brief A collection of volume data that can be provided to the user on-change or on-request
+		class VolumeStatusInfo
+		{
+		public:
+			std::string volumeName; ///< The name of the current volume on the file server
+			VolumeStatus currentStatus = VolumeStatus::Reserved; ///< The current state of the volume on the file server
+			std::uint8_t maximumTimeBeforeRemoval = 0; ///< the max time that the volume could be in the VolumeStatus::PreparingForRemoval state
+		};
 
 		/// @brief The constructor for a file server client
 		/// @param[in] partner The file server control function to communicate with
@@ -154,6 +173,11 @@ namespace isobus
 		/// @param[in] data A pointer to some data to write
 		/// @param[in] dataSize The amount of data to write in bytes
 		bool write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize);
+
+		/// @brief Requests the volume status from the file server for a specific volume
+		/// @param[in] volumeName The name of the volume to request the status of
+		/// @returns true if the request was sent, otherwise false
+		bool request_current_volume_status(std::string volumeName) const;
 
 		// Setup Functions
 		/// @brief This function starts the state machine. Call this once you have supplied 1 or more object pool and are ready to connect.

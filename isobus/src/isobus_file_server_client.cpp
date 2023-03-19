@@ -11,6 +11,7 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include <cassert>
 #include <cstring>
 
 namespace isobus
@@ -199,6 +200,47 @@ namespace isobus
 			}
 		}
 		return retVal;
+	}
+
+	bool FileServerClient::request_current_volume_status(std::string volumeName) const
+	{
+		constexpr std::size_t FIXED_HEADER_LENGTH_BYTES = 5;
+
+		std::vector<std::uint8_t> buffer;
+
+		assert(volumeName.size() < 0xFFFF); // Max length is 65535 since only 2 bytes are allocated for length
+		buffer.resize(FIXED_HEADER_LENGTH_BYTES + volumeName.size());
+
+		if (buffer.size() < CAN_DATA_LENGTH)
+		{
+			buffer.resize(CAN_DATA_LENGTH);
+		}
+
+		std::uint16_t pathLength = static_cast<std::uint16_t>(volumeName.size());
+
+		buffer[0] = static_cast<std::uint8_t>(ClientToFileServerMultiplexor::VolumeStatusRequest);
+		buffer[1] = 0x00; // Current Status request (B.30)
+		buffer[2] = static_cast<std::uint8_t>(pathLength & 0xFF);
+		buffer[3] = static_cast<std::uint8_t>(pathLength >> 8);
+
+		for (std::size_t i = 0; i < volumeName.size(); i++)
+		{
+			buffer[4 + i] = volumeName[i];
+		}
+
+		if ((pathLength + FIXED_HEADER_LENGTH_BYTES) < CAN_DATA_LENGTH)
+		{
+			for (std::size_t i = (pathLength + FIXED_HEADER_LENGTH_BYTES) - 1; i < CAN_DATA_LENGTH; i++)
+			{
+				buffer[i] = 0xFF; // Reserved bytes
+			}
+		}
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+		                                                      buffer.data(),
+		                                                      buffer.size(),
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
 	}
 
 	bool FileServerClient::initialize(bool spawnThread)
@@ -594,6 +636,10 @@ namespace isobus
 				break;
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::VolumeStatusResponse):
+				{
+				}
+				break;
+
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::GetCurrentDirectoryResponse):
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::SeekFileResponse):
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::ReadFileResponse):
@@ -765,6 +811,11 @@ namespace isobus
 		if (StateMachineState::Connected == get_state())
 		{
 			buffer.resize(5 + fileMetadata->fileName.size());
+
+			if (buffer.size() < CAN_DATA_LENGTH)
+			{
+				buffer.resize(CAN_DATA_LENGTH);
+			}
 
 			buffer[0] = static_cast<std::uint8_t>(ClientToFileServerMultiplexor::OpenFileRequest);
 			buffer[1] = fileMetadata->transactionNumberForRequest;
