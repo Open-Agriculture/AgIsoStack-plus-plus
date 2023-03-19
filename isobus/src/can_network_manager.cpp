@@ -250,12 +250,12 @@ namespace isobus
 		return retVal;
 	}
 
-	void isobus::receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &rxFrame)
+	void receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &rxFrame)
 	{
 		CANNetworkManager::process_receive_can_message_frame(rxFrame);
 	}
 
-	void isobus::periodic_update_from_hardware()
+	void periodic_update_from_hardware()
 	{
 		CANNetworkManager::CANNetwork.update();
 	}
