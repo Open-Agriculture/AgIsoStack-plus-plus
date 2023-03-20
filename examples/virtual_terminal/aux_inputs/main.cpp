@@ -74,7 +74,7 @@ void simulate_slider_move()
 	TestVirtualTerminalClient->update_auxiliary_input(AUXN_INPUT_SLIDER, sliderPosition, 0xFFFF);
 }
 
-void update_CAN_network(void *)
+void on_periodic_update()
 {
 	if (nullptr != TestVirtualTerminalClient &&
 	    !TestVirtualTerminalClient->get_auxiliary_input_learn_mode_enabled())
@@ -90,13 +90,6 @@ void update_CAN_network(void *)
 			simulate_slider_move();
 		}
 	}
-
-	isobus::CANNetworkManager::CANNetwork.update();
-}
-
-void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-{
-	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 }
 
 int main()
@@ -131,9 +124,7 @@ int main()
 		return -2;
 	}
 
-	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-	CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
-
+	auto updateListener = CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(on_periodic_update);
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	isobus::NAME TestDeviceNAME(0);
@@ -167,8 +158,8 @@ int main()
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1E, 0);
-	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1E, 0);
+	auto TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
