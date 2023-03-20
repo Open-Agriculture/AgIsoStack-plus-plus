@@ -29,7 +29,7 @@ namespace isobus
 		/// @brief Register a callback to be invoked when the event is invoked.
 		/// @param callback The callback to register.
 		/// @return A shared pointer to the callback.
-		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &...)> &callback)
+		std::shared_ptr<std::function<void(const E &...)>> add_listener(const std::function<void(const E &...)> &callback)
 		{
 			std::lock_guard<std::mutex> lock(callbacksMutex);
 			auto shared = std::make_shared<std::function<void(const E &...)>>(callback);
@@ -42,7 +42,7 @@ namespace isobus
 		/// @param context The context object to pass through to the callback.
 		/// @return A shared pointer to the contextless callback.
 		template<typename C>
-		std::shared_ptr<std::function<void(const E &...)>> add_listener(std::function<void(const E &..., std::shared_ptr<C>)> &callback, std::weak_ptr<C> context)
+		std::shared_ptr<std::function<void(const E &...)>> add_listener(const std::function<void(const E &..., std::shared_ptr<C>)> &callback, std::weak_ptr<C> context)
 		{
 			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
 				if (auto contextPtr = context.lock())
@@ -58,7 +58,7 @@ namespace isobus
 		/// @param context The context object to pass through to the callback.
 		/// @return A shared pointer to the contextless callback.
 		template<typename C>
-		std::shared_ptr<std::function<void(const E &...)>> add_unsafe_listener(std::function<void(const E &..., std::weak_ptr<C>)> &callback, std::weak_ptr<C> context)
+		std::shared_ptr<std::function<void(const E &...)>> add_unsafe_listener(const std::function<void(const E &..., std::weak_ptr<C>)> &callback, std::weak_ptr<C> context)
 		{
 			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
 				callback(args..., context);
