@@ -25,11 +25,6 @@ void signal_handler(int)
 	running = false;
 }
 
-void update_CAN_network(void *)
-{
-	isobus::CANNetworkManager::CANNetwork.update();
-}
-
 // This callback will provide us with event driven notifications of button presses from the stack
 void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {

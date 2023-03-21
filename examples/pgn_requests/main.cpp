@@ -21,11 +21,6 @@ void signal_handler(int)
 	running = false;
 }
 
-void update_CAN_network(void *)
-{
-	isobus::CANNetworkManager::CANNetwork.update();
-}
-
 bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumber,
                                                isobus::ControlFunction *,
                                                bool &acknowledge,
