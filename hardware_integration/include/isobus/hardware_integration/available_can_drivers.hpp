@@ -38,4 +38,8 @@
 #include "isobus/hardware_integration/mac_can_pcan_plugin.hpp"
 #endif
 
+#ifdef ISOBUS_TOUCAN_AVAILABLE
+#include "isobus/hardware_integration/toucan_vscp_canal.hpp"
+#endif
+
 #endif // AVAILABLE_CAN_DRIVERS_HPP

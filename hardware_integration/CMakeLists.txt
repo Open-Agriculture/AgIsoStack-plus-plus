@@ -60,6 +60,12 @@ if("MCP2515" IN_LIST CAN_DRIVER)
     list(APPEND HARDWARE_INTEGRATION_INCLUDE "spi_interface_esp.hpp")
   endif()
 endif()
+if("TouCAN" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "toucan_vscp_canal.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "toucan_vscp_canal.hpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "canal.h")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "canal_a.h")
+endif()
 if("MacCANPCAN" IN_LIST CAN_DRIVER)
   message(
     AUTHOR_WARNING
@@ -189,6 +195,54 @@ if("MacCANPCAN" IN_LIST CAN_DRIVER)
   target_link_libraries(
     HardwareIntegration
     PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Mac/libPCBUSB.0.12.dylib)
+endif()
+
+if("TouCAN" IN_LIST CAN_DRIVER)
+  if(WIN32)
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
+                                                   STREQUAL "X86")
+      message(STATUS "Detected x86, linking to CANAL 1.0.2 x86 library")
+      message(
+        STATUS
+          "To lean more about this driver, visit https://github.com/rusoku/CANAL-DLL or https://www.rusoku.com/"
+      )
+      message(
+        AUTHOR_WARNING
+          "
+      The TouCAN driver requires canal32d.dll to be in the same directory as the executable. A copy of this file is included in the repository,
+      under the /hardware_integration/lib/Windows directory. It is recommended to use this copy, as it is known to work with the TouCAN driver provided by the stack.
+      ")
+      target_link_libraries(
+        HardwareIntegration
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/canal32d.lib)
+    elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR
+                                                      STREQUAL "x64")
+      message(STATUS "Detected x64, linking to CANAL 1.0.2 x64 library")
+      message(
+        STATUS
+          "To lean more about this driver, visit https://github.com/rusoku/CANAL-DLL or https://www.rusoku.com/"
+      )
+      message(
+        AUTHOR_WARNING
+          "
+      The TouCAN driver requires canal64d.dll to be in the same directory as the executable. A copy of this file is included in the repository,
+      under the /hardware_integration/lib/Windows directory. It is recommended to use this copy, as it is known to work with the TouCAN driver provided by the stack.
+      ")
+      target_link_libraries(
+        HardwareIntegration
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/canal64d.lib)
+    else()
+      message(
+        FATAL_ERROR
+          "TouCAN Selected but no supported processor arch was detected. Only x64 and x86 are supported."
+      )
+    endif()
+  else()
+    message(
+      FATAL_ERROR
+        "TouCAN Selected but no supported OS was detected. Only Windows is supported currently."
+    )
+  endif()
 endif()
 
 # Mark the compiled CAN drivers available to other modules. In the form:
