@@ -10,6 +10,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <cassert>
 #include <cstring>
@@ -68,7 +69,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		for (auto file : fileInfoList)
+		for (auto &file : fileInfoList)
 		{
 			if (file->handle == handle)
 			{
@@ -96,7 +97,7 @@ namespace isobus
 
 		const std::unique_lock<std::mutex> lock(metadataMutex);
 
-		for (auto file : fileInfoList)
+		for (auto &file : fileInfoList)
 		{
 			if (file->fileName == filePath)
 			{
@@ -113,7 +114,7 @@ namespace isobus
 
 		const std::unique_lock<std::mutex> lock(metadataMutex);
 
-		for (auto file : fileInfoList)
+		for (auto &file : fileInfoList)
 		{
 			if (file->handle == handle)
 			{
@@ -130,7 +131,7 @@ namespace isobus
 
 		const std::unique_lock<std::mutex> lock(metadataMutex);
 
-		for (auto file : fileInfoList)
+		for (auto &file : fileInfoList)
 		{
 			if (file->fileName == fileName)
 			{
@@ -149,7 +150,7 @@ namespace isobus
 			newFileMetadata->openMode = openMode;
 			newFileMetadata->pointerMode = pointerMode;
 			newFileMetadata->transactionNumberForRequest = transactionNumber;
-			newFileMetadata->state = FileState::SendOpenFile;
+			newFileMetadata->state = FileState::WaitForConnection;
 			newFileMetadata->handle = INVALID_FILE_HANDLE;
 			transactionNumber++;
 
@@ -164,7 +165,7 @@ namespace isobus
 
 		const std::lock_guard<std::mutex> lock(metadataMutex);
 
-		for (auto file : fileInfoList)
+		for (auto &file : fileInfoList)
 		{
 			if (file->handle == handle)
 			{
@@ -186,7 +187,7 @@ namespace isobus
 		    (nullptr != data) &&
 		    (0 != dataSize))
 		{
-			for (auto file : fileInfoList)
+			for (auto &file : fileInfoList)
 			{
 				if (file->handle == handle)
 				{
@@ -322,11 +323,44 @@ namespace isobus
 				}
 				break;
 
+				case StateMachineState::ChangeToRootDirectory:
+				{
+					if (send_change_current_directory_request("\\"))
+					{
+						set_state(StateMachineState::WaitForChangeToRootDirectory);
+					}
+					else if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
+					         (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
+					{
+						set_state(StateMachineState::Disconnected);
+						lastServerStatusTimestamp_ms = 0;
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForChangeToRootDirectory:
+				{
+					if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
+					    (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
+					{
+						set_state(StateMachineState::Disconnected);
+						lastServerStatusTimestamp_ms = 0;
+					}
+				}
+				break;
+
 				case StateMachineState::ChangeToManufacturerDirectory:
 				{
 					if (true == send_change_current_directory_request("~\\"))
 					{
 						set_state(StateMachineState::WaitForChangeToManufacturerDirectoryResponse);
+					}
+					if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
+					    (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
+					{
+						CANStackLogger::error("[FS]: Timeout trying to change directory to ~\\");
+						set_state(StateMachineState::Disconnected);
+						lastServerStatusTimestamp_ms = 0;
 					}
 				}
 				break;
@@ -477,7 +511,12 @@ namespace isobus
 							fileServerVersion = messageData[1];
 							maxNumberSimultaneouslyOpenFiles = messageData[2];
 							fileServerCapabilitiesBitfield = messageData[3];
-							set_state(StateMachineState::ChangeToManufacturerDirectory);
+							CANStackLogger::info("[FS]: File server is version " +
+							                     isobus::to_string(static_cast<int>(fileServerVersion)) +
+							                     ", supports up to " +
+							                     isobus::to_string(static_cast<int>(maxNumberSimultaneouslyOpenFiles)) +
+							                     " open files, and supports " + (0 == fileServerCapabilitiesBitfield ? "1 volume." : "multiple volumes."));
+							set_state(StateMachineState::ChangeToRootDirectory);
 						}
 						else
 						{
@@ -497,7 +536,33 @@ namespace isobus
 					{
 						if (StateMachineState::WaitForChangeToManufacturerDirectoryResponse == get_state())
 						{
-							set_state(StateMachineState::Connected);
+							if (0 == messageData[2])
+							{
+								set_state(StateMachineState::Connected);
+							}
+							else
+							{
+								CANStackLogger::error("[FS]: Error changing to manufacturer directory: " +
+								                      error_code_to_string(static_cast<ErrorCode>(messageData[2])) +
+								                      ". Directory will be created.");
+								set_state(StateMachineState::CreateManufacturerDirectory);
+							}
+						}
+						else if (StateMachineState::WaitForChangeToRootDirectory == get_state())
+						{
+							if (0 == messageData[2])
+							{
+								CANStackLogger::debug("[FS]: Changed to root directory.");
+								set_state(StateMachineState::ChangeToManufacturerDirectory);
+							}
+							else
+							{
+								CANStackLogger::error("[FS]: Error changing to root directory of the file server : " +
+								                      error_code_to_string(static_cast<ErrorCode>(messageData[2])) +
+								                      ". Connection will not be recovered.");
+								set_state(StateMachineState::Disconnected);
+								terminate();
+							}
 						}
 					}
 					else
@@ -515,7 +580,7 @@ namespace isobus
 
 						std::unique_lock<std::mutex> lock(metadataMutex);
 
-						for (auto file : fileInfoList)
+						for (auto &file : fileInfoList)
 						{
 							if (file->transactionNumberForRequest == messageData[1])
 							{
@@ -596,7 +661,7 @@ namespace isobus
 
 						std::unique_lock<std::mutex> lock(metadataMutex);
 
-						for (auto file : fileInfoList)
+						for (auto &file : fileInfoList)
 						{
 							if (file->transactionNumberForRequest == messageData[1])
 							{
@@ -871,10 +936,20 @@ namespace isobus
 
 	void FileServerClient::update_open_files()
 	{
-		for (auto file : fileInfoList)
+		for (auto &file : fileInfoList)
 		{
 			switch (file->state)
 			{
+				case FileState::WaitForConnection:
+				{
+					// We're waiting for whatever is in-progress to wrap up, like changing a directory
+					if (StateMachineState::Connected == get_state())
+					{
+						set_file_state(file, FileState::SendOpenFile);
+					}
+				}
+				break;
+
 				case FileState::SendOpenFile:
 				{
 					if (send_open_file(file))

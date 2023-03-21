@@ -33,6 +33,10 @@ namespace isobus
 			Disconnected, ///< Waiting for a server status message
 			SendGetFileServerProperties, ///< Transmitting the Get File Server Properties message
 			WaitForGetFileServerPropertiesResponse, ///< Waiting for a response to the Get File Server Properties message
+			ChangeToRootDirectory, ///< Navigate to the '/' directory so we can check for a manufacturer directory
+			WaitForChangeToRootDirectory, ///< Waiting for the file server to respond to changing the directory to '/'
+			CreateManufacturerDirectory, ///< Try and create the MCMC directory correlated to our ISO NAME manufacturer code
+			WaitForCreateManufacturerDirectory, ///< Wait for response to our create directory command
 			ChangeToManufacturerDirectory, ///< Attempting to change directory into "~\"
 			WaitForChangeToManufacturerDirectoryResponse, ///< Waiting for the response to the change directory request for "~\"
 			Connected, ///< FS is connected. You can use public functions on this class to interact further from this point!
@@ -44,6 +48,7 @@ namespace isobus
 		enum class FileState
 		{
 			Uninitialized, ///< The initial state
+			WaitForConnection, ///< Ensures the FS client is connected before proceeding
 			SendOpenFile, ///< The client is sending the open file message. File is not interactable yet
 			WaitForOpenFileResponse, ///< Client is waiting for a response to the open file message. File is not interactable yet
 			FileOpen, ///< The file is currently open and can be interacted with

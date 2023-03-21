@@ -1,34 +1,27 @@
-#include "can_general_parameter_group_numbers.hpp"
-#include "can_network_manager.hpp"
-#include "can_partnered_control_function.hpp"
-#include "isobus_file_server_client.hpp"
-#include "socket_can_interface.hpp"
+#include "isobus/hardware_integration/available_can_drivers.hpp"
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_partnered_control_function.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_file_server_client.hpp"
 
+#include "console_logger.cpp"
+
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <iterator>
 #include <memory>
 
-static std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
-static std::shared_ptr<isobus::PartneredControlFunction> TestPartnerFS = nullptr;
-static std::shared_ptr<isobus::FileServerClient> TestFileServerClient = nullptr;
-std::vector<isobus::NAMEFilter> fsNameFilters;
-const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::FileServerOrPrinter));
-static std::vector<std::uint8_t> testPool;
+static std::atomic_bool running = { true };
 
-using namespace std;
-
-void signal_handler(int signum)
+void signal_handler(int)
 {
-	CANHardwareInterface::stop();
-	if (nullptr != TestFileServerClient)
-	{
-		TestFileServerClient->terminate();
-	}
-	exit(signum);
+	running = false;
 }
 
-void update_CAN_network()
+void update_CAN_network(void *)
 {
 	isobus::CANNetworkManager::CANNetwork.update();
 }
@@ -38,11 +31,50 @@ void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPoint
 	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 }
 
-void setup()
+enum class ExampleStateMachineState
 {
+	OpenFile,
+	WaitForFileToBeOpen,
+	WriteFile,
+	WaitForFileWrite,
+	CloseFile,
+	ExampleComplete
+};
+
+int main()
+{
+	std::signal(SIGINT, signal_handler);
+	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
+	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Debug); // Change this to Debug to see more information
+	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = nullptr;
+	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerFS = nullptr;
+	std::shared_ptr<isobus::FileServerClient> TestFileServerClient = nullptr;
+	std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
+#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
+	canDriver = std::make_shared<SocketCANInterface>("can0");
+#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+	canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+	canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
+	canDriver = std::make_shared<MacCANPCANPlugin>(PCAN_USBBUS1);
+#endif
+
+	if (nullptr == canDriver)
+	{
+		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
+		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
+		return -1;
+	}
+
 	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, "can0");
-	CANHardwareInterface::start();
+	CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+
+	if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+	{
+		std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
+		return -2;
+	}
 
 	CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
 	CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
@@ -62,39 +94,28 @@ void setup()
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
+
+	std::vector<isobus::NAMEFilter> fsNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::FileServerOrPrinter));
 	fsNameFilters.push_back(testFilter);
 
 	TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
 	TestPartnerFS = std::make_shared<isobus ::PartneredControlFunction>(0, fsNameFilters);
 	TestFileServerClient = std::make_shared<isobus::FileServerClient>(TestPartnerFS, TestInternalECU);
-	std::signal(SIGINT, signal_handler);
-}
 
-enum class ExampleStateMachineState
-{
-	OpenFile,
-	WaitForFileToBeOpen,
-	WriteFile,
-	WaitForFileWrite,
-	CloseFile,
-	ExampleComplete
-};
-
-int main()
-{
-	setup();
 	TestFileServerClient->initialize(true);
 
 	ExampleStateMachineState state = ExampleStateMachineState::OpenFile;
 	std::string fileNameToUse = "FSExampleFile.txt";
 	std::uint8_t fileHandle = isobus::FileServerClient::INVALID_FILE_HANDLE;
-	const std::string fileExampleContents = "This is an example file! Visit us on Github https://github.com/ad3154/ISO11783-CAN-Stack";
+	const std::string fileExampleContents = "This is an example file! Visit us on Github https://github.com/ad3154/Isobus-plus-plus";
 
-	while (true)
+	while (running)
 	{
 		// A little state machine to run our example.
 		// Most functions on FS client interface are async, and can take a variable amount of time to complete, so
 		// you will need to have some kind of stateful wrapper to manage your file operations.
+		// This is essentially unavoidable, as interacting with files over the bus is a fairly involved process.
 		switch (state)
 		{
 			// Let's open a file
