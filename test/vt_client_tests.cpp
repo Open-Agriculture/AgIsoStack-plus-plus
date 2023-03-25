@@ -3,6 +3,7 @@
 #include "isobus//utility/iop_file_interface.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 
@@ -14,10 +15,15 @@ public:
 	DerivedTestVTClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  VirtualTerminalClient(partner, clientSource){};
 
+	void test_wrapper_process_rx_message(CANMessage *message, void *parentPointer)
+	{
+		VirtualTerminalClient::process_rx_message(message, parentPointer);
+	}
+
 	bool test_wrapper_get_any_pool_needs_scaling() const
 	{
 		return VirtualTerminalClient::get_any_pool_needs_scaling();
-	};
+	}
 
 	bool test_wrapper_scale_object_pools()
 	{
@@ -105,6 +111,43 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 	EXPECT_EQ(VirtualTerminalClient::VTVersion::ReservedOrUnknown, clientUnderTest.get_connected_vt_version());
 
 	clientUnderTest.terminate();
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
+{
+	NAME clientNAME(0);
+	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	EXPECT_EQ(VirtualTerminalClient::NULL_OBJECT_ID, clientUnderTest.get_visible_data_mask());
+	EXPECT_EQ(VirtualTerminalClient::NULL_OBJECT_ID, clientUnderTest.get_visible_soft_key_mask());
+
+	CANLibManagedMessage testMessage(0);
+	testMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::PriorityDefault6, 0, 0));
+
+	std::uint8_t testContent[] = {
+		0xFE, // VT Status message function code
+		0x26, // Working set master address
+		1234 & 0xFF, // Data mask active
+		1234 >> 8, // Data mask active
+		4567 & 0xFF, // Soft key mask active
+		4567 >> 8, // Soft key mask active
+		0xFF, // Busy codes
+		1, // VT Function code that is being executed
+	};
+
+	testMessage.set_data(testContent, 8);
+	clientUnderTest.test_wrapper_process_rx_message(&testMessage, &clientUnderTest);
+
+	EXPECT_EQ(1234, clientUnderTest.get_visible_data_mask());
+	EXPECT_EQ(4567, clientUnderTest.get_visible_soft_key_mask());
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
