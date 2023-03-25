@@ -30,7 +30,7 @@ namespace isobus
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this),
 	  lastVTStatusTimestamp_ms(0),
 	  activeWorkingSetDataMaskObjectID(NULL_OBJECT_ID),
-	  activeWorkingSetSoftkeyMaskObjectID(NULL_OBJECT_ID),
+	  activeWorkingSetSoftKeyMaskObjectID(NULL_OBJECT_ID),
 	  activeWorkingSetMasterAddress(NULL_CAN_ADDRESS),
 	  busyCodesBitfield(0),
 	  currentCommandFunctionCode(0),
@@ -1410,6 +1410,16 @@ namespace isobus
 		}
 
 		return retVal;
+	}
+
+	std::uint16_t VirtualTerminalClient::get_visible_data_mask() const
+	{
+		return activeWorkingSetDataMaskObjectID;
+	}
+
+	std::uint16_t VirtualTerminalClient::get_visible_soft_key_mask() const
+	{
+		return activeWorkingSetSoftKeyMaskObjectID;
 	}
 
 	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version)
@@ -2926,7 +2936,7 @@ namespace isobus
 							parentVT->lastVTStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
 							parentVT->activeWorkingSetMasterAddress = message->get_uint8_at(1);
 							parentVT->activeWorkingSetDataMaskObjectID = message->get_uint16_at(2);
-							parentVT->activeWorkingSetSoftkeyMaskObjectID = message->get_uint16_at(4);
+							parentVT->activeWorkingSetSoftKeyMaskObjectID = message->get_uint16_at(4);
 							parentVT->busyCodesBitfield = message->get_uint8_at(6);
 							parentVT->currentCommandFunctionCode = message->get_uint8_at(7);
 						}

@@ -1071,6 +1071,14 @@ namespace isobus
 		/// @returns true if the VT version is supported by the VT server
 		bool get_vt_version_supported(VTVersion value) const;
 
+		/// @brief Returns the current data mask displayed by the VT server
+		/// @returns The object ID of the data mask visible
+		std::uint16_t get_visible_data_mask() const;
+
+		/// @brief Returns the current soft key mask displayed by the VT server
+		/// @returns The object ID of the soft key mask visible
+		std::uint16_t get_visible_soft_key_mask() const;
+
 		// ************************************************
 		// Object Pool Interface
 		// ************************************************
@@ -1539,7 +1547,7 @@ namespace isobus
 		// Status message contents from the VT
 		std::uint32_t lastVTStatusTimestamp_ms; ///< The timestamp of the last VT status message
 		std::uint16_t activeWorkingSetDataMaskObjectID; ///< The active working set data mask object ID
-		std::uint16_t activeWorkingSetSoftkeyMaskObjectID; ///< The active working set's softkey mask object ID
+		std::uint16_t activeWorkingSetSoftKeyMaskObjectID; ///< The active working set's softkey mask object ID
 		std::uint8_t activeWorkingSetMasterAddress; ///< The active working set master address
 		std::uint8_t busyCodesBitfield; ///< The VT server's busy codes
 		std::uint8_t currentCommandFunctionCode; ///< The VT server's current command function code
