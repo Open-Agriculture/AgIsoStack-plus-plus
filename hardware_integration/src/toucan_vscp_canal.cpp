@@ -79,7 +79,6 @@ bool TouCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 {
 	long result = CANAL_ERROR_GENERIC;
 	structCanalMsg CANMsg = { 0 };
-	bool retVal = false;
 
 	result = CanalReceive(handle, &CANMsg);
 
@@ -90,7 +89,6 @@ bool TouCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 		canFrame.identifier = CANMsg.id;
 		canFrame.isExtendedFrame = (0 != (CANAL_IDFLAG_EXTENDED & CANMsg.flags));
 		canFrame.timestamp_us = CANMsg.timestamp;
-		retVal = true;
 	}
 	else
 	{
