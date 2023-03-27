@@ -126,8 +126,9 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
-	EXPECT_EQ(VirtualTerminalClient::NULL_OBJECT_ID, clientUnderTest.get_visible_data_mask());
-	EXPECT_EQ(VirtualTerminalClient::NULL_OBJECT_ID, clientUnderTest.get_visible_soft_key_mask());
+	static constexpr std::uint16_t NULL_OBJECT_ID = isobus::VirtualTerminalClient::NULL_OBJECT_ID;
+	EXPECT_EQ(NULL_OBJECT_ID, clientUnderTest.get_visible_data_mask());
+	EXPECT_EQ(NULL_OBJECT_ID, clientUnderTest.get_visible_soft_key_mask());
 
 	CANLibManagedMessage testMessage(0);
 	testMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::PriorityDefault6, 0, 0));
