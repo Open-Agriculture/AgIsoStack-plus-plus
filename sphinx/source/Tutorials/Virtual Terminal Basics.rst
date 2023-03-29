@@ -34,27 +34,27 @@ Let's start our program fresh, with a folder containing only the CAN stack.
 Create the file `main.cpp` as shown below inside that folder with the requisite control functions.
 
 .. code-block:: c++
-
+	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
-	#include "isobus/hardware_integration/socket_can_interface.hpp"
 	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
 	#include "isobus/isobus/can_partnered_control_function.hpp"
 	#include "isobus/isobus/can_stack_logger.hpp"
 
+	#include <atomic>
 	#include <csignal>
 	#include <iostream>
 	#include <memory>
 
-	using namespace std;
+	//! It is discouraged to use global variables, but it is done here for simplicity.
+	static std::atomic_bool running = { true };
 
 	void signal_handler(int)
 	{
-		CANHardwareInterface::stop();
-		_exit(EXIT_FAILURE);
+		running = false;
 	}
 
-	void update_CAN_network()
+	void update_CAN_network(void *)
 	{
 		isobus::CANNetworkManager::CANNetwork.update();
 	}
@@ -66,15 +66,32 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 	int main()
 	{
-		// Set up the hardware layer to use SocketCAN interface on channel "can0"
-		std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
+		std::signal(SIGINT, signal_handler);
+
+		// Automatically load the desired CAN driver based on the available drivers
+		std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
+	#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
+		canDriver = std::make_shared<SocketCANInterface>("can0");
+	#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+		canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+	#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+		canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+	#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
+		canDriver = std::make_shared<MacCANPCANPlugin>(PCAN_USBBUS1);
+	#endif
+		if (nullptr == canDriver)
+		{
+			std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
+			std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
+			return -1;
+		}
 		CANHardwareInterface::set_number_of_can_channels(1);
 		CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
 		if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 		{
 			std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
-			return -1;
+			return -2;
 		}
 
 		CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -98,10 +115,10 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-		std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-		std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+		auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+		auto TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
-		while (true)
+		while (running)
 		{
 			// CAN stack runs in other threads. Do nothing forever.
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -127,7 +144,14 @@ With those notes in mind, let's create our VT client:
 	//! It is discouraged to use global variables, but we have done it here for simplicity.
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 
-	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
+	int main()
+	{
+		...
+
+		TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
+
+		...
+	}
 
 Now, we've got our client created, and we need to configure it. More specifically, we need to give it at least one object pool to manage.
 
@@ -171,22 +195,29 @@ Now, let's add some code to our example to read in this IOP file, and give it to
 
 	#include "isobus/utility/iop_file_interface.hpp"
 
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 
-	if (0 != testPool.size())
+	int main() 
 	{
+		...
+
+		std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
+		if (testPool.empty())
+		{
+			std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
+			return -3;
+		}
 		std::cout << "Loaded object pool from VT3TestPool.iop" << std::endl;
-	}
-	else
-	{
-		std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
-		return -2;
+
+		// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
+		std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
+
+		...
+
+		TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
+
+		...
 	}
 
-	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
-	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
-
-	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
 
 Note how :code:`testPool` is not static here. It is required that whatever pointer you pass into the VT client via :code:`set_object_pool` MUST remain valid (IE, not deleted or out of scope) during the object pool upload or your application may crash.
 
@@ -220,20 +251,20 @@ Button and Softkey Events
 One of the main ways you'll get feedback from the VT is button events. These occur because the VT sends a message whenever a button is pressed, released, held, or aborted (pressed but not released).
 You will want to set up processing of these events in your program so that you can take some action based on these events.
 
-To do this, let's create a callback that follows the definition of :code:`VTKeyEventCallback`.
+To do this, let's create a callback that accepts :code:`VirtualTerminalClient::VTKeyEvent`. This is a struct that contains information about the key event that occurred.
 
 .. code-block:: c++
 
 	// This callback will provide us with event driven notifications of button presses from the stack
-	void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, std::uint8_t, std::uint16_t objectID, std::uint16_t, isobus::VirtualTerminalClient *)
+	void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 	{
-		static std::uint32_t exampleNumberOutput = 214748364;
+		static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
 
-		switch (keyEvent)
+		switch (event.keyEvent)
 		{
 			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
 			{
-				switch (objectID)
+				switch (event.objectID)
 				{
 					case Plus_Button:
 					{
@@ -258,15 +289,15 @@ To do this, let's create a callback that follows the definition of :code:`VTKeyE
 						TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
 					}
 					break;
+
+					default:
+						break;
 				}
 			}
 			break;
 
 			default:
-			{
-		
-			}
-			break;
+				break;
 		}
 	}
 
@@ -305,10 +336,12 @@ Now that we have our callback, we have to tell the VT client about it so that it
 
 .. code-block:: c++
 	
-	TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
-	TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
+	auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
+	auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
 
-You could in theory have seperate callbacks for softkeys and buttons, but in this example we're just re-using the same callback for both.
+You could in theory have separate callbacks for softkeys and buttons, but in this example we're just re-using the same callback for both.
+
+Note, the :code:`add_vt_soft_key_event_listener` and :code:`add_vt_button_event_listener` functions return a shared pointer to the listener. This is so that the listener doesn't get destroyed until you're done with it. If you don't store the listener in a variable, it will be destroyed as soon as the function returns, and your callback will never be called. So make sure to keep it alive as long as you want to receive events.
 
 Other Actions
 ^^^^^^^^^^^^^^
@@ -340,36 +373,33 @@ Here's the final code for this example:
 
 .. code-block:: c++
 
+	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
-	#include "isobus/hardware_integration/socket_can_interface.hpp"
 	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
 	#include "isobus/isobus/can_partnered_control_function.hpp"
+	#include "isobus/isobus/can_stack_logger.hpp"
 	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 	#include "isobus/utility/iop_file_interface.hpp"
 
 	#include "objectPoolObjects.h"
 
+	#include <atomic>
 	#include <csignal>
+	#include <functional>
 	#include <iostream>
 	#include <memory>
 
 	//! It is discouraged to use global variables, but it is done here for simplicity.
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
-
-	using namespace std;
+	static std::atomic_bool running = { true };
 
 	void signal_handler(int)
 	{
-		CANHardwareInterface::stop();
-		if (nullptr != TestVirtualTerminalClient)
-		{
-			TestVirtualTerminalClient->terminate();
-		}
-		_exit(EXIT_FAILURE);
+		running = false;
 	}
 
-	void update_CAN_network()
+	void update_CAN_network(void *)
 	{
 		isobus::CANNetworkManager::CANNetwork.update();
 	}
@@ -380,15 +410,15 @@ Here's the final code for this example:
 	}
 
 	// This callback will provide us with event driven notifications of button presses from the stack
-	void handleVTButton(isobus::VirtualTerminalClient::KeyActivationCode keyEvent, std::uint8_t, std::uint16_t objectID, std::uint16_t, isobus::VirtualTerminalClient *)
+	void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 	{
 		static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
 
-		switch (keyEvent)
+		switch (event.keyEvent)
 		{
 			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
 			{
-				switch (objectID)
+				switch (event.objectID)
 				{
 					case Plus_Button:
 					{
@@ -413,14 +443,15 @@ Here's the final code for this example:
 						TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
 					}
 					break;
+
+					default:
+						break;
 				}
 			}
 			break;
 
 			default:
-			{
-			}
-			break;
+				break;
 		}
 	}
 
@@ -428,15 +459,31 @@ Here's the final code for this example:
 	{
 		std::signal(SIGINT, signal_handler);
 
-		// Set up the hardware layer to use SocketCAN interface on channel "can0"
-		std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
+		// Automatically load the desired CAN driver based on the available drivers
+		std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
+	#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
+		canDriver = std::make_shared<SocketCANInterface>("can0");
+	#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+		canDriver = std::make_shared<PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+	#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+		canDriver = std::make_shared<InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+	#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
+		canDriver = std::make_shared<MacCANPCANPlugin>(PCAN_USBBUS1);
+	#endif
+		if (nullptr == canDriver)
+		{
+			std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
+			std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
+			return -1;
+		}
+
 		CANHardwareInterface::set_number_of_can_channels(1);
 		CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
 		if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
 		{
 			std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
-			return -1;
+			return -2;
 		}
 
 		CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
@@ -460,36 +507,34 @@ Here's the final code for this example:
 
 		std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 
-		if (0 != testPool.size())
-		{
-			std::cout << "Loaded object pool from VT3TestPool.iop" << std::endl;
-		}
-		else
+		if (testPool.empty())
 		{
 			std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
 			return -3;
 		}
+		std::cout << "Loaded object pool from VT3TestPool.iop" << std::endl;
 
 		// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
 		std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
 
 		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-		std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-		std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+		auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+		auto TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
 		TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 		TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
-		TestVirtualTerminalClient->register_vt_button_event_callback(handleVTButton);
-		TestVirtualTerminalClient->register_vt_soft_key_event_callback(handleVTButton);
+		auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
+		auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
 		TestVirtualTerminalClient->initialize(true);
 
-		while (true)
+		while (running)
 		{
 			// CAN stack runs in other threads. Do nothing forever.
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		}
 
+		TestVirtualTerminalClient->terminate();
 		CANHardwareInterface::stop();
 		return 0;
 	}
@@ -552,6 +597,6 @@ Now you should be able to build and run the program!
 	cd build
 	./vt_example
 
-That's it for this Tutorial. You should be able to run it as long as you have a VT and a "can0" network, see the test pool be uploaded, and be able to interact with all buttons on screen!
+That's it for this Tutorial. You should be able to run it as long as you have a VT and a supported CAN driver, see the test pool be uploaded, and be able to interact with all buttons on screen!
 
 If you would like to see more advanced VT tutorials or have other feedback, please visit our `GitHub page <https://github.com/ad3154/ISO11783-CAN-Stack>`_ and feel free to open a discussion! We're friendly, we promise.
