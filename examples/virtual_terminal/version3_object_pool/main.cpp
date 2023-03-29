@@ -69,14 +69,15 @@ void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 					TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
 				}
 				break;
+
+				default:
+					break;
 			}
 		}
 		break;
 
 		default:
-		{
-		}
-		break;
+			break;
 	}
 }
 
@@ -84,6 +85,7 @@ int main()
 {
 	std::signal(SIGINT, signal_handler);
 
+	// Automatically load the desired CAN driver based on the available drivers
 	std::shared_ptr<CANHardwarePlugin> canDriver = nullptr;
 #if defined(ISOBUS_SOCKETCAN_AVAILABLE)
 	canDriver = std::make_shared<SocketCANInterface>("can0");
@@ -133,23 +135,20 @@ int main()
 
 	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 
-	if (0 != testPool.size())
-	{
-		std::cout << "Loaded object pool from VT3TestPool.iop" << std::endl;
-	}
-	else
+	if (testPool.empty())
 	{
 		std::cout << "Failed to load object pool from VT3TestPool.iop" << std::endl;
 		return -3;
 	}
+	std::cout << "Loaded object pool from VT3TestPool.iop" << std::endl;
 
 	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
 	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	auto TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
