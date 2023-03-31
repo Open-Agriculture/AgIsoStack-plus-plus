@@ -140,24 +140,76 @@ namespace isobus
 		/// @brief A convenient way to set all client options at once instead of calling the individual setters
 		/// @details This function sets up the parameters that the client will report to the TC server.
 		/// These parameters should be tailored to your specific application.
+		/// @note This version of the configure function takes a DeviceDescriptorObjectPool.
+		/// The other versions of the configure function take various other kinds of DDOP.
 		/// @param[in] DDOP The device descriptor object pool to upload to the TC
-		/// @param[in] numberBoomsSupported Configures the max number of booms the client supports
-		/// @param[in] numberSectionsSupported Configures the max number of sections supported by the client for section control
-		/// @param[in] numberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
-		/// @param[in] supportsDocumentation Denotes if your app supports documentation
-		/// @param[in] supportsTCGEOWithoutPositionBasedControl Denotes if your app supports TC-GEO without position based control
-		/// @param[in] supportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
-		/// @param[in] supportsPeerControlAssignment Denotes if your app supports peer control assignment
-		/// @param[in] supportsImplementSectionControl Denotes if your app supports implement section control
+		/// @param[in] maxNumberBoomsSupported Configures the max number of booms the client supports
+		/// @param[in] maxNumberSectionsSupported Configures the max number of sections supported by the client for section control
+		/// @param[in] maxNumberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
+		/// @param[in] reportToTCSupportsDocumentation Denotes if your app supports documentation
+		/// @param[in] reportToTCSupportsTCGEOWithoutPositionBasedControl Denotes if your app supports TC-GEO without position based control
+		/// @param[in] reportToTCSupportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
+		/// @param[in] reportToTCSupportsPeerControlAssignment Denotes if your app supports peer control assignment
+		/// @param[in] reportToTCSupportsImplementSectionControl Denotes if your app supports implement section control
 		void configure(std::shared_ptr<DeviceDescriptorObjectPool> DDOP,
-		               std::uint8_t numberBoomsSupported,
-		               std::uint8_t numberSectionsSupported,
-		               std::uint8_t numberChannelsSupportedForPositionBasedControl,
+		               std::uint8_t maxNumberBoomsSupported,
+		               std::uint8_t maxNumberSectionsSupported,
+		               std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
 		               bool supportsDocumentation,
 		               bool supportsTCGEOWithoutPositionBasedControl,
 		               bool supportsTCGEOWithPositionBasedControl,
 		               bool supportsPeerControlAssignment,
 		               bool supportsImplementSectionControl);
+
+		/// @brief A convenient way to set all client options at once instead of calling the individual setters
+		/// @details This function sets up the parameters that the client will report to the TC server.
+		/// These parameters should be tailored to your specific application.
+		/// @note This version of the configure function takes a pointer to an array of bytes.
+		/// The other versions of the configure function take various other kinds of DDOP.
+		/// @param[in] binaryDDOP The device descriptor object pool to upload to the TC
+		/// @param[in] DDOPSize The number of bytes in the binary DDOP that will be uploaded
+		/// @param[in] maxNumberBoomsSupported Configures the max number of booms the client supports
+		/// @param[in] maxNumberSectionsSupported Configures the max number of sections supported by the client for section control
+		/// @param[in] maxNumberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
+		/// @param[in] reportToTCSupportsDocumentation Denotes if your app supports documentation
+		/// @param[in] reportToTCSupportsTCGEOWithoutPositionBasedControl Denotes if your app supports TC-GEO without position based control
+		/// @param[in] reportToTCSupportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
+		/// @param[in] reportToTCSupportsPeerControlAssignment Denotes if your app supports peer control assignment
+		/// @param[in] reportToTCSupportsImplementSectionControl Denotes if your app supports implement section control
+		void configure(std::uint8_t const *binaryDDOP,
+		               std::uint32_t DDOPSize,
+		               std::uint8_t maxNumberBoomsSupported,
+		               std::uint8_t maxNumberSectionsSupported,
+		               std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
+		               bool reportToTCSupportsDocumentation,
+		               bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+		               bool reportToTCSupportsTCGEOWithPositionBasedControl,
+		               bool reportToTCSupportsPeerControlAssignment,
+		               bool reportToTCSupportsImplementSectionControl);
+
+		/// @brief A convenient way to set all client options at once instead of calling the individual setters
+		/// @details This function sets up the parameters that the client will report to the TC server.
+		/// These parameters should be tailored to your specific application.
+		/// @note This version of the configure function takes a vector of bytes, and stores a copy of it.
+		/// The other versions of the configure function take various other kinds of DDOP.
+		/// @param[in] binaryDDOP The device descriptor object pool to upload to the TC
+		/// @param[in] maxNumberBoomsSupported Configures the max number of booms the client supports
+		/// @param[in] maxNumberSectionsSupported Configures the max number of sections supported by the client for section control
+		/// @param[in] maxNumberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
+		/// @param[in] reportToTCSupportsDocumentation Denotes if your app supports documentation
+		/// @param[in] reportToTCSupportsTCGEOWithoutPositionBasedControl Denotes if your app supports TC-GEO without position based control
+		/// @param[in] reportToTCSupportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
+		/// @param[in] reportToTCSupportsPeerControlAssignment Denotes if your app supports peer control assignment
+		/// @param[in] reportToTCSupportsImplementSectionControl Denotes if your app supports implement section control
+		void configure(const std::vector<std::uint8_t> &binaryDDOP,
+		               std::uint8_t maxNumberBoomsSupported,
+		               std::uint8_t maxNumberSectionsSupported,
+		               std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
+		               bool reportToTCSupportsDocumentation,
+		               bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+		               bool reportToTCSupportsTCGEOWithPositionBasedControl,
+		               bool reportToTCSupportsPeerControlAssignment,
+		               bool reportToTCSupportsImplementSectionControl);
 
 		// Calling this will stop the worker thread if it exists
 		/// @brief Terminates the client and joins the worker thread if applicable
@@ -321,6 +373,13 @@ namespace isobus
 		/// @brief Clears all queued TC commands and responses
 		void clear_queues();
 
+		/// @brief Checks if a DDOP was provided via one of the configure functions
+		/// @returns true if a DDOP was provided, otherwise false
+		bool get_was_ddop_supplied() const;
+
+		/// @brief Searches the DDOP for a device object and stores that object's structure and localization labels
+		void process_labels_from_ddop();
+
 		/// @brief Processes queued TC requests and commands. Calls the user's callbacks if needed.
 		void process_queued_commands();
 
@@ -413,6 +472,24 @@ namespace isobus
 		/// @returns `true` if the message was sent, otherwise false
 		bool send_working_set_master() const;
 
+		/// @brief Sets the common items found in all versions of `configure`
+		/// @param[in] maxNumberBoomsSupported Configures the max number of booms the client supports
+		/// @param[in] maxNumberSectionsSupported Configures the max number of sections supported by the client for section control
+		/// @param[in] maxNumberChannelsSupportedForPositionBasedControl Configures the max number of channels supported by the client for position based control
+		/// @param[in] reportToTCSupportsDocumentation Denotes if your app supports documentation
+		/// @param[in] reportToTCSupportsTCGEOWithoutPositionBasedControl Denotes if your app supports TC-GEO without position based control
+		/// @param[in] reportToTCSupportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
+		/// @param[in] reportToTCSupportsPeerControlAssignment Denotes if your app supports peer control assignment
+		/// @param[in] reportToTCSupportsImplementSectionControl Denotes if your app supports implement section control
+		void set_common_config_items(std::uint8_t maxNumberBoomsSupported,
+		                             std::uint8_t maxNumberSectionsSupported,
+		                             std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
+		                             bool reportToTCSupportsDocumentation,
+		                             bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+		                             bool reportToTCSupportsTCGEOWithPositionBasedControl,
+		                             bool reportToTCSupportsPeerControlAssignment,
+		                             bool reportToTCSupportsImplementSectionControl);
+
 		/// @brief Changes the internal state machine state and updates the associated timestamp
 		/// @param[in] newState The new state for the state machine
 		void set_state(StateMachineState newState);
@@ -464,11 +541,20 @@ namespace isobus
 			void *parent; ///< The parent pointer, generic context value
 		};
 
+		/// @brief Enumerates the modes that the client may use when dealing with a DDOP
+		enum class DDOPUploadType
+		{
+			ProgramaticallyGenerated, ///< Using the isobus++ DeviceDescriptorObjectPool class
+			UserProvidedBinaryPointer, ///< Using a raw pointer to a binary DDOP
+			UserProvidedVector ///< Uses a vector of bytes that comprise a binary DDOP
+		};
+
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 		std::shared_ptr<VirtualTerminalClient> primaryVirtualTerminal; ///< A pointer to the primary VT. Used for TCs < version 4
 		std::shared_ptr<DeviceDescriptorObjectPool> clientDDOP; ///< Stores the DDOP for upload to the TC (if needed)
-		std::vector<std::uint8_t> binaryDDOP; ///< Stores the DDOP in binary form after it has been generated
+		std::uint8_t const *userSuppliedBinaryDDOP = nullptr; ///< Stores a client-provided DDOP if one was provided
+		std::vector<std::uint8_t> generatedBinaryDDOP; ///< Stores the DDOP in binary form after it has been generated
 		std::vector<RequestValueCommandCallbackInfo> requestValueCallbacks; ///< A list of callbacks that will be called when the TC requests a process data value
 		std::vector<ValueCommandCallbackInfo> valueCommandsCallbacks; ///< A list of callbacks that will be called when the TC sets a process data value
 		std::list<ProcessDataCallbackInfo> queuedValueRequests; ///< A list of queued value requests that will be processed on the next update
@@ -479,10 +565,14 @@ namespace isobus
 		std::list<ProcessDataCallbackInfo> measurementOnChangeThresholdCommands; ///< A list of measurement commands that will be processed when the value changes by the specified amount
 		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
+		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback
+		std::array<std::uint8_t, 7> ddopLocalizationLabel; ///< Stores a pre-parsed localization label, helps to avoid processing the whole DDOP during a CAN message callback
+		DDOPUploadType ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated; ///< Determines if DDOPs get generated or raw uploaded
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)
 		std::uint32_t statusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we sent a status message to the TC
 		std::uint32_t serverStatusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we received a status message from the TC
+		std::uint32_t userSuppliedBinaryDDOPSize_bytes = 0; ///< The number of bytes in the user provided binary DDOP (if one was provided)
 		std::uint8_t numberOfWorkingSetMembers = 1; ///< The number of working set members that will be reported in the working set master message
 		std::uint8_t tcStatusBitfield = 0; ///< The last received TC/DL status from the status message
 		std::uint8_t sourceAddressOfCommandBeingExecuted = 0; ///< Source address of client for which the current command is being executed
