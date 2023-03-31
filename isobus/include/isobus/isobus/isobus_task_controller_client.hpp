@@ -155,11 +155,11 @@ namespace isobus
 		               std::uint8_t maxNumberBoomsSupported,
 		               std::uint8_t maxNumberSectionsSupported,
 		               std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
-		               bool supportsDocumentation,
-		               bool supportsTCGEOWithoutPositionBasedControl,
-		               bool supportsTCGEOWithPositionBasedControl,
-		               bool supportsPeerControlAssignment,
-		               bool supportsImplementSectionControl);
+		               bool reportToTCSupportsDocumentation,
+		               bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+		               bool reportToTCSupportsTCGEOWithPositionBasedControl,
+		               bool reportToTCSupportsPeerControlAssignment,
+		               bool reportToTCSupportsImplementSectionControl);
 
 		/// @brief A convenient way to set all client options at once instead of calling the individual setters
 		/// @details This function sets up the parameters that the client will report to the TC server.
@@ -566,7 +566,7 @@ namespace isobus
 		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback
-		std::array<std::uint8_t, 7> ddopLocalizationLabel; ///< Stores a pre-parsed localization label, helps to avoid processing the whole DDOP during a CAN message callback
+		std::array<std::uint8_t, 7> ddopLocalizationLabel = { 0 }; ///< Stores a pre-parsed localization label, helps to avoid processing the whole DDOP during a CAN message callback
 		DDOPUploadType ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated; ///< Determines if DDOPs get generated or raw uploaded
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp that tracks when the state machine last changed states (in milliseconds)
