@@ -821,15 +821,15 @@ namespace isobus
 
 						const std::uint32_t DESIGNATOR_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "N", See Table A.1
 						assert(currentByteIndex + DESIGNATOR_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
-						currentByteIndex += DESIGNATOR_LENGTH;
+						currentByteIndex += DESIGNATOR_LENGTH + 1;
 
 						const std::uint32_t SOFTWARE_VERSION_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "M", See Table A.1
 						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
-						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH;
+						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH + 1;
 
 						const std::uint32_t SERIAL_NUMBER_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "O", See Table A.1
 						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
-						currentByteIndex += SERIAL_NUMBER_LENGTH;
+						currentByteIndex += SERIAL_NUMBER_LENGTH + 1;
 
 						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < userSuppliedBinaryDDOPSize_bytes); // // Not enough bytes in your DDOP!
 						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
@@ -867,15 +867,15 @@ namespace isobus
 
 						const std::uint32_t DESIGNATOR_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "N", See Table A.1
 						assert(currentByteIndex + DESIGNATOR_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
-						currentByteIndex += DESIGNATOR_LENGTH;
+						currentByteIndex += DESIGNATOR_LENGTH + 1;
 
 						const std::uint32_t SOFTWARE_VERSION_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "M", See Table A.1
 						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
-						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH;
+						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH + 1;
 
 						const std::uint32_t SERIAL_NUMBER_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "O", See Table A.1
 						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
-						currentByteIndex += SERIAL_NUMBER_LENGTH;
+						currentByteIndex += SERIAL_NUMBER_LENGTH + 1;
 
 						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < generatedBinaryDDOP.size()); // // Not enough bytes in your DDOP!
 						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
@@ -907,7 +907,7 @@ namespace isobus
 
 		while (!queuedValueRequests.empty() && transmitSuccessful)
 		{
-			auto currentRequest = queuedValueRequests.front();
+			auto &currentRequest = queuedValueRequests.front();
 
 			for (auto &currentCallback : requestValueCallbacks)
 			{
@@ -922,7 +922,7 @@ namespace isobus
 		}
 		while (!queuedValueCommands.empty() && transmitSuccessful)
 		{
-			auto currentRequest = queuedValueCommands.front();
+			auto &currentRequest = queuedValueCommands.front();
 
 			for (auto &currentCallback : valueCommandsCallbacks)
 			{
@@ -1215,12 +1215,12 @@ namespace isobus
 										}
 										else
 										{
-											assert(7 == parentTC->ddopStructureLabel.length()); // Make sure the DDOP is valid before we access the label. It must be 7 bytes
+											assert(7 == parentTC->ddopLocalizationLabel.size()); // Make sure the DDOP is valid before we access the label. It must be 7 bytes
 											bool labelsMatch = true;
 
 											for (std::uint_fast8_t i = 0; i < (CAN_DATA_LENGTH - 1); i++)
 											{
-												if (messageData[i + 1] != parentTC->ddopStructureLabel[i])
+												if (messageData[i + 1] != parentTC->ddopLocalizationLabel[i])
 												{
 													labelsMatch = false;
 													break;
