@@ -114,16 +114,93 @@ namespace isobus
 		if (StateMachineState::Disconnected == get_state())
 		{
 			assert(nullptr != DDOP); // Client will not work without a DDOP.
-			binaryDDOP.clear();
+			generatedBinaryDDOP.clear();
+			ddopStructureLabel.clear();
+			ddopLocalizationLabel.fill(0x00);
+			ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated;
 			clientDDOP = DDOP;
-			numberBoomsSupported = maxNumberBoomsSupported;
-			numberSectionsSupported = maxNumberSectionsSupported;
-			numberChannelsSupportedForPositionBasedControl = maxNumberChannelsSupportedForPositionBasedControl;
-			supportsDocumentation = reportToTCSupportsDocumentation;
-			supportsTCGEOWithoutPositionBasedControl = reportToTCSupportsTCGEOWithoutPositionBasedControl;
-			supportsTCGEOWithPositionBasedControl = reportToTCSupportsTCGEOWithPositionBasedControl;
-			supportsPeerControlAssignment = reportToTCSupportsPeerControlAssignment;
-			supportsImplementSectionControl = reportToTCSupportsImplementSectionControl;
+			userSuppliedBinaryDDOP = nullptr;
+			userSuppliedBinaryDDOPSize_bytes = 0;
+			set_common_config_items(maxNumberBoomsSupported,
+			                        maxNumberSectionsSupported,
+			                        maxNumberChannelsSupportedForPositionBasedControl,
+			                        reportToTCSupportsDocumentation,
+			                        reportToTCSupportsTCGEOWithoutPositionBasedControl,
+			                        reportToTCSupportsTCGEOWithPositionBasedControl,
+			                        reportToTCSupportsPeerControlAssignment,
+			                        reportToTCSupportsImplementSectionControl);
+		}
+		else
+		{
+			// We don't want someone to erase our object pool or something while it is being used.
+			CANStackLogger::error("[TC]: Cannot reconfigure TC client while it is running!");
+		}
+	}
+
+	void TaskControllerClient::configure(const std::uint8_t *binaryDDOP,
+	                                     std::uint32_t DDOPSize,
+	                                     std::uint8_t maxNumberBoomsSupported,
+	                                     std::uint8_t maxNumberSectionsSupported,
+	                                     std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
+	                                     bool reportToTCSupportsDocumentation,
+	                                     bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+	                                     bool reportToTCSupportsTCGEOWithPositionBasedControl,
+	                                     bool reportToTCSupportsPeerControlAssignment,
+	                                     bool reportToTCSupportsImplementSectionControl)
+	{
+		if (StateMachineState::Disconnected == get_state())
+		{
+			assert(nullptr != binaryDDOP); // Client will not work without a DDOP.
+			assert(0 != binaryDDOP);
+			generatedBinaryDDOP.clear();
+			ddopStructureLabel.clear();
+			ddopLocalizationLabel.fill(0x00);
+			ddopUploadMode = DDOPUploadType::UserProvidedBinaryPointer;
+			userSuppliedBinaryDDOP = binaryDDOP;
+			userSuppliedBinaryDDOPSize_bytes = DDOPSize;
+			set_common_config_items(maxNumberBoomsSupported,
+			                        maxNumberSectionsSupported,
+			                        maxNumberChannelsSupportedForPositionBasedControl,
+			                        reportToTCSupportsDocumentation,
+			                        reportToTCSupportsTCGEOWithoutPositionBasedControl,
+			                        reportToTCSupportsTCGEOWithPositionBasedControl,
+			                        reportToTCSupportsPeerControlAssignment,
+			                        reportToTCSupportsImplementSectionControl);
+		}
+		else
+		{
+			// We don't want someone to erase our object pool or something while it is being used.
+			CANStackLogger::error("[TC]: Cannot reconfigure TC client while it is running!");
+		}
+	}
+
+	void TaskControllerClient::configure(const std::vector<std::uint8_t> &binaryDDOP,
+	                                     std::uint8_t maxNumberBoomsSupported,
+	                                     std::uint8_t maxNumberSectionsSupported,
+	                                     std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
+	                                     bool reportToTCSupportsDocumentation,
+	                                     bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+	                                     bool reportToTCSupportsTCGEOWithPositionBasedControl,
+	                                     bool reportToTCSupportsPeerControlAssignment,
+	                                     bool reportToTCSupportsImplementSectionControl)
+	{
+		if (StateMachineState::Disconnected == get_state())
+		{
+			assert(!binaryDDOP.empty()); // Client will not work without a DDOP.
+			ddopStructureLabel.clear();
+			ddopLocalizationLabel.fill(0x00);
+			generatedBinaryDDOP = binaryDDOP;
+			ddopUploadMode = DDOPUploadType::UserProvidedVector;
+			userSuppliedBinaryDDOP = nullptr;
+			userSuppliedBinaryDDOPSize_bytes = 0;
+			set_common_config_items(maxNumberBoomsSupported,
+			                        maxNumberSectionsSupported,
+			                        maxNumberChannelsSupportedForPositionBasedControl,
+			                        reportToTCSupportsDocumentation,
+			                        reportToTCSupportsTCGEOWithoutPositionBasedControl,
+			                        reportToTCSupportsTCGEOWithPositionBasedControl,
+			                        reportToTCSupportsPeerControlAssignment,
+			                        reportToTCSupportsImplementSectionControl);
 		}
 		else
 		{
@@ -217,7 +294,7 @@ namespace isobus
 			{
 				enableStatusMessage = false;
 
-				if (nullptr != clientDDOP)
+				if (get_was_ddop_supplied())
 				{
 					set_state(StateMachineState::WaitForStartUpDelay);
 				}
@@ -352,32 +429,57 @@ namespace isobus
 
 			case StateMachineState::ProcessDDOP:
 			{
-				assert(0 != clientDDOP->size()); // Need to have a valid object pool!
-
-				if (serverVersion < clientDDOP->get_task_controller_compatibility_level())
+				if (DDOPUploadType::ProgramaticallyGenerated == ddopUploadMode)
 				{
-					clientDDOP->set_task_controller_compatibility_level(serverVersion); // Manipulate the DDOP slightly if needed to upload a version compatible DDOP
-					CANStackLogger::info("[TC]: DDOP will be generated using the server's version instead of the specified version. New version: " +
-					                     isobus::to_string(static_cast<int>(serverVersion)));
-				}
+					assert(0 != clientDDOP->size()); // Need to have a valid object pool!
 
-				if (binaryDDOP.empty())
-				{
-					// Binary DDOP has not been generated before.
-					if (clientDDOP->generate_binary_object_pool(binaryDDOP))
+					if (serverVersion < clientDDOP->get_task_controller_compatibility_level())
 					{
-						CANStackLogger::debug("[TC]: DDOP Generated, size: " + isobus::to_string(static_cast<int>(binaryDDOP.size())));
-						set_state(StateMachineState::RequestStructureLabel);
+						clientDDOP->set_task_controller_compatibility_level(serverVersion); // Manipulate the DDOP slightly if needed to upload a version compatible DDOP
+						CANStackLogger::info("[TC]: DDOP will be generated using the server's version instead of the specified version. New version: " +
+						                     isobus::to_string(static_cast<int>(serverVersion)));
+					}
+
+					if (generatedBinaryDDOP.empty())
+					{
+						// Binary DDOP has not been generated before.
+						if (clientDDOP->generate_binary_object_pool(generatedBinaryDDOP))
+						{
+							process_labels_from_ddop();
+							CANStackLogger::debug("[TC]: DDOP Generated, size: " + isobus::to_string(static_cast<int>(generatedBinaryDDOP.size())));
+							set_state(StateMachineState::RequestStructureLabel);
+						}
+						else
+						{
+							CANStackLogger::error("[TC]: Cannot proceed with connection to TC due to invalid DDOP. Check log for [DDOP] events. TC client will now terminate.");
+							terminate();
+						}
 					}
 					else
 					{
-						CANStackLogger::error("[TC]: Cannot proceed with connection to TC due to invalid DDOP. Check log for [DDOP] events. TC client will now terminate.");
-						this->terminate();
+						CANStackLogger::debug("[TC]: Using previously generated DDOP binary");
+						set_state(StateMachineState::RequestStructureLabel);
 					}
 				}
 				else
 				{
-					CANStackLogger::debug("[TC]: Using previously generated DDOP binary");
+					if ((ddopLocalizationLabel.empty()) ||
+					    (ddopStructureLabel.empty()))
+					{
+						CANStackLogger::debug("[TC]: Beginning a search of pre-serialized DDOP for device structure and localization labels.");
+						process_labels_from_ddop();
+
+						if ((ddopLocalizationLabel.empty()) ||
+						    (ddopStructureLabel.empty()))
+						{
+							CANStackLogger::error("[TC]: Failed to parse the DDOP. Ensure you provided a valid device object. TC client will now terminate.");
+							terminate();
+						}
+					}
+					else
+					{
+						CANStackLogger::debug("[TC]: Reusing previously located device labels.");
+					}
 					set_state(StateMachineState::RequestStructureLabel);
 				}
 			}
@@ -481,15 +583,34 @@ namespace isobus
 
 			case StateMachineState::BeginTransferDDOP:
 			{
-				if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-				                                                   nullptr,
-				                                                   static_cast<std::uint32_t>(binaryDDOP.size() + 1), // Account for Mux byte
-				                                                   myControlFunction.get(),
-				                                                   partnerControlFunction.get(),
-				                                                   CANIdentifier::CANPriority::PriorityLowest7,
-				                                                   process_tx_callback,
-				                                                   this,
-				                                                   process_internal_object_pool_upload_callback))
+				bool transmitSuccessful = false;
+
+				if (DDOPUploadType::UserProvidedBinaryPointer == ddopUploadMode)
+				{
+					transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+					                                                                    nullptr,
+					                                                                    static_cast<std::uint32_t>(userSuppliedBinaryDDOPSize_bytes + 1), // Account for Mux byte
+					                                                                    myControlFunction.get(),
+					                                                                    partnerControlFunction.get(),
+					                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+					                                                                    process_tx_callback,
+					                                                                    this,
+					                                                                    process_internal_object_pool_upload_callback);
+				}
+				else
+				{
+					transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+					                                                                    nullptr,
+					                                                                    static_cast<std::uint32_t>(generatedBinaryDDOP.size() + 1), // Account for Mux byte
+					                                                                    myControlFunction.get(),
+					                                                                    partnerControlFunction.get(),
+					                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+					                                                                    process_tx_callback,
+					                                                                    this,
+					                                                                    process_internal_object_pool_upload_callback);
+				}
+
+				if (transmitSuccessful)
 				{
 					set_state(StateMachineState::WaitForDDOPTransfer);
 				}
@@ -621,6 +742,162 @@ namespace isobus
 		measurementMinimumThresholdCommands.clear();
 		measurementMaximumThresholdCommands.clear();
 		measurementOnChangeThresholdCommands.clear();
+	}
+
+	bool TaskControllerClient::get_was_ddop_supplied() const
+	{
+		bool retVal = false;
+
+		switch (ddopUploadMode)
+		{
+			case DDOPUploadType::ProgramaticallyGenerated:
+			{
+				retVal = (nullptr != clientDDOP);
+			}
+			break;
+
+			case DDOPUploadType::UserProvidedBinaryPointer:
+			{
+				retVal = (nullptr != userSuppliedBinaryDDOP) &&
+				  (0 != userSuppliedBinaryDDOPSize_bytes);
+			}
+			break;
+
+			case DDOPUploadType::UserProvidedVector:
+			{
+				retVal = !generatedBinaryDDOP.empty();
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	void TaskControllerClient::process_labels_from_ddop()
+	{
+		std::uint32_t currentByteIndex = 0;
+		const std::string DEVICE_TABLE_ID = "DVC";
+		constexpr std::uint8_t DESIGNATOR_BYTE_OFFSET = 5;
+		constexpr std::uint8_t CLIENT_NAME_LENGTH = 8;
+
+		switch (ddopUploadMode)
+		{
+			case DDOPUploadType::ProgramaticallyGenerated:
+			{
+				assert(nullptr != clientDDOP); // You need a DDOP
+				// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
+				auto deviceObject = clientDDOP->get_object_by_id(0);
+				assert(nullptr != deviceObject);
+				assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
+
+				ddopStructureLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_structure_label();
+
+				while (ddopStructureLabel.size() < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
+				{
+					ddopStructureLabel.push_back(' ');
+				}
+
+				ddopLocalizationLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_localization_label();
+			}
+			break;
+
+			case DDOPUploadType::UserProvidedBinaryPointer:
+			{
+				// Searching for "DVC"
+				while (currentByteIndex < (userSuppliedBinaryDDOPSize_bytes - DEVICE_TABLE_ID.size()))
+				{
+					if ((DEVICE_TABLE_ID[0] == userSuppliedBinaryDDOP[currentByteIndex]) &&
+					    (DEVICE_TABLE_ID[1] == userSuppliedBinaryDDOP[currentByteIndex + 1]) &&
+					    (DEVICE_TABLE_ID[2] == userSuppliedBinaryDDOP[currentByteIndex + 2]))
+					{
+						// We have to do a lot of error checking on the DDOP length
+						// This is because we don't control the content of this DDOP, and have no
+						// assurances that the schema is even valid
+
+						assert((currentByteIndex + DESIGNATOR_BYTE_OFFSET) < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes to read the designator length
+						currentByteIndex += DESIGNATOR_BYTE_OFFSET; // Skip to the next variable length part of the object
+
+						const std::uint32_t DESIGNATOR_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "N", See Table A.1
+						assert(currentByteIndex + DESIGNATOR_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
+						currentByteIndex += DESIGNATOR_LENGTH;
+
+						const std::uint32_t SOFTWARE_VERSION_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "M", See Table A.1
+						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
+						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH;
+
+						const std::uint32_t SERIAL_NUMBER_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "O", See Table A.1
+						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
+						currentByteIndex += SERIAL_NUMBER_LENGTH;
+
+						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < userSuppliedBinaryDDOPSize_bytes); // // Not enough bytes in your DDOP!
+						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
+						{
+							ddopStructureLabel.push_back(userSuppliedBinaryDDOP[currentByteIndex + i]); // Read the descriptor
+						}
+
+						currentByteIndex += task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH;
+						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < userSuppliedBinaryDDOPSize_bytes); // // Not enough bytes in your DDOP!
+						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
+						{
+							ddopLocalizationLabel[i] = (userSuppliedBinaryDDOP[currentByteIndex + i]); // Read the localization label
+						}
+						break;
+					}
+				}
+			}
+			break;
+
+			case DDOPUploadType::UserProvidedVector:
+			{
+				// Searching for "DVC"
+				while (currentByteIndex < (generatedBinaryDDOP.size() - DEVICE_TABLE_ID.size()))
+				{
+					if ((DEVICE_TABLE_ID[0] == generatedBinaryDDOP.at(currentByteIndex)) &&
+					    (DEVICE_TABLE_ID[1] == generatedBinaryDDOP.at(currentByteIndex + 1)) &&
+					    (DEVICE_TABLE_ID[2] == generatedBinaryDDOP.at(currentByteIndex + 2)))
+					{
+						// We have to do a lot of error checking on the DDOP length
+						// This is because we don't control the content of this DDOP, and have no
+						// assurances that the schema is even valid
+
+						assert((currentByteIndex + DESIGNATOR_BYTE_OFFSET) < generatedBinaryDDOP.size()); // Not enough bytes to read the designator length
+						currentByteIndex += DESIGNATOR_BYTE_OFFSET; // Skip to the next variable length part of the object
+
+						const std::uint32_t DESIGNATOR_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "N", See Table A.1
+						assert(currentByteIndex + DESIGNATOR_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
+						currentByteIndex += DESIGNATOR_LENGTH;
+
+						const std::uint32_t SOFTWARE_VERSION_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "M", See Table A.1
+						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
+						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH;
+
+						const std::uint32_t SERIAL_NUMBER_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "O", See Table A.1
+						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
+						currentByteIndex += SERIAL_NUMBER_LENGTH;
+
+						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < generatedBinaryDDOP.size()); // // Not enough bytes in your DDOP!
+						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
+						{
+							ddopStructureLabel.push_back(generatedBinaryDDOP.at(currentByteIndex + i)); // Read the structure label
+						}
+
+						currentByteIndex += task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH;
+						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < generatedBinaryDDOP.size()); // // Not enough bytes in your DDOP!
+						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
+						{
+							ddopLocalizationLabel[i] = (generatedBinaryDDOP.at(currentByteIndex + i)); // Read the localization label
+						}
+						break;
+					}
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
 	}
 
 	void TaskControllerClient::process_queued_commands()
@@ -895,20 +1172,8 @@ namespace isobus
 											{
 												CANStackLogger::warn("[TC]: Structure Label from TC exceeds the max length allowed by ISO11783-10");
 											}
-											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
-											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
-											auto deviceObject = parentTC->clientDDOP->get_object_by_id(0);
-											assert(nullptr != deviceObject);
-											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
 
-											std::string tempLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_structure_label();
-
-											while (tempLabel.size() < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
-											{
-												tempLabel.push_back(' ');
-											}
-
-											if (tempLabel == tcStructure)
+											if (parentTC->ddopStructureLabel == tcStructure)
 											{
 												// Structure label matched. No upload needed yet.
 												CANStackLogger::debug("[TC]: Task controller structure labels match");
@@ -950,18 +1215,12 @@ namespace isobus
 										}
 										else
 										{
-											assert(nullptr != parentTC->clientDDOP); // You need a DDOP
-											auto deviceObject = parentTC->clientDDOP->get_object_by_id(0);
-											// Does your DDOP have a device object? Device object 0 is required by ISO11783-10
-											assert(nullptr != deviceObject);
-											assert(task_controller_object::ObjectTypes::Device == deviceObject->get_object_type());
-
-											auto ddopLabel = std::static_pointer_cast<task_controller_object::DeviceObject>(deviceObject)->get_localization_label();
+											assert(7 == parentTC->ddopStructureLabel.length()); // Make sure the DDOP is valid before we access the label. It must be 7 bytes
 											bool labelsMatch = true;
 
 											for (std::uint_fast8_t i = 0; i < (CAN_DATA_LENGTH - 1); i++)
 											{
-												if (messageData[i + 1] != ddopLabel[i])
+												if (messageData[i + 1] != parentTC->ddopStructureLabel[i])
 												{
 													labelsMatch = false;
 													break;
@@ -1038,7 +1297,6 @@ namespace isobus
 												}
 												if (0x02 & messageData[6])
 												{
-													// In theory, we check for this before upload, so this should be nearly impossible.
 													CANStackLogger::error("[TC]: Unknown object reference (missing object)");
 												}
 												if (0x04 & messageData[6])
@@ -1400,19 +1658,36 @@ namespace isobus
 		assert(nullptr != chunkBuffer);
 		assert(0 != numberOfBytesNeeded);
 
-		if ((bytesOffset + numberOfBytesNeeded) <= parentTCClient->binaryDDOP.size() + 1)
+		if (((bytesOffset + numberOfBytesNeeded) <= parentTCClient->generatedBinaryDDOP.size() + 1) ||
+		    ((bytesOffset + numberOfBytesNeeded) <= parentTCClient->userSuppliedBinaryDDOPSize_bytes + 1))
 		{
 			retVal = true;
 			if (0 == bytesOffset)
 			{
 				chunkBuffer[0] = static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
 				  (static_cast<std::uint8_t>(DeviceDescriptorCommands::ObjectPoolTransfer) << 4);
-				memcpy(&chunkBuffer[1], &parentTCClient->binaryDDOP[bytesOffset], numberOfBytesNeeded - 1);
+
+				if (DDOPUploadType::UserProvidedBinaryPointer == parentTCClient->ddopUploadMode)
+				{
+					memcpy(&chunkBuffer[1], &parentTCClient->userSuppliedBinaryDDOP[bytesOffset], numberOfBytesNeeded - 1);
+				}
+				else
+				{
+					memcpy(&chunkBuffer[1], &parentTCClient->generatedBinaryDDOP[bytesOffset], numberOfBytesNeeded - 1);
+				}
 			}
 			else
 			{
-				// Subtract off 1 to account for the mux in the first byte of the message
-				memcpy(chunkBuffer, &parentTCClient->binaryDDOP[bytesOffset - 1], numberOfBytesNeeded);
+				if (DDOPUploadType::UserProvidedBinaryPointer == parentTCClient->ddopUploadMode)
+				{
+					// Subtract off 1 to account for the mux in the first byte of the message
+					memcpy(chunkBuffer, &parentTCClient->userSuppliedBinaryDDOP[bytesOffset - 1], numberOfBytesNeeded);
+				}
+				else
+				{
+					// Subtract off 1 to account for the mux in the first byte of the message
+					memcpy(chunkBuffer, &parentTCClient->generatedBinaryDDOP[bytesOffset - 1], numberOfBytesNeeded);
+				}
 			}
 		}
 		else
@@ -1525,7 +1800,13 @@ namespace isobus
 
 	bool TaskControllerClient::send_request_object_pool_transfer() const
 	{
-		std::size_t binaryPoolSize = binaryDDOP.size();
+		std::size_t binaryPoolSize = generatedBinaryDDOP.size();
+
+		if (DDOPUploadType::UserProvidedBinaryPointer == ddopUploadMode)
+		{
+			binaryPoolSize = userSuppliedBinaryDDOPSize_bytes;
+		}
+
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) |
 			                                                           (static_cast<std::uint8_t>(DeviceDescriptorCommands::RequestObjectPoolTransfer) << 4),
 			                                                         static_cast<std::uint8_t>(binaryPoolSize & 0xFF),
@@ -1622,6 +1903,25 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      myControlFunction.get(),
 		                                                      nullptr);
+	}
+
+	void TaskControllerClient::set_common_config_items(std::uint8_t maxNumberBoomsSupported,
+	                                                   std::uint8_t maxNumberSectionsSupported,
+	                                                   std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
+	                                                   bool reportToTCSupportsDocumentation,
+	                                                   bool reportToTCSupportsTCGEOWithoutPositionBasedControl,
+	                                                   bool reportToTCSupportsTCGEOWithPositionBasedControl,
+	                                                   bool reportToTCSupportsPeerControlAssignment,
+	                                                   bool reportToTCSupportsImplementSectionControl)
+	{
+		numberBoomsSupported = maxNumberBoomsSupported;
+		numberSectionsSupported = maxNumberSectionsSupported;
+		numberChannelsSupportedForPositionBasedControl = maxNumberChannelsSupportedForPositionBasedControl;
+		supportsDocumentation = reportToTCSupportsDocumentation;
+		supportsTCGEOWithoutPositionBasedControl = reportToTCSupportsTCGEOWithoutPositionBasedControl;
+		supportsTCGEOWithPositionBasedControl = reportToTCSupportsTCGEOWithPositionBasedControl;
+		supportsPeerControlAssignment = reportToTCSupportsPeerControlAssignment;
+		supportsImplementSectionControl = reportToTCSupportsImplementSectionControl;
 	}
 
 	void TaskControllerClient::set_state(StateMachineState newState)
