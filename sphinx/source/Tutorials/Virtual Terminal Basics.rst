@@ -29,11 +29,12 @@ Let's start our program fresh, with a folder containing only the CAN stack.
 
 	mkdir vt_example
 	cd vt_example
-	git clone https://github.com/ad3154/ISO11783-CAN-Stack.git
+	git clone https://github.com/ad3154/Isobus-plus-plus.git
 
 Create the file `main.cpp` as shown below inside that folder with the requisite control functions.
 
 .. code-block:: c++
+
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
 	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
@@ -561,7 +562,7 @@ We'll start off like we did in "ISOBUS Hello World".
 	set(THREADS_PREFER_PTHREAD_FLAG ON)
 	find_package(Threads REQUIRED)
 
-	add_subdirectory("ISO11783-CAN-Stack")
+	add_subdirectory("Isobus-plus-plus")
 
 	add_executable(vt_example main.cpp)
 
@@ -599,4 +600,4 @@ Now you should be able to build and run the program!
 
 That's it for this Tutorial. You should be able to run it as long as you have a VT and a supported CAN driver, see the test pool be uploaded, and be able to interact with all buttons on screen!
 
-If you would like to see more advanced VT tutorials or have other feedback, please visit our `GitHub page <https://github.com/ad3154/ISO11783-CAN-Stack>`_ and feel free to open a discussion! We're friendly, we promise.
+If you would like to see more advanced VT tutorials or have other feedback, please visit our `GitHub page <https://github.com/ad3154/Isobus-plus-plus>`_ and feel free to open a discussion! We're friendly, we promise.

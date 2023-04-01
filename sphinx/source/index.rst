@@ -39,6 +39,6 @@ Table of Contents:
 * :doc:`FAQ <FAQ>`
 
 
-`Visit us on GitHub <https://github.com/ad3154/ISO11783-CAN-Stack>`_
+`Visit us on GitHub <https://github.com/ad3154/Isobus-plus-plus>`_
 
 

@@ -171,5 +171,5 @@ Here are the different transport layers this library provides, along with a shor
 
 In general, the ISOBUS++ library will take care of choosing which protocol to use automatically.
 
-Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/examples/transport_layer>`_.
+Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/ad3154/Isobus-plus-plus/tree/main/examples/transport_layer>`_.
 

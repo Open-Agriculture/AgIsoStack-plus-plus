@@ -23,11 +23,11 @@ Compiling the Doxygen locally
 
 You can also generate the Doxygen yourself and browse it locally.
 
-From your project, change directory into the 'ISO11783-CAN-Stack' folder.
+From your project, change directory into the 'Isobus-plus-plus' folder.
 
 .. code-block:: bash
 
-   cd ISO11783-CAN-Stack
+   cd Isobus-plus-plus
 
 Make sure you have Doxygen installed.
 
@@ -45,11 +45,15 @@ RHEL:
 
    sudo dnf install doxygen graphviz
 
+Windows:
+
+Make sure you have doxygen installed: https://www.doxygen.nl/download.html
+
 
 Then, generate the docs.
 
 .. code-block:: bash
 
-   doxygen
+   doxygen doxyfile
 
 The documentation will appear in the docs/html folder. Open index.html in a web browser to start browsing the docs!

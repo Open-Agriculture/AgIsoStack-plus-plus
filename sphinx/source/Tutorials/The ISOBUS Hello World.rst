@@ -199,36 +199,6 @@ So, lets talk about what's happening here.
 :code:`CANHardwareInterface::start();` Kicks off a number of threads that will manage the socket and issue callbacks for when messages are received. It also provides callbacks to 'tick' the stack cyclically.
 Checking its return value and :code:`get_is_valid` will tell you if the underlying CAN driver is connected to the hardware. In this case, since we're using socket CAN, it tells us if we bound to the socket.
 
-There's still one more step before the plumbing is done. Like we discussed earlier, the "CANHardwareInterface" is an independent component that is not actually directly tied to the CAN stack. This is so that anybody could implement their own hardware layer for their specific needs! But, that also means that we need to do a tiny bit of manual routing for the callbacks coming from the CANHardwareInterface.
-
-Let's add two functions to our program. You could use a class member function if you want instead, but it would have to be static.
-
-.. code-block:: c++
-
-   void update_CAN_network()
-   {
-   	isobus::CANNetworkManager::CANNetwork.update();
-   }
-   
-   void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-   {
-   	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-   }
-
-These two functions will help us "glue" together the CAN stack with the CANHardwareInterface. Basically, the CANHardwareInterface will call these as callbacks, and they will in-turn pass the appropriate info to the stack.
-
-It's OK if you don't fully understand this part right now - stick with me!
-
-Let's register our two functions as callbacks from the CANHardwareInterface.
-
-.. code-block:: c++
-
-   CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-   CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
-
-So, now whenever "can0" receives a CAN message, the hardware layer will call the function :code:`raw_can_glue`, which will send that message to the stack! 
-
-Likewise, the hardware layer will call :code:`update_CAN_network` at some interval which will update all the internals of the stack.
 
 Let's see what we've got so far:
 
@@ -241,16 +211,6 @@ Let's see what we've got so far:
 
    #include <memory>
    #include <iostream>
-
-   void update_CAN_network()
-   {
-      isobus::CANNetworkManager::CANNetwork.update();
-   }
-
-   void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-   {
-      isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-   }
 
    int main()
    {
@@ -267,9 +227,6 @@ Let's see what we've got so far:
          std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
          return -2;
       }
-
-      CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-      CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
       //! Make sure you change these for your device!!!!
       //! This is an example device that is using a manufacturer code that is currently unused at time of writing
@@ -317,16 +274,6 @@ Make sure to include `csignal`.
 		_exit(EXIT_FAILURE);
    }
 
-   void update_CAN_network()
-   {
-      isobus::CANNetworkManager::CANNetwork.update();
-   }
-
-   void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-   {
-      isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-   }
-
    int main()
    {
       isobus::NAME myNAME(0); // Create an empty NAME
@@ -345,9 +292,6 @@ Make sure to include `csignal`.
 
       // Handle control+c
       std::signal(SIGINT, signal_handler);
-
-      CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-      CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
       //! Make sure you change these for your device!!!!
       //! This is an example device that is using a manufacturer code that is currently unused at time of writing
@@ -397,16 +341,6 @@ The total result:
    	CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);
    }
-
-   void update_CAN_network()
-   {
-   	isobus::CANNetworkManager::CANNetwork.update();
-   }
-   
-   void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-   {
-   	isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-   }
    
    int main()
    {
@@ -426,9 +360,6 @@ The total result:
 
     // Handle control+c
     std::signal(SIGINT, signal_handler);
-
-    CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-    CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
     //! Make sure you change these for your device!!!!
     //! This is an example device that is using a manufacturer code that is currently unused at time of writing
@@ -487,7 +418,7 @@ Assuming you followed the :doc:`installation instructions <../Installation>` the
 .. code-block:: bash
 
    ls
-   ISO11783-CAN-Stack  main.cpp
+   Isobus-plus-plus main.cpp
 
 To get everything compiling into a program using CMake, let's add a CMakeLists.txt file.
 
@@ -507,7 +438,7 @@ Add the following to a new file called CMakeLists.txt:
    set(THREADS_PREFER_PTHREAD_FLAG ON)
    find_package(Threads REQUIRED)
    
-   add_subdirectory("ISO11783-CAN-Stack")
+   add_subdirectory("Isobus-plus-plus")
    
    add_executable(isobus_hello_world main.cpp)
    
