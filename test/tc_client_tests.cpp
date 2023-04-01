@@ -503,6 +503,24 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
 	EXPECT_DEATH(interfaceUnderTest.initialize(false), "");
 }
 
+TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPDeathTest)
+{
+	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
+	EXPECT_DEATH(interfaceUnderTest.configure(nullptr, 6, 64, 32, false, false, false, false, false), "");
+}
+
+TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPSizeDeathTest)
+{
+	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
+	EXPECT_DEATH(interfaceUnderTest.configure(DerivedTestTCClient::testBinaryDDOP, 0, 6, 64, 32, false, false, false, false, false), "");
+}
+
+TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryVectorDDOPSDeathTest)
+{
+	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
+	EXPECT_DEATH(interfaceUnderTest.configure(std::vector<std::uint8_t>(), 6, 64, 32, false, false, false, false, false), "");
+}
+
 TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 {
 	// Boilerplate...

@@ -151,7 +151,7 @@ namespace isobus
 		if (StateMachineState::Disconnected == get_state())
 		{
 			assert(nullptr != binaryDDOP); // Client will not work without a DDOP.
-			assert(0 != binaryDDOP);
+			assert(0 != DDOPSize);
 			generatedBinaryDDOP.clear();
 			ddopStructureLabel.clear();
 			ddopLocalizationLabel.fill(0x00);
