@@ -18,48 +18,50 @@
 
 #include <string>
 
-//================================================================================================
-/// @class TWAIPlugin
-///
-/// @brief A driver for Two-Wire Automotive Interface (TWAI).
-//================================================================================================
-class TWAIPlugin : public CANHardwarePlugin
+namespace isobus
 {
-public:
-	/// @brief Constructor for the socket CAN driver
-	/// @param[in] filterConfig A reference to the filter configuration for the TWAI driver
-	/// @param[in] timingConfig A reference to the timing configuration for the TWAI driver
-	/// @param[in] generalConfig A reference to the general configuration for the TWAI driver
-	explicit TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig);
+	//================================================================================================
+	/// @class TWAIPlugin
+	///
+	/// @brief A driver for Two-Wire Automotive Interface (TWAI).
+	//================================================================================================
+	class TWAIPlugin : public CANHardwarePlugin
+	{
+	public:
+		/// @brief Constructor for the socket CAN driver
+		/// @param[in] filterConfig A reference to the filter configuration for the TWAI driver
+		/// @param[in] timingConfig A reference to the timing configuration for the TWAI driver
+		/// @param[in] generalConfig A reference to the general configuration for the TWAI driver
+		explicit TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig);
 
-	/// @brief The destructor for TWAIPlugin
-	virtual ~TWAIPlugin();
+		/// @brief The destructor for TWAIPlugin
+		virtual ~TWAIPlugin();
 
-	/// @brief Returns if the socket connection is valid
-	/// @returns `true` if connected, `false` if not connected
-	bool get_is_valid() const override;
+		/// @brief Returns if the socket connection is valid
+		/// @returns `true` if connected, `false` if not connected
+		bool get_is_valid() const override;
 
-	/// @brief Closes the socket
-	void close() override;
+		/// @brief Closes the socket
+		void close() override;
 
-	/// @brief Connects to the socket
-	void open() override;
+		/// @brief Connects to the socket
+		void open() override;
 
-	/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
-	/// @param[in, out] canFrame The CAN frame that was read
-	/// @returns `true` if a CAN frame was read, otherwise `false`
-	bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) override;
+		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
+		/// @param[in, out] canFrame The CAN frame that was read
+		/// @returns `true` if a CAN frame was read, otherwise `false`
+		bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) override;
 
-	/// @brief Writes a frame to the bus (synchronous)
-	/// @param[in] canFrame The frame to write to the bus
-	/// @returns `true` if the frame was written, otherwise `false`
-	bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
+		/// @brief Writes a frame to the bus (synchronous)
+		/// @param[in] canFrame The frame to write to the bus
+		/// @returns `true` if the frame was written, otherwise `false`
+		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
 
-private:
-	const twai_general_config_t *generalConfig;
-	const twai_timing_config_t *timingConfig;
-	const twai_filter_config_t *filterConfig;
-};
-
+	private:
+		const twai_general_config_t *generalConfig;
+		const twai_timing_config_t *timingConfig;
+		const twai_filter_config_t *filterConfig;
+	};
+}
 #endif // ESP_PLATFORM
 #endif // TWAI_PLUGIN_HPP

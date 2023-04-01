@@ -176,11 +176,11 @@ There are a few lines we'll need to add:
 
 .. code-block:: c++
 
-   std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
-   CANHardwareInterface::set_number_of_can_channels(1);
-   CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+   std::shared_ptr<isobus::SocketCANInterface> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+   isobus::CANHardwareInterface::set_number_of_can_channels(1);
+   isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-   if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+   if ((!isobus::CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
    {
       std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
       return -1;
@@ -190,15 +190,14 @@ The "CANHardwareInterface" is an independent component that is not actually dire
 
 So, lets talk about what's happening here.
 
-:code:`std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");` Creates a new SocketCANInterface object, and stores it in a shared_ptr. This is the object that will be used to interface with the socket CAN driver.
+:code:`std::shared_ptr<isobus::SocketCANInterface> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");` Creates a new SocketCANInterface object, and stores it in a shared_ptr. This is the object that will be used to interface with the socket CAN driver.
 
-:code:`CANHardwareInterface::set_number_of_can_channels(1)` Is telling the hardware layer (socket CAN in our case) that we will use 1 CAN adapter.
+:code:`isobus::CANHardwareInterface::set_number_of_can_channels(1)` Is telling the hardware layer (socket CAN in our case) that we will use 1 CAN adapter.
 
-:code:`CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);` Tells the hardware layer that we want to use the SocketCANInterface object we just created as the handler for CAN channel 0.
+:code:`isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);` Tells the hardware layer that we want to use the SocketCANInterface object we just created as the handler for CAN channel 0.
 
-:code:`CANHardwareInterface::start();` Kicks off a number of threads that will manage the socket and issue callbacks for when messages are received. It also provides callbacks to 'tick' the stack cyclically.
+:code:`isobus::CANHardwareInterface::start();` Kicks off a number of threads that will manage the socket and issue callbacks for when messages are received. It also provides callbacks to 'tick' the stack cyclically.
 Checking its return value and :code:`get_is_valid` will tell you if the underlying CAN driver is connected to the hardware. In this case, since we're using socket CAN, it tells us if we bound to the socket.
-
 
 Let's see what we've got so far:
 
@@ -218,11 +217,11 @@ Let's see what we've got so far:
       std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
       // Set up the hardware layer to use SocketCAN interface on channel "can0"
-      std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
-      CANHardwareInterface::set_number_of_can_channels(1);
-      CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+      std::shared_ptr<isobus::SocketCANInterface> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+      isobus::CANHardwareInterface::set_number_of_can_channels(1);
+      isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-      if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+      if ((!isobus::CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
       {
          std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
          return -2;
@@ -251,9 +250,9 @@ Sweet! We're almost ready to send a message. Let's just add a few more things to
 Cleaning up
 ------------
 
-Whenever the program ends, we want to call :code:`CANHardwareInterface::stop();` to clean up the hardware layer and stop the threads we started with :code:`CANHardwareInterface::start();`.
+Whenever the program ends, we want to call :code:`isobus::CANHardwareInterface::stop();` to clean up the hardware layer and stop the threads we started with :code:`isobus::CANHardwareInterface::start();`.
 
-Additionally, we want to call :code:`CANHardwareInterface::stop();` if the user presses control+c (user sends a SIGINT signal to our program). So let's add a little signal handler that'll gracefully clean up if that happens.
+Additionally, we want to call :code:`isobus::CANHardwareInterface::stop();` if the user presses control+c (user sends a SIGINT signal to our program). So let's add a little signal handler that'll gracefully clean up if that happens.
 
 Make sure to include `csignal`.
 
@@ -270,7 +269,7 @@ Make sure to include `csignal`.
 
    void signal_handler(int)
    {
-      CANHardwareInterface::stop(); // Clean up the threads
+      isobus::CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);
    }
 
@@ -280,11 +279,11 @@ Make sure to include `csignal`.
       std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
       // Set up the hardware layer to use SocketCAN interface on channel "can0"
-      std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
-      CANHardwareInterface::set_number_of_can_channels(1);
-      CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+      std::shared_ptr<isobus::SocketCANInterface> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+      isobus::CANHardwareInterface::set_number_of_can_channels(1);
+      isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-      if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+      if ((!isobus::CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
       {
          std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
          return -2;
@@ -309,7 +308,7 @@ Make sure to include `csignal`.
       myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
 
       // Clean up the threads
-      CANHardwareInterface::stop();
+      isobus::CANHardwareInterface::stop();
 
       return 0;
    }
@@ -338,7 +337,7 @@ The total result:
 
    void signal_handler(int)
    {
-   	CANHardwareInterface::stop(); // Clean up the threads
+   	isobus::CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);
    }
    
@@ -348,11 +347,11 @@ The total result:
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
     // Set up the hardware layer to use SocketCAN interface on channel "can0"
-    std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
-    CANHardwareInterface::set_number_of_can_channels(1);
-    CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+    std::shared_ptr<isobus::SocketCANInterface> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+    isobus::CANHardwareInterface::set_number_of_can_channels(1);
+    isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-    if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+    if ((!isobus::CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
     {
     	 std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
     	 return -2;
@@ -379,7 +378,7 @@ The total result:
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // Clean up the threads
-    CANHardwareInterface::stop();
+    isobus::CANHardwareInterface::stop();
 
     return 0;
    }
