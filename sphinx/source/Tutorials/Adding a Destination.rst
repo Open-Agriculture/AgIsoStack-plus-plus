@@ -107,16 +107,6 @@ The final program for this tutorial (including the code from the previous Hello 
 		_exit(EXIT_FAILURE);
    }
 
-   void update_CAN_network()
-   {
-      isobus::CANNetworkManager::CANNetwork.update();
-   }
-
-   void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
-   {
-      isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-   }
-
    int main()
    {
       isobus::NAME myNAME(0); // Create an empty NAME
@@ -136,9 +126,6 @@ The final program for this tutorial (including the code from the previous Hello 
 
       // Handle control+c
       std::signal(SIGINT, signal_handler);
-
-      CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-      CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
 
       //! Make sure you change these for your device!!!!
       //! This is an example device that is using a manufacturer code that is currently unused at time of writing
