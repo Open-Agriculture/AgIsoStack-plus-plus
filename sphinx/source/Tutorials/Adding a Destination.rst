@@ -103,7 +103,7 @@ The final program for this tutorial (including the code from the previous Hello 
 
    void signal_handler(int)
    {
-      CANHardwareInterface::stop(); // Clean up the threads
+      isobus::CANHardwareInterface::stop(); // Clean up the threads
 		_exit(EXIT_FAILURE);
    }
 
@@ -114,11 +114,11 @@ The final program for this tutorial (including the code from the previous Hello 
       std::shared_ptr<isobus::PartneredControlFunction> myPartner = nullptr; // A pointer to hold a partner
 
       // Set up the hardware layer to use SocketCAN interface on channel "can0"
-      std::shared_ptr<SocketCANInterface> canDriver = std::make_shared<SocketCANInterface>("can0");
-      CANHardwareInterface::set_number_of_can_channels(1);
-      CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+      std::shared_ptr<isobus::SocketCANInterface> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+      isobus::CANHardwareInterface::set_number_of_can_channels(1);
+      isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
-      if ((!CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+      if ((!isobus::CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
       {
          std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
          return -1;
@@ -163,7 +163,7 @@ The final program for this tutorial (including the code from the previous Hello 
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
       // Clean up the threads
-      CANHardwareInterface::stop();
+      isobus::CANHardwareInterface::stop();
 
       return 0;
    }

@@ -14,72 +14,75 @@
 
 #include <thread>
 
-PCANBasicWindowsPlugin::PCANBasicWindowsPlugin(WORD channel) :
-  handle(channel),
-  openResult(PCAN_ERROR_OK)
+namespace isobus
 {
-}
-
-PCANBasicWindowsPlugin::~PCANBasicWindowsPlugin()
-{
-}
-
-bool PCANBasicWindowsPlugin::get_is_valid() const
-{
-	return (PCAN_ERROR_OK == openResult);
-}
-
-void PCANBasicWindowsPlugin::close()
-{
-	CAN_Uninitialize(handle);
-}
-
-void PCANBasicWindowsPlugin::open()
-{
-	openResult = CAN_Initialize(handle, PCAN_BAUD_250K);
-
-	if (PCAN_ERROR_OK != openResult)
+	PCANBasicWindowsPlugin::PCANBasicWindowsPlugin(WORD channel) :
+	  handle(channel),
+	  openResult(PCAN_ERROR_OK)
 	{
-		isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[PCAN]: Error trying to connect to PCAN probe");
 	}
-}
 
-bool PCANBasicWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
-{
-	TPCANStatus result;
-	TPCANMsg CANMsg;
-	TPCANTimestamp CANTimeStamp;
-	bool retVal = false;
-
-	result = CAN_Read(handle, &CANMsg, &CANTimeStamp);
-
-	if (PCAN_ERROR_OK == result)
+	PCANBasicWindowsPlugin::~PCANBasicWindowsPlugin()
 	{
-		canFrame.dataLength = CANMsg.LEN;
-		memcpy(canFrame.data, CANMsg.DATA, CANMsg.LEN);
-		canFrame.identifier = CANMsg.ID;
-		canFrame.isExtendedFrame = (PCAN_MESSAGE_EXTENDED == CANMsg.MSGTYPE);
-		canFrame.timestamp_us = (CANTimeStamp.millis * 1000) + CANTimeStamp.micros;
-		retVal = true;
 	}
-	else
+
+	bool PCANBasicWindowsPlugin::get_is_valid() const
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		return (PCAN_ERROR_OK == openResult);
 	}
-	return retVal;
-}
 
-bool PCANBasicWindowsPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
-{
-	TPCANStatus result;
-	TPCANMsg msgCanMessage;
+	void PCANBasicWindowsPlugin::close()
+	{
+		CAN_Uninitialize(handle);
+	}
 
-	msgCanMessage.ID = canFrame.identifier;
-	msgCanMessage.LEN = canFrame.dataLength;
-	msgCanMessage.MSGTYPE = canFrame.isExtendedFrame ? PCAN_MESSAGE_EXTENDED : PCAN_MESSAGE_STANDARD;
-	memcpy(msgCanMessage.DATA, canFrame.data, canFrame.dataLength);
+	void PCANBasicWindowsPlugin::open()
+	{
+		openResult = CAN_Initialize(handle, PCAN_BAUD_250K);
 
-	result = CAN_Write(handle, &msgCanMessage);
+		if (PCAN_ERROR_OK != openResult)
+		{
+			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[PCAN]: Error trying to connect to PCAN probe");
+		}
+	}
 
-	return (PCAN_ERROR_OK == result);
+	bool PCANBasicWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	{
+		TPCANStatus result;
+		TPCANMsg CANMsg;
+		TPCANTimestamp CANTimeStamp;
+		bool retVal = false;
+
+		result = CAN_Read(handle, &CANMsg, &CANTimeStamp);
+
+		if (PCAN_ERROR_OK == result)
+		{
+			canFrame.dataLength = CANMsg.LEN;
+			memcpy(canFrame.data, CANMsg.DATA, CANMsg.LEN);
+			canFrame.identifier = CANMsg.ID;
+			canFrame.isExtendedFrame = (PCAN_MESSAGE_EXTENDED == CANMsg.MSGTYPE);
+			canFrame.timestamp_us = (CANTimeStamp.millis * 1000) + CANTimeStamp.micros;
+			retVal = true;
+		}
+		else
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		return retVal;
+	}
+
+	bool PCANBasicWindowsPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	{
+		TPCANStatus result;
+		TPCANMsg msgCanMessage;
+
+		msgCanMessage.ID = canFrame.identifier;
+		msgCanMessage.LEN = canFrame.dataLength;
+		msgCanMessage.MSGTYPE = canFrame.isExtendedFrame ? PCAN_MESSAGE_EXTENDED : PCAN_MESSAGE_STANDARD;
+		memcpy(msgCanMessage.DATA, canFrame.data, canFrame.dataLength);
+
+		result = CAN_Write(handle, &msgCanMessage);
+
+		return (PCAN_ERROR_OK == result);
+	}
 }

@@ -11,35 +11,37 @@
 
 #include "isobus/isobus/can_frame.hpp"
 
-//================================================================================================
-/// @class CANHardwarePlugin
-///
-/// @brief An abstract base class for a CAN driver
-//================================================================================================
-class CANHardwarePlugin
+namespace isobus
 {
-public:
-	/// @brief Returns if the driver is ready and in a good state
-	/// @details This should return `false` until `open` is called, and after `close` is called, or
-	/// if anything happens that causes the driver to be invalid, like the hardware is disconnected.
-	/// @returns `true` if the driver is good/connected, `false` if the driver is not usable
-	virtual bool get_is_valid() const = 0;
+	//================================================================================================
+	/// @class CANHardwarePlugin
+	///
+	/// @brief An abstract base class for a CAN driver
+	//================================================================================================
+	class CANHardwarePlugin
+	{
+	public:
+		/// @brief Returns if the driver is ready and in a good state
+		/// @details This should return `false` until `open` is called, and after `close` is called, or
+		/// if anything happens that causes the driver to be invalid, like the hardware is disconnected.
+		/// @returns `true` if the driver is good/connected, `false` if the driver is not usable
+		virtual bool get_is_valid() const = 0;
 
-	/// @brief Disconnects the driver from the hardware
-	virtual void close() = 0;
+		/// @brief Disconnects the driver from the hardware
+		virtual void close() = 0;
 
-	/// @brief Connects the driver to the hardware
-	virtual void open() = 0;
+		/// @brief Connects the driver to the hardware
+		virtual void open() = 0;
 
-	/// @brief Reads one frame from the bus synchronously
-	/// @param[in, out] canFrame The CAN frame that was read
-	/// @returns `true` if a CAN frame was read, otherwise `false`
-	virtual bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) = 0;
+		/// @brief Reads one frame from the bus synchronously
+		/// @param[in, out] canFrame The CAN frame that was read
+		/// @returns `true` if a CAN frame was read, otherwise `false`
+		virtual bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) = 0;
 
-	/// @brief Writes a frame to the bus (synchronous)
-	/// @param[in] canFrame The frame to write to the bus
-	/// @returns `true` if the frame was written, otherwise `false`
-	virtual bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) = 0;
-};
-
+		/// @brief Writes a frame to the bus (synchronous)
+		/// @param[in] canFrame The frame to write to the bus
+		/// @returns `true` if the frame was written, otherwise `false`
+		virtual bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) = 0;
+	};
+}
 #endif // CAN_HARDEWARE_PLUGIN_HPP

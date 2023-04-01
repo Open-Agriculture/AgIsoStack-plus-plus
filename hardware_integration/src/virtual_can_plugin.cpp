@@ -8,87 +8,90 @@
 //================================================================================================
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 
-std::mutex VirtualCANPlugin::mutex;
-std::map<std::string, std::vector<std::shared_ptr<VirtualCANPlugin::VirtualDevice>>> VirtualCANPlugin::channels;
-
-VirtualCANPlugin::VirtualCANPlugin(const std::string channel, const bool receiveOwnMessages) :
-  channel(channel),
-  receiveOwnMessages(receiveOwnMessages)
+namespace isobus
 {
-	const std::lock_guard<std::mutex> lock(mutex);
-	ourDevice = std::make_shared<VirtualDevice>();
-	channels[channel].push_back(ourDevice);
-}
+	std::mutex VirtualCANPlugin::mutex;
+	std::map<std::string, std::vector<std::shared_ptr<VirtualCANPlugin::VirtualDevice>>> VirtualCANPlugin::channels;
 
-VirtualCANPlugin::~VirtualCANPlugin()
-{
-	// Prevent a deadlock in the read_frame() function
-	running = false;
-	ourDevice->condition.notify_one();
-}
-
-bool VirtualCANPlugin::get_is_valid() const
-{
-	return running;
-}
-
-std::string VirtualCANPlugin::get_channel_name() const
-{
-	return channel;
-}
-
-void VirtualCANPlugin::open()
-{
-	running = true;
-}
-
-void VirtualCANPlugin::close()
-{
-	running = false;
-	ourDevice->condition.notify_one();
-}
-
-bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
-{
-	bool retVal = false;
-	const std::lock_guard<std::mutex> lock(mutex);
-	for (std::shared_ptr<VirtualDevice> device : channels[channel])
+	VirtualCANPlugin::VirtualCANPlugin(const std::string channel, const bool receiveOwnMessages) :
+	  channel(channel),
+	  receiveOwnMessages(receiveOwnMessages)
 	{
-		if (device->queue.size() < MAX_QUEUE_SIZE)
+		const std::lock_guard<std::mutex> lock(mutex);
+		ourDevice = std::make_shared<VirtualDevice>();
+		channels[channel].push_back(ourDevice);
+	}
+
+	VirtualCANPlugin::~VirtualCANPlugin()
+	{
+		// Prevent a deadlock in the read_frame() function
+		running = false;
+		ourDevice->condition.notify_one();
+	}
+
+	bool VirtualCANPlugin::get_is_valid() const
+	{
+		return running;
+	}
+
+	std::string VirtualCANPlugin::get_channel_name() const
+	{
+		return channel;
+	}
+
+	void VirtualCANPlugin::open()
+	{
+		running = true;
+	}
+
+	void VirtualCANPlugin::close()
+	{
+		running = false;
+		ourDevice->condition.notify_one();
+	}
+
+	bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	{
+		bool retVal = false;
+		const std::lock_guard<std::mutex> lock(mutex);
+		for (std::shared_ptr<VirtualDevice> device : channels[channel])
 		{
-			if (receiveOwnMessages || device != ourDevice)
+			if (device->queue.size() < MAX_QUEUE_SIZE)
 			{
-				device->queue.push_back(canFrame);
-				device->condition.notify_one();
-				retVal = true;
+				if (receiveOwnMessages || device != ourDevice)
+				{
+					device->queue.push_back(canFrame);
+					device->condition.notify_one();
+					retVal = true;
+				}
 			}
 		}
+		return retVal;
 	}
-	return retVal;
-}
 
-void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const
-{
-	const std::lock_guard<std::mutex> lock(mutex);
-	ourDevice->queue.push_back(canFrame);
-	ourDevice->condition.notify_one();
-}
-
-bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
-{
-	std::unique_lock<std::mutex> lock(mutex);
-	ourDevice->condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });
-	if (!ourDevice->queue.empty())
+	void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const
 	{
-		canFrame = ourDevice->queue.front();
-		ourDevice->queue.pop_front();
-		return true;
+		const std::lock_guard<std::mutex> lock(mutex);
+		ourDevice->queue.push_back(canFrame);
+		ourDevice->condition.notify_one();
 	}
-	return false;
-}
 
-bool VirtualCANPlugin::get_queue_empty() const
-{
-	const std::lock_guard<std::mutex> lock(mutex);
-	return ourDevice->queue.empty();
+	bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		ourDevice->condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });
+		if (!ourDevice->queue.empty())
+		{
+			canFrame = ourDevice->queue.front();
+			ourDevice->queue.pop_front();
+			return true;
+		}
+		return false;
+	}
+
+	bool VirtualCANPlugin::get_queue_empty() const
+	{
+		const std::lock_guard<std::mutex> lock(mutex);
+		return ourDevice->queue.empty();
+	}
 }
