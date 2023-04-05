@@ -201,7 +201,7 @@ namespace isobus
 		/// @param[in] reportToTCSupportsTCGEOWithPositionBasedControl Denotes if your app supports TC-GEO with position based control
 		/// @param[in] reportToTCSupportsPeerControlAssignment Denotes if your app supports peer control assignment
 		/// @param[in] reportToTCSupportsImplementSectionControl Denotes if your app supports implement section control
-		void configure(const std::vector<std::uint8_t> &binaryDDOP,
+		void configure(std::shared_ptr<std::vector<std::uint8_t>> binaryDDOP,
 		               std::uint8_t maxNumberBoomsSupported,
 		               std::uint8_t maxNumberSectionsSupported,
 		               std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
@@ -554,6 +554,7 @@ namespace isobus
 		std::shared_ptr<VirtualTerminalClient> primaryVirtualTerminal; ///< A pointer to the primary VT. Used for TCs < version 4
 		std::shared_ptr<DeviceDescriptorObjectPool> clientDDOP; ///< Stores the DDOP for upload to the TC (if needed)
 		std::uint8_t const *userSuppliedBinaryDDOP = nullptr; ///< Stores a client-provided DDOP if one was provided
+		std::shared_ptr<std::vector<std::uint8_t>> userSuppliedVectorDDOP; ///< Stores a client-provided DDOP if one was provided
 		std::vector<std::uint8_t> generatedBinaryDDOP; ///< Stores the DDOP in binary form after it has been generated
 		std::vector<RequestValueCommandCallbackInfo> requestValueCallbacks; ///< A list of callbacks that will be called when the TC requests a process data value
 		std::vector<ValueCommandCallbackInfo> valueCommandsCallbacks; ///< A list of callbacks that will be called when the TC sets a process data value
