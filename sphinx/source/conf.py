@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'ISO 11783 CAN Stack'
+project = 'Isobus-plus-plus'
 copyright = '2022, Adrian Del Grosso'
 author = 'Adrian Del Grosso'
 release = '1.0.0'

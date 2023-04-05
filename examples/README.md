@@ -6,10 +6,10 @@ Then, use a call to `find_package()` to find this package.
 
 The same process can be used for all examples, however `diagnostic_protocol` is just shown as a reference.
 
-First, build the ISO1173 CAN Stack.
+First, build the Isobus-plus-plus CAN Stack.
 ```
 # Build the library like normal
-cd /path/to/root/directory/of/ISO11783-CAN-Stack
+cd /path/to/root/directory/of/Isobus-plus-plus
 cmake -S . -B build 
 cmake --build build
 # Install it locally in a directory called "install"

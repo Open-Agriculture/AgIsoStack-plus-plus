@@ -60,7 +60,7 @@ VS Code can be installed via the snap store, or by downloading it from [Microsof
 Clone the repo:
 
 ```
-git clone https://github.com/ad3154/ISO11783-CAN-Stack.git
+git clone https://github.com/ad3154/Isobus-plus-plus.git
 ```
 
 Then, open it in Code by clicking `File -> Open Folder`.
