@@ -506,7 +506,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPDeathTest)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
-	EXPECT_DEATH(interfaceUnderTest.configure(nullptr, 6, 64, 32, false, false, false, false, false), "");
+	EXPECT_DEATH(interfaceUnderTest.configure(nullptr, 0, 6, 64, 32, false, false, false, false, false), "");
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPSizeDeathTest)
@@ -518,7 +518,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPSizeDeathTest)
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryVectorDDOPSDeathTest)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
-	EXPECT_DEATH(interfaceUnderTest.configure(std::vector<std::uint8_t>(), 6, 64, 32, false, false, false, false, false), "");
+	EXPECT_DEATH(interfaceUnderTest.configure(std::shared_ptr<std::vector<std::uint8_t>>(), 6, 64, 32, false, false, false, false, false), "");
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
@@ -877,9 +877,9 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
 	// Test with a vector binary ddop, this time using the process DDOP state to run process_labels_from_ddop
-	std::vector<std::uint8_t> ddopVector;
-	ddopVector.resize(sizeof(DerivedTestTCClient::testBinaryDDOP));
-	memcpy(ddopVector.data(), DerivedTestTCClient::testBinaryDDOP, sizeof(DerivedTestTCClient::testBinaryDDOP));
+	auto ddopVector = std::make_shared<std::vector<std::uint8_t>>();
+	ddopVector->resize(sizeof(DerivedTestTCClient::testBinaryDDOP));
+	memcpy(ddopVector->data(), DerivedTestTCClient::testBinaryDDOP, sizeof(DerivedTestTCClient::testBinaryDDOP));
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected);
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 	interfaceUnderTest.configure(ddopVector, 32, 32, 32, true, true, true, true, true);

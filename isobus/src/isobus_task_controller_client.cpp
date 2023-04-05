@@ -116,6 +116,7 @@ namespace isobus
 			assert(nullptr != DDOP); // Client will not work without a DDOP.
 			generatedBinaryDDOP.clear();
 			ddopStructureLabel.clear();
+			userSuppliedVectorDDOP = nullptr;
 			ddopLocalizationLabel.fill(0x00);
 			ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated;
 			clientDDOP = DDOP;
@@ -154,6 +155,7 @@ namespace isobus
 			assert(0 != DDOPSize);
 			generatedBinaryDDOP.clear();
 			ddopStructureLabel.clear();
+			userSuppliedVectorDDOP = nullptr;
 			ddopLocalizationLabel.fill(0x00);
 			ddopUploadMode = DDOPUploadType::UserProvidedBinaryPointer;
 			userSuppliedBinaryDDOP = binaryDDOP;
@@ -174,7 +176,7 @@ namespace isobus
 		}
 	}
 
-	void TaskControllerClient::configure(const std::vector<std::uint8_t> &binaryDDOP,
+	void TaskControllerClient::configure(std::shared_ptr<std::vector<std::uint8_t>> binaryDDOP,
 	                                     std::uint8_t maxNumberBoomsSupported,
 	                                     std::uint8_t maxNumberSectionsSupported,
 	                                     std::uint8_t maxNumberChannelsSupportedForPositionBasedControl,
@@ -186,10 +188,11 @@ namespace isobus
 	{
 		if (StateMachineState::Disconnected == get_state())
 		{
-			assert(!binaryDDOP.empty()); // Client will not work without a DDOP.
+			assert(nullptr != binaryDDOP); // Client will not work without a DDOP.
 			ddopStructureLabel.clear();
+			generatedBinaryDDOP.clear();
 			ddopLocalizationLabel.fill(0x00);
-			generatedBinaryDDOP = binaryDDOP;
+			userSuppliedVectorDDOP = binaryDDOP;
 			ddopUploadMode = DDOPUploadType::UserProvidedVector;
 			userSuppliedBinaryDDOP = nullptr;
 			userSuppliedBinaryDDOPSize_bytes = 0;
@@ -584,32 +587,42 @@ namespace isobus
 			case StateMachineState::BeginTransferDDOP:
 			{
 				bool transmitSuccessful = false;
+				std::uint32_t dataLength = 0;
 
-				if (DDOPUploadType::UserProvidedBinaryPointer == ddopUploadMode)
+				switch (ddopUploadMode)
 				{
-					transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-					                                                                    nullptr,
-					                                                                    static_cast<std::uint32_t>(userSuppliedBinaryDDOPSize_bytes + 1), // Account for Mux byte
-					                                                                    myControlFunction.get(),
-					                                                                    partnerControlFunction.get(),
-					                                                                    CANIdentifier::CANPriority::PriorityLowest7,
-					                                                                    process_tx_callback,
-					                                                                    this,
-					                                                                    process_internal_object_pool_upload_callback);
-				}
-				else
-				{
-					transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-					                                                                    nullptr,
-					                                                                    static_cast<std::uint32_t>(generatedBinaryDDOP.size() + 1), // Account for Mux byte
-					                                                                    myControlFunction.get(),
-					                                                                    partnerControlFunction.get(),
-					                                                                    CANIdentifier::CANPriority::PriorityLowest7,
-					                                                                    process_tx_callback,
-					                                                                    this,
-					                                                                    process_internal_object_pool_upload_callback);
+					case DDOPUploadType::ProgramaticallyGenerated:
+					{
+						dataLength = static_cast<std::uint32_t>(generatedBinaryDDOP.size() + 1); // Account for Mux byte
+					}
+					break;
+
+					case DDOPUploadType::UserProvidedBinaryPointer:
+					{
+						dataLength = static_cast<std::uint32_t>(userSuppliedBinaryDDOPSize_bytes + 1);
+					}
+					break;
+
+					case DDOPUploadType::UserProvidedVector:
+					{
+						dataLength = static_cast<std::uint32_t>(userSuppliedVectorDDOP->size() + 1);
+					}
+					break;
+
+					default:
+						break;
 				}
 
+				assert(0 != dataLength);
+				transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+				                                                                    nullptr,
+				                                                                    dataLength,
+				                                                                    myControlFunction.get(),
+				                                                                    partnerControlFunction.get(),
+				                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+				                                                                    process_tx_callback,
+				                                                                    this,
+				                                                                    process_internal_object_pool_upload_callback);
 				if (transmitSuccessful)
 				{
 					set_state(StateMachineState::WaitForDDOPTransfer);
@@ -765,7 +778,8 @@ namespace isobus
 
 			case DDOPUploadType::UserProvidedVector:
 			{
-				retVal = !generatedBinaryDDOP.empty();
+				retVal = (nullptr != userSuppliedVectorDDOP) &&
+				  (!userSuppliedVectorDDOP->empty());
 			}
 			break;
 
@@ -804,90 +818,66 @@ namespace isobus
 			break;
 
 			case DDOPUploadType::UserProvidedBinaryPointer:
-			{
-				// Searching for "DVC"
-				while (currentByteIndex < (userSuppliedBinaryDDOPSize_bytes - DEVICE_TABLE_ID.size()))
-				{
-					if ((DEVICE_TABLE_ID[0] == userSuppliedBinaryDDOP[currentByteIndex]) &&
-					    (DEVICE_TABLE_ID[1] == userSuppliedBinaryDDOP[currentByteIndex + 1]) &&
-					    (DEVICE_TABLE_ID[2] == userSuppliedBinaryDDOP[currentByteIndex + 2]))
-					{
-						// We have to do a lot of error checking on the DDOP length
-						// This is because we don't control the content of this DDOP, and have no
-						// assurances that the schema is even valid
-
-						assert((currentByteIndex + DESIGNATOR_BYTE_OFFSET) < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes to read the designator length
-						currentByteIndex += DESIGNATOR_BYTE_OFFSET; // Skip to the next variable length part of the object
-
-						const std::uint32_t DESIGNATOR_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "N", See Table A.1
-						assert(currentByteIndex + DESIGNATOR_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
-						currentByteIndex += DESIGNATOR_LENGTH + 1;
-
-						const std::uint32_t SOFTWARE_VERSION_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "M", See Table A.1
-						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
-						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH + 1;
-
-						const std::uint32_t SERIAL_NUMBER_LENGTH = userSuppliedBinaryDDOP[currentByteIndex]; // "O", See Table A.1
-						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < userSuppliedBinaryDDOPSize_bytes); // Not enough bytes in your DDOP!
-						currentByteIndex += SERIAL_NUMBER_LENGTH + 1;
-
-						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < userSuppliedBinaryDDOPSize_bytes); // // Not enough bytes in your DDOP!
-						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
-						{
-							ddopStructureLabel.push_back(userSuppliedBinaryDDOP[currentByteIndex + i]); // Read the descriptor
-						}
-
-						currentByteIndex += task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH;
-						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < userSuppliedBinaryDDOPSize_bytes); // // Not enough bytes in your DDOP!
-						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
-						{
-							ddopLocalizationLabel[i] = (userSuppliedBinaryDDOP[currentByteIndex + i]); // Read the localization label
-						}
-						break;
-					}
-				}
-			}
-			break;
-
 			case DDOPUploadType::UserProvidedVector:
 			{
+				auto getDDOPSize = [this]() {
+					if (ddopUploadMode == DDOPUploadType::UserProvidedBinaryPointer)
+					{
+						return userSuppliedBinaryDDOPSize_bytes;
+					}
+					else
+					{
+						return static_cast<std::uint32_t>(userSuppliedVectorDDOP->size());
+					}
+				};
+
+				auto getDDOPByteAt = [this](std::size_t index) {
+					if (ddopUploadMode == DDOPUploadType::UserProvidedBinaryPointer)
+					{
+						return userSuppliedBinaryDDOP[index];
+					}
+					else
+					{
+						return userSuppliedVectorDDOP->at(index);
+					}
+				};
 				// Searching for "DVC"
-				while (currentByteIndex < (generatedBinaryDDOP.size() - DEVICE_TABLE_ID.size()))
+				while (currentByteIndex < (getDDOPSize() - DEVICE_TABLE_ID.size()))
 				{
-					if ((DEVICE_TABLE_ID[0] == generatedBinaryDDOP.at(currentByteIndex)) &&
-					    (DEVICE_TABLE_ID[1] == generatedBinaryDDOP.at(currentByteIndex + 1)) &&
-					    (DEVICE_TABLE_ID[2] == generatedBinaryDDOP.at(currentByteIndex + 2)))
+					if ((DEVICE_TABLE_ID[0] == getDDOPByteAt(currentByteIndex)) &&
+					    (DEVICE_TABLE_ID[1] == getDDOPByteAt(currentByteIndex + 1)) &&
+					    (DEVICE_TABLE_ID[2] == getDDOPByteAt(currentByteIndex + 2)))
 					{
 						// We have to do a lot of error checking on the DDOP length
 						// This is because we don't control the content of this DDOP, and have no
 						// assurances that the schema is even valid
 
-						assert((currentByteIndex + DESIGNATOR_BYTE_OFFSET) < generatedBinaryDDOP.size()); // Not enough bytes to read the designator length
+						assert((currentByteIndex + DESIGNATOR_BYTE_OFFSET) < getDDOPSize()); // Not enough bytes to read the designator length
 						currentByteIndex += DESIGNATOR_BYTE_OFFSET; // Skip to the next variable length part of the object
 
-						const std::uint32_t DESIGNATOR_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "N", See Table A.1
-						assert(currentByteIndex + DESIGNATOR_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
+						const std::uint32_t DESIGNATOR_LENGTH = getDDOPByteAt(currentByteIndex); // "N", See Table A.1
+						assert(currentByteIndex + DESIGNATOR_LENGTH < getDDOPSize()); // Not enough bytes in your DDOP!
 						currentByteIndex += DESIGNATOR_LENGTH + 1;
 
-						const std::uint32_t SOFTWARE_VERSION_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "M", See Table A.1
-						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
+						const std::uint32_t SOFTWARE_VERSION_LENGTH = getDDOPByteAt(currentByteIndex); // "M", See Table A.1
+						assert(currentByteIndex + SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH < getDDOPSize()); // Not enough bytes in your DDOP!
 						currentByteIndex += SOFTWARE_VERSION_LENGTH + CLIENT_NAME_LENGTH + 1;
 
-						const std::uint32_t SERIAL_NUMBER_LENGTH = generatedBinaryDDOP.at(currentByteIndex); // "O", See Table A.1
-						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < generatedBinaryDDOP.size()); // Not enough bytes in your DDOP!
+						const std::uint32_t SERIAL_NUMBER_LENGTH = getDDOPByteAt(currentByteIndex); // "O", See Table A.1
+						assert(currentByteIndex + SERIAL_NUMBER_LENGTH < getDDOPSize()); // Not enough bytes in your DDOP!
 						currentByteIndex += SERIAL_NUMBER_LENGTH + 1;
 
-						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < generatedBinaryDDOP.size()); // // Not enough bytes in your DDOP!
+						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < getDDOPSize()); // // Not enough bytes in your DDOP!
 						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
 						{
-							ddopStructureLabel.push_back(generatedBinaryDDOP.at(currentByteIndex + i)); // Read the structure label
+							ddopStructureLabel.push_back(getDDOPByteAt(currentByteIndex + i)); // Read the descriptor
 						}
 
 						currentByteIndex += task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH;
-						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < generatedBinaryDDOP.size()); // // Not enough bytes in your DDOP!
+						assert(currentByteIndex + task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH < getDDOPSize()); // // Not enough bytes in your DDOP!
 						for (std::uint_fast8_t i = 0; i < task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH; i++)
 						{
-							ddopLocalizationLabel[i] = (generatedBinaryDDOP.at(currentByteIndex + i)); // Read the localization label
+							ddopLocalizationLabel[i] = (getDDOPByteAt(currentByteIndex + i)); // Read the localization label
 						}
 						break;
 					}
@@ -907,7 +897,7 @@ namespace isobus
 
 		while (!queuedValueRequests.empty() && transmitSuccessful)
 		{
-			auto &currentRequest = queuedValueRequests.front();
+			const auto &currentRequest = queuedValueRequests.front();
 
 			for (auto &currentCallback : requestValueCallbacks)
 			{
@@ -922,7 +912,7 @@ namespace isobus
 		}
 		while (!queuedValueCommands.empty() && transmitSuccessful)
 		{
-			auto &currentRequest = queuedValueCommands.front();
+			const auto &currentRequest = queuedValueCommands.front();
 
 			for (auto &currentCallback : valueCommandsCallbacks)
 			{
