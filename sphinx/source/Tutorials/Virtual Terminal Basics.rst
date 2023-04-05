@@ -184,9 +184,9 @@ The `utility` folder in the CAN stack contains a helper function to read standar
 
 You can make one for yourself if you have access to an ISOBUS object pool designer tool of some kind, but for our purposes, one has been included in the examples folder for you called `VT3TestPool.iop`.
 
-For this example, let's `download <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/VT3TestPool.iop>`_ that object pool (or grab it from the examples folder within the CAN stack), and place it in the same directory as your main.cpp file.
+For this example, let's `download <https://github.com/ad3154/Isobus-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/VT3TestPool.iop>`_ that object pool (or grab it from the examples folder within the CAN stack), and place it in the same directory as your main.cpp file.
 
-Let's also grab `this header file <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/objectPoolObjects.h>`_ and place it in the same folder.
+Let's also grab `this header file <https://github.com/ad3154/Isobus-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/objectPoolObjects.h>`_ and place it in the same folder.
 This file is for convenience, and tells us what objects are inside the IOP file along with their object ID. Files like these are often created by VT object pool designer programs to give nice, human-readable names to your objects so that instead of
 referencing object 5001, we can instead reference it by the nicer name `acknowledgeAlarm_SoftKey` for example.
 
@@ -229,12 +229,12 @@ This can be used to read from some external device if needed in segments or just
 
 You can also have the CAN stack automatically scale your object pool to match the dimensions of whatever VT it ends up loading to. 
 This can be helpful if you designed your object pool for a certain data mask size, but need the pool to load on VTs with different resolutions or VTs that support different fonts than you designed your pool with.
-To do this, just tell the client what sizes you used when creating your object pool with the :code:`set_object_pool_scaling` function. The documentation for that funcation can be found `in our api docs <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a677ff706f3ebe65e1ea9972e0a7304da>`_.
+To do this, just tell the client what sizes you used when creating your object pool with the :code:`set_object_pool_scaling` function. The documentation for that function can be found `in our api docs <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a677ff706f3ebe65e1ea9972e0a7304da>`_.
 
 
 .. note::
 
-    Since we are now using a function in the "isobus/utility" folder to load this IOP file, we will also need to link to the CAN stack's utility library in our CMakeLists.txt file. You can do this by adding :code:`isobus::Utility` to your :code:`target_link_libraries` statement. We'll also need to add some CMake to move the IOP file to the binary location, so that when the program is compiled, the IOP will end up in a location accessable to your program.
+    Since we are now using a function in the "isobus/utility" folder to load this IOP file, we will also need to link to the CAN stack's utility library in our CMakeLists.txt file. You can do this by adding :code:`isobus::Utility` to your :code:`target_link_libraries` statement. We'll also need to add some CMake to move the IOP file to the binary location, so that when the program is compiled, the IOP will end up in a location accessible to your program.
 
 	We'll go over the full CMake closer to the end of this tutorial.
 

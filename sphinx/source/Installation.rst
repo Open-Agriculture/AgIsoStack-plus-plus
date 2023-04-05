@@ -20,7 +20,7 @@ We officially support building ISOBUS++ from source on the following platforms:
 
 .. note::
 
-	ISOBUS++ may also work on other platforms, and has been designed to accomodate different underlying hardware, but the ones listed above are the officially supported platforms. Additional platform support may be added if there is demand for it.
+	ISOBUS++ may also work on other platforms, and has been designed to accommodate different underlying hardware, but the ones listed above are the officially supported platforms. Additional platform support may be added if there is demand for it.
 
 	Using a supported platform will get you the best support for any issues you may encounter.
 

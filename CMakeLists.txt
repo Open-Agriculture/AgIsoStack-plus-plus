@@ -169,8 +169,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/isobusConfig.cmake"
 
 set(CPACK_PACKAGE_CONTACT "delgrossoengineering@protonmail.com")
 set(CPACK_DEBIAN_FILENAME DEB-DEFAULT)
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE
-    "https://github.com/ad3154/ISO11783-CAN-Stack")
-set(CPACK_PACKAGE_VENDOR "https://github.com/ad3154/ISO11783-CAN-Stack")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ad3154/Isobus-plus-plus")
+set(CPACK_PACKAGE_VENDOR "https://github.com/ad3154/Isobus-plus-plus")
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 include(CPack)

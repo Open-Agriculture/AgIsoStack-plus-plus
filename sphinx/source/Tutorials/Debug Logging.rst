@@ -50,4 +50,4 @@ The logger must be static or otherwise not go out of scope, as the CAN stack sav
 
 That's all there is to it! Now, when you run your program you should see some logging messages are written to your console.
 
-A full example of this is included with the `VT example program <https://github.com/ad3154/ISO11783-CAN-Stack/blob/main/examples/vt_version_3_object_pool/main.cpp>`_.
+A full example of this is included with the `VT example program <https://github.com/ad3154/Isobus-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/main.cpp>`_.

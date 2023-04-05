@@ -2,13 +2,13 @@
 
 This example shows how you can use the CAN stack to simplify working with PGN requests (PGN 0xEA00) and PGN requests for repetition rate (PGN 0xCC00).
 
-The example sets up an internal control function (ICF) to transmit as, tells the stack that it wants to accept PGN requests for that ICF, sets up handling of the PROPA PGN (0xEF00), and sends a requst of its own to the broadcast address.
+The example sets up an internal control function (ICF) to transmit as, tells the stack that it wants to accept PGN requests for that ICF, sets up handling of the PROPA PGN (0xEF00), and sends a request of its own to the broadcast address.
 
 For this example to work properly, you must have a valid, functional ISO 11783 CAN network connected as "can0".
 
 ## The Basics
 
-This example will assume you have already learned the basics of the stack and ISOBUS communication, and won't go over the basic setup of your internal control function. If you need to brush up on those topics, check out the [transport layer example](https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/examples/transport_layer) first, or visit our [tutorial website](https://delgrossoengineering.com/isobus-tutorial/index.html).
+This example will assume you have already learned the basics of the stack and ISOBUS communication, and won't go over the basic setup of your internal control function. If you need to brush up on those topics, check out the [transport layer example](https://github.com/ad3154/Isobus-plus-plus/tree/main/examples/transport_layer) first, or visit our [tutorial website](https://isobus-plus-plus.readthedocs.io/en/latest/index.html).
 
 ## PGN Requests
 
@@ -18,7 +18,7 @@ Basically if someone requests a PGN from you using this request PGN, they are po
 
 See ISO 11783-3 for a full description, but here are some general things to keep in mind regarding this message.
 
-* If the request or applicable PGN is sent to the global address, then the response is sent to the global address. The stack will currently always send ACK/NACK responses to the broadcast address, but you can send any reponse you want from your application in response to these requests. Using the CAN stack's ACK/NACK functionality is completely optional.
+* If the request or applicable PGN is sent to the global address, then the response is sent to the global address. The stack will currently always send ACK/NACK responses to the broadcast address, but you can send any response you want from your application in response to these requests. Using the CAN stack's ACK/NACK functionality is completely optional.
 * A NACK is not desired as a response to a global request. The CAN stack _will not send them_ in response to a global request.
 * A NACK is required if the PGN is not supported. _It is highly recommended you assign an instance of the PGN request protocol to every internal control function you make if you wish to be in compliance with this rule._ As long as you tell the stack to handle these requests, it will NACK any unhandled request.
 
@@ -49,7 +49,7 @@ bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumbe
 	bool retVal;
 
 	// This function will be called whenever PGN EF00 is requested.
-	// Add whatever logic you want execute to on reciept of a PROPA request.
+	// Add whatever logic you want execute to on receipt of a PROPA request.
 	// One normal thing to do would be to send a CAN message with that PGN.
 
 	// In this example though, we'll simply acknowledge the request.
@@ -172,6 +172,6 @@ Here you can see we're asking the CAN stack for the protocol instance we created
 
 Sending a request for repetition rate is as simple as it was for a PGN request. The CAN stack will take care of message encoding for you. All you need to do is call the function `isobus::ParameterGroupNumberRequestProtocol::request_repetition_rate`.
 
-The use of this was omitted in the example, as it does not make sense to request a repetition rate from the broadcast address, and I do not know what devices you might have on your bus, so I suggest you check out the doxygen for this function so you are familliar with its parameters and usage.
+The use of this was omitted in the example, as it does not make sense to request a repetition rate from the broadcast address, and I do not know what devices you might have on your bus, so I suggest you check out the doxygen for this function so you are familiar with its parameters and usage.
 
 That's all for this example! You should now be able to easily deal with PGN requests and requests for repetition rate in your application.

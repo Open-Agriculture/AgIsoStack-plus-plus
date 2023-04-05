@@ -5,7 +5,7 @@
     "keywords": "can, isobus, j1939, agritech, smart-farming, iso11783",
     "repository": {
         "type": "git",
-        "url": "https://github.com/ad3154/ISO11783-CAN-Stack.git"
+        "url": "https://github.com/ad3154/Isobus-plus-plus.git"
     },
     "license": "MIT",
     "homepage": "https://isobusplusplus.com/",

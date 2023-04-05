@@ -43,7 +43,7 @@ There are some things to keep in mind though.
 
 .. note::
 
-	Unlike TP and ETP, NMEA 2000 Fast Packet messages must be sent and registered for explicitly. This will be covered below in the section "Sending and Reveiving a Fast Packet Message".
+	Unlike TP and ETP, NMEA 2000 Fast Packet messages must be sent and registered for explicitly. This will be covered below in the section "Sending and Receiving a Fast Packet Message".
 
 Receiving More Than 8 Bytes
 ----------------------------
