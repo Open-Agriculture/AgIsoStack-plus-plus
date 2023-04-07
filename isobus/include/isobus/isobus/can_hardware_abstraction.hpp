@@ -24,6 +24,10 @@ namespace isobus
 	/// @param[in] frame The frame to receive from the hardware
 	void receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &frame);
 
+	/// @brief Informs the network manager whenever messages are emitted on the bus
+	/// @param[in] txFrame The CAN frame that was just emitted
+	void on_transmit_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &txFrame);
+
 	/// @brief The periodic update abstraction layer between the hardware and the stack
 	void periodic_update_from_hardware();
 

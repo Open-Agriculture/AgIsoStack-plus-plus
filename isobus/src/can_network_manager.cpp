@@ -22,6 +22,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <numeric>
+
 namespace isobus
 {
 	CANNetworkManager CANNetworkManager::CANNetwork;
@@ -92,6 +94,21 @@ namespace isobus
 		    (ControlFunction::Type::Internal == controlFunction->get_type()))
 		{
 			retVal = static_cast<InternalControlFunction *>(controlFunction);
+		}
+		return retVal;
+	}
+
+	float CANNetworkManager::get_estimated_busload(std::uint8_t canChannel)
+	{
+		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
+		constexpr float ISOBUS_BAUD_RATE_BPS = 250000.0f;
+		float retVal = 0.0f;
+
+		if (canChannel < CAN_PORT_MAXIMUM)
+		{
+			float totalTimeInAccumulatorWindow = (busloadMessageBitsHistory.at(canChannel).size() * BUSLOAD_UPDATE_FREQUENCY_MS) / 1000.0f;
+			uint32_t totalBitCount = std::accumulate(busloadMessageBitsHistory.at(canChannel).begin(), busloadMessageBitsHistory.at(canChannel).end(), 0);
+			retVal = (0 != totalTimeInAccumulatorWindow) ? ((totalBitCount / (totalTimeInAccumulatorWindow * ISOBUS_BAUD_RATE_BPS)) * 100.0f) : 0.0f;
 		}
 		return retVal;
 	}
@@ -224,6 +241,7 @@ namespace isobus
 				currentProtocol->update({});
 			}
 		}
+		update_busload_history();
 		updateTimestamp_ms = SystemTiming::get_timestamp_ms();
 	}
 
@@ -253,6 +271,11 @@ namespace isobus
 	void receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &rxFrame)
 	{
 		CANNetworkManager::process_receive_can_message_frame(rxFrame);
+	}
+
+	void on_transmit_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &txFrame)
+	{
+		CANNetworkManager::process_transmitted_can_message_frame(txFrame);
 	}
 
 	void periodic_update_from_hardware()
@@ -293,6 +316,14 @@ namespace isobus
 		tempCANMessage.set_data(rxFrame.data, rxFrame.dataLength);
 
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
+	}
+
+	void CANNetworkManager::process_transmitted_can_message_frame(const HardwareInterfaceCANFrame &txFrame)
+	{
+		const std::lock_guard<std::mutex> lock(CANNetworkManager::CANNetwork.busloadUpdateMutex);
+		std::uint32_t numberMessageBits = get_number_bits_in_message(txFrame.dataLength, txFrame.isExtendedFrame ? CANIdentifier::Type::Extended : CANIdentifier::Type::Standard);
+
+		CANNetworkManager::CANNetwork.currentBusloadBitAccumulator.at(txFrame.channel) += numberMessageBits;
 	}
 
 	void CANNetworkManager::on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>)
@@ -364,11 +395,31 @@ namespace isobus
 		return retVal;
 	}
 
-	CANNetworkManager::CANNetworkManager() :
-	  updateTimestamp_ms(0),
-	  initialized(false)
+	CANNetworkManager::CANNetworkManager()
 	{
+		currentBusloadBitAccumulator.fill(0);
 		controlFunctionTable.fill({ nullptr });
+	}
+
+	std::uint32_t CANNetworkManager::get_number_bits_in_message(std::uint8_t numberDataBytes, CANIdentifier::Type messageType)
+	{
+		constexpr std::uint32_t MAX_CONSECUTIVE_SAME_BITS = 5; // After 5 consecutive bits, 6th will be opposite
+		const std::uint32_t dataLengthBits = CAN_DATA_LENGTH * numberDataBytes;
+		std::uint32_t retVal = 0;
+
+		if (CANIdentifier::Type::Extended == messageType)
+		{
+			constexpr std::uint32_t EXTENDED_ID_BEST_NON_DATA_LENGTH = 67; // SOF, ID, Control, CRC, ACK, EOF, and interframe space
+			constexpr std::uint32_t EXTENDED_ID_WORST_NON_DATA_LENGTH = 78;
+			retVal = ((dataLengthBits + EXTENDED_ID_BEST_NON_DATA_LENGTH) + (dataLengthBits + (dataLengthBits / MAX_CONSECUTIVE_SAME_BITS) + EXTENDED_ID_WORST_NON_DATA_LENGTH));
+		}
+		else
+		{
+			constexpr std::uint32_t STANDARD_ID_BEST_NON_DATA_LENGTH = 47; // SOF, ID, Control, CRC, ACK, EOF, and interframe space
+			constexpr std::uint32_t STANDARD_ID_WORST_NON_DATA_LENGTH = 54;
+			retVal = ((dataLengthBits + STANDARD_ID_BEST_NON_DATA_LENGTH) + (dataLengthBits + (dataLengthBits / MAX_CONSECUTIVE_SAME_BITS) + STANDARD_ID_WORST_NON_DATA_LENGTH));
+		}
+		return retVal;
 	}
 
 	void CANNetworkManager::update_address_table(CANMessage &message)
@@ -435,6 +486,32 @@ namespace isobus
 					}
 				}
 			}
+		}
+	}
+
+	void CANNetworkManager::update_busload(const CANMessage &message)
+	{
+		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
+
+		currentBusloadBitAccumulator.at(message.get_can_port_index()) += get_number_bits_in_message(message.get_data_length(), message.get_identifier().get_identifier_type());
+	}
+
+	void CANNetworkManager::update_busload_history()
+	{
+		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
+
+		if (SystemTiming::time_expired_ms(busloadUpdateTimestamp_ms, BUSLOAD_UPDATE_FREQUENCY_MS))
+		{
+			for (std::size_t i = 0; i < busloadMessageBitsHistory.size(); i++)
+			{
+				busloadMessageBitsHistory.at(i).push_back(currentBusloadBitAccumulator.at(i));
+
+				while (busloadMessageBitsHistory.at(i).size() > (BUSLOAD_SAMPLE_WINDOW_MS / BUSLOAD_UPDATE_FREQUENCY_MS))
+				{
+					busloadMessageBitsHistory.at(i).pop_front();
+				}
+			}
+			busloadUpdateTimestamp_ms = SystemTiming::get_timestamp_ms();
 		}
 	}
 
@@ -756,6 +833,7 @@ namespace isobus
 			CANMessage currentMessage = get_next_can_message_from_rx_queue();
 
 			update_address_table(currentMessage);
+			update_busload(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
 			process_protocol_pgn_callbacks(currentMessage);
