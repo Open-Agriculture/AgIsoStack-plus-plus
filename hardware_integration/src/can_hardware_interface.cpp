@@ -293,6 +293,7 @@ namespace isobus
 						if (transmit_can_message_from_buffer(frame))
 						{
 							frameTransmittedEventDispatcher.invoke(std::move(frame));
+							isobus::on_transmit_can_message_frame_from_hardware(frame);
 							channel->messagesToBeTransmitted.pop_front();
 						}
 						else

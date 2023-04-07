@@ -23,6 +23,7 @@
 #include "isobus/isobus/can_transport_protocol.hpp"
 
 #include <array>
+#include <deque>
 #include <list>
 #include <mutex>
 
@@ -89,6 +90,15 @@ namespace isobus
 		/// @returns An internal control function casted from the passed in control function
 		InternalControlFunction *get_internal_control_function(ControlFunction *controlFunction);
 
+		/// @brief Returns an estimated busload between 0.0f and 100.0f
+		/// @details This calculates busload over a 1 second window.
+		/// @note This function averages between best and worst case bit-stuffing.
+		/// This may be more or less aggressive than the actual amount of bit stuffing. Knowing
+		/// the actual amount of bit stuffing is impossible, so this should only be used as an estimate.
+		/// @param[in] canChannel The channel to estimate the bus load for
+		/// @returns Estimated busload over the last 1 second
+		float get_estimated_busload(std::uint8_t canChannel);
+
 		/// @brief This is the main way to send a CAN message of any length.
 		/// @details This function will automatically choose an appropriate transport protocol if needed.
 		/// If you don't specify a destination (or use nullptr) you message will be sent as a broadcast
@@ -116,6 +126,11 @@ namespace isobus
 		/// @brief Process the CAN Rx queue
 		/// @param[in] rxFrame Frame to process
 		static void process_receive_can_message_frame(const HardwareInterfaceCANFrame &rxFrame);
+
+		/// @brief Used to tell the network manager when frames are emitted on the bus, so that they can be
+		/// added to the internal bus load calculations.
+		/// @param[in] txFrame The frame that was just emitted onto the bus
+		static void process_transmitted_can_message_frame(const HardwareInterfaceCANFrame &txFrame);
 
 		/// @brief Informs the network manager that a partner was deleted so that it can be purged from the address/cf tables
 		/// @param[in] partner Pointer to the partner being deleted
@@ -173,6 +188,12 @@ namespace isobus
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
 
+		/// Returns the number of bits in a CAN message with averaged bit stuffing
+		/// @param[in] numberDataBytes The number of bytes in the data payload of the message
+		/// @param[in] messageType The frame type (extended or standard ID)
+		/// @returns The number of bits in the message (with average bit stuffing)
+		static std::uint32_t get_number_bits_in_message(std::uint8_t numberDataBytes, CANIdentifier::Type messageType);
+
 		/// @brief Updates the internal address table based on a received CAN message
 		/// @param[in] message A message being received by the stack
 		void update_address_table(CANMessage &message);
@@ -181,6 +202,13 @@ namespace isobus
 		/// @param[in] CANPort The CAN channel index of the CAN message being processed
 		/// @param[in] claimedAddress The address claimed
 		void update_address_table(std::uint8_t CANPort, std::uint8_t claimedAddress);
+
+		/// @brief Processes a CAN message's contribution to the current bus load
+		/// @param[in] message The message to process
+		void update_busload(const CANMessage &message);
+
+		/// @brief Updates the stored bit accumulators for calculating the bus load over a multiple sample windows
+		void update_busload_history();
 
 		/// @brief Creates new control function classes based on the frames coming in from the bus
 		/// @param[in] rxFrame Raw frames coming in from the bus
@@ -258,9 +286,14 @@ namespace isobus
 		/// @returns A structure containing the global PGN callback data
 		ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::uint32_t index) const;
 
+		static constexpr std::uint32_t BUSLOAD_SAMPLE_WINDOW_MS = 1000; ///< Using a 1s window to average the bus load, otherwise it's very erratic
+		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
+
 		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Static instance of the protocol manager
 		TransportProtocolManager transportProtocol; ///< Static instance of the transport protocol manager
 
+		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
+		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
 		std::array<std::array<ControlFunction *, 256>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::vector<ControlFunction *> activeControlFunctions; ///< A list of active control function used to track connected devices
 		std::vector<ControlFunction *> inactiveControlFunctions; ///< A list of inactive control functions, used to track disconnected devices
@@ -271,8 +304,10 @@ namespace isobus
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
 		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
-		std::uint32_t updateTimestamp_ms; ///< Keeps track of the last time the CAN stack was update in milliseconds
-		bool initialized; ///< True if the network manager has been initialized by the update function
+		std::mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
+		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
+		std::uint32_t updateTimestamp_ms = 0; ///< Keeps track of the last time the CAN stack was update in milliseconds
+		bool initialized = false; ///< True if the network manager has been initialized by the update function
 	};
 
 } // namespace isobus
