@@ -17,14 +17,6 @@ namespace isobus
 	CANStackLogger::LoggingLevel CANStackLogger::currentLogLevel = LoggingLevel::Info;
 	std::mutex CANStackLogger::loggerMutex;
 
-	CANStackLogger::CANStackLogger()
-	{
-	}
-
-	CANStackLogger::~CANStackLogger()
-	{
-	}
-
 	void CANStackLogger::CAN_stack_log(LoggingLevel level, const std::string &logText)
 	{
 		const std::lock_guard<std::mutex> lock(loggerMutex);

@@ -1103,15 +1103,11 @@ namespace isobus
 									{
 										CANStackLogger::warn("[TC]: Server version is newer than client's maximum supported version.");
 									}
-									CANStackLogger::debug("[TC]: TC Server supports version " +
-									                      isobus::to_string(static_cast<int>(messageData[1])) +
-									                      " with " +
-									                      isobus::to_string(static_cast<int>(messageData[5])) +
-									                      " booms, " +
-									                      isobus::to_string(static_cast<int>(messageData[6])) +
-									                      " sections, and " +
-									                      isobus::to_string(static_cast<int>(messageData[7])) +
-									                      " position based control channels.");
+									CANStackLogger::debug("[TC]: TC Server supports version %u with %u booms, %u sections, and %u position based control channels.",
+									                      messageData[1],
+									                      messageData[5],
+									                      messageData[6],
+									                      messageData[7]);
 
 									if (StateMachineState::WaitForRequestVersionResponse == parentTC->get_state())
 									{
