@@ -10,6 +10,7 @@
 #ifndef CAN_STACK_LOGGER_HPP
 #define CAN_STACK_LOGGER_HPP
 
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -37,35 +38,97 @@ namespace isobus
 		};
 
 		/// @brief The constructor for a CANStackLogger
-		CANStackLogger();
+		CANStackLogger() = default;
 
 		/// @brief The destructor for a CANStackLogger
-		~CANStackLogger();
+		~CANStackLogger() = default;
 
 		/// @brief Gets called from the CAN stack to log information. Wraps sink_CAN_stack_log.
 		/// @param[in] level The log level for this text
 		/// @param[in] logText The text to be logged
 		static void CAN_stack_log(LoggingLevel level, const std::string &logText);
 
+		/// @brief Gets called from the CAN stack to log information. Wraps sink_CAN_stack_log.
+		/// @param[in] level The log level for this text
+		/// @param[in] format A format string of text to log, similar to printf
+		/// @param[in] args A list of printf style arguments to use with the format string when logging
+		template<typename... Args>
+		static void CAN_stack_log(LoggingLevel level, const std::string &format, Args... args)
+		{
+			int size_s = std::snprintf(nullptr, 0, format.c_str(), args...) + 1; // Extra space for '\0'
+			if (size_s > 0)
+			{
+				auto size = static_cast<std::size_t>(size_s);
+				std::unique_ptr<char[]> buf(new char[size]);
+				std::snprintf(buf.get(), size, format.c_str(), args...);
+				CAN_stack_log(level, std::string(buf.get(), buf.get() + size - 1)); // We don't want the '\0' inside
+			}
+		}
+
 		/// @brief Logs a string to the log sink with `Debug` severity. Wraps sink_CAN_stack_log.
 		/// @param[in] logText The text to be logged at `Debug` severity
 		static void debug(const std::string &logText);
+
+		/// @brief Logs a printf formatted string to the log sink with `Debug` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] format The format string, similar to printf
+		/// @param[in] args The variadic arguments to format, similar to printf
+		template<typename... Args>
+		static void debug(const std::string &format, Args... args)
+		{
+			CAN_stack_log(LoggingLevel::Debug, format, args...);
+		}
 
 		/// @brief Logs a string to the log sink with `Info` severity. Wraps sink_CAN_stack_log.
 		/// @param[in] logText The text to be logged at `Info` severity
 		static void info(const std::string &logText);
 
+		/// @brief Logs a printf formatted string to the log sink with `Info` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] format The format string, similar to printf
+		/// @param[in] args The variadic arguments to format, similar to printf
+		template<typename... Args>
+		static void info(const std::string &format, Args... args)
+		{
+			CAN_stack_log(LoggingLevel::Info, format, args...);
+		}
+
 		/// @brief Logs a string to the log sink with `Warning` severity. Wraps sink_CAN_stack_log.
 		/// @param[in] logText The text to be logged at `Warning` severity
 		static void warn(const std::string &logText);
+
+		/// @brief Logs a printf formatted string to the log sink with `Warning` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] format The format string, similar to printf
+		/// @param[in] args The variadic arguments to format, similar to printf
+		template<typename... Args>
+		static void warn(const std::string &format, Args... args)
+		{
+			CAN_stack_log(LoggingLevel::Warning, format, args...);
+		}
 
 		/// @brief Logs a string to the log sink with `Error` severity. Wraps sink_CAN_stack_log.
 		/// @param[in] logText The text to be logged at `Error` severity
 		static void error(const std::string &logText);
 
+		/// @brief Logs a printf formatted string to the log sink with `Error` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] format The format string, similar to printf
+		/// @param[in] args The variadic arguments to format, similar to printf
+		template<typename... Args>
+		static void error(const std::string &format, Args... args)
+		{
+			CAN_stack_log(LoggingLevel::Error, format, args...);
+		}
+
 		/// @brief Logs a string to the log sink with `Critical` severity. Wraps sink_CAN_stack_log.
 		/// @param[in] logText The text to be logged at `Critical` severity
 		static void critical(const std::string &logText);
+
+		/// @brief Logs a printf formatted string to the log sink with `Critical` severity. Wraps sink_CAN_stack_log.
+		/// @param[in] format The format string, similar to printf
+		/// @param[in] args The variadic arguments to format, similar to printf
+		template<typename... Args>
+		static void critical(const std::string &format, Args... args)
+		{
+			CAN_stack_log(LoggingLevel::Critical, format, args...);
+		}
 
 		/// @brief Assigns a derived logger class to be used as the log sink
 		/// @param[in] logSink A pointer to a derived CANStackLogger class
