@@ -63,6 +63,10 @@ namespace isobus
 				std::snprintf(buf.get(), size, format.c_str(), args...);
 				CAN_stack_log(level, std::string(buf.get(), buf.get() + size - 1)); // We don't want the '\0' inside
 			}
+			else if (size_s < 0)
+			{
+				CAN_stack_log(level, format); // If snprintf had some error, at least print the format string
+			}
 		}
 
 		/// @brief Logs a string to the log sink with `Debug` severity. Wraps sink_CAN_stack_log.
