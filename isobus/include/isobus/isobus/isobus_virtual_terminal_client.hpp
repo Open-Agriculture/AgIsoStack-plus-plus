@@ -320,8 +320,8 @@ namespace isobus
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
 
-		/// @brief Returns the partner control function being used by the client
-		/// @returns The partner control function being used by the client
+		/// @brief Returns the control function of the VT server with which this VT client communicates.
+		/// @returns The partner control function for the VT server
 		std::shared_ptr<PartneredControlFunction> get_partner_control_function() const;
 
 		/// @brief Returns the internal control function being used by the client
