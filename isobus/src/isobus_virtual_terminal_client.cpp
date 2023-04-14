@@ -131,6 +131,27 @@ namespace isobus
 		}
 	}
 
+	std::shared_ptr<PartneredControlFunction> VirtualTerminalClient::get_partner_control_function() const
+	{
+		return partnerControlFunction;
+	}
+
+	std::shared_ptr<InternalControlFunction> VirtualTerminalClient::get_internal_control_function() const
+	{
+		return myControlFunction;
+	}
+
+	std::uint8_t VirtualTerminalClient::get_active_working_set_master_address() const
+	{
+		std::uint8_t retVal = NULL_CAN_ADDRESS;
+
+		if (get_is_connected())
+		{
+			retVal = activeWorkingSetMasterAddress;
+		}
+		return retVal;
+	}
+
 	std::shared_ptr<void> VirtualTerminalClient::add_vt_soft_key_event_listener(std::function<void(const VTKeyEvent &)> callback)
 	{
 		return softKeyEventDispatcher.add_listener(callback);
