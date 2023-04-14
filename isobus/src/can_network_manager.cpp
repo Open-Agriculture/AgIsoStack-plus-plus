@@ -419,7 +419,7 @@ namespace isobus
 			constexpr std::uint32_t STANDARD_ID_WORST_NON_DATA_LENGTH = 54;
 			retVal = ((dataLengthBits + STANDARD_ID_BEST_NON_DATA_LENGTH) + (dataLengthBits + (dataLengthBits / MAX_CONSECUTIVE_SAME_BITS) + STANDARD_ID_WORST_NON_DATA_LENGTH));
 		}
-		return retVal;
+		return retVal / 2;
 	}
 
 	void CANNetworkManager::update_address_table(CANMessage &message)
@@ -510,6 +510,7 @@ namespace isobus
 				{
 					busloadMessageBitsHistory.at(i).pop_front();
 				}
+				currentBusloadBitAccumulator.at(i) = 0;
 			}
 			busloadUpdateTimestamp_ms = SystemTiming::get_timestamp_ms();
 		}
