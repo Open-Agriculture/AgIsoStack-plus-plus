@@ -66,6 +66,11 @@ public:
 		largeFontSizesBitfield = largeFontsBitfield;
 	}
 
+	void test_wrapper_set_state(VirtualTerminalClient::StateMachineState value)
+	{
+		VirtualTerminalClient::set_state(value);
+	}
+
 	static std::vector<std::uint8_t> staticTestPool;
 
 	static bool testWrapperDataChunkCallback(std::uint32_t,
@@ -110,6 +115,9 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 	EXPECT_EQ(0, clientUnderTest.get_number_x_pixels());
 	EXPECT_EQ(VirtualTerminalClient::VTVersion::ReservedOrUnknown, clientUnderTest.get_connected_vt_version());
 
+	EXPECT_NE(nullptr, clientUnderTest.get_internal_control_function());
+	EXPECT_NE(nullptr, clientUnderTest.get_partner_control_function());
+
 	clientUnderTest.terminate();
 }
 
@@ -149,6 +157,11 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 
 	EXPECT_EQ(1234, clientUnderTest.get_visible_data_mask());
 	EXPECT_EQ(4567, clientUnderTest.get_visible_soft_key_mask());
+	EXPECT_EQ(0xFE, clientUnderTest.get_active_working_set_master_address()); // Expect null address since not in the connected state
+
+	// Test the master address is correct when in the connected state
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	EXPECT_EQ(0x26, clientUnderTest.get_active_working_set_master_address());
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
