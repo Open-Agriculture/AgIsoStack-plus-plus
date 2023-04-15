@@ -107,7 +107,7 @@ namespace isobus
 		if (canChannel < CAN_PORT_MAXIMUM)
 		{
 			float totalTimeInAccumulatorWindow = (busloadMessageBitsHistory.at(canChannel).size() * BUSLOAD_UPDATE_FREQUENCY_MS) / 1000.0f;
-			uint32_t totalBitCount = std::accumulate(busloadMessageBitsHistory.at(canChannel).begin(), busloadMessageBitsHistory.at(canChannel).end(), 0);
+			std::uint32_t totalBitCount = std::accumulate(busloadMessageBitsHistory.at(canChannel).begin(), busloadMessageBitsHistory.at(canChannel).end(), 0);
 			retVal = (0 != totalTimeInAccumulatorWindow) ? ((totalBitCount / (totalTimeInAccumulatorWindow * ISOBUS_BAUD_RATE_BPS)) * 100.0f) : 0.0f;
 		}
 		return retVal;
@@ -315,15 +315,14 @@ namespace isobus
 		}
 		tempCANMessage.set_data(rxFrame.data, rxFrame.dataLength);
 
+		CANNetworkManager::CANNetwork.update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
+
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
 
 	void CANNetworkManager::process_transmitted_can_message_frame(const HardwareInterfaceCANFrame &txFrame)
 	{
-		const std::lock_guard<std::mutex> lock(CANNetworkManager::CANNetwork.busloadUpdateMutex);
-		std::uint32_t numberMessageBits = get_number_bits_in_message(txFrame.dataLength, txFrame.isExtendedFrame ? CANIdentifier::Type::Extended : CANIdentifier::Type::Standard);
-
-		CANNetworkManager::CANNetwork.currentBusloadBitAccumulator.at(txFrame.channel) += numberMessageBits;
+		CANNetworkManager::CANNetwork.update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
 	}
 
 	void CANNetworkManager::on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>)
@@ -401,27 +400,6 @@ namespace isobus
 		controlFunctionTable.fill({ nullptr });
 	}
 
-	std::uint32_t CANNetworkManager::get_number_bits_in_message(std::uint8_t numberDataBytes, CANIdentifier::Type messageType)
-	{
-		constexpr std::uint32_t MAX_CONSECUTIVE_SAME_BITS = 5; // After 5 consecutive bits, 6th will be opposite
-		const std::uint32_t dataLengthBits = CAN_DATA_LENGTH * numberDataBytes;
-		std::uint32_t retVal = 0;
-
-		if (CANIdentifier::Type::Extended == messageType)
-		{
-			constexpr std::uint32_t EXTENDED_ID_BEST_NON_DATA_LENGTH = 67; // SOF, ID, Control, CRC, ACK, EOF, and interframe space
-			constexpr std::uint32_t EXTENDED_ID_WORST_NON_DATA_LENGTH = 78;
-			retVal = ((dataLengthBits + EXTENDED_ID_BEST_NON_DATA_LENGTH) + (dataLengthBits + (dataLengthBits / MAX_CONSECUTIVE_SAME_BITS) + EXTENDED_ID_WORST_NON_DATA_LENGTH));
-		}
-		else
-		{
-			constexpr std::uint32_t STANDARD_ID_BEST_NON_DATA_LENGTH = 47; // SOF, ID, Control, CRC, ACK, EOF, and interframe space
-			constexpr std::uint32_t STANDARD_ID_WORST_NON_DATA_LENGTH = 54;
-			retVal = ((dataLengthBits + STANDARD_ID_BEST_NON_DATA_LENGTH) + (dataLengthBits + (dataLengthBits / MAX_CONSECUTIVE_SAME_BITS) + STANDARD_ID_WORST_NON_DATA_LENGTH));
-		}
-		return retVal / 2;
-	}
-
 	void CANNetworkManager::update_address_table(CANMessage &message)
 	{
 		std::uint8_t CANPort = message.get_can_port_index();
@@ -489,11 +467,11 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::update_busload(const CANMessage &message)
+	void CANNetworkManager::update_busload(std::uint8_t channelIndex, std::uint32_t numberOfBitsProcessed)
 	{
-		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
+		const std::lock_guard<std::mutex> lock(CANNetworkManager::CANNetwork.busloadUpdateMutex);
 
-		currentBusloadBitAccumulator.at(message.get_can_port_index()) += get_number_bits_in_message(message.get_data_length(), message.get_identifier().get_identifier_type());
+		currentBusloadBitAccumulator.at(channelIndex) += numberOfBitsProcessed;
 	}
 
 	void CANNetworkManager::update_busload_history()
@@ -834,7 +812,6 @@ namespace isobus
 			CANMessage currentMessage = get_next_can_message_from_rx_queue();
 
 			update_address_table(currentMessage);
-			update_busload(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
 			process_protocol_pgn_callbacks(currentMessage);

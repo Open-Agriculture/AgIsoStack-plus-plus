@@ -27,6 +27,7 @@ set(ISOBUS_SRC
     "can_stack_logger.cpp"
     "can_network_configuration.cpp"
     "can_callbacks.cpp"
+    "can_frame.cpp"
     "isobus_virtual_terminal_client.cpp"
     "can_extended_transport_protocol.cpp"
     "isobus_diagnostic_protocol.cpp"
