@@ -82,7 +82,7 @@ namespace isobus
 
 		//Wait for message to be received
 		twai_message_t message;
-		esp_err_t error = twai_receive(&message, portMAX_DELAY);
+		esp_err_t error = twai_receive(&message, pdMS_TO_TICKS(1000));
 		if (ESP_OK == error)
 		{
 			// Process received message
@@ -99,7 +99,7 @@ namespace isobus
 				}
 			}
 		}
-		else
+		else if (ESP_ERR_TIMEOUT != error)
 		{
 			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error receiving message: " + isobus::to_string(esp_err_to_name(error)));
 		}
