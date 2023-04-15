@@ -22,6 +22,10 @@ namespace isobus
 	class HardwareInterfaceCANFrame
 	{
 	public:
+		/// Returns the number of bits in a CAN message with averaged bit stuffing
+		/// @returns The number of bits in the message (with average bit stuffing)
+		std::uint32_t get_number_bits_in_message() const;
+
 		std::uint64_t timestamp_us; ///< A microsecond timestamp
 		std::uint32_t identifier; ///< The 32 bit identifier of the frame
 		std::uint8_t channel; ///< The CAN channel index associated with the frame

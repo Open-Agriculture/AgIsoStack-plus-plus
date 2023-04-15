@@ -188,12 +188,6 @@ namespace isobus
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
 
-		/// Returns the number of bits in a CAN message with averaged bit stuffing
-		/// @param[in] numberDataBytes The number of bytes in the data payload of the message
-		/// @param[in] messageType The frame type (extended or standard ID)
-		/// @returns The number of bits in the message (with average bit stuffing)
-		static std::uint32_t get_number_bits_in_message(std::uint8_t numberDataBytes, CANIdentifier::Type messageType);
-
 		/// @brief Updates the internal address table based on a received CAN message
 		/// @param[in] message A message being received by the stack
 		void update_address_table(CANMessage &message);
@@ -203,9 +197,10 @@ namespace isobus
 		/// @param[in] claimedAddress The address claimed
 		void update_address_table(std::uint8_t CANPort, std::uint8_t claimedAddress);
 
-		/// @brief Processes a CAN message's contribution to the current bus load
-		/// @param[in] message The message to process
-		void update_busload(const CANMessage &message);
+		/// @brief Processes a CAN message's contribution to the current busload
+		/// @param[in] channelIndex The CAN channel index associated to the message being processed
+		/// @param[in] numberOfBitsProcessed The number of bits to add to the busload calculation
+		void update_busload(std::uint8_t channelIndex, std::uint32_t numberOfBitsProcessed);
 
 		/// @brief Updates the stored bit accumulators for calculating the bus load over a multiple sample windows
 		void update_busload_history();
