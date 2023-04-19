@@ -31,6 +31,7 @@ namespace isobus
 		AddressClaim = 0xEE00,
 		ProprietaryA = 0xEF00,
 		ProductIdentification = 0xFC8D,
+		ControlFunctionFunctionalities = 0xFC8E,
 		DiagnosticProtocolIdentification = 0xFD32,
 		WorkingSetMaster = 0xFE0D,
 		LanguageCommand = 0xFE0F,

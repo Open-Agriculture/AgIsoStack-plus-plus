@@ -37,7 +37,8 @@ set(ISOBUS_SRC
     "isobus_task_controller_client_objects.cpp"
     "isobus_task_controller_client.cpp"
     "isobus_device_descriptor_object_pool.cpp"
-    "isobus_shortcut_button_interface.cpp")
+    "isobus_shortcut_button_interface.cpp"
+    "isobus_functionalities.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
@@ -74,7 +75,8 @@ set(ISOBUS_INCLUDE
     "isobus_task_controller_client_objects.hpp"
     "isobus_task_controller_client.hpp"
     "isobus_device_descriptor_object_pool.hpp"
-    "isobus_shortcut_button_interface.hpp")
+    "isobus_shortcut_button_interface.hpp"
+    "isobus_functionalities.hpp")
 
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
