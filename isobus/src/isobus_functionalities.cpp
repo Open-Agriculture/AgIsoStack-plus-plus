@@ -13,18 +13,32 @@
 
 namespace isobus
 {
+	ControlFunctionFunctionalities::ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
+	  myControlFunction(sourceControlFunction)
+	{
+		set_functionality_is_supported(Functionalities::MinimumControlFunction, 1, true); // Support the absolute minimum by default
+	}
+
 	void ControlFunctionFunctionalities::set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(functionality);
 
-		if (supportedFunctionalities.end() == existingFunctionality)
+		if ((supportedFunctionalities.end() == existingFunctionality) && (isSupported))
 		{
 			FunctionalityData newFunctionality(functionality);
 			newFunctionality.configure_default_data();
 			newFunctionality.generation = functionalityGeneration;
 			supportedFunctionalities.emplace_back(newFunctionality);
+		}
+		else if ((supportedFunctionalities.end() != existingFunctionality) && (!isSupported))
+		{
+			if (Functionalities::MinimumControlFunction == functionality)
+			{
+				CANStackLogger::warn("[DP]: You are disabling minimum control function functionality reporting! This is not reccommended.");
+			}
+			supportedFunctionalities.erase(existingFunctionality);
 		}
 	}
 
@@ -137,7 +151,7 @@ namespace isobus
 		}
 	}
 
-	void ControlFunctionFunctionalities::set_task_controller_section_control_server_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections, bool optionState)
+	void ControlFunctionFunctionalities::set_task_controller_section_control_server_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
 
@@ -152,7 +166,7 @@ namespace isobus
 		}
 	}
 
-	void ControlFunctionFunctionalities::set_task_controller_section_control_client_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections, bool optionState)
+	void ControlFunctionFunctionalities::set_task_controller_section_control_client_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
 
