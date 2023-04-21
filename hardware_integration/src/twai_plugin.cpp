@@ -81,7 +81,7 @@ namespace isobus
 		bool retVal = false;
 
 		//Wait for message to be received
-		twai_message_t message;
+		twai_message_t message = {};
 		esp_err_t error = twai_receive(&message, pdMS_TO_TICKS(1000));
 		if (ESP_OK == error)
 		{
@@ -110,7 +110,7 @@ namespace isobus
 	bool TWAIPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 	{
 		bool retVal = false;
-		twai_message_t message;
+		twai_message_t message = {};
 
 		message.identifier = canFrame.identifier;
 		message.extd = canFrame.isExtendedFrame;
