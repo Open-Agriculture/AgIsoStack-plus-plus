@@ -78,7 +78,7 @@ namespace isobus
 		};
 
 		/// @brief This parameter reports which auxiliary control type 2 functionality type functions are supported by
-		// an implement working set auxiliary function or an auxiliary function input unit.
+		/// an implement working set auxiliary function or an auxiliary function input unit.
 		enum class AuxNOptions : std::uint16_t
 		{
 			NoOptions = 0x00,
@@ -165,25 +165,113 @@ namespace isobus
 		/// @note Minimum Control Function is enabled by defualt, and generally should not be disabled.
 		void set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported);
 
+		/// @brief Returns if a functionality was previously configured with set_functionality_is_supported
+		/// @param[in] functionality The functionality to check against
+		/// @returns true if the specified functionality will be reported as being supported, otherwise false
 		bool get_functionality_is_supported(Functionalities functionality);
 
+		/// @brief Returns the generation that was set for the specified functionality when
+		/// set_functionality_is_supported was called for that functionality.
+		/// @param[in] functionality The functionality to check against
+		/// @returns The generation associated with the specified functionality, or 0 if not configured
 		std::uint8_t get_functionality_generation(Functionalities functionality);
 
+		/// @brief Sets a minimum control function functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "minimum control function" functionality section of the message.
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_minimum_control_function_option_state(MinimumControlFunctionOptions option, bool optionState);
 
+		/// @brief Sets an AUX-O inputs functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "AUX-O inputs" functionality section of the message.
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_aux_O_inputs_option_state(AuxOOptions option, bool optionState);
+
+		/// @brief Sets an AUX-O functions functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "AUX-O functions" functionality section of the message.
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_aux_O_functions_option_state(AuxOOptions option, bool optionState);
+
+		/// @brief Sets an AUX-N inputs functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "AUX-N inputs" functionality section of the message.
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_aux_N_inputs_option_state(AuxNOptions option, bool optionState);
+
+		/// @brief Sets an AUX-N functions functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "AUX-N functions" functionality section of the message.
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_aux_N_functions_option_state(AuxNOptions option, bool optionState);
+
+		/// @brief Sets a task controller geo server functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "task controller geo server" functionality section of the message.
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_task_controller_geo_server_option_state(TaskControllerGeoServerOptions option, bool optionState);
+
+		/// @brief Sets a task controller geo client's only functionality option, which is the number of control channels.
+		/// @details The value you set will be reported to the requestor of your CF's functionalities
+		/// within the "task controller geo client" functionality section of the message.
+		/// @param[in] numberOfControlChannels The number of control channels your ECU supports for TC GEO (client side)
 		void set_task_controller_geo_client_option(std::uint8_t numberOfControlChannels);
-		void set_task_controller_section_control_server_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections, bool optionState);
-		void set_task_controller_section_control_client_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections, bool optionState);
+
+		/// @brief Sets a task controller section control server's options
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] numberOfSupportedBooms The number of booms your application TC server supports
+		/// @param[in] numberOfSupportedSections The number of sections your application TC server supports
+		void set_task_controller_section_control_server_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections);
+
+		/// @brief Sets a task controller section control client's options
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] numberOfSupportedBooms The number of booms your application TC client supports
+		/// @param[in] numberOfSupportedSections The number of sections your application TC client supports
+		void set_task_controller_section_control_client_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections);
+
+		/// @brief Sets a tractor ECU server functionality option to a new state.
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option, bool optionState);
+
+		/// @brief Sets a tractor ECU client functionality option to a new state.
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_basic_tractor_ECU_implement_client_option_state(BasicTractorECUOptions option, bool optionState);
+
+		/// @brief Sets a tractor implement management (TIM) server functionality option to a new state.
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_tractor_implement_management_server_option_state(TractorImplementManagementOptions option, bool optionState);
+
+		/// @brief Sets a tractor implement management (TIM) server aux valve's functionality options to a new state
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] auxValveIndex The index of the aux valve to set, between 0 and 31
+		/// @param[in] stateSupported Set to true to indicate you support the state of this valve, otherwise false
+		/// @param[in] flowSupported Set to true to indicate your support aux valve flow with this valve
 		void set_tractor_implement_management_server_aux_valve_option(std::uint8_t auxValveIndex, bool stateSupported, bool flowSupported);
+
+		/// @brief Sets a tractor implement management (TIM) client functionality option to a new state.
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
 		void set_tractor_implement_management_client_option_state(TractorImplementManagementOptions option, bool optionState);
+
+		/// @brief Sets a tractor implement management (TIM) client aux valve's functionality options to a new state
+		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
+		/// @param[in] auxValveIndex The index of the aux valve to set, between 0 and 31
+		/// @param[in] stateSupported Set to true to indicate you support the state of this valve, otherwise false
+		/// @param[in] flowSupported Set to true to indicate your support aux valve flow with this valve
 		void set_tractor_implement_management_client_aux_valve_option(std::uint8_t auxValveIndex, bool stateSupported, bool flowSupported);
 
 	private:
@@ -222,11 +310,19 @@ namespace isobus
 		/// @param[in,out] messageData The buffer to populate with data (will be cleared before use)
 		void get_message_content(std::vector<std::uint8_t> &messageData);
 
+		/// @brief Returns the byte index of the specified TIM option in the CF Functionalities message data
+		/// associated with wither TIM server or TIM client functionalities.
+		/// @param[in] option The option for which you want to know the byte index
+		/// @returns The byte index of the specified option in the TIM functionalities' message data
 		std::uint8_t get_tim_option_byte_index(TractorImplementManagementOptions option) const;
 
+		/// @brief Returns the bit offset of a specified TIM functionality option into the
+		/// TIM client and server functionality message data
+		/// @param[in] option The option for which you want to know the bit index into the TIM functionality message data
+		/// @returns The bit offset/index of the specified option int the TIM functionality message data
 		std::uint8_t get_tim_option_bit_index(TractorImplementManagementOptions option) const;
 
-		static constexpr std::uint8_t NUMBER_TIM_AUX_VALVES_PER_BYTE = 4;
+		static constexpr std::uint8_t NUMBER_TIM_AUX_VALVES_PER_BYTE = 4; ///< The number of aux valves per byte of TIM functionality message data
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
 		std::list<FunctionalityData> supportedFunctionalities; ///< A list of all configured functionalities and their data

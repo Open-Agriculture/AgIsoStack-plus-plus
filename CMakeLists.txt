@@ -118,7 +118,8 @@ if(BUILD_TESTING)
       test/tc_client_tests.cpp
       test/ddop_tests.cpp
       test/event_dispatcher_tests.cpp
-      test/isb_tests.cpp)
+      test/isb_tests.cpp
+      test/cf_functionalities_tests.cpp)
 
   add_executable(unit_tests ${TEST_SRC})
   target_link_libraries(
