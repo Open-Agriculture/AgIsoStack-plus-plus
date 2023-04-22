@@ -25,7 +25,7 @@
 namespace isobus
 {
 	/// @brief Manages the control function functionalities message
-	class ControlFunctionFunctionalities : public CANLibProtocol
+	class ControlFunctionFunctionalities
 	{
 	public:
 		/// @brief Enumerates the different functionalities that an ISOBUS ECU can report
@@ -168,7 +168,7 @@ namespace isobus
 		/// @param[in] functionality The functionality to change
 		/// @param[in] functionalityGeneration The generation of the functionality to report
 		/// @param[in] isSupported If true, this class will add reporting as such on the ISOBUS. If false, it will not be reported on the bus.
-		/// @note Minimum Control Function is enabled by defualt, and generally should not be disabled.
+		/// @note Minimum Control Function is enabled by default, and generally should not be disabled.
 		void set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported);
 
 		/// @brief Returns if a functionality was previously configured with set_functionality_is_supported
@@ -370,19 +370,9 @@ namespace isobus
 		/// @returns true if the aux valve you specified is being reported as "supported".
 		bool get_tractor_implement_management_client_aux_valve_flow_supported(std::uint8_t auxValveIndex);
 
-		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
-		/// @returns true if the message was accepted by the protocol for processing
-		bool protocol_transmit_message(std::uint32_t,
-		                               const std::uint8_t *,
-		                               std::uint32_t,
-		                               ControlFunction *,
-		                               ControlFunction *,
-		                               TransmitCompleteCallback,
-		                               void *,
-		                               DataChunkCallback) override;
-
-		/// @brief This will be called by the network manager on every cyclic update of the stack
-		void update(CANLibBadge<CANNetworkManager>) override;
+		/// @brief This will be called by the network manager when the diagnostic protocol updates.
+		/// There is no need for you to call it manually.
+		void update();
 
 	protected:
 		/// @brief Populates a vector with the message data needed to send PGN 0xFC8E
@@ -417,7 +407,7 @@ namespace isobus
 			/// @returns The state of the requested bit
 			bool get_bit_in_option(std::uint8_t byteIndex, std::uint8_t bit);
 
-			Functionalities functionality = Functionalities::MinimumControlFunction; ///< The funcionalty associated with this data
+			Functionalities functionality = Functionalities::MinimumControlFunction; ///< The functionality associated with this data
 			std::vector<std::uint8_t> serializedValue; ///< The raw message data value for this functionality
 			std::uint8_t generation = 1; ///< The generation of the functionality supported
 		};
@@ -430,11 +420,11 @@ namespace isobus
 			NumberOfFlags ///< The number of flags enumerated in this enum
 		};
 
-		/// @brief Checks for the existance of a functionality in the list of previously configured functionalities
+		/// @brief Checks for the existence of a functionality in the list of previously configured functionalities
 		/// and returns an iterator to that functionality in the list
 		/// @param[in] functionalityToRetreive The functionality to return
 		/// @returns Iterator to the desired functionality, or supportedFunctionalities.end() if not found
-		std::list<FunctionalityData>::iterator get_functionality(Functionalities functionalityToRetreive);
+		std::list<FunctionalityData>::iterator get_functionality(Functionalities functionalityToRetrieve);
 
 		/// @brief A wrapper to to get an option from the first byte of a functionalities' data
 		/// @param[in] functionality The functionality associated to the option being retrieved
@@ -454,10 +444,6 @@ namespace isobus
 		/// @param[in] option The option for which you want to know the bit index into the TIM functionality message data
 		/// @returns The bit offset/index of the specified option int the TIM functionality message data
 		std::uint8_t get_tim_option_bit_index(TractorImplementManagementOptions option) const;
-
-		/// @brief A generic way for a protocol to process a received message
-		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
 
 		/// @brief Handles PGN requests for the control function functionalities message
 		/// @param[in] parameterGroupNumber The PGN that was requested

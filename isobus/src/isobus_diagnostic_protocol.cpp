@@ -68,6 +68,7 @@ namespace isobus
 	}
 
 	DiagnosticProtocol::DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
+	  ControlFunctionFunctionalitiesMessageInterface(internalControlFunction),
 	  myControlFunction(internalControlFunction),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
 	  lastDM1SentTimestamp(0),
@@ -475,6 +476,7 @@ namespace isobus
 			}
 		}
 		txFlags.process_all_flags();
+		ControlFunctionFunctionalitiesMessageInterface.update();
 	}
 
 	std::uint8_t DiagnosticProtocol::convert_flash_state_to_byte(FlashState flash)

@@ -38,6 +38,7 @@
 
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_protocol.hpp"
+#include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
 #include <array>
@@ -240,6 +241,13 @@ namespace isobus
 		/// @brief Returns `true` if the protocol is in J1939 mode instead of ISO11783 mode, `false` if using ISO11783 mode
 		/// @returns `true` if the protocol is in J1939 mode instead of ISO11783 mode, `false` if using ISO11783 mode
 		bool get_j1939_mode() const;
+
+		/// @brief Use this interface to configure your CF's functionalities.
+		/// This info will be reported to any ECU that requests it and you are
+		/// required to support it on an ISOBUS.
+		/// @note By default, this interface will only report that your ECU is a
+		/// "Minimum Control Function".
+		ControlFunctionFunctionalities ControlFunctionFunctionalitiesMessageInterface;
 
 		/// @brief Clears the list of active DTCs and makes them all inactive
 		void clear_active_diagnostic_trouble_codes();
