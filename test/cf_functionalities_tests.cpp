@@ -540,7 +540,8 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	testFrame.dataLength = 3;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	CANNetworkManager::CANNetwork.update(); // Update twice in case the order of the protocols is different, causing a slight delay
+
+	cfFunctionalitiesUnderTest.update(); // Updating manually since we're not integrated with the diagnostic protocol inside this test
 
 	ASSERT_TRUE(requesterPlugin.read_frame(testFrame));
 	ASSERT_TRUE(testFrame.isExtendedFrame);

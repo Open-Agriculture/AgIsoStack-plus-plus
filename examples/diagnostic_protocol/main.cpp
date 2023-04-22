@@ -79,24 +79,32 @@ int main()
 	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC2(567, isobus::DiagnosticProtocol::FailureModeIdentifier::DataErratic, isobus::DiagnosticProtocol::LampStatus::AmberWarningLampSlowFlash);
 	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC3(8910, isobus::DiagnosticProtocol::FailureModeIdentifier::BadIntellegentDevice, isobus::DiagnosticProtocol::LampStatus::RedStopLampSolid);
 
-	// Set a product identification string (in case someone requests it)
-	diagnosticProtocol->set_product_identification_code("1234567890ABC");
-	diagnosticProtocol->set_product_identification_brand("Del Grosso Engineering");
-	diagnosticProtocol->set_product_identification_model("Isobus++ CAN Stack DP Example");
-
-	// Set a software ID string (This is what tells other ECUs what version your software is)
-	diagnosticProtocol->set_software_id_field(0, "Diagnostic Protocol Example 1.0.0");
-	diagnosticProtocol->set_software_id_field(1, "Another version string x.x.x.x");
-
-	// Set an ECU ID (This is what tells other ECUs more details about your specific physical ECU)
-	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::HardwareID, "Hardware ID");
-	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Location, "The Aether");
-	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "None");
-	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
-	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1");
-
 	if (nullptr != diagnosticProtocol)
 	{
+		// Set a product identification string (in case someone requests it)
+		diagnosticProtocol->set_product_identification_code("1234567890ABC");
+		diagnosticProtocol->set_product_identification_brand("Del Grosso Engineering");
+		diagnosticProtocol->set_product_identification_model("Isobus++ CAN Stack DP Example");
+
+		// Set a software ID string (This is what tells other ECUs what version your software is)
+		diagnosticProtocol->set_software_id_field(0, "Diagnostic Protocol Example 1.0.0");
+		diagnosticProtocol->set_software_id_field(1, "Another version string x.x.x.x");
+
+		// Set an ECU ID (This is what tells other ECUs more details about your specific physical ECU)
+		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::HardwareID, "Hardware ID");
+		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Location, "The Aether");
+		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "None");
+		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
+		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1");
+
+		// Let's say that our ECU has the capability of a universal terminal working set (as an example) and
+		// contains weak internal bus termination.
+		// This info gets reported to any ECU on the bus that requests our capabilities through the
+		// control function functionalities message.
+		diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 1, true);
+		diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_minimum_control_function_option_state(isobus::ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination, true);
+		diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::UniversalTerminalWorkingSet, 1, true);
+
 		// Set the DTCs active. This should put them in the DM1 message
 		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC1, true);
 		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC2, true);

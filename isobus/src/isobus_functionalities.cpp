@@ -44,7 +44,7 @@ namespace isobus
 
 		auto existingFunctionality = get_functionality(functionality);
 
-		if ((supportedFunctionalities.end() == existingFunctionality) && (isSupported))
+		if ((supportedFunctionalities.end() == existingFunctionality) && isSupported)
 		{
 			FunctionalityData newFunctionality(functionality);
 			newFunctionality.configure_default_data();
@@ -55,7 +55,7 @@ namespace isobus
 		{
 			if (Functionalities::MinimumControlFunction == functionality)
 			{
-				CANStackLogger::warn("[DP]: You are disabling minimum control function functionality reporting! This is not reccommended.");
+				CANStackLogger::warn("[DP]: You are disabling minimum control function functionality reporting! This is not recommended.");
 			}
 			supportedFunctionalities.erase(existingFunctionality);
 		}
@@ -408,7 +408,7 @@ namespace isobus
 
 			if (supportedFunctionalities.end() != existingFunctionality)
 			{
-				for (auto &currentByte : existingFunctionality->serializedValue)
+				for (const auto &currentByte : existingFunctionality->serializedValue)
 				{
 					retVal &= (0 == currentByte);
 				}
@@ -485,7 +485,7 @@ namespace isobus
 
 			if (supportedFunctionalities.end() != existingFunctionality)
 			{
-				for (auto &currentByte : existingFunctionality->serializedValue)
+				for (const auto &currentByte : existingFunctionality->serializedValue)
 				{
 					retVal &= (0 == currentByte);
 				}
@@ -493,7 +493,19 @@ namespace isobus
 		}
 		else
 		{
-			retVal = get_functionality_byte_option(Functionalities::TractorImplementManagementClient, get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option));
+			std::uint8_t optionBit = get_tim_option_bit_index(option);
+
+			if (optionBit < std::numeric_limits<std::uint8_t>::digits)
+			{
+				retVal = get_functionality_byte_option(Functionalities::TractorImplementManagementClient, get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option));
+			}
+			else
+			{
+				// This should be impossible, if you see this please report a bug on our GitHub.
+				// Generally this means that a new TIM option was added but not considered in get_tim_option_bit_index.
+				assert(false);
+				retVal = false;
+			}
 		}
 		return retVal;
 	}
@@ -538,19 +550,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ControlFunctionFunctionalities::protocol_transmit_message(std::uint32_t,
-	                                                               const std::uint8_t *,
-	                                                               std::uint32_t,
-	                                                               ControlFunction *,
-	                                                               ControlFunction *,
-	                                                               TransmitCompleteCallback,
-	                                                               void *,
-	                                                               DataChunkCallback)
-	{
-		return false;
-	}
-
-	void ControlFunctionFunctionalities::update(CANLibBadge<CANNetworkManager>)
+	void ControlFunctionFunctionalities::update()
 	{
 		txFlags.process_all_flags();
 	}
@@ -644,9 +644,9 @@ namespace isobus
 		return retVal;
 	}
 
-	std::list<ControlFunctionFunctionalities::FunctionalityData>::iterator ControlFunctionFunctionalities::get_functionality(Functionalities functionalityToRetreive)
+	std::list<ControlFunctionFunctionalities::FunctionalityData>::iterator ControlFunctionFunctionalities::get_functionality(Functionalities functionalityToRetrieve)
 	{
-		return std::find_if(supportedFunctionalities.begin(), supportedFunctionalities.end(), [functionalityToRetreive](FunctionalityData &currentFunctionality) { return currentFunctionality.functionality == functionalityToRetreive; });
+		return std::find_if(supportedFunctionalities.begin(), supportedFunctionalities.end(), [functionalityToRetrieve](const FunctionalityData &currentFunctionality) { return currentFunctionality.functionality == functionalityToRetrieve; });
 	}
 
 	bool ControlFunctionFunctionalities::get_functionality_byte_option(Functionalities functionality, std::uint8_t byteIndex, std::uint8_t option)
@@ -658,7 +658,7 @@ namespace isobus
 
 		if (supportedFunctionalities.end() != existingFunctionality)
 		{
-			retVal = existingFunctionality->get_bit_in_option(byteIndex, static_cast<std::uint8_t>(option));
+			retVal = existingFunctionality->get_bit_in_option(byteIndex, option);
 		}
 		return retVal;
 	}
@@ -671,13 +671,13 @@ namespace isobus
 		messageData.push_back(0xFF); // Each control function shall respond with byte 1 set to FF
 		messageData.push_back(static_cast<std::uint8_t>(supportedFunctionalities.size()));
 
-		for (auto &functionality : supportedFunctionalities)
+		for (const auto &functionality : supportedFunctionalities)
 		{
 			messageData.push_back(static_cast<std::uint8_t>(functionality.functionality));
 			messageData.push_back(functionality.generation);
-			messageData.push_back(functionality.serializedValue.size());
+			messageData.push_back(static_cast<std::uint8_t>(functionality.serializedValue.size()));
 
-			for (auto &dataByte : functionality.serializedValue)
+			for (const auto &dataByte : functionality.serializedValue)
 			{
 				messageData.push_back(dataByte);
 			}
@@ -749,6 +749,7 @@ namespace isobus
 
 			default:
 			{
+				// Option not handled. This is normal for NoOption but others should be considered.
 			}
 			break;
 		}
@@ -820,14 +821,11 @@ namespace isobus
 
 			default:
 			{
+				// Option not handled. This is normal for NoOption but others should be considered.
 			}
 			break;
 		}
 		return retVal;
-	}
-
-	void ControlFunctionFunctionalities::process_message(CANMessage *const)
-	{
 	}
 
 	bool ControlFunctionFunctionalities::pgn_request_handler(std::uint32_t parameterGroupNumber,
