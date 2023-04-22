@@ -35,9 +35,9 @@ namespace isobus
 		}
 	}
 
-	std::shared_ptr<void> ShortcutButtonInterface::add_stop_all_implement_operations_state_callback(std::function<void(StopAllImplementOperationsState ISBState)> callback)
+	EventDispatcher<ShortcutButtonInterface::StopAllImplementOperationsState> &ShortcutButtonInterface::get_stop_all_implement_operations_state_event_dispatcher()
 	{
-		return ISBEventDispatcher.add_listener(callback);
+		return ISBEventDispatcher;
 	}
 
 	void ShortcutButtonInterface::set_stop_all_implement_operations_state(StopAllImplementOperationsState newState)
