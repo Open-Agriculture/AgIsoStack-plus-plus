@@ -7,16 +7,35 @@
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/isobus_functionalities.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 
+#include <algorithm>
+#include <cassert>
 #include <limits>
 
 namespace isobus
 {
 	ControlFunctionFunctionalities::ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
-	  myControlFunction(sourceControlFunction)
+	  myControlFunction(sourceControlFunction),
+	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
 		set_functionality_is_supported(Functionalities::MinimumControlFunction, 1, true); // Support the absolute minimum by default
+		ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(myControlFunction);
+
+		ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction);
+		assert(nullptr != pgnRequestProtocol);
+		pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+	}
+
+	ControlFunctionFunctionalities::~ControlFunctionFunctionalities()
+	{
+		ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction);
+
+		if (nullptr != pgnRequestProtocol)
+		{
+			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+		}
 	}
 
 	void ControlFunctionFunctionalities::set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported)
@@ -69,6 +88,24 @@ namespace isobus
 		return retVal;
 	}
 
+	void ControlFunctionFunctionalities::set_minimum_control_function_option_state(MinimumControlFunctionOptions option, bool optionState)
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+
+		auto existingFunctionality = get_functionality(Functionalities::MinimumControlFunction);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) &&
+		    (option < MinimumControlFunctionOptions::Reserved))
+		{
+			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
+		}
+	}
+
+	bool ControlFunctionFunctionalities::get_minimum_control_function_option_state(MinimumControlFunctionOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::MinimumControlFunction, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_aux_O_inputs_option_state(AuxOOptions option, bool optionState)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -82,6 +119,11 @@ namespace isobus
 		}
 	}
 
+	bool ControlFunctionFunctionalities::get_aux_O_inputs_option_state(AuxOOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::AuxOInputs, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_aux_O_functions_option_state(AuxOOptions option, bool optionState)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -93,6 +135,11 @@ namespace isobus
 		{
 			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
 		}
+	}
+
+	bool ControlFunctionFunctionalities::get_aux_O_functions_option_state(AuxOOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::AuxOFunctions, 0, static_cast<std::uint8_t>(option));
 	}
 
 	void ControlFunctionFunctionalities::set_aux_N_inputs_option_state(AuxNOptions option, bool optionState)
@@ -110,6 +157,11 @@ namespace isobus
 		}
 	}
 
+	bool ControlFunctionFunctionalities::get_aux_N_inputs_option_state(AuxNOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::AuxNInputs, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_aux_N_functions_option_state(AuxNOptions option, bool optionState)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -125,6 +177,11 @@ namespace isobus
 		}
 	}
 
+	bool ControlFunctionFunctionalities::get_aux_N_functions_option_state(AuxNOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::AuxNFunctions, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_task_controller_geo_server_option_state(TaskControllerGeoServerOptions option, bool optionState)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -138,6 +195,11 @@ namespace isobus
 		}
 	}
 
+	bool ControlFunctionFunctionalities::get_task_controller_geo_server_option_state(TaskControllerGeoServerOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::TaskControllerGeoServer, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_task_controller_geo_client_option(std::uint8_t numberOfControlChannels)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -149,6 +211,19 @@ namespace isobus
 		{
 			existingFunctionality->serializedValue.at(0) = numberOfControlChannels;
 		}
+	}
+
+	std::uint8_t ControlFunctionFunctionalities::get_task_controller_geo_client_option()
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerGeoClient);
+		std::uint8_t retVal = 0;
+
+		if (supportedFunctionalities.end() != existingFunctionality)
+		{
+			retVal = existingFunctionality->serializedValue.at(0);
+		}
+		return retVal;
 	}
 
 	void ControlFunctionFunctionalities::set_task_controller_section_control_server_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections)
@@ -166,6 +241,32 @@ namespace isobus
 		}
 	}
 
+	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_server_number_supported_booms()
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlServer);
+		std::uint8_t retVal = 0;
+
+		if (supportedFunctionalities.end() != existingFunctionality)
+		{
+			retVal = existingFunctionality->serializedValue.at(0);
+		}
+		return retVal;
+	}
+
+	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_server_number_supported_sections()
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlServer);
+		std::uint8_t retVal = 0;
+
+		if (supportedFunctionalities.end() != existingFunctionality)
+		{
+			retVal = existingFunctionality->serializedValue.at(1);
+		}
+		return retVal;
+	}
+
 	void ControlFunctionFunctionalities::set_task_controller_section_control_client_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -181,6 +282,32 @@ namespace isobus
 		}
 	}
 
+	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_client_number_supported_booms()
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlClient);
+		std::uint8_t retVal = 0;
+
+		if (supportedFunctionalities.end() != existingFunctionality)
+		{
+			retVal = existingFunctionality->serializedValue.at(0);
+		}
+		return retVal;
+	}
+
+	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_client_number_supported_sections()
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlClient);
+		std::uint8_t retVal = 0;
+
+		if (supportedFunctionalities.end() != existingFunctionality)
+		{
+			retVal = existingFunctionality->serializedValue.at(1);
+		}
+		return retVal;
+	}
+
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option, bool optionState)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -192,6 +319,28 @@ namespace isobus
 		{
 			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
 		}
+	}
+
+	bool ControlFunctionFunctionalities::get_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option)
+	{
+		bool retVal = false;
+
+		// This one is handled differently to handle the 0 value
+		if (BasicTractorECUOptions::TECUNotMeetingCompleteClass1Requirements == option)
+		{
+			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+			auto existingFunctionality = get_functionality(Functionalities::BasicTractorECUServer);
+
+			if (supportedFunctionalities.end() != existingFunctionality)
+			{
+				retVal = (0 == existingFunctionality->serializedValue.at(0));
+			}
+		}
+		else
+		{
+			retVal = get_functionality_byte_option(Functionalities::BasicTractorECUServer, 0, static_cast<std::uint8_t>(option));
+		}
+		return retVal;
 	}
 
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_implement_client_option_state(BasicTractorECUOptions option, bool optionState)
@@ -206,6 +355,29 @@ namespace isobus
 			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
 		}
 	}
+
+	bool ControlFunctionFunctionalities::get_basic_tractor_ECU_implement_client_option_state(BasicTractorECUOptions option)
+	{
+		bool retVal = false;
+
+		// This one is handled differently to handle the 0 value
+		if (BasicTractorECUOptions::TECUNotMeetingCompleteClass1Requirements == option)
+		{
+			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+			auto existingFunctionality = get_functionality(Functionalities::BasicTractorECUImplementClient);
+
+			if (supportedFunctionalities.end() != existingFunctionality)
+			{
+				retVal = (0 == existingFunctionality->serializedValue.at(0));
+			}
+		}
+		else
+		{
+			retVal = get_functionality_byte_option(Functionalities::BasicTractorECUImplementClient, 0, static_cast<std::uint8_t>(option));
+		}
+		return retVal;
+	}
+
 	void ControlFunctionFunctionalities::set_tractor_implement_management_server_option_state(TractorImplementManagementOptions option, bool optionState)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
@@ -214,8 +386,39 @@ namespace isobus
 
 		if (supportedFunctionalities.end() != existingFunctionality)
 		{
-			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), get_tim_option_bit_index(option), optionState);
+			if (TractorImplementManagementOptions::NoOptions != option)
+			{
+				existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option), optionState);
+			}
+			else
+			{
+				CANStackLogger::debug("[DP]: Can't set the No Options TIM option, disable the other ones instead.");
+			}
 		}
+	}
+
+	bool ControlFunctionFunctionalities::get_tractor_implement_management_server_option_state(TractorImplementManagementOptions option)
+	{
+		bool retVal = true;
+
+		if (TractorImplementManagementOptions::NoOptions == option)
+		{
+			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+			auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
+
+			if (supportedFunctionalities.end() != existingFunctionality)
+			{
+				for (auto &currentByte : existingFunctionality->serializedValue)
+				{
+					retVal &= (0 == currentByte);
+				}
+			}
+		}
+		else
+		{
+			retVal = get_functionality_byte_option(Functionalities::TractorImplementManagementServer, get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option));
+		}
+		return retVal;
 	}
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_server_aux_valve_option(std::uint8_t auxValveIndex, bool stateSupported, bool flowSupported)
@@ -224,11 +427,39 @@ namespace isobus
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
 
-		if (supportedFunctionalities.end() != existingFunctionality)
+		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
 		{
-			existingFunctionality->set_bit_in_option(auxValveIndex / 4, 2 * (auxValveIndex % 4), stateSupported);
-			existingFunctionality->set_bit_in_option(auxValveIndex / 4, 2 * (auxValveIndex % 4) + 1, flowSupported);
+			existingFunctionality->set_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4)), stateSupported);
+			existingFunctionality->set_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4) + 1), flowSupported);
 		}
+	}
+
+	bool ControlFunctionFunctionalities::get_tractor_implement_management_server_aux_valve_state_supported(std::uint8_t auxValveIndex)
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		bool retVal = false;
+
+		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
+		{
+			retVal = existingFunctionality->get_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4)));
+		}
+		return retVal;
+	}
+
+	bool ControlFunctionFunctionalities::get_tractor_implement_management_server_aux_valve_flow_supported(std::uint8_t auxValveIndex)
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		bool retVal = false;
+
+		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
+		{
+			retVal = existingFunctionality->get_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4) + 1));
+		}
+		return retVal;
 	}
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_client_option_state(TractorImplementManagementOptions option, bool optionState)
@@ -239,13 +470,89 @@ namespace isobus
 
 		if (supportedFunctionalities.end() != existingFunctionality)
 		{
-			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), get_tim_option_bit_index(option), optionState);
+			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option), optionState);
 		}
+	}
+
+	bool ControlFunctionFunctionalities::get_tractor_implement_management_client_option_state(TractorImplementManagementOptions option)
+	{
+		bool retVal = true;
+
+		if (TractorImplementManagementOptions::NoOptions == option)
+		{
+			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+			auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
+
+			if (supportedFunctionalities.end() != existingFunctionality)
+			{
+				for (auto &currentByte : existingFunctionality->serializedValue)
+				{
+					retVal &= (0 == currentByte);
+				}
+			}
+		}
+		else
+		{
+			retVal = get_functionality_byte_option(Functionalities::TractorImplementManagementClient, get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option));
+		}
+		return retVal;
 	}
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_client_aux_valve_option(std::uint8_t auxValveIndex, bool stateSupported, bool flowSupported)
 	{
 		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
+		{
+			existingFunctionality->set_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4)), stateSupported);
+			existingFunctionality->set_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4) + 1), flowSupported);
+		}
+	}
+
+	bool ControlFunctionFunctionalities::get_tractor_implement_management_client_aux_valve_state_supported(std::uint8_t auxValveIndex)
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		bool retVal = false;
+
+		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
+		{
+			retVal = existingFunctionality->get_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4)));
+		}
+		return retVal;
+	}
+
+	bool ControlFunctionFunctionalities::get_tractor_implement_management_client_aux_valve_flow_supported(std::uint8_t auxValveIndex)
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		bool retVal = false;
+
+		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
+		{
+			retVal = existingFunctionality->get_bit_in_option(auxValveIndex / 4, 1 << (2 * (auxValveIndex % 4) + 1));
+		}
+		return retVal;
+	}
+
+	bool ControlFunctionFunctionalities::protocol_transmit_message(std::uint32_t,
+	                                                               const std::uint8_t *,
+	                                                               std::uint32_t,
+	                                                               ControlFunction *,
+	                                                               ControlFunction *,
+	                                                               TransmitCompleteCallback,
+	                                                               void *,
+	                                                               DataChunkCallback)
+	{
+		return false;
+	}
+
+	void ControlFunctionFunctionalities::update(CANLibBadge<CANNetworkManager>)
+	{
+		txFlags.process_all_flags();
 	}
 
 	ControlFunctionFunctionalities::FunctionalityData::FunctionalityData(Functionalities functionalityToStore) :
@@ -313,17 +620,28 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::FunctionalityData::set_bit_in_option(std::uint8_t byteIndex, std::uint8_t bit, bool value)
 	{
-		if ((byteIndex < serializedValue.size()) && (bit < std::numeric_limits<std::uint8_t>::digits))
+		if ((byteIndex < serializedValue.size()) && (bit < std::numeric_limits<std::uint8_t>::max()))
 		{
 			if (value)
 			{
-				serializedValue.at(byteIndex) = (serializedValue.at(byteIndex) | (1 << bit));
+				serializedValue.at(byteIndex) = (serializedValue.at(byteIndex) | bit);
 			}
 			else
 			{
-				serializedValue.at(byteIndex) = (serializedValue.at(byteIndex) & ~(1 << bit));
+				serializedValue.at(byteIndex) = (serializedValue.at(byteIndex) & ~(bit));
 			}
 		}
+	}
+
+	bool ControlFunctionFunctionalities::FunctionalityData::get_bit_in_option(std::uint8_t byteIndex, std::uint8_t bit)
+	{
+		bool retVal = false;
+
+		if ((byteIndex < serializedValue.size()) && (bit < std::numeric_limits<std::uint8_t>::max()))
+		{
+			retVal = (0 != (serializedValue.at(byteIndex) & (bit)));
+		}
+		return retVal;
 	}
 
 	std::list<ControlFunctionFunctionalities::FunctionalityData>::iterator ControlFunctionFunctionalities::get_functionality(Functionalities functionalityToRetreive)
@@ -331,11 +649,44 @@ namespace isobus
 		return std::find_if(supportedFunctionalities.begin(), supportedFunctionalities.end(), [functionalityToRetreive](FunctionalityData &currentFunctionality) { return currentFunctionality.functionality == functionalityToRetreive; });
 	}
 
+	bool ControlFunctionFunctionalities::get_functionality_byte_option(Functionalities functionality, std::uint8_t byteIndex, std::uint8_t option)
+	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
+		bool retVal = false;
+
+		auto existingFunctionality = get_functionality(functionality);
+
+		if (supportedFunctionalities.end() != existingFunctionality)
+		{
+			retVal = existingFunctionality->get_bit_in_option(byteIndex, static_cast<std::uint8_t>(option));
+		}
+		return retVal;
+	}
+
 	void ControlFunctionFunctionalities::get_message_content(std::vector<std::uint8_t> &messageData)
 	{
+		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
 		messageData.clear();
+		messageData.reserve(supportedFunctionalities.size() * 4); // Approximate, but pretty close unless you have TIM.
 		messageData.push_back(0xFF); // Each control function shall respond with byte 1 set to FF
 		messageData.push_back(static_cast<std::uint8_t>(supportedFunctionalities.size()));
+
+		for (auto &functionality : supportedFunctionalities)
+		{
+			messageData.push_back(static_cast<std::uint8_t>(functionality.functionality));
+			messageData.push_back(functionality.generation);
+			messageData.push_back(functionality.serializedValue.size());
+
+			for (auto &dataByte : functionality.serializedValue)
+			{
+				messageData.push_back(dataByte);
+			}
+		}
+
+		while (messageData.size() < CAN_DATA_LENGTH)
+		{
+			messageData.push_back(0xFF);
+		}
 	}
 
 	std::uint8_t ControlFunctionFunctionalities::get_tim_option_byte_index(TractorImplementManagementOptions option) const
@@ -473,5 +824,51 @@ namespace isobus
 			break;
 		}
 		return retVal;
+	}
+
+	void ControlFunctionFunctionalities::process_message(CANMessage *const)
+	{
+	}
+
+	bool ControlFunctionFunctionalities::pgn_request_handler(std::uint32_t parameterGroupNumber,
+	                                                         ControlFunction *,
+	                                                         bool &acknowledge,
+	                                                         AcknowledgementType &,
+	                                                         void *parentPointer)
+	{
+		assert(nullptr != parentPointer);
+		auto targetInterface = static_cast<ControlFunctionFunctionalities *>(parentPointer);
+		bool retVal = false;
+
+		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities) == parameterGroupNumber)
+		{
+			acknowledge = false;
+			targetInterface->txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage));
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	void ControlFunctionFunctionalities::process_flags(std::uint32_t flag, void *parentPointer)
+	{
+		assert(nullptr != parentPointer);
+		auto targetInterface = static_cast<ControlFunctionFunctionalities *>(parentPointer);
+		bool transmitSuccessful = true;
+
+		if (static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage) == flag)
+		{
+			std::vector<std::uint8_t> messageBuffer;
+			targetInterface->get_message_content(messageBuffer);
+			transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities),
+			                                                                    messageBuffer.data(),
+			                                                                    messageBuffer.size(),
+			                                                                    targetInterface->myControlFunction.get(),
+			                                                                    nullptr);
+		}
+
+		if (!transmitSuccessful)
+		{
+			targetInterface->txFlags.set_flag(flag);
+		}
 	}
 } // namespace isobus
