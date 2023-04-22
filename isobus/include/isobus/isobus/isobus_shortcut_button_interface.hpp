@@ -79,10 +79,10 @@ namespace isobus
 		/// @brief Destructor for a ShortcutButtonInterface
 		virtual ~ShortcutButtonInterface();
 
-		/// @brief Adds a callback that will get called when any CF commands a stop to implement operations
-		/// and likewise will be called again when all tracked CFs are sending the "permit implement operations" state
-		/// @param[in] callback The callback to add
-		std::shared_ptr<void> add_stop_all_implement_operations_state_callback(std::function<void(StopAllImplementOperationsState ISBState)> callback);
+		/// @brief Gets the event dispatcher for when the assigned bus' ISB state changes.
+		/// The assigned bus is determined by which internal control function you pass into the constructor.
+		/// @returns The event dispatcher which can be used to register callbacks/listeners to
+		EventDispatcher<StopAllImplementOperationsState> &get_stop_all_implement_operations_state_event_dispatcher();
 
 		/// @brief Sets the state that the interface will broadcast on the bus.
 		/// @note This is only used when the interface was created as a server.

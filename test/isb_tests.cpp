@@ -203,7 +203,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
-	auto testEvent = interfaceUnderTest.add_stop_all_implement_operations_state_callback(testCallback);
+	auto testEvent = interfaceUnderTest.get_stop_all_implement_operations_state_event_dispatcher().add_listener(testCallback);
 
 	// Test callback
 	// Set up to test roll over at 255
@@ -224,6 +224,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	std::this_thread::sleep_for(std::chrono::milliseconds(3100));
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	CANHardwareInterface::stop();
 }
 
 TEST(ISB_TESTS, ShortcutButtonTxTests)
@@ -300,4 +301,6 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	EXPECT_EQ(testFrame.data[7], 0xFC);
 
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+
+	CANHardwareInterface::stop();
 }
