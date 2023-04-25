@@ -805,6 +805,33 @@ namespace isobus
 		}
 	}
 
+	void CANNetworkManager::process_can_message_for_commanded_address(const CANMessage *message)
+	{
+		constexpr std::uint8_t COMMANDED_ADDRESS_LENGTH = 9;
+
+		if ((nullptr != message) &&
+		    (nullptr == message->get_destination_control_function()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::CommandedAddress) == message->get_identifier().get_parameter_group_number()) &&
+		    (COMMANDED_ADDRESS_LENGTH == message->get_data_length()))
+		{
+			auto messageData = message->get_data_length();
+			std::uint64_t targetNAME = message->get_uint64_at(0);
+
+			for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
+			{
+				// This is not a particularly efficient search, but this should be pretty rare
+				auto currentICF = InternalControlFunction::get_internal_control_function(i);
+
+				if ((nullptr != currentICF) &&
+				    (message->get_can_port_index() == currentICF->get_can_port()) &&
+				    (currentICF->get_NAME().get_full_name() == targetNAME))
+				{
+					currentICF->process_commanded_address(message->get_uint8_at(8), {});
+				}
+			}
+		}
+	}
+
 	void CANNetworkManager::process_rx_messages()
 	{
 		while (0 != get_number_can_messages_in_rx_queue())
@@ -838,6 +865,7 @@ namespace isobus
 	void CANNetworkManager::protocol_message_callback(CANMessage *protocolMessage)
 	{
 		process_can_message_for_global_and_partner_callbacks(protocolMessage);
+		process_can_message_for_commanded_address(protocolMessage);
 	}
 
 } // namespace isobus

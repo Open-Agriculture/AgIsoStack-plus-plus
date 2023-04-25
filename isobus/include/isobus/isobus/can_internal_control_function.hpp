@@ -59,6 +59,10 @@ namespace isobus
 		/// @returns true if the ICF changed address since the last network manager update
 		bool get_changed_address_since_last_update(CANLibBadge<CANNetworkManager>) const;
 
+		/// @brief Used by the network manager to tell the ICF that the address claim state machine needs to process
+		/// a J1939 command to move address.
+		void process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>);
+
 		/// @brief Updates all address claim state machines
 		static void update_address_claiming(CANLibBadge<CANNetworkManager>);
 

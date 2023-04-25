@@ -80,6 +80,11 @@ namespace isobus
 		return objectChangedAddressSinceLastUpdate;
 	}
 
+	void InternalControlFunction::process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>)
+	{
+		stateMachine.process_commanded_address(commandedAddress);
+	}
+
 	void InternalControlFunction::update_address_claiming(CANLibBadge<CANNetworkManager>)
 	{
 		anyChangedAddress = false;

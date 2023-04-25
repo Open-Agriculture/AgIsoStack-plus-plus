@@ -39,6 +39,7 @@ namespace isobus
 		DiagnosticMessage2 = 0xFECB,
 		DiagnosticMessage3 = 0xFECC,
 		DiagnosticMessage11 = 0xFED3,
+		CommandedAddress = 0xFED8,
 		SoftwareIdentification = 0xFEDA,
 		AllImplementsStopOperationsSwitchState = 0xFD02
 	};

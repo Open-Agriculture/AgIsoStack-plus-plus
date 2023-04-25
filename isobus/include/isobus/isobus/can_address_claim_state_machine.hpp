@@ -56,6 +56,12 @@ namespace isobus
 		/// @returns The current state of the state machine
 		State get_current_state() const;
 
+		/// @brief Attempts to process a commanded address.
+		/// @details If the state machine has claimed successfully before,
+		/// this will attempt to move a NAME from the claimed address to the new, specified address.
+		/// @param[in] commandedAddress The address to attempt to claim
+		void process_commanded_address(std::uint8_t commandedAddress);
+
 		/// @brief Enables or disables the address claimer
 		/// @param[in] value true if you want the class to claim, false if you want to be a sniffer only
 		void set_is_enabled(bool value);
