@@ -9,6 +9,7 @@
 #include "isobus/isobus/can_address_claim_state_machine.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include <cassert>
@@ -41,6 +42,39 @@ namespace isobus
 	AddressClaimStateMachine::State AddressClaimStateMachine::get_current_state() const
 	{
 		return m_currentState;
+	}
+
+	void AddressClaimStateMachine::process_commanded_address(std::uint8_t commandedAddress)
+	{
+		if (State::AddressClaimingComplete == get_current_state())
+		{
+			if (!m_isoname.get_arbitrary_address_capable())
+			{
+				CANStackLogger::error("[AC]: Our address was commanded to a new value, but our ISO NAME doesn't support changing our address.");
+			}
+			else
+			{
+				ControlFunction *deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, commandedAddress, {});
+				m_preferredAddress = commandedAddress;
+
+				if (nullptr == deviceAtOurPreferredAddress)
+				{
+					// Commanded address is free. We'll claim it.
+					set_current_state(State::SendPreferredAddressClaim);
+					CANStackLogger::info("[AC]: Our address was commanded to a new value of %u", commandedAddress);
+				}
+				else if (deviceAtOurPreferredAddress->get_NAME().get_full_name() < m_isoname.get_full_name())
+				{
+					// We can steal the address of the device at our commanded address and force it to move
+					set_current_state(State::SendArbitraryAddressClaim);
+					CANStackLogger::info("[AC]: Our address was commanded to a new value of %u, and an ECU at the target address is being evicted.", commandedAddress);
+				}
+				else
+				{
+					CANStackLogger::error("[AC]: Our address was commanded to a new value of %u, but we cannot move to the target address.", commandedAddress);
+				}
+			}
+		}
 	}
 
 	void AddressClaimStateMachine::set_is_enabled(bool value)

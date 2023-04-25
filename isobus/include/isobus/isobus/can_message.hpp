@@ -84,7 +84,7 @@ namespace isobus
 		/// @details This function will return the byte at the specified index in the buffer.
 		/// @param[in] index The index to get the byte from
 		/// @return The 8-bit unsigned byte
-		std::uint8_t get_uint8_at(const std::size_t index);
+		std::uint8_t get_uint8_at(const std::size_t index) const;
 
 		/// @brief Get a 16-bit unsigned integer from the buffer at a specific index.
 		/// A 16-bit unsigned integer can hold a value between 0 and 65535.
@@ -92,7 +92,7 @@ namespace isobus
 		/// @param[in] index The index to get the 16-bit unsigned integer from
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 16-bit unsigned integer
-		std::uint16_t get_uint16_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian);
+		std::uint16_t get_uint16_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
 		/// @brief Get a right-aligned 24-bit integer from the buffer (returned as a uint32_t) at a specific index.
 		/// A 24-bit number can hold a value between 0 and 16,777,215.
@@ -100,7 +100,7 @@ namespace isobus
 		/// @param[in] index The index to get the 24-bit unsigned integer from
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 24-bit unsigned integer, right aligned into a uint32_t
-		std::uint32_t get_uint24_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian);
+		std::uint32_t get_uint24_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
 		/// @brief Get a 32-bit unsigned integer from the buffer at a specific index.
 		/// A 32-bit unsigned integer can hold a value between 0 and 4294967295.
@@ -108,7 +108,7 @@ namespace isobus
 		/// @param[in] index The index to get the 32-bit unsigned integer from
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 32-bit unsigned integer
-		std::uint32_t get_uint32_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian);
+		std::uint32_t get_uint32_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
 		/// @brief Get a 64-bit unsigned integer from the buffer at a specific index.
 		/// A 64-bit unsigned integer can hold a value between 0 and 18446744073709551615.
@@ -116,7 +116,7 @@ namespace isobus
 		/// @param[in] index The index to get the 64-bit unsigned integer from
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 64-bit unsigned integer
-		std::uint64_t get_uint64_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian);
+		std::uint64_t get_uint64_at(const std::size_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
 		/// @brief Get a bit-boolean from the buffer at a specific index.
 		/// @details This function will return whether the bit(s) at the specified index in the buffer is/are (all) equal to 1.
@@ -124,7 +124,7 @@ namespace isobus
 		/// @param[in] bitIndex The bit index to start reading the boolean from, ranging from 0 to 7
 		/// @param[in] length The number of bits to read, maximum of (8 - bitIndex)
 		/// @return True if (all) the bit(s) are set, false otherwise
-		bool get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1);
+		bool get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1) const;
 
 		/// @brief ISO11783-3 defines this: The maximum number of packets that can be sent in a single connection
 		/// with extended transport protocol is restricted by the extended data packet offset (3 bytes).

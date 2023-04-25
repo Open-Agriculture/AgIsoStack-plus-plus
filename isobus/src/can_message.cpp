@@ -63,12 +63,12 @@ namespace isobus
 		return CANPortIndex;
 	}
 
-	std::uint8_t CANMessage::get_uint8_at(const std::size_t index)
+	std::uint8_t CANMessage::get_uint8_at(const std::size_t index) const
 	{
 		return data.at(index);
 	}
 
-	std::uint16_t CANMessage::get_uint16_at(const std::size_t index, const ByteFormat format)
+	std::uint16_t CANMessage::get_uint16_at(const std::size_t index, const ByteFormat format) const
 	{
 		std::uint16_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -84,7 +84,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t CANMessage::get_uint24_at(const std::size_t index, const ByteFormat format)
+	std::uint32_t CANMessage::get_uint24_at(const std::size_t index, const ByteFormat format) const
 	{
 		std::uint32_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -102,7 +102,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t CANMessage::get_uint32_at(const std::size_t index, const ByteFormat format)
+	std::uint32_t CANMessage::get_uint32_at(const std::size_t index, const ByteFormat format) const
 	{
 		std::uint32_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -122,7 +122,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint64_t CANMessage::get_uint64_at(const std::size_t index, const ByteFormat format)
+	std::uint64_t CANMessage::get_uint64_at(const std::size_t index, const ByteFormat format) const
 	{
 		std::uint64_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -149,7 +149,7 @@ namespace isobus
 		}
 		return retVal;
 	}
-	bool isobus::CANMessage::get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length)
+	bool isobus::CANMessage::get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length) const
 	{
 		assert(length <= 8 - bitIndex && "length must be less than or equal to 8 - bitIndex");
 		std::uint8_t mask = ((1 << length) - 1) << bitIndex;

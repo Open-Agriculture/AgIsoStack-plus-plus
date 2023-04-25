@@ -256,6 +256,13 @@ namespace isobus
 		/// @param[in] message A pointer to a CAN message to be processed
 		void process_can_message_for_global_and_partner_callbacks(CANMessage *message);
 
+		/// @brief Processes a CAN message to see if it's a commanded address message, and
+		/// if it is, it attempts to set the relevant CF's address to the new value.
+		/// @note Changing the address will resend the address claim message if
+		/// the target was an internal control function.
+		/// @param[in] message The message to process
+		void process_can_message_for_commanded_address(const CANMessage *message);
+
 		/// @brief Processes the internal receive message queue
 		void process_rx_messages();
 
