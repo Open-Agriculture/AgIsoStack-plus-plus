@@ -1682,4 +1682,6 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 
 	EXPECT_EQ(true, valueRequested);
 	EXPECT_EQ(requestedDDI, 0x3B19);
+
+	CANHardwareInterface::stop();
 }
