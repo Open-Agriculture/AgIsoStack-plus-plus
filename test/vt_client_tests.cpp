@@ -6,6 +6,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 using namespace isobus;
 
@@ -105,6 +106,10 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 	clientUnderTest.initialize(false);
 
 	EXPECT_EQ(true, clientUnderTest.get_is_initialized());
+
+	clientUnderTest.initialize(false);
+
+	EXPECT_EQ(true, clientUnderTest.get_is_initialized()); // Double init should be at least tolerated
 
 	EXPECT_EQ(false, clientUnderTest.get_has_adjustable_volume_output());
 	EXPECT_EQ(false, clientUnderTest.get_multiple_frequency_audio_output());
@@ -802,4 +807,166 @@ TEST(VIRTUAL_TERMINAL_TESTS, TestNumberBytesInInvalidObjects)
 		};
 		EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
 	}
+}
+
+TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
+{
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start();
+
+	NAME clientNAME(0);
+	clientNAME.set_industry_group(4);
+	clientNAME.set_arbitrary_address_capable(true);
+	clientNAME.set_function_code(6);
+	clientNAME.set_identity_number(975);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::ControlHead));
+	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x37, 0);
+
+	HardwareInterfaceCANFrame testFrame;
+
+	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
+
+	while ((!internalECU->get_address_valid()) &&
+	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+
+	ASSERT_TRUE(internalECU->get_address_valid());
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+
+	// Force claim a partner
+	NAME serverNAME(0);
+	serverNAME.set_arbitrary_address_capable(true);
+	serverNAME.set_device_class(1);
+	serverNAME.set_function_code(29);
+	serverNAME.set_identity_number(645);
+	serverNAME.set_manufacturer_code(64);
+	std::uint64_t serverFullNAME = serverNAME.get_full_name();
+
+	testFrame.dataLength = 8;
+	testFrame.channel = 0;
+	testFrame.isExtendedFrame = true;
+	testFrame.identifier = 0x18EEFF26;
+	testFrame.data[0] = static_cast<std::uint8_t>(serverFullNAME & 0xFF);
+	testFrame.data[1] = static_cast<std::uint8_t>((serverFullNAME >> 8) & 0xFF);
+	testFrame.data[2] = static_cast<std::uint8_t>((serverFullNAME >> 16) & 0xFF);
+	testFrame.data[3] = static_cast<std::uint8_t>((serverFullNAME >> 24) & 0xFF);
+	testFrame.data[4] = static_cast<std::uint8_t>((serverFullNAME >> 32) & 0xFF);
+	testFrame.data[5] = static_cast<std::uint8_t>((serverFullNAME >> 40) & 0xFF);
+	testFrame.data[6] = static_cast<std::uint8_t>((serverFullNAME >> 48) & 0xFF);
+	testFrame.data[7] = static_cast<std::uint8_t>((serverFullNAME >> 56) & 0xFF);
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+
+	DerivedTestVTClient interfaceUnderTest(vtPartner, internalECU);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	// Get the virtual CAN plugin back to a known state
+	while (!serverVT.get_queue_empty())
+	{
+		serverVT.read_frame(testFrame);
+	}
+	ASSERT_TRUE(serverVT.get_queue_empty());
+
+	// Test Change active mask
+	interfaceUnderTest.send_change_active_mask(123, 456);
+
+	serverVT.read_frame(testFrame);
+
+	EXPECT_EQ(0, testFrame.channel);
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+
+	EXPECT_EQ(173, testFrame.data[0]); // VT Function
+
+	std::uint16_t workingSetObjectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
+	EXPECT_EQ(123, workingSetObjectID);
+
+	std::uint16_t newActiveMaskObjectID = (static_cast<std::uint16_t>(testFrame.data[3]) | (static_cast<std::uint16_t>(testFrame.data[4]) << 8));
+	EXPECT_EQ(456, newActiveMaskObjectID);
+
+	// Test send_hide_show_object
+	interfaceUnderTest.send_hide_show_object(1234, VirtualTerminalClient::HideShowObjectCommand::HideObject);
+
+	serverVT.read_frame(testFrame);
+	EXPECT_EQ(0, testFrame.channel);
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(160, testFrame.data[0]); // VT function
+
+	std::uint16_t objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
+	EXPECT_EQ(1234, objectID);
+	EXPECT_EQ(0, testFrame.data[3]); // Hide
+	EXPECT_EQ(0xFF, testFrame.data[4]); // Reserved
+	EXPECT_EQ(0xFF, testFrame.data[5]); // Reserved
+	EXPECT_EQ(0xFF, testFrame.data[6]); // Reserved
+	EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
+
+	interfaceUnderTest.send_hide_show_object(1234, VirtualTerminalClient::HideShowObjectCommand::ShowObject);
+	serverVT.read_frame(testFrame);
+	EXPECT_EQ(0, testFrame.channel);
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(160, testFrame.data[0]); // VT function
+
+	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
+	EXPECT_EQ(1234, objectID);
+	EXPECT_EQ(1, testFrame.data[3]); // Show
+	EXPECT_EQ(0xFF, testFrame.data[4]); // Reserved
+	EXPECT_EQ(0xFF, testFrame.data[5]); // Reserved
+	EXPECT_EQ(0xFF, testFrame.data[6]); // Reserved
+	EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
+
+	interfaceUnderTest.send_enable_disable_object(1234, VirtualTerminalClient::EnableDisableObjectCommand::DisableObject);
+	serverVT.read_frame(testFrame);
+	EXPECT_EQ(0, testFrame.channel);
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(161, testFrame.data[0]); // VT function
+	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
+	EXPECT_EQ(1234, objectID);
+	EXPECT_EQ(0, testFrame.data[3]); // Disable
+
+	interfaceUnderTest.send_enable_disable_object(1234, VirtualTerminalClient::EnableDisableObjectCommand::EnableObject);
+	serverVT.read_frame(testFrame);
+	EXPECT_EQ(0, testFrame.channel);
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(161, testFrame.data[0]); // VT function
+	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
+	EXPECT_EQ(1234, objectID);
+	EXPECT_EQ(1, testFrame.data[3]); // Disable
+
+	// Test draw text
+	const std::string testString = "a";
+	interfaceUnderTest.send_draw_text(123, true, 1, testString.data());
+	serverVT.read_frame(testFrame);
+	EXPECT_EQ(0, testFrame.channel);
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(184, testFrame.data[0]); // VT function (graphics context command)
+	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
+	EXPECT_EQ(123, objectID);
+	EXPECT_EQ(1, testFrame.data[4]); // Transparent
+	EXPECT_EQ(1, testFrame.data[5]); // Length
+	EXPECT_EQ('a', testFrame.data[6]); // Length
+
+	serverVT.close();
+	CANHardwareInterface::stop();
 }
