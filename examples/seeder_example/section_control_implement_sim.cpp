@@ -1,5 +1,7 @@
 #include "section_control_implement_sim.hpp"
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/isobus_standard_data_description_indices.hpp"
+#include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
 #include <cassert>
@@ -91,6 +93,11 @@ std::uint32_t SectionControlImplementSimulator::get_prescription_control_state()
 std::uint32_t SectionControlImplementSimulator::get_section_control_state() const
 {
 	return static_cast<std::uint32_t>(get_is_mode_auto());
+}
+
+std::uint16_t SectionControlImplementSimulator::get_machine_selected_speed_mm_per_sec() const
+{
+	return machineSelectedSpeedRaw;
 }
 
 bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectPool> poolToPopulate, isobus::NAME clientName) const
@@ -211,6 +218,34 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualRate));
 	}
 	return retVal;
+}
+
+isobus::EventDispatcher<SectionControlImplementSimulator::Events> &SectionControlImplementSimulator::get_event_dispatcher()
+{
+	return eventReporter;
+}
+
+void SectionControlImplementSimulator::process_application_can_messages(isobus::CANMessage *messageToProcess, void *parentPointer)
+{
+	if ((nullptr != parentPointer) && (nullptr != messageToProcess))
+	{
+		auto implement = static_cast<SectionControlImplementSimulator *>(parentPointer);
+		switch (messageToProcess->get_identifier().get_parameter_group_number())
+		{
+			case ISO_MACHINE_SELECTED_SPEED_PGN:
+			{
+				if (isobus::CAN_DATA_LENGTH == messageToProcess->get_data_length())
+				{
+					implement->machineSelectedSpeedTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
+					implement->machineSelectedSpeedRaw = messageToProcess->get_uint16_at(0);
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
+	}
 }
 
 bool SectionControlImplementSimulator::request_value_command_callback(std::uint16_t,
