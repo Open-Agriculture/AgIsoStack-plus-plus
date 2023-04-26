@@ -814,7 +814,6 @@ namespace isobus
 		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::CommandedAddress) == message->get_identifier().get_parameter_group_number()) &&
 		    (COMMANDED_ADDRESS_LENGTH == message->get_data_length()))
 		{
-			auto messageData = message->get_data_length();
 			std::uint64_t targetNAME = message->get_uint64_at(0);
 
 			for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
