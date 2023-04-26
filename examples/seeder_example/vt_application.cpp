@@ -77,6 +77,8 @@ bool SeederVtApplication::Initialize()
 	numericValueEventListener = VTClientInterface.add_vt_change_numeric_value_event_listener(handle_numeric_value_events);
 	VTClientInterface.initialize(true);
 
+	isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(SectionControlImplementSimulator::ISO_MACHINE_SELECTED_SPEED_PGN, SectionControlImplementSimulator::process_application_can_messages, &sectionControl);
+
 	for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(UpdateVTStateFlags::NumberOfFlags); i++)
 	{
 		txFlags.set_flag(i); // Set all flags to bring the pool up with a known state
@@ -224,6 +226,13 @@ void SeederVtApplication::Update()
 		}
 		set_current_busload(isobus::CANNetworkManager::CANNetwork.get_estimated_busload(0));
 		set_current_ut_version(VTClientInterface.get_connected_vt_version());
+
+		if (distanceUnits != VTClientInterface.languageCommandInterface.get_commanded_distance_units())
+		{
+			distanceUnits = VTClientInterface.languageCommandInterface.get_commanded_distance_units();
+			txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSpeed_OutNum));
+			txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSpeedUnits_ObjPtr));
+		}
 		slowUpdateTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 	}
 
@@ -266,7 +275,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			{
 				std::uint32_t sectionIndex = flag - static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr);
 
-				if (seeder->getIsObjectShown(SECTION_SWITCH_STATES.at(sectionIndex)))
+				if (seeder->get_is_object_shown(SECTION_SWITCH_STATES.at(sectionIndex)))
 				{
 					std::uint16_t newObject = offButtonSliderSmall_OutPict;
 
@@ -281,16 +290,32 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateAutoManual_ObjPtr:
 			{
-				if (seeder->getIsObjectShown(autoManual_ObjPtr))
+				if (seeder->get_is_object_shown(autoManual_ObjPtr))
 				{
 					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(autoManual_ObjPtr, seeder->sectionControl.get_is_mode_auto() ? autoMode_Container : manualMode_Container);
 				}
 			}
 			break;
 
+			case UpdateVTStateFlags::UpdateSpeedUnits_ObjPtr:
+			{
+				if (seeder->get_is_object_shown(speedUnits_ObjPtr))
+				{
+					if (isobus::LanguageCommandInterface::DistanceUnits::ImperialUS == seeder->VTClientInterface.languageCommandInterface.get_commanded_distance_units())
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(speedUnits_ObjPtr, unitMph_OutStr);
+					}
+					else
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(speedUnits_ObjPtr, unitKph_OutStr);
+					}
+				}
+			}
+			break;
+
 			case UpdateVTStateFlags::UpdateStatisticsSelection_VarNum:
 			{
-				if (seeder->getIsObjectShown(statisticsSelection_VarNum))
+				if (seeder->get_is_object_shown(statisticsSelection_VarNum))
 				{
 					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(statisticsSelection_VarNum, static_cast<std::uint32_t>(seeder->currentlySelectedStatistic));
 				}
@@ -299,7 +324,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateSelectedStatisticsContainer_ObjPtr:
 			{
-				if (seeder->getIsObjectShown(selectedStatisticsContainer_ObjPtr))
+				if (seeder->get_is_object_shown(selectedStatisticsContainer_ObjPtr))
 				{
 					std::uint16_t newContainer = UNDEFINED;
 
@@ -316,7 +341,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateCanAddress_VarNum:
 			{
-				if (seeder->getIsObjectShown(canAddress_VarNum))
+				if (seeder->get_is_object_shown(canAddress_VarNum))
 				{
 					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(canAddress_VarNum, seeder->canAddress);
 				}
@@ -325,7 +350,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateBusload_VarNum:
 			{
-				if (seeder->getIsObjectShown(busload_VarNum))
+				if (seeder->get_is_object_shown(busload_VarNum))
 				{
 					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(busload_VarNum, seeder->currentBusload * 100.0f);
 				}
@@ -334,7 +359,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateUtAddress_VarNum:
 			{
-				if (seeder->getIsObjectShown(utAddress_VarNum))
+				if (seeder->get_is_object_shown(utAddress_VarNum))
 				{
 					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(utAddress_VarNum, seeder->utAddress);
 				}
@@ -343,7 +368,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateUtVersion_VarNum:
 			{
-				if (seeder->getIsObjectShown(utVersion_VarNum))
+				if (seeder->get_is_object_shown(utVersion_VarNum))
 				{
 					std::uint8_t integerVersion = 0xFF;
 
@@ -387,6 +412,15 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			}
 			break;
 
+			case UpdateVTStateFlags::UpdateCurrentSpeedMeter_VarNum:
+			{
+				if (seeder->get_is_object_shown(currentSpeedMeter_VarNum))
+				{
+					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, seeder->sectionControl.get_machine_selected_speed_mm_per_sec());
+				}
+			}
+			break;
+
 			case UpdateVTStateFlags::UpdateSection1Status_OutRect:
 			case UpdateVTStateFlags::UpdateSection2Status_OutRect:
 			case UpdateVTStateFlags::UpdateSection3Status_OutRect:
@@ -396,9 +430,9 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			{
 				std::uint32_t sectionIndex = flag - static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect);
 
-				if (seeder->getIsObjectShown(SECTION_STATUS_OUTRECTS.at(sectionIndex)))
+				if (seeder->get_is_object_shown(SECTION_STATUS_OUTRECTS.at(sectionIndex)))
 				{
-					std::uint16_t fillAttribute = solidRed_FillAttr;
+					std::uint32_t fillAttribute = solidRed_FillAttr;
 
 					if (seeder->sectionControl.get_actual_work_state())
 					{
@@ -409,6 +443,22 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 						fillAttribute = solidYellow_FillAttr;
 					}
 					transmitSuccessful = seeder->VTClientInterface.send_change_attribute(SECTION_STATUS_OUTRECTS.at(sectionIndex), 5, fillAttribute); // 5 Is the attribute ID of the fill attribute
+				}
+			}
+			break;
+
+			case UpdateVTStateFlags::UpdateSpeed_OutNum:
+			{
+				if (seeder->get_is_object_shown(speed_OutNum))
+				{
+					if (isobus::LanguageCommandInterface::DistanceUnits::ImperialUS == seeder->VTClientInterface.languageCommandInterface.get_commanded_distance_units())
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_attribute(speed_OutNum, 8, 0.0022369363f); // mm/s to mph
+					}
+					else
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_attribute(speed_OutNum, 8, 0.0036f); // mm/s to kph
+					}
 				}
 			}
 			break;
@@ -427,7 +477,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 	}
 }
 
-bool SeederVtApplication::getIsObjectShown(std::uint16_t objectID)
+bool SeederVtApplication::get_is_object_shown(std::uint16_t objectID)
 {
 	auto myControlFunction = VTClientInterface.get_internal_control_function();
 	bool retVal = false;
@@ -456,6 +506,11 @@ bool SeederVtApplication::getIsObjectShown(std::uint16_t objectID)
 			case section4Switch_Container:
 			case section5Switch_Container:
 			case section6Switch_Container:
+			case speed_OutNum:
+			case speedReadout_Container:
+			case speedUnits_ObjPtr:
+			case currentSpeedReadout_VarNum:
+			case currentSpeedMeter_VarNum:
 			{
 				retVal = (ActiveScreen::Main == currentlyActiveScreen);
 			}
