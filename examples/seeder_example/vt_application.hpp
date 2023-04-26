@@ -44,12 +44,14 @@ private:
 		UpdateSection6EnableState_ObjPtr,
 		UpdateSelectedStatisticsContainer_ObjPtr,
 		UpdateAutoManual_ObjPtr,
+		UpdateSpeedUnits_ObjPtr,
 
 		UpdateStatisticsSelection_VarNum,
 		UpdateCanAddress_VarNum,
 		UpdateBusload_VarNum,
 		UpdateUtVersion_VarNum,
 		UpdateUtAddress_VarNum,
+		UpdateCurrentSpeedMeter_VarNum,
 
 		UpdateSection1Status_OutRect,
 		UpdateSection2Status_OutRect,
@@ -57,6 +59,8 @@ private:
 		UpdateSection4Status_OutRect,
 		UpdateSection5Status_OutRect,
 		UpdateSection6Status_OutRect,
+
+		UpdateSpeed_OutNum,
 
 		NumberOfFlags
 	};
@@ -74,7 +78,7 @@ private:
 	static void handle_vt_key_events(const isobus::VirtualTerminalClient::VTKeyEvent &event);
 	static void handle_numeric_value_events(const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event);
 
-	bool getIsObjectShown(std::uint16_t objectID);
+	bool get_is_object_shown(std::uint16_t objectID);
 
 	void set_currently_active_screen(ActiveScreen newScreen);
 	void set_current_busload(float busload);
@@ -98,6 +102,7 @@ private:
 	float currentBusload = 0.0f;
 	ActiveScreen currentlyActiveScreen = ActiveScreen::Main;
 	Statistics currentlySelectedStatistic = Statistics::None;
+	isobus::LanguageCommandInterface::DistanceUnits distanceUnits = isobus::LanguageCommandInterface::DistanceUnits::Metric;
 	isobus::VirtualTerminalClient::VTVersion utVersion = isobus::VirtualTerminalClient::VTVersion::ReservedOrUnknown; ///< Stores the UT's version for display in the pool
 	std::uint32_t slowUpdateTimestamp_ms = 0; ///< A timestamp to limit some polled data to 1Hz update rate
 	std::uint8_t canAddress = 0xFE; ///< Stores our CAN address so we know if it changes and can update it in the pool
