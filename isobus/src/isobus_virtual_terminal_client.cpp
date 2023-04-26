@@ -610,6 +610,33 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
+	bool VirtualTerminalClient::send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value)
+	{
+		static_assert(sizeof(float) == 4, "Float must be 4 bytes");
+		std::array<std::uint8_t, sizeof(float)> floatBytes = { 0 };
+		memcpy(floatBytes.data(), &value, sizeof(float));
+
+		if (is_big_endian())
+		{
+			std::reverse(floatBytes.begin(), floatBytes.end());
+		}
+
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::ChangeAttributeCommand),
+			                                                         static_cast<std::uint8_t>(objectID & 0xFF),
+			                                                         static_cast<std::uint8_t>(objectID >> 8),
+			                                                         attributeID,
+			                                                         floatBytes[0],
+			                                                         floatBytes[1],
+			                                                         floatBytes[2],
+			                                                         floatBytes[3] };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      myControlFunction.get(),
+		                                                      partnerControlFunction.get(),
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
 	bool VirtualTerminalClient::send_change_priority(std::uint16_t alarmMaskObjectID, AlarmMaskPriority priority) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::ChangePriorityCommand),

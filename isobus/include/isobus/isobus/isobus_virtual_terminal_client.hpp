@@ -718,6 +718,15 @@ namespace isobus
 		/// @returns true if the message was sent successfully
 		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, std::uint32_t value) const;
 
+		/// @brief Sends the change attribute command (for float values)
+		/// @details This command is used to change a float attribute with an assigned Attribute ID.
+		/// This is most useful for changing output number scale factors.
+		/// @param[in] objectID The ID of the target object
+		/// @param[in] attributeID The attribute ID of the attribute being changed
+		/// @param[in] value The new attribute value
+		/// @returns true if the message was sent successfully
+		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value);
+
 		/// @brief Sends the change priority command
 		/// @details This command is used to change the priority of an Alarm Mask.
 		/// This command causes the VT to evaluate the priority of all active masks and
