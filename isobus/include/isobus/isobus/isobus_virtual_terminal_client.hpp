@@ -725,7 +725,7 @@ namespace isobus
 		/// @param[in] attributeID The attribute ID of the attribute being changed
 		/// @param[in] value The new attribute value
 		/// @returns true if the message was sent successfully
-		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value);
+		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value) const;
 
 		/// @brief Sends the change priority command
 		/// @details This command is used to change the priority of an Alarm Mask.
