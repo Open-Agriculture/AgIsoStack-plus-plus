@@ -21,6 +21,7 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
+#include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 
 #include <array>
 #include <deque>
@@ -135,6 +136,8 @@ namespace isobus
 		/// @brief Informs the network manager that a partner was deleted so that it can be purged from the address/cf tables
 		/// @param[in] partner Pointer to the partner being deleted
 		void on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>);
+
+		FastPacketProtocol &get_fast_packet_protocol();
 
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
@@ -292,6 +295,7 @@ namespace isobus
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
 
 		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Static instance of the protocol manager
+		FastPacketProtocol fastPacketProtocol; ///< Instance of the fast packet protocol
 		TransportProtocolManager transportProtocol; ///< Static instance of the transport protocol manager
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
