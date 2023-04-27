@@ -172,10 +172,11 @@ namespace isobus
 		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister sidhRegister);
 
 		SPIHardwarePlugin *transactionHandler; ///< The SPI transaction handler
+		std::uint8_t rxIndex = 0; ///< The index of the rx buffer to read from next
 		const std::uint8_t cfg1; ///< Configuration value for CFG1 register
 		const std::uint8_t cfg2; ///< Configuration value for CFG2 register
 		const std::uint8_t cfg3; ///< Configuration value for CFG3 register
-		bool initialized; ///< If the mcp2515 has been initialized and no errors have occured
+		bool initialized = false; ///< If the mcp2515 has been initialized and no errors have occurred
 	};
 }
 #endif // MCP2515_CAN_INTERFACE_HPP

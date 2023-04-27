@@ -9,6 +9,7 @@
 #include "isobus/hardware_integration/mcp2515_can_interface.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <iostream>
 
@@ -63,14 +64,9 @@ namespace isobus
 		{
 			// Depends on oscillator & capacitors used
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-			std::uint8_t zeros[14] = { 0 };
-			if ((write_register(MCPRegister::TXB0CTRL, zeros, 14)) &&
-			    (write_register(MCPRegister::TXB1CTRL, zeros, 14)) &&
-			    (write_register(MCPRegister::TXB2CTRL, zeros, 14)) &&
-			    (write_register(MCPRegister::RXB0CTRL, 0)) &&
-			    (write_register(MCPRegister::RXB1CTRL, 0)) &&
-			    (write_register(MCPRegister::CANINTE, 0xA3)))
+			if ((write_register(MCPRegister::RXB0CTRL, 0x65)) &&
+			    (write_register(MCPRegister::RXB1CTRL, 0x65)) &&
+			    (write_register(MCPRegister::CANINTE, 0x03)))
 			{
 				retVal = true;
 			}
@@ -223,6 +219,7 @@ namespace isobus
 		}
 		return retVal;
 	}
+
 	bool MCP2515CANInterface::read_frame(isobus::HardwareInterfaceCANFrame &canFrame,
 	                                     const MCPRegister ctrlRegister,
 	                                     const MCPRegister dataRegister,
@@ -266,23 +263,31 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		// TODO: implement interrupt driven message reading
 		std::uint8_t status;
-		while (get_read_status(status))
-		{
-			// Check if any of the buffers have a message
-			if (status & 0x01)
-			{
-				retVal = read_frame(canFrame, MCPRegister::RXB0CTRL, MCPRegister::RXB0DATA, 0x01);
-				break;
-			}
-			else if (status & 0x02)
-			{
-				retVal = read_frame(canFrame, MCPRegister::RXB1CTRL, MCPRegister::RXB1DATA, 0x02);
-				break;
-			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(RECEIVE_MESSAGE_READ_RATE));
+		while (get_is_valid())
+		{
+			if (get_read_status(status))
+			{
+				// Check if any of the buffers have a message
+				if (status & 0x01 && rxIndex == 0)
+				{
+					retVal = read_frame(canFrame, MCPRegister::RXB0CTRL, MCPRegister::RXB0DATA, 0x01);
+					get_read_status(status);
+					if (status & 0x02)
+					{
+						rxIndex = 1;
+					}
+					break;
+				}
+				else if (status & 0x02)
+				{
+					retVal = read_frame(canFrame, MCPRegister::RXB1CTRL, MCPRegister::RXB1DATA, 0x02);
+					rxIndex = 0;
+					break;
+				}
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(6));
 		}
 
 		return retVal;
@@ -300,6 +305,20 @@ namespace isobus
 		{
 			if ((ctrl & 0x08) == 0)
 			{
+				// Check if last message was sent successfully
+				if (0 != (ctrl & (0x40 | 0x10)))
+				{
+					isobus::CANStackLogger::error("[MCP2515] Failed to send last message, please verify your connection/setup:");
+					if (0 != (ctrl & 0x40))
+					{
+						isobus::CANStackLogger::error("\t- Message was aborted.");
+					}
+					if (0 != (ctrl & 0x10))
+					{
+						isobus::CANStackLogger::error("\t- A bus error occurred while the message was being transmitted.");
+					}
+				}
+
 				// Buffer is empty now we can write the buffer
 				std::uint8_t buffer[13];
 				if (canFrame.isExtendedFrame)
@@ -324,14 +343,7 @@ namespace isobus
 					// Now indicate that the buffer is ready to be sent
 					if (modify_register(ctrlRegister, 0x08, 0x08))
 					{
-						// Now check if the buffer was sent
-						if (read_register(ctrlRegister, ctrl))
-						{
-							if (0 == (ctrl & (0x40 | 0x20 | 0x10)))
-							{
-								retVal = true;
-							}
-						}
+						retVal = true;
 					}
 				}
 			}
@@ -342,14 +354,26 @@ namespace isobus
 
 	bool MCP2515CANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
 	{
-		bool retVal = write_frame(canFrame, MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH);
-		if (!retVal)
+		bool retVal = false;
+		std::uint8_t retries = 100;
+		while (!retVal && retries > 0)
 		{
-			retVal = write_frame(canFrame, MCPRegister::TXB1CTRL, MCPRegister::TXB1SIDH);
+			retVal = write_frame(canFrame, MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH);
+			//! TODO: figure out how to reliably send messages to MCP2515 with multiple buffers such that they will still be sent in correct order
+			// if (!retVal)
+			// {
+			// 	retVal = write_frame(canFrame, MCPRegister::TXB1CTRL, MCPRegister::TXB1SIDH);
+			// }
+			// if (!retVal)
+			// {
+			// 	retVal = write_frame(canFrame, MCPRegister::TXB2CTRL, MCPRegister::TXB2SIDH);
+			// }
+			retries--;
 		}
+
 		if (!retVal)
 		{
-			retVal = write_frame(canFrame, MCPRegister::TXB2CTRL, MCPRegister::TXB2SIDH);
+			isobus::CANStackLogger::error("[MCP2515] Failed to send message, buffer has been full for too long.");
 		}
 		return retVal;
 	}
