@@ -82,7 +82,7 @@ namespace isobus
 
 		//Wait for message to be received
 		twai_message_t message = {};
-		esp_err_t error = twai_receive(&message, pdMS_TO_TICKS(1000));
+		esp_err_t error = twai_receive(&message, pdMS_TO_TICKS(100));
 		if (ESP_OK == error)
 		{
 			// Process received message
@@ -117,7 +117,7 @@ namespace isobus
 		message.data_length_code = canFrame.dataLength;
 		memcpy(message.data, canFrame.data, canFrame.dataLength);
 
-		esp_err_t error = twai_transmit(&message, portMAX_DELAY);
+		esp_err_t error = twai_transmit(&message, pdMS_TO_TICKS(100));
 		if (ESP_OK == error)
 		{
 			retVal = true;
