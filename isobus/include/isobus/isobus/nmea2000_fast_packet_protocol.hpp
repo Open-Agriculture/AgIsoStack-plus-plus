@@ -38,8 +38,6 @@ namespace isobus
 	class FastPacketProtocol : public CANLibProtocol
 	{
 	public:
-		static FastPacketProtocol Protocol; ///< Static instance of the protocol
-
 		/// @brief A generic way to initialize a protocol
 		/// @details The network manager will call a protocol's initialize function
 		/// when it is first updated, if it has yet to be initialized.

@@ -358,6 +358,11 @@ namespace isobus
 		}
 	}
 
+	FastPacketProtocol &CANNetworkManager::get_fast_packet_protocol()
+	{
+		return fastPacketProtocol;
+	}
+
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;

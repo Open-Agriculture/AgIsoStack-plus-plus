@@ -46,7 +46,7 @@ int main()
 
 	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
 #if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+	canDriver = std::make_shared<isobus::SocketCANInterface>("vcan0");
 #elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
 	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
@@ -87,7 +87,7 @@ int main()
 
 	isobus::InternalControlFunction TestInternalECU(TestDeviceNAME, 0x1C, 0);
 
-	isobus::FastPacketProtocol::Protocol.register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
+	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
 	//! @todo Check this instead of asuming it is done
@@ -105,13 +105,13 @@ int main()
 	while (running)
 	{
 		// Send a fast packet message
-		isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, &TestInternalECU, nullptr, isobus::CANIdentifier::PriorityLowest7, nmea2k_transmit_complete_callback);
+		isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, &TestInternalECU, nullptr, isobus::CANIdentifier::PriorityLowest7, nmea2k_transmit_complete_callback);
 
 		// Sleep for a while
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 	}
 
 	isobus::CANHardwareInterface::stop();
-	isobus::FastPacketProtocol::Protocol.remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
+	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 	return 0;
 }

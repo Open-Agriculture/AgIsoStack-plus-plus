@@ -19,12 +19,11 @@
 
 namespace isobus
 {
-	FastPacketProtocol FastPacketProtocol::Protocol;
-
 	FastPacketProtocol::FastPacketProtocolSession::FastPacketProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
 	  sessionMessage(canPortIndex),
 	  sessionCompleteCallback(nullptr),
 	  frameChunkCallback(nullptr),
+	  parent(nullptr),
 	  timestamp_ms(0),
 	  lastPacketNumber(0),
 	  packetCount(0),
