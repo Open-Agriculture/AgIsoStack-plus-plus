@@ -610,7 +610,7 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value)
+	bool VirtualTerminalClient::send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value) const
 	{
 		static_assert(sizeof(float) == 4, "Float must be 4 bytes");
 		std::array<std::uint8_t, sizeof(float)> floatBytes = { 0 };
