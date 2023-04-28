@@ -173,6 +173,8 @@ namespace isobus
 
 		SPIHardwarePlugin *transactionHandler; ///< The SPI transaction handler
 		std::uint8_t rxIndex = 0; ///< The index of the rx buffer to read from next
+		std::uint8_t txIndex = 2; ///< The index of the tx buffer to write to next, start with 2 as it is the buffer with the highest priority
+		std::uint8_t txPriority = 3; ///< The priority of the next tx frame
 		const std::uint8_t cfg1; ///< Configuration value for CFG1 register
 		const std::uint8_t cfg2; ///< Configuration value for CFG2 register
 		const std::uint8_t cfg3; ///< Configuration value for CFG3 register

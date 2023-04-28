@@ -341,11 +341,15 @@ namespace isobus
 				if (write_register(sidhRegister, buffer, 5 + canFrame.dataLength))
 				{
 					// Now indicate that the buffer is ready to be sent
-					if (modify_register(ctrlRegister, 0x08, 0x08))
+					if (modify_register(ctrlRegister, 0x08 | 0x03, 0x08 | txPriority))
 					{
 						retVal = true;
 					}
 				}
+			}
+			else
+			{
+				isobus::CANStackLogger::warn("[MCP2515] Failed to send message, buffer is not empty.");
 			}
 		}
 
@@ -356,18 +360,48 @@ namespace isobus
 	{
 		bool retVal = false;
 		std::uint8_t retries = 100;
+		std::uint8_t status;
 		while (!retVal && retries > 0)
 		{
-			retVal = write_frame(canFrame, MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH);
-			//! TODO: figure out how to reliably send messages to MCP2515 with multiple buffers such that they will still be sent in correct order
-			// if (!retVal)
-			// {
-			// 	retVal = write_frame(canFrame, MCPRegister::TXB1CTRL, MCPRegister::TXB1SIDH);
-			// }
-			// if (!retVal)
-			// {
-			// 	retVal = write_frame(canFrame, MCPRegister::TXB2CTRL, MCPRegister::TXB2SIDH);
-			// }
+			get_read_status(status);
+			if (0 == (status & 0x04) && txIndex == 0)
+			{
+				retVal = write_frame(canFrame, MCPRegister::TXB0CTRL, MCPRegister::TXB0SIDH);
+				if (retVal)
+				{
+					txIndex = 2;
+				}
+			}
+			else if (0 == (status & 0x10) && txIndex == 1)
+			{
+				retVal = write_frame(canFrame, MCPRegister::TXB1CTRL, MCPRegister::TXB1SIDH);
+				if (retVal)
+				{
+					txIndex = 0;
+				}
+			}
+			else if (0 == (status & 0x40) && txIndex == 2)
+			{
+				if (status & (0x10 | 0x04))
+				{
+					// If there are messages in one of the other buffers, lower the priority of this message if possible, otherwise raise the priority of the other messages
+					if (txPriority > 0)
+					{
+						txPriority--;
+					}
+					else
+					{
+						txPriority = 2;
+						modify_register(MCPRegister::TXB1CTRL, 0x03, 0x03);
+						modify_register(MCPRegister::TXB0CTRL, 0x03, 0x03);
+					}
+				}
+				retVal = write_frame(canFrame, MCPRegister::TXB2CTRL, MCPRegister::TXB2SIDH);
+				if (retVal)
+				{
+					txIndex = 1;
+				}
+			}
 			retries--;
 		}
 
