@@ -17,7 +17,6 @@ namespace isobus
 
 	ControlFunction::ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort) :
 	  controlFunctionNAME(NAMEValue),
-	  controlFunctionType(Type::External),
 	  address(addressValue),
 	  canPortIndex(CANPort)
 

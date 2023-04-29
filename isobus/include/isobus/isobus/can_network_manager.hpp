@@ -272,6 +272,10 @@ namespace isobus
 		/// @brief Processes the internal receive message queue
 		void process_rx_messages();
 
+		/// @brief Checks to see if any control function didn't claim during a round of
+		/// address claiming and removes it if needed.
+		void prune_inactive_control_functions();
+
 		/// @brief Sends a CAN message using raw addresses. Used only by the stack.
 		/// @param[in] portIndex The CAN channel index to send the message from
 		/// @param[in] sourceAddress The source address to send the CAN message from
@@ -303,8 +307,9 @@ namespace isobus
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
+		std::array<std::uint32_t, CAN_PORT_MAXIMUM> lastAddressClaimRequestTimestamp_ms; ///< Stores timestamps for when the last request for the address claim PGN was recieved. Used to prune stale CFs.
 		std::array<std::array<ControlFunction *, 256>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
-		std::vector<ControlFunction *> activeControlFunctions; ///< A list of active control function used to track connected devices
+		std::list<ControlFunction *> activeControlFunctions; ///< A list of active control function used to track connected devices
 		std::vector<ControlFunction *> inactiveControlFunctions; ///< A list of inactive control functions, used to track disconnected devices
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::list<CANMessage> receiveMessageList; ///< A queue of Rx messages to process

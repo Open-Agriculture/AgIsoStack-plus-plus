@@ -20,8 +20,7 @@ namespace isobus
 
 	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort) :
 	  ControlFunction(desiredName, NULL_CAN_ADDRESS, CANPort),
-	  stateMachine(preferredAddress, desiredName, CANPort),
-	  objectChangedAddressSinceLastUpdate(false)
+	  stateMachine(preferredAddress, desiredName, CANPort)
 	{
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
 		controlFunctionType = Type::Internal;
