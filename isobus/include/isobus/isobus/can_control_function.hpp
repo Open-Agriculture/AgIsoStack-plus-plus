@@ -65,9 +65,10 @@ namespace isobus
 		friend class CANNetworkManager;
 		static std::mutex controlFunctionProcessingMutex; ///< Protects the control function tables
 		NAME controlFunctionNAME; ///< The NAME of the control function
-		Type controlFunctionType; ///< The Type of the control function
+		Type controlFunctionType = Type::External; ///< The Type of the control function
 		std::uint8_t address; ///< The address of the control function
 		std::uint8_t canPortIndex; ///< The CAN channel index of the control function
+		bool claimedAddressSinceLastAddressClaimRequest = false; ///< Used to mark CFs as stale if they don't claim within a certain time
 	};
 
 } // namespace isobus

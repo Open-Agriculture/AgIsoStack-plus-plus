@@ -170,6 +170,10 @@ namespace isobus
 				{
 					if (send_address_claim(m_preferredAddress))
 					{
+						CANStackLogger::debug("[AC]: Internal control function %016llx has claimed address %u on channel %u",
+						                      m_isoname.get_full_name(),
+						                      m_preferredAddress,
+						                      m_portIndex);
 						set_current_state(State::AddressClaimingComplete);
 					}
 					else
@@ -189,6 +193,10 @@ namespace isobus
 						if ((nullptr == CANNetworkManager::CANNetwork.get_control_function(m_portIndex, i, {})) && (send_address_claim(i)))
 						{
 							addressFound = true;
+							CANStackLogger::debug("[AC]: Internal control function %016llx could not use the preferred address, but has claimed address %u on channel %u",
+							                      m_isoname.get_full_name(),
+							                      m_preferredAddress,
+							                      m_portIndex);
 							set_current_state(State::AddressClaimingComplete);
 							break;
 						}

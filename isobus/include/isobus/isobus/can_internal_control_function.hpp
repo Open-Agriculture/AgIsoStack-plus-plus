@@ -73,7 +73,7 @@ namespace isobus
 		static std::vector<InternalControlFunction *> internalControlFunctionList; ///< A list of all internal control functions that exist
 		static bool anyChangedAddress; ///< Lets the network manager know if any ICF changed address since the last update
 		AddressClaimStateMachine stateMachine; ///< The address claimer for this ICF
-		bool objectChangedAddressSinceLastUpdate; ///< Tracks if this object has changed address since the last update
+		bool objectChangedAddressSinceLastUpdate = false; ///< Tracks if this object has changed address since the last update
 	};
 
 } // namespace isobus

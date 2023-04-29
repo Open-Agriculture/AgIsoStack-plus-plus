@@ -20,6 +20,7 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <numeric>
 
@@ -225,6 +226,8 @@ namespace isobus
 			}
 		}
 
+		prune_inactive_control_functions();
+
 		for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 		{
 			CANLibProtocol *currentProtocol = nullptr;
@@ -295,12 +298,12 @@ namespace isobus
 		// At least address claiming should be infrequent, so this should not happen a ton.
 		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == tempCANMessage.get_identifier().get_parameter_group_number())
 		{
-			for (std::uint32_t i = 0; i < CANNetworkManager::CANNetwork.activeControlFunctions.size(); i++)
+			for (auto i = CANNetworkManager::CANNetwork.activeControlFunctions.begin(); i != CANNetworkManager::CANNetwork.activeControlFunctions.end(); i++)
 			{
-				if ((CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_can_port() == tempCANMessage.get_can_port_index()) &&
-				    (CANNetworkManager::CANNetwork.activeControlFunctions[i]->get_address() == tempCANMessage.get_identifier().get_source_address()))
+				if (((*i)->get_can_port() == tempCANMessage.get_can_port_index()) &&
+				    ((*i)->get_address() == tempCANMessage.get_identifier().get_source_address()))
 				{
-					tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.activeControlFunctions[i]);
+					tempCANMessage.set_source_control_function(*i);
 					break;
 				}
 			}
@@ -399,6 +402,7 @@ namespace isobus
 	CANNetworkManager::CANNetworkManager()
 	{
 		currentBusloadBitAccumulator.fill(0);
+		lastAddressClaimRequestTimestamp_ms.fill(0);
 		controlFunctionTable.fill({ nullptr });
 	}
 
@@ -424,14 +428,37 @@ namespace isobus
 			if (nullptr == controlFunctionTable[CANPort][messageSourceAddress])
 			{
 				// Look through active CFs, maybe we've heard of this ECU before
-				for (auto currentControlFunction : activeControlFunctions)
+				for (auto &currentControlFunction : activeControlFunctions)
 				{
 					if (currentControlFunction->get_address() == messageSourceAddress)
 					{
 						// ECU has claimed since the last update, add it to the table
 						controlFunctionTable[CANPort][messageSourceAddress] = currentControlFunction;
 						currentControlFunction->address = messageSourceAddress;
+						currentControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
 						break;
+					}
+				}
+			}
+			else
+			{
+				controlFunctionTable[CANPort][messageSourceAddress]->claimedAddressSinceLastAddressClaimRequest = true;
+			}
+		}
+		else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
+		         (CANPort < CAN_PORT_MAXIMUM))
+		{
+			auto requestedPGN = message.get_uint24_at(0);
+
+			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN)
+			{
+				lastAddressClaimRequestTimestamp_ms.at(CANPort) = SystemTiming::get_timestamp_ms();
+
+				for (auto &activeControlFunction : activeControlFunctions)
+				{
+					if (CANPort == activeControlFunction->get_can_port())
+					{
+						activeControlFunction->claimedAddressSinceLastAddressClaimRequest = false;
 					}
 				}
 			}
@@ -514,20 +541,20 @@ namespace isobus
 			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[6]) << 48);
 			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[7]) << 56);
 
-			for (std::size_t i = 0; i < activeControlFunctions.size(); i++)
+			for (auto i = activeControlFunctions.begin(); i != activeControlFunctions.end(); i++)
 			{
-				if ((claimedNAME == activeControlFunctions[i]->controlFunctionNAME.get_full_name()) &&
-				    (rxFrame.channel == activeControlFunctions[i]->get_can_port()))
+				if ((claimedNAME == (*i)->controlFunctionNAME.get_full_name()) &&
+				    (rxFrame.channel == (*i)->get_can_port()))
 				{
 					// Device already in the active list
-					foundControlFunction = activeControlFunctions[i];
+					foundControlFunction = (*i);
 					break;
 				}
-				else if ((activeControlFunctions[i]->address == CANIdentifier(rxFrame.identifier).get_source_address()) &&
-				         (rxFrame.channel == activeControlFunctions[i]->get_can_port()))
+				else if (((*i)->address == CANIdentifier(rxFrame.identifier).get_source_address()) &&
+				         (rxFrame.channel == (*i)->get_can_port()))
 				{
 					// If this CF has the same address as the one claiming, we need set it to 0xFE (null address)
-					activeControlFunctions[i]->address = CANIdentifier::NULL_ADDRESS;
+					(*i)->address = CANIdentifier::NULL_ADDRESS;
 				}
 			}
 
@@ -845,6 +872,50 @@ namespace isobus
 
 			// Update Others
 			process_can_message_for_global_and_partner_callbacks(currentMessage);
+		}
+	}
+
+	void CANNetworkManager::prune_inactive_control_functions()
+	{
+		for (std::uint_fast8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
+		{
+			constexpr std::uint32_t MAX_ADDRESS_CLAIM_RESOLUTION_TIME = 755; // This is 250ms + RTxD + 250ms
+			if ((0 != lastAddressClaimRequestTimestamp_ms.at(i)) &&
+			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTimestamp_ms.at(i), MAX_ADDRESS_CLAIM_RESOLUTION_TIME)))
+			{
+				for (auto activeCF = activeControlFunctions.begin(); activeCF != activeControlFunctions.end(); activeCF++)
+				{
+					if ((nullptr != (*activeCF)) &&
+					    ((*activeCF)->canPortIndex == i) &&
+					    (!(*activeCF)->claimedAddressSinceLastAddressClaimRequest) &&
+					    (ControlFunction::Type::Internal != (*activeCF)->get_type()))
+					{
+						ControlFunction *cfToMove = (*activeCF);
+						activeCF = activeControlFunctions.erase(activeCF);
+
+						if (activeControlFunctions.begin() != activeCF)
+						{
+							activeCF--;
+						}
+
+						inactiveControlFunctions.push_back(cfToMove);
+						assert(nullptr != cfToMove);
+
+						if ((NULL_CAN_ADDRESS != cfToMove->get_address()) &&
+						    (nullptr != controlFunctionTable.at(i).at(cfToMove->get_address())))
+						{
+							CANStackLogger::debug("[NM]: Control function on channel %u with address %u and NAME %016llx is now offline.", i, cfToMove->get_address(), cfToMove->get_NAME());
+							controlFunctionTable.at(i).at(cfToMove->get_address()) = nullptr;
+							cfToMove->address = NULL_CAN_ADDRESS;
+						}
+						if (activeControlFunctions.end() == activeCF)
+						{
+							break;
+						}
+					}
+				}
+				lastAddressClaimRequestTimestamp_ms.at(i) = 0;
+			}
 		}
 	}
 

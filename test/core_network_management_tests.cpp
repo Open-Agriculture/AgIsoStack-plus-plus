@@ -2,6 +2,7 @@
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
@@ -168,4 +169,70 @@ TEST(CORE_TESTS, CommandedAddress)
 	EXPECT_EQ(0x04, testECU->get_address());
 	testPlugin.close();
 	CANHardwareInterface::stop();
+}
+
+TEST(CORE_TESTS, InvalidatingControlFunctions)
+{
+	CANMessageFrame testFrame;
+	testFrame.channel = 0;
+	testFrame.isExtendedFrame = true;
+	NAME partnerName(0);
+	partnerName.set_arbitrary_address_capable(true);
+	partnerName.set_device_class(6);
+	partnerName.set_ecu_instance(3);
+	partnerName.set_function_code(130);
+	partnerName.set_industry_group(3);
+	partnerName.set_identity_number(967);
+
+	CANNetworkManager::CANNetwork.update();
+
+	// Request the address claim PGN
+	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
+	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
+	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
+	testFrame.data[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
+	testFrame.identifier = 0x18EAFFFE;
+	testFrame.dataLength = 3;
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	// Simulate waiting for some contention
+	std::this_thread::sleep_for(std::chrono::milliseconds(15));
+	CANNetworkManager::CANNetwork.update();
+
+	std::vector<NAMEFilter> testFilter = { NAMEFilter(NAME::NAMEParameters::IdentityNumber, 967) };
+	PartneredControlFunction testPartner(0, testFilter);
+
+	std::uint64_t rawNAME = partnerName.get_full_name();
+
+	// Force claim some kind of partner
+	testFrame.identifier = 0x18EEFF79;
+	testFrame.dataLength = 8;
+	testFrame.data[0] = static_cast<std::uint8_t>(rawNAME & 0xFF);
+	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
+	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
+	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
+	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
+	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
+	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
+	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_TRUE(testPartner.get_address_valid());
+
+	// Request the address claim PGN
+	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
+	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
+	testFrame.data[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
+	testFrame.identifier = 0x18EAFFFE;
+	testFrame.dataLength = 3;
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	// Now, if we wait a while, that partner didn't claim again, so it should be invalid.
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_FALSE(testPartner.get_address_valid());
 }
