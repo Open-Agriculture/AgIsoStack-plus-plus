@@ -422,7 +422,7 @@ namespace isobus
 
 		/// @brief Checks for the existence of a functionality in the list of previously configured functionalities
 		/// and returns an iterator to that functionality in the list
-		/// @param[in] functionalityToRetreive The functionality to return
+		/// @param[in] functionalityToRetrieve The functionality to return
 		/// @returns Iterator to the desired functionality, or supportedFunctionalities.end() if not found
 		std::list<FunctionalityData>::iterator get_functionality(Functionalities functionalityToRetrieve);
 

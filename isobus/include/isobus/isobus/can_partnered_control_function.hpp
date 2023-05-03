@@ -22,6 +22,7 @@
 namespace isobus
 {
 	class CANNetworkManager;
+	class InternalControlFunction;
 
 	//================================================================================================
 	/// @class PartneredControlFunction
@@ -57,13 +58,17 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN you want to use to communicate, or `CANLibParameterGroupNumber::Any`
 		/// @param[in] callback The function you want to get called when a message is received with parameterGroupNumber from this CF
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
-		void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] internalControlFunction An internal control function to filter based on. If you supply this
+		/// parameter the callback will only be called when messages from the partner are received with the
+		/// specified ICF as the destination.
+		void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
 
 		/// @brief Removes a callback matching *exactly* the parameters passed in
 		/// @param[in] parameterGroupNumber The PGN associated with the callback being removed
 		/// @param[in] callback The callback function being removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
-		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] internalControlFunction The ICF being used to filter messages against
+		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
 
 		/// @brief Returns the number of parameter group number callbacks associated with this control function
 		/// @returns The number of parameter group number callbacks associated with this control function

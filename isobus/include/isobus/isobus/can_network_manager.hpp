@@ -137,6 +137,9 @@ namespace isobus
 		/// @param[in] partner Pointer to the partner being deleted
 		void on_partner_deleted(PartneredControlFunction *partner, CANLibBadge<PartneredControlFunction>);
 
+		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
+		/// Use this to register for FP multipacket messages
+		/// @returns The class instance of the NMEA2k fast packet protocol.
 		FastPacketProtocol &get_fast_packet_protocol();
 
 	protected:
