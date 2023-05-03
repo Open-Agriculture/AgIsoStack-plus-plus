@@ -52,15 +52,15 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction)
 	{
-		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent));
+		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent, internalControlFunction));
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
 	}
 
-	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
+	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction)
 	{
-		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent);
+		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, internalControlFunction);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
 		if (parameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -245,7 +245,9 @@ namespace isobus
 
 				for (auto &callback : parameterGroupNumberCallbacks)
 				{
-					if (callback.get_parameter_group_number() == message->get_identifier().get_parameter_group_number())
+					if ((callback.get_parameter_group_number() == message->get_identifier().get_parameter_group_number()) &&
+					    ((nullptr == callback.get_internal_control_function()) ||
+					     (callback.get_internal_control_function()->get_address() == message->get_destination_control_function()->get_address())))
 					{
 						pgnNeedsParsing = true;
 						break;

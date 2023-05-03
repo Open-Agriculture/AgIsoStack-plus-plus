@@ -47,13 +47,16 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
 		/// @param[in] callback The callback that the stack will call when a matching message is received
 		/// @param[in] parent Generic context variable
-		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] internalControlFunction An internal control function to use as an additional filter for the callback.
+		/// Only messages destined for the specified ICF will generate a callback. Use nullptr to receive all messages.
+		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
 
 		// @brief Removes a callback previously added with register_multipacket_message_callback
 		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
 		/// @param[in] callback The callback that the stack will call when a matching message is received
 		/// @param[in] parent Generic context variable
-		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+		/// @param[in] internalControlFunction An internal control function to use as an additional filter for the callback
+		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
 
 		/// @brief Used to send CAN messages using fast packet
 		/// @details You have to use this function instead of the network manager

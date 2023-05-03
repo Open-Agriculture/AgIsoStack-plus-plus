@@ -10,25 +10,28 @@
 
 namespace isobus
 {
-	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer) :
+	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *internalControlFunction) :
 	  mCallback(callback),
 	  mParameterGroupNumber(parameterGroupNumber),
-	  mParent(parentPointer)
+	  mParent(parentPointer),
+	  mInternalControlFunctionFilter(internalControlFunction)
 	{
 	}
 
-	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(const ParameterGroupNumberCallbackData &oldObj)
+	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(const ParameterGroupNumberCallbackData &oldObj) :
+	  mCallback(oldObj.mCallback),
+	  mParameterGroupNumber(oldObj.mParameterGroupNumber),
+	  mParent(oldObj.mParent),
+	  mInternalControlFunctionFilter(oldObj.mInternalControlFunctionFilter)
 	{
-		mCallback = oldObj.mCallback;
-		mParameterGroupNumber = oldObj.mParameterGroupNumber;
-		mParent = oldObj.mParent;
 	}
 
 	bool ParameterGroupNumberCallbackData::operator==(const ParameterGroupNumberCallbackData &obj) const
 	{
 		return ((obj.mCallback == this->mCallback) &&
 		        (obj.mParameterGroupNumber == this->mParameterGroupNumber) &&
-		        (obj.mParent == this->mParent));
+		        (obj.mParent == this->mParent) &&
+		        (obj.mInternalControlFunctionFilter == this->mInternalControlFunctionFilter));
 	}
 
 	ParameterGroupNumberCallbackData &ParameterGroupNumberCallbackData::operator=(const ParameterGroupNumberCallbackData &obj)
@@ -36,6 +39,7 @@ namespace isobus
 		mCallback = obj.mCallback;
 		mParameterGroupNumber = obj.mParameterGroupNumber;
 		mParent = obj.mParent;
+		mInternalControlFunctionFilter = obj.mInternalControlFunctionFilter;
 		return *this;
 	}
 
@@ -52,5 +56,10 @@ namespace isobus
 	void *ParameterGroupNumberCallbackData::get_parent() const
 	{
 		return mParent;
+	}
+
+	InternalControlFunction *ParameterGroupNumberCallbackData::get_internal_control_function() const
+	{
+		return mInternalControlFunctionFilter;
 	}
 } // namespace isobus
