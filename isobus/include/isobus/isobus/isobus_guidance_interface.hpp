@@ -62,6 +62,8 @@ namespace isobus
 				NotAvailable = 3
 			};
 
+			GuidanceSystemCommand() = default;
+
 			/// @brief A useful way to compare objects to each other for equality
 			bool operator==(const GuidanceSystemCommand &obj);
 
@@ -206,8 +208,12 @@ namespace isobus
 			/// @returns The guidance system's readiness state for steering
 			GenericSAEbs02SlotValue get_guidance_steering_system_readiness_state() const;
 
+			/// @brief Sets the guidance steering input position state
+			/// @param[in] state The state to set for the guidance steering input position
 			void set_guidance_steering_input_position_status(GenericSAEbs02SlotValue state);
 
+			/// @brief Returns the guidance steering input position state
+			/// @returns Guidance steering input position state
 			GenericSAEbs02SlotValue get_guidance_steering_input_position_status() const;
 
 			void set_request_reset_command_status(RequestResetCommandStatus state);
