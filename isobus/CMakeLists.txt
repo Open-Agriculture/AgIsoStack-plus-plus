@@ -79,6 +79,7 @@ set(ISOBUS_INCLUDE
     "isobus_shortcut_button_interface.hpp"
     "isobus_functionalities.hpp")
 # Prepend the include directory path to all the include files
+prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 
 # Create the library from the source and include files
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
