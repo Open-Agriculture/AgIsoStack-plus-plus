@@ -72,6 +72,11 @@ namespace isobus
 		return commandedCurvature;
 	}
 
+	ControlFunction *GuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
+	{
+		return controlFunction;
+	}
+
 	bool GuidanceInterface::AgriculturalGuidanceMachineInfo::operator==(const AgriculturalGuidanceMachineInfo &obj)
 	{
 		return obj.controlFunction == this->controlFunction;
@@ -187,6 +192,28 @@ namespace isobus
 		return receivedAgriculturalGuidanceMachineInfoMessages.size();
 	}
 
+	std::shared_ptr<GuidanceInterface::AgriculturalGuidanceMachineInfo> GuidanceInterface::get_received_agricultural_guidance_machine_info(std::size_t index)
+	{
+		std::shared_ptr<GuidanceInterface::AgriculturalGuidanceMachineInfo> retVal = nullptr;
+
+		if (index < receivedAgriculturalGuidanceMachineInfoMessages.size())
+		{
+			retVal = receivedAgriculturalGuidanceMachineInfoMessages.at(index);
+		}
+		return retVal;
+	}
+
+	std::shared_ptr<GuidanceInterface::GuidanceSystemCommand> GuidanceInterface::get_received_guidance_system_command(std::size_t index)
+	{
+		std::shared_ptr<GuidanceInterface::GuidanceSystemCommand> retVal = nullptr;
+
+		if (index < receivedGuidanceSystemCommandMessages.size())
+		{
+			retVal = receivedGuidanceSystemCommandMessages.at(index);
+		}
+		return retVal;
+	}
+
 	bool GuidanceInterface::send_guidance_system_command() const
 	{
 		bool retVal = false;
@@ -196,7 +223,7 @@ namespace isobus
 			float scaledCurvature = std::roundf(4 * ((GuidanceSystemCommandTransmitData.get_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
 
-			if (scaledCurvature > CURVATURE_COMMAND_MAX_INVERSE_KM)
+			if (AgriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
 				CANStackLogger::warn("[Guidance]: Transmitting a commanded curvature clamped to maximum value. Verify guidance calculations are accurate!");
@@ -239,7 +266,7 @@ namespace isobus
 			float scaledCurvature = std::roundf(4 * ((AgriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
 
-			if (scaledCurvature > CURVATURE_COMMAND_MAX_INVERSE_KM)
+			if (AgriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
 				CANStackLogger::warn("[Guidance]: Transmitting an estimated curvature clamped to maximum value. Verify guidance calculations are accurate!");
@@ -265,6 +292,7 @@ namespace isobus
 				static_cast<std::uint8_t>((AgriculturalGuidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code() & 0x3F) |
 				                          (static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status()) << 6)),
 				0xFF, // Reserved
+				0xFF, // Reserved
 				0xFF // Reserved
 			};
 
@@ -280,19 +308,26 @@ namespace isobus
 
 	void GuidanceInterface::update()
 	{
-		if (nullptr != sourceControlFunction)
+		if (initialized)
 		{
-			if (SystemTiming::time_expired_ms(agriculturalGuidanceMachineInfoTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
+			if (nullptr != sourceControlFunction)
 			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceMachineInfo));
-				agriculturalGuidanceMachineInfoTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+				if (SystemTiming::time_expired_ms(agriculturalGuidanceMachineInfoTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceMachineInfo));
+					agriculturalGuidanceMachineInfoTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+				}
+				if (SystemTiming::time_expired_ms(guidanceSystemCommandTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceSystemCommand));
+					guidanceSystemCommandTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+				}
+				txFlags.process_all_flags();
 			}
-			if (SystemTiming::time_expired_ms(guidanceSystemCommandTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
-			{
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceSystemCommand));
-				guidanceSystemCommandTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
-			}
-			txFlags.process_all_flags();
+		}
+		else
+		{
+			CANStackLogger::error("[Guidance]: Guidance interface has not been initialized yet.");
 		}
 	}
 
@@ -332,16 +367,65 @@ namespace isobus
 	{
 		assert(nullptr != message);
 		assert(nullptr != parentPointer);
+		auto targetInterface = static_cast<GuidanceInterface *>(parentPointer);
+		auto messageData = message->get_data();
 
 		switch (message->get_identifier().get_parameter_group_number())
 		{
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand):
 			{
+				if (CAN_DATA_LENGTH == message->get_data_length())
+				{
+					bool lFoundExisting = false;
+
+					for (auto &receivedCommand : targetInterface->receivedGuidanceSystemCommandMessages)
+					{
+						if ((nullptr != receivedCommand) &&
+						    (receivedCommand->get_sender_control_function() == message->get_source_control_function()))
+						{
+							lFoundExisting = true;
+						}
+					}
+
+					if (!lFoundExisting)
+					{
+						auto newInfoData = std::make_shared<GuidanceSystemCommand>();
+						targetInterface->receivedGuidanceSystemCommandMessages.push_back(newInfoData);
+					}
+				}
+				else
+				{
+					CANStackLogger::warn("[Guidance]: Received a malformed guidance system command message. DLC must be 8.");
+				}
 			}
 			break;
 
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo):
 			{
+				if (CAN_DATA_LENGTH == message->get_data_length())
+				{
+					bool lFoundExisting = false;
+
+					for (auto &receivedInfo : targetInterface->receivedAgriculturalGuidanceMachineInfoMessages)
+					{
+						if ((nullptr != receivedInfo) &&
+						    (receivedInfo->get_sender_control_function() == message->get_source_control_function()))
+						{
+							lFoundExisting = true;
+							receivedInfo->set_estimated_curvature(message->get_uint16_at(0));
+						}
+					}
+
+					if (!lFoundExisting)
+					{
+						auto newInfoData = std::make_shared<AgriculturalGuidanceMachineInfo>();
+						targetInterface->receivedAgriculturalGuidanceMachineInfoMessages.push_back(newInfoData);
+					}
+				}
+				else
+				{
+					CANStackLogger::warn("[Guidance]: Received a malformed guidance machine info message. DLC must be 8.");
+				}
 			}
 			break;
 
