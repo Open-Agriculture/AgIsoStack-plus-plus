@@ -16,6 +16,8 @@ namespace isobus
 	enum class CANLibParameterGroupNumber
 	{
 		Any = 0x0000,
+		AgriculturalGuidanceMachineInfo = 0xAC00,
+		AgriculturalGuidanceSystemCommand = 0xAD00,
 		DiagnosticMessage22 = 0xC300,
 		ExtendedTransportProtocolDataTransfer = 0xC700,
 		ExtendedTransportProtocolConnectionManagement = 0xC800,
