@@ -47,11 +47,6 @@ namespace isobus
 		}
 	}
 
-	bool GuidanceInterface::GuidanceSystemCommand::operator==(const GuidanceSystemCommand &obj)
-	{
-		return obj.controlFunction == this->controlFunction;
-	}
-
 	void GuidanceInterface::GuidanceSystemCommand::set_status(CurvatureCommandStatus newStatus)
 	{
 		commandedStatus = newStatus;
@@ -72,14 +67,14 @@ namespace isobus
 		return commandedCurvature;
 	}
 
+	void GuidanceInterface::GuidanceSystemCommand::set_sender_control_function(ControlFunction *sender)
+	{
+		controlFunction = sender;
+	}
+
 	ControlFunction *GuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
 	{
 		return controlFunction;
-	}
-
-	bool GuidanceInterface::AgriculturalGuidanceMachineInfo::operator==(const AgriculturalGuidanceMachineInfo &obj)
-	{
-		return obj.controlFunction == this->controlFunction;
 	}
 
 	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_estimated_curvature(float curvature)
@@ -162,6 +157,11 @@ namespace isobus
 		return guidanceSystemRemoteEngageSwitchStatus;
 	}
 
+	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_sender_control_function(ControlFunction *sender)
+	{
+		controlFunction = sender;
+	}
+
 	ControlFunction *GuidanceInterface::AgriculturalGuidanceMachineInfo::get_sender_control_function() const
 	{
 		return controlFunction;
@@ -178,8 +178,19 @@ namespace isobus
 			}
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand), process_rx_message, this);
+
+			if (nullptr != sourceControlFunction)
+			{
+				agriculturalGuidanceMachineInfoTransmitData.set_sender_control_function(sourceControlFunction.get());
+				guidanceSystemCommandTransmitData.set_sender_control_function(sourceControlFunction.get());
+			}
 			initialized = true;
 		}
+	}
+
+	bool GuidanceInterface::get_initialized() const
+	{
+		return initialized;
 	}
 
 	std::size_t GuidanceInterface::get_number_received_guidance_system_command_sources() const
@@ -220,10 +231,10 @@ namespace isobus
 
 		if (nullptr != sourceControlFunction)
 		{
-			float scaledCurvature = std::roundf(4 * ((GuidanceSystemCommandTransmitData.get_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
+			float scaledCurvature = std::roundf(4 * ((guidanceSystemCommandTransmitData.get_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
 
-			if (AgriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
+			if (agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
 				CANStackLogger::warn("[Guidance]: Transmitting a commanded curvature clamped to maximum value. Verify guidance calculations are accurate!");
@@ -235,12 +246,12 @@ namespace isobus
 			}
 			else
 			{
-				encodedCurvature = scaledCurvature;
+				encodedCurvature = static_cast<std::uint16_t>(scaledCurvature);
 			}
 
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(encodedCurvature & 0xFF),
 				                                                   static_cast<std::uint8_t>((encodedCurvature >> 8) & 0xFF),
-				                                                   static_cast<std::uint8_t>(static_cast<std::uint8_t>(GuidanceSystemCommandTransmitData.get_status()) | static_cast<std::uint8_t>(0xFC)),
+				                                                   static_cast<std::uint8_t>(static_cast<std::uint8_t>(guidanceSystemCommandTransmitData.get_status()) | static_cast<std::uint8_t>(0xFC)),
 				                                                   0xFF,
 				                                                   0xFF,
 				                                                   0xFF,
@@ -263,10 +274,10 @@ namespace isobus
 
 		if (nullptr != sourceControlFunction)
 		{
-			float scaledCurvature = std::roundf(4 * ((AgriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
+			float scaledCurvature = std::roundf(4 * ((agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
 
-			if (AgriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
+			if (agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
 				CANStackLogger::warn("[Guidance]: Transmitting an estimated curvature clamped to maximum value. Verify guidance calculations are accurate!");
@@ -278,19 +289,19 @@ namespace isobus
 			}
 			else
 			{
-				encodedCurvature = scaledCurvature;
+				encodedCurvature = static_cast<std::uint16_t>(scaledCurvature);
 			}
 
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(encodedCurvature & 0xFF),
 				static_cast<std::uint8_t>((encodedCurvature >> 8) & 0xFF),
-				static_cast<std::uint8_t>((static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_mechanical_system_lockout()) & 0x03) |
-				                          ((static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state()) & 0x03) << 2) |
-				                          ((static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_input_position_status()) & 0x03) << 4) |
-				                          ((static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_request_reset_command_status()) & 0x03) << 6)),
-				static_cast<std::uint8_t>(static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_guidance_limit_status()) << 5),
-				static_cast<std::uint8_t>((AgriculturalGuidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code() & 0x3F) |
-				                          (static_cast<std::uint8_t>(AgriculturalGuidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status()) << 6)),
+				static_cast<std::uint8_t>((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_mechanical_system_lockout()) & 0x03) |
+				                          ((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state()) & 0x03) << 2) |
+				                          ((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_input_position_status()) & 0x03) << 4) |
+				                          ((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_request_reset_command_status()) & 0x03) << 6)),
+				static_cast<std::uint8_t>(static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_limit_status()) << 5),
+				static_cast<std::uint8_t>((agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code() & 0x3F) |
+				                          (static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status()) << 6)),
 				0xFF, // Reserved
 				0xFF, // Reserved
 				0xFF // Reserved
@@ -368,7 +379,6 @@ namespace isobus
 		assert(nullptr != message);
 		assert(nullptr != parentPointer);
 		auto targetInterface = static_cast<GuidanceInterface *>(parentPointer);
-		auto messageData = message->get_data();
 
 		switch (message->get_identifier().get_parameter_group_number())
 		{
@@ -378,18 +388,20 @@ namespace isobus
 				{
 					bool lFoundExisting = false;
 
-					for (auto &receivedCommand : targetInterface->receivedGuidanceSystemCommandMessages)
+					for (const auto &receivedCommand : targetInterface->receivedGuidanceSystemCommandMessages)
 					{
 						if ((nullptr != receivedCommand) &&
 						    (receivedCommand->get_sender_control_function() == message->get_source_control_function()))
 						{
 							lFoundExisting = true;
+							parse_agricultural_guidance_system_command_message(message, receivedCommand);
 						}
 					}
 
 					if (!lFoundExisting)
 					{
 						auto newInfoData = std::make_shared<GuidanceSystemCommand>();
+						parse_agricultural_guidance_system_command_message(message, newInfoData);
 						targetInterface->receivedGuidanceSystemCommandMessages.push_back(newInfoData);
 					}
 				}
@@ -406,19 +418,20 @@ namespace isobus
 				{
 					bool lFoundExisting = false;
 
-					for (auto &receivedInfo : targetInterface->receivedAgriculturalGuidanceMachineInfoMessages)
+					for (const auto &receivedInfo : targetInterface->receivedAgriculturalGuidanceMachineInfoMessages)
 					{
 						if ((nullptr != receivedInfo) &&
 						    (receivedInfo->get_sender_control_function() == message->get_source_control_function()))
 						{
 							lFoundExisting = true;
-							receivedInfo->set_estimated_curvature(message->get_uint16_at(0));
+							parse_agricultural_guidance_machine_info_message(message, receivedInfo);
 						}
 					}
 
 					if (!lFoundExisting)
 					{
 						auto newInfoData = std::make_shared<AgriculturalGuidanceMachineInfo>();
+						parse_agricultural_guidance_machine_info_message(message, newInfoData);
 						targetInterface->receivedAgriculturalGuidanceMachineInfoMessages.push_back(newInfoData);
 					}
 				}
@@ -432,5 +445,37 @@ namespace isobus
 			default:
 				break;
 		}
+	}
+
+	void GuidanceInterface::parse_agricultural_guidance_machine_info_message(CANMessage *message, std::shared_ptr<AgriculturalGuidanceMachineInfo> machineInfo)
+	{
+		// These should never happen based on how the interface is using it, but sanity check anyways
+		assert(nullptr != machineInfo);
+		assert(nullptr != message);
+		assert(CAN_DATA_LENGTH == message->get_data_length());
+
+		const auto &data = message->get_data();
+		machineInfo->set_sender_control_function(message->get_source_control_function());
+		machineInfo->set_estimated_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
+		machineInfo->set_mechanical_system_lockout_state(static_cast<AgriculturalGuidanceMachineInfo::MechanicalSystemLockout>(data[2] & 0x03));
+		machineInfo->set_guidance_steering_system_readiness_state(static_cast<AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue>((data[2] >> 2) & 0x03));
+		machineInfo->set_guidance_steering_input_position_status(static_cast<AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue>((data[2] >> 4) & 0x03));
+		machineInfo->set_request_reset_command_status(static_cast<AgriculturalGuidanceMachineInfo::RequestResetCommandStatus>((data[2] >> 6) & 0x03));
+		machineInfo->set_guidance_limit_status(static_cast<AgriculturalGuidanceMachineInfo::GuidanceLimitStatus>(data[3] >> 5));
+		machineInfo->set_guidance_system_command_exit_reason_code(data[4] & 0x3F);
+		machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue>((data[4] >> 6) & 0x03));
+	}
+
+	void GuidanceInterface::parse_agricultural_guidance_system_command_message(CANMessage *message, std::shared_ptr<GuidanceSystemCommand> guidanceCommand)
+	{
+		// These should never happen based on how the interface is using it, but sanity check anyways
+		assert(nullptr != guidanceCommand);
+		assert(nullptr != message);
+		assert(CAN_DATA_LENGTH == message->get_data_length());
+
+		const auto &data = message->get_data();
+		guidanceCommand->set_sender_control_function(message->get_source_control_function());
+		guidanceCommand->set_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
+		guidanceCommand->set_status(static_cast<GuidanceSystemCommand::CurvatureCommandStatus>(data.at(2) & 0x03));
 	}
 } // namespace isobus
