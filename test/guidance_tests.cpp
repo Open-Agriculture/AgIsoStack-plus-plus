@@ -10,11 +10,11 @@
 
 using namespace isobus;
 
-class TestGuidanceInterface : public GuidanceInterface
+class TestGuidanceInterface : public AgriculturalGuidanceInterface
 {
 public:
 	TestGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) :
-	  GuidanceInterface(source, destination){
+	  AgriculturalGuidanceInterface(source, destination){
 
 	  };
 
@@ -30,15 +30,15 @@ public:
 
 	bool test_wrapper_send_guidance_info() const
 	{
-		return send_agricultural_guidance_machine_info();
+		return send_guidance_machine_info();
 	}
 
-	static void test_guidance_system_command_callback(const std::shared_ptr<GuidanceSystemCommand>)
+	static void test_guidance_system_command_callback(const std::shared_ptr<GuidanceSystemCommand>, bool)
 	{
 		wasGuidanceSystemCommandCallbackHit = true;
 	}
 
-	static void test_guidance_info_callback(const std::shared_ptr<AgriculturalGuidanceMachineInfo>)
+	static void test_guidance_info_callback(const std::shared_ptr<GuidanceMachineInfo>, bool)
 	{
 		wasGuidanceInfoCallbackHit = true;
 	}
@@ -100,51 +100,51 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	TestGuidanceInterface interfaceUnderTest(testECU, nullptr); // Configured for broadcasts
 
 	// Test fresh state
-	EXPECT_EQ(0, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 	interfaceUnderTest.test_wrapper_set_flag(0);
 	interfaceUnderTest.update(); // Nothing should happen, since not initialized yet
 	EXPECT_TRUE(testPlugin.get_queue_empty());
 
-	EXPECT_EQ(0.0f, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GuidanceLimitStatus::NotAvailable, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_limit_status());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::NotAvailableTakeNoAction, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::NotAvailableTakeNoAction, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_input_position_status());
-	EXPECT_EQ(static_cast<std::uint8_t>(GuidanceInterface::AgriculturalGuidanceMachineInfo::GuidanceSystemCommandExitReasonCode::NotAvailable), interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::NotAvailableTakeNoAction, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::RequestResetCommandStatus::NotAvailable, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_request_reset_command_status());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::MechanicalSystemLockout::NotAvailable, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_mechanical_system_lockout());
+	EXPECT_EQ(0.0f, interfaceUnderTest.guidanceMachineInfoTransmitData.get_estimated_curvature());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceLimitStatus::NotAvailable, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_limit_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::NotAvailableTakeNoAction, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::NotAvailableTakeNoAction, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_steering_input_position_status());
+	EXPECT_EQ(static_cast<std::uint8_t>(AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceSystemCommandExitReasonCode::NotAvailable), interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::NotAvailableTakeNoAction, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::RequestResetCommandStatus::NotAvailable, interfaceUnderTest.guidanceMachineInfoTransmitData.get_request_reset_command_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::MechanicalSystemLockout::NotAvailable, interfaceUnderTest.guidanceMachineInfoTransmitData.get_mechanical_system_lockout());
 
 	interfaceUnderTest.initialize();
 	EXPECT_TRUE(interfaceUnderTest.get_initialized());
 	interfaceUnderTest.initialize();
 	EXPECT_TRUE(interfaceUnderTest.get_initialized());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_estimated_curvature(10.0f);
-	EXPECT_NEAR(10.0f, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature(), 0.01f);
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_estimated_curvature(10.0f);
+	EXPECT_NEAR(10.0f, interfaceUnderTest.guidanceMachineInfoTransmitData.get_estimated_curvature(), 0.01f);
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_guidance_limit_status(GuidanceInterface::AgriculturalGuidanceMachineInfo::GuidanceLimitStatus::LimitedLow);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GuidanceLimitStatus::LimitedLow, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_limit_status());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_guidance_limit_status(AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceLimitStatus::LimitedLow);
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceLimitStatus::LimitedLow, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_limit_status());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_guidance_steering_input_position_status(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::DisabledOffPassive);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::DisabledOffPassive, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_input_position_status());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_guidance_steering_input_position_status(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::DisabledOffPassive);
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::DisabledOffPassive, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_steering_input_position_status());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_guidance_steering_system_readiness_state(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_guidance_steering_system_readiness_state(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive);
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_guidance_system_remote_engage_switch_status(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_guidance_system_remote_engage_switch_status(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive);
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_mechanical_system_lockout_state(GuidanceInterface::AgriculturalGuidanceMachineInfo::MechanicalSystemLockout::NotActive);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::MechanicalSystemLockout::NotActive, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_mechanical_system_lockout());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_mechanical_system_lockout_state(AgriculturalGuidanceInterface::GuidanceMachineInfo::MechanicalSystemLockout::NotActive);
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::MechanicalSystemLockout::NotActive, interfaceUnderTest.guidanceMachineInfoTransmitData.get_mechanical_system_lockout());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_request_reset_command_status(GuidanceInterface::AgriculturalGuidanceMachineInfo::RequestResetCommandStatus::ResetNotRequired);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::RequestResetCommandStatus::ResetNotRequired, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_request_reset_command_status());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_request_reset_command_status(AgriculturalGuidanceInterface::GuidanceMachineInfo::RequestResetCommandStatus::ResetNotRequired);
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::RequestResetCommandStatus::ResetNotRequired, interfaceUnderTest.guidanceMachineInfoTransmitData.get_request_reset_command_status());
 
-	interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.set_guidance_system_command_exit_reason_code(27);
-	EXPECT_EQ(27, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code());
+	interfaceUnderTest.guidanceMachineInfoTransmitData.set_guidance_system_command_exit_reason_code(27);
+	EXPECT_EQ(27, interfaceUnderTest.guidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code());
 
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_info());
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
@@ -171,9 +171,9 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 
 	// Test the command message next. It's much simpler.
 	interfaceUnderTest.guidanceSystemCommandTransmitData.set_curvature(-43.4f);
-	interfaceUnderTest.guidanceSystemCommandTransmitData.set_status(GuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer);
+	interfaceUnderTest.guidanceSystemCommandTransmitData.set_status(AgriculturalGuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer);
 	EXPECT_NEAR(-43.5f, interfaceUnderTest.guidanceSystemCommandTransmitData.get_curvature(), 0.24f); // This also tests rounding to the nearest 0.25 km-1
-	EXPECT_EQ(GuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer, interfaceUnderTest.guidanceSystemCommandTransmitData.get_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer, interfaceUnderTest.guidanceSystemCommandTransmitData.get_status());
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -183,7 +183,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 
 	EXPECT_EQ(1, (testFrame.data[2] & 0x03));
 
-	EXPECT_NE(nullptr, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_sender_control_function());
+	EXPECT_NE(nullptr, interfaceUnderTest.guidanceMachineInfoTransmitData.get_sender_control_function());
 	EXPECT_NE(nullptr, interfaceUnderTest.guidanceSystemCommandTransmitData.get_sender_control_function());
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(105));
@@ -208,7 +208,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 
 	EXPECT_FALSE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
 	EXPECT_FALSE(interfaceUnderTest.test_wrapper_send_guidance_info());
-	EXPECT_EQ(nullptr, interfaceUnderTest.agriculturalGuidanceMachineInfoTransmitData.get_sender_control_function());
+	EXPECT_EQ(nullptr, interfaceUnderTest.guidanceMachineInfoTransmitData.get_sender_control_function());
 	EXPECT_EQ(nullptr, interfaceUnderTest.guidanceSystemCommandTransmitData.get_sender_control_function());
 
 	CANNetworkManager::CANNetwork.update();
@@ -217,9 +217,9 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	interfaceUnderTest.initialize();
 	EXPECT_EQ(true, interfaceUnderTest.get_initialized());
 
-	EXPECT_EQ(0, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
 	// Force claim some other ECU
@@ -239,8 +239,8 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	CANNetworkManager::CANNetwork.update();
 
 	// Register callbacks to test
-	auto guidanceCommandListener = interfaceUnderTest.get_guidance_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
-	auto guidanceInfoListener = interfaceUnderTest.get_agricultural_guidance_machine_info_event_publisher().add_listener(TestGuidanceInterface::test_guidance_info_callback);
+	auto guidanceCommandListener = interfaceUnderTest.get_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
+	auto guidanceInfoListener = interfaceUnderTest.get_guidance_machine_info_event_publisher().add_listener(TestGuidanceInterface::test_guidance_info_callback);
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceInfoCallbackHit);
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
 
@@ -263,15 +263,15 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
 	TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit = false;
 
-	EXPECT_EQ(0, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	ASSERT_NE(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
 	auto guidanceCommand = interfaceUnderTest.get_received_guidance_system_command(0);
 
 	EXPECT_NEAR(94.25, guidanceCommand->get_curvature(), 0.2f);
-	EXPECT_EQ(GuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer, guidanceCommand->get_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer, guidanceCommand->get_status());
 
 	// Test estimated curvature
 	testCurvature = std::roundf(4 * ((-47.75f + 8032) / 0.25f)) / 4.0f; // manually encode a curvature of -47.75 km-1
@@ -290,19 +290,19 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceInfoCallbackHit);
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
 
-	EXPECT_EQ(1, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_NE(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
-	auto estimatedCurvatureInfo = interfaceUnderTest.get_received_agricultural_guidance_machine_info(0);
+	auto estimatedCurvatureInfo = interfaceUnderTest.get_received_guidance_machine_info(0);
 	EXPECT_NEAR(estimatedCurvatureInfo->get_estimated_curvature(), -47.75f, 0.2f);
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GuidanceLimitStatus::NotAvailable, estimatedCurvatureInfo->get_guidance_limit_status());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, estimatedCurvatureInfo->get_guidance_steering_input_position_status());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, estimatedCurvatureInfo->get_guidance_steering_system_readiness_state());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, estimatedCurvatureInfo->get_guidance_system_remote_engage_switch_status());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::MechanicalSystemLockout::Active, estimatedCurvatureInfo->get_mechanical_system_lockout());
-	EXPECT_EQ(GuidanceInterface::AgriculturalGuidanceMachineInfo::RequestResetCommandStatus::ResetRequired, estimatedCurvatureInfo->get_request_reset_command_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceLimitStatus::NotAvailable, estimatedCurvatureInfo->get_guidance_limit_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, estimatedCurvatureInfo->get_guidance_steering_input_position_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, estimatedCurvatureInfo->get_guidance_steering_system_readiness_state());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue::EnabledOnActive, estimatedCurvatureInfo->get_guidance_system_remote_engage_switch_status());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::MechanicalSystemLockout::Active, estimatedCurvatureInfo->get_mechanical_system_lockout());
+	EXPECT_EQ(AgriculturalGuidanceInterface::GuidanceMachineInfo::RequestResetCommandStatus::ResetRequired, estimatedCurvatureInfo->get_request_reset_command_status());
 
 	// Make a slightly different value to confirm we don't add a duplicate source
 	testCurvature = std::roundf(4 * ((-44.75f + 8032) / 0.25f)) / 4.0f; // manually encode a curvature of -47.75 km-1
@@ -318,9 +318,9 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
-	EXPECT_EQ(1, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_NE(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
 	// Test different commanded curvature doesn't cause duplicates
@@ -338,16 +338,16 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
-	EXPECT_EQ(1, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_NE(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
 	// Test timeouts
 	std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	interfaceUnderTest.update();
-	EXPECT_EQ(0, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
-	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 }

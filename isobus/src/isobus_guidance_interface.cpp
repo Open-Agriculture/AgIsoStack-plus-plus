@@ -32,14 +32,14 @@
 
 namespace isobus
 {
-	GuidanceInterface::GuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) :
+	AgriculturalGuidanceInterface::AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) :
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
 	  sourceControlFunction(source),
 	  destinationControlFunction(destination)
 	{
 	}
 
-	GuidanceInterface::~GuidanceInterface()
+	AgriculturalGuidanceInterface::~AgriculturalGuidanceInterface()
 	{
 		if (initialized)
 		{
@@ -48,147 +48,197 @@ namespace isobus
 		}
 	}
 
-	void GuidanceInterface::GuidanceSystemCommand::set_status(CurvatureCommandStatus newStatus)
+	bool AgriculturalGuidanceInterface::GuidanceSystemCommand::set_status(CurvatureCommandStatus newStatus)
 	{
-		commandedStatus = newStatus;
+		if (commandedStatus != newStatus)
+		{
+			commandedStatus = newStatus;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus GuidanceInterface::GuidanceSystemCommand::get_status() const
+	AgriculturalGuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus AgriculturalGuidanceInterface::GuidanceSystemCommand::get_status() const
 	{
 		return commandedStatus;
 	}
 
-	void GuidanceInterface::GuidanceSystemCommand::set_curvature(float curvature)
+	bool AgriculturalGuidanceInterface::GuidanceSystemCommand::set_curvature(float curvature)
 	{
-		commandedCurvature = curvature;
+		if (fabs(commandedCurvature - curvature) > std::numeric_limits<float>::epsilon())
+		{
+			commandedCurvature = curvature;
+			return true;
+		}
+		return false;
 	}
 
-	float GuidanceInterface::GuidanceSystemCommand::get_curvature() const
+	float AgriculturalGuidanceInterface::GuidanceSystemCommand::get_curvature() const
 	{
 		return commandedCurvature;
 	}
 
-	void GuidanceInterface::GuidanceSystemCommand::set_sender_control_function(ControlFunction *sender)
+	void AgriculturalGuidanceInterface::GuidanceSystemCommand::set_sender_control_function(ControlFunction *sender)
 	{
 		controlFunction = sender;
 	}
 
-	ControlFunction *GuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
+	ControlFunction *AgriculturalGuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
 
-	void GuidanceInterface::GuidanceSystemCommand::set_timestamp_ms(std::uint32_t timestamp)
+	void AgriculturalGuidanceInterface::GuidanceSystemCommand::set_timestamp_ms(std::uint32_t timestamp)
 	{
 		timestamp_ms = timestamp;
 	}
 
-	std::uint32_t GuidanceInterface::GuidanceSystemCommand::get_timestamp_ms() const
+	std::uint32_t AgriculturalGuidanceInterface::GuidanceSystemCommand::get_timestamp_ms() const
 	{
 		return timestamp_ms;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_estimated_curvature(float curvature)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_estimated_curvature(float curvature)
 	{
-		estimatedCurvature = curvature;
+		if (fabs(estimatedCurvature - curvature) > std::numeric_limits<float>::epsilon())
+		{
+			estimatedCurvature = curvature;
+			return true;
+		}
+		return false;
 	}
 
-	float GuidanceInterface::AgriculturalGuidanceMachineInfo::get_estimated_curvature() const
+	float AgriculturalGuidanceInterface::GuidanceMachineInfo::get_estimated_curvature() const
 	{
 		return estimatedCurvature;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_mechanical_system_lockout_state(MechanicalSystemLockout state)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_mechanical_system_lockout_state(MechanicalSystemLockout state)
 	{
-		mechanicalSystemLockoutState = state;
+		if (mechanicalSystemLockoutState != state)
+		{
+			mechanicalSystemLockoutState = state;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::AgriculturalGuidanceMachineInfo::MechanicalSystemLockout GuidanceInterface::AgriculturalGuidanceMachineInfo::get_mechanical_system_lockout() const
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::MechanicalSystemLockout AgriculturalGuidanceInterface::GuidanceMachineInfo::get_mechanical_system_lockout() const
 	{
 		return mechanicalSystemLockoutState;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_guidance_steering_system_readiness_state(GenericSAEbs02SlotValue state)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_guidance_steering_system_readiness_state(GenericSAEbs02SlotValue state)
 	{
-		guidanceSteeringSystemReadinessState = state;
+		if (guidanceSteeringSystemReadinessState != state)
+		{
+			guidanceSteeringSystemReadinessState = state;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue GuidanceInterface::AgriculturalGuidanceMachineInfo::get_guidance_steering_system_readiness_state() const
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue AgriculturalGuidanceInterface::GuidanceMachineInfo::get_guidance_steering_system_readiness_state() const
 	{
 		return guidanceSteeringSystemReadinessState;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_guidance_steering_input_position_status(GenericSAEbs02SlotValue state)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_guidance_steering_input_position_status(GenericSAEbs02SlotValue state)
 	{
-		guidanceSteeringInputPositionStatus = state;
+		if (guidanceSteeringInputPositionStatus != state)
+		{
+			guidanceSteeringInputPositionStatus = state;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue GuidanceInterface::AgriculturalGuidanceMachineInfo::get_guidance_steering_input_position_status() const
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue AgriculturalGuidanceInterface::GuidanceMachineInfo::get_guidance_steering_input_position_status() const
 	{
 		return guidanceSteeringInputPositionStatus;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_request_reset_command_status(RequestResetCommandStatus state)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_request_reset_command_status(RequestResetCommandStatus state)
 	{
-		requestResetCommandStatus = state;
+		if (requestResetCommandStatus != state)
+		{
+			requestResetCommandStatus = state;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::AgriculturalGuidanceMachineInfo::RequestResetCommandStatus GuidanceInterface::AgriculturalGuidanceMachineInfo::get_request_reset_command_status() const
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::RequestResetCommandStatus AgriculturalGuidanceInterface::GuidanceMachineInfo::get_request_reset_command_status() const
 	{
 		return requestResetCommandStatus;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_guidance_limit_status(GuidanceLimitStatus status)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_guidance_limit_status(GuidanceLimitStatus status)
 	{
-		guidanceLimitStatus = status;
+		if (guidanceLimitStatus != status)
+		{
+			guidanceLimitStatus = status;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::AgriculturalGuidanceMachineInfo::GuidanceLimitStatus GuidanceInterface::AgriculturalGuidanceMachineInfo::get_guidance_limit_status() const
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceLimitStatus AgriculturalGuidanceInterface::GuidanceMachineInfo::get_guidance_limit_status() const
 	{
 		return guidanceLimitStatus;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_guidance_system_command_exit_reason_code(std::uint8_t exitCode)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_guidance_system_command_exit_reason_code(std::uint8_t exitCode)
 	{
-		guidanceSystemCommandExitReasonCode = exitCode;
+		if (guidanceSystemCommandExitReasonCode != exitCode)
+		{
+			guidanceSystemCommandExitReasonCode = exitCode;
+			return true;
+		}
+		return false;
 	}
 
-	std::uint8_t GuidanceInterface::AgriculturalGuidanceMachineInfo::get_guidance_system_command_exit_reason_code() const
+	std::uint8_t AgriculturalGuidanceInterface::GuidanceMachineInfo::get_guidance_system_command_exit_reason_code() const
 	{
 		return guidanceSystemCommandExitReasonCode;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_guidance_system_remote_engage_switch_status(GenericSAEbs02SlotValue switchStatus)
+	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_guidance_system_remote_engage_switch_status(GenericSAEbs02SlotValue switchStatus)
 	{
-		guidanceSystemRemoteEngageSwitchStatus = switchStatus;
+		if (guidanceSystemRemoteEngageSwitchStatus != switchStatus)
+		{
+			guidanceSystemRemoteEngageSwitchStatus = switchStatus;
+			return true;
+		}
+		return false;
 	}
 
-	GuidanceInterface::AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue GuidanceInterface::AgriculturalGuidanceMachineInfo::get_guidance_system_remote_engage_switch_status() const
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::GenericSAEbs02SlotValue AgriculturalGuidanceInterface::GuidanceMachineInfo::get_guidance_system_remote_engage_switch_status() const
 	{
 		return guidanceSystemRemoteEngageSwitchStatus;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_sender_control_function(ControlFunction *sender)
+	void AgriculturalGuidanceInterface::GuidanceMachineInfo::set_sender_control_function(ControlFunction *sender)
 	{
 		controlFunction = sender;
 	}
 
-	ControlFunction *GuidanceInterface::AgriculturalGuidanceMachineInfo::get_sender_control_function() const
+	ControlFunction *AgriculturalGuidanceInterface::GuidanceMachineInfo::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
 
-	void GuidanceInterface::AgriculturalGuidanceMachineInfo::set_timestamp_ms(std::uint32_t timestamp)
+	void AgriculturalGuidanceInterface::GuidanceMachineInfo::set_timestamp_ms(std::uint32_t timestamp)
 	{
 		timestamp_ms = timestamp;
 	}
 
-	std::uint32_t GuidanceInterface::AgriculturalGuidanceMachineInfo::get_timestamp_ms() const
+	std::uint32_t AgriculturalGuidanceInterface::GuidanceMachineInfo::get_timestamp_ms() const
 	{
 		return timestamp_ms;
 	}
 
-	void GuidanceInterface::initialize()
+	void AgriculturalGuidanceInterface::initialize()
 	{
 		if (!initialized)
 		{
@@ -202,42 +252,42 @@ namespace isobus
 
 			if (nullptr != sourceControlFunction)
 			{
-				agriculturalGuidanceMachineInfoTransmitData.set_sender_control_function(sourceControlFunction.get());
+				guidanceMachineInfoTransmitData.set_sender_control_function(sourceControlFunction.get());
 				guidanceSystemCommandTransmitData.set_sender_control_function(sourceControlFunction.get());
 			}
 			initialized = true;
 		}
 	}
 
-	bool GuidanceInterface::get_initialized() const
+	bool AgriculturalGuidanceInterface::get_initialized() const
 	{
 		return initialized;
 	}
 
-	std::size_t GuidanceInterface::get_number_received_guidance_system_command_sources() const
+	std::size_t AgriculturalGuidanceInterface::get_number_received_guidance_system_command_sources() const
 	{
 		return receivedGuidanceSystemCommandMessages.size();
 	}
 
-	std::size_t GuidanceInterface::get_number_received_agricultural_guidance_machine_info_message_sources() const
+	std::size_t AgriculturalGuidanceInterface::get_number_received_guidance_machine_info_message_sources() const
 	{
-		return receivedAgriculturalGuidanceMachineInfoMessages.size();
+		return receivedGuidanceMachineInfoMessages.size();
 	}
 
-	std::shared_ptr<GuidanceInterface::AgriculturalGuidanceMachineInfo> GuidanceInterface::get_received_agricultural_guidance_machine_info(std::size_t index)
+	std::shared_ptr<AgriculturalGuidanceInterface::GuidanceMachineInfo> AgriculturalGuidanceInterface::get_received_guidance_machine_info(std::size_t index)
 	{
-		std::shared_ptr<GuidanceInterface::AgriculturalGuidanceMachineInfo> retVal = nullptr;
+		std::shared_ptr<AgriculturalGuidanceInterface::GuidanceMachineInfo> retVal = nullptr;
 
-		if (index < receivedAgriculturalGuidanceMachineInfoMessages.size())
+		if (index < receivedGuidanceMachineInfoMessages.size())
 		{
-			retVal = receivedAgriculturalGuidanceMachineInfoMessages.at(index);
+			retVal = receivedGuidanceMachineInfoMessages.at(index);
 		}
 		return retVal;
 	}
 
-	std::shared_ptr<GuidanceInterface::GuidanceSystemCommand> GuidanceInterface::get_received_guidance_system_command(std::size_t index)
+	std::shared_ptr<AgriculturalGuidanceInterface::GuidanceSystemCommand> AgriculturalGuidanceInterface::get_received_guidance_system_command(std::size_t index)
 	{
-		std::shared_ptr<GuidanceInterface::GuidanceSystemCommand> retVal = nullptr;
+		std::shared_ptr<AgriculturalGuidanceInterface::GuidanceSystemCommand> retVal = nullptr;
 
 		if (index < receivedGuidanceSystemCommandMessages.size())
 		{
@@ -246,17 +296,17 @@ namespace isobus
 		return retVal;
 	}
 
-	EventDispatcher<const std::shared_ptr<GuidanceInterface::AgriculturalGuidanceMachineInfo>> &GuidanceInterface::get_agricultural_guidance_machine_info_event_publisher()
+	EventDispatcher<const std::shared_ptr<AgriculturalGuidanceInterface::GuidanceMachineInfo>, bool> &AgriculturalGuidanceInterface::get_guidance_machine_info_event_publisher()
 	{
-		return agriculturalGuidanceMachineInfoEventPublisher;
+		return guidanceMachineInfoEventPublisher;
 	}
 
-	EventDispatcher<const std::shared_ptr<GuidanceInterface::GuidanceSystemCommand>> &GuidanceInterface::get_guidance_guidance_system_command_event_publisher()
+	EventDispatcher<const std::shared_ptr<AgriculturalGuidanceInterface::GuidanceSystemCommand>, bool> &AgriculturalGuidanceInterface::get_guidance_system_command_event_publisher()
 	{
 		return guidanceSystemCommandEventPublisher;
 	}
 
-	bool GuidanceInterface::send_guidance_system_command() const
+	bool AgriculturalGuidanceInterface::send_guidance_system_command() const
 	{
 		bool retVal = false;
 
@@ -265,7 +315,7 @@ namespace isobus
 			float scaledCurvature = std::roundf(4 * ((guidanceSystemCommandTransmitData.get_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
 
-			if (agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
+			if (guidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
 				CANStackLogger::warn("[Guidance]: Transmitting a commanded curvature clamped to maximum value. Verify guidance calculations are accurate!");
@@ -299,16 +349,16 @@ namespace isobus
 		return retVal;
 	}
 
-	bool GuidanceInterface::send_agricultural_guidance_machine_info() const
+	bool AgriculturalGuidanceInterface::send_guidance_machine_info() const
 	{
 		bool retVal = false;
 
 		if (nullptr != sourceControlFunction)
 		{
-			float scaledCurvature = std::roundf(4 * ((agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
+			float scaledCurvature = std::roundf(4 * ((guidanceMachineInfoTransmitData.get_estimated_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
 
-			if (agriculturalGuidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
+			if (guidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
 				CANStackLogger::warn("[Guidance]: Transmitting an estimated curvature clamped to maximum value. Verify guidance calculations are accurate!");
@@ -326,13 +376,13 @@ namespace isobus
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(encodedCurvature & 0xFF),
 				static_cast<std::uint8_t>((encodedCurvature >> 8) & 0xFF),
-				static_cast<std::uint8_t>((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_mechanical_system_lockout()) & 0x03) |
-				                          ((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state()) & 0x03) << 2) |
-				                          ((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_steering_input_position_status()) & 0x03) << 4) |
-				                          ((static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_request_reset_command_status()) & 0x03) << 6)),
-				static_cast<std::uint8_t>(static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_limit_status()) << 5),
-				static_cast<std::uint8_t>((agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code() & 0x3F) |
-				                          (static_cast<std::uint8_t>(agriculturalGuidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status()) << 6)),
+				static_cast<std::uint8_t>((static_cast<std::uint8_t>(guidanceMachineInfoTransmitData.get_mechanical_system_lockout()) & 0x03) |
+				                          ((static_cast<std::uint8_t>(guidanceMachineInfoTransmitData.get_guidance_steering_system_readiness_state()) & 0x03) << 2) |
+				                          ((static_cast<std::uint8_t>(guidanceMachineInfoTransmitData.get_guidance_steering_input_position_status()) & 0x03) << 4) |
+				                          ((static_cast<std::uint8_t>(guidanceMachineInfoTransmitData.get_request_reset_command_status()) & 0x03) << 6)),
+				static_cast<std::uint8_t>(static_cast<std::uint8_t>(guidanceMachineInfoTransmitData.get_guidance_limit_status()) << 5),
+				static_cast<std::uint8_t>((guidanceMachineInfoTransmitData.get_guidance_system_command_exit_reason_code() & 0x3F) |
+				                          (static_cast<std::uint8_t>(guidanceMachineInfoTransmitData.get_guidance_system_remote_engage_switch_status()) << 6)),
 				0xFF, // Reserved
 				0xFF, // Reserved
 				0xFF // Reserved
@@ -348,24 +398,28 @@ namespace isobus
 		return retVal;
 	}
 
-	void GuidanceInterface::update()
+	void AgriculturalGuidanceInterface::update()
 	{
 		if (initialized)
 		{
-			receivedAgriculturalGuidanceMachineInfoMessages.erase(std::remove_if(receivedAgriculturalGuidanceMachineInfoMessages.begin(),
-			                                                                     receivedAgriculturalGuidanceMachineInfoMessages.end(),
-			                                                                     [](std::shared_ptr<AgriculturalGuidanceMachineInfo> guidanceInfo) { return SystemTiming::time_expired_ms(guidanceInfo->get_timestamp_ms(), GUIDANCE_MESSAGE_TIMEOUT_MS); }),
-			                                                      receivedAgriculturalGuidanceMachineInfoMessages.end());
+			receivedGuidanceMachineInfoMessages.erase(std::remove_if(receivedGuidanceMachineInfoMessages.begin(),
+			                                                         receivedGuidanceMachineInfoMessages.end(),
+			                                                         [](std::shared_ptr<GuidanceMachineInfo> guidanceInfo) {
+				                                                         return SystemTiming::time_expired_ms(guidanceInfo->get_timestamp_ms(), GUIDANCE_MESSAGE_TIMEOUT_MS);
+			                                                         }),
+			                                          receivedGuidanceMachineInfoMessages.end());
 			receivedGuidanceSystemCommandMessages.erase(std::remove_if(receivedGuidanceSystemCommandMessages.begin(),
 			                                                           receivedGuidanceSystemCommandMessages.end(),
-			                                                           [](std::shared_ptr<GuidanceSystemCommand> guidanceCommand) { return SystemTiming::time_expired_ms(guidanceCommand->get_timestamp_ms(), GUIDANCE_MESSAGE_TIMEOUT_MS); }),
+			                                                           [](std::shared_ptr<GuidanceSystemCommand> guidanceCommand) {
+				                                                           return SystemTiming::time_expired_ms(guidanceCommand->get_timestamp_ms(), GUIDANCE_MESSAGE_TIMEOUT_MS);
+			                                                           }),
 			                                            receivedGuidanceSystemCommandMessages.end());
 			if (nullptr != sourceControlFunction)
 			{
-				if (SystemTiming::time_expired_ms(agriculturalGuidanceMachineInfoTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
+				if (SystemTiming::time_expired_ms(guidanceMachineInfoTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
 				{
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceMachineInfo));
-					agriculturalGuidanceMachineInfoTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+					guidanceMachineInfoTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
 				}
 				if (SystemTiming::time_expired_ms(guidanceSystemCommandTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
 				{
@@ -381,18 +435,18 @@ namespace isobus
 		}
 	}
 
-	void GuidanceInterface::process_flags(std::uint32_t flag, void *parentPointer)
+	void AgriculturalGuidanceInterface::process_flags(std::uint32_t flag, void *parentPointer)
 	{
 		if (nullptr != parentPointer)
 		{
-			auto targetInterface = static_cast<GuidanceInterface *>(parentPointer);
+			auto targetInterface = static_cast<AgriculturalGuidanceInterface *>(parentPointer);
 			bool transmitSuccessful = false;
 
 			switch (flag)
 			{
 				case static_cast<std::uint32_t>(TransmitFlags::SendGuidanceMachineInfo):
 				{
-					transmitSuccessful = targetInterface->send_agricultural_guidance_machine_info();
+					transmitSuccessful = targetInterface->send_guidance_machine_info();
 				}
 				break;
 
@@ -413,11 +467,11 @@ namespace isobus
 		}
 	}
 
-	void GuidanceInterface::process_rx_message(CANMessage *message, void *parentPointer)
+	void AgriculturalGuidanceInterface::process_rx_message(CANMessage *message, void *parentPointer)
 	{
 		assert(nullptr != message);
 		assert(nullptr != parentPointer);
-		auto targetInterface = static_cast<GuidanceInterface *>(parentPointer);
+		auto targetInterface = static_cast<AgriculturalGuidanceInterface *>(parentPointer);
 
 		switch (message->get_identifier().get_parameter_group_number())
 		{
@@ -425,25 +479,30 @@ namespace isobus
 			{
 				if (CAN_DATA_LENGTH == message->get_data_length())
 				{
-					bool lFoundExisting = false;
-
-					for (const auto &receivedCommand : targetInterface->receivedGuidanceSystemCommandMessages)
+					if (message->get_source_control_function() != nullptr)
 					{
-						if ((nullptr != receivedCommand) &&
-						    (receivedCommand->get_sender_control_function() == message->get_source_control_function()))
+						auto result = std::find_if(targetInterface->receivedGuidanceSystemCommandMessages.begin(),
+						                           targetInterface->receivedGuidanceSystemCommandMessages.end(),
+						                           [&message](const std::shared_ptr<GuidanceSystemCommand> &receivedCommand) {
+							                           return (nullptr != receivedCommand) && (receivedCommand->get_sender_control_function() == message->get_source_control_function());
+						                           });
+
+						if (result == targetInterface->receivedGuidanceSystemCommandMessages.end())
 						{
-							lFoundExisting = true;
-							parse_agricultural_guidance_system_command_message(message, receivedCommand);
-							targetInterface->guidanceSystemCommandEventPublisher.invoke(std::move(receivedCommand));
+							// There is no existing message object from this control function, so create a new one
+							targetInterface->receivedGuidanceSystemCommandMessages.push_back(std::make_shared<GuidanceSystemCommand>());
+							result = targetInterface->receivedGuidanceSystemCommandMessages.end() - 1;
+							(*result)->set_sender_control_function(message->get_source_control_function());
 						}
-					}
 
-					if ((!lFoundExisting) && (nullptr != message->get_source_control_function()))
-					{
-						auto newInfoData = std::make_shared<GuidanceSystemCommand>();
-						parse_agricultural_guidance_system_command_message(message, newInfoData);
-						targetInterface->receivedGuidanceSystemCommandMessages.push_back(newInfoData);
-						targetInterface->guidanceSystemCommandEventPublisher.invoke(std::move(newInfoData));
+						auto &guidanceCommand = *result;
+						bool changed = false;
+
+						changed |= guidanceCommand->set_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
+						changed |= guidanceCommand->set_status(static_cast<GuidanceSystemCommand::CurvatureCommandStatus>(message->get_uint8_at(2) & 0x03));
+						guidanceCommand->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+
+						targetInterface->guidanceSystemCommandEventPublisher.invoke(std::move(guidanceCommand), std::move(changed));
 					}
 				}
 				else
@@ -457,25 +516,36 @@ namespace isobus
 			{
 				if (CAN_DATA_LENGTH == message->get_data_length())
 				{
-					bool lFoundExisting = false;
-
-					for (const auto &receivedInfo : targetInterface->receivedAgriculturalGuidanceMachineInfoMessages)
+					if (message->get_source_control_function() != nullptr)
 					{
-						if ((nullptr != receivedInfo) &&
-						    (receivedInfo->get_sender_control_function() == message->get_source_control_function()))
+						auto result = std::find_if(targetInterface->receivedGuidanceMachineInfoMessages.cbegin(),
+						                           targetInterface->receivedGuidanceMachineInfoMessages.cend(),
+						                           [&message](const std::shared_ptr<GuidanceMachineInfo> &receivedInfo) {
+							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message->get_source_control_function());
+						                           });
+
+						if (result == targetInterface->receivedGuidanceMachineInfoMessages.cend())
 						{
-							lFoundExisting = true;
-							parse_agricultural_guidance_machine_info_message(message, receivedInfo);
-							targetInterface->agriculturalGuidanceMachineInfoEventPublisher.invoke(std::move(receivedInfo));
+							// There is no existing message object from this control function, so create a new one
+							targetInterface->receivedGuidanceMachineInfoMessages.push_back(std::make_shared<GuidanceMachineInfo>());
+							result = targetInterface->receivedGuidanceMachineInfoMessages.cend() - 1;
+							(*result)->set_sender_control_function(message->get_source_control_function());
 						}
-					}
 
-					if ((!lFoundExisting) && (nullptr != message->get_source_control_function()))
-					{
-						auto newInfoData = std::make_shared<AgriculturalGuidanceMachineInfo>();
-						parse_agricultural_guidance_machine_info_message(message, newInfoData);
-						targetInterface->receivedAgriculturalGuidanceMachineInfoMessages.push_back(newInfoData);
-						targetInterface->agriculturalGuidanceMachineInfoEventPublisher.invoke(std::move(newInfoData));
+						auto &machineInfo = *result;
+						bool changed = false;
+
+						changed |= machineInfo->set_estimated_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
+						changed |= machineInfo->set_mechanical_system_lockout_state(static_cast<GuidanceMachineInfo::MechanicalSystemLockout>(message->get_uint8_at(2) & 0x03));
+						changed |= machineInfo->set_guidance_steering_system_readiness_state(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(2) >> 2) & 0x03));
+						changed |= machineInfo->set_guidance_steering_input_position_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(2) >> 4) & 0x03));
+						changed |= machineInfo->set_request_reset_command_status(static_cast<GuidanceMachineInfo::RequestResetCommandStatus>((message->get_uint8_at(2) >> 6) & 0x03));
+						changed |= machineInfo->set_guidance_limit_status(static_cast<GuidanceMachineInfo::GuidanceLimitStatus>(message->get_uint8_at(3) >> 5));
+						changed |= machineInfo->set_guidance_system_command_exit_reason_code(message->get_uint8_at(4) & 0x3F);
+						changed |= machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(4) >> 6) & 0x03));
+						machineInfo->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+
+						targetInterface->guidanceMachineInfoEventPublisher.invoke(std::move(*result), std::move(changed));
 					}
 				}
 				else
@@ -488,39 +558,5 @@ namespace isobus
 			default:
 				break;
 		}
-	}
-
-	void GuidanceInterface::parse_agricultural_guidance_machine_info_message(CANMessage *message, std::shared_ptr<AgriculturalGuidanceMachineInfo> machineInfo)
-	{
-		// These should never happen based on how the interface is using it, but sanity check anyways
-		assert(nullptr != machineInfo);
-		assert(nullptr != message);
-		assert(CAN_DATA_LENGTH == message->get_data_length());
-
-		const auto &data = message->get_data();
-		machineInfo->set_sender_control_function(message->get_source_control_function());
-		machineInfo->set_estimated_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
-		machineInfo->set_mechanical_system_lockout_state(static_cast<AgriculturalGuidanceMachineInfo::MechanicalSystemLockout>(data[2] & 0x03));
-		machineInfo->set_guidance_steering_system_readiness_state(static_cast<AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue>((data[2] >> 2) & 0x03));
-		machineInfo->set_guidance_steering_input_position_status(static_cast<AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue>((data[2] >> 4) & 0x03));
-		machineInfo->set_request_reset_command_status(static_cast<AgriculturalGuidanceMachineInfo::RequestResetCommandStatus>((data[2] >> 6) & 0x03));
-		machineInfo->set_guidance_limit_status(static_cast<AgriculturalGuidanceMachineInfo::GuidanceLimitStatus>(data[3] >> 5));
-		machineInfo->set_guidance_system_command_exit_reason_code(data[4] & 0x3F);
-		machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<AgriculturalGuidanceMachineInfo::GenericSAEbs02SlotValue>((data[4] >> 6) & 0x03));
-		machineInfo->set_timestamp_ms(SystemTiming::get_timestamp_ms());
-	}
-
-	void GuidanceInterface::parse_agricultural_guidance_system_command_message(CANMessage *message, std::shared_ptr<GuidanceSystemCommand> guidanceCommand)
-	{
-		// These should never happen based on how the interface is using it, but sanity check anyways
-		assert(nullptr != guidanceCommand);
-		assert(nullptr != message);
-		assert(CAN_DATA_LENGTH == message->get_data_length());
-
-		const auto &data = message->get_data();
-		guidanceCommand->set_sender_control_function(message->get_source_control_function());
-		guidanceCommand->set_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
-		guidanceCommand->set_status(static_cast<GuidanceSystemCommand::CurvatureCommandStatus>(data.at(2) & 0x03));
-		guidanceCommand->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 	}
 } // namespace isobus
