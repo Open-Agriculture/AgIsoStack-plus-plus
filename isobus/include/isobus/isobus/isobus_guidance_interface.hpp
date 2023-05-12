@@ -32,16 +32,16 @@
 namespace isobus
 {
 	/// @brief An interface for sending and receiving ISOBUS guidance messages
-	class GuidanceInterface
+	class AgriculturalGuidanceInterface
 	{
 	public:
-		/// @brief Constructor for a GuidanceInterface
+		/// @brief Constructor for a AgriculturalGuidanceInterface
 		/// @param[in] source The internal control function to use when sending messages, or nullptr for listen only
 		/// @param[in] destination The destination control function for transmitted messages, or nullptr for broadcasts
-		GuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
-		/// @brief Destructor for the GuidanceInterface
-		~GuidanceInterface();
+		/// @brief Destructor for the AgriculturalGuidanceInterface
+		~AgriculturalGuidanceInterface();
 
 		/// @brief An interface for sending the agricultural
 		/// guidance system command message.
@@ -68,10 +68,11 @@ namespace isobus
 			/// the CAN message. This parameter indicates whether the guidance system is
 			/// attempting to control steering with this command
 			/// @param[in] newStatus The status to encode into the message
-			void set_status(CurvatureCommandStatus newStatus);
+			/// @returns True if the status changed, false otherwise
+			bool set_status(CurvatureCommandStatus newStatus);
 
-			/// @brief Returns the curvature command status that was set with set_status
-			/// @returns The curvature command status that was set with set_status
+			/// @brief Returns the curvature command status that is active in the guidance system
+			/// @returns The curvature command status
 			CurvatureCommandStatus get_status() const;
 
 			/// @brief Desired course curvature over ground that a machine's
@@ -84,9 +85,10 @@ namespace isobus
 			/// Curvature is positive when the vehicle is moving forward and turning to the driver's right
 			///
 			/// @param[in] curvature Commanded curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
-			void set_curvature(float curvature);
+			/// @returns True if the curvature changed, false otherwise
+			bool set_curvature(float curvature);
 
-			/// @brief Returns the curvature command that was set with set_curvature
+			/// @brief Returns the curvature value that is currently be trying to be achieved by the guidance system
 			/// @returns Commanded curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
 			float get_curvature() const;
 
@@ -119,7 +121,7 @@ namespace isobus
 		};
 
 		/// @brief An interface for sending and receiving the ISOBUS agricultural guidance machine message
-		class AgriculturalGuidanceMachineInfo
+		class GuidanceMachineInfo
 		{
 		public:
 			/// @brief State of a lockout switch that allows operators to
@@ -143,7 +145,7 @@ namespace isobus
 				NotAvailable = 3
 			};
 
-			/// @brief A typical, generic 2 bit value in J1939 with no supersceding definition in ISO 11783
+			/// @brief A typical, generic 2 bit value in J1939 with no superseding definition in ISO 11783
 			enum class GenericSAEbs02SlotValue : std::uint8_t
 			{
 				DisabledOffPassive = 0,
@@ -191,12 +193,13 @@ namespace isobus
 				NotAvailable = 63 ///< Parameter not supported
 			};
 
-			/// @brief Constructor for a AgriculturalGuidanceMachineInfo
-			AgriculturalGuidanceMachineInfo() = default;
+			/// @brief Constructor for a GuidanceMachineInfo
+			GuidanceMachineInfo() = default;
 
 			/// @brief Sets the estimated course curvature over ground for the machine.
 			/// @param[in] curvature The curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
-			void set_estimated_curvature(float curvature);
+			/// @returns True if the curvature changed, false otherwise
+			bool set_estimated_curvature(float curvature);
 
 			/// @brief Returns the estimated curvature that was previously set with set_estimated_curvature
 			/// @returns The estimated curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
@@ -204,7 +207,8 @@ namespace isobus
 
 			/// @brief Sets the mechanical system lockout state
 			/// @param[in] state The mechanical system lockout state to report
-			void set_mechanical_system_lockout_state(MechanicalSystemLockout state);
+			/// @returns True if the mechanical system lockout state changed, false otherwise
+			bool set_mechanical_system_lockout_state(MechanicalSystemLockout state);
 
 			/// @brief Returns the mechanical system lockout state
 			/// @returns The mechanical system lockout state being reported
@@ -212,7 +216,8 @@ namespace isobus
 
 			/// @brief Sets the guidance system's readiness state to report
 			/// @param[in] state The state to report. See definition of GenericSAEbs02SlotValue
-			void set_guidance_steering_system_readiness_state(GenericSAEbs02SlotValue state);
+			/// @returns True if the guidance steering system readiness state changed, false otherwise
+			bool set_guidance_steering_system_readiness_state(GenericSAEbs02SlotValue state);
 
 			/// @brief Returns the guidance system's readiness state for steering
 			/// @returns The guidance system's readiness state for steering
@@ -220,7 +225,8 @@ namespace isobus
 
 			/// @brief Sets the guidance steering input position state
 			/// @param[in] state The state to set for the guidance steering input position
-			void set_guidance_steering_input_position_status(GenericSAEbs02SlotValue state);
+			/// @returns True if the guidance steering input position status changed, false otherwise
+			bool set_guidance_steering_input_position_status(GenericSAEbs02SlotValue state);
 
 			/// @brief Returns the guidance steering input position state
 			/// @returns Guidance steering input position state
@@ -230,7 +236,8 @@ namespace isobus
 			/// @details Machine steering system request to the automatic guidance system to
 			/// change Curvature Command Status state from "Intended to steer" to "Not intended to steer".
 			/// @param[in] state The request reset command state to report
-			void set_request_reset_command_status(RequestResetCommandStatus state);
+			/// @returns True if the request reset command status changed, false otherwise
+			bool set_request_reset_command_status(RequestResetCommandStatus state);
 
 			/// @brief Returns the reported request reset command
 			/// @details Machine steering system request to the automatic guidance system to
@@ -243,7 +250,8 @@ namespace isobus
 			/// limit status associated with guidance commands that are persistent
 			/// (i.e. not transient/temporary/one-shot).
 			/// @param[in] status The limit status to report
-			void set_guidance_limit_status(GuidanceLimitStatus status);
+			/// @returns True if the guidance limit status changed, false otherwise
+			bool set_guidance_limit_status(GuidanceLimitStatus status);
 
 			/// @brief Returns the reported guidance limit status
 			/// @details This parameter is used to report the steering system's present
@@ -256,7 +264,7 @@ namespace isobus
 			/// @details This parameter is used to indicate why the guidance system cannot currently accept
 			/// remote commands or has most recently stopped accepting remote commands.
 			/// @returns The exit code for the guidance system
-			void set_guidance_system_command_exit_reason_code(std::uint8_t exitCode);
+			bool set_guidance_system_command_exit_reason_code(std::uint8_t exitCode);
 
 			/// @brief Returns the exit code for the guidance system
 			/// @details This parameter is used to indicate why the guidance system cannot currently accept
@@ -266,7 +274,8 @@ namespace isobus
 
 			/// @brief Sets the state for the steering engage switch
 			/// @param[in] switchStatus The engage switch state to report
-			void set_guidance_system_remote_engage_switch_status(GenericSAEbs02SlotValue switchStatus);
+			/// @returns True if the engage switch state changed, false otherwise
+			bool set_guidance_system_remote_engage_switch_status(GenericSAEbs02SlotValue switchStatus);
 
 			/// @brief Returns the state for the steering engage switch
 			/// @returns The state for the steering engage switch
@@ -306,8 +315,8 @@ namespace isobus
 			std::uint8_t guidanceSystemCommandExitReasonCode = static_cast<std::uint8_t>(GuidanceSystemCommandExitReasonCode::NotAvailable); ///< The exit code for guidance, stored as a u8 to preserve manufacturer specific values (SPN 5725)
 		};
 
-		/// @brief Sets up the class and registers it to recieve callbacks from the network manager for processing
-		/// guidance messages. The class will not recieve messages if this is not called.
+		/// @brief Sets up the class and registers it to receive callbacks from the network manager for processing
+		/// guidance messages. The class will not receive messages if this is not called.
 		void initialize();
 
 		/// @brief Returns if the interface has been initialized
@@ -316,7 +325,7 @@ namespace isobus
 
 		/// @brief Use this to configure the transmission of the guidance machine info message from your application. If you pass in an internal control function
 		/// to the constructor of this class, then this message is available to be sent.
-		AgriculturalGuidanceMachineInfo agriculturalGuidanceMachineInfoTransmitData;
+		GuidanceMachineInfo guidanceMachineInfoTransmitData;
 
 		/// @brief Use this to configure transmission the guidance system command message from your application. If you pass in an internal control function
 		/// to the constructor of this class, then this message is available to be sent.
@@ -328,17 +337,17 @@ namespace isobus
 
 		/// @brief Returns the number of received, unique guidance machine info message sources
 		/// @returns The number of CFs sending the guidance machine info message either as a broadcast, or to our internal control function
-		std::size_t get_number_received_agricultural_guidance_machine_info_message_sources() const;
+		std::size_t get_number_received_guidance_machine_info_message_sources() const;
 
 		/// @brief Returns the content of the agricultural guidance machine info message
-		/// based on the index of the sender. Use this to read the recieved messages' content.
+		/// based on the index of the sender. Use this to read the received messages' content.
 		/// @param[in] index An index of senders of the agricultural guidance machine info message
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
-		std::shared_ptr<AgriculturalGuidanceMachineInfo> get_received_agricultural_guidance_machine_info(std::size_t index);
+		std::shared_ptr<GuidanceMachineInfo> get_received_guidance_machine_info(std::size_t index);
 
 		/// @brief Returns the content of the agricultural guidance curvature command message
-		/// based on the index of the sender. Use this to read the recieved messages' content.
+		/// based on the index of the sender. Use this to read the received messages' content.
 		/// @param[in] index An index of senders of the agricultural guidance curvature command message
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
@@ -346,11 +355,11 @@ namespace isobus
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance machine info messages are received.
 		/// @returns The event publisher for guidance machine info messages
-		EventDispatcher<const std::shared_ptr<AgriculturalGuidanceMachineInfo>> &get_agricultural_guidance_machine_info_event_publisher();
+		EventDispatcher<const std::shared_ptr<GuidanceMachineInfo>, bool> &get_guidance_machine_info_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance system command messages are received.
 		/// @returns The event publisher for guidance system command messages
-		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>> &get_guidance_guidance_system_command_event_publisher();
+		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>, bool> &get_guidance_system_command_event_publisher();
 
 		/// @brief Call this cyclically to update the interface. Transmits messages if needed and processes
 		/// timeouts for received messages.
@@ -383,33 +392,23 @@ namespace isobus
 		static constexpr float CURVATURE_COMMAND_RESOLUTION_PER_BIT = 0.25f; ///< The resolution of the message in km-1 per bit
 		static constexpr std::uint16_t ZERO_CURVATURE_INVERSE_KM = 32128; ///< This is the value for zero km-1 for 0.25 km-1 per bit
 
-		/// @brief Sends the agricultural guidance machine info message based on the configured content of agriculturalGuidanceMachineInfoTransmitData
+		/// @brief Sends the agricultural guidance machine info message based on the configured content of guidanceMachineInfoTransmitData
 		/// @returns true if the message was sent, otherwise false
-		bool send_agricultural_guidance_machine_info() const;
+		bool send_guidance_machine_info() const;
 
 		/// @brief Sends the agricultural guidance system command message based on the configured content of guidanceSystemCommandTransmitData
 		/// @returns true if the message was sent, otherwise false
 		bool send_guidance_system_command() const;
 
-		/// @brief Parses a message into a AgriculturalGuidanceMachineInfo class
-		/// @param[in] message The message to parse
-		/// @param[in] machineInfo The class into which the decoded message components will be stored
-		static void parse_agricultural_guidance_machine_info_message(CANMessage *message, std::shared_ptr<AgriculturalGuidanceMachineInfo> machineInfo);
-
-		/// @brief Parses a message into a GuidanceSystemCommand class
-		/// @param[in] message The message to parse
-		/// @param[in] guidanceCommand The class into which the decoded message components will be stored
-		static void parse_agricultural_guidance_system_command_message(CANMessage *message, std::shared_ptr<GuidanceSystemCommand> guidanceCommand);
-
 		ProcessingFlags txFlags; ///< Tx flag for sending messages periodically
-		EventDispatcher<const std::shared_ptr<AgriculturalGuidanceMachineInfo>> agriculturalGuidanceMachineInfoEventPublisher; ///< An event publisher for notifying when new guidance machine info messages are received
-		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>> guidanceSystemCommandEventPublisher; ///< An event publisher for notifying when new guidance system commands are received
+		EventDispatcher<const std::shared_ptr<GuidanceMachineInfo>, bool> guidanceMachineInfoEventPublisher; ///< An event publisher for notifying when new guidance machine info messages are received
+		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>, bool> guidanceSystemCommandEventPublisher; ///< An event publisher for notifying when new guidance system commands are received
 		std::shared_ptr<InternalControlFunction> sourceControlFunction; ///< The control function to use when sending messages
 		std::shared_ptr<ControlFunction> destinationControlFunction; ///< The optional destination to which messages will be sent. If nullptr it will be broadcast instead.
-		std::vector<std::shared_ptr<AgriculturalGuidanceMachineInfo>> receivedAgriculturalGuidanceMachineInfoMessages; ///< A list of all received estimated curvatures
+		std::vector<std::shared_ptr<GuidanceMachineInfo>> receivedGuidanceMachineInfoMessages; ///< A list of all received estimated curvatures
 		std::vector<std::shared_ptr<GuidanceSystemCommand>> receivedGuidanceSystemCommandMessages; ///< A list of all received curvature commands and statuses
 		std::uint32_t guidanceSystemCommandTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the guidance system command message
-		std::uint32_t agriculturalGuidanceMachineInfoTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the agricultural guidance machine info message
+		std::uint32_t guidanceMachineInfoTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the guidance machine info message
 		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 } // namespace isobus

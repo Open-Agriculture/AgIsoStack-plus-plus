@@ -71,6 +71,7 @@ if(BUILD_EXAMPLES)
   add_subdirectory("examples/virtual_terminal/aux_functions")
   add_subdirectory("examples/virtual_terminal/aux_inputs")
   add_subdirectory("examples/task_controller_client")
+  add_subdirectory("examples/guidance")
 endif()
 
 if(BUILD_TESTING)
