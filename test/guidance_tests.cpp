@@ -32,7 +32,23 @@ public:
 	{
 		return send_agricultural_guidance_machine_info();
 	}
+
+	static void test_guidance_system_command_callback(const std::shared_ptr<GuidanceSystemCommand>)
+	{
+		wasGuidanceSystemCommandCallbackHit = true;
+	}
+
+	static void test_guidance_info_callback(const std::shared_ptr<AgriculturalGuidanceMachineInfo>)
+	{
+		wasGuidanceInfoCallbackHit = true;
+	}
+
+	static bool wasGuidanceSystemCommandCallbackHit;
+	static bool wasGuidanceInfoCallbackHit;
 };
+
+bool TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit = false;
+bool TestGuidanceInterface::wasGuidanceInfoCallbackHit = false;
 
 TEST(GUIDANCE_TESTS, GuidanceMessages)
 {
@@ -156,6 +172,8 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	// Test the command message next. It's much simpler.
 	interfaceUnderTest.guidanceSystemCommandTransmitData.set_curvature(-43.4f);
 	interfaceUnderTest.guidanceSystemCommandTransmitData.set_status(GuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer);
+	EXPECT_NEAR(-43.5f, interfaceUnderTest.guidanceSystemCommandTransmitData.get_curvature(), 0.24f); // This also tests rounding to the nearest 0.25 km-1
+	EXPECT_EQ(GuidanceInterface::GuidanceSystemCommand::CurvatureCommandStatus::IntendedToSteer, interfaceUnderTest.guidanceSystemCommandTransmitData.get_status());
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -220,6 +238,12 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
+	// Register callbacks to test
+	auto guidanceCommandListener = interfaceUnderTest.get_guidance_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
+	auto guidanceInfoListener = interfaceUnderTest.get_agricultural_guidance_machine_info_event_publisher().add_listener(TestGuidanceInterface::test_guidance_info_callback);
+	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceInfoCallbackHit);
+	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
+
 	// Test commanded curvature
 	std::uint16_t testCurvature = std::roundf(4 * ((94.25f + 8032) / 0.25f)) / 4.0f; // manually encode a curvature of 94.25 km-1
 	testFrame.dataLength = 8;
@@ -234,6 +258,10 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceInfoCallbackHit);
+	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
+	TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit = false;
 
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
@@ -258,6 +286,9 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceInfoCallbackHit);
+	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
@@ -311,4 +342,12 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
+
+	// Test timeouts
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	interfaceUnderTest.update();
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_agricultural_guidance_machine_info_message_sources());
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
+	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_agricultural_guidance_machine_info(0));
+	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 }
