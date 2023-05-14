@@ -32,10 +32,14 @@
 
 namespace isobus
 {
-	AgriculturalGuidanceInterface::AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) :
+	AgriculturalGuidanceInterface::AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source,
+	                                                             std::shared_ptr<ControlFunction> destination,
+	                                                             bool sentSystemCommandPeriodically,
+	                                                             bool sentMachineInfoPeriodically) :
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
-	  sourceControlFunction(source),
-	  destinationControlFunction(destination)
+	  destinationControlFunction(destination),
+	  guidanceMachineInfoTransmitData(GuidanceMachineInfo(sentMachineInfoPeriodically ? source.get() : nullptr)),
+	  guidanceSystemCommandTransmitData(GuidanceSystemCommand(sentSystemCommandPeriodically ? source.get() : nullptr))
 	{
 	}
 
@@ -46,6 +50,11 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand), process_rx_message, this);
 		}
+	}
+
+	AgriculturalGuidanceInterface::GuidanceSystemCommand::GuidanceSystemCommand(ControlFunction *sender) :
+	  controlFunction(sender)
+	{
 	}
 
 	bool AgriculturalGuidanceInterface::GuidanceSystemCommand::set_status(CurvatureCommandStatus newStatus)
@@ -78,11 +87,6 @@ namespace isobus
 		return commandedCurvature;
 	}
 
-	void AgriculturalGuidanceInterface::GuidanceSystemCommand::set_sender_control_function(ControlFunction *sender)
-	{
-		controlFunction = sender;
-	}
-
 	ControlFunction *AgriculturalGuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
 	{
 		return controlFunction;
@@ -96,6 +100,11 @@ namespace isobus
 	std::uint32_t AgriculturalGuidanceInterface::GuidanceSystemCommand::get_timestamp_ms() const
 	{
 		return timestamp_ms;
+	}
+
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceMachineInfo(ControlFunction *sender) :
+	  controlFunction(sender)
+	{
 	}
 
 	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_estimated_curvature(float curvature)
@@ -218,11 +227,6 @@ namespace isobus
 		return guidanceSystemRemoteEngageSwitchStatus;
 	}
 
-	void AgriculturalGuidanceInterface::GuidanceMachineInfo::set_sender_control_function(ControlFunction *sender)
-	{
-		controlFunction = sender;
-	}
-
 	ControlFunction *AgriculturalGuidanceInterface::GuidanceMachineInfo::get_sender_control_function() const
 	{
 		return controlFunction;
@@ -242,19 +246,13 @@ namespace isobus
 	{
 		if (!initialized)
 		{
-			if (nullptr != sourceControlFunction)
+			if ((nullptr != guidanceSystemCommandTransmitData.get_sender_control_function()) || (nullptr != guidanceMachineInfoTransmitData.get_sender_control_function()))
 			{
 				// Make sure you know what you are doing... consider reviewing the guidance messaging in ISO 11783-7 if you haven't already.
 				CANStackLogger::warn("[Guidance]: Use extreme caution! You have configured the ISOBUS guidance interface with the ability to steer a machine.");
 			}
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand), process_rx_message, this);
-
-			if (nullptr != sourceControlFunction)
-			{
-				guidanceMachineInfoTransmitData.set_sender_control_function(sourceControlFunction.get());
-				guidanceSystemCommandTransmitData.set_sender_control_function(sourceControlFunction.get());
-			}
 			initialized = true;
 		}
 	}
@@ -310,7 +308,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != sourceControlFunction)
+		if (nullptr != guidanceSystemCommandTransmitData.get_sender_control_function())
 		{
 			float scaledCurvature = std::roundf(4 * ((guidanceSystemCommandTransmitData.get_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
@@ -342,7 +340,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        sourceControlFunction.get(),
+			                                                        static_cast<isobus::InternalControlFunction *>(guidanceSystemCommandTransmitData.get_sender_control_function()),
 			                                                        destinationControlFunction.get(),
 			                                                        CANIdentifier::Priority3);
 		}
@@ -353,7 +351,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != sourceControlFunction)
+		if (nullptr != guidanceMachineInfoTransmitData.get_sender_control_function())
 		{
 			float scaledCurvature = std::roundf(4 * ((guidanceMachineInfoTransmitData.get_estimated_curvature() + CURVATURE_COMMAND_OFFSET_INVERSE_KM) / CURVATURE_COMMAND_RESOLUTION_PER_BIT)) / 4.0f;
 			std::uint16_t encodedCurvature = ZERO_CURVATURE_INVERSE_KM;
@@ -391,7 +389,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        sourceControlFunction.get(),
+			                                                        static_cast<isobus::InternalControlFunction *>(guidanceMachineInfoTransmitData.get_sender_control_function()),
 			                                                        destinationControlFunction.get(),
 			                                                        CANIdentifier::Priority3);
 		}
@@ -414,20 +412,20 @@ namespace isobus
 				                                                           return SystemTiming::time_expired_ms(guidanceCommand->get_timestamp_ms(), GUIDANCE_MESSAGE_TIMEOUT_MS);
 			                                                           }),
 			                                            receivedGuidanceSystemCommandMessages.end());
-			if (nullptr != sourceControlFunction)
+
+			if (SystemTiming::time_expired_ms(guidanceMachineInfoTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS) &&
+			    (nullptr != guidanceMachineInfoTransmitData.get_sender_control_function()))
 			{
-				if (SystemTiming::time_expired_ms(guidanceMachineInfoTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
-				{
-					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceMachineInfo));
-					guidanceMachineInfoTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
-				}
-				if (SystemTiming::time_expired_ms(guidanceSystemCommandTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS))
-				{
-					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceSystemCommand));
-					guidanceSystemCommandTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
-				}
-				txFlags.process_all_flags();
+				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceMachineInfo));
+				guidanceMachineInfoTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
 			}
+			if (SystemTiming::time_expired_ms(guidanceSystemCommandTransmitTimestamp_ms, GUIDANCE_MESSAGE_TX_INTERVAL_MS) &&
+			    (nullptr != guidanceSystemCommandTransmitData.get_sender_control_function()))
+			{
+				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGuidanceSystemCommand));
+				guidanceSystemCommandTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+			}
+			txFlags.process_all_flags();
 		}
 		else
 		{
@@ -490,9 +488,8 @@ namespace isobus
 						if (result == targetInterface->receivedGuidanceSystemCommandMessages.end())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGuidanceSystemCommandMessages.push_back(std::make_shared<GuidanceSystemCommand>());
+							targetInterface->receivedGuidanceSystemCommandMessages.push_back(std::make_shared<GuidanceSystemCommand>(message->get_source_control_function()));
 							result = targetInterface->receivedGuidanceSystemCommandMessages.end() - 1;
-							(*result)->set_sender_control_function(message->get_source_control_function());
 						}
 
 						auto &guidanceCommand = *result;
@@ -527,9 +524,8 @@ namespace isobus
 						if (result == targetInterface->receivedGuidanceMachineInfoMessages.cend())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGuidanceMachineInfoMessages.push_back(std::make_shared<GuidanceMachineInfo>());
+							targetInterface->receivedGuidanceMachineInfoMessages.push_back(std::make_shared<GuidanceMachineInfo>(message->get_source_control_function()));
 							result = targetInterface->receivedGuidanceMachineInfoMessages.cend() - 1;
-							(*result)->set_sender_control_function(message->get_source_control_function());
 						}
 
 						auto &machineInfo = *result;
