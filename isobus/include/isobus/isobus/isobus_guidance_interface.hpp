@@ -38,7 +38,12 @@ namespace isobus
 		/// @brief Constructor for a AgriculturalGuidanceInterface
 		/// @param[in] source The internal control function to use when sending messages, or nullptr for listen only
 		/// @param[in] destination The destination control function for transmitted messages, or nullptr for broadcasts
-		AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		/// @param[in] sentSystemCommandPeriodically If true, the system command message will be sent periodically. This should (only) be used by an guidance application trying to steer a machine.
+		/// @param[in] sentMachineInfoPeriodically If true, the machine info message will be sent periodically. This should (only) be used by the steering controller itself.
+		AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source,
+		                              std::shared_ptr<ControlFunction> destination,
+		                              bool sentSystemCommandPeriodically = false,
+		                              bool sentMachineInfoPeriodically = false);
 
 		/// @brief Destructor for the AgriculturalGuidanceInterface
 		~AgriculturalGuidanceInterface();
@@ -62,7 +67,9 @@ namespace isobus
 				NotAvailable = 3
 			};
 
-			GuidanceSystemCommand() = default;
+			/// @brief Constructor for a GuidanceSystemCommand
+			/// @param[in] sender The control function that is sending this message
+			GuidanceSystemCommand(ControlFunction *sender);
 
 			/// @brief Sets the curvature command status that will be encoded into
 			/// the CAN message. This parameter indicates whether the guidance system is
@@ -92,10 +99,6 @@ namespace isobus
 			/// @returns Commanded curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
 			float get_curvature() const;
 
-			/// @brief Stores a pointer to the source control function for this message data
-			/// @param[in] sender The control function sending this information
-			void set_sender_control_function(ControlFunction *sender);
-
 			/// @brief Returns a pointer to the sender of the message. If an ICF is the sender, returns the ICF being used to transmit from.
 			/// @attention The only way you could get an invalid pointer here is if you register a partner, it sends this message, then you delete the partner and
 			/// call this function, as that is the only time the stack deletes a control function. That would be abnormal program flow, but at some point
@@ -114,7 +117,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *controlFunction = nullptr; ///< The CF that is sending the message
+			ControlFunction *const controlFunction; ///< The CF that is sending the message
 			float commandedCurvature = 0.0f; ///< The commanded curvature in km^-1 (inverse kilometers)
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			CurvatureCommandStatus commandedStatus = CurvatureCommandStatus::NotAvailable; ///< The current status for the command
@@ -194,7 +197,8 @@ namespace isobus
 			};
 
 			/// @brief Constructor for a GuidanceMachineInfo
-			GuidanceMachineInfo() = default;
+			/// @param[in] sender The control function that is sending this message
+			GuidanceMachineInfo(ControlFunction *sender);
 
 			/// @brief Sets the estimated course curvature over ground for the machine.
 			/// @param[in] curvature The curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
@@ -281,10 +285,6 @@ namespace isobus
 			/// @returns The state for the steering engage switch
 			GenericSAEbs02SlotValue get_guidance_system_remote_engage_switch_status() const;
 
-			/// @brief Stores a pointer to the source control function for this message data
-			/// @param[in] sender The control function sending this information
-			void set_sender_control_function(ControlFunction *sender);
-
 			/// @brief Returns a pointer to the sender of the message. If an ICF is the sender, returns the ICF being used to transmit from.
 			/// @attention The only way you could get an invalid pointer here is if you register a partner, it sends this message, then you delete the partner and
 			/// call this function, as that is the only time the stack deletes a control function. That would be abnormal program flow, but at some point
@@ -303,7 +303,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *controlFunction = nullptr; ///< The CF that is sending the message
+			ControlFunction *const controlFunction; ///< The CF that is sending the message
 			float estimatedCurvature = 0.0f; ///< Curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1 (SPN 5238)
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			MechanicalSystemLockout mechanicalSystemLockoutState = MechanicalSystemLockout::NotAvailable; ///< The reported state of the mechanical system lockout switch (SPN 5243)
@@ -403,7 +403,6 @@ namespace isobus
 		ProcessingFlags txFlags; ///< Tx flag for sending messages periodically
 		EventDispatcher<const std::shared_ptr<GuidanceMachineInfo>, bool> guidanceMachineInfoEventPublisher; ///< An event publisher for notifying when new guidance machine info messages are received
 		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>, bool> guidanceSystemCommandEventPublisher; ///< An event publisher for notifying when new guidance system commands are received
-		std::shared_ptr<InternalControlFunction> sourceControlFunction; ///< The control function to use when sending messages
 		std::shared_ptr<ControlFunction> destinationControlFunction; ///< The optional destination to which messages will be sent. If nullptr it will be broadcast instead.
 		std::vector<std::shared_ptr<GuidanceMachineInfo>> receivedGuidanceMachineInfoMessages; ///< A list of all received estimated curvatures
 		std::vector<std::shared_ptr<GuidanceSystemCommand>> receivedGuidanceSystemCommandMessages; ///< A list of all received curvature commands and statuses

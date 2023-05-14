@@ -79,7 +79,7 @@ namespace isobus
 	bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
 	{
 		std::unique_lock<std::mutex> lock(mutex);
-		ourDevice->condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });
+		ourDevice->condition.wait_for(lock, std::chrono::milliseconds(1000), [this] { return !ourDevice->queue.empty() || !running; });
 		if (!ourDevice->queue.empty())
 		{
 			canFrame = ourDevice->queue.front();
