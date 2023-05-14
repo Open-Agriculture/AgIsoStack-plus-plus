@@ -103,9 +103,18 @@ namespace isobus
 			/// @returns The control function sending this instance of the guidance system command message
 			ControlFunction *get_sender_control_function() const;
 
+			/// @brief Sets the timestamp for when the message was received or sent
+			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
+			void set_timestamp_ms(std::uint32_t timestamp);
+
+			/// @brief Returns the timestamp for when the message was received, in milliseconds
+			/// @returns The timestamp for when the message was received, in milliseconds
+			std::uint32_t get_timestamp_ms() const;
+
 		private:
 			ControlFunction *controlFunction = nullptr; ///< The CF that is sending the message
 			float commandedCurvature = 0.0f; ///< The commanded curvature in km^-1 (inverse kilometers)
+			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			CurvatureCommandStatus commandedStatus = CurvatureCommandStatus::NotAvailable; ///< The current status for the command
 		};
 
@@ -276,9 +285,18 @@ namespace isobus
 			/// @returns The control function sending this instance of the guidance system command message
 			ControlFunction *get_sender_control_function() const;
 
+			/// @brief Sets the timestamp for when the message was received or sent
+			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
+			void set_timestamp_ms(std::uint32_t timestamp);
+
+			/// @brief Returns the timestamp for when the message was received, in milliseconds
+			/// @returns The timestamp for when the message was received, in milliseconds
+			std::uint32_t get_timestamp_ms() const;
+
 		private:
 			ControlFunction *controlFunction = nullptr; ///< The CF that is sending the message
 			float estimatedCurvature = 0.0f; ///< Curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1 (SPN 5238)
+			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			MechanicalSystemLockout mechanicalSystemLockoutState = MechanicalSystemLockout::NotAvailable; ///< The reported state of the mechanical system lockout switch (SPN 5243)
 			GenericSAEbs02SlotValue guidanceSteeringSystemReadinessState = GenericSAEbs02SlotValue::NotAvailableTakeNoAction; ///< The reported state of the steering system's readiness to steer (SPN 5242)
 			GenericSAEbs02SlotValue guidanceSteeringInputPositionStatus = GenericSAEbs02SlotValue::NotAvailableTakeNoAction; ///< The reported state of the steering input position. (SPN 5241)
@@ -325,6 +343,14 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		std::shared_ptr<GuidanceSystemCommand> get_received_guidance_system_command(std::size_t index);
+
+		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance machine info messages are received.
+		/// @returns The event publisher for guidance machine info messages
+		EventDispatcher<const std::shared_ptr<AgriculturalGuidanceMachineInfo>> &get_agricultural_guidance_machine_info_event_publisher();
+
+		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance system command messages are received.
+		/// @returns The event publisher for guidance system command messages
+		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>> &get_guidance_guidance_system_command_event_publisher();
 
 		/// @brief Call this cyclically to update the interface. Transmits messages if needed and processes
 		/// timeouts for received messages.
@@ -376,6 +402,8 @@ namespace isobus
 		static void parse_agricultural_guidance_system_command_message(CANMessage *message, std::shared_ptr<GuidanceSystemCommand> guidanceCommand);
 
 		ProcessingFlags txFlags; ///< Tx flag for sending messages periodically
+		EventDispatcher<const std::shared_ptr<AgriculturalGuidanceMachineInfo>> agriculturalGuidanceMachineInfoEventPublisher; ///< An event publisher for notifying when new guidance machine info messages are received
+		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>> guidanceSystemCommandEventPublisher; ///< An event publisher for notifying when new guidance system commands are received
 		std::shared_ptr<InternalControlFunction> sourceControlFunction; ///< The control function to use when sending messages
 		std::shared_ptr<ControlFunction> destinationControlFunction; ///< The optional destination to which messages will be sent. If nullptr it will be broadcast instead.
 		std::vector<std::shared_ptr<AgriculturalGuidanceMachineInfo>> receivedAgriculturalGuidanceMachineInfoMessages; ///< A list of all received estimated curvatures
