@@ -34,12 +34,12 @@ namespace isobus
 {
 	AgriculturalGuidanceInterface::AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source,
 	                                                             std::shared_ptr<ControlFunction> destination,
-	                                                             bool sentSystemCommandPeriodically,
-	                                                             bool sentMachineInfoPeriodically) :
+	                                                             bool enableSendingSystemCommandPeriodically,
+	                                                             bool enableSendingMachineInfoPeriodically) :
+	  guidanceMachineInfoTransmitData(GuidanceMachineInfo(enableSendingMachineInfoPeriodically ? source.get() : nullptr)),
+	  guidanceSystemCommandTransmitData(GuidanceSystemCommand(enableSendingSystemCommandPeriodically ? source.get() : nullptr)),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
-	  destinationControlFunction(destination),
-	  guidanceMachineInfoTransmitData(GuidanceMachineInfo(sentMachineInfoPeriodically ? source.get() : nullptr)),
-	  guidanceSystemCommandTransmitData(GuidanceSystemCommand(sentSystemCommandPeriodically ? source.get() : nullptr))
+	  destinationControlFunction(destination)
 	{
 	}
 
@@ -74,7 +74,7 @@ namespace isobus
 
 	bool AgriculturalGuidanceInterface::GuidanceSystemCommand::set_curvature(float curvature)
 	{
-		if (fabs(commandedCurvature - curvature) > std::numeric_limits<float>::epsilon())
+		if (std::fabs(commandedCurvature - curvature) > std::numeric_limits<float>::epsilon())
 		{
 			commandedCurvature = curvature;
 			return true;
@@ -109,7 +109,7 @@ namespace isobus
 
 	bool AgriculturalGuidanceInterface::GuidanceMachineInfo::set_estimated_curvature(float curvature)
 	{
-		if (fabs(estimatedCurvature - curvature) > std::numeric_limits<float>::epsilon())
+		if (std::fabs(estimatedCurvature - curvature) > std::numeric_limits<float>::epsilon())
 		{
 			estimatedCurvature = curvature;
 			return true;
@@ -492,7 +492,7 @@ namespace isobus
 							result = targetInterface->receivedGuidanceSystemCommandMessages.end() - 1;
 						}
 
-						auto &guidanceCommand = *result;
+						auto guidanceCommand = *result;
 						bool changed = false;
 
 						changed |= guidanceCommand->set_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
@@ -528,7 +528,7 @@ namespace isobus
 							result = targetInterface->receivedGuidanceMachineInfoMessages.cend() - 1;
 						}
 
-						auto &machineInfo = *result;
+						auto machineInfo = *result;
 						bool changed = false;
 
 						changed |= machineInfo->set_estimated_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
@@ -541,7 +541,7 @@ namespace isobus
 						changed |= machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(4) >> 6) & 0x03));
 						machineInfo->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->guidanceMachineInfoEventPublisher.invoke(std::move(*result), std::move(changed));
+						targetInterface->guidanceMachineInfoEventPublisher.invoke(std::move(machineInfo), std::move(changed));
 					}
 				}
 				else

@@ -42,8 +42,8 @@ namespace isobus
 		/// @param[in] sentMachineInfoPeriodically If true, the machine info message will be sent periodically. This should (only) be used by the steering controller itself.
 		AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source,
 		                              std::shared_ptr<ControlFunction> destination,
-		                              bool sentSystemCommandPeriodically = false,
-		                              bool sentMachineInfoPeriodically = false);
+		                              bool enableSendingSystemCommandPeriodically = false,
+		                              bool enableSendingMachineInfoPeriodically = false);
 
 		/// @brief Destructor for the AgriculturalGuidanceInterface
 		~AgriculturalGuidanceInterface();
@@ -69,7 +69,7 @@ namespace isobus
 
 			/// @brief Constructor for a GuidanceSystemCommand
 			/// @param[in] sender The control function that is sending this message
-			GuidanceSystemCommand(ControlFunction *sender);
+			explicit GuidanceSystemCommand(ControlFunction *sender);
 
 			/// @brief Sets the curvature command status that will be encoded into
 			/// the CAN message. This parameter indicates whether the guidance system is
@@ -198,7 +198,7 @@ namespace isobus
 
 			/// @brief Constructor for a GuidanceMachineInfo
 			/// @param[in] sender The control function that is sending this message
-			GuidanceMachineInfo(ControlFunction *sender);
+			explicit GuidanceMachineInfo(ControlFunction *sender);
 
 			/// @brief Sets the estimated course curvature over ground for the machine.
 			/// @param[in] curvature The curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
