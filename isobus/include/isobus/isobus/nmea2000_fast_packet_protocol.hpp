@@ -27,7 +27,6 @@
 #define NMEA2000_FAST_PACKET_PROTOCOL_HPP
 
 #include "isobus/isobus/can_internal_control_function.hpp"
-#include "isobus/isobus/can_managed_message.hpp"
 #include "isobus/isobus/can_protocol.hpp"
 
 #include <mutex>
@@ -111,7 +110,7 @@ namespace isobus
 			/// @brief The destructor for a TP session
 			~FastPacketProtocolSession();
 
-			CANLibManagedMessage sessionMessage; ///< A CAN message is used in the session to represent and store data like PGN
+			CANMessage sessionMessage; ///< A CAN message is used in the session to represent and store data like PGN
 			TransmitCompleteCallback sessionCompleteCallback; ///< A callback that is to be called when the session is completed
 			DataChunkCallback frameChunkCallback; ///< A callback that might be used to get chunks of data to send
 			void *parent; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr

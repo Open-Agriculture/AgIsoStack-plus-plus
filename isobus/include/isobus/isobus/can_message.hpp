@@ -40,6 +40,12 @@ namespace isobus
 			BigEndian
 		};
 
+		/// @brief ISO11783-3 defines this: The maximum number of packets that can be sent in a single connection
+		/// with extended transport protocol is restricted by the extended data packet offset (3 bytes).
+		/// This yields a maximum message size of (2^24-1 packets) x (7 bytes/packet) = 117440505 bytes
+		/// @returns The maximum length of any CAN message as defined by ETP in ISO11783
+		static const std::uint32_t ABSOLUTE_MAX_MESSAGE_LENGTH = 117440505;
+
 		/// @brief Constructor for a CAN message
 		/// @param[in] CANPort The can channel index the message uses
 		explicit CANMessage(std::uint8_t CANPort);
@@ -78,6 +84,32 @@ namespace isobus
 		/// @brief Returns the CAN channel index associated with the message
 		/// @returns The CAN channel index associated with the message
 		std::uint8_t get_can_port_index() const;
+
+		/// @brief Sets the message data to the value supplied. Creates a copy.
+		/// @param[in] dataBuffer The data payload
+		/// @param[in] length the length of the data payload in bytes
+		void set_data(const std::uint8_t *dataBuffer, std::uint32_t length);
+
+		/// @brief Sets one byte of data in the message data payload
+		/// @param[in] dataByte One byte of data
+		/// @param[in] insertPosition The position in the message at which to insert the data byte
+		void set_data(std::uint8_t dataByte, const std::uint32_t insertPosition);
+
+		/// @brief Sets the size of the data payload
+		/// @param[in] length The desired length of the data payload
+		void set_data_size(std::uint32_t length);
+
+		/// @brief Sets the source control function for the message
+		/// @param[in] value The source control function
+		void set_source_control_function(ControlFunction *value);
+
+		/// @brief Sets the destination control function for the message
+		/// @param[in] value The destination control function
+		void set_destination_control_function(ControlFunction *value);
+
+		/// @brief Sets the CAN ID of the message
+		/// @param[in] value The CAN ID for the message
+		void set_identifier(CANIdentifier value);
 
 		/// @brief Get a 8-bit unsigned byte from the buffer at a specific index.
 		/// A 8-bit unsigned byte can hold a value between 0 and 255.
@@ -126,13 +158,7 @@ namespace isobus
 		/// @return True if (all) the bit(s) are set, false otherwise
 		bool get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1) const;
 
-		/// @brief ISO11783-3 defines this: The maximum number of packets that can be sent in a single connection
-		/// with extended transport protocol is restricted by the extended data packet offset (3 bytes).
-		/// This yields a maximum message size of (2^24-1 packets) x (7 bytes/packet) = 117440505 bytes
-		/// @returns The maximum length of any CAN message as defined by ETP in ISO11783
-		static const std::uint32_t ABSOLUTE_MAX_MESSAGE_LENGTH = 117440505;
-
-	protected:
+	private:
 		std::vector<std::uint8_t> data; ///< A data buffer for the message, used when not using data chunk callbacks
 		ControlFunction *source; ///< The source control function of the message
 		ControlFunction *destination; ///< The destination control function of the message
@@ -140,8 +166,6 @@ namespace isobus
 		Type messageType; ///< The internal message type associated with the message
 		const std::uint32_t messageUniqueID; ///< The unique ID of the message, an internal value for tracking and stats
 		const std::uint8_t CANPortIndex; ///< The CAN channel index associated with the message
-
-	private:
 		static std::uint32_t lastGeneratedUniqueID; ///< A unique, sequential ID for this CAN message
 	};
 

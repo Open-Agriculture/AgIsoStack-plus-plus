@@ -13,7 +13,6 @@
 
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
-#include "isobus/isobus/can_managed_message.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_protocol.hpp"
 

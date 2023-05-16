@@ -63,6 +63,42 @@ namespace isobus
 		return CANPortIndex;
 	}
 
+	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::uint32_t length)
+	{
+		if (nullptr != dataBuffer)
+		{
+			data.insert(data.end(), dataBuffer, dataBuffer + length);
+		}
+	}
+
+	void CANMessage::set_data(std::uint8_t dataByte, const std::uint32_t insertPosition)
+	{
+		if (insertPosition < data.size())
+		{
+			data[insertPosition] = dataByte;
+		}
+	}
+
+	void CANMessage::set_data_size(std::uint32_t length)
+	{
+		data.resize(length);
+	}
+
+	void CANMessage::set_source_control_function(ControlFunction *value)
+	{
+		source = value;
+	}
+
+	void CANMessage::set_destination_control_function(ControlFunction *value)
+	{
+		destination = value;
+	}
+
+	void CANMessage::set_identifier(CANIdentifier value)
+	{
+		identifier = value;
+	}
+
 	std::uint8_t CANMessage::get_uint8_at(const std::size_t index) const
 	{
 		return data.at(index);

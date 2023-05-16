@@ -2,7 +2,6 @@
 
 #include "isobus/isobus/can_NAME_filter.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
-#include "isobus/isobus/can_managed_message.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -64,7 +63,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 
 	interfaceUnderTest.initialize();
 
-	CANLibManagedMessage testMessage(0);
+	CANMessage testMessage(0);
 	testMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, 0xFE0F, CANIdentifier::PriorityDefault6, 0x80, 0x81));
 
 	// Make a message that is too short
