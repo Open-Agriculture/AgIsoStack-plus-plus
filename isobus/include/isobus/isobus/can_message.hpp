@@ -3,6 +3,7 @@
 ///
 /// @brief An abstraction  of a CAN message, could be > 8 data bytes.
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
@@ -44,7 +45,7 @@ namespace isobus
 		/// with extended transport protocol is restricted by the extended data packet offset (3 bytes).
 		/// This yields a maximum message size of (2^24-1 packets) x (7 bytes/packet) = 117440505 bytes
 		/// @returns The maximum length of any CAN message as defined by ETP in ISO11783
-		static const std::uint32_t ABSOLUTE_MAX_MESSAGE_LENGTH = 117440505;
+		static const std::size_t ABSOLUTE_MAX_MESSAGE_LENGTH = 117440505;
 
 		/// @brief Constructor for a CAN message
 		/// @param[in] CANPort The can channel index the message uses
@@ -63,7 +64,7 @@ namespace isobus
 
 		/// @brief Returns the length of the data in the CAN message
 		/// @returns The message data payload length
-		virtual std::uint32_t get_data_length() const;
+		virtual std::size_t get_data_length() const;
 
 		/// @brief Gets the source control function that the message is from
 		/// @returns The source control function that the message is from
@@ -77,10 +78,6 @@ namespace isobus
 		/// @returns The identifier of the message
 		CANIdentifier get_identifier() const;
 
-		/// @brief Returns the unique message ID
-		/// @returns The unique message ID
-		std::uint32_t get_message_unique_id() const;
-
 		/// @brief Returns the CAN channel index associated with the message
 		/// @returns The CAN channel index associated with the message
 		std::uint8_t get_can_port_index() const;
@@ -88,16 +85,16 @@ namespace isobus
 		/// @brief Sets the message data to the value supplied. Creates a copy.
 		/// @param[in] dataBuffer The data payload
 		/// @param[in] length the length of the data payload in bytes
-		void set_data(const std::uint8_t *dataBuffer, std::uint32_t length);
+		void set_data(const std::uint8_t *dataBuffer, std::size_t length);
 
 		/// @brief Sets one byte of data in the message data payload
 		/// @param[in] dataByte One byte of data
 		/// @param[in] insertPosition The position in the message at which to insert the data byte
-		void set_data(std::uint8_t dataByte, const std::uint32_t insertPosition);
+		void set_data(std::uint8_t dataByte, const std::size_t insertPosition);
 
 		/// @brief Sets the size of the data payload
 		/// @param[in] length The desired length of the data payload
-		void set_data_size(std::uint32_t length);
+		void set_data_size(std::size_t length);
 
 		/// @brief Sets the source control function for the message
 		/// @param[in] value The source control function
@@ -159,14 +156,12 @@ namespace isobus
 		bool get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1) const;
 
 	private:
+		Type messageType = Type::Receive; ///< The internal message type associated with the message
+		CANIdentifier identifier = CANIdentifier(0); ///< The CAN ID of the message
 		std::vector<std::uint8_t> data; ///< A data buffer for the message, used when not using data chunk callbacks
-		ControlFunction *source; ///< The source control function of the message
-		ControlFunction *destination; ///< The destination control function of the message
-		CANIdentifier identifier; ///< The CAN ID of the message
-		Type messageType; ///< The internal message type associated with the message
-		const std::uint32_t messageUniqueID; ///< The unique ID of the message, an internal value for tracking and stats
+		ControlFunction *source = nullptr; ///< The source control function of the message
+		ControlFunction *destination = nullptr; ///< The destination control function of the message
 		const std::uint8_t CANPortIndex; ///< The CAN channel index associated with the message
-		static std::uint32_t lastGeneratedUniqueID; ///< A unique, sequential ID for this CAN message
 	};
 
 } // namespace isobus

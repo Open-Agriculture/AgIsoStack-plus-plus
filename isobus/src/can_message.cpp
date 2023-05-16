@@ -1,8 +1,9 @@
 //================================================================================================
 /// @file can_message.cpp
 ///
-/// @brief An abstraction  of a CAN message, could be > 8 data bytes.
+/// @brief An abstraction of a CAN message, could be > 8 data bytes.
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
@@ -11,14 +12,7 @@
 
 namespace isobus
 {
-	std::uint32_t CANMessage::lastGeneratedUniqueID = 0;
-
 	CANMessage::CANMessage(std::uint8_t CANPort) :
-	  source(nullptr),
-	  destination(nullptr),
-	  identifier(0),
-	  messageType(Type::Receive),
-	  messageUniqueID(lastGeneratedUniqueID++),
 	  CANPortIndex(CANPort)
 	{
 	}
@@ -33,7 +27,7 @@ namespace isobus
 		return data;
 	}
 
-	std::uint32_t CANMessage::get_data_length() const
+	std::size_t CANMessage::get_data_length() const
 	{
 		return data.size();
 	}
@@ -53,17 +47,12 @@ namespace isobus
 		return identifier;
 	}
 
-	std::uint32_t CANMessage::get_message_unique_id() const
-	{
-		return messageUniqueID;
-	}
-
 	std::uint8_t CANMessage::get_can_port_index() const
 	{
 		return CANPortIndex;
 	}
 
-	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::uint32_t length)
+	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::size_t length)
 	{
 		if (nullptr != dataBuffer)
 		{
@@ -71,7 +60,7 @@ namespace isobus
 		}
 	}
 
-	void CANMessage::set_data(std::uint8_t dataByte, const std::uint32_t insertPosition)
+	void CANMessage::set_data(std::uint8_t dataByte, const std::size_t insertPosition)
 	{
 		if (insertPosition < data.size())
 		{
@@ -79,7 +68,7 @@ namespace isobus
 		}
 	}
 
-	void CANMessage::set_data_size(std::uint32_t length)
+	void CANMessage::set_data_size(std::size_t length)
 	{
 		data.resize(length);
 	}
