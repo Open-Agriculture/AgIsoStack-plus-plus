@@ -37,7 +37,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::TirePressureControl));
 	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x50, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 

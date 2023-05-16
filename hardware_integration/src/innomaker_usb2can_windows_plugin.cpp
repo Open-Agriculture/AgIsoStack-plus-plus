@@ -252,7 +252,7 @@ namespace isobus
 		}
 	}
 
-	bool InnoMakerUSB2CANWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool InnoMakerUSB2CANWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
 
@@ -299,7 +299,7 @@ namespace isobus
 		return true;
 	}
 
-	bool InnoMakerUSB2CANWindowsPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool InnoMakerUSB2CANWindowsPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
 		if (nullptr == device)

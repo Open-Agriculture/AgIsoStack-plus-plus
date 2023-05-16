@@ -16,7 +16,7 @@
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_extended_transport_protocol.hpp"
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
@@ -126,12 +126,12 @@ namespace isobus
 
 		/// @brief Process the CAN Rx queue
 		/// @param[in] rxFrame Frame to process
-		static void process_receive_can_message_frame(const HardwareInterfaceCANFrame &rxFrame);
+		static void process_receive_can_message_frame(const CANMessageFrame &rxFrame);
 
 		/// @brief Used to tell the network manager when frames are emitted on the bus, so that they can be
 		/// added to the internal bus load calculations.
 		/// @param[in] txFrame The frame that was just emitted onto the bus
-		static void process_transmitted_can_message_frame(const HardwareInterfaceCANFrame &txFrame);
+		static void process_transmitted_can_message_frame(const CANMessageFrame &txFrame);
 
 		/// @brief Informs the network manager that a partner was deleted so that it can be purged from the address/cf tables
 		/// @param[in] partner Pointer to the partner being deleted
@@ -213,7 +213,7 @@ namespace isobus
 
 		/// @brief Creates new control function classes based on the frames coming in from the bus
 		/// @param[in] rxFrame Raw frames coming in from the bus
-		void update_control_functions(const HardwareInterfaceCANFrame &rxFrame);
+		void update_control_functions(const CANMessageFrame &rxFrame);
 
 		/// @brief Checks if new partners have been created and matches them to existing control functions
 		void update_new_partners();
@@ -227,7 +227,7 @@ namespace isobus
 		/// @param[in] data A pointer to the data buffer to send from
 		/// @param[in] size The size of the messgage to send
 		/// @returns The constucted frame based on the inputs
-		HardwareInterfaceCANFrame construct_frame(std::uint32_t portIndex,
+		CANMessageFrame construct_frame(std::uint32_t portIndex,
 		                                          std::uint8_t sourceAddress,
 		                                          std::uint8_t destAddress,
 		                                          std::uint32_t parameterGroupNumber,

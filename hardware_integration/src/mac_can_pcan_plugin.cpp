@@ -45,7 +45,7 @@ namespace isobus
 		}
 	}
 
-	bool MacCANPCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool MacCANPCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		TPCANStatus result;
 		TPCANMsg CANMsg;
@@ -70,7 +70,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool MacCANPCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool MacCANPCANPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		TPCANStatus result;
 		TPCANMsg msgCanMessage;

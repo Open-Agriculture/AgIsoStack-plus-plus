@@ -17,7 +17,7 @@
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/hardware_integration/spi_hardware_plugin.hpp"
 #include "isobus/isobus/can_constants.hpp"
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 
 namespace isobus
@@ -56,12 +56,12 @@ namespace isobus
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
-		bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) override;
+		bool read_frame(isobus::CANMessageFrame &canFrame) override;
 
 		/// @brief Writes a frame to the bus (synchronous)
 		/// @param[in] canFrame The frame to write to the bus
 		/// @returns `true` if the frame was written, otherwise `false`
-		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
+		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
 	private:
 		/// @brief Some essential instructions of the MCP2515
@@ -162,14 +162,14 @@ namespace isobus
 		/// @param[in] dataRegister The data register of the buffer to read from
 		/// @param[in] intfMask The interrupt flag of the buffer to reset after reading
 		/// @returns If the read was successfull
-		bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister dataRegister, const std::uint8_t intfMask);
+		bool read_frame(isobus::CANMessageFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister dataRegister, const std::uint8_t intfMask);
 
 		/// @brief Write a frame to a buffer on the mcp2515
 		/// @param[in] canFrame The frame to write
 		/// @param[in] ctrlRegister The control register of the buffer to write to
 		/// @param[in] sidhRegister The sidh register of the buffer to write to
 		/// @returns If the write was successfull
-		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister sidhRegister);
+		bool write_frame(const isobus::CANMessageFrame &canFrame, const MCPRegister ctrlRegister, const MCPRegister sidhRegister);
 
 		SPIHardwarePlugin *transactionHandler; ///< The SPI transaction handler
 		std::uint8_t rxIndex = 0; ///< The index of the rx buffer to read from next

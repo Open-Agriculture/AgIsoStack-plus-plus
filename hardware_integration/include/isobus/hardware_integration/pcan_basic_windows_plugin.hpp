@@ -19,7 +19,7 @@
 
 #include "isobus/hardware_integration/PCANBasic.h"
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 
 namespace isobus
@@ -52,12 +52,12 @@ namespace isobus
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
-		bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) override;
+		bool read_frame(isobus::CANMessageFrame &canFrame) override;
 
 		/// @brief Writes a frame to the bus (synchronous)
 		/// @param[in] canFrame The frame to write to the bus
 		/// @returns `true` if the frame was written, otherwise `false`
-		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
+		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
 	private:
 		TPCANHandle handle; ///< The handle as defined in the PCAN driver API

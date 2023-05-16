@@ -11,7 +11,7 @@
 #define VIRTUAL_CAN_PLUGIN_HPP
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 
 #include <atomic>
@@ -60,16 +60,16 @@ namespace isobus
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
-		bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) override;
+		bool read_frame(isobus::CANMessageFrame &canFrame) override;
 
 		/// @brief Writes a frame to the bus (synchronous)
 		/// @param[in] canFrame The frame to write to the bus
 		/// @returns `true` if the frame was written, otherwise `false`
-		bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) override;
+		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
 		/// @brief Allows us to write messages as if we received them from the bus
 		/// @param[in] canFrame The frame to write to the bus
-		void write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const;
+		void write_frame_as_if_received(const isobus::CANMessageFrame &canFrame) const;
 
 		/// @brief Returns if the internal message queue is empty or not
 		/// @returns `true` if the internal message queue is empty, otherwise false
@@ -79,7 +79,7 @@ namespace isobus
 		/// @brief A struct holding information about a virtual CAN device
 		struct VirtualDevice
 		{
-			std::deque<isobus::HardwareInterfaceCANFrame> queue; ///< A queue of CAN frames
+			std::deque<isobus::CANMessageFrame> queue; ///< A queue of CAN frames
 			std::condition_variable condition; ///< A condition variable to wake us up when a frame is received
 		};
 

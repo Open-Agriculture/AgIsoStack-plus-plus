@@ -268,12 +268,12 @@ namespace isobus
 		return retVal;
 	}
 
-	void receive_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &rxFrame)
+	void receive_can_message_frame_from_hardware(const CANMessageFrame &rxFrame)
 	{
 		CANNetworkManager::process_receive_can_message_frame(rxFrame);
 	}
 
-	void on_transmit_can_message_frame_from_hardware(const HardwareInterfaceCANFrame &txFrame)
+	void on_transmit_can_message_frame_from_hardware(const CANMessageFrame &txFrame)
 	{
 		CANNetworkManager::process_transmitted_can_message_frame(txFrame);
 	}
@@ -283,7 +283,7 @@ namespace isobus
 		CANNetworkManager::CANNetwork.update();
 	}
 
-	void CANNetworkManager::process_receive_can_message_frame(const HardwareInterfaceCANFrame &rxFrame)
+	void CANNetworkManager::process_receive_can_message_frame(const CANMessageFrame &rxFrame)
 	{
 		CANLibManagedMessage tempCANMessage(rxFrame.channel);
 
@@ -320,7 +320,7 @@ namespace isobus
 		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
 	}
 
-	void CANNetworkManager::process_transmitted_can_message_frame(const HardwareInterfaceCANFrame &txFrame)
+	void CANNetworkManager::process_transmitted_can_message_frame(const CANMessageFrame &txFrame)
 	{
 		CANNetworkManager::CANNetwork.update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
 	}
@@ -499,7 +499,7 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::update_control_functions(const HardwareInterfaceCANFrame &rxFrame)
+	void CANNetworkManager::update_control_functions(const CANMessageFrame &rxFrame)
 	{
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
@@ -645,7 +645,7 @@ namespace isobus
 		}
 	}
 
-	HardwareInterfaceCANFrame CANNetworkManager::construct_frame(std::uint32_t portIndex,
+	CANMessageFrame CANNetworkManager::construct_frame(std::uint32_t portIndex,
 	                                                             std::uint8_t sourceAddress,
 	                                                             std::uint8_t destAddress,
 	                                                             std::uint32_t parameterGroupNumber,
@@ -653,7 +653,7 @@ namespace isobus
 	                                                             const void *data,
 	                                                             std::uint32_t size) const
 	{
-		HardwareInterfaceCANFrame txFrame;
+		CANMessageFrame txFrame;
 		txFrame.identifier = DEFAULT_IDENTIFIER;
 
 		if ((NULL_CAN_ADDRESS != destAddress) && (priority <= static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityLowest7)) && (size <= CAN_DATA_LENGTH) && (nullptr != data))
@@ -857,7 +857,7 @@ namespace isobus
 
 	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size) const
 	{
-		HardwareInterfaceCANFrame tempFrame = construct_frame(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
+		CANMessageFrame tempFrame = construct_frame(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 		bool retVal = false;
 
 		if ((DEFAULT_IDENTIFIER != tempFrame.identifier) &&

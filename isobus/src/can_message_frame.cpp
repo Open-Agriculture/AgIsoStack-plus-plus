@@ -1,18 +1,18 @@
 //================================================================================================
 /// @file can_frame.cpp
 ///
-/// @brief Implements helper functions for HardwareInterfaceCANFrame
+/// @brief Implements helper functions for CANMessageFrame
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 
 namespace isobus
 {
-	std::uint32_t HardwareInterfaceCANFrame::get_number_bits_in_message() const
+	std::uint32_t CANMessageFrame::get_number_bits_in_message() const
 	{
 		constexpr std::uint32_t MAX_CONSECUTIVE_SAME_BITS = 5; // After 5 consecutive bits, 6th will be opposite
 		const std::uint32_t dataLengthBits = CAN_DATA_LENGTH * dataLength;

@@ -20,13 +20,13 @@ Let's discuss how these components work. Then, we'll go over how you can write y
 The CAN stack relies on a couple of functions being defined externally to function. This boundary keeps the core stack completely isolated from the hardware layer. Thus, the content of the `isobus` folder can function entirely on its own if that meets your needs better than using the built in hardware interface layer.
 These functions are:
 
-* `bool send_can_message_frame_to_hardware(const HardwareInterfaceCANFrame &frame);`
+* `bool send_can_message_frame_to_hardware(const CANMessageFrame &frame);`
 	- This is how the CAN stack will send a frame to the actual hardware.
 	- This is already defined in `CANHardwareInterface` and wraps the actual CAN driver calls.
 	- `CANHardwareInterface` Stores these frames in a queue that will be fed to your underlying CAN driver.
-	- `CANHardwareInterface` Will call `bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)` in `CANHardwarePlugin` from the internal queuing mechanism, which is when the frame officially goes to your CAN driver.
+	- `CANHardwareInterface` Will call `bool write_frame(const isobus::CANMessageFrame &canFrame)` in `CANHardwarePlugin` from the internal queuing mechanism, which is when the frame officially goes to your CAN driver.
 	
-* `void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)`
+* `void raw_can_glue(isobus::CANMessageFrame &rawFrame, void *parentPointer)`
 	- This function is how the CAN stack will receive frames
 	- The name is arbitrary. You can name it whatever you want as long as the signature is the same and it calls `isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);` inside it.
 	- The `CANHardwareInterface` will take care of calling this. You just need to tell it what function to call, like this `CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);`

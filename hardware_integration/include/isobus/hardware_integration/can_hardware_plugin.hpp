@@ -9,7 +9,7 @@
 #ifndef CAN_HARDEWARE_PLUGIN_HPP
 #define CAN_HARDEWARE_PLUGIN_HPP
 
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 
 namespace isobus
 {
@@ -36,12 +36,12 @@ namespace isobus
 		/// @brief Reads one frame from the bus synchronously
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
-		virtual bool read_frame(isobus::HardwareInterfaceCANFrame &canFrame) = 0;
+		virtual bool read_frame(isobus::CANMessageFrame &canFrame) = 0;
 
 		/// @brief Writes a frame to the bus (synchronous)
 		/// @param[in] canFrame The frame to write to the bus
 		/// @returns `true` if the frame was written, otherwise `false`
-		virtual bool write_frame(const isobus::HardwareInterfaceCANFrame &canFrame) = 0;
+		virtual bool write_frame(const isobus::CANMessageFrame &canFrame) = 0;
 	};
 }
 #endif // CAN_HARDEWARE_PLUGIN_HPP

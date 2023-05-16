@@ -46,7 +46,7 @@ namespace isobus
 		}
 	}
 
-	bool PCANBasicWindowsPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool PCANBasicWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		TPCANStatus result;
 		TPCANMsg CANMsg;
@@ -71,7 +71,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool PCANBasicWindowsPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool PCANBasicWindowsPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		TPCANStatus result;
 		TPCANMsg msgCanMessage;

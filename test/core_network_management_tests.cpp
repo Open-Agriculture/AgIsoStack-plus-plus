@@ -48,7 +48,7 @@ TEST(CORE_TESTS, BusloadTest)
 	EXPECT_EQ(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(200)); // Invalid channel should return zero load
 
 	// Send a bunch of messages through the receive process
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 	testFrame.dataLength = 8;
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
@@ -96,7 +96,7 @@ TEST(CORE_TESTS, CommandedAddress)
 
 	auto testECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x43, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 
