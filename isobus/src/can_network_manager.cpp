@@ -12,7 +12,6 @@
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
-#include "isobus/isobus/can_managed_message.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_protocol.hpp"
@@ -285,7 +284,7 @@ namespace isobus
 
 	void CANNetworkManager::process_receive_can_message_frame(const CANMessageFrame &rxFrame)
 	{
-		CANLibManagedMessage tempCANMessage(rxFrame.channel);
+		CANMessage tempCANMessage(rxFrame.channel);
 
 		CANNetworkManager::CANNetwork.update_control_functions(rxFrame);
 
@@ -294,7 +293,7 @@ namespace isobus
 		// Note, if this is an address claim message, the address to CF table might be stale.
 		// We don't want to update that here though, as we're maybe in some other thread in this callback.
 		// So for now, manually search all of them to line up the appropriate CF. A bit unfortunate in that we may have a lot of CFs, but saves pain later so we don't have to
-		// do some gross cast to CANLibManagedMessage to edit the CFs.
+		// do some gross cast to CANMessage to edit the CFs.
 		// At least address claiming should be infrequent, so this should not happen a ton.
 		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == tempCANMessage.get_identifier().get_parameter_group_number())
 		{
@@ -646,12 +645,12 @@ namespace isobus
 	}
 
 	CANMessageFrame CANNetworkManager::construct_frame(std::uint32_t portIndex,
-	                                                             std::uint8_t sourceAddress,
-	                                                             std::uint8_t destAddress,
-	                                                             std::uint32_t parameterGroupNumber,
-	                                                             std::uint8_t priority,
-	                                                             const void *data,
-	                                                             std::uint32_t size) const
+	                                                   std::uint8_t sourceAddress,
+	                                                   std::uint8_t destAddress,
+	                                                   std::uint32_t parameterGroupNumber,
+	                                                   std::uint8_t priority,
+	                                                   const void *data,
+	                                                   std::uint32_t size) const
 	{
 		CANMessageFrame txFrame;
 		txFrame.identifier = DEFAULT_IDENTIFIER;
