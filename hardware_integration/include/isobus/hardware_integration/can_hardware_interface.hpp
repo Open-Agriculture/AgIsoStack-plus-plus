@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/isobus/can_frame.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 
@@ -79,15 +79,15 @@ namespace isobus
 		/// @brief Called externally, adds a message to a CAN channel's Tx queue
 		/// @param[in] packet The packet to add to the Tx queue
 		/// @returns `true` if the packet was accepted, otherwise `false` (maybe wrong channel assigned)
-		static bool transmit_can_message(const isobus::HardwareInterfaceCANFrame &packet);
+		static bool transmit_can_message(const isobus::CANMessageFrame &packet);
 
 		/// @brief Get the event dispatcher for when a CAN message frame is received from hardware event
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
-		static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> &get_can_frame_received_event_dispatcher();
+		static isobus::EventDispatcher<isobus::CANMessageFrame> &get_can_frame_received_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a CAN message frame will be send to hardware event
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
-		static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> &get_can_frame_transmitted_event_dispatcher();
+		static isobus::EventDispatcher<isobus::CANMessageFrame> &get_can_frame_transmitted_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a periodic update is called
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
@@ -106,10 +106,10 @@ namespace isobus
 		struct CANHardware
 		{
 			std::mutex messagesToBeTransmittedMutex; ///< Mutex to protect the Tx queue
-			std::deque<isobus::HardwareInterfaceCANFrame> messagesToBeTransmitted; ///< Tx message queue for a CAN channel
+			std::deque<isobus::CANMessageFrame> messagesToBeTransmitted; ///< Tx message queue for a CAN channel
 
 			std::mutex receivedMessagesMutex; ///< Mutex to protect the Rx queue
-			std::deque<isobus::HardwareInterfaceCANFrame> receivedMessages; ///< Rx message queue for a CAN channel
+			std::deque<isobus::CANMessageFrame> receivedMessages; ///< Rx message queue for a CAN channel
 
 			std::unique_ptr<std::thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
 
@@ -138,7 +138,7 @@ namespace isobus
 
 		/// @brief Attempts to write a frame using the driver assigned to a packet's channel
 		/// @param[in] packet The packet to try and write to the bus
-		static bool transmit_can_message_from_buffer(isobus::HardwareInterfaceCANFrame &packet);
+		static bool transmit_can_message_from_buffer(isobus::CANMessageFrame &packet);
 
 		/// @brief The periodic update thread executes this function
 		static void periodic_update_function();
@@ -152,8 +152,8 @@ namespace isobus
 		static std::atomic_bool stackNeedsUpdate; ///< Stores if the CAN thread needs to update the stack this iteration
 		static std::uint32_t periodicUpdateInterval; ///< The period between calls to the CAN stack update function in milliseconds
 
-		static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
-		static isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
+		static isobus::EventDispatcher<isobus::CANMessageFrame> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
+		static isobus::EventDispatcher<isobus::CANMessageFrame> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
 		static isobus::EventDispatcher<> periodicUpdateEventDispatcher; ///< The event dispatcher for when a periodic update is called
 
 		static std::vector<std::unique_ptr<CANHardware>> hardwareChannels; ///< A list of all CAN channel's metadata

@@ -826,7 +826,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::ControlHead));
 	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x37, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 

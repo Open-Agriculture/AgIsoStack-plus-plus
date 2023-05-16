@@ -1,25 +1,26 @@
 //================================================================================================
-/// @file can_frame.hpp
+/// @file can_message_frame.hpp
 ///
 /// @brief A classical CAN frame, with 8 data bytes
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 
-#ifndef CAN_FRAME_HPP
-#define CAN_FRAME_HPP
+#ifndef CAN_MESSAGE_FRAME_HPP
+#define CAN_MESSAGE_FRAME_HPP
 
 #include <cstdint>
 
 namespace isobus
 {
 	//================================================================================================
-	/// @class HardwareInterfaceCANFrame
+	/// @class CANMessageFrame
 	///
 	/// @brief A CAN frame for interfacing with a hardware layer, like socket CAN or other interface
 	//================================================================================================
-	class HardwareInterfaceCANFrame
+	class CANMessageFrame
 	{
 	public:
 		/// Returns the number of bits in a CAN message with averaged bit stuffing
@@ -36,4 +37,4 @@ namespace isobus
 
 } // namespace isobus
 
-#endif // CAN_FRAME_HPP
+#endif // CAN_MESSAGE_FRAME_HPP

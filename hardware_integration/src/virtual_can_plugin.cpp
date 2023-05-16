@@ -50,7 +50,7 @@ namespace isobus
 		ourDevice->condition.notify_one();
 	}
 
-	bool VirtualCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool VirtualCANPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		bool retVal = false;
 		const std::lock_guard<std::mutex> lock(mutex);
@@ -69,14 +69,14 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualCANPlugin::write_frame_as_if_received(const isobus::HardwareInterfaceCANFrame &canFrame) const
+	void VirtualCANPlugin::write_frame_as_if_received(const isobus::CANMessageFrame &canFrame) const
 	{
 		const std::lock_guard<std::mutex> lock(mutex);
 		ourDevice->queue.push_back(canFrame);
 		ourDevice->condition.notify_one();
 	}
 
-	bool VirtualCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool VirtualCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		ourDevice->condition.wait(lock, [this] { return !running || !ourDevice->queue.empty(); });

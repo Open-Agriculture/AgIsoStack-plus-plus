@@ -30,7 +30,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
 	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x97, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	// Force claim some other ECU
 	testFrame.dataLength = 8;
@@ -242,7 +242,7 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
 	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x98, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	// Force claim some other ECU
 	testFrame.dataLength = 8;

@@ -18,16 +18,16 @@ TEST(HARDWARE_INTERFACE_TESTS, SendMessageToHardware)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, sender);
 	CANHardwareInterface::start();
 
-	HardwareInterfaceCANFrame fakeFrame;
-	memset(&fakeFrame, 0, sizeof(HardwareInterfaceCANFrame));
+	CANMessageFrame fakeFrame;
+	memset(&fakeFrame, 0, sizeof(CANMessageFrame));
 	fakeFrame.identifier = 0x613;
 	fakeFrame.isExtendedFrame = false;
 	fakeFrame.dataLength = 1;
 	fakeFrame.data[0] = 0x01;
 	fakeFrame.channel = 0;
 
-	HardwareInterfaceCANFrame receiveFrame;
-	memset(&receiveFrame, 0, sizeof(HardwareInterfaceCANFrame));
+	CANMessageFrame receiveFrame;
+	memset(&receiveFrame, 0, sizeof(CANMessageFrame));
 	auto future = std::async(std::launch::async, [&] { receiver->read_frame(receiveFrame); });
 
 	isobus::send_can_message_frame_to_hardware(fakeFrame);
@@ -49,8 +49,8 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
 	CANHardwareInterface::start();
 
-	HardwareInterfaceCANFrame fakeFrame;
-	memset(&fakeFrame, 0, sizeof(HardwareInterfaceCANFrame));
+	CANMessageFrame fakeFrame;
+	memset(&fakeFrame, 0, sizeof(CANMessageFrame));
 	fakeFrame.identifier = 0x613;
 	fakeFrame.isExtendedFrame = false;
 	fakeFrame.dataLength = 1;
@@ -58,7 +58,7 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	fakeFrame.channel = 0;
 
 	int messageCount = 0;
-	std::function<void(const HardwareInterfaceCANFrame &)> receivedCallback = [&messageCount](const HardwareInterfaceCANFrame &frame) {
+	std::function<void(const CANMessageFrame &)> receivedCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
 		EXPECT_EQ(frame.identifier, 0x613);
@@ -85,19 +85,19 @@ TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, sender);
 	CANHardwareInterface::start();
 
-	HardwareInterfaceCANFrame fakeFrame;
-	memset(&fakeFrame, 0, sizeof(HardwareInterfaceCANFrame));
+	CANMessageFrame fakeFrame;
+	memset(&fakeFrame, 0, sizeof(CANMessageFrame));
 	fakeFrame.identifier = 0x613;
 	fakeFrame.isExtendedFrame = false;
 	fakeFrame.dataLength = 1;
 	fakeFrame.data[0] = 0x01;
 	fakeFrame.channel = 0;
 
-	HardwareInterfaceCANFrame receiveFrame;
-	memset(&receiveFrame, 0, sizeof(HardwareInterfaceCANFrame));
+	CANMessageFrame receiveFrame;
+	memset(&receiveFrame, 0, sizeof(CANMessageFrame));
 
 	int messageCount = 0;
-	std::function<void(const HardwareInterfaceCANFrame &)> sendCallback = [&messageCount](const HardwareInterfaceCANFrame &frame) {
+	std::function<void(const CANMessageFrame &)> sendCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
 		EXPECT_EQ(frame.identifier, 0x613);

@@ -8,7 +8,7 @@ TEST(VIRTUAL_CAN_PLUGIN_TESTS, ReceivesOwnMessages)
 {
 	VirtualCANPlugin testPlugin("", true);
 
-	HardwareInterfaceCANFrame sentFrame;
+	CANMessageFrame sentFrame;
 	sentFrame.identifier = 0x18FFA227;
 	sentFrame.isExtendedFrame = true;
 	sentFrame.data[0] = 0x01;
@@ -22,7 +22,7 @@ TEST(VIRTUAL_CAN_PLUGIN_TESTS, ReceivesOwnMessages)
 	sentFrame.dataLength = 8;
 	testPlugin.write_frame(sentFrame);
 
-	HardwareInterfaceCANFrame receiveFrame;
+	CANMessageFrame receiveFrame;
 	EXPECT_TRUE(testPlugin.read_frame(receiveFrame));
 	EXPECT_EQ(receiveFrame.identifier, 0x18FFA227);
 	EXPECT_EQ(receiveFrame.isExtendedFrame, true);
@@ -42,7 +42,7 @@ TEST(VIRTUAL_CAN_PLUGIN_TESTS, OtherReceivesMessage)
 	VirtualCANPlugin testPlugin;
 	VirtualCANPlugin otherPlugin;
 
-	HardwareInterfaceCANFrame sentFrame;
+	CANMessageFrame sentFrame;
 	sentFrame.identifier = 0x18FFA227;
 	sentFrame.isExtendedFrame = true;
 	sentFrame.data[0] = 0x01;
@@ -56,7 +56,7 @@ TEST(VIRTUAL_CAN_PLUGIN_TESTS, OtherReceivesMessage)
 	sentFrame.dataLength = 8;
 	testPlugin.write_frame(sentFrame);
 
-	HardwareInterfaceCANFrame receiveFrame;
+	CANMessageFrame receiveFrame;
 	EXPECT_TRUE(otherPlugin.read_frame(receiveFrame));
 	EXPECT_EQ(receiveFrame.identifier, 0x18FFA227);
 	EXPECT_EQ(receiveFrame.isExtendedFrame, true);

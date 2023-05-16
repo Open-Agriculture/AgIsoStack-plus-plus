@@ -106,7 +106,7 @@ namespace isobus
 		}
 	}
 
-	bool SocketCANInterface::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool SocketCANInterface::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		struct pollfd pollingFileDescriptor;
 		bool retVal = false;
@@ -191,7 +191,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool SocketCANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool SocketCANInterface::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		struct can_frame txFrame;
 		bool retVal = false;

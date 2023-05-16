@@ -22,8 +22,8 @@ namespace isobus
 	std::atomic_bool CANHardwareInterface::stackNeedsUpdate = { false };
 	std::uint32_t CANHardwareInterface::periodicUpdateInterval = PERIODIC_UPDATE_INTERVAL;
 
-	isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> CANHardwareInterface::frameReceivedEventDispatcher;
-	isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> CANHardwareInterface::frameTransmittedEventDispatcher;
+	isobus::EventDispatcher<isobus::CANMessageFrame> CANHardwareInterface::frameReceivedEventDispatcher;
+	isobus::EventDispatcher<isobus::CANMessageFrame> CANHardwareInterface::frameTransmittedEventDispatcher;
 	isobus::EventDispatcher<> CANHardwareInterface::periodicUpdateEventDispatcher;
 
 	std::vector<std::unique_ptr<CANHardwareInterface::CANHardware>> CANHardwareInterface::hardwareChannels;
@@ -38,7 +38,7 @@ namespace isobus
 		stop_threads();
 	}
 
-	bool send_can_message_frame_to_hardware(const HardwareInterfaceCANFrame &frame)
+	bool send_can_message_frame_to_hardware(const CANMessageFrame &frame)
 	{
 		return CANHardwareInterface::transmit_can_message(frame);
 	}
@@ -187,7 +187,7 @@ namespace isobus
 		return threadsStarted;
 	}
 
-	bool CANHardwareInterface::transmit_can_message(const isobus::HardwareInterfaceCANFrame &packet)
+	bool CANHardwareInterface::transmit_can_message(const isobus::CANMessageFrame &packet)
 	{
 		if (!threadsStarted)
 		{
@@ -220,12 +220,12 @@ namespace isobus
 		return false;
 	}
 
-	isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> &CANHardwareInterface::get_can_frame_received_event_dispatcher()
+	isobus::EventDispatcher<isobus::CANMessageFrame> &CANHardwareInterface::get_can_frame_received_event_dispatcher()
 	{
 		return frameReceivedEventDispatcher;
 	}
 
-	isobus::EventDispatcher<isobus::HardwareInterfaceCANFrame> &CANHardwareInterface::get_can_frame_transmitted_event_dispatcher()
+	isobus::EventDispatcher<isobus::CANMessageFrame> &CANHardwareInterface::get_can_frame_transmitted_event_dispatcher()
 	{
 		return frameTransmittedEventDispatcher;
 	}
@@ -313,7 +313,7 @@ namespace isobus
 		// Wait until everything is running
 		channelsLock.unlock();
 
-		isobus::HardwareInterfaceCANFrame frame;
+		isobus::CANMessageFrame frame;
 		while ((threadsStarted) &&
 		       (nullptr != hardwareChannels[channelIndex]->frameHandler))
 		{
@@ -337,7 +337,7 @@ namespace isobus
 		}
 	}
 
-	bool CANHardwareInterface::transmit_can_message_from_buffer(isobus::HardwareInterfaceCANFrame &packet)
+	bool CANHardwareInterface::transmit_can_message_from_buffer(isobus::CANMessageFrame &packet)
 	{
 		bool retVal = false;
 		if (packet.channel < hardwareChannels.size())

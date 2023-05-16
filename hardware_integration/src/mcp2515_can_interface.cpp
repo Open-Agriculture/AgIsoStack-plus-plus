@@ -220,7 +220,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool MCP2515CANInterface::read_frame(isobus::HardwareInterfaceCANFrame &canFrame,
+	bool MCP2515CANInterface::read_frame(isobus::CANMessageFrame &canFrame,
 	                                     const MCPRegister ctrlRegister,
 	                                     const MCPRegister dataRegister,
 	                                     const std::uint8_t intfMask)
@@ -259,7 +259,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool MCP2515CANInterface::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool MCP2515CANInterface::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		bool retVal = false;
 
@@ -293,7 +293,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool MCP2515CANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame,
+	bool MCP2515CANInterface::write_frame(const isobus::CANMessageFrame &canFrame,
 	                                      const MCPRegister ctrlRegister,
 	                                      const MCPRegister sidhRegister)
 	{
@@ -356,7 +356,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool MCP2515CANInterface::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool MCP2515CANInterface::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		bool retVal = false;
 		std::uint8_t retries = 100;

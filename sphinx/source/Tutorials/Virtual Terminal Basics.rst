@@ -60,7 +60,7 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		isobus::CANNetworkManager::CANNetwork.update();
 	}
 
-	void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
+	void raw_can_glue(isobus::CANMessageFrame &rawFrame, void *parentPointer)
 	{
 		isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 	}
@@ -405,7 +405,7 @@ Here's the final code for this example:
 		isobus::CANNetworkManager::CANNetwork.update();
 	}
 
-	void raw_can_glue(isobus::HardwareInterfaceCANFrame &rawFrame, void *parentPointer)
+	void raw_can_glue(isobus::CANMessageFrame &rawFrame, void *parentPointer)
 	{
 		isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
 	}

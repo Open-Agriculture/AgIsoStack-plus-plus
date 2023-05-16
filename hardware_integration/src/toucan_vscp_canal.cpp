@@ -77,7 +77,7 @@ namespace isobus
 		}
 	}
 
-	bool TouCANPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool TouCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		long result = CANAL_ERROR_GENERIC;
 		structCanalMsg CANMsg = { 0 };
@@ -99,7 +99,7 @@ namespace isobus
 		return (CANAL_ERROR_SUCCESS == result);
 	}
 
-	bool TouCANPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool TouCANPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		std::uint32_t result = CANAL_ERROR_SUCCESS;
 		structCanalMsg msgCanMessage;

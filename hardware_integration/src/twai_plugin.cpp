@@ -76,7 +76,7 @@ namespace isobus
 		}
 	}
 
-	bool TWAIPlugin::read_frame(isobus::HardwareInterfaceCANFrame &canFrame)
+	bool TWAIPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
 		bool retVal = false;
 
@@ -107,7 +107,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TWAIPlugin::write_frame(const isobus::HardwareInterfaceCANFrame &canFrame)
+	bool TWAIPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
 		bool retVal = false;
 		twai_message_t message = {};

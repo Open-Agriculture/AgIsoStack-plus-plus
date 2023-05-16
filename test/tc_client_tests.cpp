@@ -272,7 +272,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
 	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x81, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 
@@ -537,7 +537,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
 	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x83, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 
@@ -1409,7 +1409,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerTC = std::make_shared<isobus::PartneredControlFunction>(0, tcNameFilters);
 	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	// Force claim a partner
 	testFrame.dataLength = 8;
