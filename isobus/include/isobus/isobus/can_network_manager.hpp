@@ -16,10 +16,10 @@
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_extended_transport_protocol.hpp"
-#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 
@@ -228,12 +228,12 @@ namespace isobus
 		/// @param[in] size The size of the messgage to send
 		/// @returns The constucted frame based on the inputs
 		CANMessageFrame construct_frame(std::uint32_t portIndex,
-		                                          std::uint8_t sourceAddress,
-		                                          std::uint8_t destAddress,
-		                                          std::uint32_t parameterGroupNumber,
-		                                          std::uint8_t priority,
-		                                          const void *data,
-		                                          std::uint32_t size) const;
+		                                std::uint8_t sourceAddress,
+		                                std::uint8_t destAddress,
+		                                std::uint32_t parameterGroupNumber,
+		                                std::uint8_t priority,
+		                                const void *data,
+		                                std::uint32_t size) const;
 
 		/// @brief Returns a control function based on a CAN address and channel index
 		/// @param[in] CANPort The CAN channel index of the CAN message being processed

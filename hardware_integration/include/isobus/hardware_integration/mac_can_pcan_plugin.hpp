@@ -14,8 +14,8 @@
 
 #include "isobus/hardware_integration/PCBUSB.h"
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 
 namespace isobus
 {

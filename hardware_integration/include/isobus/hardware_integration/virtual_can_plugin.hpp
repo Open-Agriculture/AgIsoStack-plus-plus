@@ -11,8 +11,8 @@
 #define VIRTUAL_CAN_PLUGIN_HPP
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 
 #include <atomic>
 #include <condition_variable>
