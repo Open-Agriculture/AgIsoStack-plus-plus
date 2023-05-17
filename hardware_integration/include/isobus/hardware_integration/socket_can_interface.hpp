@@ -13,8 +13,8 @@
 #include <string>
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
-#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 
 struct sockaddr_can; ///< Forward declare the linux sockaddr_can struct
 
