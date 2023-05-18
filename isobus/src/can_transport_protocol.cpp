@@ -66,34 +66,33 @@ namespace isobus
 		}
 	}
 
-	void TransportProtocolManager::process_message(CANMessage *const message)
+	void TransportProtocolManager::process_message(const CANMessage &message)
 	{
-		if ((nullptr != message) &&
-		    (nullptr != message->get_source_control_function()) &&
-		    ((nullptr == message->get_destination_control_function()) ||
-		     (nullptr != CANNetworkManager::CANNetwork.get_internal_control_function(message->get_destination_control_function()))))
+		if ((nullptr != message.get_source_control_function()) &&
+		    ((nullptr == message.get_destination_control_function()) ||
+		     (nullptr != CANNetworkManager::CANNetwork.get_internal_control_function(message.get_destination_control_function()))))
 		{
-			switch (message->get_identifier().get_parameter_group_number())
+			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand):
 				{
 					TransportProtocolSession *session;
-					std::vector<std::uint8_t> &data = message->get_data();
+					const auto &data = message.get_data();
 					const std::uint32_t pgn = (static_cast<std::uint32_t>(data[5]) | (static_cast<std::uint32_t>(data[6]) << 8) | (static_cast<std::uint32_t>(data[7]) << 16));
 					switch (data[0])
 					{
 						case BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR:
 						{
-							if (CAN_DATA_LENGTH == message->get_data_length())
+							if (CAN_DATA_LENGTH == message.get_data_length())
 							{
-								if ((nullptr == message->get_destination_control_function()) &&
+								if ((nullptr == message.get_destination_control_function()) &&
 								    (activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
-								    (!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
+								    (!get_session(session, message.get_source_control_function(), message.get_destination_control_function(), pgn)))
 								{
-									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive, message->get_can_port_index());
-									CANIdentifier tempIdentifierData(CANIdentifier::Type::Extended, pgn, CANIdentifier::CANPriority::PriorityLowest7, BROADCAST_CAN_ADDRESS, message->get_source_control_function()->get_address());
+									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive, message.get_can_port_index());
+									CANIdentifier tempIdentifierData(CANIdentifier::Type::Extended, pgn, CANIdentifier::CANPriority::PriorityLowest7, BROADCAST_CAN_ADDRESS, message.get_source_control_function()->get_address());
 									newSession->sessionMessage.set_data_size(static_cast<std::uint16_t>(data[1]) | static_cast<std::uint16_t>(data[2] << 8));
-									newSession->sessionMessage.set_source_control_function(message->get_source_control_function());
+									newSession->sessionMessage.set_source_control_function(message.get_source_control_function());
 									newSession->sessionMessage.set_destination_control_function(nullptr);
 									newSession->packetCount = data[3];
 									newSession->sessionMessage.set_identifier(tempIdentifierData);
@@ -120,17 +119,17 @@ namespace isobus
 
 						case REQUEST_TO_SEND_MULTIPLEXOR:
 						{
-							if (CAN_DATA_LENGTH == message->get_data_length())
+							if (CAN_DATA_LENGTH == message.get_data_length())
 							{
-								if ((nullptr != message->get_destination_control_function()) &&
+								if ((nullptr != message.get_destination_control_function()) &&
 								    (activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
-								    (!get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)))
+								    (!get_session(session, message.get_source_control_function(), message.get_destination_control_function(), pgn)))
 								{
-									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive, message->get_can_port_index());
-									CANIdentifier tempIdentifierData(CANIdentifier::Type::Extended, pgn, CANIdentifier::CANPriority::PriorityLowest7, message->get_destination_control_function()->get_address(), message->get_source_control_function()->get_address());
+									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive, message.get_can_port_index());
+									CANIdentifier tempIdentifierData(CANIdentifier::Type::Extended, pgn, CANIdentifier::CANPriority::PriorityLowest7, message.get_destination_control_function()->get_address(), message.get_source_control_function()->get_address());
 									newSession->sessionMessage.set_data_size(static_cast<std::uint16_t>(data[1]) | static_cast<std::uint16_t>(data[2] << 8));
-									newSession->sessionMessage.set_source_control_function(message->get_source_control_function());
-									newSession->sessionMessage.set_destination_control_function(message->get_destination_control_function());
+									newSession->sessionMessage.set_source_control_function(message.get_source_control_function());
+									newSession->sessionMessage.set_destination_control_function(message.get_destination_control_function());
 									newSession->packetCount = data[3];
 									newSession->clearToSendPacketMax = data[4];
 									newSession->sessionMessage.set_identifier(tempIdentifierData);
@@ -138,18 +137,18 @@ namespace isobus
 									newSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 									activeSessions.push_back(newSession);
 								}
-								else if ((get_session(session, message->get_source_control_function(), message->get_destination_control_function(), pgn)) &&
-								         (nullptr != message->get_destination_control_function()) &&
-								         (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								else if ((get_session(session, message.get_source_control_function(), message.get_destination_control_function(), pgn)) &&
+								         (nullptr != message.get_destination_control_function()) &&
+								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
-									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, RTS when already in CM session");
 								}
 								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
-								         (nullptr != message->get_destination_control_function()) &&
-								         (ControlFunction::Type::Internal == message->get_destination_control_function()->get_type()))
+								         (nullptr != message.get_destination_control_function()) &&
+								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
-									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, No Sessions Available");
 								}
 							}
@@ -164,13 +163,13 @@ namespace isobus
 						case CLEAR_TO_SEND_MULTIPLEXOR:
 						{
 							// Can't happen when doing a BAM session, make sure the session type is correct
-							if ((CAN_DATA_LENGTH == message->get_data_length()) &&
-							    (nullptr != message->get_destination_control_function()) &&
-							    (nullptr != message->get_source_control_function()))
+							if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+							    (nullptr != message.get_destination_control_function()) &&
+							    (nullptr != message.get_source_control_function()))
 							{
 								const std::uint8_t packetsToBeSent = data[1];
 
-								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+								if (get_session(session, message.get_destination_control_function(), message.get_source_control_function(), pgn))
 								{
 									if (StateMachineState::WaitForClearToSend == session->state)
 									{
@@ -188,7 +187,7 @@ namespace isobus
 									{
 										// The session exists, but we're probably already in the TxDataSession state. Need to abort
 										// In the case of Rx'ing a CTS, we're the source in the session
-										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS while in data session, PGN: " + isobus::to_string(pgn));
 									}
 								}
@@ -196,7 +195,7 @@ namespace isobus
 								{
 									// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
 									// In the case of Rx'ing a CTS, we're the source in the session
-									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS With no matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
@@ -210,11 +209,11 @@ namespace isobus
 						case END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR:
 						{
 							// Can't happen when doing a BAM session, make sure the session type is correct
-							if ((CAN_DATA_LENGTH == message->get_data_length()) &&
-							    (nullptr != message->get_destination_control_function()) &&
-							    (nullptr != message->get_source_control_function()))
+							if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+							    (nullptr != message.get_destination_control_function()) &&
+							    (nullptr != message.get_source_control_function()))
 							{
-								if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+								if (get_session(session, message.get_destination_control_function(), message.get_source_control_function(), pgn))
 								{
 									if (StateMachineState::WaitForEndOfMessageAcknowledge == session->state)
 									{
@@ -224,14 +223,14 @@ namespace isobus
 									}
 									else
 									{
-										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
 										close_session(session, false);
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM in wrong session state, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
 								{
-									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()), message->get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM without matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
@@ -244,7 +243,7 @@ namespace isobus
 
 						case CONNECTION_ABORT_MULTIPLEXOR:
 						{
-							if (get_session(session, message->get_destination_control_function(), message->get_source_control_function(), pgn))
+							if (get_session(session, message.get_destination_control_function(), message.get_source_control_function(), pgn))
 							{
 								CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Received an abort for an session with PGN: " + isobus::to_string(pgn));
 								close_session(session, false);
@@ -269,17 +268,17 @@ namespace isobus
 				{
 					TransportProtocolSession *tempSession = nullptr;
 
-					if ((CAN_DATA_LENGTH == message->get_data_length()) &&
-					    (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function())) &&
+					if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+					    (get_session(tempSession, message.get_source_control_function(), message.get_destination_control_function())) &&
 					    (StateMachineState::RxDataSession == tempSession->state))
 					{
 						// Check for valid sequence number
-						if (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1))
+						if (message.get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1))
 						{
 							for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < PROTOCOL_BYTES_PER_FRAME; i++)
 							{
 								std::uint16_t currentDataIndex = (PROTOCOL_BYTES_PER_FRAME * tempSession->lastPacketNumber) + i;
-								tempSession->sessionMessage.set_data(message->get_data()[1 + SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
+								tempSession->sessionMessage.set_data(message.get_data()[1 + SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
 							}
 							tempSession->lastPacketNumber++;
 							tempSession->processedPacketsThisSession++;
@@ -291,12 +290,12 @@ namespace isobus
 									send_end_of_session_acknowledgement(tempSession);
 								}
 								CANNetworkManager::CANNetwork.process_any_control_function_pgn_callbacks(tempSession->sessionMessage);
-								CANNetworkManager::CANNetwork.protocol_message_callback(&tempSession->sessionMessage);
+								CANNetworkManager::CANNetwork.protocol_message_callback(tempSession->sessionMessage);
 								close_session(tempSession, true);
 							}
 							tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 						}
-						else if (message->get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber))
+						else if (message.get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber))
 						{
 							// Sequence number is duplicate of the last one
 							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Aborting session due to duplciate sequence number");
@@ -313,7 +312,7 @@ namespace isobus
 					else
 					{
 						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[TP]: Invalid BAM TP Data Received");
-						if (get_session(tempSession, message->get_source_control_function(), message->get_destination_control_function()))
+						if (get_session(tempSession, message.get_source_control_function(), message.get_destination_control_function()))
 						{
 							// If a session matches and ther was an error, get rid of the session
 							close_session(tempSession, false);
@@ -333,7 +332,7 @@ namespace isobus
 		}
 	}
 
-	void TransportProtocolManager::process_message(CANMessage *const message, void *parent)
+	void TransportProtocolManager::process_message(const CANMessage &message, void *parent)
 	{
 		if (nullptr != parent)
 		{

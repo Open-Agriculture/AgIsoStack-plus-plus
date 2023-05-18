@@ -228,7 +228,7 @@ namespace isobus
 		/// @param[in] message The message to parse from
 		/// @param[in] networkStates The returned network state bitfield based on the message contents
 		/// @returns `true` if the message was parsed, `false` if the message was invalid
-		static bool parse_j1939_network_states(CANMessage *const message, std::uint32_t &networkStates);
+		static bool parse_j1939_network_states(const CANMessage &message, std::uint32_t &networkStates);
 
 		/// @brief The protocol's initializer function
 		void initialize(CANLibBadge<CANNetworkManager>) override;
@@ -493,12 +493,12 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
+		void process_message(const CANMessage &message) override;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual TP manager object
-		static void process_message(CANMessage *const message, void *parent);
+		static void process_message(const CANMessage &message, void *parent);
 
 		/// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested

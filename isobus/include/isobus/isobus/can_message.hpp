@@ -60,7 +60,7 @@ namespace isobus
 
 		/// @brief Gets a reference to the data in the CAN message
 		/// @returns A reference to the data in the CAN message
-		std::vector<std::uint8_t> &get_data();
+		const std::vector<std::uint8_t> &get_data() const;
 
 		/// @brief Returns the length of the data in the CAN message
 		/// @returns The message data payload length

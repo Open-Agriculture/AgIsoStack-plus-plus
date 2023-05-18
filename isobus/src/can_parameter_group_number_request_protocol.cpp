@@ -214,21 +214,20 @@ namespace isobus
 		return ((obj.callbackFunction == this->callbackFunction) && (obj.pgn == this->pgn) && (obj.parent == this->parent));
 	}
 
-	void ParameterGroupNumberRequestProtocol::process_message(CANMessage *const message)
+	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message)
 	{
-		if ((nullptr != message) &&
-		    (((nullptr == message->get_destination_control_function()) &&
-		      (BROADCAST_CAN_ADDRESS == message->get_identifier().get_destination_address())) ||
-		     (message->get_destination_control_function() == myControlFunction.get())))
+		if ((((nullptr == message.get_destination_control_function()) &&
+		      (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
+		     (message.get_destination_control_function() == myControlFunction.get())))
 		{
-			switch (message->get_identifier().get_parameter_group_number())
+			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate):
 				{
 					// Can't send this request to global, and must be 8 bytes. Ignore illegal message formats
-					if ((CAN_DATA_LENGTH == message->get_data_length()) && (nullptr != message->get_destination_control_function()))
+					if ((CAN_DATA_LENGTH == message.get_data_length()) && (nullptr != message.get_destination_control_function()))
 					{
-						std::vector<std::uint8_t> &data = message->get_data();
+						const std::vector<std::uint8_t> &data = message.get_data();
 						std::uint32_t requestedPGN = data[0];
 						requestedPGN |= (static_cast<std::uint32_t>(data[1]) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(data[2]) << 16);
@@ -242,7 +241,7 @@ namespace isobus
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
-							    (repetitionRateCallback.callbackFunction(requestedPGN, message->get_source_control_function(), requestedRate, repetitionRateCallback.parent)))
+							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), requestedRate, repetitionRateCallback.parent)))
 							{
 								break;
 							}
@@ -262,12 +261,12 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest):
 				{
-					if (message->get_data_length() >= PGN_REQUEST_LENGTH)
+					if (message.get_data_length() >= PGN_REQUEST_LENGTH)
 					{
 						bool shouldAck = false;
 						AcknowledgementType ackType = AcknowledgementType::Negative;
 						bool anyCallbackProcessed = false;
-						std::vector<std::uint8_t> &data = message->get_data();
+						const std::vector<std::uint8_t> &data = message.get_data();
 						std::uint32_t requestedPGN = data[0];
 						requestedPGN |= (static_cast<std::uint32_t>(data[1]) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(data[2]) << 16);
@@ -278,7 +277,7 @@ namespace isobus
 						{
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&
-							    (pgnRequestCallback.callbackFunction(requestedPGN, message->get_source_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
+							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
 							{
 								// If we're here, the callback was able to process the PGN request.
 								anyCallbackProcessed = true;
@@ -286,24 +285,24 @@ namespace isobus
 								// Now we need to know if we shoulc ACK it.
 								// We should not ACK messages that send the actual PGN as a result of requesting it. This behavior is up to
 								// the application layer to do properly.
-								if ((shouldAck) && (nullptr != message->get_destination_control_function()))
+								if ((shouldAck) && (nullptr != message.get_destination_control_function()))
 								{
 									send_acknowledgement(ackType,
 									                     requestedPGN,
-									                     reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()),
-									                     message->get_source_control_function());
+									                     reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()),
+									                     message.get_source_control_function());
 								}
 								// If this callback was able to process the PGN request, stop processing more.
 								break;
 							}
 						}
 
-						if ((!anyCallbackProcessed) && (nullptr != message->get_destination_control_function()))
+						if ((!anyCallbackProcessed) && (nullptr != message.get_destination_control_function()))
 						{
 							send_acknowledgement(AcknowledgementType::Negative,
 							                     requestedPGN,
-							                     reinterpret_cast<InternalControlFunction *>(message->get_destination_control_function()),
-							                     message->get_source_control_function());
+							                     reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()),
+							                     message.get_source_control_function());
 							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
 						}
 					}
@@ -336,7 +335,7 @@ namespace isobus
 		}
 	}
 
-	void ParameterGroupNumberRequestProtocol::process_message(CANMessage *const message, void *parent)
+	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message, void *parent)
 	{
 		if (nullptr != parent)
 		{

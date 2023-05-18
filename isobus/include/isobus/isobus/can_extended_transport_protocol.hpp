@@ -115,12 +115,12 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
+		void process_message(const CANMessage &message) override;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual TP manager object
-		static void process_message(CANMessage *const message, void *parent);
+		static void process_message(const CANMessage &message, void *parent);
 
 		/// @brief The network manager calls this to see if the protocol can accept a long CAN message for processing
 		/// @param[in] parameterGroupNumber The PGN of the message

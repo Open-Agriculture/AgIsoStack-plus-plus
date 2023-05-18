@@ -389,7 +389,7 @@ namespace isobus
 		/// @brief Processes a CAN message destined for any TC client
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant TC client class
-		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief The callback passed to the network manager's send function to know when a Tx is completed
 		static void process_tx_callback(std::uint32_t parameterGroupNumber,
@@ -579,7 +579,7 @@ namespace isobus
 		std::uint8_t sourceAddressOfCommandBeingExecuted = 0; ///< Source address of client for which the current command is being executed
 		std::uint8_t commandBeingExecuted = 0; ///< The current command the TC is executing as reported in the status message
 		std::uint8_t serverVersion = 0; ///< The detected version of the TC Server
-		std::uint8_t maxServerBootTime_s = 0; ///< Maximum number of seconds from a power cycle to transmission of first “Task Controller Status message” or 0xFF
+		std::uint8_t maxServerBootTime_s = 0; ///< Maximum number of seconds from a power cycle to transmission of first ï¿½Task Controller Status messageï¿½ or 0xFF
 		std::uint8_t serverOptionsByte1 = 0; ///< The options specified in ISO 11783-10 that this TC, DL, or client meets (The definition of this byte is introduced in ISO11783-10 version 3)
 		std::uint8_t serverOptionsByte2 = 0; ///< Reserved for ISO assignment, should be zero or 0xFF.
 		std::uint8_t serverNumberOfBoomsForSectionControl = 0; ///< When reported by the TC, this is the maximum number of section control booms that are supported

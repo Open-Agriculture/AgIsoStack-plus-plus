@@ -228,21 +228,20 @@ namespace isobus
 		}
 	}
 
-	void AddressClaimStateMachine::process_rx_message(CANMessage *message, void *parentPointer)
+	void AddressClaimStateMachine::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
-		if ((nullptr != parentPointer) &&
-		    (nullptr != message))
+		if (nullptr != parentPointer)
 		{
 			AddressClaimStateMachine *parent = reinterpret_cast<AddressClaimStateMachine *>(parentPointer);
 
-			if ((message->get_can_port_index() == parent->m_portIndex) &&
+			if ((message.get_can_port_index() == parent->m_portIndex) &&
 			    (parent->get_enabled()))
 			{
-				switch (message->get_identifier().get_parameter_group_number())
+				switch (message.get_identifier().get_parameter_group_number())
 				{
 					case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest):
 					{
-						std::vector<std::uint8_t> messageData = message->get_data();
+						const auto &messageData = message.get_data();
 						std::uint32_t requestedPGN = messageData.at(0);
 						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(1)) << 8);
 						requestedPGN |= (static_cast<std::uint32_t>(messageData.at(2)) << 16);
@@ -257,9 +256,9 @@ namespace isobus
 
 					case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim):
 					{
-						if (parent->m_claimedAddress == message->get_identifier().get_source_address())
+						if (parent->m_claimedAddress == message.get_identifier().get_source_address())
 						{
-							std::vector<std::uint8_t> messageData = message->get_data();
+							const auto &messageData = message.get_data();
 							std::uint64_t NAMEClaimed = messageData.at(0);
 							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(1)) << 8);
 							NAMEClaimed |= (static_cast<uint64_t>(messageData.at(2)) << 16);

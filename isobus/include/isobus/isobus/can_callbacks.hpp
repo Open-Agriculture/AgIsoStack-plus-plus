@@ -28,7 +28,7 @@ namespace isobus
 	};
 
 	/// @brief A callback for control functions to get CAN messages
-	typedef void (*CANLibCallback)(CANMessage *message, void *parentPointer);
+	typedef void (*CANLibCallback)(const CANMessage &message, void *parentPointer);
 	/// @brief A callback to get chunks of data for transfer by a protocol
 	using DataChunkCallback = bool (*)(std::uint32_t callbackIndex,
 	                                   std::uint32_t bytesOffset,

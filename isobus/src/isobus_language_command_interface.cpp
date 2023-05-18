@@ -173,18 +173,17 @@ namespace isobus
 		return retVal;
 	}
 
-	void LanguageCommandInterface::process_rx_message(CANMessage *message, void *parentPointer)
+	void LanguageCommandInterface::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
 		auto *parentInterface = reinterpret_cast<LanguageCommandInterface *>(parentPointer);
 
-		if ((nullptr != message) &&
-		    (nullptr != parentInterface) &&
-		    (CAN_DATA_LENGTH <= message->get_data_length()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand) == message->get_identifier().get_parameter_group_number()) &&
+		if ((nullptr != parentInterface) &&
+		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand) == message.get_identifier().get_parameter_group_number()) &&
 		    ((nullptr == parentInterface->myPartner) ||
-		     (message->get_source_control_function()->get_NAME() == parentInterface->myPartner->get_NAME())))
+		     (message.get_source_control_function()->get_NAME() == parentInterface->myPartner->get_NAME())))
 		{
-			auto &data = message->get_data();
+			const auto &data = message.get_data();
 			parentInterface->languageCommandTimestamp_ms = SystemTiming::get_timestamp_ms();
 			parentInterface->languageCode.clear();
 			parentInterface->languageCode.push_back(static_cast<char>(data.at(0)));
@@ -202,7 +201,7 @@ namespace isobus
 			parentInterface->temperatureUnitSystem = static_cast<TemperatureUnits>((data.at(5) >> 6) & 0x03);
 
 			CANStackLogger::debug("[VT/TC]: Language and unit data received from control function " +
-			                      isobus::to_string(static_cast<int>(message->get_identifier().get_source_address())) +
+			                      isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
 			                      " language is: " +
 			                      parentInterface->languageCode);
 

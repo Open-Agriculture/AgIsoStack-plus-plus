@@ -22,7 +22,7 @@ namespace isobus
 		return messageType;
 	}
 
-	std::vector<std::uint8_t> &CANMessage::get_data()
+	const std::vector<std::uint8_t> &CANMessage::get_data() const
 	{
 		return data;
 	}

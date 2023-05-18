@@ -15,7 +15,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, DM13TestNetworkParsing)
 	CANMessage testDM13Message(0);
 	testDM13Message.set_identifier(testID);
 	testDM13Message.set_data_size(8);
-	EXPECT_EQ(true, DiagnosticProtocol::parse_j1939_network_states(&testDM13Message, testNetworkStates));
+	EXPECT_EQ(true, DiagnosticProtocol::parse_j1939_network_states(testDM13Message, testNetworkStates));
 }
 
 TEST(DIAGNOSTIC_PROTOCOL_TESTS, TestInvalidDM13Rejection)
@@ -29,7 +29,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, TestInvalidDM13Rejection)
 	CANMessage testDM13Message(0);
 	testDM13Message.set_identifier(testID);
 	testDM13Message.set_data_size(4);
-	EXPECT_EQ(false, DiagnosticProtocol::parse_j1939_network_states(&testDM13Message, testNetworkStates));
+	EXPECT_EQ(false, DiagnosticProtocol::parse_j1939_network_states(testDM13Message, testNetworkStates));
 }
 
 TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)

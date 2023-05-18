@@ -133,7 +133,7 @@ namespace isobus
 		/// @brief Parses incoming CAN messages for the interface
 		/// @param message The CAN message to parse
 		/// @param parentPointer A generic context variable, usually the `this` pointer for this interface instance
-		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief Processes the internal Tx flags
 		/// @param[in] flag The flag to process
@@ -147,7 +147,7 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
+		void process_message(const CANMessage &message) override;
 
 		/// @brief Sends the Stop all implement operations switch state message
 		/// @returns true if the message was sent, otherwise false

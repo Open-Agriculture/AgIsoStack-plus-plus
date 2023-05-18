@@ -114,9 +114,8 @@ namespace isobus
 		txFlags.process_all_flags();
 	}
 
-	void ShortcutButtonInterface::process_rx_message(CANMessage *message, void *parentPointer)
+	void ShortcutButtonInterface::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
-		assert(nullptr != message);
 		assert(nullptr != parentPointer);
 
 		static_cast<ShortcutButtonInterface *>(parentPointer)->process_message(message);
@@ -152,24 +151,24 @@ namespace isobus
 		initialized = true;
 	}
 
-	void ShortcutButtonInterface::process_message(CANMessage *const message)
+	void ShortcutButtonInterface::process_message(const CANMessage &message)
 	{
-		if ((message->get_can_port_index() == sourceControlFunction->get_can_port()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState) == message->get_identifier().get_parameter_group_number()))
+		if ((message.get_can_port_index() == sourceControlFunction->get_can_port()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState) == message.get_identifier().get_parameter_group_number()))
 		{
-			if (CAN_DATA_LENGTH == message->get_data_length())
+			if (CAN_DATA_LENGTH == message.get_data_length())
 			{
-				auto messageNAME = message->get_source_control_function()->get_NAME();
+				auto messageNAME = message.get_source_control_function()->get_NAME();
 				auto matches_isoname = [messageNAME](ISBServerData &isb) { return isb.ISONAME == messageNAME; };
 				auto ISB = std::find_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), matches_isoname);
-				auto &messageData = message->get_data();
+				auto &messageData = message.get_data();
 				StopAllImplementOperationsState previousState = get_state();
 
 				if (isobusShorcutButtonList.end() == ISB)
 				{
 					ISBServerData newISB;
 
-					CANStackLogger::debug("[ISB]: New ISB detected at address %u", message->get_identifier().get_source_address());
+					CANStackLogger::debug("[ISB]: New ISB detected at address %u", message.get_identifier().get_source_address());
 					newISB.ISONAME = messageNAME;
 					isobusShorcutButtonList.emplace_back(newISB);
 					ISB = std::prev(isobusShorcutButtonList.end());
@@ -187,7 +186,7 @@ namespace isobus
 						// A Working Set shall consider an increase in the transitions without detecting a corresponding
 						// transition of the Stop all implement operations state as an error and react accordingly.
 						ISB->commandedState = StopAllImplementOperationsState::StopImplementOperations;
-						CANStackLogger::error("[ISB]: Missed an ISB transition from ISB at address %u", message->get_identifier().get_source_address());
+						CANStackLogger::error("[ISB]: Missed an ISB transition from ISB at address %u", message.get_identifier().get_source_address());
 					}
 					else
 					{
@@ -201,7 +200,7 @@ namespace isobus
 					{
 						if (StopAllImplementOperationsState::StopImplementOperations == newState)
 						{
-							CANStackLogger::error("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message->get_identifier().get_source_address());
+							CANStackLogger::error("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message.get_identifier().get_source_address());
 						}
 						else
 						{

@@ -1043,22 +1043,21 @@ namespace isobus
 		}
 	}
 
-	void TaskControllerClient::process_rx_message(CANMessage *message, void *parentPointer)
+	void TaskControllerClient::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
-		if ((nullptr != message) &&
-		    (nullptr != parentPointer) &&
-		    (CAN_DATA_LENGTH <= message->get_data_length()))
+		if ((nullptr != parentPointer) &&
+		    (CAN_DATA_LENGTH <= message.get_data_length()))
 		{
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
-			std::vector<std::uint8_t> &messageData = message->get_data();
+			const auto &messageData = message.get_data();
 
-			switch (message->get_identifier().get_parameter_group_number())
+			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
 				{
-					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message->get_uint8_at(0)))
+					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message.get_uint8_at(0)))
 					{
-						std::uint32_t targetParameterGroupNumber = message->get_uint24_at(5);
+						std::uint32_t targetParameterGroupNumber = message.get_uint24_at(5);
 						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData) == targetParameterGroupNumber)
 						{
 							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TC]: The TC Server is NACK-ing our messages. Disconnecting.");
@@ -1389,7 +1388,7 @@ namespace isobus
 
 						case ProcessDataCommands::StatusMessage:
 						{
-							if (parentTC->partnerControlFunction->get_NAME() == message->get_source_control_function()->get_NAME())
+							if (parentTC->partnerControlFunction->get_NAME() == message.get_source_control_function()->get_NAME())
 							{
 								// Many values in the status message were undefined in version 2 and before, so the
 								// standard explicitly tells us to ignore those attributes. The only things that really

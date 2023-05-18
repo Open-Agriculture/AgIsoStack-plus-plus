@@ -13,9 +13,9 @@
 
 static std::atomic_bool running = { true };
 
-void nmea2k_callback(isobus::CANMessage *message, void *)
+void nmea2k_callback(const isobus::CANMessage &message, void *)
 {
-	std::cout << "Received a NMEA2K fast packet PGN " << message->get_identifier().get_parameter_group_number() << " message with length " << message->get_data_length() << std::endl;
+	std::cout << "Received a NMEA2K fast packet PGN " << message.get_identifier().get_parameter_group_number() << " message with length " << message.get_data_length() << std::endl;
 }
 
 void nmea2k_transmit_complete_callback(std::uint32_t parameterGroupNumber,

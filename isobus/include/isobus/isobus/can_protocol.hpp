@@ -62,7 +62,7 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		virtual void process_message(CANMessage *const message) = 0;
+		virtual void process_message(const CANMessage &message) = 0;
 
 		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
 		/// @param[in] parameterGroupNumber The PGN of the message
