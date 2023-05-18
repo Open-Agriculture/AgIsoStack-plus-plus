@@ -185,15 +185,14 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::parse_j1939_network_states(CANMessage *const message, std::uint32_t &networkStates)
+	bool DiagnosticProtocol::parse_j1939_network_states(const CANMessage &message, std::uint32_t &networkStates)
 	{
 		bool retVal = false;
 
-		if ((nullptr != message) &&
-		    (CAN_DATA_LENGTH == message->get_data_length()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13) == message->get_identifier().get_parameter_group_number()))
+		if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13) == message.get_identifier().get_parameter_group_number()))
 		{
-			auto messageData = message->get_data();
+			const auto &messageData = message.get_data();
 
 			for (std::uint8_t i = 0; i < DM13_NUMBER_OF_J1939_NETWORKS; i++)
 			{
@@ -227,13 +226,13 @@ namespace isobus
 			{
 				case StopStartCommand::StopBroadcast:
 				{
-					networkStates |= (1 << message->get_can_port_index());
+					networkStates |= (1 << message.get_can_port_index());
 				}
 				break;
 
 				case StopStartCommand::StartBroadcast:
 				{
-					networkStates &= ~(1 << message->get_can_port_index());
+					networkStates &= ~(1 << message.get_can_port_index());
 				}
 				break;
 
@@ -1076,14 +1075,13 @@ namespace isobus
 		return retVal;
 	}
 
-	void DiagnosticProtocol::process_message(CANMessage *const message)
+	void DiagnosticProtocol::process_message(const CANMessage &message)
 	{
-		if ((nullptr != message) &&
-		    (((nullptr == message->get_destination_control_function()) &&
-		      (BROADCAST_CAN_ADDRESS == message->get_identifier().get_destination_address())) ||
-		     (message->get_destination_control_function() == myControlFunction.get())))
+		if ((((nullptr == message.get_destination_control_function()) &&
+		      (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
+		     (message.get_destination_control_function() == myControlFunction.get())))
 		{
-			switch (message->get_identifier().get_parameter_group_number())
+			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13):
 				{
@@ -1096,9 +1094,9 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
-						auto messageData = message->get_data();
+						const auto &messageData = message.get_data();
 
 						DM22Data tempDM22Data;
 						bool wasDTCCleared = false;
@@ -1107,7 +1105,7 @@ namespace isobus
 						tempDM22Data.suspectParameterNumber |= (messageData.at(6) << 8);
 						tempDM22Data.suspectParameterNumber |= (((messageData.at(7) & 0xE0) >> 5) << 16);
 						tempDM22Data.failureModeIdentifier = (messageData.at(7) & 0x1F);
-						tempDM22Data.destination = message->get_source_control_function();
+						tempDM22Data.destination = message.get_source_control_function();
 						tempDM22Data.nackIndicator = 0;
 						tempDM22Data.clearActive = false;
 
@@ -1221,7 +1219,7 @@ namespace isobus
 		}
 	}
 
-	void DiagnosticProtocol::process_message(CANMessage *const message, void *parent)
+	void DiagnosticProtocol::process_message(const CANMessage &message, void *parent)
 	{
 		if (nullptr != parent)
 		{

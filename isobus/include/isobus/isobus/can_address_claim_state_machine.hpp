@@ -81,7 +81,7 @@ namespace isobus
 		/// @brief Processes a CAN message
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant address claimer
-		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief Sets the current state machine state
 		void set_current_state(State value);

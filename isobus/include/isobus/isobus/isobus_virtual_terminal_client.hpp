@@ -1482,7 +1482,7 @@ namespace isobus
 		/// @brief Processes a CAN message destined for any VT client
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant VT client class
-		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief The callback passed to the network manager's send function to know when a Tx is completed
 		static void process_callback(std::uint32_t parameterGroupNumber,

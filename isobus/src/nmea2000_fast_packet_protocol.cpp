@@ -223,7 +223,7 @@ namespace isobus
 		return (nullptr != returnedSession);
 	}
 
-	void FastPacketProtocol::process_message(CANMessage *const message, void *parent)
+	void FastPacketProtocol::process_message(const CANMessage &message, void *parent)
 	{
 		if (nullptr != parent)
 		{
@@ -231,12 +231,11 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::process_message(CANMessage *const message)
+	void FastPacketProtocol::process_message(const CANMessage &message)
 	{
-		if ((nullptr != message) &&
-		    (CAN_DATA_LENGTH == message->get_data_length()) &&
-		    (message->get_identifier().get_parameter_group_number() >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
-		    (message->get_identifier().get_parameter_group_number() <= FP_MAX_PARAMETER_GROUP_NUMBER))
+		if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+		    (message.get_identifier().get_parameter_group_number() >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
+		    (message.get_identifier().get_parameter_group_number() <= FP_MAX_PARAMETER_GROUP_NUMBER))
 		{
 			// See if we care about parsing this message
 			if (parameterGroupNumberCallbacks.size() > 0)
@@ -245,9 +244,9 @@ namespace isobus
 
 				for (auto &callback : parameterGroupNumberCallbacks)
 				{
-					if ((callback.get_parameter_group_number() == message->get_identifier().get_parameter_group_number()) &&
+					if ((callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
 					    ((nullptr == callback.get_internal_control_function()) ||
-					     (callback.get_internal_control_function()->get_address() == message->get_destination_control_function()->get_address())))
+					     (callback.get_internal_control_function()->get_address() == message.get_destination_control_function()->get_address())))
 					{
 						pgnNeedsParsing = true;
 						break;
@@ -257,11 +256,11 @@ namespace isobus
 				if (pgnNeedsParsing)
 				{
 					FastPacketProtocolSession *currentSession = nullptr;
-					std::vector<std::uint8_t> messageData = message->get_data();
+					std::vector<std::uint8_t> messageData = message.get_data();
 					std::uint8_t frameCount = (messageData[0] & FRAME_COUNTER_BIT_MASK);
 
 					// Check for a valid session
-					if (get_session(currentSession, message->get_identifier().get_parameter_group_number(), message->get_source_control_function(), message->get_destination_control_function()))
+					if (get_session(currentSession, message.get_identifier().get_parameter_group_number(), message.get_source_control_function(), message.get_destination_control_function()))
 					{
 						// Matched a session
 						if (0 != frameCount)
@@ -282,7 +281,7 @@ namespace isobus
 								{
 									if (callback.get_parameter_group_number() == currentSession->sessionMessage.get_identifier().get_parameter_group_number())
 									{
-										callback.get_callback()(&currentSession->sessionMessage, callback.get_parent());
+										callback.get_callback()(currentSession->sessionMessage, callback.get_parent());
 									}
 								}
 								close_session(currentSession, true); // All done
@@ -302,7 +301,7 @@ namespace isobus
 							if (messageData[1] <= MAX_PROTOCOL_MESSAGE_LENGTH)
 							{
 								// This is the beginning of a new message
-								currentSession = new FastPacketProtocolSession(FastPacketProtocolSession::Direction::Receive, message->get_can_port_index());
+								currentSession = new FastPacketProtocolSession(FastPacketProtocolSession::Direction::Receive, message.get_can_port_index());
 								currentSession->frameChunkCallback = nullptr;
 								if (messageData[1] >= PROTOCOL_BYTES_PER_FRAME - 1)
 								{
@@ -315,9 +314,9 @@ namespace isobus
 								currentSession->lastPacketNumber = ((messageData[0] >> SEQUENCE_NUMBER_BIT_OFFSET) & SEQUENCE_NUMBER_BIT_MASK);
 								currentSession->processedPacketsThisSession = 1;
 								currentSession->sessionMessage.set_data_size(messageData[1]);
-								currentSession->sessionMessage.set_identifier(message->get_identifier());
-								currentSession->sessionMessage.set_source_control_function(message->get_source_control_function());
-								currentSession->sessionMessage.set_destination_control_function(message->get_destination_control_function());
+								currentSession->sessionMessage.set_identifier(message.get_identifier());
+								currentSession->sessionMessage.set_source_control_function(message.get_source_control_function());
+								currentSession->sessionMessage.set_destination_control_function(message.get_destination_control_function());
 								currentSession->timestamp_ms = SystemTiming::get_timestamp_ms();
 
 								if (0 != (messageData[1] % PROTOCOL_BYTES_PER_FRAME))

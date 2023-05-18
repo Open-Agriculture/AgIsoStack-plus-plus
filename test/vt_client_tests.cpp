@@ -16,7 +16,7 @@ public:
 	DerivedTestVTClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  VirtualTerminalClient(partner, clientSource){};
 
-	void test_wrapper_process_rx_message(CANMessage *message, void *parentPointer)
+	void test_wrapper_process_rx_message(const CANMessage &message, void *parentPointer)
 	{
 		VirtualTerminalClient::process_rx_message(message, parentPointer);
 	}
@@ -158,7 +158,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 	};
 
 	testMessage.set_data(testContent, 8);
-	clientUnderTest.test_wrapper_process_rx_message(&testMessage, &clientUnderTest);
+	clientUnderTest.test_wrapper_process_rx_message(testMessage, &clientUnderTest);
 
 	EXPECT_EQ(1234, clientUnderTest.get_visible_data_mask());
 	EXPECT_EQ(4567, clientUnderTest.get_visible_soft_key_mask());

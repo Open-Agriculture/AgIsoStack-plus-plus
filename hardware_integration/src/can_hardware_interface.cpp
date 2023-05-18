@@ -22,8 +22,8 @@ namespace isobus
 	std::atomic_bool CANHardwareInterface::stackNeedsUpdate = { false };
 	std::uint32_t CANHardwareInterface::periodicUpdateInterval = PERIODIC_UPDATE_INTERVAL;
 
-	isobus::EventDispatcher<isobus::CANMessageFrame> CANHardwareInterface::frameReceivedEventDispatcher;
-	isobus::EventDispatcher<isobus::CANMessageFrame> CANHardwareInterface::frameTransmittedEventDispatcher;
+	isobus::EventDispatcher<const isobus::CANMessageFrame &> CANHardwareInterface::frameReceivedEventDispatcher;
+	isobus::EventDispatcher<const isobus::CANMessageFrame &> CANHardwareInterface::frameTransmittedEventDispatcher;
 	isobus::EventDispatcher<> CANHardwareInterface::periodicUpdateEventDispatcher;
 
 	std::vector<std::unique_ptr<CANHardwareInterface::CANHardware>> CANHardwareInterface::hardwareChannels;
@@ -40,7 +40,7 @@ namespace isobus
 
 	bool send_can_message_frame_to_hardware(const CANMessageFrame &frame)
 	{
-		return CANHardwareInterface::transmit_can_message(frame);
+		return CANHardwareInterface::transmit_can_frame(frame);
 	}
 
 	bool CANHardwareInterface::set_number_of_can_channels(uint8_t value)
@@ -149,7 +149,7 @@ namespace isobus
 
 				if (hardwareChannels[i]->frameHandler->get_is_valid())
 				{
-					hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_message_thread_function, static_cast<std::uint8_t>(i));
+					hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_can_frame_thread_function, static_cast<std::uint8_t>(i));
 				}
 			}
 		}
@@ -187,7 +187,7 @@ namespace isobus
 		return threadsStarted;
 	}
 
-	bool CANHardwareInterface::transmit_can_message(const isobus::CANMessageFrame &packet)
+	bool CANHardwareInterface::transmit_can_frame(const isobus::CANMessageFrame &frame)
 	{
 		if (!threadsStarted)
 		{
@@ -195,24 +195,24 @@ namespace isobus
 			return false;
 		}
 
-		if (packet.channel >= hardwareChannels.size())
+		if (frame.channel >= hardwareChannels.size())
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(packet.channel) +
+			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(frame.channel) +
 			                              ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set.");
 			return false;
 		}
 
-		const std::unique_ptr<CANHardware> &channel = hardwareChannels[packet.channel];
+		const std::unique_ptr<CANHardware> &channel = hardwareChannels[frame.channel];
 		if (nullptr == channel->frameHandler)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(packet.channel) + ", because it is not assigned.");
+			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel " + isobus::to_string(frame.channel) + ", because it is not assigned.");
 			return false;
 		}
 
 		if (channel->frameHandler->get_is_valid())
 		{
 			std::lock_guard<std::mutex> lock(channel->messagesToBeTransmittedMutex);
-			channel->messagesToBeTransmitted.push_back(packet);
+			channel->messagesToBeTransmitted.push_back(frame);
 
 			updateThreadWakeupCondition.notify_all();
 			return true;
@@ -220,12 +220,12 @@ namespace isobus
 		return false;
 	}
 
-	isobus::EventDispatcher<isobus::CANMessageFrame> &CANHardwareInterface::get_can_frame_received_event_dispatcher()
+	isobus::EventDispatcher<const isobus::CANMessageFrame &> &CANHardwareInterface::get_can_frame_received_event_dispatcher()
 	{
 		return frameReceivedEventDispatcher;
 	}
 
-	isobus::EventDispatcher<isobus::CANMessageFrame> &CANHardwareInterface::get_can_frame_transmitted_event_dispatcher()
+	isobus::EventDispatcher<const isobus::CANMessageFrame &> &CANHardwareInterface::get_can_frame_transmitted_event_dispatcher()
 	{
 		return frameTransmittedEventDispatcher;
 	}
@@ -264,9 +264,9 @@ namespace isobus
 					std::lock_guard<std::mutex> lock(channel->receivedMessagesMutex);
 					while (!channel->receivedMessages.empty())
 					{
-						auto &frame = channel->receivedMessages.front();
+						const auto &frame = channel->receivedMessages.front();
 
-						frameReceivedEventDispatcher.invoke(std::move(frame));
+						frameReceivedEventDispatcher.invoke(frame);
 						isobus::receive_can_message_frame_from_hardware(frame);
 
 						channel->receivedMessages.pop_front();
@@ -288,11 +288,11 @@ namespace isobus
 					std::lock_guard<std::mutex> lock(channel->messagesToBeTransmittedMutex);
 					while (!channel->messagesToBeTransmitted.empty())
 					{
-						auto &frame = channel->messagesToBeTransmitted.front();
+						const auto &frame = channel->messagesToBeTransmitted.front();
 
-						if (transmit_can_message_from_buffer(frame))
+						if (transmit_can_frame_from_buffer(frame))
 						{
-							frameTransmittedEventDispatcher.invoke(std::move(frame));
+							frameTransmittedEventDispatcher.invoke(frame);
 							isobus::on_transmit_can_message_frame_from_hardware(frame);
 							channel->messagesToBeTransmitted.pop_front();
 						}
@@ -307,7 +307,7 @@ namespace isobus
 		}
 	}
 
-	void CANHardwareInterface::receive_message_thread_function(std::uint8_t channelIndex)
+	void CANHardwareInterface::receive_can_frame_thread_function(std::uint8_t channelIndex)
 	{
 		std::unique_lock<std::mutex> channelsLock(hardwareChannelsMutex);
 		// Wait until everything is running
@@ -337,13 +337,13 @@ namespace isobus
 		}
 	}
 
-	bool CANHardwareInterface::transmit_can_message_from_buffer(isobus::CANMessageFrame &packet)
+	bool CANHardwareInterface::transmit_can_frame_from_buffer(const isobus::CANMessageFrame &frame)
 	{
 		bool retVal = false;
-		if (packet.channel < hardwareChannels.size())
+		if (frame.channel < hardwareChannels.size())
 		{
-			retVal = ((nullptr != hardwareChannels[packet.channel]->frameHandler) &&
-			          (hardwareChannels[packet.channel]->frameHandler->write_frame(packet)));
+			retVal = ((nullptr != hardwareChannels[frame.channel]->frameHandler) &&
+			          (hardwareChannels[frame.channel]->frameHandler->write_frame(frame)));
 		}
 		return retVal;
 	}

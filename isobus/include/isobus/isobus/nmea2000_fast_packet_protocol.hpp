@@ -154,12 +154,12 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message) override;
+		void process_message(const CANMessage &message) override;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual FP manager object
-		static void process_message(CANMessage *const message, void *parent);
+		static void process_message(const CANMessage &message, void *parent);
 
 		/// @brief Processes end of session callbacks
 		/// @param[in] session The session we've just completed

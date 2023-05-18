@@ -119,7 +119,7 @@ namespace isobus
 		/// @brief This is the main function used by the stack to receive CAN messages and add them to a queue.
 		/// @details This function is called by the stack itself when you call can_lib_process_rx_message.
 		/// @param[in] message The message to be received
-		void receive_can_message(CANMessage &message);
+		void receive_can_message(const CANMessage &message);
 
 		/// @brief The main update function for the network manager. Updates all protocols.
 		void update();
@@ -186,7 +186,7 @@ namespace isobus
 
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
 		/// @param[in] protocolMessage The completed protocol message
-		void protocol_message_callback(CANMessage *protocolMessage);
+		void protocol_message_callback(const CANMessage &message);
 
 		std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
 
@@ -196,7 +196,7 @@ namespace isobus
 
 		/// @brief Updates the internal address table based on a received CAN message
 		/// @param[in] message A message being received by the stack
-		void update_address_table(CANMessage &message);
+		void update_address_table(const CANMessage &message);
 
 		/// @brief Updates the internal address table based on a received address claim
 		/// @param[in] CANPort The CAN channel index of the CAN message being processed
@@ -252,22 +252,22 @@ namespace isobus
 
 		/// @brief Processes a can message for callbacks added with add_any_control_function_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
-		void process_any_control_function_pgn_callbacks(CANMessage &currentMessage);
+		void process_any_control_function_pgn_callbacks(const CANMessage &currentMessage);
 
 		/// @brief Processes a can message for callbacks added with add_protocol_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
-		void process_protocol_pgn_callbacks(CANMessage &currentMessage);
+		void process_protocol_pgn_callbacks(const CANMessage &currentMessage);
 
 		/// @brief Matches a CAN message to any matching PGN callback, and calls that callback
 		/// @param[in] message A pointer to a CAN message to be processed
-		void process_can_message_for_global_and_partner_callbacks(CANMessage *message);
+		void process_can_message_for_global_and_partner_callbacks(const CANMessage &message);
 
 		/// @brief Processes a CAN message to see if it's a commanded address message, and
 		/// if it is, it attempts to set the relevant CF's address to the new value.
 		/// @note Changing the address will resend the address claim message if
 		/// the target was an internal control function.
 		/// @param[in] message The message to process
-		void process_can_message_for_commanded_address(const CANMessage *message);
+		void process_can_message_for_commanded_address(const CANMessage &message);
 
 		/// @brief Processes the internal receive message queue
 		void process_rx_messages();

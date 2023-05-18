@@ -180,15 +180,13 @@ namespace isobus
 		return retVal;
 	}
 
-	void CANNetworkManager::receive_can_message(CANMessage &message)
+	void CANNetworkManager::receive_can_message(const CANMessage &message)
 	{
 		if (initialized)
 		{
-			receiveMessageMutex.lock();
+			std::lock_guard<std::mutex> lock(receiveMessageMutex);
 
 			receiveMessageList.push_back(message);
-
-			receiveMessageMutex.unlock();
 		}
 	}
 
@@ -404,7 +402,7 @@ namespace isobus
 		controlFunctionTable.fill({ nullptr });
 	}
 
-	void CANNetworkManager::update_address_table(CANMessage &message)
+	void CANNetworkManager::update_address_table(const CANMessage &message)
 	{
 		std::uint8_t CANPort = message.get_can_port_index();
 
@@ -729,79 +727,76 @@ namespace isobus
 		return receiveMessageList.size();
 	}
 
-	void CANNetworkManager::process_any_control_function_pgn_callbacks(CANMessage &currentMessage)
+	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)
 	{
 		const std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-		for (auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
+		for (const auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
 		{
 			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
 			    ((nullptr == currentMessage.get_destination_control_function()) ||
 			     (ControlFunction::Type::Internal == currentMessage.get_destination_control_function()->get_type())))
 			{
-				currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
+				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
 			}
 		}
 	}
 
-	void CANNetworkManager::process_protocol_pgn_callbacks(CANMessage &currentMessage)
+	void CANNetworkManager::process_protocol_pgn_callbacks(const CANMessage &currentMessage)
 	{
 		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
 		for (auto &currentCallback : protocolPGNCallbacks)
 		{
 			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
 			{
-				currentCallback.get_callback()(&currentMessage, currentCallback.get_parent());
+				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
 			}
 		}
 	}
 
-	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(CANMessage *message)
+	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(const CANMessage &message)
 	{
-		if (nullptr != message)
+		ControlFunction *messageDestination = message.get_destination_control_function();
+		if ((nullptr == messageDestination) &&
+		    ((nullptr != message.get_source_control_function()) ||
+		     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
+		      (NULL_CAN_ADDRESS == message.get_identifier().get_source_address()))))
 		{
-			ControlFunction *messageDestination = message->get_destination_control_function();
-			if ((nullptr == messageDestination) &&
-			    ((nullptr != message->get_source_control_function()) ||
-			     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message->get_identifier().get_parameter_group_number()) &&
-			      (NULL_CAN_ADDRESS == message->get_identifier().get_source_address()))))
+			// Message destined to global
+			for (std::size_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
 			{
-				// Message destined to global
-				for (std::size_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
+				if ((message.get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
+				    (nullptr != get_global_parameter_group_number_callback(i).get_callback()))
 				{
-					if ((message->get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
-					    (nullptr != get_global_parameter_group_number_callback(i).get_callback()))
-					{
-						// We have a callback that matches this PGN
-						get_global_parameter_group_number_callback(i).get_callback()(message, get_global_parameter_group_number_callback(i).get_parent());
-					}
+					// We have a callback that matches this PGN
+					get_global_parameter_group_number_callback(i).get_callback()(message, get_global_parameter_group_number_callback(i).get_parent());
 				}
 			}
-			else
+		}
+		else
+		{
+			// Message is destination specific
+			for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
 			{
-				// Message is destination specific
-				for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
+				if (messageDestination == InternalControlFunction::get_internal_control_function(i))
 				{
-					if (messageDestination == InternalControlFunction::get_internal_control_function(i))
+					// Message is destined to us
+					for (std::size_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
 					{
-						// Message is destined to us
-						for (std::size_t j = 0; j < PartneredControlFunction::get_number_partnered_control_functions(); j++)
-						{
-							PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
+						PartneredControlFunction *currentControlFunction = PartneredControlFunction::get_partnered_control_function(j);
 
-							if ((nullptr != currentControlFunction) &&
-							    (currentControlFunction->get_can_port() == message->get_can_port_index()))
+						if ((nullptr != currentControlFunction) &&
+						    (currentControlFunction->get_can_port() == message.get_can_port_index()))
+						{
+							// Message matches CAN port for a partnered control function
+							for (std::size_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
 							{
-								// Message matches CAN port for a partnered control function
-								for (std::size_t k = 0; k < currentControlFunction->get_number_parameter_group_number_callbacks(); k++)
+								if ((message.get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
+								    (nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()) &&
+								    ((nullptr == currentControlFunction->get_parameter_group_number_callback(k).get_internal_control_function()) ||
+								     (currentControlFunction->get_parameter_group_number_callback(k).get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
 								{
-									if ((message->get_identifier().get_parameter_group_number() == currentControlFunction->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
-									    (nullptr != currentControlFunction->get_parameter_group_number_callback(k).get_callback()) &&
-									    ((nullptr == currentControlFunction->get_parameter_group_number_callback(k).get_internal_control_function()) ||
-									     (currentControlFunction->get_parameter_group_number_callback(k).get_internal_control_function()->get_address() == message->get_identifier().get_destination_address())))
-									{
-										// We have a callback matching this message
-										currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, currentControlFunction->get_parameter_group_number_callback(k).get_parent());
-									}
+									// We have a callback matching this message
+									currentControlFunction->get_parameter_group_number_callback(k).get_callback()(message, currentControlFunction->get_parameter_group_number_callback(k).get_parent());
 								}
 							}
 						}
@@ -811,16 +806,15 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::process_can_message_for_commanded_address(const CANMessage *message)
+	void CANNetworkManager::process_can_message_for_commanded_address(const CANMessage &message)
 	{
 		constexpr std::uint8_t COMMANDED_ADDRESS_LENGTH = 9;
 
-		if ((nullptr != message) &&
-		    (nullptr == message->get_destination_control_function()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::CommandedAddress) == message->get_identifier().get_parameter_group_number()) &&
-		    (COMMANDED_ADDRESS_LENGTH == message->get_data_length()))
+		if ((nullptr == message.get_destination_control_function()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::CommandedAddress) == message.get_identifier().get_parameter_group_number()) &&
+		    (COMMANDED_ADDRESS_LENGTH == message.get_data_length()))
 		{
-			std::uint64_t targetNAME = message->get_uint64_at(0);
+			std::uint64_t targetNAME = message.get_uint64_at(0);
 
 			for (std::size_t i = 0; i < InternalControlFunction::get_number_internal_control_functions(); i++)
 			{
@@ -828,10 +822,10 @@ namespace isobus
 				auto currentICF = InternalControlFunction::get_internal_control_function(i);
 
 				if ((nullptr != currentICF) &&
-				    (message->get_can_port_index() == currentICF->get_can_port()) &&
+				    (message.get_can_port_index() == currentICF->get_can_port()) &&
 				    (currentICF->get_NAME().get_full_name() == targetNAME))
 				{
-					currentICF->process_commanded_address(message->get_uint8_at(8), {});
+					currentICF->process_commanded_address(message.get_uint8_at(8), {});
 				}
 			}
 		}
@@ -850,7 +844,7 @@ namespace isobus
 			process_any_control_function_pgn_callbacks(currentMessage);
 
 			// Update Others
-			process_can_message_for_global_and_partner_callbacks(&currentMessage);
+			process_can_message_for_global_and_partner_callbacks(currentMessage);
 		}
 	}
 
@@ -867,10 +861,10 @@ namespace isobus
 		return retVal;
 	}
 
-	void CANNetworkManager::protocol_message_callback(CANMessage *protocolMessage)
+	void CANNetworkManager::protocol_message_callback(const CANMessage &message)
 	{
-		process_can_message_for_global_and_partner_callbacks(protocolMessage);
-		process_can_message_for_commanded_address(protocolMessage);
+		process_can_message_for_global_and_partner_callbacks(message);
+		process_can_message_for_commanded_address(message);
 	}
 
 } // namespace isobus

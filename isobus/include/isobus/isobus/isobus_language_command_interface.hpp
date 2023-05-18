@@ -232,7 +232,7 @@ namespace isobus
 		/// @brief Parses incoming CAN messages into usable unit and language settings
 		/// @param message The CAN message to parse
 		/// @param parentPointer A generic context variable, usually the `this` pointer for this interface instance
-		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 	private:
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as

@@ -69,7 +69,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	// Make a message that is too short
 	std::uint8_t shortMessage[] = { 'r', 'u' };
 	testMessage.set_data(shortMessage, 2);
-	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	interfaceUnderTest.process_rx_message(testMessage, &interfaceUnderTest);
 
 	// Should still be default values
 	EXPECT_EQ("", interfaceUnderTest.get_language_code());
@@ -80,7 +80,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData, 9);
 
-	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	interfaceUnderTest.process_rx_message(testMessage, &interfaceUnderTest);
 	EXPECT_EQ("en", interfaceUnderTest.get_language_code());
 	EXPECT_EQ(LanguageCommandInterface::DecimalSymbols::Comma, interfaceUnderTest.get_commanded_decimal_symbol());
 	EXPECT_EQ(LanguageCommandInterface::TimeFormats::TwentyFourHour, interfaceUnderTest.get_commanded_time_format());
@@ -100,7 +100,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 
-	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	interfaceUnderTest.process_rx_message(testMessage, &interfaceUnderTest);
 	EXPECT_EQ("de", interfaceUnderTest.get_language_code());
 	EXPECT_EQ(LanguageCommandInterface::DecimalSymbols::Point, interfaceUnderTest.get_commanded_decimal_symbol());
 	EXPECT_EQ(LanguageCommandInterface::TimeFormats::TwelveHourAmPm, interfaceUnderTest.get_commanded_time_format());
@@ -124,7 +124,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 	// Cover bad reserved bytes
-	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	interfaceUnderTest.process_rx_message(testMessage, &interfaceUnderTest);
 	// We still accept the message with strange reserved bytes, but would have printed an error
 	EXPECT_EQ("fr", interfaceUnderTest.get_language_code());
 	//! @todo assert that an warning log message came through
@@ -136,7 +136,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 	// Cover bad one bad reserved byte
-	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	interfaceUnderTest.process_rx_message(testMessage, &interfaceUnderTest);
 	EXPECT_EQ("us", interfaceUnderTest.get_language_code());
 	//! @todo assert that an warning log message came through
 
@@ -147,14 +147,9 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
 	// Cover bad one bad reserved byte
-	interfaceUnderTest.process_rx_message(&testMessage, &interfaceUnderTest);
+	interfaceUnderTest.process_rx_message(testMessage, &interfaceUnderTest);
 	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 	//! @todo assert that an warning log message came through
-
-	// Cover null message
-	interfaceUnderTest.process_rx_message(nullptr, &interfaceUnderTest);
-	// The old language code should still be there
-	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 
 	// Cover null parent
 	testData2[0] = 'r';
@@ -163,11 +158,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	testData2[7] = 0xFF;
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);
-	interfaceUnderTest.process_rx_message(&testMessage, nullptr);
+	interfaceUnderTest.process_rx_message(testMessage, nullptr);
 	// Message should have been discarded
-	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
-
-	// Cover all null parameters
-	interfaceUnderTest.process_rx_message(nullptr, nullptr);
 	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 }
