@@ -465,38 +465,37 @@ namespace isobus
 		}
 	}
 
-	void AgriculturalGuidanceInterface::process_rx_message(CANMessage *message, void *parentPointer)
+	void AgriculturalGuidanceInterface::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
-		assert(nullptr != message);
 		assert(nullptr != parentPointer);
 		auto targetInterface = static_cast<AgriculturalGuidanceInterface *>(parentPointer);
 
-		switch (message->get_identifier().get_parameter_group_number())
+		switch (message.get_identifier().get_parameter_group_number())
 		{
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand):
 			{
-				if (CAN_DATA_LENGTH == message->get_data_length())
+				if (CAN_DATA_LENGTH == message.get_data_length())
 				{
-					if (message->get_source_control_function() != nullptr)
+					if (message.get_source_control_function() != nullptr)
 					{
 						auto result = std::find_if(targetInterface->receivedGuidanceSystemCommandMessages.begin(),
 						                           targetInterface->receivedGuidanceSystemCommandMessages.end(),
 						                           [&message](const std::shared_ptr<GuidanceSystemCommand> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_sender_control_function() == message->get_source_control_function());
+							                           return (nullptr != receivedCommand) && (receivedCommand->get_sender_control_function() == message.get_source_control_function());
 						                           });
 
 						if (result == targetInterface->receivedGuidanceSystemCommandMessages.end())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGuidanceSystemCommandMessages.push_back(std::make_shared<GuidanceSystemCommand>(message->get_source_control_function()));
+							targetInterface->receivedGuidanceSystemCommandMessages.push_back(std::make_shared<GuidanceSystemCommand>(message.get_source_control_function()));
 							result = targetInterface->receivedGuidanceSystemCommandMessages.end() - 1;
 						}
 
 						auto guidanceCommand = *result;
 						bool changed = false;
 
-						changed |= guidanceCommand->set_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
-						changed |= guidanceCommand->set_status(static_cast<GuidanceSystemCommand::CurvatureCommandStatus>(message->get_uint8_at(2) & 0x03));
+						changed |= guidanceCommand->set_curvature((message.get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
+						changed |= guidanceCommand->set_status(static_cast<GuidanceSystemCommand::CurvatureCommandStatus>(message.get_uint8_at(2) & 0x03));
 						guidanceCommand->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
 						targetInterface->guidanceSystemCommandEventPublisher.invoke(std::move(guidanceCommand), std::move(changed));
@@ -511,34 +510,34 @@ namespace isobus
 
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo):
 			{
-				if (CAN_DATA_LENGTH == message->get_data_length())
+				if (CAN_DATA_LENGTH == message.get_data_length())
 				{
-					if (message->get_source_control_function() != nullptr)
+					if (message.get_source_control_function() != nullptr)
 					{
 						auto result = std::find_if(targetInterface->receivedGuidanceMachineInfoMessages.cbegin(),
 						                           targetInterface->receivedGuidanceMachineInfoMessages.cend(),
 						                           [&message](const std::shared_ptr<GuidanceMachineInfo> &receivedInfo) {
-							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message->get_source_control_function());
+							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
 						                           });
 
 						if (result == targetInterface->receivedGuidanceMachineInfoMessages.cend())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGuidanceMachineInfoMessages.push_back(std::make_shared<GuidanceMachineInfo>(message->get_source_control_function()));
+							targetInterface->receivedGuidanceMachineInfoMessages.push_back(std::make_shared<GuidanceMachineInfo>(message.get_source_control_function()));
 							result = targetInterface->receivedGuidanceMachineInfoMessages.cend() - 1;
 						}
 
 						auto machineInfo = *result;
 						bool changed = false;
 
-						changed |= machineInfo->set_estimated_curvature((message->get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
-						changed |= machineInfo->set_mechanical_system_lockout_state(static_cast<GuidanceMachineInfo::MechanicalSystemLockout>(message->get_uint8_at(2) & 0x03));
-						changed |= machineInfo->set_guidance_steering_system_readiness_state(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(2) >> 2) & 0x03));
-						changed |= machineInfo->set_guidance_steering_input_position_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(2) >> 4) & 0x03));
-						changed |= machineInfo->set_request_reset_command_status(static_cast<GuidanceMachineInfo::RequestResetCommandStatus>((message->get_uint8_at(2) >> 6) & 0x03));
-						changed |= machineInfo->set_guidance_limit_status(static_cast<GuidanceMachineInfo::GuidanceLimitStatus>(message->get_uint8_at(3) >> 5));
-						changed |= machineInfo->set_guidance_system_command_exit_reason_code(message->get_uint8_at(4) & 0x3F);
-						changed |= machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message->get_uint8_at(4) >> 6) & 0x03));
+						changed |= machineInfo->set_estimated_curvature((message.get_uint16_at(0) * CURVATURE_COMMAND_RESOLUTION_PER_BIT) - CURVATURE_COMMAND_OFFSET_INVERSE_KM);
+						changed |= machineInfo->set_mechanical_system_lockout_state(static_cast<GuidanceMachineInfo::MechanicalSystemLockout>(message.get_uint8_at(2) & 0x03));
+						changed |= machineInfo->set_guidance_steering_system_readiness_state(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message.get_uint8_at(2) >> 2) & 0x03));
+						changed |= machineInfo->set_guidance_steering_input_position_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message.get_uint8_at(2) >> 4) & 0x03));
+						changed |= machineInfo->set_request_reset_command_status(static_cast<GuidanceMachineInfo::RequestResetCommandStatus>((message.get_uint8_at(2) >> 6) & 0x03));
+						changed |= machineInfo->set_guidance_limit_status(static_cast<GuidanceMachineInfo::GuidanceLimitStatus>(message.get_uint8_at(3) >> 5));
+						changed |= machineInfo->set_guidance_system_command_exit_reason_code(message.get_uint8_at(4) & 0x3F);
+						changed |= machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message.get_uint8_at(4) >> 6) & 0x03));
 						machineInfo->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
 						targetInterface->guidanceMachineInfoEventPublisher.invoke(std::move(machineInfo), std::move(changed));

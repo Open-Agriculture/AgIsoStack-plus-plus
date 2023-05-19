@@ -383,7 +383,7 @@ namespace isobus
 		/// @brief Processes a CAN message
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant instance of this class
-		static void process_rx_message(CANMessage *message, void *parentPointer);
+		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		static constexpr std::uint32_t GUIDANCE_MESSAGE_TX_INTERVAL_MS = 100; ///< How often guidance messages are sent, defined in ISO 11783-7
 		static constexpr std::uint32_t GUIDANCE_MESSAGE_TIMEOUT_MS = 150; ///< Amount of time before a guidance message is stale. We currently tolerate 50ms of delay.

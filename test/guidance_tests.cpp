@@ -77,7 +77,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 
 	auto testECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x44, 0);
 
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 	testFrame.timestamp_us = 0;
 	testFrame.identifier = 0;
 	testFrame.channel = 0;
@@ -222,7 +222,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 {
 	TestGuidanceInterface interfaceUnderTest(nullptr, nullptr);
-	HardwareInterfaceCANFrame testFrame;
+	CANMessageFrame testFrame;
 
 	testFrame.timestamp_us = 0;
 	testFrame.identifier = 0;
