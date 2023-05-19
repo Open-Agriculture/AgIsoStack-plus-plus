@@ -34,7 +34,7 @@ namespace isobus
 	  processingState(ObjectPoolProcessingThreadState::None)
 	{
 		initialize_colour_table();
-		
+
 		if (nullptr != associatedControlFunction)
 		{
 			CANStackLogger::info("[WS]: New VT Server Object Created for CF " + isobus::to_string(static_cast<int>(associatedControlFunction->get_NAME().get_full_name())));
@@ -43,12 +43,11 @@ namespace isobus
 		{
 			CANStackLogger::info("[WS]: New VT Server Object Created with no associated control function");
 		}
-		
 	}
 
 	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
 	{
-		if(nullptr != vtObjectTree)
+		if (nullptr != vtObjectTree)
 		{
 			for (auto key = vtObjectTree->begin(); key != vtObjectTree->end(); ++key)
 			{
@@ -58,7 +57,7 @@ namespace isobus
 					(*key).second = nullptr;
 				}
 			}
-		}		
+		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()

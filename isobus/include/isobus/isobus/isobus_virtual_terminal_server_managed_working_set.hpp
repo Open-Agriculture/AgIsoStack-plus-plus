@@ -124,7 +124,7 @@ namespace isobus
 		std::thread *objectPoolProcessingThread; ///< A thread to process the object pool with, since that can be fairly time consuming.
 		isobus::ControlFunction *workingSetControlFunction; ///< Stores the control function associated with this working set
 		ObjectPoolProcessingThreadState processingState; ///< Stores the state of processing the object pool
-		
+
 		std::shared_ptr<std::map<std::uint16_t, VTObject *>> vtObjectTree; ///< The C++ object representation (deserialized) of the object pool being managed
 		std::vector<std::vector<std::uint8_t>> iopFilesRawData; ///< Raw IOP File data from the client
 		std::mutex manangedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
