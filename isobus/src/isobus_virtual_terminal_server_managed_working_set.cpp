@@ -15,11 +15,11 @@ namespace isobus
 {
 
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet() :
+	  workingSetID(NULL_OBJECT_ID),
 	  objectPoolProcessingThread(nullptr),
 	  workingSetControlFunction(nullptr),
 	  processingState(ObjectPoolProcessingThreadState::None),
 	  workingSetMaintenanceMessageTimestamp_ms(0),
-	  workingSetID(NULL_OBJECT_ID),
 	  faultingObjectID(NULL_OBJECT_ID)
 	{
 		initialize_colour_table();
@@ -33,6 +33,7 @@ namespace isobus
 	  processingState(ObjectPoolProcessingThreadState::None)
 	{
 		initialize_colour_table();
+		
 		if (nullptr != associatedControlFunction)
 		{
 			CANStackLogger::info("[WS]: New VT Server Object Created for CF " + isobus::to_string(static_cast<int>(associatedControlFunction->get_NAME().get_full_name())));
@@ -41,18 +42,22 @@ namespace isobus
 		{
 			CANStackLogger::info("[WS]: New VT Server Object Created with no associated control function");
 		}
+		
 	}
 
 	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
 	{
-		for (auto key = vtObjectTree->begin(); key != vtObjectTree->end(); ++key)
+		if(nullptr != vtObjectTree)
 		{
-			if (nullptr != (*key).second)
+			for (auto key = vtObjectTree->begin(); key != vtObjectTree->end(); ++key)
 			{
-				delete (*key).second;
-				(*key).second = nullptr;
+				if (nullptr != (*key).second)
+				{
+					delete (*key).second;
+					(*key).second = nullptr;
+				}
 			}
-		}
+		}		
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()

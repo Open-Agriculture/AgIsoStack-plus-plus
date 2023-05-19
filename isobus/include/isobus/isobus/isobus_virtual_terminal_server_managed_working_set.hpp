@@ -118,14 +118,17 @@ namespace isobus
 		/// @brief The object pool processing thread will execute this function when it runs
 		void worker_thread_function();
 
-		std::shared_ptr<std::map<std::uint16_t, VTObject *>> vtObjectTree; ///< The C++ object representation (deserialized) of the object pool being managed
-		std::vector<std::vector<std::uint8_t>> iopFilesRawData; ///< Raw IOP File data from the client
+		std::vector<std::shared_ptr<ControlFunction>> workingSetMemberControlFunctions;
+
+		std::uint16_t workingSetID; ///,< Stores the object ID of the working set object itself
 		std::thread *objectPoolProcessingThread; ///< A thread to process the object pool with, since that can be fairly time consuming.
-		std::mutex manangedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
 		isobus::ControlFunction *workingSetControlFunction; ///< Stores the control function associated with this working set
 		ObjectPoolProcessingThreadState processingState; ///< Stores the state of processing the object pool
+		
+		std::shared_ptr<std::map<std::uint16_t, VTObject *>> vtObjectTree; ///< The C++ object representation (deserialized) of the object pool being managed
+		std::vector<std::vector<std::uint8_t>> iopFilesRawData; ///< Raw IOP File data from the client
+		std::mutex manangedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms; ///< A timestamp (in ms) to track sending of the maintenance message
-		std::uint16_t workingSetID; ///,< Stores the object ID of the working set object itself
 		std::uint16_t faultingObjectID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
 	};
 } // namespace isobus
