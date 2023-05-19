@@ -7,9 +7,10 @@
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
-
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
+
+#include <cstring>
 
 namespace isobus
 {
