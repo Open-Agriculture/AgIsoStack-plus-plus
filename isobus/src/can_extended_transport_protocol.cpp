@@ -40,6 +40,15 @@ namespace isobus
 		        (sessionMessage.get_identifier().get_parameter_group_number() == obj.sessionMessage.get_identifier().get_parameter_group_number()));
 	}
 
+	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_message_data_length() const
+	{
+		if (nullptr != frameChunkCallback)
+		{
+			return frameChunkCallbackMessageLength;
+		}
+		return sessionMessage.get_data_length();
+	}
+
 	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::~ExtendedTransportProtocolSession()
 	{
 	}
@@ -295,7 +304,7 @@ namespace isobus
 						}
 						tempSession->lastPacketNumber++;
 						tempSession->processedPacketsThisSession++;
-						if ((tempSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
+						if ((tempSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) >= tempSession->get_message_data_length())
 						{
 							if (nullptr != tempSession->sessionMessage.get_destination_control_function())
 							{
@@ -350,14 +359,21 @@ namespace isobus
 			ExtendedTransportProtocolSession *newSession = new ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Transmit,
 			                                                                                    source->get_can_port());
 
-			newSession->sessionMessage.set_data(dataBuffer, messageLength);
+			if (dataBuffer != nullptr)
+			{
+				newSession->sessionMessage.set_data(dataBuffer, messageLength);
+			}
+			else
+			{
+				newSession->frameChunkCallback = frameChunkCallback;
+				newSession->frameChunkCallbackMessageLength = messageLength;
+			}
 			newSession->sessionMessage.set_source_control_function(source);
 			newSession->sessionMessage.set_destination_control_function(destination);
 			newSession->packetCount = (messageLength / PROTOCOL_BYTES_PER_FRAME);
 			newSession->lastPacketNumber = 0;
 			newSession->processedPacketsThisSession = 0;
 			newSession->sessionCompleteCallback = sessionCompleteCallback;
-			newSession->frameChunkCallback = frameChunkCallback;
 			newSession->parent = parentPointer;
 			if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
 			{
@@ -498,7 +514,7 @@ namespace isobus
 		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
-			                                 session->sessionMessage.get_data_length(),
+			                                 session->get_message_data_length(),
 			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
@@ -512,7 +528,7 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			std::uint32_t totalBytesTransferred = (session->sessionMessage.get_data_length());
+			std::uint32_t totalBytesTransferred = (session->get_message_data_length());
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_END_OF_MESSAGE_ACKNOWLEDGEMENT,
 				                                                 static_cast<std::uint8_t>(totalBytesTransferred & 0xFF),
 				                                                 static_cast<std::uint8_t>((totalBytesTransferred >> 8) & 0xFF),
@@ -537,7 +553,7 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			std::uint32_t packetMax = ((((session->sessionMessage.get_data_length() - 1) / 7) + 1) - session->processedPacketsThisSession);
+			std::uint32_t packetMax = ((((session->get_message_data_length() - 1) / 7) + 1) - session->processedPacketsThisSession);
 
 			if (packetMax > 0xFF)
 			{
@@ -574,10 +590,10 @@ namespace isobus
 		if (nullptr != session)
 		{
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { EXTENDED_REQUEST_TO_SEND_MULTIPLEXOR,
-				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
-				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
-				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 16) & 0xFF),
-				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 24) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->get_message_data_length() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->get_message_data_length() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->get_message_data_length() >> 16) & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->get_message_data_length() >> 24) & 0xFF),
 				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
 				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 8) & 0xFF),
 				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_identifier().get_parameter_group_number() >> 16) & 0xFF) };
@@ -693,7 +709,7 @@ namespace isobus
 										0xFF,
 										0xFF
 									};
-									std::uint32_t numberBytesLeft = (session->sessionMessage.get_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+									std::uint32_t numberBytesLeft = (session->get_message_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
 
 									if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
 									{
@@ -724,7 +740,7 @@ namespace isobus
 									for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
 									{
 										std::uint32_t index = (j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
-										if (index < session->sessionMessage.get_data_length())
+										if (index < session->get_message_data_length())
 										{
 											dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)];
 										}
@@ -757,7 +773,7 @@ namespace isobus
 						if (sessionStillValid)
 						{
 							if ((session->lastPacketNumber == (session->packetCount)) &&
-							    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+							    (session->get_message_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
 							{
 								set_state(session, StateMachineState::WaitForEndOfMessageAcknowledge);
 								session->timestamp_ms = SystemTiming::get_timestamp_ms();

@@ -8,6 +8,8 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
+
 #include <cassert>
 
 namespace isobus
@@ -27,7 +29,7 @@ namespace isobus
 		return data;
 	}
 
-	std::size_t CANMessage::get_data_length() const
+	std::uint32_t CANMessage::get_data_length() const
 	{
 		return data.size();
 	}
@@ -52,23 +54,22 @@ namespace isobus
 		return CANPortIndex;
 	}
 
-	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::size_t length)
+	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::uint32_t length)
 	{
-		if (nullptr != dataBuffer)
-		{
-			data.insert(data.end(), dataBuffer, dataBuffer + length);
-		}
+		assert(length <= ABSOLUTE_MAX_MESSAGE_LENGTH && "CANMessage::set_data() called with length greater than maximum supported");
+		assert(nullptr != dataBuffer && "CANMessage::set_data() called with nullptr dataBuffer");
+
+		data.insert(data.end(), dataBuffer, dataBuffer + length);
 	}
 
-	void CANMessage::set_data(std::uint8_t dataByte, const std::size_t insertPosition)
+	void CANMessage::set_data(std::uint8_t dataByte, const std::uint32_t insertPosition)
 	{
-		if (insertPosition < data.size())
-		{
-			data[insertPosition] = dataByte;
-		}
+		assert(insertPosition <= ABSOLUTE_MAX_MESSAGE_LENGTH && "CANMessage::set_data() called with insertPosition greater than maximum supported");
+
+		data[insertPosition] = dataByte;
 	}
 
-	void CANMessage::set_data_size(std::size_t length)
+	void CANMessage::set_data_size(std::uint32_t length)
 	{
 		data.resize(length);
 	}
@@ -88,12 +89,12 @@ namespace isobus
 		identifier = value;
 	}
 
-	std::uint8_t CANMessage::get_uint8_at(const std::size_t index) const
+	std::uint8_t CANMessage::get_uint8_at(const std::uint32_t index) const
 	{
 		return data.at(index);
 	}
 
-	std::uint16_t CANMessage::get_uint16_at(const std::size_t index, const ByteFormat format) const
+	std::uint16_t CANMessage::get_uint16_at(const std::uint32_t index, const ByteFormat format) const
 	{
 		std::uint16_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -109,7 +110,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t CANMessage::get_uint24_at(const std::size_t index, const ByteFormat format) const
+	std::uint32_t CANMessage::get_uint24_at(const std::uint32_t index, const ByteFormat format) const
 	{
 		std::uint32_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -127,7 +128,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t CANMessage::get_uint32_at(const std::size_t index, const ByteFormat format) const
+	std::uint32_t CANMessage::get_uint32_at(const std::uint32_t index, const ByteFormat format) const
 	{
 		std::uint32_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -147,7 +148,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint64_t CANMessage::get_uint64_at(const std::size_t index, const ByteFormat format) const
+	std::uint64_t CANMessage::get_uint64_at(const std::uint32_t index, const ByteFormat format) const
 	{
 		std::uint64_t retVal;
 		if (ByteFormat::LittleEndian == format)
@@ -174,7 +175,7 @@ namespace isobus
 		}
 		return retVal;
 	}
-	bool isobus::CANMessage::get_bool_at(const std::size_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length) const
+	bool isobus::CANMessage::get_bool_at(const std::uint32_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length) const
 	{
 		assert(length <= 8 - bitIndex && "length must be less than or equal to 8 - bitIndex");
 		std::uint8_t mask = ((1 << length) - 1) << bitIndex;

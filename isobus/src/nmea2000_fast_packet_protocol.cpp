@@ -40,6 +40,15 @@ namespace isobus
 		        (sessionMessage.get_identifier().get_parameter_group_number() == obj.sessionMessage.get_identifier().get_parameter_group_number()));
 	}
 
+	std::uint32_t FastPacketProtocol::FastPacketProtocolSession::get_message_data_length() const
+	{
+		if (nullptr != frameChunkCallback)
+		{
+			return frameChunkCallbackMessageLength;
+		}
+		return sessionMessage.get_data_length();
+	}
+
 	FastPacketProtocol::FastPacketProtocolSession::~FastPacketProtocolSession()
 	{
 	}
@@ -97,8 +106,15 @@ namespace isobus
 				tempSession->sessionMessage.set_source_control_function(source);
 				tempSession->sessionMessage.set_destination_control_function(destination);
 				tempSession->sessionMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, parameterGroupNumber, priority, (destination == nullptr ? 0xFF : destination->get_address()), source->get_address()));
-				tempSession->sessionMessage.set_data(data, messageLength);
-				tempSession->frameChunkCallback = frameChunkCallback;
+				if (data != nullptr)
+				{
+					tempSession->sessionMessage.set_data(data, messageLength);
+				}
+				else
+				{
+					tempSession->frameChunkCallback = frameChunkCallback;
+					tempSession->frameChunkCallbackMessageLength = messageLength;
+				}
 				tempSession->parent = parentPointer;
 				tempSession->packetCount = ((messageLength - 6) / PROTOCOL_BYTES_PER_FRAME);
 				tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
@@ -359,7 +375,7 @@ namespace isobus
 		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
-			                                 session->sessionMessage.get_data_length(),
+			                                 session->get_message_data_length(),
 			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
@@ -410,7 +426,7 @@ namespace isobus
 							bytesProcessedSoFar += (PROTOCOL_BYTES_PER_FRAME * (session->processedPacketsThisSession - 1));
 						}
 
-						std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - bytesProcessedSoFar);
+						std::uint16_t numberBytesLeft = (session->get_message_data_length() - bytesProcessedSoFar);
 
 						if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
 						{
@@ -442,7 +458,7 @@ namespace isobus
 							{
 								dataBuffer[0] = session->processedPacketsThisSession;
 								dataBuffer[0] |= (session->sequenceNumber << SEQUENCE_NUMBER_BIT_OFFSET);
-								dataBuffer[1] = session->sessionMessage.get_data_length();
+								dataBuffer[1] = session->get_message_data_length();
 								dataBuffer[2] = messageData[0];
 								dataBuffer[3] = messageData[1];
 								dataBuffer[4] = messageData[2];
