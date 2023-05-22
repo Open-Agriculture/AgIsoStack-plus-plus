@@ -42,6 +42,15 @@ namespace isobus
 		        (sessionMessage.get_identifier().get_parameter_group_number() == obj.sessionMessage.get_identifier().get_parameter_group_number()));
 	}
 
+	std::uint32_t TransportProtocolManager::TransportProtocolSession::get_message_data_length() const
+	{
+		if (nullptr != frameChunkCallback)
+		{
+			return frameChunkCallbackMessageLength;
+		}
+		return sessionMessage.get_data_length();
+	}
+
 	TransportProtocolManager::TransportProtocolSession::~TransportProtocolSession()
 	{
 	}
@@ -282,7 +291,7 @@ namespace isobus
 							}
 							tempSession->lastPacketNumber++;
 							tempSession->processedPacketsThisSession++;
-							if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->sessionMessage.get_data_length())
+							if ((tempSession->lastPacketNumber * PROTOCOL_BYTES_PER_FRAME) >= tempSession->get_message_data_length())
 							{
 								// Send EOM Ack for CM sessions only
 								if (nullptr != tempSession->sessionMessage.get_destination_control_function())
@@ -366,14 +375,21 @@ namespace isobus
 			                                                                    source->get_can_port());
 			std::uint8_t destinationAddress;
 
-			newSession->sessionMessage.set_data(dataBuffer, messageLength);
+			if (dataBuffer != nullptr)
+			{
+				newSession->sessionMessage.set_data(dataBuffer, messageLength);
+			}
+			else
+			{
+				newSession->frameChunkCallback = frameChunkCallback;
+				newSession->frameChunkCallbackMessageLength = messageLength;
+			}
 			newSession->sessionMessage.set_source_control_function(source);
 			newSession->sessionMessage.set_destination_control_function(destination);
 			newSession->packetCount = (messageLength / PROTOCOL_BYTES_PER_FRAME);
 			newSession->lastPacketNumber = 0;
 			newSession->processedPacketsThisSession = 0;
 			newSession->sessionCompleteCallback = sessionCompleteCallback;
-			newSession->frameChunkCallback = frameChunkCallback;
 			newSession->parent = parentPointer;
 			if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
 			{
@@ -498,7 +514,7 @@ namespace isobus
 		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
-			                                 session->sessionMessage.get_data_length(),
+			                                 session->get_message_data_length(),
 			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
@@ -513,8 +529,8 @@ namespace isobus
 		if (nullptr != session)
 		{
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR,
-				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
-				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->get_message_data_length() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->get_message_data_length() >> 8) & 0xFF),
 				                                                 session->packetCount,
 				                                                 0xFF,
 				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
@@ -573,8 +589,8 @@ namespace isobus
 		if (nullptr != session)
 		{
 			const std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { REQUEST_TO_SEND_MULTIPLEXOR,
-				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_data_length() & 0xFF),
-				                                                 static_cast<std::uint8_t>((session->sessionMessage.get_data_length() >> 8) & 0xFF),
+				                                                 static_cast<std::uint8_t>(session->get_message_data_length() & 0xFF),
+				                                                 static_cast<std::uint8_t>((session->get_message_data_length() >> 8) & 0xFF),
 				                                                 session->packetCount,
 				                                                 0xFF,
 				                                                 static_cast<std::uint8_t>(session->sessionMessage.get_identifier().get_parameter_group_number() & 0xFF),
@@ -597,7 +613,7 @@ namespace isobus
 		if (nullptr != session)
 		{
 			std::uint8_t dataBuffer[CAN_DATA_LENGTH] = { 0 };
-			std::uint32_t messageLength = session->sessionMessage.get_data_length();
+			std::uint32_t messageLength = session->get_message_data_length();
 			std::uint32_t pgn = session->sessionMessage.get_identifier().get_parameter_group_number();
 
 			dataBuffer[0] = END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR;
@@ -740,7 +756,7 @@ namespace isobus
 									0xFF,
 									0xFF
 								};
-								std::uint16_t numberBytesLeft = (session->sessionMessage.get_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
+								std::uint16_t numberBytesLeft = (session->get_message_data_length() - (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
 
 								if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
 								{
@@ -770,7 +786,7 @@ namespace isobus
 								for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
 								{
 									std::uint32_t index = (j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession));
-									if (index < session->sessionMessage.get_data_length())
+									if (index < session->get_message_data_length())
 									{
 										dataBuffer[1 + j] = session->sessionMessage.get_data()[j + (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)];
 									}
@@ -809,7 +825,7 @@ namespace isobus
 					if (sessionStillValid)
 					{
 						if ((session->lastPacketNumber == (session->packetCount)) &&
-						    (session->sessionMessage.get_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
+						    (session->get_message_data_length() <= (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession)))
 						{
 							if (nullptr == session->sessionMessage.get_destination_control_function())
 							{

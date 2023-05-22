@@ -99,6 +99,10 @@ namespace isobus
 			/// @brief A useful way to compare sesson objects to each other for equality
 			bool operator==(const FastPacketProtocolSession &obj);
 
+			/// @brief Get the total number of bytes that will be sent or received in this session
+			/// @return The length of the message in number of bytes
+			std::uint32_t get_message_data_length() const;
+
 		private:
 			friend class FastPacketProtocol; ///< Allows the TP manager full access
 
@@ -113,6 +117,7 @@ namespace isobus
 			CANMessage sessionMessage; ///< A CAN message is used in the session to represent and store data like PGN
 			TransmitCompleteCallback sessionCompleteCallback; ///< A callback that is to be called when the session is completed
 			DataChunkCallback frameChunkCallback; ///< A callback that might be used to get chunks of data to send
+			std::uint32_t frameChunkCallbackMessageLength; ///< The length of the message that is being sent in chunks
 			void *parent; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
 			std::uint32_t timestamp_ms; ///< A timestamp used to track session timeouts
 			std::uint16_t lastPacketNumber; ///< The last processed sequence number for this set of packets
