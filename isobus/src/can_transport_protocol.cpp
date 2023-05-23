@@ -284,7 +284,7 @@ namespace isobus
 						// Check for valid sequence number
 						if (message.get_data()[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1))
 						{
-							for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < PROTOCOL_BYTES_PER_FRAME; i++)
+							for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; (i < PROTOCOL_BYTES_PER_FRAME) && ((PROTOCOL_BYTES_PER_FRAME * tempSession->lastPacketNumber) + i < tempSession->get_message_data_length()); i++)
 							{
 								std::uint16_t currentDataIndex = (PROTOCOL_BYTES_PER_FRAME * tempSession->lastPacketNumber) + i;
 								tempSession->sessionMessage.set_data(message.get_data()[1 + SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
