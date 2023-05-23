@@ -297,7 +297,7 @@ namespace isobus
 					    (StateMachineState::RxDataSession == tempSession->state) &&
 					    (messageData[SEQUENCE_NUMBER_DATA_INDEX] == (tempSession->lastPacketNumber + 1)))
 					{
-						for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; i < PROTOCOL_BYTES_PER_FRAME; i++)
+						for (std::uint8_t i = SEQUENCE_NUMBER_DATA_INDEX; (i < PROTOCOL_BYTES_PER_FRAME) && ((PROTOCOL_BYTES_PER_FRAME * tempSession->lastPacketNumber) + i < tempSession->get_message_data_length()); i++)
 						{
 							std::uint32_t currentDataIndex = (PROTOCOL_BYTES_PER_FRAME * tempSession->processedPacketsThisSession) + i;
 							tempSession->sessionMessage.set_data(messageData[1 + SEQUENCE_NUMBER_DATA_INDEX + i], currentDataIndex);
