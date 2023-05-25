@@ -1,3 +1,12 @@
+//================================================================================================
+/// @file isobus_language_command_interface.cpp
+///
+/// @brief Defines a set of values found in the isobus language command message from
+/// ISO11783-7 commonly used in VT and TC communication
+/// @author Adrian Del Grosso
+///
+/// @copyright 2023 Adrian Del Grosso
+//================================================================================================
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 
 #include "isobus/isobus/can_constants.hpp"

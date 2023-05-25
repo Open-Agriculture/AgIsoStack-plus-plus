@@ -185,7 +185,7 @@ namespace isobus
 		                          CANLibBadge<AddressClaimStateMachine>) const;
 
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
-		/// @param[in] protocolMessage The completed protocol message
+		/// @param[in] message The completed protocol message
 		void protocol_message_callback(const CANMessage &message);
 
 		std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes

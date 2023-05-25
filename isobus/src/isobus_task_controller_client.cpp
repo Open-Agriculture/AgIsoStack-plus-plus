@@ -1,3 +1,11 @@
+//================================================================================================
+/// @file isobus_task_controller_client.cpp
+///
+/// @brief A class to manage a client connection to a ISOBUS field computer's task controller
+/// @author Adrian Del Grosso
+///
+/// @copyright 2023 Adrian Del Grosso
+//================================================================================================
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"

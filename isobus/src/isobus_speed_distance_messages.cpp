@@ -31,10 +31,12 @@ namespace isobus
 	SpeedMessagesInterface::SpeedMessagesInterface(std::shared_ptr<InternalControlFunction> source,
 	                                               bool enableSendingGroundBasedSpeedPeriodically,
 	                                               bool enableSendingWheelBasedSpeedPeriodically,
-	                                               bool enableSendingMachineSelectedSpeedPeriodically) :
+	                                               bool enableSendingMachineSelectedSpeedPeriodically,
+	                                               bool enableSendingMachineSelectedSpeedCommandPeriodically) :
 	  machineSelectedSpeedTransmitData(MachineSelectedSpeedData(enableSendingMachineSelectedSpeedPeriodically ? source.get() : nullptr)),
 	  wheelBasedSpeedTransmitData(WheelBasedMachineSpeedData(enableSendingWheelBasedSpeedPeriodically ? source.get() : nullptr)),
 	  groundBasedSpeedTransmitData(GroundBasedSpeedData(enableSendingGroundBasedSpeedPeriodically ? source.get() : nullptr)),
+	  machineSelectedSpeedCommandTransmitData(MachineSelectedSpeedCommandData(enableSendingMachineSelectedSpeedCommandPeriodically ? source.get() : nullptr)),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
 	}
@@ -46,6 +48,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance), process_rx_message, this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand), process_rx_message, this);
 		}
 	}
 
@@ -56,7 +59,14 @@ namespace isobus
 
 	std::uint32_t SpeedMessagesInterface::WheelBasedMachineSpeedData::get_machine_distance() const
 	{
-		return wheelBasedMachineDistance_mm;
+		std::uint32_t retVal = wheelBasedMachineDistance_mm;
+
+		// Values above the max are sort of implicitly defined and should be ignored.
+		if (wheelBasedMachineDistance_mm > SAEds05_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
 	}
 
 	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_machine_distance(std::uint32_t distance)
@@ -68,7 +78,13 @@ namespace isobus
 
 	std::uint16_t SpeedMessagesInterface::WheelBasedMachineSpeedData::get_machine_speed() const
 	{
-		return wheelBasedMachineSpeed_mm_per_sec;
+		std::uint16_t retVal = wheelBasedMachineSpeed_mm_per_sec;
+
+		if (wheelBasedMachineSpeed_mm_per_sec > SAEvl01_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
 	}
 
 	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_machine_speed(std::uint16_t speed)
@@ -160,7 +176,14 @@ namespace isobus
 
 	std::uint32_t SpeedMessagesInterface::MachineSelectedSpeedData::get_machine_distance() const
 	{
-		return machineSelectedSpeedDistance_mm;
+		std::uint32_t retVal = machineSelectedSpeedDistance_mm;
+
+		// Values above the max are sort of implicitly defined and should be ignored.
+		if (machineSelectedSpeedDistance_mm > SAEds05_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
 	}
 
 	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_machine_distance(std::uint32_t distance)
@@ -172,7 +195,13 @@ namespace isobus
 
 	std::uint16_t SpeedMessagesInterface::MachineSelectedSpeedData::get_machine_speed() const
 	{
-		return machineSelectedSpeed_mm_per_sec;
+		std::uint16_t retVal = machineSelectedSpeed_mm_per_sec;
+
+		if (machineSelectedSpeed_mm_per_sec > SAEvl01_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
 	}
 
 	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_machine_speed(std::uint16_t speed)
@@ -252,7 +281,14 @@ namespace isobus
 
 	std::uint32_t SpeedMessagesInterface::GroundBasedSpeedData::get_machine_distance() const
 	{
-		return groundBasedMachineDistance_mm;
+		std::uint32_t retVal = groundBasedMachineDistance_mm;
+
+		// Values above the max are sort of implicitly defined and should be ignored.
+		if (groundBasedMachineDistance_mm > SAEds05_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
 	}
 
 	bool SpeedMessagesInterface::GroundBasedSpeedData::set_machine_distance(std::uint32_t distance)
@@ -264,7 +300,13 @@ namespace isobus
 
 	std::uint16_t SpeedMessagesInterface::GroundBasedSpeedData::get_machine_speed() const
 	{
-		return groundBasedMachineSpeed_mm_per_sec;
+		std::uint16_t retVal = groundBasedMachineSpeed_mm_per_sec;
+
+		if (groundBasedMachineSpeed_mm_per_sec > SAEvl01_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
 	}
 
 	bool SpeedMessagesInterface::GroundBasedSpeedData::set_machine_speed(std::uint16_t speed)
@@ -301,13 +343,88 @@ namespace isobus
 		return timestamp_ms;
 	}
 
+	SpeedMessagesInterface::MachineSelectedSpeedCommandData::MachineSelectedSpeedCommandData(ControlFunction *sender) :
+	  controlFunction(sender)
+	{
+	}
+
+	std::uint16_t SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_machine_speed_setpoint_command() const
+	{
+		std::uint16_t retVal = speedCommandedSetpoint;
+
+		// Values over the max are implicitly defined, best to treat as zeros.
+		if (speedCommandedSetpoint > SAEvl01_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
+	}
+
+	bool SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_machine_speed_setpoint_command(std::uint16_t speed)
+	{
+		bool retVal = (speed != speedCommandedSetpoint);
+		speedCommandedSetpoint = speed;
+		return retVal;
+	}
+
+	std::uint16_t SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_machine_selected_speed_setpoint_limit() const
+	{
+		std::uint16_t retVal = speedSetpointLimit;
+
+		// Values over the max are implicitly defined, best to treat as zeros.
+		if (speedSetpointLimit > SAEvl01_MAX_VALUE)
+		{
+			retVal = 0;
+		}
+		return retVal;
+	}
+
+	bool SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_machine_selected_speed_setpoint_limit(std::uint16_t speedLimit)
+	{
+		bool retVal = (speedSetpointLimit != speedLimit);
+		speedSetpointLimit = speedLimit;
+		return retVal;
+	}
+
+	SpeedMessagesInterface::MachineDirection SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_machine_direction_command() const
+	{
+		return machineDirectionCommand;
+	}
+
+	bool SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_machine_direction_of_travel(MachineDirection commandedDirection)
+	{
+		bool retVal = (commandedDirection != machineDirectionCommand);
+		machineDirectionCommand = commandedDirection;
+		return retVal;
+	}
+
+	ControlFunction *SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_sender_control_function() const
+	{
+		return controlFunction;
+	}
+
+	void SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_timestamp_ms(std::uint32_t timestamp)
+	{
+		timestamp_ms = timestamp;
+	}
+
+	std::uint32_t SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_timestamp_ms() const
+	{
+		return timestamp_ms;
+	}
+
 	void SpeedMessagesInterface::initialize()
 	{
 		if (!initialized)
 		{
+			if (nullptr != machineSelectedSpeedCommandTransmitData.get_sender_control_function())
+			{
+				CANStackLogger::warn("[Speed/Distance]: Use extreme cation! You have configured an interface to command the speed of the machine. The machine may move without warning!");
+			}
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance), process_rx_message, this);
+			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand), process_rx_message, this);
 			initialized = true;
 		}
 	}
@@ -330,6 +447,11 @@ namespace isobus
 	std::size_t SpeedMessagesInterface::get_number_received_machine_selected_speed_sources() const
 	{
 		return receivedMachineSelectedSpeedMessages.size();
+	}
+
+	std::size_t SpeedMessagesInterface::get_number_received_machine_selected_speed_command_sources() const
+	{
+		return receivedMachineSelectedSpeedCommandMessages.size();
 	}
 
 	std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedData> SpeedMessagesInterface::get_received_machine_selected_speed(std::size_t index)
@@ -365,6 +487,17 @@ namespace isobus
 		return retVal;
 	}
 
+	std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedCommandData> SpeedMessagesInterface::get_received_machine_selected_speed_command(std::size_t index)
+	{
+		std::shared_ptr<MachineSelectedSpeedCommandData> retVal = nullptr;
+
+		if (index < receivedMachineSelectedSpeedCommandMessages.size())
+		{
+			retVal = receivedMachineSelectedSpeedCommandMessages.at(index);
+		}
+		return retVal;
+	}
+
 	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::WheelBasedMachineSpeedData>, bool> &SpeedMessagesInterface::get_wheel_based_machine_speed_data_event_publisher()
 	{
 		return wheelBasedMachineSpeedDataEventPublisher;
@@ -378,6 +511,11 @@ namespace isobus
 	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::GroundBasedSpeedData>, bool> &SpeedMessagesInterface::get_ground_based_machine_speed_data_event_publisher()
 	{
 		return groundBasedSpeedDataEventPublisher;
+	}
+
+	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedCommandData>, bool> &SpeedMessagesInterface::get_machine_selected_speed_command_data_event_publisher()
+	{
+		return machineSelectedSpeedCommandDataEventPublisher;
 	}
 
 	void SpeedMessagesInterface::update()
@@ -402,6 +540,12 @@ namespace isobus
 				                                                      return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
 			                                                      }),
 			                                       receivedGroundBasedSpeedMessages.end());
+			receivedMachineSelectedSpeedCommandMessages.erase(std::remove_if(receivedMachineSelectedSpeedCommandMessages.begin(),
+			                                                                 receivedMachineSelectedSpeedCommandMessages.end(),
+			                                                                 [](std::shared_ptr<MachineSelectedSpeedCommandData> messageInfo) {
+				                                                                 return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
+			                                                                 }),
+			                                                  receivedMachineSelectedSpeedCommandMessages.end());
 
 			if (SystemTiming::time_expired_ms(machineSelectedSpeedTransmitTimestamp_ms, SPEED_DISTANCE_MESSAGE_TX_INTERVAL_MS) &&
 			    (nullptr != machineSelectedSpeedTransmitData.get_sender_control_function()))
@@ -420,6 +564,12 @@ namespace isobus
 			{
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendGroundBasedSpeed));
 				groundBasedSpeedTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+			}
+			if (SystemTiming::time_expired_ms(machineSelectedSpeedCommandTransmitTimestamp_ms, SPEED_DISTANCE_MESSAGE_TX_INTERVAL_MS) &&
+			    (nullptr != machineSelectedSpeedCommandTransmitData.get_sender_control_function()))
+			{
+				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendMachineSelectedSpeedCommand));
+				machineSelectedSpeedCommandTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
 			}
 			txFlags.process_all_flags();
 		}
@@ -456,6 +606,12 @@ namespace isobus
 				}
 				break;
 
+				case static_cast<std::uint32_t>(TransmitFlags::SendMachineSelectedSpeedCommand):
+				{
+					transmitSuccessful = targetInterface->send_machine_selected_speed_command();
+				}
+				break;
+
 				default:
 					break;
 			}
@@ -478,7 +634,7 @@ namespace isobus
 			{
 				if (CAN_DATA_LENGTH == message.get_data_length())
 				{
-					if (message.get_source_control_function() != nullptr)
+					if (nullptr != message.get_source_control_function())
 					{
 						auto result = std::find_if(targetInterface->receivedMachineSelectedSpeedMessages.cbegin(),
 						                           targetInterface->receivedMachineSelectedSpeedMessages.cend(),
@@ -493,7 +649,7 @@ namespace isobus
 							result = targetInterface->receivedMachineSelectedSpeedMessages.end() - 1;
 						}
 
-						auto mssMessage = *result;
+						auto &mssMessage = *result;
 						bool changed = false;
 
 						changed |= mssMessage->set_machine_speed(message.get_uint16_at(0));
@@ -518,7 +674,7 @@ namespace isobus
 			{
 				if (CAN_DATA_LENGTH == message.get_data_length())
 				{
-					if (message.get_source_control_function() != nullptr)
+					if (nullptr != message.get_source_control_function())
 					{
 						auto result = std::find_if(targetInterface->receivedWheelBasedSpeedMessages.cbegin(),
 						                           targetInterface->receivedWheelBasedSpeedMessages.cend(),
@@ -533,7 +689,7 @@ namespace isobus
 							result = targetInterface->receivedWheelBasedSpeedMessages.end() - 1;
 						}
 
-						auto wheelSpeedMessage = *result;
+						auto &wheelSpeedMessage = *result;
 						bool changed = false;
 
 						changed |= wheelSpeedMessage->set_machine_speed(message.get_uint16_at(0));
@@ -559,7 +715,7 @@ namespace isobus
 			{
 				if (CAN_DATA_LENGTH == message.get_data_length())
 				{
-					if (message.get_source_control_function() != nullptr)
+					if (nullptr != message.get_source_control_function())
 					{
 						auto result = std::find_if(targetInterface->receivedGroundBasedSpeedMessages.cbegin(),
 						                           targetInterface->receivedGroundBasedSpeedMessages.cend(),
@@ -574,7 +730,7 @@ namespace isobus
 							result = targetInterface->receivedGroundBasedSpeedMessages.end() - 1;
 						}
 
-						auto groundSpeedMessage = *result;
+						auto &groundSpeedMessage = *result;
 						bool changed = false;
 
 						changed |= groundSpeedMessage->set_machine_speed(message.get_uint16_at(0));
@@ -588,6 +744,43 @@ namespace isobus
 				else
 				{
 					CANStackLogger::error("[Speed/Distance]: Received a malformed ground-based speed and distance message. DLC must be 8.");
+				}
+			}
+			break;
+
+			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand):
+			{
+				if (CAN_DATA_LENGTH == message.get_data_length())
+				{
+					if (nullptr != message.get_source_control_function())
+					{
+						auto result = std::find_if(targetInterface->receivedMachineSelectedSpeedCommandMessages.cbegin(),
+						                           targetInterface->receivedMachineSelectedSpeedCommandMessages.cend(),
+						                           [&message](const std::shared_ptr<MachineSelectedSpeedCommandData> &receivedInfo) {
+							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
+						                           });
+
+						if (result == targetInterface->receivedMachineSelectedSpeedCommandMessages.end())
+						{
+							// There is no existing message object from this control function, so create a new one
+							targetInterface->receivedMachineSelectedSpeedCommandMessages.push_back(std::make_shared<MachineSelectedSpeedCommandData>(message.get_source_control_function()));
+							result = targetInterface->receivedMachineSelectedSpeedCommandMessages.end() - 1;
+						}
+
+						auto &commandMessage = *result;
+						bool changed = false;
+
+						commandMessage->set_machine_speed_setpoint_command(message.get_uint16_at(0));
+						commandMessage->set_machine_selected_speed_setpoint_limit(message.get_uint16_at(2));
+						commandMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
+						commandMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+
+						targetInterface->machineSelectedSpeedCommandDataEventPublisher.invoke(std::move(commandMessage), std::move(changed));
+					}
+				}
+				else
+				{
+					CANStackLogger::error("[Speed/Distance]: Received a malformed machine selected speed command message. DLC must be 8.");
 				}
 			}
 			break;
@@ -670,6 +863,30 @@ namespace isobus
 			                                                        buffer.data(),
 			                                                        buffer.size(),
 			                                                        static_cast<isobus::InternalControlFunction *>(groundBasedSpeedTransmitData.get_sender_control_function()),
+			                                                        nullptr,
+			                                                        CANIdentifier::Priority3);
+		}
+		return retVal;
+	}
+
+	bool SpeedMessagesInterface::send_machine_selected_speed_command() const
+	{
+		bool retVal = false;
+
+		if (nullptr != machineSelectedSpeedCommandTransmitData.get_sender_control_function())
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(machineSelectedSpeedCommandTransmitData.get_machine_speed_setpoint_command() & 0xFF),
+				                                                   static_cast<std::uint8_t>((machineSelectedSpeedCommandTransmitData.get_machine_speed_setpoint_command() >> 8) & 0xFF),
+				                                                   static_cast<std::uint8_t>(machineSelectedSpeedCommandTransmitData.get_machine_selected_speed_setpoint_limit() & 0xFF),
+				                                                   static_cast<std::uint8_t>((machineSelectedSpeedCommandTransmitData.get_machine_selected_speed_setpoint_limit() >> 8) & 0xFF),
+				                                                   0xFF,
+				                                                   0xFF,
+				                                                   0xFF,
+				                                                   static_cast<std::uint8_t>(0xFC | static_cast<std::uint8_t>(machineSelectedSpeedCommandTransmitData.get_machine_direction_command())) };
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand),
+			                                                        buffer.data(),
+			                                                        buffer.size(),
+			                                                        static_cast<isobus::InternalControlFunction *>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
