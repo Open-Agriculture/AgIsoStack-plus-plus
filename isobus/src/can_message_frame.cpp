@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file can_frame.cpp
+/// @file can_message_frame.cpp
 ///
 /// @brief Implements helper functions for CANMessageFrame
 /// @author Adrian Del Grosso

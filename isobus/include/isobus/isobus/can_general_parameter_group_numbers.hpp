@@ -36,6 +36,7 @@ namespace isobus
 		ProductIdentification = 0xFC8D,
 		ControlFunctionFunctionalities = 0xFC8E,
 		DiagnosticProtocolIdentification = 0xFD32,
+		MachineSelectedSpeedCommand = 0xFD43,
 		WorkingSetMaster = 0xFE0D,
 		LanguageCommand = 0xFE0F,
 		WheelBasedSpeedAndDistance = 0xFE48,

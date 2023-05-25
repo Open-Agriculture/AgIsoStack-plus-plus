@@ -38,8 +38,8 @@ namespace isobus
 		/// @brief Constructor for a AgriculturalGuidanceInterface
 		/// @param[in] source The internal control function to use when sending messages, or nullptr for listen only
 		/// @param[in] destination The destination control function for transmitted messages, or nullptr for broadcasts
-		/// @param[in] sentSystemCommandPeriodically If true, the system command message will be sent periodically. This should (only) be used by an guidance application trying to steer a machine.
-		/// @param[in] sentMachineInfoPeriodically If true, the machine info message will be sent periodically. This should (only) be used by the steering controller itself.
+		/// @param[in] enableSendingSystemCommandPeriodically If true, the system command message will be sent periodically. This should (only) be used by an guidance application trying to steer a machine.
+		/// @param[in] enableSendingMachineInfoPeriodically If true, the machine info message will be sent periodically. This should (only) be used by the steering controller itself.
 		AgriculturalGuidanceInterface(std::shared_ptr<InternalControlFunction> source,
 		                              std::shared_ptr<ControlFunction> destination,
 		                              bool enableSendingSystemCommandPeriodically = false,
