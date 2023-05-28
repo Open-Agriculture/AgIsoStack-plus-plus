@@ -82,7 +82,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 
 	// Make a test pool as a 120ft sprayer with 16 sections, 1 liquid product
 	// Set up device
-	retVal &= poolToPopulate->add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", localizationData, std::vector<std::uint8_t>(), clientName.get_full_name());
+	retVal &= poolToPopulate->add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "A++1.0", localizationData, std::vector<std::uint8_t>(), clientName.get_full_name());
 	retVal &= poolToPopulate->add_device_element("Sprayer", elementCounter++, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement));
 	retVal &= poolToPopulate->add_device_process_data("Actual Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
 	retVal &= poolToPopulate->add_device_process_data("Request Default PD", static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData), isobus::task_controller_object::Object::NULL_OBJECT_ID, 0, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData));

@@ -806,7 +806,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	// Make a test pool, don't care about our ISO NAME, Localization label, or extended structure label for this test
 	// Set up device
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected);
-	ASSERT_EQ(true, testDDOP->add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", { 0x01 }, std::vector<std::uint8_t>(), 0));
+	ASSERT_EQ(true, testDDOP->add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", { 0x01 }, std::vector<std::uint8_t>(), 0));
 	interfaceUnderTest.configure(testDDOP, 6, 64, 32, false, false, false, false, false);
 
 	// Now try it with a valid structure label

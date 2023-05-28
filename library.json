@@ -1,11 +1,11 @@
 {
-    "name": "Isobus++",
+    "name": "AgIsoStack++",
     "version": "1.0.0",
     "description": "The Free ISO11783 & J1939 CAN Stack",
     "keywords": "can, isobus, j1939, agritech, smart-farming, iso11783",
     "repository": {
         "type": "git",
-        "url": "https://github.com/ad3154/Isobus-plus-plus.git"
+        "url": "https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git"
     },
     "license": "MIT",
     "homepage": "https://isobusplusplus.com/",

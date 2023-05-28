@@ -29,7 +29,7 @@ Let's start our program fresh, with a folder containing only the CAN stack.
 
 	mkdir vt_example
 	cd vt_example
-	git clone https://github.com/ad3154/Isobus-plus-plus.git
+	git clone https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
 
 Create the file `main.cpp` as shown below inside that folder with the requisite control functions.
 
@@ -184,9 +184,9 @@ The `utility` folder in the CAN stack contains a helper function to read standar
 
 You can make one for yourself if you have access to an ISOBUS object pool designer tool of some kind, but for our purposes, one has been included in the examples folder for you called `VT3TestPool.iop`.
 
-For this example, let's `download <https://github.com/ad3154/Isobus-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/VT3TestPool.iop>`_ that object pool (or grab it from the examples folder within the CAN stack), and place it in the same directory as your main.cpp file.
+For this example, let's `download <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/VT3TestPool.iop>`_ that object pool (or grab it from the examples folder within the CAN stack), and place it in the same directory as your main.cpp file.
 
-Let's also grab `this header file <https://github.com/ad3154/Isobus-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/objectPoolObjects.h>`_ and place it in the same folder.
+Let's also grab `this header file <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/examples/virtual_terminal/version3_object_pool/objectPoolObjects.h>`_ and place it in the same folder.
 This file is for convenience, and tells us what objects are inside the IOP file along with their object ID. Files like these are often created by VT object pool designer programs to give nice, human-readable names to your objects so that instead of
 referencing object 5001, we can instead reference it by the nicer name `acknowledgeAlarm_SoftKey` for example.
 
@@ -562,7 +562,7 @@ We'll start off like we did in "ISOBUS Hello World".
 	set(THREADS_PREFER_PTHREAD_FLAG ON)
 	find_package(Threads REQUIRED)
 
-	add_subdirectory("Isobus-plus-plus")
+	add_subdirectory("AgIsoStack-plus-plus")
 
 	add_executable(vt_example main.cpp)
 
@@ -600,4 +600,4 @@ Now you should be able to build and run the program!
 
 That's it for this Tutorial. You should be able to run it as long as you have a VT and a supported CAN driver, see the test pool be uploaded, and be able to interact with all buttons on screen!
 
-If you would like to see more advanced VT tutorials or have other feedback, please visit our `GitHub page <https://github.com/ad3154/Isobus-plus-plus>`_ and feel free to open a discussion! We're friendly, we promise.
+If you would like to see more advanced VT tutorials or have other feedback, please visit our `GitHub page <https://github.com/Open-Agriculture/AgIsoStack-plus-plus>`_ and feel free to open a discussion! We're friendly, we promise.

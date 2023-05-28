@@ -23,11 +23,11 @@ Compiling the Doxygen locally
 
 You can also generate the Doxygen yourself and browse it locally.
 
-From your project, change directory into the 'Isobus-plus-plus' folder.
+From your project, change directory into the 'AgIsoStack-plus-plus' folder.
 
 .. code-block:: bash
 
-   cd Isobus-plus-plus
+   cd AgIsoStack-plus-plus
 
 Make sure you have Doxygen installed.
 

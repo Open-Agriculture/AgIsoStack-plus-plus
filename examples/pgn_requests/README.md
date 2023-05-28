@@ -8,7 +8,7 @@ For this example to work properly, you must have a valid, functional ISO 11783 C
 
 ## The Basics
 
-This example will assume you have already learned the basics of the stack and ISOBUS communication, and won't go over the basic setup of your internal control function. If you need to brush up on those topics, check out the [transport layer example](https://github.com/ad3154/Isobus-plus-plus/tree/main/examples/transport_layer) first, or visit our [tutorial website](https://isobus-plus-plus.readthedocs.io/en/latest/index.html).
+This example will assume you have already learned the basics of the stack and ISOBUS communication, and won't go over the basic setup of your internal control function. If you need to brush up on those topics, check out the [transport layer example](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/examples/transport_layer) first, or visit our [tutorial website](https://isobus-plus-plus.readthedocs.io/en/latest/index.html).
 
 ## PGN Requests
 
