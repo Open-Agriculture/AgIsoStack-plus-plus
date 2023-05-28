@@ -24,7 +24,7 @@ If you are seeing something similar to this error:
 
 .. code-block:: text
 
-   /usr/bin/ld: Isobus-plus-plus/socket_can/libSocketCANInterface.so: undefined reference to `pthread_create'
+   /usr/bin/ld: AgIsoStack-plus-plus/socket_can/libSocketCANInterface.so: undefined reference to `pthread_create'
    collect2: error: ld returned 1 exit status
    make[2]: *** [CMakeFiles/isobus_hello_world.dir/build.make:86: isobus_hello_world] Error 1
    make[1]: *** [CMakeFiles/Makefile2:285: CMakeFiles/isobus_hello_world.dir/all] Error 2
@@ -43,4 +43,4 @@ I have some other issue!
 -------------------------
 
 Please submit an issue at the project's GitHub page:
-https://github.com/ad3154/Isobus-plus-plus/issues
+https://github.com/Open-Agriculture/AgIsoStack-plus-plus/issues

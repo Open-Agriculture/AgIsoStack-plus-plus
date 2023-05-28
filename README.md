@@ -1,4 +1,4 @@
-![ISOBUS++Logo](docs/images/wideLogoTransparent.png)
+![AgIsoStack++Logo](docs/images/wideLogoTransparent.png)
 
 ![Features](docs/images/features.png)
 
@@ -6,7 +6,7 @@
 
 ## About This Library
 
-Isobus++ is an MIT licensed hardware agnostic ISOBUS (ISO11783) and SAE J1939 CAN stack written in C++.
+AgIsoStack++ (Formerly Isobus++) is an MIT licensed hardware agnostic ISOBUS (ISO11783) and SAE J1939 CAN stack written in C++.
 
 The library transparently supports the entire ISOBUS/J1939 transport layer, automatic address claiming, and many of the high level ISOBUS protocols, such as:
 
@@ -38,7 +38,7 @@ A default CAN driver plug-in will be selected for you based on your OS, but when
 
 Or specify multiple using a semicolon separated list: `-DCAN_DRIVER="<driver1>;<driver2>"`
 
-If your target hardware is not listed above, you can easily integrate your own hardware by [implementing a few simple functions](https://github.com/ad3154/ISO11783-CAN-Stack/tree/main/hardware_integration#writing-a-new-can-driver-for-the-stack).
+If your target hardware is not listed above, you can easily integrate your own hardware by [implementing a few simple functions](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/hardware_integration#writing-a-new-can-driver-for-the-stack).
 
 ## Examples
 

@@ -20,7 +20,7 @@
 Overview
 ==========
 
-**ISOBUS++ is a free and open source library that provides easy and robust ISO 11783 and J1939 CAN communication functionality using C++**
+**AgIsoStack++ is a free and open source library that provides easy and robust ISO 11783 and J1939 CAN communication functionality using C++**
 
 .. note::
 
@@ -39,6 +39,6 @@ Table of Contents:
 * :doc:`FAQ <FAQ>`
 
 
-`Visit us on GitHub <https://github.com/ad3154/Isobus-plus-plus>`_
+`Visit us on GitHub <https://github.com/Open-Agriculture/AgIsoStack-plus-plus>`_
 
 

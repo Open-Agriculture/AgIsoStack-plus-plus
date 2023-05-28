@@ -73,6 +73,6 @@ You can do this by calling :code:`isobus::FastPacketProtocol::Protocol.register_
 
 .. note::
 
-	A full example of both sending and receiving can be found in the `examples folder <https://github.com/ad3154/Isobus-plus-plus/tree/main/examples>`_ of this project.
+	A full example of both sending and receiving can be found in the `examples folder <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/examples>`_ of this project.
 
 That's it for this tutorial! Sending 100MB CAN messages has never been easier.

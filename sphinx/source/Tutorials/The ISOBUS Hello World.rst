@@ -38,7 +38,7 @@ Let's set up a standard, empty C++ program in a file called "main.cpp", and incl
 
 The file `"can_network_manager.hpp" <https://delgrossoengineering.com/isobus-docs/can__network__manager_8hpp.html>`_ is the header file for the main interface for the CAN stack.
 
-The file `"socket_can_interface.hpp" <https://github.com/ad3154/Isobus-plus-plus/blob/main/socket_can/include/socket_can_interface.hpp>`_ is a hardware tie-in for socket CAN.
+The file `"socket_can_interface.hpp" <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/socket_can/include/socket_can_interface.hpp>`_ is a hardware tie-in for socket CAN.
 
 The file `"can_partnered_control_function.hpp" <https://delgrossoengineering.com/isobus-docs/can__partnered__control__function_8hpp.html>`_ Defines the interface for a *partnered control function*, which is another device you want to communicate with.
 
@@ -412,12 +412,12 @@ This will send our 8 byte message of all zeros to the global address, using the 
 Compiling The Program (Using CMake)
 ------------------------------------
 
-Assuming you followed the :doc:`installation instructions <../Installation>` the program we just wrote should be in a folder, and the library should be in a directory called Isobus-plus-plus, like this:
+Assuming you followed the :doc:`installation instructions <../Installation>` the program we just wrote should be in a folder, and the library should be in a directory called AgIsoStack-plus-plus, like this:
 
 .. code-block:: bash
 
    ls
-   Isobus-plus-plus main.cpp
+   AgIsoStack-plus-plus main.cpp
 
 To get everything compiling into a program using CMake, let's add a CMakeLists.txt file.
 
@@ -437,7 +437,7 @@ Add the following to a new file called CMakeLists.txt:
    set(THREADS_PREFER_PTHREAD_FLAG ON)
    find_package(Threads REQUIRED)
    
-   add_subdirectory("Isobus-plus-plus")
+   add_subdirectory("AgIsoStack-plus-plus")
    
    add_executable(isobus_hello_world main.cpp)
    

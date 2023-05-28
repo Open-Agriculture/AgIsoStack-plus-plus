@@ -66,7 +66,7 @@ TEST(DDOP_TESTS, CreateSprayerDDOP)
 
 	// Make a test pool, don't care about our ISO NAME, Localization label, or extended structure label for this test
 	// Set up device
-	EXPECT_EQ(true, testDDOP.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOP.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOP.add_device_element("Sprayer", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 	EXPECT_EQ(true, testDDOP.add_device_process_data("Actual Work State", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkState), task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::DeviceActualWorkState)));
 	EXPECT_EQ(true, testDDOP.add_device_value_presentation("minutes", 0, 1.0f, 1, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TimePresentation)));
@@ -117,8 +117,8 @@ TEST(DDOP_TESTS, DDOPDetectDuplicateID)
 	DeviceDescriptorObjectPool testDDOP;
 	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
 
-	EXPECT_EQ(true, testDDOP.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
-	EXPECT_EQ(false, testDDOP.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOP.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(false, testDDOP.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 
 	EXPECT_EQ(true, testDDOP.add_device_value_presentation("m", 0, 0.001f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation)));
 	EXPECT_EQ(false, testDDOP.add_device_value_presentation("m", 0, 0.001f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation)));
@@ -211,11 +211,11 @@ TEST(DDOP_TESTS, DeviceElementDesignatorTests)
 
 	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
 
-	EXPECT_EQ(true, testDDOPVersion3.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion3.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_element("Sprayer But like with a super long designator, just a really impractical one", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
-	EXPECT_EQ(true, testDDOPVersion4.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion4.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_element("Sprayer But like with a super long designator, just a really impractical one", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
-	EXPECT_EQ(true, testDDOPVersion4_2.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion4_2.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion4_2.add_device_element("Sprayer But like with a super long designator, just a really impractical one, it's really getting out of hand with this designator", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 
 	auto tempPD = testDDOPVersion3.get_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement));
@@ -259,7 +259,7 @@ TEST(DDOP_TESTS, ProcessDataTests)
 	DeviceDescriptorObjectPool testDDOPVersion4(4);
 	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
 
-	EXPECT_EQ(true, testDDOPVersion3.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion3.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_element("Sprayer", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_process_data("This is a very long designator that should get truncated", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkState), task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::DeviceActualWorkState)));
 
@@ -268,7 +268,7 @@ TEST(DDOP_TESTS, ProcessDataTests)
 	ASSERT_NE(nullptr, tempPD);
 	EXPECT_EQ(32, tempPD->get_designator().size());
 
-	EXPECT_EQ(true, testDDOPVersion4.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion4.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_element("Sprayer", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_process_data("This is an even longer designator that should get truncated ideally to 128 characters in length but in reality not very many TCs will support this kind of long designator", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkState), task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::DeviceActualWorkState)));
 
@@ -287,7 +287,7 @@ TEST(DDOP_TESTS, PropertyTests)
 	DeviceDescriptorObjectPool testDDOPVersion4_2(4);
 	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
 
-	EXPECT_EQ(true, testDDOPVersion3.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion3.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_element("Sprayer", 1, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_process_data("Total Time", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::EffectiveTotalTime), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TimePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::DeviceTotalTime)));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_element("Connector", 2, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), isobus::task_controller_object::DeviceElementObject::Type::Connector, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::Connector)));
@@ -302,7 +302,7 @@ TEST(DDOP_TESTS, PropertyTests)
 	EXPECT_EQ(std::static_pointer_cast<task_controller_object::DevicePropertyObject>(tempProperty)->get_table_id(), "DPT");
 	EXPECT_EQ(std::static_pointer_cast<task_controller_object::DevicePropertyObject>(tempProperty)->get_device_value_presentation_object_id(), 65535);
 
-	EXPECT_EQ(true, testDDOPVersion4.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion4.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_element("Sprayer", 1, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_process_data("Total Time", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::EffectiveTotalTime), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TimePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::DeviceTotalTime)));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_element("Connector", 2, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), isobus::task_controller_object::DeviceElementObject::Type::Connector, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::Connector)));
@@ -314,7 +314,7 @@ TEST(DDOP_TESTS, PropertyTests)
 	ASSERT_NE(nullptr, tempProperty);
 	EXPECT_EQ(tempProperty->get_designator().size(), 43);
 
-	EXPECT_EQ(true, testDDOPVersion4_2.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion4_2.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion4_2.add_device_element("Sprayer", 1, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
 	EXPECT_EQ(true, testDDOPVersion4_2.add_device_process_data("Total Time", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::EffectiveTotalTime), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TimePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::DeviceTotalTime)));
 	EXPECT_EQ(true, testDDOPVersion4_2.add_device_element("Connector", 2, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), isobus::task_controller_object::DeviceElementObject::Type::Connector, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::Connector)));
@@ -333,11 +333,11 @@ TEST(DDOP_TESTS, PresentationTests)
 	DeviceDescriptorObjectPool testDDOPVersion4(4);
 	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
 
-	EXPECT_EQ(true, testDDOPVersion3.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion3.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_value_presentation("mm", 0, 1.0f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ShortWidthPresentation)));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_value_presentation("mm but like with an abnormally long designator to test if we handle it correctly", 0, 1.0f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation)));
 
-	EXPECT_EQ(true, testDDOPVersion4.add_device("Isobus++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_EQ(true, testDDOPVersion4.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_value_presentation("mm but basically an outragious designator that makes no sense and should never be used. Ideally his is always 32 chars or less, but using a long string to test byte max.", 0, 1.0f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ShortWidthPresentation)));
 	EXPECT_EQ(true, testDDOPVersion4.add_device_value_presentation("mm but like with an abnormally long designator to test if we handle it correctly", 0, 1.0f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation)));
 

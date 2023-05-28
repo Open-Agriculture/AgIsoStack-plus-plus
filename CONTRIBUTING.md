@@ -1,6 +1,6 @@
-# Contributing to ISOBUS++
+# Contributing to AgIsoStack++
 
-We warmly welcome you to Isobus++! Contributing to our open source repository implementing the ISOBUS (ISO11783) standard in the agricultural industry can involve anything from adding new features, improving existing code, fixing bugs, or even just helping to test and document the project. We greatly appreciate any contributions you can make to help drive progress and innovation in this field. Thank you for your interest and support!
+We warmly welcome you to AgIsoStack++! Contributing to our open source repository implementing the ISOBUS (ISO11783) standard in the agricultural industry can involve anything from adding new features, improving existing code, fixing bugs, or even just helping to test and document the project. We greatly appreciate any contributions you can make to help drive progress and innovation in this field. Thank you for your interest and support!
 
 We accept all public contributions that adhere to our code of conduct. Additionally, for PR's we require the pass of all automated pre-merge checks, and a manual code review by a repository maintainer to ensure that our high code quality and project standards are maintained.
 
@@ -60,7 +60,7 @@ VS Code can be installed via the snap store, or by downloading it from [Microsof
 Clone the repo:
 
 ```
-git clone https://github.com/ad3154/Isobus-plus-plus.git
+git clone https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
 ```
 
 Then, open it in Code by clicking `File -> Open Folder`.

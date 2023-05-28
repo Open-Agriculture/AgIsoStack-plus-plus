@@ -544,7 +544,7 @@ namespace isobus
 		/// @brief Enumerates the modes that the client may use when dealing with a DDOP
 		enum class DDOPUploadType
 		{
-			ProgramaticallyGenerated, ///< Using the isobus++ DeviceDescriptorObjectPool class
+			ProgramaticallyGenerated, ///< Using the AgIsoStack++ DeviceDescriptorObjectPool class
 			UserProvidedBinaryPointer, ///< Using a raw pointer to a binary DDOP
 			UserProvidedVector ///< Uses a vector of bytes that comprise a binary DDOP
 		};

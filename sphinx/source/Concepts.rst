@@ -169,7 +169,7 @@ Here are the different transport layers this library provides, along with a shor
 	* ISO11783 Adopts this protocol for a subset of standard GNSS messages
 	* This protocol provides a means to stream up to 223 bytes of data, with the advantage that each frame retains the parameter group number and priority, where TP and ETP do not.
 
-In general, the ISOBUS++ library will take care of choosing which protocol to use automatically.
+In general, the AgIsoStack++ library will take care of choosing which protocol to use automatically.
 
-Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/ad3154/Isobus-plus-plus/tree/main/examples/transport_layer>`_.
+Now that you understand these concepts, if you've done the other :doc:`tutorials <Tutorials>`, check out the :doc:`Transport Layer Tutorial <Tutorials/Transport Layer>` and `example <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/examples/transport_layer>`_.
 
