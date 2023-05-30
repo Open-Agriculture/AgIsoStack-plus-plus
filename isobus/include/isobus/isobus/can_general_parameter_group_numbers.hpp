@@ -39,6 +39,7 @@ namespace isobus
 		MachineSelectedSpeedCommand = 0xFD43,
 		WorkingSetMaster = 0xFE0D,
 		LanguageCommand = 0xFE0F,
+		MaintainPower = 0xFE47,
 		WheelBasedSpeedAndDistance = 0xFE48,
 		GroundBasedSpeedAndDistance = 0xFE49,
 		ECUIdentificationInformation = 0xFDC5,
