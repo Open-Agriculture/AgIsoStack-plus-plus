@@ -166,8 +166,6 @@ namespace isobus
 		private:
 			MaintainPowerData() = delete;
 			ControlFunction *sendingControlFunction = nullptr; ///< The control function that is sending the message.
-			std::uint32_t maintainActuatorPowerTime_ms = 0; ///< The amount of time to ask the TECU to maintain actuator/section power. Will be rounded up to the next 2s mark when sent.
-			std::uint32_t maintainECUPowerTime_ms = 0; ///< The amount of time to ask the TECU to maintain ECU power. Will be rounded up to the next 2s mark when sent.
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			ImplementInWorkState currentImplementInWorkState = ImplementInWorkState::NotAvailable; ///< The reported implement in-work state
 			ImplementReadyToWorkState currentImplementReadyToWorkState = ImplementReadyToWorkState::NotAvailable; ///< The reported implement ready to work state
@@ -192,6 +190,23 @@ namespace isobus
 		/// @returns true if initialize has been called for this interface, otherwise false
 		bool get_initialized() const;
 
+		/// @brief Use this to tell the interface how long it should transmit the maintain power message
+		/// after it detects a key state transition to off. The interface will use whatever you have set in
+		/// maintainPowerTransmitData when performing automatic transmission of the message.
+		/// @attention The interface will always send the message at least once with what you have configured
+		/// in maintainPowerTransmitData if it was set up with an internal control function, but you should
+		/// take care to configure maintainPowerTransmitData with the parameters that will ensure you have enough time
+		/// to safely stop your section control and shutdown your application, because when we stop sending this message
+		/// the TECU may kill power to your device or the actuators without warning.
+		/// @param[in] timeToMaintainPower The amount of time in milliseconds that the interface will send the maintain
+		/// power message when the key transitions to off.
+		void set_maintain_power_time(std::uint32_t timeToMaintainPower);
+
+		/// @brief Returns the amount of time that the interface will continue to send the maintain
+		/// power message after it detects a key transition to off.
+		/// @returns The amount of time in milliseconds that the interface will send the maintain power message for.
+		std::uint32_t get_maintain_power_time() const;
+
 		/// @brief Returns the number of unique senders of the maintain power message
 		/// @returns The number of unique senders of the maintain power message
 		std::size_t get_number_received_maintain_power_sources() const;
@@ -199,11 +214,18 @@ namespace isobus
 		/// @brief Returns the content of a received maintain power message
 		/// based on the index of the sender. Use this to read the received messages' content.
 		/// @param[in] index An index of senders of the maintain power message
-		std::shared_ptr<MaintainPowerData> get_received_wheel_based_speed(std::size_t index);
+		std::shared_ptr<MaintainPowerData> get_received_maintain_power(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated maintain power messages are received.
 		/// @returns The event publisher for maintain power messages
 		EventDispatcher<const std::shared_ptr<MaintainPowerData>, bool> &get_maintain_power_data_event_publisher();
+
+		/// @brief Returns an event dispatcher which you can use to get callbacks when the key switch transitions from
+		/// the not-off state to the off state. When you get this callback, you can then shutdown your application safely.
+		/// @note You can get more comprehensive key switch events by using the wheel-selected speed events in the
+		/// SpeedMessagesInterface file.
+		/// @returns The event publisher for key switch off transitions
+		EventDispatcher<> &get_key_switch_transition_off_event_publisher();
 
 		/// @brief Use this to configure the transmission of the maintain power message.
 		MaintainPowerData maintainPowerTransmitData;
@@ -250,9 +272,11 @@ namespace isobus
 		static constexpr std::uint32_t MAINTAIN_POWER_TIMEOUT_MS = 2000; ///< The amount of time that power can be maintained per message, used as the timeout as well
 		std::vector<std::shared_ptr<MaintainPowerData>> receivedMaintainPowerMessages; ///< A list of all received maintain power messages
 		EventDispatcher<const std::shared_ptr<MaintainPowerData>, bool> maintainPowerDataEventPublisher; ///< An event publisher for notifying when new maintain power messages are received
+		EventDispatcher<> keySwitchOffEventPublisher; ///< An event publisher for notifying when the key switch transitions to the off state
 		std::uint32_t keyNotOffTimestamp = 0; ///< A timestamp to track when the key was detected as ON, used to detect transitions to "Not On".
 		std::uint32_t keyOffTimestamp = 0; ///< A timestamp to track when the key is off, used to calculate how many messages to send and when to send them.
 		std::uint32_t maintainPowerTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the maintain power message in milliseconds
+		std::uint32_t maintainPowerTime_ms = 0; ///< The amount of time to ask the TECU to maintain actuator/section power. Will be rounded up to the next 2s mark when sent.
 		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 } // namespace isobus
