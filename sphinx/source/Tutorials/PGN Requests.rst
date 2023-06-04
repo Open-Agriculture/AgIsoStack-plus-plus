@@ -11,7 +11,7 @@ PGN Requests
    :depth: 2
    :local:
 
-This tutorial covers the basics on how to use the library to simplify handling of PGN requests and PGN requests for repitition rate.
+This tutorial covers the basics on how to use the library to simplify handling of PGN requests and PGN requests for repetition rate.
 
 It is assumed you have completed the basic tutorials, as this tutorial covers application level use of the CAN stack.
 
