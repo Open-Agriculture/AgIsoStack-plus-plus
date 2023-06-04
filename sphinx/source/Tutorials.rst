@@ -13,3 +13,4 @@ Tutorials
    Tutorials/PGN Requests
    Tutorials/Hardware Interface
    Tutorials/Debug Logging
+   Tutorials/ISOBUS Shortcut Button
