@@ -1046,7 +1046,8 @@ namespace isobus
 	void TaskControllerClient::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
 		if ((nullptr != parentPointer) &&
-		    (CAN_DATA_LENGTH <= message.get_data_length()))
+		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
+		    (nullptr != message.get_source_control_function()))
 		{
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
 			const auto &messageData = message.get_data();
