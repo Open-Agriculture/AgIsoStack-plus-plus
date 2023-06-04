@@ -38,6 +38,8 @@
 namespace isobus
 {
 	/// @brief An interface for communicating as or interpreting the messages of ISOBUS Shortcut Buttons
+	/// @note This interface must be cyclically updated from your application since it's an application layer
+	/// message. Be sure to call "update" from time to time. Suggested rate is at least every 500ms, but ideally every 100ms or faster.
 	/// @details This interface parses the "All implements stop operations switch state" message
 	/// that is sent by ISOBUS shortcut buttons, and also allows you to optionally transmit the same message
 	/// as an ISOBUS shortcut button.
@@ -59,7 +61,7 @@ namespace isobus
 	/// The Working Set shall monitor the number of transitions for each ISB server upon receiving first
 	/// the message from a given ISB server. A Working Set shall consider an increase in the transitions
 	/// without detecting a corresponding transition of the Stop all implement operations state as an error and react accordingly.
-	class ShortcutButtonInterface : public CANLibProtocol
+	class ShortcutButtonInterface
 	{
 	public:
 		/// @brief Enumerates the states that can be sent in the main ISB message (pgn 64770, 0xFD02)
@@ -79,6 +81,13 @@ namespace isobus
 		/// @brief Destructor for a ShortcutButtonInterface
 		virtual ~ShortcutButtonInterface();
 
+		/// @brief Used to initialize the interface. Registers for PGNs with the network manager.
+		void initialize();
+
+		/// @brief Returns if the interface has been initialized
+		/// @returns true if the interface has been initialized
+		bool get_is_initialized() const;
+
 		/// @brief Gets the event dispatcher for when the assigned bus' ISB state changes.
 		/// The assigned bus is determined by which internal control function you pass into the constructor.
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
@@ -92,21 +101,11 @@ namespace isobus
 		/// @brief Returns the current ISB state for the bus, which is a combination of the internal commanded
 		/// state and the states reported by all other CFs.
 		/// @returns The current ISB state for the bus associated with the interface's internal control function
-		StopAllImplementOperationsState get_state();
+		StopAllImplementOperationsState get_state() const;
 
-		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
-		/// @returns true if the message was accepted by the protocol for processing
-		bool protocol_transmit_message(std::uint32_t,
-		                               const std::uint8_t *,
-		                               std::uint32_t,
-		                               ControlFunction *,
-		                               ControlFunction *,
-		                               TransmitCompleteCallback,
-		                               void *,
-		                               DataChunkCallback) override;
-
-		/// @brief This will be called by the network manager on every cyclic update of the stack
-		void update(CANLibBadge<CANNetworkManager>) override;
+		/// @brief This must be called cyclically to update the interface.
+		/// This processes transmits and timeouts.
+		void update();
 
 	private:
 		/// @brief Stores data about a sender of the stop all implement operations switch state
@@ -140,14 +139,9 @@ namespace isobus
 		/// @param[in] parent A context variable to find the relevant interface class
 		static void process_flags(std::uint32_t flag, void *parent);
 
-		/// @brief A generic way to initialize a protocol
-		/// @details The network manager will call a protocol's initialize function
-		/// when it is first updated, if it has yet to be initialized.
-		void initialize(CANLibBadge<CANNetworkManager>) override;
-
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(const CANMessage &message) override;
+		void process_message(const CANMessage &message);
 
 		/// @brief Sends the Stop all implement operations switch state message
 		/// @returns true if the message was sent, otherwise false
@@ -164,6 +158,7 @@ namespace isobus
 		std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< A counter used to track our transitions from "stop" to "permit" when acting as a server
 		StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state set by the user to transmit if we're acting as a server
 		bool actAsISBServer = false; ///< A setting that enables sending the ISB messages rather than just receiving them
+		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 } // namespace isobus
 #endif // ISOBUS_SHORTCUT_BUTTON_INTERFACE_HPP

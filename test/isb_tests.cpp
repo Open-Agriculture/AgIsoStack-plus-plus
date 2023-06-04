@@ -69,7 +69,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 
 	ShortcutButtonInterface interfaceUnderTest(internalECU, false);
 	EXPECT_EQ(false, interfaceUnderTest.get_is_initialized());
-	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.initialize();
 	EXPECT_EQ(true, interfaceUnderTest.get_is_initialized());
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -218,11 +218,12 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x00;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, lastCallbackValue);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(3100));
-	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 	CANHardwareInterface::stop();
 }
@@ -281,12 +282,12 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 
 	ShortcutButtonInterface interfaceUnderTest(internalECU, true);
 	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.initialize();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
 	interfaceUnderTest.set_stop_all_implement_operations_state(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations);
-	CANNetworkManager::CANNetwork.update();
-	serverPlugin.read_frame(testFrame);
-	serverPlugin.read_frame(testFrame);
+	interfaceUnderTest.update();
+	EXPECT_TRUE(serverPlugin.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -297,7 +298,7 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	EXPECT_EQ(testFrame.data[3], 0xFF);
 	EXPECT_EQ(testFrame.data[4], 0xFF);
 	EXPECT_EQ(testFrame.data[5], 0xFF);
-	EXPECT_EQ(testFrame.data[6], 0x01);
+	EXPECT_EQ(testFrame.data[6], 0x00);
 	EXPECT_EQ(testFrame.data[7], 0xFC);
 
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());

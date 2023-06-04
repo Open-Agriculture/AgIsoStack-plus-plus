@@ -35,6 +35,22 @@ namespace isobus
 		}
 	}
 
+	void ShortcutButtonInterface::initialize()
+	{
+		if (!initialized)
+		{
+			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState),
+			                                                                         process_rx_message,
+			                                                                         this);
+			initialized = true;
+		}
+	}
+
+	bool ShortcutButtonInterface::get_is_initialized() const
+	{
+		return initialized;
+	}
+
 	EventDispatcher<ShortcutButtonInterface::StopAllImplementOperationsState> &ShortcutButtonInterface::get_stop_all_implement_operations_state_event_dispatcher()
 	{
 		return ISBEventDispatcher;
@@ -65,7 +81,7 @@ namespace isobus
 		}
 	}
 
-	ShortcutButtonInterface::StopAllImplementOperationsState ShortcutButtonInterface::get_state()
+	ShortcutButtonInterface::StopAllImplementOperationsState ShortcutButtonInterface::get_state() const
 	{
 		StopAllImplementOperationsState retVal = StopAllImplementOperationsState::PermitAllImplementsToOperationOn;
 
@@ -87,19 +103,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ShortcutButtonInterface::protocol_transmit_message(std::uint32_t,
-	                                                        const std::uint8_t *,
-	                                                        std::uint32_t,
-	                                                        ControlFunction *,
-	                                                        ControlFunction *,
-	                                                        TransmitCompleteCallback,
-	                                                        void *,
-	                                                        DataChunkCallback)
-	{
-		return false;
-	}
-
-	void ShortcutButtonInterface::update(CANLibBadge<CANNetworkManager>)
+	void ShortcutButtonInterface::update()
 	{
 		if (SystemTiming::time_expired_ms(allImplementsStopOperationsSwitchStateTimestamp_ms, TRANSMISSION_RATE_MS))
 		{
@@ -141,14 +145,6 @@ namespace isobus
 		{
 			myInterface->txFlags.set_flag(flag);
 		}
-	}
-
-	void ShortcutButtonInterface::initialize(CANLibBadge<CANNetworkManager>)
-	{
-		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState),
-		                                                                         process_rx_message,
-		                                                                         this);
-		initialized = true;
 	}
 
 	void ShortcutButtonInterface::process_message(const CANMessage &message)
