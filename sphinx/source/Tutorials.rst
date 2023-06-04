@@ -11,3 +11,4 @@ Tutorials
    Tutorials/Transport Layer
    Tutorials/Virtual Terminal Basics
    Tutorials/Debug Logging
+   Tutorials/PGN Requests
