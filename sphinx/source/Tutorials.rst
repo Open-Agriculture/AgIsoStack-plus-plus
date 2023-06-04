@@ -10,5 +10,6 @@ Tutorials
    Tutorials/Receiving Messages
    Tutorials/Transport Layer
    Tutorials/Virtual Terminal Basics
-   Tutorials/Debug Logging
    Tutorials/PGN Requests
+   Tutorials/Hardware Interface
+   Tutorials/Debug Logging
