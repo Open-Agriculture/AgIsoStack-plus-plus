@@ -12,4 +12,4 @@ find_package(Threads REQUIRED)
 add_executable(GuidanceExampleTarget main.cpp console_logger.cpp)
 target_link_libraries(
   GuidanceExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration
-                                isobus::Utility)
+                                isobus::Utility Threads::Threads)
