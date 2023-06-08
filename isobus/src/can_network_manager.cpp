@@ -432,6 +432,23 @@ namespace isobus
 				{
 					if (currentControlFunction->get_address() == messageSourceAddress)
 					{
+						// Scan the address table to remove this CF from a previous location if needed
+						for (std::uint_fast8_t i = 0; i < NULL_CAN_ADDRESS; i++)
+						{
+							if ((nullptr != controlFunctionTable[CANPort][i]) &&
+							    (controlFunctionTable[CANPort][i]->get_NAME() == currentControlFunction->get_NAME()) &&
+							    (i != messageSourceAddress))
+							{
+								controlFunctionTable[CANPort][i] = nullptr;
+								CANStackLogger::debug("[NM]: Detected that CF %016llx on channel %u is moving from address %u to %u.",
+								                      currentControlFunction->get_NAME().get_full_name(),
+								                      CANPort,
+								                      i,
+								                      messageSourceAddress);
+								break;
+							}
+						}
+
 						// ECU has claimed since the last update, add it to the table
 						controlFunctionTable[CANPort][messageSourceAddress] = currentControlFunction;
 						currentControlFunction->address = messageSourceAddress;
@@ -469,10 +486,9 @@ namespace isobus
 	{
 		if (CANPort < CAN_PORT_MAXIMUM)
 		{
-			if ((nullptr != controlFunctionTable[CANPort][claimedAddress]) &&
-			    (CANIdentifier::NULL_ADDRESS == controlFunctionTable[CANPort][claimedAddress]->get_address()))
+			if (nullptr != controlFunctionTable[CANPort][claimedAddress])
 			{
-				// Someone is at that spot in the table, but their address was stolen
+				// Someone is at that spot in the table, but their address was stolen by an internal control function
 				// Need to evict them from the table
 				controlFunctionTable[CANPort][claimedAddress]->address = NULL_CAN_ADDRESS;
 				controlFunctionTable[CANPort][claimedAddress] = nullptr;
