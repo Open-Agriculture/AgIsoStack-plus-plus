@@ -2553,10 +2553,12 @@ namespace isobus
 
 	void VirtualTerminalClient::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
+		VirtualTerminalClient *parentVT = static_cast<VirtualTerminalClient *>(parentPointer);
 		if ((nullptr != parentPointer) &&
-		    (CAN_DATA_LENGTH <= message.get_data_length()))
+		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
+		    ((nullptr == message.get_destination_control_function()) ||
+		     (parentVT->myControlFunction.get() == message.get_destination_control_function())))
 		{
-			VirtualTerminalClient *parentVT = static_cast<VirtualTerminalClient *>(parentPointer);
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
