@@ -35,8 +35,8 @@ namespace isobus
 			WaitForClaim, ///< State machine is waiting for the random delay time
 			SendRequestForClaim, ///< State machine is sending the request for address claim
 			WaitForRequestContentionPeriod, ///< State machine is waiting for the address claim contention period
-			SendPreferredAddressClaim, ///< State machine is claiming the prefferred address
-			ContendForPreferredAddress, ///< State machine is contending the prefferred address
+			SendPreferredAddressClaim, ///< State machine is claiming the preferred address
+			ContendForPreferredAddress, ///< State machine is contending the preferred address
 			SendArbitraryAddressClaim, ///< State machine is claiming an address
 			SendReclaimAddressOnRequest, ///< An ECU requested address claim, inform the bus of our current address
 			UnableToClaim, ///< State machine could not claim an address
