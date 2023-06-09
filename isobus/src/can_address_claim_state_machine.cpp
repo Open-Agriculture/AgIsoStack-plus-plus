@@ -288,6 +288,11 @@ namespace isobus
 							{
 								// Wait for things to shake out a bit, then claim a new address.
 								parent->set_current_state(State::WaitForRequestContentionPeriod);
+								parent->m_claimedAddress = NULL_CAN_ADDRESS;
+								CANStackLogger::warn("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
+								                     parent->m_isoname.get_full_name(),
+								                     parent->m_portIndex,
+								                     NAMEClaimed);
 							}
 						}
 					}
