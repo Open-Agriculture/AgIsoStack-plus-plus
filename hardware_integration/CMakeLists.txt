@@ -198,6 +198,10 @@ if("MacCANPCAN" IN_LIST CAN_DRIVER)
 endif()
 
 if("TouCAN" IN_LIST CAN_DRIVER)
+  if(MSVC)
+    # See https://gitlab.kitware.com/cmake/cmake/-/issues/15170
+    set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
+  endif()
   if(WIN32)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
                                                    STREQUAL "X86")
