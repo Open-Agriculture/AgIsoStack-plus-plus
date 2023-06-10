@@ -201,7 +201,7 @@ if("TouCAN" IN_LIST CAN_DRIVER)
   if(WIN32)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
                                                    STREQUAL "X86")
-      message(STATUS "Detected x86, linking to CANAL 1.0.2 x86 library")
+      message(STATUS "Detected x86, linking to CANAL 1.0.5 x86 library")
       message(
         STATUS
           "To lean more about this driver, visit https://github.com/rusoku/CANAL-DLL or https://www.rusoku.com/"
@@ -209,15 +209,16 @@ if("TouCAN" IN_LIST CAN_DRIVER)
       message(
         AUTHOR_WARNING
           "
-      The TouCAN driver requires canal32d.dll to be in the same directory as the executable. A copy of this file is included in the repository,
-      under the /hardware_integration/lib/Windows directory. It is recommended to use this copy, as it is known to work with the TouCAN driver provided by the stack.
+      The TouCAN driver requires canal.dll to be in the same directory as the executable.
+      A copy of this file is included in the repository under the /hardware_integration/lib/Windows directory as canal32.dll.
+      It is recommended to use this copy, as it is known to work with the TouCAN driver provided by the stack.
       ")
       target_link_libraries(
         HardwareIntegration
-        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/canal32d.lib)
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/canal32.lib)
     elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR
                                                       STREQUAL "x64")
-      message(STATUS "Detected x64, linking to CANAL 1.0.2 x64 library")
+      message(STATUS "Detected x64, linking to CANAL 1.0.5 x64 library")
       message(
         STATUS
           "To lean more about this driver, visit https://github.com/rusoku/CANAL-DLL or https://www.rusoku.com/"
@@ -225,12 +226,13 @@ if("TouCAN" IN_LIST CAN_DRIVER)
       message(
         AUTHOR_WARNING
           "
-      The TouCAN driver requires canal64d.dll to be in the same directory as the executable. A copy of this file is included in the repository,
-      under the /hardware_integration/lib/Windows directory. It is recommended to use this copy, as it is known to work with the TouCAN driver provided by the stack.
+      The TouCAN driver requires canal.dll to be in the same directory as the executable. A copy of this file is included in the repository,
+      under the /hardware_integration/lib/Windows directory as canal64.dll.
+      It is recommended to use this copy and rename it to canal.dll, as it is known to work with the TouCAN driver provided by the stack.
       ")
       target_link_libraries(
         HardwareIntegration
-        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/canal64d.lib)
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/canal64.lib)
     else()
       message(
         FATAL_ERROR
