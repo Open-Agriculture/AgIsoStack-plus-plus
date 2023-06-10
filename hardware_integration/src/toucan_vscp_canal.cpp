@@ -66,7 +66,7 @@ namespace isobus
 	{
 		long tempHandle = CanalOpen(name.c_str(), 0);
 
-		if (-1 != tempHandle)
+		if (0 != tempHandle)
 		{
 			handle = tempHandle;
 			openResult = CANAL_ERROR_SUCCESS;
