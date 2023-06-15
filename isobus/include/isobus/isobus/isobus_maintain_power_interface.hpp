@@ -33,7 +33,7 @@ namespace isobus
 		class MaintainPowerData
 		{
 		public:
-			/// @brief 	Signal that indicates that an implement is connected to a tractor or power unit and is in work state.
+			/// @brief Signal that indicates that an implement is connected to a tractor or power unit and is in work state.
 			/// @details SPN 7447
 			enum class ImplementInWorkState : std::uint8_t
 			{
@@ -73,6 +73,8 @@ namespace isobus
 				NotAvailable = 3
 			};
 
+			/// @brief Enumerates the different states that can be requested in the "Maintain Actuator Power" SPN
+			/// @details SPN 1868
 			enum class MaintainActuatorPower
 			{
 				NoFurtherRequirementForPWR = 0,
@@ -81,6 +83,8 @@ namespace isobus
 				DontCare = 3
 			};
 
+			/// @brief Enumerates the different states that can be requested in the "Maintain ECU Power" SPN
+			/// @details SPN 1867
 			enum class MaintainECUPower
 			{
 				NoFurtherRequirementForECU_PWR = 0,
