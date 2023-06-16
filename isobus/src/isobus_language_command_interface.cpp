@@ -17,6 +17,8 @@
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <string>
+
 namespace isobus
 {
 	LanguageCommandInterface::LanguageCommandInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction) :

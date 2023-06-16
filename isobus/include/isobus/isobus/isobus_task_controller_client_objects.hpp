@@ -10,6 +10,7 @@
 #define ISOBUS_TASK_CONTROLLER_CLIENT_OBJECTS_HPP
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
