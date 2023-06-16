@@ -13,6 +13,7 @@
 #include "isobus/isobus/can_message.hpp"
 
 #include <memory>
+#include <string>
 
 namespace isobus
 {
