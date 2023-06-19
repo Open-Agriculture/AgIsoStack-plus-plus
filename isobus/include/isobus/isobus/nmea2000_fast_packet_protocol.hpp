@@ -48,14 +48,14 @@ namespace isobus
 		/// @param[in] parent Generic context variable
 		/// @param[in] internalControlFunction An internal control function to use as an additional filter for the callback.
 		/// Only messages destined for the specified ICF will generate a callback. Use nullptr to receive all messages.
-		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
+		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
 		// @brief Removes a callback previously added with register_multipacket_message_callback
 		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
 		/// @param[in] callback The callback that the stack will call when a matching message is received
 		/// @param[in] parent Generic context variable
 		/// @param[in] internalControlFunction An internal control function to use as an additional filter for the callback
-		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
+		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
 		/// @brief Used to send CAN messages using fast packet
 		/// @details You have to use this function instead of the network manager
@@ -74,8 +74,8 @@ namespace isobus
 		bool send_multipacket_message(std::uint32_t parameterGroupNumber,
 		                              const std::uint8_t *data,
 		                              std::uint8_t messageLength,
-		                              InternalControlFunction *source,
-		                              ControlFunction *destination,
+		                              std::shared_ptr<InternalControlFunction> source,
+		                              std::shared_ptr<ControlFunction> destination,
 		                              CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                              TransmitCompleteCallback txCompleteCallback = nullptr,
 		                              void *parentPointer = nullptr,
@@ -155,7 +155,7 @@ namespace isobus
 		/// @param[in] source The session source control function
 		/// @param[in] destination The sesssion destination control function
 		/// @returns `true` if a session was found that matches, otherwise `false`
-		bool get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, ControlFunction *source, ControlFunction *destination);
+		bool get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -184,8 +184,8 @@ namespace isobus
 		bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
 		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
-		                               ControlFunction *source,
-		                               ControlFunction *destination,
+		                               std::shared_ptr<ControlFunction> source,
+		                               std::shared_ptr<ControlFunction> destination,
 		                               TransmitCompleteCallback transmitCompleteCallback,
 		                               void *parentPointer,
 		                               DataChunkCallback frameChunkCallback) override;

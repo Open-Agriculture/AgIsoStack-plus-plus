@@ -85,7 +85,7 @@ namespace isobus
 
 		if ((nullptr != pgnRequest) && initialized)
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction.get(), myPartner.get());
+			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction, myPartner);
 		}
 		return retVal;
 	}

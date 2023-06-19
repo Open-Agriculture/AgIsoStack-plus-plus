@@ -69,7 +69,7 @@ namespace isobus
 
 			/// @brief Constructor for a GuidanceSystemCommand
 			/// @param[in] sender The control function that is sending this message
-			explicit GuidanceSystemCommand(ControlFunction *sender);
+			explicit GuidanceSystemCommand(std::shared_ptr<ControlFunction> sender);
 
 			/// @brief Sets the curvature command status that will be encoded into
 			/// the CAN message. This parameter indicates whether the guidance system is
@@ -100,13 +100,8 @@ namespace isobus
 			float get_curvature() const;
 
 			/// @brief Returns a pointer to the sender of the message. If an ICF is the sender, returns the ICF being used to transmit from.
-			/// @attention The only way you could get an invalid pointer here is if you register a partner, it sends this message, then you delete the partner and
-			/// call this function, as that is the only time the stack deletes a control function. That would be abnormal program flow, but at some point
-			/// the stack will be updated to return a shared or weak pointer instead, but for now please be aware of that limitation.
-			/// Eventually though the message will time-out normally and you can get a new pointer for
-			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -117,7 +112,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *const controlFunction; ///< The CF that is sending the message
+			std::shared_ptr<ControlFunction> const controlFunction; ///< The CF that is sending the message
 			float commandedCurvature = 0.0f; ///< The commanded curvature in km^-1 (inverse kilometers)
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			CurvatureCommandStatus commandedStatus = CurvatureCommandStatus::NotAvailable; ///< The current status for the command
@@ -198,7 +193,7 @@ namespace isobus
 
 			/// @brief Constructor for a GuidanceMachineInfo
 			/// @param[in] sender The control function that is sending this message
-			explicit GuidanceMachineInfo(ControlFunction *sender);
+			explicit GuidanceMachineInfo(std::shared_ptr<ControlFunction> sender);
 
 			/// @brief Sets the estimated course curvature over ground for the machine.
 			/// @param[in] curvature The curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1
@@ -286,13 +281,8 @@ namespace isobus
 			GenericSAEbs02SlotValue get_guidance_system_remote_engage_switch_status() const;
 
 			/// @brief Returns a pointer to the sender of the message. If an ICF is the sender, returns the ICF being used to transmit from.
-			/// @attention The only way you could get an invalid pointer here is if you register a partner, it sends this message, then you delete the partner and
-			/// call this function, as that is the only time the stack deletes a control function. That would be abnormal program flow, but at some point
-			/// the stack will be updated to return a shared or weak pointer instead, but for now please be aware of that limitation.
-			/// Eventually though the message will time-out normally and you can get a new pointer for
-			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -303,7 +293,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *const controlFunction; ///< The CF that is sending the message
+			std::shared_ptr<ControlFunction> const controlFunction; ///< The CF that is sending the message
 			float estimatedCurvature = 0.0f; ///< Curvature in km^-1 (inverse kilometers). Range is -8032 to 8031.75 km-1 (SPN 5238)
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			MechanicalSystemLockout mechanicalSystemLockoutState = MechanicalSystemLockout::NotAvailable; ///< The reported state of the mechanical system lockout switch (SPN 5243)

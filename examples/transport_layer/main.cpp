@@ -70,8 +70,8 @@ int main()
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 
-	isobus::InternalControlFunction TestInternalECU(TestDeviceNAME, 0x1C, 0);
-	isobus::PartneredControlFunction TestPartner(0, { filterVirtualTerminal });
+	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
+	auto TestPartner = isobus::PartneredControlFunction::create(0, { filterVirtualTerminal });
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
 	//! @todo Check this instead of asuming it is done
@@ -91,14 +91,14 @@ int main()
 	}
 
 	// Send a classic CAN message to a specific destination(8 bytes or less)
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU, &TestPartner))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, TestInternalECU, TestPartner))
 	{
 		std::cout << "Sent a normal CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
 	}
 
 	// Send a classic CAN message to global (0xFF) (8 bytes or less)
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, &TestInternalECU))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, TestInternalECU))
 	{
 		std::cout << "Sent a broadcast CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
@@ -115,7 +115,7 @@ int main()
 		}
 
 		// Send message
-		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, &TestInternalECU, &TestPartner))
+		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, TestInternalECU, TestPartner))
 		{
 			std::cout << "Started TP CM Session with length " << i << std::endl;
 		}
@@ -139,7 +139,7 @@ int main()
 		}
 
 		// Send message
-		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, &TestInternalECU))
+		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, TestInternalECU))
 		{
 			std::cout << "Started BAM Session with length " << i << std::endl;
 		}
@@ -153,7 +153,7 @@ int main()
 
 	// ETP Example
 	// Send one ETP message
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, ETP_TEST_SIZE, &TestInternalECU, &TestPartner))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, ETP_TEST_SIZE, TestInternalECU, TestPartner))
 	{
 		std::cout << "Started ETP Session with length " << ETP_TEST_SIZE << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));

@@ -4,6 +4,7 @@
 /// @brief A representation of an ISOBUS ECU that we can send from. Use this class
 /// when defining your own control functions that will claim an address within your program.
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
@@ -32,19 +33,21 @@ namespace isobus
 	class InternalControlFunction : public ControlFunction
 	{
 	public:
-		/// @brief Constructor for an internal control function
+		/// @brief The factory function to construct an internal control function
 		/// @param[in] desiredName The NAME for this control function to claim as
 		/// @param[in] preferredAddress The preferred NAME for this control function
 		/// @param[in] CANPort The CAN channel index for this control function to use
-		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
+		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
 
-		/// @brief Destructor for an internal control function
-		~InternalControlFunction();
+		/// @brief Destroys this internal control function, by removing it from the network manager
+		/// @param[in] expectedRefCount The expected number of shared pointers to this control function after removal
+		/// @returns true if the internal control function was successfully removed from everywhere in the stack, otherwise false
+		bool destroy(std::uint32_t expectedRefCount = 1) override;
 
 		/// @brief Returns a an internal control function from the list of all internal control functions
 		/// @param[in] index The index in the list internalControlFunctionList from which to get an ICF
 		/// @returns The requested internal control function or `nullptr` if the index is out of range
-		static InternalControlFunction *get_internal_control_function(std::uint32_t index);
+		static std::shared_ptr<InternalControlFunction> get_internal_control_function(std::uint32_t index);
 
 		/// @brief Returns the number of internal control functions that exist
 		static std::uint32_t get_number_internal_control_functions();
@@ -66,11 +69,18 @@ namespace isobus
 		/// @brief Updates all address claim state machines
 		static void update_address_claiming(CANLibBadge<CANNetworkManager>);
 
+	protected:
+		/// @brief The protected constructor for the internal control function, which is called by the (inherited) factory function
+		/// @param[in] desiredName The NAME for this control function to claim as
+		/// @param[in] preferredAddress The preferred NAME for this control function
+		/// @param[in] CANPort The CAN channel index for this control function to use
+		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
+
 	private:
 		/// @brief Updates the internal control function, should be called periodically by the network manager
 		void update();
 
-		static std::vector<InternalControlFunction *> internalControlFunctionList; ///< A list of all internal control functions that exist
+		static std::vector<std::shared_ptr<InternalControlFunction>> internalControlFunctionList; ///< A list of all internal control functions that exist
 		static bool anyChangedAddress; ///< Lets the network manager know if any ICF changed address since the last update
 		AddressClaimStateMachine stateMachine; ///< The address claimer for this ICF
 		bool objectChangedAddressSinceLastUpdate = false; ///< Tracks if this object has changed address since the last update

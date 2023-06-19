@@ -134,8 +134,8 @@ int main()
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-	auto TestPartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
+	auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);

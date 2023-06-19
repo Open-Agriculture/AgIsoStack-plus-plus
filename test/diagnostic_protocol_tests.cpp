@@ -36,7 +36,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 {
 	NAME TestDeviceNAME(0);
 
-	auto TestInternalECU = std::make_shared<InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	auto TestInternalECU = InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 
 	DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
 	DiagnosticProtocol *diagnosticProtocol = DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(TestInternalECU);
@@ -47,4 +47,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 		EXPECT_NO_THROW(DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions());
 		EXPECT_EQ(nullptr, DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(TestInternalECU));
 	}
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(TestInternalECU->destroy(2));
 }

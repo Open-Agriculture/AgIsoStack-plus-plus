@@ -69,7 +69,7 @@ To do this, create a function that matches the type :code:`PGNRequestCallback`.
 .. code-block:: c++
 
     bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumber,
-                                               isobus::ControlFunction *,
+                                               isobus::std::shared_ptr<ControlFunction> ,
                                                bool &acknowledge,
                                                isobus::AcknowledgementType &acknowledgeType,
                                                void *)
@@ -112,7 +112,7 @@ To do this, create a function that matches the type :code:`PGNRequestForRepetiti
 .. code-block:: c++
 
     bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t parameterGroupNumber,
-                                                               isobus::ControlFunction *requestingControlFunction,
+                                                               isobus::std::shared_ptr<ControlFunction> requestingControlFunction,
                                                                std::uint32_t repetitionRate,
                                                                void *)
     {

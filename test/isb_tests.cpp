@@ -28,7 +28,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(4);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x97, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x97, 0);
 
 	CANMessageFrame testFrame;
 
@@ -226,6 +226,9 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	interfaceUnderTest.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 	CANHardwareInterface::stop();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(internalECU->destroy(2));
 }
 
 TEST(ISB_TESTS, ShortcutButtonTxTests)
@@ -241,7 +244,7 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(4);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x98, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x98, 0);
 
 	CANMessageFrame testFrame;
 
@@ -304,4 +307,7 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 
 	CANHardwareInterface::stop();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(internalECU->destroy(2));
 }

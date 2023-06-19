@@ -150,14 +150,14 @@ namespace isobus
 								         (nullptr != message.get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
-									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, RTS when already in CM session");
 								}
 								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
 								         (nullptr != message.get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
-									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, No Sessions Available");
 								}
 							}
@@ -196,7 +196,7 @@ namespace isobus
 									{
 										// The session exists, but we're probably already in the TxDataSession state. Need to abort
 										// In the case of Rx'ing a CTS, we're the source in the session
-										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
+										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS while in data session, PGN: " + isobus::to_string(pgn));
 									}
 								}
@@ -204,7 +204,7 @@ namespace isobus
 								{
 									// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
 									// In the case of Rx'ing a CTS, we're the source in the session
-									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS With no matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
@@ -232,14 +232,14 @@ namespace isobus
 									}
 									else
 									{
-										abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
+										abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 										close_session(session, false);
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM in wrong session state, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
 								{
-									abort_session(pgn, ConnectionAbortReason::AnyOtherError, reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM without matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
@@ -352,8 +352,8 @@ namespace isobus
 	bool TransportProtocolManager::protocol_transmit_message(std::uint32_t parameterGroupNumber,
 	                                                         const std::uint8_t *dataBuffer,
 	                                                         std::uint32_t messageLength,
-	                                                         ControlFunction *source,
-	                                                         ControlFunction *destination,
+	                                                         std::shared_ptr<ControlFunction> source,
+	                                                         std::shared_ptr<ControlFunction> destination,
 	                                                         TransmitCompleteCallback sessionCompleteCallback,
 	                                                         void *parentPointer,
 	                                                         DataChunkCallback frameChunkCallback)
@@ -437,8 +437,8 @@ namespace isobus
 
 		if (nullptr != session)
 		{
-			InternalControlFunction *myControlFunction;
-			ControlFunction *partnerControlFunction;
+			std::shared_ptr<InternalControlFunction> myControlFunction;
+			std::shared_ptr<ControlFunction> partnerControlFunction;
 			std::array<std::uint8_t, CAN_DATA_LENGTH> data;
 			std::uint32_t pgn = session->sessionMessage.get_identifier().get_parameter_group_number();
 
@@ -471,7 +471,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TransportProtocolManager::abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, InternalControlFunction *source, ControlFunction *destination)
+	bool TransportProtocolManager::abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		std::array<std::uint8_t, 8> data;
 
@@ -515,7 +515,7 @@ namespace isobus
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
 			                                 session->get_message_data_length(),
-			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                 std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
 			                                 session->parent);
@@ -539,7 +539,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
@@ -575,7 +575,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_destination_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_destination_control_function()),
 			                                                        session->sessionMessage.get_source_control_function(),
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
@@ -599,7 +599,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                                        session->sessionMessage.get_destination_control_function(),
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
@@ -631,7 +631,7 @@ namespace isobus
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 				                                                        dataBuffer,
 				                                                        CAN_DATA_LENGTH,
-				                                                        reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_destination_control_function()),
+				                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_destination_control_function()),
 				                                                        session->sessionMessage.get_source_control_function(),
 				                                                        CANIdentifier::CANPriority::PriorityDefault6);
 			}
@@ -652,7 +652,7 @@ namespace isobus
 		}
 	}
 
-	bool TransportProtocolManager::get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination)
+	bool TransportProtocolManager::get_session(TransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		session = nullptr;
 
@@ -668,7 +668,7 @@ namespace isobus
 		return (nullptr != session);
 	}
 
-	bool TransportProtocolManager::get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber)
+	bool TransportProtocolManager::get_session(TransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber)
 	{
 		bool retVal = false;
 		session = nullptr;
@@ -800,7 +800,7 @@ namespace isobus
 							if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData),
 							                                                   dataBuffer,
 							                                                   CAN_DATA_LENGTH,
-							                                                   reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+							                                                   std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 							                                                   session->sessionMessage.get_destination_control_function(),
 							                                                   CANIdentifier::CANPriority::PriorityLowest7))
 							{

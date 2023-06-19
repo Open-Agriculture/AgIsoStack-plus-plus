@@ -54,7 +54,7 @@ namespace isobus
 			}
 			else
 			{
-				ControlFunction *deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, commandedAddress, {});
+				std::shared_ptr<ControlFunction> deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, commandedAddress, {});
 				m_preferredAddress = commandedAddress;
 
 				if (nullptr == deviceAtOurPreferredAddress)
@@ -132,7 +132,7 @@ namespace isobus
 
 					if (SystemTiming::time_expired_ms(m_timestamp_ms, addressContentionTime_ms + m_randomClaimDelay_ms))
 					{
-						ControlFunction *deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, m_preferredAddress, {});
+						std::shared_ptr<ControlFunction> deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, m_preferredAddress, {});
 						// Time to find a free address
 						if (nullptr == deviceAtOurPreferredAddress)
 						{

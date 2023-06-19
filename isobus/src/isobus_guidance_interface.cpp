@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <memory>
 
 namespace isobus
 {
@@ -36,8 +37,8 @@ namespace isobus
 	                                                             std::shared_ptr<ControlFunction> destination,
 	                                                             bool enableSendingSystemCommandPeriodically,
 	                                                             bool enableSendingMachineInfoPeriodically) :
-	  guidanceMachineInfoTransmitData(GuidanceMachineInfo(enableSendingMachineInfoPeriodically ? source.get() : nullptr)),
-	  guidanceSystemCommandTransmitData(GuidanceSystemCommand(enableSendingSystemCommandPeriodically ? source.get() : nullptr)),
+	  guidanceMachineInfoTransmitData(GuidanceMachineInfo(enableSendingMachineInfoPeriodically ? source : nullptr)),
+	  guidanceSystemCommandTransmitData(GuidanceSystemCommand(enableSendingSystemCommandPeriodically ? source : nullptr)),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this),
 	  destinationControlFunction(destination)
 	{
@@ -52,7 +53,7 @@ namespace isobus
 		}
 	}
 
-	AgriculturalGuidanceInterface::GuidanceSystemCommand::GuidanceSystemCommand(ControlFunction *sender) :
+	AgriculturalGuidanceInterface::GuidanceSystemCommand::GuidanceSystemCommand(std::shared_ptr<ControlFunction> sender) :
 	  controlFunction(sender)
 	{
 	}
@@ -87,7 +88,7 @@ namespace isobus
 		return commandedCurvature;
 	}
 
-	ControlFunction *AgriculturalGuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> AgriculturalGuidanceInterface::GuidanceSystemCommand::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
@@ -102,7 +103,7 @@ namespace isobus
 		return timestamp_ms;
 	}
 
-	AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceMachineInfo(ControlFunction *sender) :
+	AgriculturalGuidanceInterface::GuidanceMachineInfo::GuidanceMachineInfo(std::shared_ptr<ControlFunction> sender) :
 	  controlFunction(sender)
 	{
 	}
@@ -227,7 +228,7 @@ namespace isobus
 		return guidanceSystemRemoteEngageSwitchStatus;
 	}
 
-	ControlFunction *AgriculturalGuidanceInterface::GuidanceMachineInfo::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> AgriculturalGuidanceInterface::GuidanceMachineInfo::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
@@ -340,8 +341,8 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        static_cast<isobus::InternalControlFunction *>(guidanceSystemCommandTransmitData.get_sender_control_function()),
-			                                                        destinationControlFunction.get(),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(guidanceSystemCommandTransmitData.get_sender_control_function()),
+			                                                        destinationControlFunction,
 			                                                        CANIdentifier::Priority3);
 		}
 		return retVal;
@@ -389,8 +390,8 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        static_cast<isobus::InternalControlFunction *>(guidanceMachineInfoTransmitData.get_sender_control_function()),
-			                                                        destinationControlFunction.get(),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(guidanceMachineInfoTransmitData.get_sender_control_function()),
+			                                                        destinationControlFunction,
 			                                                        CANIdentifier::Priority3);
 		}
 		return retVal;

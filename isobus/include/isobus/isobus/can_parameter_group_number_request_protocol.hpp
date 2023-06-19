@@ -54,7 +54,7 @@ namespace isobus
 		/// @param[in] source The internal control function to send from
 		/// @param[in] destination The control function to request `pgn` from
 		/// @returns `true` if the request was successfully sent
-		static bool request_parameter_group_number(std::uint32_t pgn, InternalControlFunction *source, ControlFunction *destination);
+		static bool request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a PGN request for repitition rate
 		/// @details Use this if you want the requestee to send you the specified PGN at some fixed interval
@@ -63,7 +63,7 @@ namespace isobus
 		/// @param[in] source The internal control function to send from
 		/// @param[in] destination The control function to send the request to
 		/// @returns `true` if the request was sent
-		static bool request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, InternalControlFunction *source, ControlFunction *destination);
+		static bool request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Registers for a callback on receipt of a PGN request
 		/// @param[in] pgn The PGN you want to handle in the callback
@@ -179,8 +179,8 @@ namespace isobus
 		bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
 		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
-		                               ControlFunction *source,
-		                               ControlFunction *destination,
+		                               std::shared_ptr<ControlFunction> source,
+		                               std::shared_ptr<ControlFunction> destination,
 		                               TransmitCompleteCallback transmitCompleteCallback,
 		                               void *parentPointer,
 		                               DataChunkCallback frameChunkCallback) override;
@@ -191,7 +191,7 @@ namespace isobus
 		/// @param[in] source The source control function to send from
 		/// @param[in] destination The destination control function to send the acknowledgement to
 		/// @returns true if the message was sent, false otherwise
-		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, InternalControlFunction *source, ControlFunction *destination);
+		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		static std::list<ParameterGroupNumberRequestProtocol *> pgnRequestProtocolList; ///< List of all PGN request protocol instances (one per ICF)
 

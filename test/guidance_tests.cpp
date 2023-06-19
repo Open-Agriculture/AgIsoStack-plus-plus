@@ -75,7 +75,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	auto testECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x44, 0);
+	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x44, 0);
 
 	CANMessageFrame testFrame;
 	testFrame.timestamp_us = 0;
@@ -217,6 +217,8 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 		CANHardwareInterface::stop();
 		testPlugin.close();
 	}
+
+	ASSERT_TRUE(testECU->destroy());
 }
 
 TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)

@@ -94,7 +94,7 @@ namespace isobus
 			};
 
 			/// @brief Constructor for a MaintainPowerData object, which stores information sent/received in a maintain power message.
-			explicit MaintainPowerData(ControlFunction *sendingControlFunction);
+			explicit MaintainPowerData(std::shared_ptr<ControlFunction> sendingControlFunction);
 
 			/// @brief Sets the reported implement in-work state
 			/// @param[in] inWorkState The reported implement in-work state to set
@@ -157,7 +157,7 @@ namespace isobus
 			/// Eventually though the message will time-out normally and you can get a new pointer for
 			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -169,7 +169,7 @@ namespace isobus
 
 		private:
 			MaintainPowerData() = delete;
-			ControlFunction *sendingControlFunction = nullptr; ///< The control function that is sending the message.
+			std::shared_ptr<ControlFunction> sendingControlFunction = nullptr; ///< The control function that is sending the message.
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			ImplementInWorkState currentImplementInWorkState = ImplementInWorkState::NotAvailable; ///< The reported implement in-work state
 			ImplementReadyToWorkState currentImplementReadyToWorkState = ImplementReadyToWorkState::NotAvailable; ///< The reported implement ready to work state

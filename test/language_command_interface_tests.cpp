@@ -13,7 +13,7 @@ using namespace isobus;
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 {
 	NAME clientNAME(0);
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 	LanguageCommandInterface interfaceUnderTest(internalECU);
 	EXPECT_EQ(false, interfaceUnderTest.get_initialized());
 	EXPECT_EQ(false, interfaceUnderTest.send_request_language_command());
@@ -22,6 +22,9 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 	EXPECT_EQ(0, interfaceUnderTest.get_language_command_timestamp());
 	interfaceUnderTest.initialize(); // double init
 	EXPECT_EQ(true, interfaceUnderTest.get_initialized());
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, InvalidICF)
@@ -38,15 +41,19 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
 	vtNameFilters.push_back(testFilter);
 
 	NAME clientNAME(0);
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 	LanguageCommandInterface interfaceUnderTest(internalECU, vtPartner);
 	interfaceUnderTest.initialize();
 	ASSERT_TRUE(interfaceUnderTest.get_initialized());
 	// Technically our address is bad, so this should still not send
 	//! @todo Test with valid address
 	ASSERT_FALSE(interfaceUnderTest.send_request_language_command());
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(vtPartner->destroy(2));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
@@ -58,7 +65,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 {
 	NAME clientNAME(0);
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x80, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x80, 0);
 	LanguageCommandInterface interfaceUnderTest(internalECU, nullptr);
 
 	interfaceUnderTest.initialize();
@@ -161,4 +168,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	interfaceUnderTest.process_rx_message(testMessage, nullptr);
 	// Message should have been discarded
 	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(internalECU->destroy(3));
 }

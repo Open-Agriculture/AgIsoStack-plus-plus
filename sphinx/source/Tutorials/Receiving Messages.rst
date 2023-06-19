@@ -125,7 +125,7 @@ So, our updated tutorial program now should look like this:
       myNAME.set_manufacturer_code(64);
 
       // Create our InternalControlFunction
-      myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
+      myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
 
       // Define a NAME filter for our partner
       std::vector<isobus::NAMEFilter> myPartnerFilter;
@@ -136,7 +136,7 @@ So, our updated tutorial program now should look like this:
       isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xEF00, propa_callback, nullptr);
 
       // Create our PartneredControlFunction
-      myPartner = std::make_shared<isobus::PartneredControlFunction>(0, myPartnerFilter);
+      myPartner = isobus::PartneredControlFunction::create(0, myPartnerFilter);
 
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

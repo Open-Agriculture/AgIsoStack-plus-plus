@@ -81,7 +81,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, InternalControlFunction *source, ControlFunction *destination)
+	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		std::array<std::uint8_t, PGN_REQUEST_LENGTH> buffer;
 
@@ -96,7 +96,7 @@ namespace isobus
 		                                                      destination);
 	}
 
-	bool ParameterGroupNumberRequestProtocol::request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, InternalControlFunction *source, ControlFunction *destination)
+	bool ParameterGroupNumberRequestProtocol::request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -218,7 +218,7 @@ namespace isobus
 	{
 		if ((((nullptr == message.get_destination_control_function()) &&
 		      (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
-		     (message.get_destination_control_function() == myControlFunction.get())))
+		     (message.get_destination_control_function() == myControlFunction)))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
@@ -289,7 +289,7 @@ namespace isobus
 								{
 									send_acknowledgement(ackType,
 									                     requestedPGN,
-									                     reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()),
+									                     std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()),
 									                     message.get_source_control_function());
 								}
 								// If this callback was able to process the PGN request, stop processing more.
@@ -301,7 +301,7 @@ namespace isobus
 						{
 							send_acknowledgement(AcknowledgementType::Negative,
 							                     requestedPGN,
-							                     reinterpret_cast<InternalControlFunction *>(message.get_destination_control_function()),
+							                     std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()),
 							                     message.get_source_control_function());
 							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
 						}
@@ -346,8 +346,8 @@ namespace isobus
 	bool ParameterGroupNumberRequestProtocol::protocol_transmit_message(std::uint32_t,
 	                                                                    const std::uint8_t *,
 	                                                                    std::uint32_t,
-	                                                                    ControlFunction *,
-	                                                                    ControlFunction *,
+	                                                                    std::shared_ptr<ControlFunction>,
+	                                                                    std::shared_ptr<ControlFunction>,
 	                                                                    TransmitCompleteCallback,
 	                                                                    void *,
 	                                                                    DataChunkCallback)
@@ -355,7 +355,7 @@ namespace isobus
 		return false; // This protocol is not a transport layer, so just return false
 	}
 
-	bool ParameterGroupNumberRequestProtocol::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, InternalControlFunction *source, ControlFunction *destination)
+	bool ParameterGroupNumberRequestProtocol::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		bool retVal = false;
 

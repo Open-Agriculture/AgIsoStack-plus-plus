@@ -11,7 +11,7 @@
 namespace isobus
 {
 	MaintainPowerInterface::MaintainPowerInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
-	  maintainPowerTransmitData(sourceControlFunction.get()),
+	  maintainPowerTransmitData(sourceControlFunction),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
 	}
@@ -61,7 +61,7 @@ namespace isobus
 		}
 	}
 
-	MaintainPowerInterface::MaintainPowerData::MaintainPowerData(ControlFunction *sendingControlFunction) :
+	MaintainPowerInterface::MaintainPowerData::MaintainPowerData(std::shared_ptr<ControlFunction> sendingControlFunction) :
 	  sendingControlFunction(sendingControlFunction)
 	{
 	}
@@ -138,7 +138,7 @@ namespace isobus
 		return currentMaintainECUPowerState;
 	}
 
-	ControlFunction *MaintainPowerInterface::MaintainPowerData::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> MaintainPowerInterface::MaintainPowerData::get_sender_control_function() const
 	{
 		return sendingControlFunction;
 	}
@@ -213,7 +213,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MaintainPower),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
-		                                                      static_cast<isobus::InternalControlFunction *>(maintainPowerTransmitData.get_sender_control_function()));
+		                                                      std::dynamic_pointer_cast<InternalControlFunction>(maintainPowerTransmitData.get_sender_control_function()));
 	}
 
 	void MaintainPowerInterface::process_flags(std::uint32_t flag, void *parentPointer)

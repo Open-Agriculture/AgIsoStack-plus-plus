@@ -61,13 +61,13 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction)
+	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent, internalControlFunction));
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
 	}
 
-	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction)
+	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, internalControlFunction);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
@@ -81,8 +81,8 @@ namespace isobus
 	bool FastPacketProtocol::send_multipacket_message(std::uint32_t parameterGroupNumber,
 	                                                  const std::uint8_t *data,
 	                                                  std::uint8_t messageLength,
-	                                                  InternalControlFunction *source,
-	                                                  ControlFunction *destination,
+	                                                  std::shared_ptr<InternalControlFunction> source,
+	                                                  std::shared_ptr<ControlFunction> destination,
 	                                                  CANIdentifier::CANPriority priority,
 	                                                  TransmitCompleteCallback txCompleteCallback,
 	                                                  void *parentPointer,
@@ -221,7 +221,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool FastPacketProtocol::get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, ControlFunction *source, ControlFunction *destination)
+	bool FastPacketProtocol::get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		returnedSession = nullptr;
 		std::unique_lock<std::mutex> lock(sessionMutex);
@@ -376,7 +376,7 @@ namespace isobus
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
 			                                 session->get_message_data_length(),
-			                                 reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+			                                 std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
 			                                 session->parent);
@@ -386,8 +386,8 @@ namespace isobus
 	bool FastPacketProtocol::protocol_transmit_message(std::uint32_t,
 	                                                   const std::uint8_t *,
 	                                                   std::uint32_t,
-	                                                   ControlFunction *,
-	                                                   ControlFunction *,
+	                                                   std::shared_ptr<ControlFunction>,
+	                                                   std::shared_ptr<ControlFunction>,
 	                                                   TransmitCompleteCallback,
 	                                                   void *,
 	                                                   DataChunkCallback)
@@ -491,7 +491,7 @@ namespace isobus
 						if (CANNetworkManager::CANNetwork.send_can_message(session->sessionMessage.get_identifier().get_parameter_group_number(),
 						                                                   dataBuffer.data(),
 						                                                   CAN_DATA_LENGTH,
-						                                                   reinterpret_cast<InternalControlFunction *>(session->sessionMessage.get_source_control_function()),
+						                                                   std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 						                                                   session->sessionMessage.get_destination_control_function(),
 						                                                   session->sessionMessage.get_identifier().get_priority(),
 						                                                   nullptr,

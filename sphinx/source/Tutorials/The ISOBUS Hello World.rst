@@ -139,7 +139,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     myNAME.set_manufacturer_code(64);
 
     // Create our InternalControlFunction
-    myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
+    myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
 
     return 0;
    }
@@ -240,7 +240,7 @@ Let's see what we've got so far:
       myNAME.set_manufacturer_code(64);
 
       // Create our InternalControlFunction
-      myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
+      myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
 
       return 0;
    }
@@ -305,7 +305,7 @@ Make sure to include `csignal`.
       myNAME.set_manufacturer_code(64);
 
       // Create our InternalControlFunction
-      myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
+      myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
 
       // Clean up the threads
       isobus::CANHardwareInterface::stop();
@@ -373,7 +373,7 @@ The total result:
     myNAME.set_manufacturer_code(64);
 
     // Create our InternalControlFunction
-    myECU = std::make_shared<isobus::InternalControlFunction>(myNAME, 0x1C, 0);
+    myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

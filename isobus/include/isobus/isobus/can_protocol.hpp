@@ -77,8 +77,8 @@ namespace isobus
 		virtual bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
 		                                       const std::uint8_t *data,
 		                                       std::uint32_t messageLength,
-		                                       ControlFunction *source,
-		                                       ControlFunction *destination,
+		                                       std::shared_ptr<ControlFunction> source,
+		                                       std::shared_ptr<ControlFunction> destination,
 		                                       TransmitCompleteCallback transmitCompleteCallback,
 		                                       void *parentPointer,
 		                                       DataChunkCallback frameChunkCallback) = 0;
