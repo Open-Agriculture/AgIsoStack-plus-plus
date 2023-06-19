@@ -103,7 +103,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	auto testECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x45, 0);
+	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x45, 0);
 
 	CANMessageFrame testFrame;
 	testFrame.timestamp_us = 0;
@@ -364,6 +364,8 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	}
+
+	EXPECT_TRUE(testECU->destroy());
 	CANHardwareInterface::stop();
 }
 

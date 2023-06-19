@@ -1487,8 +1487,8 @@ namespace isobus
 		/// @brief The callback passed to the network manager's send function to know when a Tx is completed
 		static void process_callback(std::uint32_t parameterGroupNumber,
 		                             std::uint32_t dataLength,
-		                             InternalControlFunction *sourceControlFunction,
-		                             ControlFunction *destinationControlFunction,
+		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
+		                             std::shared_ptr<ControlFunction> destinationControlFunction,
 		                             bool successful,
 		                             void *parentPointer);
 

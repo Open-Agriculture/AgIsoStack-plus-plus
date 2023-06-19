@@ -153,8 +153,8 @@ namespace isobus
 		bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
 		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
-		                               ControlFunction *source,
-		                               ControlFunction *destination,
+		                               std::shared_ptr<ControlFunction> source,
+		                               std::shared_ptr<ControlFunction> destination,
 		                               TransmitCompleteCallback transmitCompleteCallback,
 		                               void *parentPointer,
 		                               DataChunkCallback frameChunkCallback) override;
@@ -175,7 +175,7 @@ namespace isobus
 		/// @param[in] source The source control function from which we'll send the abort
 		/// @param[in] destination The destination control function to which we'll send the abort
 		/// @returns true if the abort was send OK, false if not sent
-		bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, InternalControlFunction *source, ControlFunction *destination);
+		bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
@@ -216,14 +216,14 @@ namespace isobus
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
-		bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination);
+		bool get_session(TransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Gets a TP session from the passed in source and destination and PGN combination
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @param[in] parameterGroupNumber The PGN of the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
-		bool get_session(TransportProtocolSession *&session, ControlFunction *source, ControlFunction *destination, std::uint32_t parameterGroupNumber);
+		bool get_session(TransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber);
 
 		/// @brief Updates the state machine of a Tp session
 		/// @param[in] session The session to update

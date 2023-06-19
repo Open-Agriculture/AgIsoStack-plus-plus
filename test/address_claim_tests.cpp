@@ -15,8 +15,8 @@ using namespace isobus;
 
 TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 {
-	std::shared_ptr<VirtualCANPlugin> firstDevice = std::make_shared<VirtualCANPlugin>();
-	std::shared_ptr<VirtualCANPlugin> secondDevice = std::make_shared<VirtualCANPlugin>();
+	auto firstDevice = std::make_shared<VirtualCANPlugin>();
+	auto secondDevice = std::make_shared<VirtualCANPlugin>();
 	CANHardwareInterface::set_number_of_can_channels(2);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, firstDevice);
 	CANHardwareInterface::assign_can_channel_frame_handler(1, secondDevice);
@@ -34,7 +34,7 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	firstName.set_function_instance(0);
 	firstName.set_device_class_instance(0);
 	firstName.set_manufacturer_code(69);
-	InternalControlFunction firstInternalECU(firstName, 0x1C, 0);
+	auto firstInternalECU = InternalControlFunction::create(firstName, 0x1C, 0);
 
 	isobus::NAME secondName(0);
 	secondName.set_arbitrary_address_capable(true);
@@ -46,17 +46,22 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	secondName.set_function_instance(0);
 	secondName.set_device_class_instance(0);
 	secondName.set_manufacturer_code(69);
-	InternalControlFunction secondInternalECU2(secondName, 0x1D, 1);
+	auto secondInternalECU2 = InternalControlFunction::create(secondName, 0x1D, 1);
 
 	const NAMEFilter filterSecond(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::SeatControl));
-	PartneredControlFunction firstPartneredSecondECU(0, { filterSecond });
+	auto firstPartneredSecondECU = PartneredControlFunction::create(0, { filterSecond });
 	const isobus::NAMEFilter filterFirst(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::CabClimateControl));
-	PartneredControlFunction secondPartneredFirstEcu(1, { filterFirst });
+	auto secondPartneredFirstEcu = PartneredControlFunction::create(1, { filterFirst });
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-	EXPECT_TRUE(firstPartneredSecondECU.get_address_valid());
-	EXPECT_TRUE(secondPartneredFirstEcu.get_address_valid());
+	EXPECT_TRUE(firstInternalECU->get_address_valid());
+	EXPECT_TRUE(secondInternalECU2->get_address_valid());
+	EXPECT_TRUE(firstPartneredSecondECU->get_address_valid());
+	EXPECT_TRUE(secondPartneredFirstEcu->get_address_valid());
 
 	CANHardwareInterface::stop();
+	ASSERT_TRUE(firstPartneredSecondECU->destroy());
+	ASSERT_TRUE(secondPartneredFirstEcu->destroy());
+	ASSERT_TRUE(firstInternalECU->destroy());
+	ASSERT_TRUE(secondInternalECU2->destroy());
 }

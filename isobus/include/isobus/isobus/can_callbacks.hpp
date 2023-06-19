@@ -38,19 +38,19 @@ namespace isobus
 	/// @brief A callback for when a transmit is completed by the stack
 	using TransmitCompleteCallback = void (*)(std::uint32_t parameterGroupNumber,
 	                                          std::uint32_t dataLength,
-	                                          InternalControlFunction *sourceControlFunction,
-	                                          ControlFunction *destinationControlFunction,
+	                                          std::shared_ptr<InternalControlFunction> sourceControlFunction,
+	                                          std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                          bool successful,
 	                                          void *parentPointer);
 	/// @brief A callback for handling a PGN request
 	using PGNRequestCallback = bool (*)(std::uint32_t parameterGroupNumber,
-	                                    ControlFunction *requestingControlFunction,
+	                                    std::shared_ptr<ControlFunction> requestingControlFunction,
 	                                    bool &acknowledge,
 	                                    AcknowledgementType &acknowledgeType,
 	                                    void *parentPointer);
 	/// @brief A callback for handling a request for repetition rate for a specific PGN
 	using PGNRequestForRepetitionRateCallback = bool (*)(std::uint32_t parameterGroupNumber,
-	                                                     ControlFunction *requestingControlFunction,
+	                                                     std::shared_ptr<ControlFunction> requestingControlFunction,
 	                                                     std::uint32_t repetitionRate,
 	                                                     void *parentPointer);
 
@@ -67,7 +67,7 @@ namespace isobus
 		/// @param[in] callback The function you want the stack to call when it gets receives a message with a matching PGN
 		/// @param[in] parentPointer A generic variable that can provide context to which object the callback was meant for
 		/// @param[in] internalControlFunction An internal control function to use as an additional filter for the callback
-		ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *internalControlFunction);
+		ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, std::shared_ptr<InternalControlFunction> internalControlFunction);
 
 		/// @brief A copy constructor for holding callback data
 		/// @param[in] oldObj The object to copy from
@@ -96,13 +96,13 @@ namespace isobus
 
 		/// @brief Returns the ICF being used as a filter for this callback
 		/// @returns A pointer to the ICF being used as a filter, or nullptr
-		InternalControlFunction *get_internal_control_function() const;
+		std::shared_ptr<InternalControlFunction> get_internal_control_function() const;
 
 	private:
 		CANLibCallback mCallback; ///< The callback that will get called when a matching PGN is received
 		std::uint32_t mParameterGroupNumber; ///< The PGN assocuiated with this callback
 		void *mParent; ///< A generic variable that can provide context to which object the callback was meant for
-		InternalControlFunction *mInternalControlFunctionFilter; ///< An optional way to filter callbacks based on the destination of messages from the partner
+		std::shared_ptr<InternalControlFunction> mInternalControlFunctionFilter; ///< An optional way to filter callbacks based on the destination of messages from the partner
 	};
 } // namespace isobus
 

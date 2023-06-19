@@ -90,13 +90,13 @@ std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
 TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 {
 	NAME clientNAME(0);
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -124,18 +124,20 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 	EXPECT_NE(nullptr, clientUnderTest.get_partner_control_function());
 
 	clientUnderTest.terminate();
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(4));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 {
 	NAME clientNAME(0);
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -167,6 +169,10 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 	// Test the master address is correct when in the connected state
 	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 	EXPECT_EQ(0x26, clientUnderTest.get_active_working_set_master_address());
+
+	// expectedRefCount=3 is to account for the pointer in the VT client and the language interface
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
@@ -182,13 +188,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 	clientNAME.set_device_class_instance(0);
 	clientNAME.set_manufacturer_code(69);
 
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -219,6 +225,10 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
+
+	// expectedRefCount=3 is to account for the pointer in the VT client and the language interface
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
@@ -234,13 +244,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 	clientNAME.set_device_class_instance(0);
 	clientNAME.set_manufacturer_code(69);
 
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -264,6 +274,10 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
@@ -279,13 +293,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 	clientNAME.set_device_class_instance(0);
 	clientNAME.set_manufacturer_code(69);
 
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -321,18 +335,22 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 {
 	NAME clientNAME(0);
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x26, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -380,6 +398,10 @@ TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 
 	// Don't support proprietary objects for autoscaling
 	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ManufacturerDefined11));
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
@@ -824,7 +846,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	clientNAME.set_function_code(6);
 	clientNAME.set_identity_number(975);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::ControlHead));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x37, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x37, 0);
 
 	CANMessageFrame testFrame;
 
@@ -842,7 +864,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	// Force claim a partner
 	NAME serverNAME(0);
@@ -877,6 +899,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 		serverVT.read_frame(testFrame);
 	}
 	ASSERT_TRUE(serverVT.get_queue_empty());
+	EXPECT_TRUE(vtPartner->get_address_valid());
 
 	// Test Change active mask
 	interfaceUnderTest.send_change_active_mask(123, 456);
@@ -969,4 +992,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 
 	serverVT.close();
 	CANHardwareInterface::stop();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(vtPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }

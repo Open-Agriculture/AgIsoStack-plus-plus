@@ -33,10 +33,10 @@ namespace isobus
 	                                               bool enableSendingWheelBasedSpeedPeriodically,
 	                                               bool enableSendingMachineSelectedSpeedPeriodically,
 	                                               bool enableSendingMachineSelectedSpeedCommandPeriodically) :
-	  machineSelectedSpeedTransmitData(MachineSelectedSpeedData(enableSendingMachineSelectedSpeedPeriodically ? source.get() : nullptr)),
-	  wheelBasedSpeedTransmitData(WheelBasedMachineSpeedData(enableSendingWheelBasedSpeedPeriodically ? source.get() : nullptr)),
-	  groundBasedSpeedTransmitData(GroundBasedSpeedData(enableSendingGroundBasedSpeedPeriodically ? source.get() : nullptr)),
-	  machineSelectedSpeedCommandTransmitData(MachineSelectedSpeedCommandData(enableSendingMachineSelectedSpeedCommandPeriodically ? source.get() : nullptr)),
+	  machineSelectedSpeedTransmitData(MachineSelectedSpeedData(enableSendingMachineSelectedSpeedPeriodically ? source : nullptr)),
+	  wheelBasedSpeedTransmitData(WheelBasedMachineSpeedData(enableSendingWheelBasedSpeedPeriodically ? source : nullptr)),
+	  groundBasedSpeedTransmitData(GroundBasedSpeedData(enableSendingGroundBasedSpeedPeriodically ? source : nullptr)),
+	  machineSelectedSpeedCommandTransmitData(MachineSelectedSpeedCommandData(enableSendingMachineSelectedSpeedCommandPeriodically ? source : nullptr)),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
 	}
@@ -52,7 +52,7 @@ namespace isobus
 		}
 	}
 
-	SpeedMessagesInterface::WheelBasedMachineSpeedData::WheelBasedMachineSpeedData(ControlFunction *sender) :
+	SpeedMessagesInterface::WheelBasedMachineSpeedData::WheelBasedMachineSpeedData(std::shared_ptr<ControlFunction> sender) :
 	  controlFunction(sender)
 	{
 	}
@@ -154,7 +154,7 @@ namespace isobus
 		return retVal;
 	}
 
-	ControlFunction *SpeedMessagesInterface::WheelBasedMachineSpeedData::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> SpeedMessagesInterface::WheelBasedMachineSpeedData::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
@@ -169,7 +169,7 @@ namespace isobus
 		return timestamp_ms;
 	}
 
-	SpeedMessagesInterface::MachineSelectedSpeedData::MachineSelectedSpeedData(ControlFunction *sender) :
+	SpeedMessagesInterface::MachineSelectedSpeedData::MachineSelectedSpeedData(std::shared_ptr<ControlFunction> sender) :
 	  controlFunction(sender)
 	{
 	}
@@ -259,7 +259,7 @@ namespace isobus
 		return retVal;
 	}
 
-	ControlFunction *SpeedMessagesInterface::MachineSelectedSpeedData::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> SpeedMessagesInterface::MachineSelectedSpeedData::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
@@ -274,7 +274,7 @@ namespace isobus
 		return timestamp_ms;
 	}
 
-	SpeedMessagesInterface::GroundBasedSpeedData::GroundBasedSpeedData(ControlFunction *sender) :
+	SpeedMessagesInterface::GroundBasedSpeedData::GroundBasedSpeedData(std::shared_ptr<ControlFunction> sender) :
 	  controlFunction(sender)
 	{
 	}
@@ -328,7 +328,7 @@ namespace isobus
 		return retVal;
 	}
 
-	ControlFunction *SpeedMessagesInterface::GroundBasedSpeedData::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> SpeedMessagesInterface::GroundBasedSpeedData::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
@@ -343,7 +343,7 @@ namespace isobus
 		return timestamp_ms;
 	}
 
-	SpeedMessagesInterface::MachineSelectedSpeedCommandData::MachineSelectedSpeedCommandData(ControlFunction *sender) :
+	SpeedMessagesInterface::MachineSelectedSpeedCommandData::MachineSelectedSpeedCommandData(std::shared_ptr<ControlFunction> sender) :
 	  controlFunction(sender)
 	{
 	}
@@ -398,7 +398,7 @@ namespace isobus
 		return retVal;
 	}
 
-	ControlFunction *SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_sender_control_function() const
+	std::shared_ptr<ControlFunction> SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_sender_control_function() const
 	{
 		return controlFunction;
 	}
@@ -811,7 +811,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        static_cast<isobus::InternalControlFunction *>(machineSelectedSpeedTransmitData.get_sender_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -838,7 +838,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        static_cast<isobus::InternalControlFunction *>(wheelBasedSpeedTransmitData.get_sender_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -862,7 +862,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        static_cast<isobus::InternalControlFunction *>(groundBasedSpeedTransmitData.get_sender_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -886,7 +886,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        static_cast<isobus::InternalControlFunction *>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
+			                                                        std::dynamic_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}

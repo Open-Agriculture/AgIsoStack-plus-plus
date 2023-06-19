@@ -4,6 +4,7 @@
 /// @brief A class that describes a control function on the bus that the stack should communicate
 /// with. Use these to describe ECUs you want to send messages to.
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
@@ -27,7 +28,7 @@ namespace isobus
 	//================================================================================================
 	/// @class PartneredControlFunction
 	///
-	/// @brief This reprents any device on the bus you want to talk to.
+	/// @brief This represents any device on the bus you want to talk to.
 	/// @details To communicate with a device on the bus, create one of these objects and tell it
 	/// via the constructor what the identity of that device is using NAME fields like
 	/// manufacturer code, function, and device class. The stack will take care of locating the
@@ -37,16 +38,18 @@ namespace isobus
 	class PartneredControlFunction : public ControlFunction
 	{
 	public:
-		/// @brief the constructor for a PartneredControlFunction
+		/// @brief The factory function to construct a partnered control function
 		/// @param[in] CANPort The CAN channel associated with this control function definition
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
-		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
+		static std::shared_ptr<PartneredControlFunction> create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
 
 		/// @brief Deleted copy constructor for PartneredControlFunction to avoid slicing
 		PartneredControlFunction(PartneredControlFunction &) = delete;
 
-		/// @brief The destructor for PartneredControlFunction
-		virtual ~PartneredControlFunction();
+		/// @brief Destroys this partnered control function, by removing it from the network manager
+		/// @param[in] expectedRefCount The expected number of shared pointers to this control function after removal
+		/// @returns true if the partnered control function was successfully removed from everywhere in the stack, otherwise false
+		bool destroy(std::uint32_t expectedRefCount = 1) override;
 
 		/// @brief This is how you get notified that this control function has sent you a destination specific message.
 		/// @details Add a callback function here to be notified when this device has sent you a message with the specified PGN.
@@ -61,14 +64,14 @@ namespace isobus
 		/// @param[in] internalControlFunction An internal control function to filter based on. If you supply this
 		/// parameter the callback will only be called when messages from the partner are received with the
 		/// specified ICF as the destination.
-		void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
+		void add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
 		/// @brief Removes a callback matching *exactly* the parameters passed in
 		/// @param[in] parameterGroupNumber The PGN associated with the callback being removed
 		/// @param[in] callback The callback function being removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
 		/// @param[in] internalControlFunction The ICF being used to filter messages against
-		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction = nullptr);
+		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
 		/// @brief Returns the number of parameter group number callbacks associated with this control function
 		/// @returns The number of parameter group number callbacks associated with this control function
@@ -98,7 +101,7 @@ namespace isobus
 		/// @brief Gets a PartneredControlFunction by index
 		/// @param[in] index The index of the PartneredControlFunction to get
 		/// @returns a PartneredControlFunction at the index specified from `partneredControlFunctionList`
-		static PartneredControlFunction *get_partnered_control_function(std::size_t index);
+		static std::shared_ptr<PartneredControlFunction> get_partnered_control_function(std::size_t index);
 
 		/// @brief Returns the number of created partner control functions
 		/// @returns The number of created partner control functions from the static list of all of them
@@ -107,16 +110,24 @@ namespace isobus
 	private:
 		friend class CANNetworkManager; ///< Allows the network manager to use get_parameter_group_number_callback
 
+		/// @brief the constructor for a PartneredControlFunction, which is called by the factory function
+		/// @param[in] CANPort The CAN channel associated with this control function definition
+		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
+		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
+
+		/// @brief Make inherited factory function private so that it can't be called
+		static std::shared_ptr<ControlFunction> create(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort) = delete;
+
 		/// @brief Returns a parameter group number associated with this control function by index
 		/// @param[in] index The index from which to get the PGN callback data object
 		/// @returns A reference to the PGN callback data object at the index specified
 		ParameterGroupNumberCallbackData &get_parameter_group_number_callback(std::size_t index);
 
-		static std::vector<PartneredControlFunction *> partneredControlFunctionList; ///< A list of all created partnered control functions
+		static std::vector<std::shared_ptr<PartneredControlFunction>> partneredControlFunctionList; ///< A list of all created partnered control functions
 		static bool anyPartnerNeedsInitializing; ///< A way for the network manager to know if it needs to parse the partner list to match partners with existing CFs
 		const std::vector<NAMEFilter> NAMEFilterList; ///< A list of NAME parameters that describe this control function's identity
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks associated with this control function
-		bool initialized; ///< A way to track if the network manager has processed this CF against existing CFs
+		bool initialized = false; ///< A way to track if the network manager has processed this CF against existing CFs
 	};
 
 } // namespace isobus

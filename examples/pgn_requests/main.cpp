@@ -13,7 +13,7 @@
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;
-static isobus::ControlFunction *repetitionRateRequestor = nullptr;
+static std::shared_ptr<isobus::ControlFunction> repetitionRateRequestor = nullptr;
 static std::atomic_bool running = { true };
 
 void signal_handler(int)
@@ -22,7 +22,7 @@ void signal_handler(int)
 }
 
 bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumber,
-                                               isobus::ControlFunction *,
+                                               std::shared_ptr<isobus::ControlFunction>,
                                                bool &acknowledge,
                                                isobus::AcknowledgementType &acknowledgeType,
                                                void *)
@@ -50,7 +50,7 @@ bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumbe
 }
 
 bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t parameterGroupNumber,
-                                                               isobus::ControlFunction *requestingControlFunction,
+                                                               std::shared_ptr<isobus::ControlFunction> requestingControlFunction,
                                                                std::uint32_t repetitionRate,
                                                                void *)
 {
@@ -125,7 +125,7 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	std::shared_ptr<isobus::InternalControlFunction> TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
+	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 	std::signal(SIGINT, signal_handler);
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
@@ -157,7 +157,7 @@ int main()
 
 		// This is how you would request a PGN from someone else. In this example, we request it from the broadcast address.
 		// Generally you'd want to replace nullptr with your partner control function as its a little nicer than just asking everyone on the bus for a PGN
-		isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), TestInternalECU.get(), nullptr);
+		isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), TestInternalECU, nullptr);
 	}
 
 	while (running)
@@ -166,7 +166,7 @@ int main()
 		{
 			// If someone has requested a repetition rate for PROPA, service it here (in the application layer)
 			std::uint8_t buffer[isobus::CAN_DATA_LENGTH] = { 0 };
-			isobus::CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), buffer, isobus::CAN_DATA_LENGTH, TestInternalECU.get(), repetitionRateRequestor);
+			isobus::CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), buffer, isobus::CAN_DATA_LENGTH, TestInternalECU, repetitionRateRequestor);
 			std::this_thread::sleep_for(std::chrono::milliseconds(propARepetitionRate_ms));
 		}
 		else

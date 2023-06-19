@@ -65,7 +65,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	auto testECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x82, 0);
+	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x82, 0);
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 
 	while ((!testECU->get_address_valid()) &&
@@ -82,7 +82,8 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	interfaceUnderTest.initialize();
 	EXPECT_TRUE(interfaceUnderTest.get_initialized());
 
-	CANMessageFrame testFrame = { 0 };
+	CANMessageFrame testFrame;
+	memset(&testFrame, 0, sizeof(testFrame));
 	testFrame.isExtendedFrame = true;
 
 	// Get the virtual CAN plugin back to a known state
@@ -103,7 +104,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	testFrame.data[3] = 0x12;
 	testFrame.data[4] = 0x00;
 	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x01;
+	testFrame.data[6] = 0x02;
 	testFrame.data[7] = 0xA0;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
@@ -239,6 +240,8 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 
 	EXPECT_FALSE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
 
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	EXPECT_TRUE(testECU->destroy(2));
 	CANHardwareInterface::stop();
 }
 
@@ -262,7 +265,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(64);
 
-	auto testECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x48, 0);
+	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x48, 0);
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 
 	while ((!testECU->get_address_valid()) &&
@@ -273,7 +276,8 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 
 	ASSERT_TRUE(testECU->get_address_valid());
 
-	CANMessageFrame testFrame = { 0 };
+	CANMessageFrame testFrame;
+	memset(&testFrame, 0, sizeof(testFrame));
 	testFrame.isExtendedFrame = true;
 
 	// Get the virtual CAN plugin back to a known state
@@ -337,5 +341,8 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 	EXPECT_EQ(0xFF, testFrame.data[7]);
 
 	testPlugin.close();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	EXPECT_TRUE(testECU->destroy(2));
 	CANHardwareInterface::stop();
 }

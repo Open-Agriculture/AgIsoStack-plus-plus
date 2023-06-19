@@ -35,7 +35,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_instance(3);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::TirePressureControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x50, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x50, 0);
 
 	CANMessageFrame testFrame;
 
@@ -48,21 +48,6 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	}
 
 	ASSERT_TRUE(internalECU->get_address_valid());
-
-	// Force claim a partner
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFFF7;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x12;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
 
 	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
 
@@ -627,4 +612,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	EXPECT_EQ(2, testMessageData.at(17)); // 2 Option bytes
 	EXPECT_EQ(1, testMessageData.at(18)); // 1 Boom
 	EXPECT_EQ(255, testMessageData.at(19)); // 255 Sections
+
+	//! @todo try to reduce the reference count, such that that we don't use destroyed control functions later on
+	ASSERT_TRUE(internalECU->destroy(3));
 }

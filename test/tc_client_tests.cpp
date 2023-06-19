@@ -80,8 +80,8 @@ public:
 
 	void test_wrapper_process_tx_callback(std::uint32_t parameterGroupNumber,
 	                                      std::uint32_t dataLength,
-	                                      InternalControlFunction *sourceControlFunction,
-	                                      ControlFunction *destinationControlFunction,
+	                                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
+	                                      std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                      bool successful,
 	                                      void *parentPointer)
 	{
@@ -270,7 +270,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x81, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x84, 0);
 
 	CANMessageFrame testFrame;
 
@@ -288,7 +288,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
 
 	// Force claim a partner
 	testFrame.dataLength = 8;
@@ -305,7 +305,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	testFrame.data[7] = 0xA0;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 
-	DerivedTestTCClient interfaceUnderTest(vtPartner, internalECU);
+	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -315,6 +315,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 		serverTC.read_frame(testFrame);
 	}
 	ASSERT_TRUE(serverTC.get_queue_empty());
+	ASSERT_TRUE(tcPartner->get_address_valid());
 
 	// Test Working Set Master Message
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_working_set_master());
@@ -478,6 +479,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(tcPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
@@ -485,10 +490,13 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x81, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x81, 0);
 	DerivedTestTCClient interfaceUnderTest(nullptr, internalECU);
 	ASSERT_FALSE(interfaceUnderTest.get_is_initialized());
 	EXPECT_DEATH(interfaceUnderTest.initialize(false), "");
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	EXPECT_TRUE(internalECU->destroy(3));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
@@ -497,10 +505,11 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
-	DerivedTestTCClient interfaceUnderTest(vtPartner, nullptr);
+	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
+	DerivedTestTCClient interfaceUnderTest(tcPartner, nullptr);
 	ASSERT_FALSE(interfaceUnderTest.get_is_initialized());
 	EXPECT_DEATH(interfaceUnderTest.initialize(false), "");
+	ASSERT_TRUE(tcPartner->destroy(3)); // Account for the pointer in the TC client and the language interface
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPDeathTest)
@@ -535,7 +544,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(1);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x83, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x83, 0);
 
 	CANMessageFrame testFrame;
 
@@ -553,7 +562,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	tcNameFilters.push_back(testFilter);
 
-	auto tcPartner = std::make_shared<PartneredControlFunction>(0, tcNameFilters);
+	auto tcPartner = PartneredControlFunction::create(0, tcNameFilters);
 
 	// Force claim a partner
 	testFrame.dataLength = 8;
@@ -581,6 +590,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 		serverTC.read_frame(testFrame);
 	}
 	ASSERT_TRUE(serverTC.get_queue_empty());
+	ASSERT_TRUE(tcPartner->get_address_valid());
 
 	// End boilerplate
 
@@ -966,7 +976,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDDOPTransfer);
 	// Check ddop transfer callback
-	interfaceUnderTest.test_wrapper_process_tx_callback(0xCB00, 8, nullptr, reinterpret_cast<ControlFunction *>(tcPartner.get()), false, &interfaceUnderTest);
+	interfaceUnderTest.test_wrapper_process_tx_callback(0xCB00, 8, nullptr, std::dynamic_pointer_cast<ControlFunction>(tcPartner), false, &interfaceUnderTest);
 	// In this case it should be disconnected because we passed in false.
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
@@ -975,7 +985,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDDOPTransfer);
 	// Check ddop transfer callback
-	interfaceUnderTest.test_wrapper_process_tx_callback(0xCB00, 8, nullptr, reinterpret_cast<ControlFunction *>(tcPartner.get()), true, &interfaceUnderTest);
+	interfaceUnderTest.test_wrapper_process_tx_callback(0xCB00, 8, nullptr, std::dynamic_pointer_cast<ControlFunction>(tcPartner), true, &interfaceUnderTest);
 	// In this case it should be disconnected because we passed in false.
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse);
 
@@ -1117,6 +1127,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 
 	interfaceUnderTest.terminate();
 	CANHardwareInterface::stop();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(tcPartner->destroy(4));
+	ASSERT_TRUE(internalECU->destroy(6));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
@@ -1151,7 +1165,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(1);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x84, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x84, 0);
 
 	ASSERT_FALSE(internalECU->get_address_valid());
 
@@ -1159,9 +1173,9 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
 
-	DerivedTestTCClient interfaceUnderTest(vtPartner, internalECU);
+	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 	interfaceUnderTest.initialize(false);
 
 	// Wait a while to build up some run time for testing timeouts later
@@ -1337,6 +1351,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestVersionResponse);
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(tcPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(4));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
@@ -1345,18 +1363,19 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(1);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x85, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x85, 0);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = std::make_shared<PartneredControlFunction>(0, vtNameFilters);
+	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
 
-	DerivedTestTCClient interfaceUnderTest(vtPartner, internalECU);
+	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 	EXPECT_NO_THROW(interfaceUnderTest.initialize(true));
 
 	EXPECT_NO_THROW(interfaceUnderTest.terminate());
+	ASSERT_TRUE(tcPartner->destroy(3)); // Account for the pointer in the TC client and the language interface
 }
 
 static bool valueRequested = false;
@@ -1403,15 +1422,22 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(1);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x86, 0);
+	auto internalECU = InternalControlFunction::create(clientNAME, 0x86, 0);
 	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
-	std::shared_ptr<isobus::PartneredControlFunction> TestPartnerTC = std::make_shared<isobus::PartneredControlFunction>(0, tcNameFilters);
+	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
 	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 
-	CANMessageFrame testFrame;
+	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
+
+	while ((!internalECU->get_address_valid()) &&
+	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
 
 	// Force claim a partner
+	CANMessageFrame testFrame;
 	testFrame.dataLength = 8;
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
@@ -1424,15 +1450,6 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x82;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0xA0;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 
 	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
@@ -1684,4 +1701,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	EXPECT_EQ(requestedDDI, 0x3B19);
 
 	CANHardwareInterface::stop();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	ASSERT_TRUE(TestPartnerTC->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(4));
 }

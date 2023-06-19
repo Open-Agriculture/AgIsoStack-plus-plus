@@ -829,7 +829,7 @@ namespace isobus
 	}
 
 	bool ControlFunctionFunctionalities::pgn_request_handler(std::uint32_t parameterGroupNumber,
-	                                                         ControlFunction *,
+	                                                         std::shared_ptr<ControlFunction>,
 	                                                         bool &acknowledge,
 	                                                         AcknowledgementType &,
 	                                                         void *parentPointer)
@@ -860,7 +860,7 @@ namespace isobus
 			transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities),
 			                                                                    messageBuffer.data(),
 			                                                                    messageBuffer.size(),
-			                                                                    targetInterface->myControlFunction.get(),
+			                                                                    targetInterface->myControlFunction,
 			                                                                    nullptr);
 		}
 

@@ -10,7 +10,7 @@
 
 namespace isobus
 {
-	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, InternalControlFunction *internalControlFunction) :
+	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, std::shared_ptr<InternalControlFunction> internalControlFunction) :
 	  mCallback(callback),
 	  mParameterGroupNumber(parameterGroupNumber),
 	  mParent(parentPointer),
@@ -58,7 +58,7 @@ namespace isobus
 		return mParent;
 	}
 
-	InternalControlFunction *ParameterGroupNumberCallbackData::get_internal_control_function() const
+	std::shared_ptr<InternalControlFunction> ParameterGroupNumberCallbackData::get_internal_control_function() const
 	{
 		return mInternalControlFunctionFilter;
 	}

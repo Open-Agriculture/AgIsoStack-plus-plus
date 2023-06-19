@@ -4,6 +4,7 @@
 /// @brief A class that describes a control function on the bus that the stack should communicate
 /// with. Use these to describe ECUs you want to send messages to.
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
@@ -17,56 +18,40 @@
 
 namespace isobus
 {
-	std::vector<PartneredControlFunction *> PartneredControlFunction::partneredControlFunctionList;
+	std::vector<std::shared_ptr<PartneredControlFunction>> PartneredControlFunction::partneredControlFunctionList;
 	bool PartneredControlFunction::anyPartnerNeedsInitializing = false;
 
 	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters) :
-	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort),
-	  NAMEFilterList(NAMEFilters),
-	  initialized(false)
+	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort, Type::Partnered),
+	  NAMEFilterList(NAMEFilters)
 	{
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		bool emptyPartnerSlotFound = false;
-		controlFunctionType = Type::Partnered;
-
-		for (auto &partner : partneredControlFunctionList)
-		{
-			if (nullptr == partner)
-			{
-				partner = this;
-				emptyPartnerSlotFound = true;
-				break;
-			}
-		}
-
-		if (!emptyPartnerSlotFound)
-		{
-			partneredControlFunctionList.push_back(this);
-		}
 		anyPartnerNeedsInitializing = true;
 	}
 
-	PartneredControlFunction::~PartneredControlFunction()
+	std::shared_ptr<PartneredControlFunction> PartneredControlFunction::create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters)
 	{
-		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		if (0 != partneredControlFunctionList.size())
-		{
-			auto thisObject = std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), this);
-
-			if (partneredControlFunctionList.end() != thisObject)
-			{
-				*thisObject = nullptr; // Don't erase, in case the object was already deleted. Just make room for a new partner.
-				CANNetworkManager::CANNetwork.on_partner_deleted(this, {}); // Tell the network manager to purge this partner from all tables
-			}
-		}
+		// Unfortunately, we can't use `std::make_shared` here because the constructor is meant to be protected
+		auto createdControlFunction = std::shared_ptr<PartneredControlFunction>(new PartneredControlFunction(CANPort, NAMEFilters));
+		partneredControlFunctionList.push_back(createdControlFunction);
+		return createdControlFunction;
 	}
 
-	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction)
+	bool PartneredControlFunction::destroy(std::uint32_t expectedRefCount)
+	{
+		std::unique_lock<std::mutex> lock(controlFunctionProcessingMutex);
+		partneredControlFunctionList.erase(std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), shared_from_this()));
+		lock.unlock();
+
+		return ControlFunction::destroy(expectedRefCount);
+	}
+
+	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		parameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, internalControlFunction);
 	}
 
-	void PartneredControlFunction::remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, InternalControlFunction *internalControlFunction)
+	void PartneredControlFunction::remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, internalControlFunction);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
@@ -199,9 +184,9 @@ namespace isobus
 		return retVal;
 	}
 
-	PartneredControlFunction *PartneredControlFunction::get_partnered_control_function(std::size_t index)
+	std::shared_ptr<PartneredControlFunction> PartneredControlFunction::get_partnered_control_function(std::size_t index)
 	{
-		PartneredControlFunction *retVal = nullptr;
+		std::shared_ptr<PartneredControlFunction> retVal = nullptr;
 
 		if (index < get_number_partnered_control_functions())
 		{

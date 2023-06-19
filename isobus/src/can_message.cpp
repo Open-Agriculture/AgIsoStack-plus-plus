@@ -34,12 +34,12 @@ namespace isobus
 		return data.size();
 	}
 
-	ControlFunction *CANMessage::get_source_control_function() const
+	std::shared_ptr<ControlFunction> CANMessage::get_source_control_function() const
 	{
 		return source;
 	}
 
-	ControlFunction *CANMessage::get_destination_control_function() const
+	std::shared_ptr<ControlFunction> CANMessage::get_destination_control_function() const
 	{
 		return destination;
 	}
@@ -74,12 +74,12 @@ namespace isobus
 		data.resize(length);
 	}
 
-	void CANMessage::set_source_control_function(ControlFunction *value)
+	void CANMessage::set_source_control_function(std::shared_ptr<ControlFunction> value)
 	{
 		source = value;
 	}
 
-	void CANMessage::set_destination_control_function(ControlFunction *value)
+	void CANMessage::set_destination_control_function(std::shared_ptr<ControlFunction> value)
 	{
 		destination = value;
 	}

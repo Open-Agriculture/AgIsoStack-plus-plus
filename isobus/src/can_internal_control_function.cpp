@@ -4,6 +4,7 @@
 /// @brief A representation of an ISOBUS ECU that we can send from. Use this class
 /// when defining your own control functions that will claim an address within your program.
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
@@ -15,44 +16,35 @@
 
 namespace isobus
 {
-	std::vector<InternalControlFunction *> InternalControlFunction::internalControlFunctionList;
+	std::vector<std::shared_ptr<InternalControlFunction>> InternalControlFunction::internalControlFunctionList;
 	bool InternalControlFunction::anyChangedAddress = false;
 
 	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort) :
-	  ControlFunction(desiredName, NULL_CAN_ADDRESS, CANPort),
+	  ControlFunction(desiredName, NULL_CAN_ADDRESS, CANPort, Type::Internal),
 	  stateMachine(preferredAddress, desiredName, CANPort)
 	{
-		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		controlFunctionType = Type::Internal;
-
-		auto location = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), nullptr);
-		if (internalControlFunctionList.end() != location)
-		{
-			*location = this; // Use the available space in the list
-		}
-		else
-		{
-			internalControlFunctionList.push_back(this); // Allocate space in the list for this ICF
-		}
 	}
 
-	InternalControlFunction::~InternalControlFunction()
+	std::shared_ptr<InternalControlFunction> InternalControlFunction::create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort)
 	{
-		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		if (!internalControlFunctionList.empty())
-		{
-			auto thisObject = std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), this);
-
-			if (internalControlFunctionList.end() != thisObject)
-			{
-				*thisObject = nullptr; // Don't erase, just null it out. Erase could cause a double free.
-			}
-		}
+		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
+		auto createdControlFunction = std::shared_ptr<InternalControlFunction>(new InternalControlFunction(desiredName, preferredAddress, CANPort));
+		internalControlFunctionList.push_back(createdControlFunction);
+		return createdControlFunction;
 	}
 
-	InternalControlFunction *InternalControlFunction::get_internal_control_function(std::uint32_t index)
+	bool InternalControlFunction::destroy(std::uint32_t expectedRefCount)
 	{
-		InternalControlFunction *retVal = nullptr;
+		std::unique_lock<std::mutex> lock(controlFunctionProcessingMutex);
+		internalControlFunctionList.erase(std::find(internalControlFunctionList.begin(), internalControlFunctionList.end(), shared_from_this()));
+		lock.unlock();
+
+		return ControlFunction::destroy(expectedRefCount);
+	}
+
+	std::shared_ptr<InternalControlFunction> InternalControlFunction::get_internal_control_function(std::uint32_t index)
+	{
+		std::shared_ptr<InternalControlFunction> retVal = nullptr;
 
 		if (index < get_number_internal_control_functions())
 		{

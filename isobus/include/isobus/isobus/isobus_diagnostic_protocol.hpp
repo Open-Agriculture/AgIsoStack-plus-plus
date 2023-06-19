@@ -325,7 +325,7 @@ namespace isobus
 		/// @param[in] sourceControlFunction The internal control function to send the DM13 from
 		/// @param[in] suspendTime_seconds If you know the time for which broadcasts will be suspended, put it here, otherwise 0xFFFF
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool suspend_broadcasts(std::uint8_t canChannelIndex, InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds = 0xFFFF);
+		bool suspend_broadcasts(std::uint8_t canChannelIndex, std::shared_ptr<InternalControlFunction> sourceControlFunction, std::uint16_t suspendTime_seconds = 0xFFFF);
 
 		/// @brief Updates the protocol cyclically
 		void update(CANLibBadge<CANNetworkManager>) override;
@@ -372,7 +372,7 @@ namespace isobus
 		/// @brief A structure to hold data about DM22 responses we need to send
 		struct DM22Data
 		{
-			ControlFunction *destination; ///< Destination for the DM22 message
+			std::shared_ptr<ControlFunction> destination; ///< Destination for the DM22 message
 			std::uint32_t suspectParameterNumber; ///< SPN of the DTC for the DM22
 			std::uint8_t failureModeIdentifier; ///< FMI of the DTC for the DM22
 			std::uint8_t nackIndicator; ///< The NACK reason, if applicable
@@ -447,8 +447,8 @@ namespace isobus
 		bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
 		                               const std::uint8_t *data,
 		                               std::uint32_t messageLength,
-		                               ControlFunction *source,
-		                               ControlFunction *destination,
+		                               std::shared_ptr<ControlFunction> source,
+		                               std::shared_ptr<ControlFunction> destination,
 		                               TransmitCompleteCallback transmitCompleteCallback,
 		                               void *parentPointer,
 		                               DataChunkCallback frameChunkCallback) override;
@@ -472,7 +472,7 @@ namespace isobus
 
 		/// @brief Sends the DM13 to alert network devices of impending suspended broadcasts
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_dm13_announce_suspension(InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds);
+		bool send_dm13_announce_suspension(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::uint16_t suspendTime_seconds);
 
 		/// @brief Sends the ECU ID message
 		/// @returns true if the message was sent
@@ -507,7 +507,7 @@ namespace isobus
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @returns true if any callback was able to handle the PGN request
 		bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
-		                                            ControlFunction *requestingControlFunction,
+		                                            std::shared_ptr<ControlFunction> requestingControlFunction,
 		                                            bool &acknowledge,
 		                                            AcknowledgementType &acknowledgementType);
 
@@ -519,7 +519,7 @@ namespace isobus
 		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registed for
 		/// @returns true if any callback was able to handle the PGN request
 		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
-		                                                   ControlFunction *requestingControlFunction,
+		                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
 		                                                   bool &acknowledge,
 		                                                   AcknowledgementType &acknowledgementType,
 		                                                   void *parentPointer);

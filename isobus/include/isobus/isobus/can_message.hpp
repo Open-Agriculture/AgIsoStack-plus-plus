@@ -68,11 +68,11 @@ namespace isobus
 
 		/// @brief Gets the source control function that the message is from
 		/// @returns The source control function that the message is from
-		ControlFunction *get_source_control_function() const;
+		std::shared_ptr<ControlFunction> get_source_control_function() const;
 
 		/// @brief Gets the destination control function that the message is to
 		/// @returns The destination control function that the message is to
-		ControlFunction *get_destination_control_function() const;
+		std::shared_ptr<ControlFunction> get_destination_control_function() const;
 
 		/// @brief Returns the identifier of the message
 		/// @returns The identifier of the message
@@ -98,11 +98,11 @@ namespace isobus
 
 		/// @brief Sets the source control function for the message
 		/// @param[in] value The source control function
-		void set_source_control_function(ControlFunction *value);
+		void set_source_control_function(std::shared_ptr<ControlFunction> value);
 
 		/// @brief Sets the destination control function for the message
 		/// @param[in] value The destination control function
-		void set_destination_control_function(ControlFunction *value);
+		void set_destination_control_function(std::shared_ptr<ControlFunction> value);
 
 		/// @brief Sets the CAN ID of the message
 		/// @param[in] value The CAN ID for the message
@@ -159,8 +159,8 @@ namespace isobus
 		Type messageType = Type::Receive; ///< The internal message type associated with the message
 		CANIdentifier identifier = CANIdentifier(0); ///< The CAN ID of the message
 		std::vector<std::uint8_t> data; ///< A data buffer for the message, used when not using data chunk callbacks
-		ControlFunction *source = nullptr; ///< The source control function of the message
-		ControlFunction *destination = nullptr; ///< The destination control function of the message
+		std::shared_ptr<ControlFunction> source = nullptr; ///< The source control function of the message
+		std::shared_ptr<ControlFunction> destination = nullptr; ///< The destination control function of the message
 		const std::uint8_t CANPortIndex; ///< The CAN channel index associated with the message
 	};
 

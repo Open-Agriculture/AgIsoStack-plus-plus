@@ -76,8 +76,8 @@ int main()
 
 	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
-	auto TestInternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x1C, 0);
-	auto TestPartnerTC = std::make_shared<isobus::PartneredControlFunction>(0, tcNameFilters);
+	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
+	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
 
 	TestTCClient = std::make_shared<isobus::TaskControllerClient>(TestPartnerTC, TestInternalECU, nullptr);
 

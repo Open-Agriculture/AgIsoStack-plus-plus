@@ -85,7 +85,7 @@ namespace isobus
 
 			/// @brief Constructor for a WheelBasedMachineSpeedData
 			/// @param[in] sender The control function that is sending this message
-			explicit WheelBasedMachineSpeedData(ControlFunction *sender);
+			explicit WheelBasedMachineSpeedData(std::shared_ptr<ControlFunction> sender);
 
 			/// @brief Returns The distance traveled by a machine as calculated from wheel or tail-shaft speed.
 			/// @note When the distance exceeds 4211081215m the value shall be reset to zero and incremented as additional distance accrues.
@@ -166,7 +166,7 @@ namespace isobus
 			/// Eventually though the message will time-out normally and you can get a new pointer for
 			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -177,7 +177,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *const controlFunction; ///< The CF that is sending the message
+			std::shared_ptr<ControlFunction> const controlFunction; ///< The CF that is sending the message
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			std::uint32_t wheelBasedMachineDistance_mm = 0; ///< Stores the decoded machine wheel-based distance in millimeters
 			std::uint16_t wheelBasedMachineSpeed_mm_per_sec = 0; ///< Stores the decoded wheel-based machine speed in mm/s
@@ -247,7 +247,7 @@ namespace isobus
 
 			/// @brief Constructor for a MachineSelectedSpeedData
 			/// @param[in] sender The control function that is sending this message
-			explicit MachineSelectedSpeedData(ControlFunction *sender);
+			explicit MachineSelectedSpeedData(std::shared_ptr<ControlFunction> sender);
 
 			/// @brief Returns the Actual distance travelled by the machine based on the value of selected machine speed (SPN 4305).
 			/// @note When the distance exceeds 4211081215 meters the value shall be reset to zero and incremented as additional distance accrues.
@@ -319,7 +319,7 @@ namespace isobus
 			/// Eventually though the message will time-out normally and you can get a new pointer for
 			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -330,7 +330,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *const controlFunction; ///< The CF that is sending the message
+			std::shared_ptr<ControlFunction> const controlFunction; ///< The CF that is sending the message
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			std::uint32_t machineSelectedSpeedDistance_mm = 0; ///< Stores the machine selected speed distance in millimeters
 			std::uint16_t machineSelectedSpeed_mm_per_sec = 0; ///< Stores the machine selected speed in mm/s
@@ -351,7 +351,7 @@ namespace isobus
 		public:
 			/// @brief Constructor for a GroundBasedSpeedData
 			/// @param[in] sender The control function that is sending this message
-			explicit GroundBasedSpeedData(ControlFunction *sender);
+			explicit GroundBasedSpeedData(std::shared_ptr<ControlFunction> sender);
 
 			/// @brief Actual distance traveled by a machine, based on measurements from a sensor such as that is not susceptible to wheel slip
 			/// (e.g. radar, GPS, LIDAR, or stationary object tracking)
@@ -395,7 +395,7 @@ namespace isobus
 			/// Eventually though the message will time-out normally and you can get a new pointer for
 			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -406,7 +406,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *const controlFunction; ///< The CF that is sending the message
+			std::shared_ptr<ControlFunction> const controlFunction; ///< The CF that is sending the message
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			std::uint32_t groundBasedMachineDistance_mm = 0; ///< Stores the ground-based speed's distance in millimeters
 			std::uint16_t groundBasedMachineSpeed_mm_per_sec = 0; ///< Stores the ground-based speed in mm/s
@@ -422,7 +422,7 @@ namespace isobus
 		public:
 			/// @brief Constructor for a MachineSelectedSpeedCommandData
 			/// @param[in] sender The control function that is sending this message
-			explicit MachineSelectedSpeedCommandData(ControlFunction *sender);
+			explicit MachineSelectedSpeedCommandData(std::shared_ptr<ControlFunction> sender);
 
 			/// @brief Returns the commanded setpoint value of the machine speed as measured by the selected source in mm/s
 			/// @return The commanded setpoint value of the machine speed as measured by the selected source in mm/s
@@ -459,7 +459,7 @@ namespace isobus
 			/// Eventually though the message will time-out normally and you can get a new pointer for
 			/// the external CF that replaces the deleted partner.
 			/// @returns The control function sending this instance of the guidance system command message
-			ControlFunction *get_sender_control_function() const;
+			std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 			/// @brief Sets the timestamp for when the message was received or sent
 			/// @param[in] timestamp The timestamp, in milliseconds, when the message was sent or received
@@ -470,7 +470,7 @@ namespace isobus
 			std::uint32_t get_timestamp_ms() const;
 
 		private:
-			ControlFunction *const controlFunction; ///< The CF that is sending the message
+			std::shared_ptr<ControlFunction> const controlFunction; ///< The CF that is sending the message
 			std::uint32_t timestamp_ms = 0; ///< A timestamp for when the message was released in milliseconds
 			std::uint16_t speedCommandedSetpoint = 0; ///< Stores the commanded speed setpoint in mm/s
 			std::uint16_t speedSetpointLimit = 0; ///< Stores the maximum allowed speed in mm/s

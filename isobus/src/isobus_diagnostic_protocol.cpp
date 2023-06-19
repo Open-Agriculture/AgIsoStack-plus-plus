@@ -436,7 +436,7 @@ namespace isobus
 		softwareIdentificationFields[index] = value;
 	}
 
-	bool DiagnosticProtocol::suspend_broadcasts(std::uint8_t canChannelIndex, InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds)
+	bool DiagnosticProtocol::suspend_broadcasts(std::uint8_t canChannelIndex, std::shared_ptr<InternalControlFunction> sourceControlFunction, std::uint16_t suspendTime_seconds)
 	{
 		bool retVal = false;
 
@@ -740,8 +740,8 @@ namespace isobus
 	bool DiagnosticProtocol::protocol_transmit_message(std::uint32_t,
 	                                                   const std::uint8_t *,
 	                                                   std::uint32_t,
-	                                                   ControlFunction *,
-	                                                   ControlFunction *,
+	                                                   std::shared_ptr<ControlFunction>,
+	                                                   std::shared_ptr<ControlFunction>,
 	                                                   TransmitCompleteCallback,
 	                                                   void *,
 	                                                   DataChunkCallback)
@@ -808,7 +808,7 @@ namespace isobus
 					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
 					                                                        buffer.data(),
 					                                                        CAN_DATA_LENGTH,
-					                                                        myControlFunction.get());
+					                                                        myControlFunction);
 				}
 				else
 				{
@@ -830,7 +830,7 @@ namespace isobus
 					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
 					                                                        buffer.data(),
 					                                                        payloadSize,
-					                                                        myControlFunction.get());
+					                                                        myControlFunction);
 				}
 			}
 		}
@@ -896,7 +896,7 @@ namespace isobus
 					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
 					                                                        buffer.data(),
 					                                                        CAN_DATA_LENGTH,
-					                                                        myControlFunction.get());
+					                                                        myControlFunction);
 				}
 				else
 				{
@@ -918,7 +918,7 @@ namespace isobus
 					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
 					                                                        buffer.data(),
 					                                                        payloadSize,
-					                                                        myControlFunction.get());
+					                                                        myControlFunction);
 				}
 			}
 		}
@@ -940,12 +940,12 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction.get());
+			                                                        myControlFunction);
 		}
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_dm13_announce_suspension(InternalControlFunction *sourceControlFunction, std::uint16_t suspendTime_seconds)
+	bool DiagnosticProtocol::send_dm13_announce_suspension(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::uint16_t suspendTime_seconds)
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 			0xFF,
@@ -976,7 +976,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
-		                                                      myControlFunction.get());
+		                                                      myControlFunction);
 	}
 
 	bool DiagnosticProtocol::send_product_identification()
@@ -987,7 +987,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
-		                                                      myControlFunction.get());
+		                                                      myControlFunction);
 	}
 
 	bool DiagnosticProtocol::send_software_identification()
@@ -1008,7 +1008,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        myControlFunction.get());
+			                                                        myControlFunction);
 		}
 		return retVal;
 	}
@@ -1064,7 +1064,7 @@ namespace isobus
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22),
 				                                                        buffer.data(),
 				                                                        buffer.size(),
-				                                                        myControlFunction.get(),
+				                                                        myControlFunction,
 				                                                        currentMessageData.destination);
 				if (retVal)
 				{
@@ -1079,7 +1079,7 @@ namespace isobus
 	{
 		if ((((nullptr == message.get_destination_control_function()) &&
 		      (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
-		     (message.get_destination_control_function() == myControlFunction.get())))
+		     (message.get_destination_control_function() == myControlFunction)))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
@@ -1228,7 +1228,7 @@ namespace isobus
 	}
 
 	bool DiagnosticProtocol::process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
-	                                                                ControlFunction *requestingControlFunction,
+	                                                                std::shared_ptr<ControlFunction> requestingControlFunction,
 	                                                                bool &acknowledge,
 	                                                                AcknowledgementType &acknowledgementType)
 	{
@@ -1302,7 +1302,7 @@ namespace isobus
 	}
 
 	bool DiagnosticProtocol::process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
-	                                                                ControlFunction *requestingControlFunction,
+	                                                                std::shared_ptr<ControlFunction> requestingControlFunction,
 	                                                                bool &acknowledge,
 	                                                                AcknowledgementType &acknowledgementType,
 	                                                                void *parentPointer)
