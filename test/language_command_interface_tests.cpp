@@ -74,8 +74,8 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	// Should still be default values
 	EXPECT_EQ("", interfaceUnderTest.get_language_code());
 
-	// This contains: "en", Comma, 24 hour time, yyyymmdd, imperial, imperial, US, US, Metric, Metric, Imperial, Metric, one junk byte at the end
-	std::uint8_t testData[] = { 'e', 'n', 0b00001111, 0x04, 0b01011010, 0b00000100, 0xFF, 0xFF, 0xFF };
+	// This contains: "en", Comma, 24 hour time, yyyymmdd, imperial, imperial, US, US, Metric, Metric, Imperial, Metric, "US", one junk byte at the end
+	std::uint8_t testData[] = { 'e', 'n', 0b00001111, 0x04, 0b01011010, 0b00000100, 'U', 'S', 0xFF };
 
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData, 9);
@@ -93,8 +93,9 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ(LanguageCommandInterface::PressureUnits::Metric, interfaceUnderTest.get_commanded_pressure_units());
 	EXPECT_EQ(LanguageCommandInterface::ForceUnits::ImperialUS, interfaceUnderTest.get_commanded_force_units());
 	EXPECT_EQ(LanguageCommandInterface::UnitSystem::Metric, interfaceUnderTest.get_commanded_generic_units());
+	EXPECT_EQ("US", interfaceUnderTest.get_country_code());
 
-	// This contains: "de", point, 12 hour time, ddmmyyyy, metric, no action, US, Metric, Reserved, Reserved, Imperial, Metric
+	// This contains: "de", point, 12 hour time, ddmmyyyy, metric, no action, US, Metric, Reserved, Reserved, Imperial, Metric, No country code
 	std::uint8_t testData2[] = { 'd', 'e', 0b01011000, 0x00, 0b00111000, 0b10100100, 0xFF, 0xFF };
 
 	testMessage.set_data_size(0); // Resets the CAN message data vector
@@ -114,6 +115,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ(LanguageCommandInterface::ForceUnits::ImperialUS, interfaceUnderTest.get_commanded_force_units());
 	EXPECT_EQ(LanguageCommandInterface::UnitSystem::Metric, interfaceUnderTest.get_commanded_generic_units());
 	EXPECT_LT(SystemTiming::get_timestamp_ms() - interfaceUnderTest.get_language_command_timestamp(), 1);
+	EXPECT_EQ("", interfaceUnderTest.get_country_code());
 
 	// Use the language code as a way to assert against if we processed the message.
 	// In other words, if it stays "de" then we didn't accept the message, and if it changed, we did

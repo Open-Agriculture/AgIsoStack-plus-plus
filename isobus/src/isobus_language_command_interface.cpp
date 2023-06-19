@@ -90,6 +90,11 @@ namespace isobus
 		return retVal;
 	}
 
+	std::string LanguageCommandInterface::get_country_code() const
+	{
+		return countryCode;
+	}
+
 	std::string LanguageCommandInterface::get_language_code() const
 	{
 		return languageCode;
@@ -210,16 +215,20 @@ namespace isobus
 			parentInterface->forceUnitSystem = static_cast<ForceUnits>((data.at(5) >> 2) & 0x03);
 			parentInterface->pressureUnitSystem = static_cast<PressureUnits>((data.at(5) >> 4) & 0x03);
 			parentInterface->temperatureUnitSystem = static_cast<TemperatureUnits>((data.at(5) >> 6) & 0x03);
-
-			CANStackLogger::debug("[VT/TC]: Language and unit data received from control function " +
-			                      isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
-			                      " language is: " +
-			                      parentInterface->languageCode);
+			parentInterface->countryCode.clear();
 
 			if ((0xFF != data.at(6)) || (0xFF != data.at(7)))
 			{
-				CANStackLogger::warn("[VT/TC]: Language Command received with unrecognized reserved bytes");
+				parentInterface->countryCode.push_back(static_cast<char>(data.at(6)));
+				parentInterface->countryCode.push_back(static_cast<char>(data.at(7)));
 			}
+
+			CANStackLogger::debug("[VT/TC]: Language and unit data received from control function " +
+			                        isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
+			                        " language is: " +
+			                        parentInterface->languageCode,
+			                      " and country code is ",
+			                      parentInterface->countryCode.empty() ? "unknown." : parentInterface->countryCode);
 		}
 	}
 
