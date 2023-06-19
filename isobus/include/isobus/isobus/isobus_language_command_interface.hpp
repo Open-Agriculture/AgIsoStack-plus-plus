@@ -173,6 +173,11 @@ namespace isobus
 		/// @return `true` if the message was sent, otherwise `false`
 		bool send_request_language_command() const;
 
+		/// @brief Returns the commanded country code parsed from the last language command specifying the operator's desired language dialect.
+		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.
+		/// @return The commanded country code, or an empty string if none specified.
+		std::string get_country_code() const;
+
 		/// @brief Returns the commanded language code parsed from the last language command
 		/// @note If you do not support the returned language, your default shall be used
 		/// @return The commanded language code (usually 2 characters length)
@@ -238,6 +243,7 @@ namespace isobus
 	private:
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
 		std::shared_ptr<PartneredControlFunction> myPartner; ///< The partner to talk to, or nullptr to listen to all CFs
+		std::string countryCode; ///< The last received alpha-2 country code as specified by ISO 3166-1, such as "NL, FR, GB, US, DE".
 		std::string languageCode; ///< The last received language code, such as "en", "es", "de", etc.
 		std::uint32_t languageCommandTimestamp_ms = 0; ///< A millisecond timestamp correlated to the last received language command message
 		DecimalSymbols decimalSymbol = DecimalSymbols::Point; ///< The decimal symbol that was commanded by the last language command message
