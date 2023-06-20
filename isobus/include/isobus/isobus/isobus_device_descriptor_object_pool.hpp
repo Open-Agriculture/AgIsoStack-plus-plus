@@ -10,6 +10,7 @@
 #ifndef ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HPP
 #define ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HPP
 
+#include "isobus/isobus/can_NAME.hpp"
 #include "isobus/isobus/isobus_task_controller_client_objects.hpp"
 
 #include <memory>
@@ -106,6 +107,29 @@ namespace isobus
 		                                   std::uint8_t numberDecimals,
 		                                   std::uint16_t uniqueID);
 
+		/// @brief Attempts to take a binary object pool and convert it back into
+		/// C++ objects. Useful for a task controller server or to view the content
+		/// of a DDOP captured in a CAN log, for example.
+		/// @param binaryPool The binary object pool, as an array of bytes.
+		/// @param clientNAME The ISO NAME of the source ECU for this DDOP
+		/// @returns True if the object pool was successfully deserialized, otherwise false.
+		/// NOTE: This only means that the pool was deserialized. It does not mean that the
+		/// relationship between objects is valid. You may have to do additional
+		/// checking on the pool before using it.
+		bool deserialize_binary_object_pool(std::vector<std::uint8_t> &binaryPool, NAME clientNAME);
+
+		/// @brief Attempts to take a binary object pool and convert it back into
+		/// C++ objects. Useful for a task controller server or to view the content
+		/// of a DDOP captured in a CAN log, for example.
+		/// @param binaryPool The binary object pool, as an array of bytes.
+		/// @param binaryPoolSizeBytes The size of the DDOP to process in bytes.
+		/// @param clientNAME The ISO NAME of the source ECU for this DDOP
+		/// @returns True if the object pool was successfully deserialized, otherwise false.
+		/// NOTE: This only means that the pool was deserialized. It does not mean that the
+		/// relationship between objects is valid. You may have to do additional
+		/// checking on the pool before using it.
+		bool deserialize_binary_object_pool(const std::uint8_t *binaryPool, std::uint32_t binaryPoolSizeBytes, NAME clientNAME);
+
 		/// Constructs a binary DDOP using the objects that were previously added
 		/// @param[in,out] resultantPool The binary representation of the DDOP, or an empty vector if this function returns false
 		/// @returns `true` if the object pool was generated and is valid, otherwise `false`.
@@ -148,7 +172,7 @@ namespace isobus
 		static constexpr std::uint8_t MAX_TC_VERSION_SUPPORTED = 4; ///< The max TC version a DDOP object can support as of today
 
 		std::vector<std::shared_ptr<task_controller_object::Object>> objectList; ///< Maintains a list of all added objects
-		std::uint8_t taskControllerCompatabilityLevel = MAX_TC_VERSION_SUPPORTED; ///< Stores the max TC version
+		std::uint8_t taskControllerCompatibilityLevel = MAX_TC_VERSION_SUPPORTED; ///< Stores the max TC version
 	};
 } // namespace isobus
 
