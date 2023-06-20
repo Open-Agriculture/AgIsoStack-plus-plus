@@ -110,6 +110,73 @@ TEST(DDOP_TESTS, CreateSprayerDDOP)
 	std::vector<std::uint8_t> binaryDDOP;
 
 	EXPECT_EQ(true, testDDOP.generate_binary_object_pool(binaryDDOP));
+
+	// Now attempt to reverse the DDOP we just created back into it's objects.
+	testDDOP.clear();
+	EXPECT_EQ(0, testDDOP.size());
+
+	EXPECT_EQ(true, testDDOP.deserialize_binary_object_pool(binaryDDOP, NAME(0)));
+
+	// Test some objects match the expected pool
+	auto tempObject = testDDOP.get_object_by_id(0);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::Device, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_object_id(), 0);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_designator(), "AgIsoStack++ UnitTest");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_extended_structure_label().size(), 0);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_iso_name(), 0);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_serial_number(), "123");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_structure_label(), "I++1.0 ");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceObject>(tempObject)->get_localization_label(), testLanguageInterface.get_localization_raw_data());
+
+	tempObject = testDDOP.get_object_by_id(1);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::DeviceElement, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_object_id(), 1);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_designator(), "Sprayer");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_element_number(), 1);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_number_child_objects(), 0);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_parent_object(), 0);
+
+	tempObject = testDDOP.get_object_by_id(4);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::DeviceElement, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_object_id(), 4);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_designator(), "Connector");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_element_number(), 4);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_number_child_objects(), 0);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(tempObject)->get_parent_object(), 1);
+
+	tempObject = testDDOP.get_object_by_id(14);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::DeviceProperty, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_object_id(), 14);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_designator(), "Offset X");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_ddi(), 134);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_device_value_presentation_object_id(), 88);
+
+	tempObject = testDDOP.get_object_by_id(15);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::DeviceProperty, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_object_id(), 15);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_designator(), "Offset Y");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_ddi(), 135);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DevicePropertyObject>(tempObject)->get_device_value_presentation_object_id(), 88);
+
+	tempObject = testDDOP.get_object_by_id(90);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::DeviceValuePresentation, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceValuePresentationObject>(tempObject)->get_designator(), "L");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceValuePresentationObject>(tempObject)->get_number_of_decimals(), 0);
+	EXPECT_NEAR(std::dynamic_pointer_cast<task_controller_object::DeviceValuePresentationObject>(tempObject)->get_scale(), 0.001, 0.001);
+
+	tempObject = testDDOP.get_object_by_id(85);
+	ASSERT_NE(nullptr, tempObject);
+	ASSERT_EQ(task_controller_object::ObjectTypes::DeviceProcessData, tempObject->get_object_type());
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceProcessDataObject>(tempObject)->get_designator(), "Tank Volume");
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceProcessDataObject>(tempObject)->get_ddi(), 72);
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceProcessDataObject>(tempObject)->get_trigger_methods_bitfield(), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval));
+	EXPECT_EQ(std::dynamic_pointer_cast<task_controller_object::DeviceProcessDataObject>(tempObject)->get_properties_bitfield(), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable));
 }
 
 TEST(DDOP_TESTS, DDOPDetectDuplicateID)
