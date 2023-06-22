@@ -316,9 +316,11 @@ namespace isobus
 		/// @returns true if cconnected, false otherwise
 		bool get_is_connected() const;
 
-		// Calling this will stop the worker thread if it exists
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
+
+		/// @brief Halts communication with the VT gracefully and restarts it.
+		void restart_communication();
 
 		/// @brief Returns the control function of the VT server with which this VT client communicates.
 		/// @returns The partner control function for the VT server
