@@ -30,13 +30,6 @@ namespace isobus
 	  myControlFunction(clientSource),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this)
 	{
-		if (nullptr != partnerControlFunction)
-		{
-			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
-			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
-		}
 	}
 
 	VirtualTerminalClient::~VirtualTerminalClient()
@@ -54,6 +47,14 @@ namespace isobus
 
 		if (!initialized)
 		{
+			if (nullptr != partnerControlFunction)
+			{
+				partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+				partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
+				CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+				CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
+			}
+
 			if (!languageCommandInterface.get_initialized())
 			{
 				languageCommandInterface.initialize();
@@ -1525,7 +1526,7 @@ namespace isobus
 		objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
 	}
 
-	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value)
+	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version)
 	{
 		if ((nullptr != value) &&
 		    (0 != poolTotalSize))
@@ -1539,6 +1540,9 @@ namespace isobus
 			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = true;
 			tempData.uploaded = false;
+			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
+			tempData.autoScaleDataMaskOriginalDimension = 0;
+			tempData.versionLabel = version;
 
 			if (poolIndex < objectPools.size())
 			{

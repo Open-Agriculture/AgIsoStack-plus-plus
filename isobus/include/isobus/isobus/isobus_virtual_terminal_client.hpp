@@ -1182,7 +1182,8 @@ namespace isobus
 		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] poolTotalSize The object pool size
 		/// @param[in] value The data callback that will be used to get object pool data to upload.
-		void register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value);
+		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
+		void register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version = "");
 
 		/// @brief Periodic Update Function (worker thread may call this)
 		/// @details This class can spawn a thread, or you can supply your own to run this function.
