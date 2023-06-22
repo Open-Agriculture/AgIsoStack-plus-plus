@@ -83,6 +83,11 @@ namespace isobus
 		{
 			if (nullptr != partnerControlFunction)
 			{
+				if ((StateMachineState::Connected == state) &&
+				    (send_delete_object_pool()))
+				{
+					CANStackLogger::debug("[VT]: Requested object pool deletion from volatile VT memory.");
+				}
 				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
@@ -97,7 +102,18 @@ namespace isobus
 				delete workerThread;
 				workerThread = nullptr;
 			}
+			initialized = false;
+			set_state(StateMachineState::Disconnected);
+			CANStackLogger::info("[VT]: VT Client connection has been terminated.");
 		}
+	}
+
+	void VirtualTerminalClient::restart_communication()
+	{
+		CANStackLogger::info("[VT]:VT Client connection restart requested. Client will now terminate and reinitialize.");
+		bool workerNeeded = (nullptr != workerThread);
+		terminate();
+		initialize(workerNeeded);
 	}
 
 	std::shared_ptr<PartneredControlFunction> VirtualTerminalClient::get_partner_control_function() const
