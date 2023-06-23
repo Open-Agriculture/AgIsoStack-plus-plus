@@ -46,11 +46,6 @@ namespace isobus
 		/// @brief Deleted copy constructor for PartneredControlFunction to avoid slicing
 		PartneredControlFunction(PartneredControlFunction &) = delete;
 
-		/// @brief Destroys this partnered control function, by removing it from the network manager
-		/// @param[in] expectedRefCount The expected number of shared pointers to this control function after removal
-		/// @returns true if the partnered control function was successfully removed from everywhere in the stack, otherwise false
-		bool destroy(std::uint32_t expectedRefCount = 1) override;
-
 		/// @brief This is how you get notified that this control function has sent you a destination specific message.
 		/// @details Add a callback function here to be notified when this device has sent you a message with the specified PGN.
 		/// You can also get callbacks for any/all PGNs if you pass in `CANLibParameterGroupNumber::Any` as the PGN.
@@ -98,15 +93,6 @@ namespace isobus
 		/// @returns true if this control function matches the NAME that was passed in, false otherwise
 		bool check_matches_name(NAME NAMEToCheck) const;
 
-		/// @brief Gets a PartneredControlFunction by index
-		/// @param[in] index The index of the PartneredControlFunction to get
-		/// @returns a PartneredControlFunction at the index specified from `partneredControlFunctionList`
-		static std::shared_ptr<PartneredControlFunction> get_partnered_control_function(std::size_t index);
-
-		/// @brief Returns the number of created partner control functions
-		/// @returns The number of created partner control functions from the static list of all of them
-		static std::size_t get_number_partnered_control_functions();
-
 	private:
 		friend class CANNetworkManager; ///< Allows the network manager to use get_parameter_group_number_callback
 
@@ -123,8 +109,6 @@ namespace isobus
 		/// @returns A reference to the PGN callback data object at the index specified
 		ParameterGroupNumberCallbackData &get_parameter_group_number_callback(std::size_t index);
 
-		static std::vector<std::shared_ptr<PartneredControlFunction>> partneredControlFunctionList; ///< A list of all created partnered control functions
-		static bool anyPartnerNeedsInitializing; ///< A way for the network manager to know if it needs to parse the partner list to match partners with existing CFs
 		const std::vector<NAMEFilter> NAMEFilterList; ///< A list of NAME parameters that describe this control function's identity
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks associated with this control function
 		bool initialized = false; ///< A way to track if the network manager has processed this CF against existing CFs

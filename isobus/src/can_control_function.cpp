@@ -28,7 +28,9 @@ namespace isobus
 	std::shared_ptr<ControlFunction> ControlFunction::create(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort)
 	{
 		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
-		return std::shared_ptr<ControlFunction>(new ControlFunction(NAMEValue, addressValue, CANPort));
+		auto controlFunction = std::shared_ptr<ControlFunction>(new ControlFunction(NAMEValue, addressValue, CANPort));
+		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
+		return controlFunction;
 	}
 
 	bool ControlFunction::destroy(std::uint32_t expectedRefCount)
