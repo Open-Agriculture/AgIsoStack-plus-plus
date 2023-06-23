@@ -52,7 +52,7 @@ namespace isobus
 	/// @class DiagnosticProtocol
 	/// @brief Manages the DM1, DM2, and DM3 messages for ISO11783 or J1939
 	//================================================================================================
-	class DiagnosticProtocol : public CANLibProtocol
+	class DiagnosticProtocol
 	{
 	public:
 		/// @brief Enumerates the different fields in the ECU identification message
@@ -72,7 +72,7 @@ namespace isobus
 		{
 			None,
 			MalfunctionIndicatorLampSolid, ///< A lamp used to relay only emissions-related trouble code information
-			MalfuctionIndicatorLampSlowFlash, ///< A lamp used to relay only emissions-related trouble code information
+			MalfunctionIndicatorLampSlowFlash, ///< A lamp used to relay only emissions-related trouble code information
 			MalfunctionIndicatorLampFastFlash, ///< A lamp used to relay only emissions-related trouble code information
 			RedStopLampSolid, ///< This lamp is used to relay trouble code information that is of a severe-enough condition that it warrants stopping the vehicle
 			RedStopLampSlowFlash, ///< This lamp is used to relay trouble code information that is of a severe-enough condition that it warrants stopping the vehicle
@@ -97,10 +97,10 @@ namespace isobus
 			CurrentAboveNormal = 6, ///< A current signal, data or otherwise, is above the predefined limits that bound the range
 			MechanicalSystemNotResponding = 7, ///< Any fault that is detected as the result of an improper mechanical adjustment, an improper response or action of a mechanical system
 			AbnormalFrequency = 8, ///< Any frequency or PWM signal that is outside the predefined limits which bound the signal range for frequency or duty cycle
-			AbnotmalUpdateRate = 9, ///< Any failure that is detected when receipt of data through the data network is not at the update rate expected or required
+			AbnormalUpdateRate = 9, ///< Any failure that is detected when receipt of data through the data network is not at the update rate expected or required
 			AbnormalRateOfChange = 10, ///< Any data, exclusive of FMI 2, that are considered valid but which are changing at a rate that is outside the predefined limits that bound the rate of change for the system
 			RootCauseNotKnown = 11, ///< It has been detected that a failure has occurred in a particular subsystem but the exact nature of the fault is not known
-			BadIntellegentDevice = 12, ///< Internal diagnostic procedures have determined that the failure is one which requires the replacement of the ECU
+			BadIntelligentDevice = 12, ///< Internal diagnostic procedures have determined that the failure is one which requires the replacement of the ECU
 			OutOfCalibration = 13, ///< A failure that can be identified as the result of improper calibration
 			SpecialInstructions = 14, ///< Used when the on-board system can isolate the failure to a small number of choices but not to a single point of failure. See 11783-12 Annex E
 			DataValidAboveNormalLeastSevere = 15, ///< Condition is above what would be considered normal as determined by the predefined least severe level limits for that particular measure of the condition
@@ -124,7 +124,7 @@ namespace isobus
 		};
 
 		/// @brief Enumerates the different networks in the DM13
-		enum class Network : std::uint8_t
+		enum class NetworkType : std::uint8_t
 		{
 			SAEJ1939Network1PrimaryVehicleNetwork = 0,
 			SAEJ1922Network = 1,
@@ -187,51 +187,44 @@ namespace isobus
 			/// @brief A useful way to compare DTC objects to each other for equality
 			/// @param[in] obj The "rhs" of the comparison
 			/// @returns `true` if the objects were equal
-			bool operator==(const DiagnosticTroubleCode &obj);
+			bool operator==(const DiagnosticTroubleCode &obj) const;
 
-			///  @brief Returns the occurance count, which will be kept track of by the protocol
-			std::uint8_t get_occurrance_count() const;
+			/// @brief Returns the occurrence count, which will be kept track of by the protocol
+			/// @returns The occurrence count (0 to 126 with 127 being not available)
+			std::uint8_t get_occurrence_count() const;
 
-			std::uint32_t suspectParameterNumber = 0xFFFFFFFF; ///< This 19-bit number is used to identify the item for which diagnostics are being reported
-			std::uint8_t failureModeIdentifier = static_cast<std::uint8_t>(FailureModeIdentifier::ConditionExists); ///< The FMI defines the type of failure detected in the sub-system identified by an SPN
-			LampStatus lampState = LampStatus::None; ///< The J1939 lamp state for this DTC
+			/// @brief Returns the suspect parameter number
+			/// @returns The suspect parameter number
+			std::uint32_t get_suspect_parameter_number() const;
+
+			/// @brief Returns the failure mode indicator
+			/// @returns The failure mode indicator
+			FailureModeIdentifier get_failure_mode_identifier() const;
+
 		private:
-			friend class DiagnosticProtocol; ///< Allow the protocol to have write access the occurance but require other to use getter only
-			std::uint8_t occuranceCount = 0; ///< Number of times the DTC has been active (0 to 126 with 127 being not available)
+			friend class DiagnosticProtocol;
+			std::uint32_t suspectParameterNumber = 0xFFFFFFFF; ///< This 19-bit number is used to identify the item for which diagnostics are being reported
+			FailureModeIdentifier failureModeIdentifier = FailureModeIdentifier::ConditionExists; ///< The FMI defines the type of failure detected in the sub-system identified by an SPN
+			LampStatus lampState = LampStatus::None; ///< The J1939 lamp state for this DTC
+			std::uint8_t occurrenceCount = 0; ///< Number of times the DTC has been active (0 to 126 with 127 being not available)
 		};
 
-		/// @brief Used to tell the CAN stack that diagnostic messages should be sent from the specified internal control function
-		/// @details This will allocate an instance of this protocol
-		/// @note Assigning the diagnostic protocol to an ICF will automatically create an instance of the PGN request protocol if needed
-		/// as this protocol uses that protocol to abstract away PGN request implementation details. That protocol instance will
-		/// only be deleted if you call deassign_diagnostic_protocol_to_internal_control_function and the DP PGNs were the only registered PGNs in
-		/// the protocol OR if you manually deassign the PGN request protocol.
-		/// Most people will not need to worry about this detail.
-		/// @returns `true` If the protocol instance was created OK with the passed in ICF
-		static bool assign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
+		/// @brief The constructor for this protocol
+		/// @param[in] internalControlFunction The internal control function that owns this protocol and will be used to send messages
+		/// @param[in] networkType The type of diagnostic network that this protocol will reflect
+		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, NetworkType networkType = NetworkType::ProprietaryNetwork1);
 
-		/// @brief Used to tell the CAN stack that diagnostic messages should no longer be sent from the specified internal control function
-		/// @details This will delete an instance of this protocol and may delete an associated but unused instance of the PGN request protocol.
-		/// @returns `true` If the protocol instance was deleted OK according to the passed in ICF
-		static bool deassign_diagnostic_protocol_to_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
-
-		/// @brief Used to tell the CAN stack that diagnostic messages should no longer be sent from any internal control function
-		/// @details This will delete all instances of this protocol and may delete associated but unused instances of the PGN request protocol.
-		static void deassign_all_diagnostic_protocol_to_internal_control_functions();
-
-		/// @brief Retuns the diagnostic protocol assigned to an internal control function, if any
-		/// @param internalControlFunction The internal control function to search against
-		/// @returns The protocol object associated to the passed in ICF, or `nullptr` if none found that match the passed in ICF
-		static DiagnosticProtocol *get_diagnostic_protocol_by_internal_control_function(std::shared_ptr<InternalControlFunction> internalControlFunction);
-
-		/// @brief Parses out the DM13 J1939 network states from a CAN message
-		/// @param[in] message The message to parse from
-		/// @param[in] networkStates The returned network state bitfield based on the message contents
-		/// @returns `true` if the message was parsed, `false` if the message was invalid
-		static bool parse_j1939_network_states(const CANMessage &message, std::uint32_t &networkStates);
+		/// @brief The destructor for this protocol
+		~DiagnosticProtocol();
 
 		/// @brief The protocol's initializer function
-		void initialize(CANLibBadge<CANNetworkManager>) override;
+		void initialize();
+
+		/// @brief The protocol's terminate function
+		void terminate();
+
+		/// @brief Updates the diagnostic protocol
+		void update();
 
 		/// @brief Enables the protocol to run in J1939 mode instead of ISO11783 mode
 		/// @details See ISO11783-12 and J1939-73 for a complete explanation of the differences
@@ -252,16 +245,11 @@ namespace isobus
 		/// @brief Clears the list of active DTCs and makes them all inactive
 		void clear_active_diagnostic_trouble_codes();
 
-		/// @brief Clears the list of inactive DTCs and clears occurance counts
+		/// @brief Clears the list of inactive DTCs and clears occurrence counts
 		void clear_inactive_diagnostic_trouble_codes();
 
 		/// @brief Clears all previously configured software ID fields set with set_software_id_field
 		void clear_software_id_fields();
-
-		/// @brief Returns if broadcasts are suspended for the specified CAN channel (requested by DM13)
-		/// @param[in] canChannelIndex The CAN channel to check for suspended broadcasts
-		/// @returns `true` if broadcasts should are suspended for the specified channel
-		bool get_are_broadcasts_stopped_for_channel(std::uint8_t canChannelIndex) const;
 
 		/// @brief Sets one of the ECU identification strings for the ECU ID message
 		/// @details See ECUIdentificationFields for a brief description of the fields
@@ -310,7 +298,7 @@ namespace isobus
 
 		/// @brief Adds an ascii string to this internal control function's software ID
 		/// @details Use this to identify the software version of your application.
-		/// Seperate fields will be transmitted with a `*` delimeter.
+		/// Separate fields will be transmitted with a `*` delimeter.
 		/// For example, if your main application's version is 1.00, and you have a bootloader
 		/// that is version 2.00, you could set field `0` to be "App v1.00" and
 		/// field `1` to be "Bootloader v2.00", and it will be transmitted on request as:
@@ -320,15 +308,10 @@ namespace isobus
 		/// @param[in] value The software ID string to add
 		void set_software_id_field(std::uint32_t index, std::string value);
 
-		/// @brief Informs the network that you are going to suspend broadcasts
-		/// @param[in] canChannelIndex The CAN channel you will suspend broadcasts on. Will be converted to the proper message `Network` by the stack
-		/// @param[in] sourceControlFunction The internal control function to send the DM13 from
+		/// @brief Informs the diagnostic protocol that you are going to suspend broadcasts
 		/// @param[in] suspendTime_seconds If you know the time for which broadcasts will be suspended, put it here, otherwise 0xFFFF
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool suspend_broadcasts(std::uint8_t canChannelIndex, std::shared_ptr<InternalControlFunction> sourceControlFunction, std::uint16_t suspendTime_seconds = 0xFFFF);
-
-		/// @brief Updates the protocol cyclically
-		void update(CANLibBadge<CANNetworkManager>) override;
+		bool suspend_broadcasts(std::uint16_t suspendTime_seconds = 0xFFFF);
 
 	private:
 		/// @brief Lists the different lamps in J1939-73
@@ -348,7 +331,7 @@ namespace isobus
 			Fast ///< Fast flash
 		};
 
-		/// @brief The DM22 multiplexor bytes. All bytes not given a value here are reserved by SAE
+		/// @brief The DM22 multiplexer bytes. All bytes not given a value here are reserved by SAE
 		enum class DM22ControlByte : std::uint8_t
 		{
 			RequestToClearPreviouslyActiveDTC = 0x01, ///< Clear a previously active DTC
@@ -365,7 +348,7 @@ namespace isobus
 			General = 0x00, ///< General negative acknowledge
 			AccessDenied = 0x01, ///< Security denied access
 			UnknownOrDoesNotExist = 0x02, ///< The DTC is unknown or does not exist
-			DTCUNoLongerPreviouslyActive = 0x03, ///< The DTC in in the active list but it was requested to clear from inactive list
+			DTCNoLongerPreviouslyActive = 0x03, ///< The DTC in in the active list but it was requested to clear from inactive list
 			DTCNoLongerActive = 0x04 ///< DTC is inactive, not active, but active was requested to be cleared
 		};
 
@@ -380,34 +363,15 @@ namespace isobus
 			bool nack; ///< true if we are sending a NACK instead of PACK. Determines if we use nackIndicator
 		};
 
-		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are techically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
+		static constexpr std::uint32_t DM_MAX_FREQUENCY_MS = 1000; ///< You are technically allowed to send more than this under limited circumstances, but a hard limit saves 4 RAM bytes per DTC and has BAM benefits
 		static constexpr std::uint32_t DM13_HOLD_SIGNAL_TRANSMIT_INTERVAL_MS = 5000; ///< Defined in 5.7.13.13 SPN 1236
-		static constexpr std::uint32_t DM13_TIMEOUT_MS = 6000; ///< The timout in 5.7.13 after which nodes shall revert back to the normal broadcast state
-		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785; ///< DM 1 and 2 are limited to the BAM message max, becuase ETP does not allow global destinations
+		static constexpr std::uint32_t DM13_TIMEOUT_MS = 6000; ///< The timeout in 5.7.13 after which nodes shall revert back to the normal broadcast state
+		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785; ///< DM 1 and 2 are limited to the BAM message max, because ETP does not allow global destinations
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
 		static constexpr std::uint8_t DM13_NUMBER_OF_J1939_NETWORKS = 11; ///< The number of networks in DM13 that are set aside for J1939
 		static constexpr std::uint8_t DM13_NETWORK_BITMASK = 0x03; ///< Used to mask the network SPN values
 		static constexpr std::uint8_t DM13_BITS_PER_NETWORK = 2; ///< Number of bits for the network SPNs
-
-		/// @brief Lists the J1939 networks by index rather than by definition in J1939-73 5.7.13
-		static constexpr std::array<Network, DM13_NUMBER_OF_J1939_NETWORKS> J1939NetworkIndicies = { Network::SAEJ1939Network1PrimaryVehicleNetwork,
-			                                                                                           Network::SAEJ1939Network2,
-			                                                                                           Network::SAEJ1939Network3,
-			                                                                                           Network::SAEJ1939Network4,
-			                                                                                           Network::SAEJ1939Network5,
-			                                                                                           Network::SAEJ1939Network6,
-			                                                                                           Network::SAEJ1939Network7,
-			                                                                                           Network::SAEJ1939Network8,
-			                                                                                           Network::SAEJ1939Network9,
-			                                                                                           Network::SAEJ1939Network10,
-			                                                                                           Network::SAEJ1939Network11 };
-
-		/// @brief The constructor for this protocol
-		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
-
-		/// @brief The destructor for this protocol
-		~DiagnosticProtocol();
 
 		/// @brief A utility function to get the CAN representation of a FlashState
 		/// @param flash The flash state to convert
@@ -433,26 +397,6 @@ namespace isobus
 		/// @param[out] lampOn If the lamp state is on for any DTC
 		void get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn);
 
-		/// @brief The network manager calls this to see if the protocol can accept a non-raw CAN message for processing
-		/// @note In this protocol, we do not accept messages from the network manager for transmission
-		/// @param[in] parameterGroupNumber The PGN of the message
-		/// @param[in] data The data to be sent
-		/// @param[in] messageLength The length of the data to be sent
-		/// @param[in] source The source control function
-		/// @param[in] destination The destination control function
-		/// @param[in] transmitCompleteCallback A callback for when the protocol completes its work
-		/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
-		/// @param[in] frameChunkCallback A callback to get some data to send
-		/// @returns true if the message was accepted by the protocol for processing
-		bool protocol_transmit_message(std::uint32_t parameterGroupNumber,
-		                               const std::uint8_t *data,
-		                               std::uint32_t messageLength,
-		                               std::shared_ptr<ControlFunction> source,
-		                               std::shared_ptr<ControlFunction> destination,
-		                               TransmitCompleteCallback transmitCompleteCallback,
-		                               void *parentPointer,
-		                               DataChunkCallback frameChunkCallback) override;
-
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_1();
@@ -461,18 +405,14 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_message_2();
 
-		/// @brief Sends a DM22 response message
-		/// @param data The components of the DM22 response
-		/// @returns true if the message was sent
-		bool send_diagnostic_message_22_response(DM22Data data);
-
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification();
 
 		/// @brief Sends the DM13 to alert network devices of impending suspended broadcasts
+		/// @param suspendTime_seconds The number of seconds that the broadcast will be suspended for
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_dm13_announce_suspension(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::uint16_t suspendTime_seconds);
+		bool send_dm13_announce_suspension(std::uint16_t suspendTime_seconds);
 
 		/// @brief Sends the ECU ID message
 		/// @returns true if the message was sent
@@ -493,12 +433,17 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(const CANMessage &message) override;
+		void process_message(const CANMessage &message);
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual TP manager object
 		static void process_message(const CANMessage &message, void *parent);
+
+		/// @brief Parses out the DM13 J1939 network states from a CAN message
+		/// @param[in] message The message to parse from
+		/// @returns `true` if the message was parsed, `false` if the message was invalid
+		bool parse_j1939_network_states(const CANMessage &message);
 
 		/// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested
@@ -516,7 +461,7 @@ namespace isobus
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
 		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
-		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registed for
+		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registered for
 		/// @returns true if any callback was able to handle the PGN request
 		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
@@ -529,22 +474,22 @@ namespace isobus
 		/// @param[in] parentPointer A generic context pointer to reference a specific instance of this protocol in the callback
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
-		static std::list<DiagnosticProtocol *> diagnosticProtocolList; ///< List of all diagnostic protocol instances (one per ICF)
-
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
+		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
 		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
-		std::vector<std::string> ecuIdentificationFields; ///< Stores the ECU ID fields so we can transmit them when ECUID's PGN is requested
+		std::vector<std::string> ecuIdentificationFields; ///< Stores the ECU ID fields so we can transmit them when ECU ID's PGN is requested
 		std::vector<std::string> softwareIdentificationFields; ///< Stores the Software ID fields so we can transmit them when the PGN is requested
 		ProcessingFlags txFlags; ///< An instance of the processing flags to handle retries of some messages
 		std::string productIdentificationCode; ///< The product identification code for sending the product identification message
 		std::string productIdentificationBrand; ///< The product identification brand for sending the product identification message
 		std::string productIdentificationModel; ///< The product identification model name for sending the product identification message
-		std::uint32_t lastDM1SentTimestamp; ///< A timestamp in milliseconds of the last time a DM1 was sent
-		std::uint32_t stopBroadcastNetworkBitfield; ///< Bitfield for tracking the network broadcast states for DM13
-		std::uint32_t lastDM13ReceivedTimestamp; ///< A timestamp in milliseconds when we last got a DM13 message
-		bool j1939Mode; ///< Tells the protocol to operate according to J1939 instead of ISO11783
+		std::uint32_t lastDM1SentTimestamp = 0; ///< A timestamp in milliseconds of the last time a DM1 was sent
+		bool broadcastState = true; ///< Bitfield for tracking the network broadcast state for DM13
+		std::uint32_t lastDM13ReceivedTimestamp = 0; ///< A timestamp in milliseconds when we last got a DM13 message
+		bool j1939Mode = false; ///< Tells the protocol to operate according to J1939 instead of ISO11783
+		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 }
 

@@ -4,49 +4,16 @@
 
 using namespace isobus;
 
-TEST(DIAGNOSTIC_PROTOCOL_TESTS, DM13TestNetworkParsing)
-{
-	std::uint32_t testNetworkStates = 0;
-	CANIdentifier testID(CANIdentifier::Type::Extended,
-	                     0xDF00,
-	                     CANIdentifier::CANPriority::PriorityDefault6,
-	                     0xFF,
-	                     0x80);
-	CANMessage testDM13Message(0);
-	testDM13Message.set_identifier(testID);
-	testDM13Message.set_data_size(8);
-	EXPECT_EQ(true, DiagnosticProtocol::parse_j1939_network_states(testDM13Message, testNetworkStates));
-}
-
-TEST(DIAGNOSTIC_PROTOCOL_TESTS, TestInvalidDM13Rejection)
-{
-	std::uint32_t testNetworkStates = 0;
-	CANIdentifier testID(CANIdentifier::Type::Extended,
-	                     0xDF00,
-	                     CANIdentifier::CANPriority::PriorityDefault6,
-	                     0xFF,
-	                     0x80);
-	CANMessage testDM13Message(0);
-	testDM13Message.set_identifier(testID);
-	testDM13Message.set_data_size(4);
-	EXPECT_EQ(false, DiagnosticProtocol::parse_j1939_network_states(testDM13Message, testNetworkStates));
-}
-
 TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 {
 	NAME TestDeviceNAME(0);
-
 	auto TestInternalECU = InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 
-	DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
-	DiagnosticProtocol *diagnosticProtocol = DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(TestInternalECU);
-	EXPECT_NE(nullptr, diagnosticProtocol);
+	auto diagnosticProtocol = std::make_unique<DiagnosticProtocol>(TestInternalECU);
+	EXPECT_NO_THROW(diagnosticProtocol->initialize());
 
-	if (nullptr != diagnosticProtocol)
-	{
-		EXPECT_NO_THROW(DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions());
-		EXPECT_EQ(nullptr, DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(TestInternalECU));
-	}
+	EXPECT_NO_THROW(diagnosticProtocol->terminate());
+	diagnosticProtocol.reset();
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(TestInternalECU->destroy(2));
