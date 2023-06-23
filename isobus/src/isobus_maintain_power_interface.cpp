@@ -338,7 +338,7 @@ namespace isobus
 					changed |= mpMessage->set_implement_transport_state(static_cast<MaintainPowerData::ImplementTransportState>((message.get_uint8_at(1) >> 6) & 0x03));
 					mpMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-					targetInterface->maintainPowerDataEventPublisher.invoke(std::move(mpMessage), std::move(changed));
+					targetInterface->maintainPowerDataEventPublisher.call(mpMessage, changed);
 				}
 			}
 			else

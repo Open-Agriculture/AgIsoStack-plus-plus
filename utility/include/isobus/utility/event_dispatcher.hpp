@@ -74,21 +74,43 @@ namespace isobus
 			return callbacks.size();
 		}
 
-		/// @brief Invokes an event and notify all listeners.
-		/// @param args The arguments to pass to the listeners.
-		/// @return True if the event was successfully invoked, false otherwise.
-		void invoke(E &&...args)
+		/// @brief Remove expired listeners from the dispatcher
+		void remove_expired_listeners()
 		{
-			std::lock_guard<std::mutex> lock(callbacksMutex);
 			auto removeResult = std::remove_if(callbacks.begin(), callbacks.end(), [](std::weak_ptr<std::function<void(const E &...)>> &callback) {
 				return callback.expired();
 			});
 			callbacks.erase(removeResult, callbacks.end());
+		}
+
+		/// @brief Call and event with context that is moved using move semantics to notify all listeners.
+		/// @param args The event context to notify listeners with.
+		/// @return True if the event was successfully invoked, false otherwise.
+		void invoke(E &&...args)
+		{
+			std::lock_guard<std::mutex> lock(callbacksMutex);
+			remove_expired_listeners();
 
 			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
 				if (auto callbackPtr = callback.lock())
 				{
 					(*callbackPtr)(std::forward<E>(args)...);
+				}
+			});
+		}
+
+		/// @brief Call an event with existing context to notify all listeners.
+		/// @param args The event context to notify listeners with.
+		/// @return True if the event was successfully invoked, false otherwise.
+		void call(const E &...args)
+		{
+			std::lock_guard<std::mutex> lock(callbacksMutex);
+			remove_expired_listeners();
+
+			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
+				if (auto callbackPtr = callback.lock())
+				{
+					(*callbackPtr)(args...);
 				}
 			});
 		}

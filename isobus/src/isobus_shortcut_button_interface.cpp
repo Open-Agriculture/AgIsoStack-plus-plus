@@ -202,7 +202,7 @@ namespace isobus
 						{
 							CANStackLogger::info("[ISB]: Implement operations now permitted.");
 						}
-						ISBEventDispatcher.invoke(std::move(newState));
+						ISBEventDispatcher.call(newState);
 					}
 				}
 			}

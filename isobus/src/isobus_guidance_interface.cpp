@@ -499,7 +499,7 @@ namespace isobus
 						changed |= guidanceCommand->set_status(static_cast<GuidanceSystemCommand::CurvatureCommandStatus>(message.get_uint8_at(2) & 0x03));
 						guidanceCommand->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->guidanceSystemCommandEventPublisher.invoke(std::move(guidanceCommand), std::move(changed));
+						targetInterface->guidanceSystemCommandEventPublisher.call(guidanceCommand, changed);
 					}
 				}
 				else
@@ -541,7 +541,7 @@ namespace isobus
 						changed |= machineInfo->set_guidance_system_remote_engage_switch_status(static_cast<GuidanceMachineInfo::GenericSAEbs02SlotValue>((message.get_uint8_at(4) >> 6) & 0x03));
 						machineInfo->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->guidanceMachineInfoEventPublisher.invoke(std::move(machineInfo), std::move(changed));
+						targetInterface->guidanceMachineInfoEventPublisher.call(machineInfo, changed);
 					}
 				}
 				else
