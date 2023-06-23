@@ -55,12 +55,6 @@ namespace isobus
 		/// @returns A control function that matches the parameters, or nullptr if no match was found
 		std::shared_ptr<ControlFunction> get_control_function(std::uint8_t channelIndex, std::uint8_t address, CANLibBadge<AddressClaimStateMachine>) const;
 
-		/// @brief Called only by the stack, adds a new control function with specified parameters
-		/// @param[in] channelIndex The CAN channel index associated with the control function
-		/// @param[in] newControlFunction The new control function to be processed
-		/// @param[in] address The new control function's address
-		void add_control_function(std::uint8_t channelIndex, std::shared_ptr<ControlFunction> newControlFunction, std::uint8_t address, CANLibBadge<AddressClaimStateMachine>);
-
 		/// @brief This is how you register a callback for any PGN destined for the global address (0xFF)
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is received from the global address (0xFF)
@@ -315,6 +309,8 @@ namespace isobus
 
 		std::array<std::array<std::shared_ptr<ControlFunction>, NULL_CAN_ADDRESS>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
+		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctions; ///< A list of the internal control functions
+		std::list<std::shared_ptr<PartneredControlFunction>> partneredControlFunctions; ///< A list of the partnered control functions
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::list<CANMessage> receiveMessageList; ///< A queue of Rx messages to process

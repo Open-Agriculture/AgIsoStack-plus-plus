@@ -18,32 +18,19 @@
 
 namespace isobus
 {
-	std::vector<std::shared_ptr<PartneredControlFunction>> PartneredControlFunction::partneredControlFunctionList;
-	bool PartneredControlFunction::anyPartnerNeedsInitializing = false;
-
 	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters) :
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort, Type::Partnered),
 	  NAMEFilterList(NAMEFilters)
 	{
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-		anyPartnerNeedsInitializing = true;
 	}
 
 	std::shared_ptr<PartneredControlFunction> PartneredControlFunction::create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters)
 	{
 		// Unfortunately, we can't use `std::make_shared` here because the constructor is meant to be protected
-		auto createdControlFunction = std::shared_ptr<PartneredControlFunction>(new PartneredControlFunction(CANPort, NAMEFilters));
-		partneredControlFunctionList.push_back(createdControlFunction);
-		return createdControlFunction;
-	}
-
-	bool PartneredControlFunction::destroy(std::uint32_t expectedRefCount)
-	{
-		std::unique_lock<std::mutex> lock(controlFunctionProcessingMutex);
-		partneredControlFunctionList.erase(std::find(partneredControlFunctionList.begin(), partneredControlFunctionList.end(), shared_from_this()));
-		lock.unlock();
-
-		return ControlFunction::destroy(expectedRefCount);
+		auto controlFunction = std::shared_ptr<PartneredControlFunction>(new PartneredControlFunction(CANPort, NAMEFilters));
+		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
+		return controlFunction;
 	}
 
 	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
@@ -182,25 +169,6 @@ namespace isobus
 			}
 		}
 		return retVal;
-	}
-
-	std::shared_ptr<PartneredControlFunction> PartneredControlFunction::get_partnered_control_function(std::size_t index)
-	{
-		std::shared_ptr<PartneredControlFunction> retVal = nullptr;
-
-		if (index < get_number_partnered_control_functions())
-		{
-			auto listPosition = partneredControlFunctionList.begin();
-
-			std::advance(listPosition, index);
-			retVal = *listPosition;
-		}
-		return retVal;
-	}
-
-	std::size_t PartneredControlFunction::get_number_partnered_control_functions()
-	{
-		return partneredControlFunctionList.size();
 	}
 
 	ParameterGroupNumberCallbackData &PartneredControlFunction::get_parameter_group_number_callback(std::size_t index)
