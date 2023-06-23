@@ -660,7 +660,7 @@ namespace isobus
 						changed |= mssMessage->set_limit_status(static_cast<MachineSelectedSpeedData::LimitStatus>((message.get_uint8_at(7) >> 5) & 0x03));
 						mssMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->machineSelectedSpeedDataEventPublisher.invoke(std::move(mssMessage), std::move(changed));
+						targetInterface->machineSelectedSpeedDataEventPublisher.call(mssMessage, changed);
 					}
 				}
 				else
@@ -701,7 +701,7 @@ namespace isobus
 						changed |= wheelSpeedMessage->set_operator_direction_reversed_state(static_cast<WheelBasedMachineSpeedData::OperatorDirectionReversed>((message.get_uint8_at(7) >> 6) & 0x03));
 						wheelSpeedMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->wheelBasedMachineSpeedDataEventPublisher.invoke(std::move(wheelSpeedMessage), std::move(changed));
+						targetInterface->wheelBasedMachineSpeedDataEventPublisher.call(wheelSpeedMessage, changed);
 					}
 				}
 				else
@@ -738,7 +738,7 @@ namespace isobus
 						changed |= groundSpeedMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
 						groundSpeedMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->groundBasedSpeedDataEventPublisher.invoke(std::move(groundSpeedMessage), std::move(changed));
+						targetInterface->groundBasedSpeedDataEventPublisher.call(groundSpeedMessage, changed);
 					}
 				}
 				else
@@ -775,7 +775,7 @@ namespace isobus
 						commandMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
 						commandMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->machineSelectedSpeedCommandDataEventPublisher.invoke(std::move(commandMessage), std::move(changed));
+						targetInterface->machineSelectedSpeedCommandDataEventPublisher.call(commandMessage, changed);
 					}
 				}
 				else

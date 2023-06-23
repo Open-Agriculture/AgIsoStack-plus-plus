@@ -25,12 +25,12 @@ TEST(EVENT_DISPATCHER_TESTS, AddRemoveListener)
 		EXPECT_EQ(dispatcher.get_listener_count(), 2);
 
 		// Invoke is required to automatically remove expired listeners.
-		dispatcher.invoke({ true });
+		dispatcher.invoke(true);
 		EXPECT_EQ(dispatcher.get_listener_count(), 1);
 	}
 
 	// Invoke is required to automatically remove expired listeners.
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	EXPECT_EQ(dispatcher.get_listener_count(), 0);
 }
 
@@ -45,10 +45,10 @@ TEST(EVENT_DISPATCHER_TESTS, InvokeEvent)
 	};
 	auto listener = dispatcher.add_listener(callback);
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	ASSERT_EQ(count, 1);
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	ASSERT_EQ(count, 2);
 }
 
@@ -85,15 +85,15 @@ TEST(EVENT_DISPATCHER_TESTS, InvokeContextEvent)
 	auto context = std::make_shared<int>(42);
 	auto listener = dispatcher.add_listener<int>(callback, context);
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	ASSERT_EQ(count, 1);
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	ASSERT_EQ(count, 2);
 
 	context = nullptr;
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	ASSERT_EQ(count, 2);
 }
 
@@ -119,11 +119,30 @@ TEST(EVENT_DISPATCHER_TESTS, InvokeUnsafeContextEvent)
 	auto context = std::make_shared<int>(42);
 	auto listener = dispatcher.add_unsafe_listener<int>(callback, context);
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
 	ASSERT_EQ(count, 1);
 
 	context = nullptr;
 
-	dispatcher.invoke({ true });
+	dispatcher.invoke(true);
+	ASSERT_EQ(count, 2);
+}
+
+TEST(EVENT_DISPATCHER_TESTS, CallEvent)
+{
+	EventDispatcher<bool> dispatcher;
+
+	int count = 0;
+	std::function<void(const bool &)> callback = [&count](bool value) {
+		ASSERT_TRUE(value);
+		count += 1;
+	};
+	auto listener = dispatcher.add_listener(callback);
+
+	bool lvalue = true;
+	dispatcher.call(lvalue);
+	ASSERT_EQ(count, 1);
+
+	dispatcher.call(lvalue);
 	ASSERT_EQ(count, 2);
 }
