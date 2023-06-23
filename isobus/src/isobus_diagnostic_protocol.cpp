@@ -178,7 +178,7 @@ namespace isobus
 		softwareIdentificationFields.clear();
 	}
 
-	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, std::string value)
+	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, const std::string &value)
 	{
 		if (field <= ECUIdentificationFields::NumberOfFields)
 		{
@@ -212,7 +212,7 @@ namespace isobus
 					activeDTCList[activeDTCList.size() - 1].occurrenceCount = 1;
 
 					if ((SystemTiming::get_time_elapsed_ms(lastDM1SentTimestamp) > DM_MAX_FREQUENCY_MS) &&
-					    (broadcastState))
+					    broadcastState)
 					{
 						txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
 						lastDM1SentTimestamp = SystemTiming::get_timestamp_ms();
@@ -261,7 +261,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::set_product_identification_code(std::string value)
+	bool DiagnosticProtocol::set_product_identification_code(const std::string &value)
 	{
 		bool retVal = false;
 
@@ -273,7 +273,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::set_product_identification_brand(std::string value)
+	bool DiagnosticProtocol::set_product_identification_brand(const std::string &value)
 	{
 		bool retVal = false;
 
@@ -285,7 +285,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::set_product_identification_model(std::string value)
+	bool DiagnosticProtocol::set_product_identification_model(const std::string &value)
 	{
 		bool retVal = false;
 
@@ -297,28 +297,25 @@ namespace isobus
 		return retVal;
 	}
 
-	void DiagnosticProtocol::set_software_id_field(std::uint32_t index, std::string value)
+	void DiagnosticProtocol::set_software_id_field(std::uint32_t index, const std::string &value)
 	{
 		if (index >= softwareIdentificationFields.size())
 		{
 			softwareIdentificationFields.resize(index + 1);
 		}
-		else if ("" == value)
+		else if (("" == value) && (index == softwareIdentificationFields.size()))
 		{
-			if (index == softwareIdentificationFields.size())
-			{
-				softwareIdentificationFields.pop_back();
-			}
+			softwareIdentificationFields.pop_back();
 		}
 		softwareIdentificationFields[index] = value;
 	}
 
-	bool DiagnosticProtocol::suspend_broadcasts(std::uint16_t suspendTime_seconds)
+	bool DiagnosticProtocol::suspend_broadcasts(std::uint16_t suspendTime_seconds) const
 	{
 		return send_dm13_announce_suspension(suspendTime_seconds);
 	}
 
-	std::uint8_t DiagnosticProtocol::convert_flash_state_to_byte(FlashState flash)
+	std::uint8_t DiagnosticProtocol::convert_flash_state_to_byte(FlashState flash) const
 	{
 		std::uint8_t retVal = 0;
 
@@ -336,7 +333,6 @@ namespace isobus
 			}
 			break;
 
-			case FlashState::Solid:
 			default:
 			{
 				retVal = 0x03;
@@ -367,7 +363,7 @@ namespace isobus
 		}
 	}
 
-	void DiagnosticProtocol::get_active_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn)
+	void DiagnosticProtocol::get_active_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn) const
 	{
 		flash = FlashState::Solid;
 		lampOn = false;
@@ -465,14 +461,12 @@ namespace isobus
 				break;
 
 				default:
-				{
-				}
-				break;
+					break;
 			}
 		}
 	}
 
-	void DiagnosticProtocol::get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn)
+	void DiagnosticProtocol::get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn) const
 	{
 		flash = FlashState::Solid;
 		lampOn = false;
@@ -570,20 +564,18 @@ namespace isobus
 				break;
 
 				default:
-				{
-				}
-				break;
+					break;
 			}
 		}
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_message_1()
+	bool DiagnosticProtocol::send_diagnostic_message_1() const
 	{
 		bool retVal = false;
 
 		if (nullptr != myControlFunction)
 		{
-			std::uint16_t payloadSize = (activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
+			std::uint16_t payloadSize = static_cast<std::uint16_t>(activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
@@ -603,19 +595,19 @@ namespace isobus
 					get_active_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
 
 					/// Encode amber warning lamp state and flash
-					buffer[0] |= (tempLampState << 2);
+					buffer[0] |= (static_cast<std::uint8_t>(tempLampState) << 2);
 					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
 
 					get_active_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
 
 					/// Encode red stop lamp state and flash
-					buffer[0] |= (tempLampState << 4);
+					buffer[0] |= (static_cast<std::uint8_t>(tempLampState) << 4);
 					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
 
 					get_active_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
 
 					/// Encode malfunction indicator lamp state and flash
-					buffer[0] |= (tempLampState << 6);
+					buffer[0] |= (static_cast<std::uint8_t>(tempLampState) << 6);
 					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
 				}
 				else
@@ -625,7 +617,7 @@ namespace isobus
 					buffer[1] = 0xFF;
 				}
 
-				if (0 == activeDTCList.size())
+				if (activeDTCList.empty())
 				{
 					buffer[2] = 0x00;
 					buffer[3] = 0x00;
@@ -644,7 +636,7 @@ namespace isobus
 					{
 						buffer[2 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>(activeDTCList[i].suspectParameterNumber & 0xFF);
 						buffer[3 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 8) & 0xFF);
-						buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((activeDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | (static_cast<std::uint8_t>(activeDTCList[i].failureModeIdentifier) & 0x1F));
+						buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (static_cast<std::uint8_t>(((activeDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | (static_cast<std::uint8_t>(activeDTCList[i].failureModeIdentifier) & 0x1F));
 						buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (activeDTCList[i].occurrenceCount & 0x7F);
 					}
 
@@ -665,13 +657,13 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_message_2()
+	bool DiagnosticProtocol::send_diagnostic_message_2() const
 	{
 		bool retVal = false;
 
 		if (nullptr != myControlFunction)
 		{
-			std::uint16_t payloadSize = (inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
+			std::uint16_t payloadSize = static_cast<std::uint8_t>(inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
@@ -691,19 +683,19 @@ namespace isobus
 					get_inactive_list_lamp_state_and_flash_state(Lamps::AmberWarningLamp, tempLampFlashState, tempLampState);
 
 					/// Encode amber warning lamp state and flash
-					buffer[0] |= (tempLampState << 2);
+					buffer[0] |= (static_cast<std::uint8_t>(tempLampState) << 2);
 					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 2);
 
 					get_inactive_list_lamp_state_and_flash_state(Lamps::RedStopLamp, tempLampFlashState, tempLampState);
 
 					/// Encode red stop lamp state and flash
-					buffer[0] |= (tempLampState << 4);
+					buffer[0] |= (static_cast<std::uint8_t>(tempLampState) << 4);
 					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 4);
 
 					get_inactive_list_lamp_state_and_flash_state(Lamps::MalfunctionIndicatorLamp, tempLampFlashState, tempLampState);
 
 					/// Encode malfunction indicator lamp state and flash
-					buffer[0] |= (tempLampState << 6);
+					buffer[0] |= (static_cast<std::uint8_t>(tempLampState) << 6);
 					buffer[1] |= (convert_flash_state_to_byte(tempLampFlashState) << 6);
 				}
 				else
@@ -713,7 +705,7 @@ namespace isobus
 					buffer[1] = 0xFF;
 				}
 
-				if (0 == inactiveDTCList.size())
+				if (inactiveDTCList.empty())
 				{
 					buffer[2] = 0x00;
 					buffer[3] = 0x00;
@@ -732,7 +724,7 @@ namespace isobus
 					{
 						buffer[2 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>(inactiveDTCList[i].suspectParameterNumber & 0xFF);
 						buffer[3 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 8) & 0xFF);
-						buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = ((static_cast<std::uint8_t>((inactiveDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | (static_cast<std::uint8_t>(inactiveDTCList[i].failureModeIdentifier) & 0x1F));
+						buffer[4 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (static_cast<std::uint8_t>(((inactiveDTCList[i].suspectParameterNumber >> 16) & 0xFF) << 5) | (static_cast<std::uint8_t>(inactiveDTCList[i].failureModeIdentifier) & 0x1F));
 						buffer[5 + (DM_PAYLOAD_BYTES_PER_DTC * i)] = (inactiveDTCList[i].occurrenceCount & 0x7F);
 					}
 
@@ -753,7 +745,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_protocol_identification()
+	bool DiagnosticProtocol::send_diagnostic_protocol_identification() const
 	{
 		bool retVal = false;
 
@@ -773,7 +765,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_dm13_announce_suspension(std::uint16_t suspendTime_seconds)
+	bool DiagnosticProtocol::send_dm13_announce_suspension(std::uint16_t suspendTime_seconds) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 			0xFF,
@@ -791,11 +783,11 @@ namespace isobus
 		                                                      myControlFunction);
 	}
 
-	bool DiagnosticProtocol::send_ecu_identification()
+	bool DiagnosticProtocol::send_ecu_identification() const
 	{
 		std::string ecuIdString = "";
 
-		for (auto &stringComponent : ecuIdentificationFields)
+		for (const auto &stringComponent : ecuIdentificationFields)
 		{
 			ecuIdString.append(stringComponent);
 		}
@@ -807,7 +799,7 @@ namespace isobus
 		                                                      myControlFunction);
 	}
 
-	bool DiagnosticProtocol::send_product_identification()
+	bool DiagnosticProtocol::send_product_identification() const
 	{
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
 		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
@@ -818,19 +810,20 @@ namespace isobus
 		                                                      myControlFunction);
 	}
 
-	bool DiagnosticProtocol::send_software_identification()
+	bool DiagnosticProtocol::send_software_identification() const
 	{
 		bool retVal = false;
 
-		if (0 != softwareIdentificationFields.size())
+		if (!softwareIdentificationFields.empty())
 		{
 			std::string softIDString = "";
 
-			for (auto softIdString = softwareIdentificationFields.begin(); softIdString != softwareIdentificationFields.end(); softIdString++)
-			{
-				softIDString.append(*softIdString);
-				softIDString.append("*");
-			}
+			std::for_each(softwareIdentificationFields.begin(),
+			              softwareIdentificationFields.end(),
+			              [&softIDString](const std::string &field) {
+				              softIDString.append(field);
+				              softIDString.append("*");
+			              });
 
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
@@ -845,7 +838,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (0 != dm22ResponseQueue.size())
+		if (!dm22ResponseQueue.empty())
 		{
 			std::size_t numberOfMessage = dm22ResponseQueue.size();
 
@@ -905,9 +898,9 @@ namespace isobus
 
 	void DiagnosticProtocol::process_message(const CANMessage &message)
 	{
-		if ((((nullptr == message.get_destination_control_function()) &&
-		      (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
-		     (message.get_destination_control_function() == myControlFunction)))
+		if (((nullptr == message.get_destination_control_function()) &&
+		     (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
+		    (message.get_destination_control_function() == myControlFunction))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
@@ -964,7 +957,7 @@ namespace isobus
 									tempDM22Data.nack = true;
 
 									// Since we didn't find the DTC in the active list, we check the inactive to determine the proper NACK reason
-									for (auto &dtc : inactiveDTCList)
+									for (const auto &dtc : inactiveDTCList)
 									{
 										if ((tempDM22Data.suspectParameterNumber == dtc.suspectParameterNumber) &&
 										    (tempDM22Data.failureModeIdentifier == static_cast<std::uint8_t>(dtc.failureModeIdentifier)))
@@ -1008,7 +1001,7 @@ namespace isobus
 									tempDM22Data.nack = true;
 
 									// Since we didn't find the DTC in the inactive list, we check the active to determine the proper NACK reason
-									for (auto &dtc : activeDTCList)
+									for (const auto &dtc : activeDTCList)
 									{
 										if ((tempDM22Data.suspectParameterNumber == dtc.suspectParameterNumber) &&
 										    (tempDM22Data.failureModeIdentifier == static_cast<std::uint8_t>(dtc.failureModeIdentifier)))
@@ -1031,18 +1024,14 @@ namespace isobus
 							break;
 
 							default:
-							{
-							}
-							break;
+								break;
 						}
 					}
 				}
 				break;
 
 				default:
-				{
-				}
-				break;
+					break;
 			}
 		}
 	}
@@ -1075,8 +1064,6 @@ namespace isobus
 					broadcastState = true;
 					break;
 
-				case StopStartCommand::DontCareNoAction:
-				case StopStartCommand::Reserved:
 				default:
 					break;
 			}
@@ -1093,8 +1080,6 @@ namespace isobus
 					broadcastState = true;
 					break;
 
-				case StopStartCommand::DontCareNoAction:
-				case StopStartCommand::Reserved:
 				default:
 					break;
 			}
@@ -1196,7 +1181,7 @@ namespace isobus
 	{
 		if (nullptr != parentPointer)
 		{
-			DiagnosticProtocol *parent = reinterpret_cast<DiagnosticProtocol *>(parentPointer);
+			auto *parent = reinterpret_cast<DiagnosticProtocol *>(parentPointer);
 			bool transmitSuccessful = false;
 
 			switch (flag)
@@ -1237,9 +1222,7 @@ namespace isobus
 				break;
 
 				default:
-				{
-				}
-				break;
+					break;
 			}
 
 			if (false == transmitSuccessful)

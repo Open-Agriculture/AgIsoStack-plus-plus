@@ -258,7 +258,7 @@ namespace isobus
 		/// @attention Do not include the "*" character in your field values
 		/// @param[in] field The field to set
 		/// @param[in] value The string value associated with the ECU ID field
-		void set_ecu_id_field(ECUIdentificationFields field, std::string value);
+		void set_ecu_id_field(ECUIdentificationFields field, const std::string &value);
 
 		/// @brief Adds a DTC to the active list, or removes one from the active list
 		/// @details When you call this function with a DTC and `true`, it will be added to the DM1 message.
@@ -281,20 +281,20 @@ namespace isobus
 		/// make the product globally unique.
 		/// @param value The ascii product identification code, up to 50 characters long
 		/// @returns true if the value was set, false if the string is too long
-		bool set_product_identification_code(std::string value);
+		bool set_product_identification_code(const std::string &value);
 
 		/// @brief Sets the product identification brand used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification brand specifies the brand of a product. The combination of the product ID code and brand
 		/// shall make the product unique in the world.
 		/// @param value The ascii product brand, up to 50 characters long
 		/// @returns true if the value was set, false if the string is too long
-		bool set_product_identification_brand(std::string value);
+		bool set_product_identification_brand(const std::string &value);
 
 		/// @brief Sets the product identification model used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification model specifies a unique product within a brand.
 		/// @param value The ascii model string, up to 50 characters
 		/// @returns true if the value was set, false if the string is too long
-		bool set_product_identification_model(std::string value);
+		bool set_product_identification_model(const std::string &value);
 
 		/// @brief Adds an ascii string to this internal control function's software ID
 		/// @details Use this to identify the software version of your application.
@@ -306,12 +306,12 @@ namespace isobus
 		/// You can remove a field by setting it to ""
 		/// @param[in] index The field index to set
 		/// @param[in] value The software ID string to add
-		void set_software_id_field(std::uint32_t index, std::string value);
+		void set_software_id_field(std::uint32_t index, const std::string &value);
 
 		/// @brief Informs the diagnostic protocol that you are going to suspend broadcasts
 		/// @param[in] suspendTime_seconds If you know the time for which broadcasts will be suspended, put it here, otherwise 0xFFFF
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool suspend_broadcasts(std::uint16_t suspendTime_seconds = 0xFFFF);
+		bool suspend_broadcasts(std::uint16_t suspendTime_seconds = 0xFFFF) const;
 
 	private:
 		/// @brief Lists the different lamps in J1939-73
@@ -376,7 +376,7 @@ namespace isobus
 		/// @brief A utility function to get the CAN representation of a FlashState
 		/// @param flash The flash state to convert
 		/// @returns The two bit lamp state for CAN
-		std::uint8_t convert_flash_state_to_byte(FlashState flash);
+		std::uint8_t convert_flash_state_to_byte(FlashState flash) const;
 
 		/// @brief A utility function that will clean up PGN registrations
 		void deregister_all_pgns();
@@ -387,7 +387,7 @@ namespace isobus
 		/// @param[in] targetLamp The lamp to find the status of
 		/// @param[out] flash How the lamp should be flashing
 		/// @param[out] lampOn If the lamp state is on for any DTC
-		void get_active_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn);
+		void get_active_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn) const;
 
 		/// @brief This is a way to find the overall lamp states to report
 		/// @details This searches the inactive DTC list to find if a lamp is on or off, and to find the overall flash state for that lamp.
@@ -395,36 +395,36 @@ namespace isobus
 		/// @param[in] targetLamp The lamp to find the status of
 		/// @param[out] flash How the lamp should be flashing
 		/// @param[out] lampOn If the lamp state is on for any DTC
-		void get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn);
+		void get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn) const;
 
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_1();
+		bool send_diagnostic_message_1() const;
 
 		/// @brief Sends a DM2 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_2();
+		bool send_diagnostic_message_2() const;
 
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_protocol_identification();
+		bool send_diagnostic_protocol_identification() const;
 
 		/// @brief Sends the DM13 to alert network devices of impending suspended broadcasts
 		/// @param suspendTime_seconds The number of seconds that the broadcast will be suspended for
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_dm13_announce_suspension(std::uint16_t suspendTime_seconds);
+		bool send_dm13_announce_suspension(std::uint16_t suspendTime_seconds) const;
 
 		/// @brief Sends the ECU ID message
 		/// @returns true if the message was sent
-		bool send_ecu_identification();
+		bool send_ecu_identification() const;
 
 		/// @brief Sends the product identification message (PGN 0xFC8D)
 		/// @returns true if the message was sent, otherwise false
-		bool send_product_identification();
+		bool send_product_identification() const;
 
 		/// @brief Sends the software ID message
 		/// @returns true if the message was sent, otherwise false
-		bool send_software_identification();
+		bool send_software_identification() const;
 
 		/// @brief Processes any DM22 responses from the queue
 		/// @details We queue responses so that we can do Tx retries if needed
