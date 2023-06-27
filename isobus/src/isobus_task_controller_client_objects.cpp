@@ -80,12 +80,12 @@ namespace isobus
 			retVal.push_back(tableID[2]);
 			retVal.push_back(static_cast<std::uint8_t>(get_object_id() & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((get_object_id() >> 8) & 0xFF));
-			retVal.push_back(designator.size());
+			retVal.push_back(static_cast<std::uint8_t>(designator.size()));
 			for (std::size_t i = 0; i < designator.size(); i++)
 			{
 				retVal.push_back(designator[i]);
 			}
-			retVal.push_back(softwareVersion.size());
+			retVal.push_back(static_cast<std::uint8_t>(softwareVersion.size()));
 			for (std::size_t i = 0; i < softwareVersion.size(); i++)
 			{
 				retVal.push_back(softwareVersion[i]);
@@ -98,7 +98,7 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>((NAME >> 40) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((NAME >> 48) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((NAME >> 56) & 0xFF));
-			retVal.push_back(serialNumber.size());
+			retVal.push_back(static_cast<std::uint8_t>(serialNumber.size()));
 			for (std::size_t i = 0; i < serialNumber.size(); i++)
 			{
 				retVal.push_back(serialNumber[i]);
@@ -209,7 +209,7 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>(get_object_id() & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((get_object_id() >> 8) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>(elementType));
-			retVal.push_back(designator.size());
+			retVal.push_back(static_cast<std::uint8_t>(designator.size()));
 			for (std::size_t i = 0; i < designator.size(); i++)
 			{
 				retVal.push_back(designator[i]);
@@ -218,7 +218,7 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>((elementNumber >> 8) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>(parentObject & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((parentObject >> 8) & 0xFF));
-			std::uint16_t tempSize = referenceList.size();
+			std::uint16_t tempSize = static_cast<std::uint16_t>(referenceList.size());
 			retVal.push_back(tempSize & 0xFF);
 			retVal.push_back((tempSize >> 8) & 0xFF);
 			for (std::size_t i = 0; i < tempSize; i++)
@@ -306,7 +306,7 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>((ddi >> 8) & 0xFF));
 			retVal.push_back(propertiesBitfield);
 			retVal.push_back(triggerMethodsBitfield);
-			retVal.push_back(designator.size());
+			retVal.push_back(static_cast<std::uint8_t>(designator.size()));
 			for (std::size_t i = 0; i < designator.size(); i++)
 			{
 				retVal.push_back(designator[i]);
@@ -377,7 +377,7 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((value >> 16) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((value >> 24) & 0xFF));
-			retVal.push_back(designator.size());
+			retVal.push_back(static_cast<std::uint8_t>(designator.size()));
 			for (std::size_t i = 0; i < designator.size(); i++)
 			{
 				retVal.push_back(designator[i]);
@@ -460,7 +460,7 @@ namespace isobus
 				retVal.push_back(floatBytes[i]);
 			}
 			retVal.push_back(numberOfDecimals);
-			retVal.push_back(designator.size());
+			retVal.push_back(static_cast<std::uint8_t>(designator.size()));
 			for (std::size_t i = 0; i < designator.size(); i++)
 			{
 				retVal.push_back(designator[i]);
