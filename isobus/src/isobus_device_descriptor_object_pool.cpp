@@ -425,6 +425,11 @@ namespace isobus
 
 						std::uint32_t expectedSize = (31 + numberDeviceSerialNumberBytes + numberDesignatorBytes + numberSoftwareVersionBytes + numberExtendedStructureLabelBytes);
 
+						if (taskControllerCompatibilityLevel < 4)
+						{
+							expectedSize--; // One byte less due to no extended structure label length
+						}
+
 						if ((binaryPoolSizeBytes >= expectedSize) && retVal)
 						{
 							std::string deviceDesignator;
@@ -529,6 +534,17 @@ namespace isobus
 
 							if (add_device_element(deviceElementDesignator, binaryPool[7 + numberDesignatorBytes], parentObject, type, uniqueID))
 							{
+								auto DETObject = std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(get_object_by_id(uniqueID));
+
+								if (nullptr != DETObject)
+								{
+									for (std::uint8_t i = 0; i < numberOfObjectIDs; i++)
+									{
+										std::uint16_t childID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[13 + (2 * i) + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[14 + (2 * i) + numberDesignatorBytes]) << 8));
+										DETObject->add_reference_to_child_object(childID);
+									}
+								}
+
 								binaryPoolSizeBytes -= expectedSize;
 								binaryPool += expectedSize;
 							}
@@ -679,7 +695,7 @@ namespace isobus
 								std::reverse(scaleBytes.begin(), scaleBytes.end());
 							}
 
-							memcpy(scaleBytes.data(), &scale, sizeof(float));
+							memcpy(&scale, scaleBytes.data(), sizeof(float));
 
 							for (std::uint16_t i = 0; i < numberDesignatorBytes; i++)
 							{
@@ -714,7 +730,7 @@ namespace isobus
 					retVal = false;
 				}
 
-				if (false == retVal)
+				if (!retVal)
 				{
 					CANStackLogger::error("[DDOP]: Binary DDOP deserialization aborted.");
 					break;
@@ -778,6 +794,17 @@ namespace isobus
 				retVal = currentObject;
 				break;
 			}
+		}
+		return retVal;
+	}
+
+	std::shared_ptr<task_controller_object::Object> DeviceDescriptorObjectPool::get_object_by_index(std::uint16_t index)
+	{
+		std::shared_ptr<task_controller_object::Object> retVal = nullptr;
+
+		if (index < objectList.size())
+		{
+			retVal = objectList.at(index);
 		}
 		return retVal;
 	}

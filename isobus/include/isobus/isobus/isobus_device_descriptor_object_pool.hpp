@@ -139,6 +139,10 @@ namespace isobus
 		/// @returns Pointer to the object matching the provided ID, or nullptr if no match was found
 		std::shared_ptr<task_controller_object::Object> get_object_by_id(std::uint16_t objectID);
 
+		/// @brief Gets an object from the DDOP by index based on object creation
+		/// @returns Pointer to the object matching the index, or nullptr if no match was found
+		std::shared_ptr<task_controller_object::Object> get_object_by_index(std::uint16_t index);
+
 		/// @brief Sets the TC version to use when generating a binary DDOP.
 		/// @note If you do not call this, TC version 4 is used by default
 		/// @param[in] tcVersion The version of TC you are targeting for this DDOP
