@@ -369,7 +369,10 @@ namespace isobus
 		    (true == source->get_address_valid()) &&
 		    ((nullptr == destination) ||
 		     (destination->get_address_valid())) &&
-		    (!get_session(session, source, destination, parameterGroupNumber)))
+		    (!get_session(session, source, destination, parameterGroupNumber)) &&
+		    ((nullptr != destination) ||
+		     ((nullptr == destination) &&
+		      (!get_session(session, source, destination)))))
 		{
 			TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Transmit,
 			                                                                    source->get_can_port());
