@@ -389,12 +389,12 @@ namespace isobus
 				// Need to evict them from the table and move them to the inactive list
 				targetControlFunction->address = NULL_CAN_ADDRESS;
 				inactiveControlFunctions.push_back(targetControlFunction);
-				targetControlFunction = nullptr;
 				CANStackLogger::debug("[NM]: %s CF '%016llx' is evicted from address '%d' on channel '%d', as their address is probably stolen.",
 				                      targetControlFunction->get_type_string().c_str(),
 				                      targetControlFunction->get_NAME().get_full_name(),
 				                      claimedAddress,
 				                      channelIndex);
+				targetControlFunction = nullptr;
 			}
 
 			if (targetControlFunction != nullptr)
