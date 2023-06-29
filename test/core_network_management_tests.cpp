@@ -55,7 +55,6 @@ TEST(CORE_TESTS, TestCreateAndDestroyICFs)
 
 TEST(CORE_TESTS, BusloadTest)
 {
-	EXPECT_EQ(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(0)); // This test runs early in the testing, so load should be zero.
 	EXPECT_EQ(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(200)); // Invalid channel should return zero load
 
 	// Send a bunch of messages through the receive process

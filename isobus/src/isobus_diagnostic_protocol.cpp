@@ -64,6 +64,16 @@ namespace isobus
 		return occurrenceCount;
 	}
 
+	std::uint32_t DiagnosticProtocol::DiagnosticTroubleCode::get_suspect_parameter_number() const
+	{
+		return suspectParameterNumber;
+	}
+
+	DiagnosticProtocol::FailureModeIdentifier DiagnosticProtocol::DiagnosticTroubleCode::get_failure_mode_identifier() const
+	{
+		return failureModeIdentifier;
+	}
+
 	DiagnosticProtocol::DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, NetworkType networkType) :
 	  ControlFunctionFunctionalitiesMessageInterface(internalControlFunction),
 	  myControlFunction(internalControlFunction),
@@ -94,6 +104,7 @@ namespace isobus
 
 			// PGN protocol will check for duplicates, so no worries if there's already a request protocol registered.
 			ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(myControlFunction);
+			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1), process_parameter_group_number_request, this);
 			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2), process_parameter_group_number_request, this);
 			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3), process_parameter_group_number_request, this);
 			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11), process_parameter_group_number_request, this);
@@ -102,6 +113,11 @@ namespace isobus
 			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification), process_parameter_group_number_request, this);
 			ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction)->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation), process_parameter_group_number_request, this);
 		}
+	}
+
+	bool DiagnosticProtocol::get_initialized() const
+	{
+		return initialized;
 	}
 
 	void DiagnosticProtocol::terminate()
@@ -118,7 +134,15 @@ namespace isobus
 
 	void DiagnosticProtocol::update()
 	{
-		if (SystemTiming::time_expired_ms(lastDM13ReceivedTimestamp, DM13_TIMEOUT_MS))
+		if (0 != customDM13SuspensionTime)
+		{
+			if (SystemTiming::time_expired_ms(lastDM13ReceivedTimestamp, customDM13SuspensionTime))
+			{
+				broadcastState = true;
+				customDM13SuspensionTime = 0;
+			}
+		}
+		else if (SystemTiming::time_expired_ms(lastDM13ReceivedTimestamp, DM13_TIMEOUT_MS))
 		{
 			broadcastState = true;
 		}
@@ -310,9 +334,21 @@ namespace isobus
 		softwareIdentificationFields[index] = value;
 	}
 
-	bool DiagnosticProtocol::suspend_broadcasts(std::uint16_t suspendTime_seconds) const
+	bool DiagnosticProtocol::suspend_broadcasts(std::uint16_t suspendTime_seconds)
 	{
+		broadcastState = false;
+		lastDM13ReceivedTimestamp = SystemTiming::get_timestamp_ms();
+
+		if (customDM13SuspensionTime < MAX_DM13_CUSTOM_SUSPEND_TIME_MS)
+		{
+			customDM13SuspensionTime = suspendTime_seconds;
+		}
 		return send_dm13_announce_suspension(suspendTime_seconds);
+	}
+
+	bool DiagnosticProtocol::get_broadcast_state() const
+	{
+		return broadcastState;
 	}
 
 	std::uint8_t DiagnosticProtocol::convert_flash_state_to_byte(FlashState flash) const
@@ -347,6 +383,7 @@ namespace isobus
 		ParameterGroupNumberRequestProtocol *pgnRequestProtocol = ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction);
 		if (nullptr != pgnRequestProtocol)
 		{
+			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1), process_parameter_group_number_request, this);
 			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2), process_parameter_group_number_request, this);
 			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage3), process_parameter_group_number_request, this);
 			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage11), process_parameter_group_number_request, this);
@@ -580,7 +617,7 @@ namespace isobus
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
 				std::vector<std::uint8_t> buffer;
-				buffer.resize(payloadSize);
+				buffer.resize(payloadSize < CAN_DATA_LENGTH ? CAN_DATA_LENGTH : payloadSize);
 
 				if (get_j1939_mode())
 				{
@@ -668,7 +705,7 @@ namespace isobus
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
 			{
 				std::vector<std::uint8_t> buffer;
-				buffer.resize(payloadSize);
+				buffer.resize(payloadSize < CAN_DATA_LENGTH ? CAN_DATA_LENGTH : payloadSize);
 
 				if (get_j1939_mode())
 				{
@@ -786,10 +823,11 @@ namespace isobus
 	bool DiagnosticProtocol::send_ecu_identification() const
 	{
 		std::string ecuIdString = "";
+		const std::size_t maxComponent = get_j1939_mode() ? static_cast<std::size_t>(ECUIdentificationFields::HardwareID) : static_cast<std::size_t>(ECUIdentificationFields::NumberOfFields);
 
-		for (const auto &stringComponent : ecuIdentificationFields)
+		for (std::size_t i = 0; i < maxComponent; i++)
 		{
-			ecuIdString.append(stringComponent);
+			ecuIdString.append(ecuIdentificationFields.at(i));
 		}
 
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
@@ -1057,8 +1095,39 @@ namespace isobus
 			switch (command)
 			{
 				case StopStartCommand::StopBroadcast:
+				{
 					broadcastState = false;
-					break;
+
+					switch (static_cast<SuspendSignalState>(messageData.at(3) & 0x0F))
+					{
+						case SuspendSignalState::TemporarySuspension:
+						case SuspendSignalState::PartialTemporarySuspension:
+						{
+							std::uint16_t suspensionTime = message.get_uint16_at(3);
+
+							if (suspensionTime < MAX_DM13_CUSTOM_SUSPEND_TIME_MS)
+							{
+								customDM13SuspensionTime = suspensionTime;
+							}
+							else
+							{
+								customDM13SuspensionTime = 0;
+							}
+						}
+						break;
+
+						case SuspendSignalState::IndefiniteSuspension:
+						case SuspendSignalState::PartialIndefiniteSuspension:
+						{
+							customDM13SuspensionTime = 0;
+						}
+						break;
+
+						default:
+							break;
+					}
+				}
+				break;
 
 				case StopStartCommand::StartBroadcast:
 					broadcastState = true;
@@ -1073,8 +1142,39 @@ namespace isobus
 			switch (command)
 			{
 				case StopStartCommand::StopBroadcast:
+				{
 					broadcastState = false;
-					break;
+
+					switch (static_cast<SuspendSignalState>(messageData.at(3) & 0x0F))
+					{
+						case SuspendSignalState::TemporarySuspension:
+						case SuspendSignalState::PartialTemporarySuspension:
+						{
+							std::uint16_t suspensionTime = message.get_uint16_at(3);
+
+							if (suspensionTime < MAX_DM13_CUSTOM_SUSPEND_TIME_MS)
+							{
+								customDM13SuspensionTime = suspensionTime;
+							}
+							else
+							{
+								customDM13SuspensionTime = 0;
+							}
+						}
+						break;
+
+						case SuspendSignalState::IndefiniteSuspension:
+						case SuspendSignalState::PartialIndefiniteSuspension:
+						{
+							customDM13SuspensionTime = 0;
+						}
+						break;
+
+						default:
+							break;
+					}
+				}
+				break;
 
 				case StopStartCommand::StartBroadcast:
 					broadcastState = true;
@@ -1101,6 +1201,13 @@ namespace isobus
 		{
 			switch (parameterGroupNumber)
 			{
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1):
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
+					retVal = true;
+				}
+				break;
+
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2):
 				{
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM2));
@@ -1142,13 +1249,15 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification):
 				{
-					retVal = send_software_identification();
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SoftwareIdentification));
+					retVal = true;
 				}
 				break;
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation):
 				{
-					retVal = send_ecu_identification();
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ECUIdentification));
+					retVal = true;
 				}
 				break;
 
@@ -1218,6 +1327,18 @@ namespace isobus
 				case static_cast<std::uint32_t>(TransmitFlags::DM22):
 				{
 					transmitSuccessful = parent->process_all_dm22_responses();
+				}
+				break;
+
+				case static_cast<std::uint32_t>(TransmitFlags::ECUIdentification):
+				{
+					transmitSuccessful = parent->send_ecu_identification();
+				}
+				break;
+
+				case static_cast<std::uint32_t>(TransmitFlags::SoftwareIdentification):
+				{
+					transmitSuccessful = parent->send_software_identification();
 				}
 				break;
 
