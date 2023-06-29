@@ -83,7 +83,7 @@ int main()
 
 	// Important: we need to update the diagnostic protocol using the hardware interface periodic update event,
 	// otherwise the diagnostic protocol will not be able to update its internal state.
-	isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener([&diagnosticProtocol]() {
+	auto listenerHandle = isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener([&diagnosticProtocol]() {
 		diagnosticProtocol.update();
 	});
 
@@ -107,6 +107,7 @@ int main()
 	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "None");
 	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
 	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1");
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Type, "AgISOStack");
 
 	// Let's say that our ECU has the capability of a universal terminal working set (as an example) and
 	// contains weak internal bus termination.

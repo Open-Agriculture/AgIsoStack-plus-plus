@@ -3,7 +3,7 @@
 ///
 /// @brief A protocol that handles the ISO 11783-12 Diagnostic Protocol and some J1939 DMs.
 /// @details This protocol manages many of the messages defined in ISO 11783-12
-/// and a subset of the messages defined in SAE J1939-73.
+/// and a subset of the messages defined in SAE J1939-73 and SAE J1939-71.
 /// The ISO-11783 definition of some of these is based on the J1939 definition with some tweaks.
 /// You can select if you want the protocol to behave like J1939 by calling set_j1939_mode.
 /// One of the messages this protocol supports is the DM1 message.
@@ -119,6 +119,8 @@ namespace isobus
 			DiagnosticProtocolID, ///< A flag to manage sending the Diagnostic protocol ID message
 			ProductIdentification, ///< A flag to manage sending the product identification message
 			DM22, ///< Process queued up DM22 responses
+			ECUIdentification, ///< A flag to manage sending the ECU ID message
+			SoftwareIdentification, ///< A flag to manage sending the software ID message
 
 			NumberOfFlags ///< The number of flags in the enum
 		};
@@ -212,13 +214,17 @@ namespace isobus
 		/// @brief The constructor for this protocol
 		/// @param[in] internalControlFunction The internal control function that owns this protocol and will be used to send messages
 		/// @param[in] networkType The type of diagnostic network that this protocol will reflect
-		explicit DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, NetworkType networkType = NetworkType::ProprietaryNetwork1);
+		DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, NetworkType networkType = NetworkType::ProprietaryNetwork1);
 
 		/// @brief The destructor for this protocol
 		~DiagnosticProtocol();
 
 		/// @brief The protocol's initializer function
 		void initialize();
+
+		/// @brief Returns if the protocol has been initialized
+		/// @returns true if the protocol has been initialized, otherwise false
+		bool get_initialized() const;
 
 		/// @brief The protocol's terminate function
 		void terminate();
@@ -253,9 +259,9 @@ namespace isobus
 
 		/// @brief Sets one of the ECU identification strings for the ECU ID message
 		/// @details See ECUIdentificationFields for a brief description of the fields
-		/// @note The fields in this message are optional and separated by an ASCII �*�. It is not necessary to include parametric
+		/// @note The fields in this message are optional and separated by an ASCII "*". It is not necessary to include parametric
 		/// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
-		/// @attention Do not include the "*" character in your field values
+		/// @attention Do not include the "*" character in your field values and only use HardwareID when not in J1939 mode.
 		/// @param[in] field The field to set
 		/// @param[in] value The string value associated with the ECU ID field
 		void set_ecu_id_field(ECUIdentificationFields field, const std::string &value);
@@ -309,9 +315,14 @@ namespace isobus
 		void set_software_id_field(std::uint32_t index, const std::string &value);
 
 		/// @brief Informs the diagnostic protocol that you are going to suspend broadcasts
+		/// @details When you call this, DM1 and other broadcasts that come from this protocol will be stopped for the duration specified.
 		/// @param[in] suspendTime_seconds If you know the time for which broadcasts will be suspended, put it here, otherwise 0xFFFF
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool suspend_broadcasts(std::uint16_t suspendTime_seconds = 0xFFFF) const;
+		bool suspend_broadcasts(std::uint16_t suspendTime_seconds = 0xFFFF);
+
+		/// @brief Gets the current broadcast state for the connected network type
+		/// @returns True if broadcasts are currently allowed, false if broadcasts are suspended for the connected network
+		bool get_broadcast_state() const;
 
 	private:
 		/// @brief Lists the different lamps in J1939-73
@@ -367,6 +378,7 @@ namespace isobus
 		static constexpr std::uint32_t DM13_HOLD_SIGNAL_TRANSMIT_INTERVAL_MS = 5000; ///< Defined in 5.7.13.13 SPN 1236
 		static constexpr std::uint32_t DM13_TIMEOUT_MS = 6000; ///< The timeout in 5.7.13 after which nodes shall revert back to the normal broadcast state
 		static constexpr std::uint16_t MAX_PAYLOAD_SIZE_BYTES = 1785; ///< DM 1 and 2 are limited to the BAM message max, because ETP does not allow global destinations
+		static constexpr std::uint16_t MAX_DM13_CUSTOM_SUSPEND_TIME_MS = 64255; ///< The max valid value for a DM13 suspension time in milliseconds
 		static constexpr std::uint8_t DM_PAYLOAD_BYTES_PER_DTC = 4; ///< The number of payload bytes per DTC that gets encoded into the messages
 		static constexpr std::uint8_t PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH = 50; ///< The max string length allowed in the fields of product ID, as defined in ISO 11783-12
 		static constexpr std::uint8_t DM13_NUMBER_OF_J1939_NETWORKS = 11; ///< The number of networks in DM13 that are set aside for J1939
@@ -486,8 +498,9 @@ namespace isobus
 		std::string productIdentificationBrand; ///< The product identification brand for sending the product identification message
 		std::string productIdentificationModel; ///< The product identification model name for sending the product identification message
 		std::uint32_t lastDM1SentTimestamp = 0; ///< A timestamp in milliseconds of the last time a DM1 was sent
-		bool broadcastState = true; ///< Bitfield for tracking the network broadcast state for DM13
 		std::uint32_t lastDM13ReceivedTimestamp = 0; ///< A timestamp in milliseconds when we last got a DM13 message
+		std::uint16_t customDM13SuspensionTime = 0; ///< If using a non-standard DM13 suspension time, this tracks that duration in milliseconds
+		bool broadcastState = true; ///< Bitfield for tracking the network broadcast state for DM13
 		bool j1939Mode = false; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 		bool initialized = false; ///< Stores if the interface has been initialized
 	};

@@ -290,6 +290,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
 
+	CANNetworkManager::CANNetwork.update();
+
 	// Force claim a partner
 	testFrame.dataLength = 8;
 	testFrame.channel = 0;
@@ -483,6 +485,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(tcPartner->destroy(3));
 	ASSERT_TRUE(internalECU->destroy(3));
+
+	CANNetworkManager::CANNetwork.update();
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
@@ -569,7 +573,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
 	testFrame.identifier = 0x18EEFFF7;
-	testFrame.data[0] = 0x03;
+	testFrame.data[0] = 0x04;
 	testFrame.data[1] = 0x04;
 	testFrame.data[2] = 0x00;
 	testFrame.data[3] = 0x12;
@@ -1175,6 +1179,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 
 	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
 
+	CANNetworkManager::CANNetwork.update();
+
 	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 	interfaceUnderTest.initialize(false);
 
@@ -1371,6 +1377,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
 
 	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
 
+	CANNetworkManager::CANNetwork.update();
+
 	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 	EXPECT_NO_THROW(interfaceUnderTest.initialize(true));
 
@@ -1442,7 +1450,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
 	testFrame.identifier = 0x18EEFFF7;
-	testFrame.data[0] = 0x03;
+	testFrame.data[0] = 0x05;
 	testFrame.data[1] = 0x04;
 	testFrame.data[2] = 0x00;
 	testFrame.data[3] = 0x13;

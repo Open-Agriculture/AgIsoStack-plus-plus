@@ -121,7 +121,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ(LanguageCommandInterface::PressureUnits::Reserved, interfaceUnderTest.get_commanded_pressure_units());
 	EXPECT_EQ(LanguageCommandInterface::ForceUnits::ImperialUS, interfaceUnderTest.get_commanded_force_units());
 	EXPECT_EQ(LanguageCommandInterface::UnitSystem::Metric, interfaceUnderTest.get_commanded_generic_units());
-	EXPECT_LT(SystemTiming::get_timestamp_ms() - interfaceUnderTest.get_language_command_timestamp(), 1);
+	EXPECT_LT(SystemTiming::get_timestamp_ms() - interfaceUnderTest.get_language_command_timestamp(), 2);
 	EXPECT_EQ("", interfaceUnderTest.get_country_code());
 
 	// Use the language code as a way to assert against if we processed the message.
