@@ -222,6 +222,7 @@ namespace isobus
 			if (activeDTCList.end() == activeLocation)
 			{
 				// Not already active. This is valid
+				retVal = true;
 				auto inactiveLocation = std::find(inactiveDTCList.begin(), inactiveDTCList.end(), dtc);
 
 				if (inactiveDTCList.end() != inactiveLocation)
@@ -256,6 +257,7 @@ namespace isobus
 
 			if (inactiveDTCList.end() == inactiveLocation)
 			{
+				retVal = true;
 				auto activeLocation = std::find(activeDTCList.begin(), activeDTCList.end(), dtc);
 
 				if (activeDTCList.end() != activeLocation)
@@ -915,10 +917,10 @@ namespace isobus
 				buffer[2] = 0xFF;
 				buffer[3] = 0xFF;
 				buffer[4] = 0xFF;
-				buffer[5] = (currentMessageData.suspectParameterNumber & 0xFF);
-				buffer[6] = ((currentMessageData.suspectParameterNumber >> 8) & 0xFF);
-				buffer[7] = (((currentMessageData.suspectParameterNumber >> 16) << 5) & 0xFF);
-				buffer[7] |= (currentMessageData.failureModeIdentifier & 0x07);
+				buffer[5] = static_cast<std::uint8_t>(currentMessageData.suspectParameterNumber & 0xFF);
+				buffer[6] = static_cast<std::uint8_t>((currentMessageData.suspectParameterNumber >> 8) & 0xFF);
+				buffer[7] = static_cast<std::uint8_t>(((currentMessageData.suspectParameterNumber >> 16) << 5) & 0xE0);
+				buffer[7] |= (currentMessageData.failureModeIdentifier & 0x1F);
 
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22),
 				                                                        buffer.data(),
@@ -1006,7 +1008,7 @@ namespace isobus
 										}
 									}
 
-									if (0 != tempDM22Data.nackIndicator)
+									if (0 == tempDM22Data.nackIndicator)
 									{
 										// DTC is in neither list. NACK with the reason that we don't know anything about it
 										tempDM22Data.nackIndicator = static_cast<std::uint8_t>(DM22NegativeAcknowledgeIndicator::UnknownOrDoesNotExist);
@@ -1050,7 +1052,7 @@ namespace isobus
 										}
 									}
 
-									if (0 != tempDM22Data.nackIndicator)
+									if (0 == tempDM22Data.nackIndicator)
 									{
 										// DTC is in neither list. NACK with the reason that we don't know anything about it
 										tempDM22Data.nackIndicator = static_cast<std::uint8_t>(DM22NegativeAcknowledgeIndicator::UnknownOrDoesNotExist);
