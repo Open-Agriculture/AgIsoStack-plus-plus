@@ -90,7 +90,7 @@ int main()
 	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
-	//! @todo Check this instead of asuming it is done
+	//! @todo Check this instead of assuming it is done
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	constexpr std::uint8_t TEST_MESSAGE_LENGTH = 100;
