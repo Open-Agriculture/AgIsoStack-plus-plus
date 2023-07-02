@@ -908,6 +908,36 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(0x00, testFrame.data[5]); // Occurrence Count  + Conversion Method
 		EXPECT_EQ(0xFF, testFrame.data[6]); // Padding
 		EXPECT_EQ(0xFF, testFrame.data[7]); // Padding
+
+		// Try in J1939 Mode, make sure lamps are not reserved values
+		protocolUnderTest.set_j1939_mode(true);
+		protocolUnderTest.set_diagnostic_trouble_code_active(testDTC1, true);
+		protocolUnderTest.set_diagnostic_trouble_code_active(testDTC1, false);
+
+		testFrame.dataLength = 3;
+		testFrame.identifier = 0x18EAAAAB;
+		testFrame.data[0] = 0xCB;
+		testFrame.data[1] = 0xFE;
+		testFrame.data[2] = 0x00;
+		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.update();
+		protocolUnderTest.update();
+
+		EXPECT_TRUE(testPlugin.read_frame(testFrame));
+
+		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+		EXPECT_EQ(0x18FECBAA, testFrame.identifier); // BAM from address AA
+		EXPECT_NE(0xFF, testFrame.data[0]); // Lamp
+		EXPECT_EQ(0xFF, testFrame.data[1]); // Solid Lamp
+		EXPECT_EQ(0xD2, testFrame.data[2]); // SPN LSB
+		EXPECT_EQ(0x04, testFrame.data[3]); // SPN
+		EXPECT_EQ(31, testFrame.data[4]); // SPN + FMI
+		EXPECT_EQ(0x01, testFrame.data[5]); // Occurrence Count  + Conversion Method
+		EXPECT_EQ(0xFF, testFrame.data[6]); // Padding
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Padding
+
+		protocolUnderTest.set_j1939_mode(false);
+		protocolUnderTest.clear_inactive_diagnostic_trouble_codes();
 	}
 
 	{
@@ -942,7 +972,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xFC;
 		testFrame.data[1] = 0xFF;
 		testFrame.data[2] = 0xFF;
-		testFrame.data[3] = 0x00;
+		testFrame.data[3] = 0x03;
 		testFrame.data[4] = 0x0A;
 		testFrame.data[5] = 0x00;
 		testFrame.data[6] = 0xFF;
@@ -955,6 +985,36 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		// Restart broadcasts
 		testFrame.dataLength = 8;
 		testFrame.data[0] = 0xFD;
+		testFrame.data[1] = 0xFF;
+		testFrame.data[2] = 0xFF;
+		testFrame.data[3] = 0x00;
+		testFrame.data[4] = 0xFF;
+		testFrame.data[5] = 0xFF;
+		testFrame.data[6] = 0xFF;
+		testFrame.data[7] = 0xFF;
+		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.update();
+		protocolUnderTest.update();
+		EXPECT_TRUE(protocolUnderTest.get_broadcast_state());
+
+		// Test suspending the current data link
+		testFrame.dataLength = 8;
+		testFrame.data[0] = 0x3F;
+		testFrame.data[1] = 0xFF;
+		testFrame.data[2] = 0xFF;
+		testFrame.data[3] = 0x00;
+		testFrame.data[4] = 0x0A;
+		testFrame.data[5] = 0x00;
+		testFrame.data[6] = 0xFF;
+		testFrame.data[7] = 0xFF;
+		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.update();
+		protocolUnderTest.update();
+		EXPECT_FALSE(protocolUnderTest.get_broadcast_state());
+
+		// Restart broadcasts
+		testFrame.dataLength = 8;
+		testFrame.data[0] = 0x7F;
 		testFrame.data[1] = 0xFF;
 		testFrame.data[2] = 0xFF;
 		testFrame.data[3] = 0x00;
@@ -1080,6 +1140,35 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(0x18C3ABAA, testFrame.identifier);
 		EXPECT_EQ(3, testFrame.data[0]); // Positive acknowledge of clear/reset of a specific active DTC
 		EXPECT_EQ(0x02, testFrame.data[1]); // Since the DTC is not active, it is unknown to us.
+		EXPECT_EQ(0xFF, testFrame.data[2]); // Reserved
+		EXPECT_EQ(0xFF, testFrame.data[3]); // Reserved
+		EXPECT_EQ(0xFF, testFrame.data[4]); // Reserved
+		EXPECT_EQ(0xD2, testFrame.data[5]); // SPN
+		EXPECT_EQ(0x04, testFrame.data[6]); // SPN
+		EXPECT_EQ(31, testFrame.data[7]); // 5 bits of FMI
+
+		protocolUnderTest.set_diagnostic_trouble_code_active(testDTC1, true);
+
+		// Try clearing an inactive DTC that is in the active list to check the error code
+		testFrame.dataLength = 8;
+		testFrame.identifier = 0x18C3AAAB;
+		testFrame.data[0] = 1; // Request to clear/reset a specific previously active DTC 5.7.22.1
+		testFrame.data[1] = 0xFF; // Control Byte Specific Indicator for Individual DTC Clear (N/A)
+		testFrame.data[2] = 0xFF; // Reserved
+		testFrame.data[3] = 0xFF; // Reserved
+		testFrame.data[4] = 0xFF; // Reserved
+		testFrame.data[5] = 0xD2; // SPN
+		testFrame.data[6] = 0x04; // SPN
+		testFrame.data[7] = 31; // FMI (5 bits)
+		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.update();
+		protocolUnderTest.update();
+
+		EXPECT_TRUE(testPlugin.read_frame(testFrame));
+		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+		EXPECT_EQ(0x18C3ABAA, testFrame.identifier);
+		EXPECT_EQ(3, testFrame.data[0]); // Positive acknowledge of clear/reset of a specific active DTC
+		EXPECT_EQ(0x03, testFrame.data[1]); // DTC is not inactive (because it's in the active list)
 		EXPECT_EQ(0xFF, testFrame.data[2]); // Reserved
 		EXPECT_EQ(0xFF, testFrame.data[3]); // Reserved
 		EXPECT_EQ(0xFF, testFrame.data[4]); // Reserved
