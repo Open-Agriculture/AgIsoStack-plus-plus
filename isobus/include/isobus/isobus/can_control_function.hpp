@@ -76,6 +76,7 @@ namespace isobus
 		/// @param[in] NAMEValue The NAME of the control function
 		/// @param[in] addressValue The current address of the control function
 		/// @param[in] CANPort The CAN channel index that the control function communicates on
+		/// @param[in] type The 'Type' of control function to create
 		ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type = Type::External);
 
 		friend class CANNetworkManager;

@@ -1093,7 +1093,7 @@ namespace isobus
 		{
 			const auto &messageData = message.get_data();
 
-			auto command = static_cast<StopStartCommand>(messageData[0] & (DM13_NETWORK_BITMASK << (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(networkType))));
+			auto command = static_cast<StopStartCommand>((messageData[0] & (DM13_NETWORK_BITMASK << (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(networkType)))) >> (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(networkType)));
 			switch (command)
 			{
 				case StopStartCommand::StopBroadcast:
@@ -1140,7 +1140,7 @@ namespace isobus
 			}
 
 			// Check current data link
-			command = static_cast<StopStartCommand>(messageData[0] & (DM13_NETWORK_BITMASK << (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(NetworkType::CurrentDataLink))));
+			command = static_cast<StopStartCommand>((messageData[0] & (DM13_NETWORK_BITMASK << (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(NetworkType::CurrentDataLink)))) >> (DM13_BITS_PER_NETWORK * static_cast<std::uint8_t>(NetworkType::CurrentDataLink)));
 			switch (command)
 			{
 				case StopStartCommand::StopBroadcast:
@@ -1179,8 +1179,11 @@ namespace isobus
 				break;
 
 				case StopStartCommand::StartBroadcast:
+				{
 					broadcastState = true;
-					break;
+					customDM13SuspensionTime = 0;
+				}
+				break;
 
 				default:
 					break;
