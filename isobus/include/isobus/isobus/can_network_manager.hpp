@@ -137,6 +137,14 @@ namespace isobus
 		/// @param[in] controlFunction The control function that was created
 		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>);
 
+		/// @brief Gets all the internal control functions that are currently registered in the network manager
+		/// @returns A list of all the internal control functions
+		const std::list<std::shared_ptr<InternalControlFunction>> &get_internal_control_functions() const;
+
+		/// @brief Gets all the partnered control functions that are currently registered in the network manager
+		/// @returns A list of all the partnered control functions
+		const std::list<std::shared_ptr<PartneredControlFunction>> &get_partnered_control_functions() const;
+
 		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
 		/// Use this to register for FP multipacket messages
 		/// @returns The class instance of the NMEA2k fast packet protocol.

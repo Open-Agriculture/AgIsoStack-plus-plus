@@ -280,11 +280,11 @@ namespace isobus
 
 	void CANNetworkManager::on_control_function_destroyed(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
 	{
-		if (controlFunction->get_type() == ControlFunction::Type::Internal)
+		if (ControlFunction::Type::Internal == controlFunction->get_type())
 		{
 			internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
 		}
-		else if (controlFunction->get_type() == ControlFunction::Type::Partnered)
+		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
 		{
 			partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
 		}
@@ -316,19 +316,29 @@ namespace isobus
 				}
 			}
 		}
-		CANStackLogger::debug("[NM]: %s control function with address '%d' is deleted.", controlFunction->get_type_string().c_str(), controlFunction->get_address());
+		CANStackLogger::info("[NM]: %s control function with address '%d' is deleted.", controlFunction->get_type_string().c_str(), controlFunction->get_address());
 	}
 
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
 	{
-		if (controlFunction->get_type() == ControlFunction::Type::Internal)
+		if (ControlFunction::Type::Internal == controlFunction->get_type())
 		{
 			internalControlFunctions.push_back(std::static_pointer_cast<InternalControlFunction>(controlFunction));
 		}
-		else if (controlFunction->get_type() == ControlFunction::Type::Partnered)
+		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
 		{
 			partneredControlFunctions.push_back(std::static_pointer_cast<PartneredControlFunction>(controlFunction));
 		}
+	}
+
+	const std::list<std::shared_ptr<InternalControlFunction>> &CANNetworkManager::get_internal_control_functions() const
+	{
+		return internalControlFunctions;
+	}
+
+	const std::list<std::shared_ptr<PartneredControlFunction>> &CANNetworkManager::get_partnered_control_functions() const
+	{
+		return partneredControlFunctions;
 	}
 
 	FastPacketProtocol &CANNetworkManager::get_fast_packet_protocol()
@@ -395,11 +405,11 @@ namespace isobus
 				// Need to evict them from the table and move them to the inactive list
 				targetControlFunction->address = NULL_CAN_ADDRESS;
 				inactiveControlFunctions.push_back(targetControlFunction);
-				CANStackLogger::debug("[NM]: %s CF '%016llx' is evicted from address '%d' on channel '%d', as their address is probably stolen.",
-				                      targetControlFunction->get_type_string().c_str(),
-				                      targetControlFunction->get_NAME().get_full_name(),
-				                      claimedAddress,
-				                      channelIndex);
+				CANStackLogger::info("[NM]: %s CF '%016llx' is evicted from address '%d' on channel '%d', as their address is probably stolen.",
+				                     targetControlFunction->get_type_string().c_str(),
+				                     targetControlFunction->get_NAME().get_full_name(),
+				                     claimedAddress,
+				                     channelIndex);
 				targetControlFunction = nullptr;
 			}
 
@@ -563,10 +573,9 @@ namespace isobus
 					if ((partner->get_can_port() == rxFrame.channel) &&
 					    (partner->check_matches_name(NAME(claimedNAME))))
 					{
-						partner->address = claimedAddress;
 						partner->controlFunctionNAME = NAME(claimedNAME);
 						foundControlFunction = partner;
-						controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = foundControlFunction;
+						controlFunctionTable[rxFrame.channel][claimedAddress] = foundControlFunction;
 						break;
 					}
 				}
@@ -592,29 +601,29 @@ namespace isobus
 				// New device, need to start keeping track of it
 				foundControlFunction = ControlFunction::create(NAME(claimedNAME), claimedAddress, rxFrame.channel);
 				controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = foundControlFunction;
-				CANStackLogger::debug("[NM]: New Control function %d", foundControlFunction->get_address());
+				CANStackLogger::debug("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
 			}
-			else
+			else if (foundControlFunction->address != claimedAddress)
 			{
-				if (foundControlFunction->address != claimedAddress)
+				if (foundControlFunction->get_address_valid())
 				{
-					if (foundControlFunction->get_address_valid())
-					{
-						controlFunctionTable[rxFrame.channel][claimedAddress] = foundControlFunction;
-						controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = nullptr;
-						CANStackLogger::info("[NM]: The %s control function at address %d changed it's address to %d.",
-						                     foundControlFunction->get_type_string().c_str(),
-						                     foundControlFunction->get_address(),
-						                     claimedAddress);
-					}
-					else
-					{
-						CANStackLogger::debug("[NM]: A %s control function claimed '%d'.",
-						                      foundControlFunction->get_type_string().c_str(),
-						                      claimedAddress);
-					}
-					foundControlFunction->address = claimedAddress;
+					controlFunctionTable[rxFrame.channel][claimedAddress] = foundControlFunction;
+					controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = nullptr;
+					CANStackLogger::info("[NM]: The %s control function at address %d changed it's address to %d on channel %u.",
+					                     foundControlFunction->get_type_string().c_str(),
+					                     foundControlFunction->get_address(),
+					                     claimedAddress,
+					                     foundControlFunction->get_can_port());
 				}
+				else
+				{
+					CANStackLogger::info("[NM]: %s control function with name %016llx has claimed address %u on channel %u.",
+					                     foundControlFunction->get_type_string().c_str(),
+					                     foundControlFunction->get_NAME().get_full_name(),
+					                     claimedAddress,
+					                     foundControlFunction->get_can_port());
+				}
+				foundControlFunction->address = claimedAddress;
 			}
 		}
 	}
@@ -625,47 +634,36 @@ namespace isobus
 		{
 			if (!partner->initialized)
 			{
-				bool foundReplaceableControlFunction = false;
-
-				// Check this partner against the existing CFs
+				// Remove any inactive CF that matches the partner's name
 				for (auto currentInactiveControlFunction = inactiveControlFunctions.begin(); currentInactiveControlFunction != inactiveControlFunctions.end(); currentInactiveControlFunction++)
 				{
 					if ((partner->check_matches_name((*currentInactiveControlFunction)->get_NAME())) &&
 					    (partner->get_can_port() == (*currentInactiveControlFunction)->get_can_port()) &&
 					    (ControlFunction::Type::External == (*currentInactiveControlFunction)->get_type()))
 					{
-						foundReplaceableControlFunction = true;
-
-						// This CF matches the filter and is not an internal or already partnered CF
-						CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: Remapping new partner control function to inactive external control function at address " + isobus::to_string(static_cast<int>((*currentInactiveControlFunction)->get_address())));
-
-						// Populate the partner's data
-						partner->address = (*currentInactiveControlFunction)->get_address();
-						partner->controlFunctionNAME = (*currentInactiveControlFunction)->get_NAME();
-						partner->initialized = true;
 						inactiveControlFunctions.erase(currentInactiveControlFunction);
 						break;
 					}
 				}
 
-				if (!foundReplaceableControlFunction)
+				for (const auto &currentActiveControlFunction : controlFunctionTable[partner->get_can_port()])
 				{
-					for (const auto &currentActiveControlFunction : controlFunctionTable[partner->get_can_port()])
+					if ((nullptr != currentActiveControlFunction) &&
+					    (partner->check_matches_name(currentActiveControlFunction->get_NAME())) &&
+					    (ControlFunction::Type::External == currentActiveControlFunction->get_type()))
 					{
-						if ((nullptr != currentActiveControlFunction) &&
-						    (partner->check_matches_name(currentActiveControlFunction->get_NAME())) &&
-						    (ControlFunction::Type::External == currentActiveControlFunction->get_type()))
-						{
-							// This CF matches the filter and is not an internal or already partnered CF
-							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[NM]: Remapping new partner control function to an active external control function at address " + isobus::to_string(static_cast<int>(currentActiveControlFunction->get_address())));
+						// This CF matches the filter and is not an internal or already partnered CF
+						CANStackLogger::info("[NM]: A partner with name %016llx has claimed address %u on channel %u.",
+						                     partner->get_NAME().get_full_name(),
+						                     partner->get_address(),
+						                     partner->get_can_port());
 
-							// Populate the partner's data
-							partner->address = currentActiveControlFunction->get_address();
-							partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
-							partner->initialized = true;
-							controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
-							break;
-						}
+						// Populate the partner's data
+						partner->address = currentActiveControlFunction->get_address();
+						partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
+						partner->initialized = true;
+						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
+						break;
 					}
 				}
 				partner->initialized = true;
@@ -882,7 +880,7 @@ namespace isobus
 					    (ControlFunction::Type::Internal != controlFunction->get_type()))
 					{
 						inactiveControlFunctions.push_back(controlFunction);
-						CANStackLogger::debug("[NM]: Control function on channel %u with address %u and NAME %016llx is now offline.", channelIndex, controlFunction->get_address(), controlFunction->get_NAME());
+						CANStackLogger::info("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
 						controlFunctionTable[channelIndex][i] = nullptr;
 						controlFunction->address = NULL_CAN_ADDRESS;
 					}
