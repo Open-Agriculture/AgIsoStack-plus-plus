@@ -125,7 +125,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 
 	clientUnderTest.terminate();
 	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(4));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)

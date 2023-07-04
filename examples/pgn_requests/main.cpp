@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <future>
 #include <iostream>
 #include <memory>
 
@@ -128,45 +129,45 @@ int main()
 	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 	std::signal(SIGINT, signal_handler);
 
-	// Wait to make sure address claiming is done. The time is arbitrary.
-	//! @todo Check this instead of asuming it is done
-	std::this_thread::sleep_for(std::chrono::milliseconds(1250));
+	// Make sure address claiming is done before we continue
+	auto addressClaimedFuture = std::async(std::launch::async, [&TestInternalECU]() {
+		while (!TestInternalECU->get_address_valid())
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	});
+	if (addressClaimedFuture.wait_for(std::chrono::seconds(5)) == std::future_status::timeout)
+	{
+		std::cout << "Address claiming failed. Please make sure that your internal control function can claim a valid address." << std::endl;
+		return -3;
+	}
 
-	// Tell the CAN stack that we want to respond to PGN requests that are sent to our internal control function
-	isobus::ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(TestInternalECU);
-
-	// Get a pointer to the protocol instance we just assigned
-	isobus::ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(TestInternalECU);
+	isobus::ParameterGroupNumberRequestProtocol pgnRequestProtocol(TestInternalECU);
 
 	// Register a callback to handle PROPA PGN Requests
-	if (nullptr != pgnRequestProtocol)
-	{
-		pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_pgn_request_handler, nullptr);
+	pgnRequestProtocol.register_pgn_request_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_pgn_request_handler, nullptr);
 
-		// Now, if you send a PGN request for EF00 to our internal control function, the stack will acknowledge it. Other requests will be NACK'ed (negative acknowledged)
-		// NOTE the device you send from MUST have address claimed.
+	// Now, if you send a PGN request for EF00 to our internal control function, the stack will acknowledge it. Other requests will be NACK'ed (negative acknowledged)
+	// NOTE the device you send from MUST have address claimed.
 
-		// Now we'll set up a callback to handle requests for repetition rate for the PROPA PGN
-		pgnRequestProtocol->register_request_for_repetition_rate_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_request_for_repetition_rate_handler, nullptr);
+	// Now we'll set up a callback to handle requests for repetition rate for the PROPA PGN
+	pgnRequestProtocol.register_request_for_repetition_rate_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_request_for_repetition_rate_handler, nullptr);
 
-		// Now we'll get a callback when someone requests a repetition rate for PROPA.
-		// The application (not the stack) must handle these requests, as the CAN stack does not know what data to send when responding.
-		// It's entirely application defined!
-		// So we'll handle that below in the `while(true)` loop as an example.
-		// You do not need to handle every PGN. Only ones you care about. ISOBUS allows you to ignore any and all requests for repetition rate if you want with no reponse needed.
+	// Now we'll get a callback when someone requests a repetition rate for PROPA.
+	// The application (not the stack) must handle these requests, as the CAN stack does not know what data to send when responding.
+	// It's entirely application defined!
+	// So we'll handle that below in the `while(true)` loop as an example.
+	// You do not need to handle every PGN. Only ones you care about. ISOBUS allows you to ignore any and all requests for repetition rate if you want with no response needed.
 
-		// This is how you would request a PGN from someone else. In this example, we request it from the broadcast address.
-		// Generally you'd want to replace nullptr with your partner control function as its a little nicer than just asking everyone on the bus for a PGN
-		isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), TestInternalECU, nullptr);
-	}
+	// This is how you would request a PGN from someone else. In this example, we request it from the broadcast address.
+	// Generally you'd want to replace nullptr with your partner control function as its a little nicer than just asking everyone on the bus for a PGN
+	isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), TestInternalECU, nullptr);
 
 	while (running)
 	{
 		if (0xFFFFFFFF != propARepetitionRate_ms)
 		{
 			// If someone has requested a repetition rate for PROPA, service it here (in the application layer)
-			std::uint8_t buffer[isobus::CAN_DATA_LENGTH] = { 0 };
-			isobus::CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), buffer, isobus::CAN_DATA_LENGTH, TestInternalECU, repetitionRateRequestor);
+			std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> buffer = { 0 };
+			isobus::CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), buffer.data(), isobus::CAN_DATA_LENGTH, TestInternalECU, repetitionRateRequestor);
 			std::this_thread::sleep_for(std::chrono::milliseconds(propARepetitionRate_ms));
 		}
 		else

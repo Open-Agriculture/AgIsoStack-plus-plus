@@ -16,25 +16,24 @@
 
 namespace isobus
 {
-	ControlFunctionFunctionalities::ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
+	ControlFunctionFunctionalities::ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol) :
 	  myControlFunction(sourceControlFunction),
+	  pgnRequestProtocol(pgnRequestProtocol),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
 		set_functionality_is_supported(Functionalities::MinimumControlFunction, 1, true); // Support the absolute minimum by default
-		ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(myControlFunction);
 
-		ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction);
-		assert(nullptr != pgnRequestProtocol);
-		pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+		if (nullptr != pgnRequestProtocol)
+		{
+			pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+		}
 	}
 
 	ControlFunctionFunctionalities::~ControlFunctionFunctionalities()
 	{
-		ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction);
-
-		if (nullptr != pgnRequestProtocol)
+		if (auto protocol = pgnRequestProtocol.lock())
 		{
-			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+			protocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
 		}
 	}
 

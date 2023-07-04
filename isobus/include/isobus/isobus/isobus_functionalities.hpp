@@ -24,6 +24,8 @@
 
 namespace isobus
 {
+	class DiagnosticProtocol; // Forward declaration
+
 	/// @brief Manages the control function functionalities message
 	class ControlFunctionFunctionalities
 	{
@@ -159,7 +161,8 @@ namespace isobus
 
 		/// @brief Constructor for a ControlFunctionFunctionalities object
 		/// @param[in] sourceControlFunction The control function to use when sending messages
-		explicit ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction);
+		/// @param[in] pgnRequestProtocol The pgn request protocol for receiving control functionality requests
+		ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol);
 
 		/// @brief Destructor for a ControlFunctionFunctionalities object
 		~ControlFunctionFunctionalities();
@@ -370,8 +373,7 @@ namespace isobus
 		/// @returns true if the aux valve you specified is being reported as "supported".
 		bool get_tractor_implement_management_client_aux_valve_flow_supported(std::uint8_t auxValveIndex);
 
-		/// @brief This will be called by the network manager when the diagnostic protocol updates.
-		/// There is no need for you to call it manually.
+		/// @brief The diagnostic protocol will call this update function, make sure to call DiagnosticProtocol::update() in your update loop
 		void update();
 
 	protected:
@@ -466,6 +468,7 @@ namespace isobus
 		static constexpr std::uint8_t NUMBER_TIM_AUX_VALVES = 32; ///< The max number of TIM aux valves
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
+		std::weak_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol to handle PGN requests with
 		std::list<FunctionalityData> supportedFunctionalities; ///< A list of all configured functionalities and their data
 		std::mutex functionalitiesMutex; ///< Since messages come in on a different thread than the main app (probably), this mutex protects the functionality data
 		ProcessingFlags txFlags; ///< Handles retries for sending the CF functionalities message

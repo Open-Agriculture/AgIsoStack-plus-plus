@@ -1137,7 +1137,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(tcPartner->destroy(4));
-	ASSERT_TRUE(internalECU->destroy(6));
+	ASSERT_TRUE(internalECU->destroy(5));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
@@ -1363,7 +1363,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(tcPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(4));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
@@ -1729,5 +1729,5 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(TestPartnerTC->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(4));
+	ASSERT_TRUE(internalECU->destroy(3));
 }
