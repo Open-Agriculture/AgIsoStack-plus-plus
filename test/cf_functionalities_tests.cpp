@@ -11,8 +11,8 @@ using namespace isobus;
 class TestControlFunctionFunctionalities : public ControlFunctionFunctionalities
 {
 public:
-	explicit TestControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
-	  ControlFunctionFunctionalities(sourceControlFunction)
+	explicit TestControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol) :
+	  ControlFunctionFunctionalities(sourceControlFunction, pgnRequestProtocol)
 	{
 	}
 
@@ -49,7 +49,8 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 
 	ASSERT_TRUE(internalECU->get_address_valid());
 
-	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
+	auto pgnRequestProtocol = std::make_shared<ParameterGroupNumberRequestProtocol>(internalECU);
+	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU, pgnRequestProtocol);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 

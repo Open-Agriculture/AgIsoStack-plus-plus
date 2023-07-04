@@ -47,7 +47,6 @@ namespace isobus
 		{
 			if (nullptr != myControlFunction)
 			{
-				ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(myControlFunction);
 				CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
 				initialized = true;
 			}
@@ -74,18 +73,16 @@ namespace isobus
 
 	bool LanguageCommandInterface::send_request_language_command() const
 	{
-		auto pgnRequest = ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(myControlFunction);
 		bool retVal = false;
 
-		if (!initialized)
+		if (initialized)
+		{
+			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction, myPartner);
+		}
+		else
 		{
 			// Make sure you call initialize first!
 			CANStackLogger::error("[VT/TC]: Language command interface is being used without being initialized!");
-		}
-
-		if ((nullptr != pgnRequest) && initialized)
-		{
-			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction, myPartner);
 		}
 		return retVal;
 	}

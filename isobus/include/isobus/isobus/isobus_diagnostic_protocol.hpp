@@ -213,14 +213,17 @@ namespace isobus
 
 		/// @brief The constructor for this protocol
 		/// @param[in] internalControlFunction The internal control function that owns this protocol and will be used to send messages
+		/// @param[in] pgnRequestProtocol The PGN request protocol that will be used to respond to PGN requests
 		/// @param[in] networkType The type of diagnostic network that this protocol will reflect
-		DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, NetworkType networkType = NetworkType::ProprietaryNetwork1);
+		DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction,
+		                   std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol,
+		                   NetworkType networkType = NetworkType::ProprietaryNetwork1);
 
 		/// @brief The destructor for this protocol
 		~DiagnosticProtocol();
 
 		/// @brief The protocol's initializer function
-		void initialize();
+		bool initialize();
 
 		/// @brief Returns if the protocol has been initialized
 		/// @returns true if the protocol has been initialized, otherwise false
@@ -487,6 +490,7 @@ namespace isobus
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
+		std::weak_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol that this protocol will use
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs

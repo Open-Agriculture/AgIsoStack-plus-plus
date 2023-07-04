@@ -12,14 +12,19 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 	NAME TestDeviceNAME(0);
 	auto TestInternalECU = InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 
-	auto diagnosticProtocol = std::make_unique<DiagnosticProtocol>(TestInternalECU);
-	EXPECT_NO_THROW(diagnosticProtocol->initialize());
+	auto pgnRequestProtocol = std::make_shared<ParameterGroupNumberRequestProtocol>(TestInternalECU);
+	auto diagnosticProtocol = std::make_unique<DiagnosticProtocol>(TestInternalECU, pgnRequestProtocol);
+	EXPECT_TRUE(diagnosticProtocol->initialize());
+	EXPECT_FALSE(diagnosticProtocol->initialize()); // Should not be able to initialize twice
 
 	EXPECT_NO_THROW(diagnosticProtocol->terminate());
 	diagnosticProtocol.reset();
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(TestInternalECU->destroy(2));
+	EXPECT_EQ(pgnRequestProtocol->get_number_registered_pgn_request_callbacks(), 0);
+	EXPECT_EQ(pgnRequestProtocol->get_number_registered_request_for_repetition_rate_callbacks(), 0);
+	pgnRequestProtocol.reset();
+
+	ASSERT_TRUE(TestInternalECU->destroy());
 }
 
 TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
@@ -38,7 +43,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 	auto TestInternalECU = InternalControlFunction::create(TestDeviceNAME, 0xAA, 0);
 
-	DiagnosticProtocol protocolUnderTest(TestInternalECU, DiagnosticProtocol::NetworkType::SAEJ1939Network1PrimaryVehicleNetwork);
+	auto pgnRequestProtocol = std::make_shared<ParameterGroupNumberRequestProtocol>(TestInternalECU);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU, pgnRequestProtocol, DiagnosticProtocol::NetworkType::SAEJ1939Network1PrimaryVehicleNetwork);
 
 	EXPECT_FALSE(protocolUnderTest.get_initialized());
 	protocolUnderTest.initialize();
@@ -555,7 +561,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x18FD32AA, testFrame.identifier); // BAM from address AA
-		EXPECT_EQ(0x01, testFrame.data[0]); // J1939–73
+		EXPECT_EQ(0x01, testFrame.data[0]); // J1939-73
 		EXPECT_EQ(0xFF, testFrame.data[1]); // Reserved
 		EXPECT_EQ(0xFF, testFrame.data[2]); // Reserved
 		EXPECT_EQ(0xFF, testFrame.data[3]); // Reserved

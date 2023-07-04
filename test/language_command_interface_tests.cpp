@@ -24,7 +24,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 	EXPECT_EQ(true, interfaceUnderTest.get_initialized());
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(internalECU->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(2));
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, InvalidICF)
@@ -53,7 +53,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(vtPartner->destroy(2));
-	ASSERT_TRUE(internalECU->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(2));
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
@@ -172,5 +172,5 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(internalECU->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(2));
 }
