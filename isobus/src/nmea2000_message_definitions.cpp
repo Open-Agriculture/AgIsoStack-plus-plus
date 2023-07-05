@@ -40,9 +40,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::uint16_t VesselHeading::get_heading() const
+		std::uint16_t VesselHeading::get_raw_heading() const
 		{
 			return headingReading;
+		}
+
+		float VesselHeading::get_heading() const
+		{
+			return (headingReading * 0.0001f);
 		}
 
 		bool VesselHeading::set_heading(std::uint16_t heading)
@@ -52,9 +57,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::int16_t VesselHeading::get_magnetic_deviation() const
+		std::int16_t VesselHeading::get_raw_magnetic_deviation() const
 		{
 			return magneticDeviation;
+		}
+
+		float VesselHeading::get_magnetic_deviation() const
+		{
+			return (magneticDeviation * 0.0001f);
 		}
 
 		bool VesselHeading::set_magnetic_deviation(std::uint16_t deviation)
@@ -64,9 +74,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::int16_t VesselHeading::get_magnetic_variation() const
+		std::int16_t VesselHeading::get_raw_magnetic_variation() const
 		{
 			return magneticVariation;
+		}
+
+		float VesselHeading::get_magnetic_variation() const
+		{
+			return (magneticVariation * 0.0001f);
 		}
 
 		bool VesselHeading::set_magnetic_variation(std::int16_t variation)
@@ -100,6 +115,20 @@ namespace isobus
 			return retVal;
 		}
 
+		void VesselHeading::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(CAN_DATA_LENGTH);
+			buffer.at(0) = (sequenceID <= MAX_SEQUENCE_ID) ? sequenceID : 0xFF;
+			buffer.at(1) = static_cast<std::uint8_t>(headingReading & 0xFF);
+			buffer.at(2) = static_cast<std::uint8_t>((headingReading >> 8) & 0xFF);
+			buffer.at(3) = static_cast<std::uint8_t>(magneticDeviation & 0xFF);
+			buffer.at(4) = static_cast<std::uint8_t>((magneticDeviation >> 8) & 0xFF);
+			buffer.at(5) = static_cast<std::uint8_t>(magneticVariation & 0xFF);
+			buffer.at(6) = static_cast<std::uint8_t>((magneticVariation >> 8) & 0xFF);
+			buffer.at(7) = static_cast<std::uint8_t>(sensorReference) & 0x03;
+			buffer.at(7) |= 0xFC;
+		}
+
 		RateOfTurn::RateOfTurn(std::shared_ptr<ControlFunction> source) :
 		  senderControlFunction(source)
 		{
@@ -122,9 +151,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::int32_t RateOfTurn::get_rate_of_turn() const
+		std::int32_t RateOfTurn::get_raw_rate_of_turn() const
 		{
 			return rateOfTurn;
+		}
+
+		double RateOfTurn::get_rate_of_turn() const
+		{
+			return (rateOfTurn * (1.0 / 32.0 * 10E-6));
 		}
 
 		bool RateOfTurn::set_rate_of_turn(std::int32_t turnRate)
@@ -144,6 +178,20 @@ namespace isobus
 			bool retVal = (sequenceID != sequenceNumber);
 			sequenceID = sequenceNumber;
 			return retVal;
+		}
+
+		void RateOfTurn::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(CAN_DATA_LENGTH);
+
+			buffer.at(0) = (sequenceID <= MAX_SEQUENCE_ID) ? sequenceID : 0xFF;
+			buffer.at(1) = static_cast<std::uint8_t>(rateOfTurn & 0xFF);
+			buffer.at(2) = static_cast<std::uint8_t>((rateOfTurn >> 8) & 0xFF);
+			buffer.at(3) = static_cast<std::uint8_t>((rateOfTurn >> 16) & 0xFF);
+			buffer.at(4) = static_cast<std::uint8_t>((rateOfTurn >> 24) & 0xFF);
+			buffer.at(5) = 0xFF; // Reserved bytes
+			buffer.at(6) = 0xFF;
+			buffer.at(7) = 0xFF;
 		}
 
 		PositionRapidUpdate::PositionRapidUpdate(std::shared_ptr<ControlFunction> source) :
@@ -202,6 +250,20 @@ namespace isobus
 			return retVal;
 		}
 
+		void PositionRapidUpdate::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(CAN_DATA_LENGTH);
+
+			buffer.at(0) = static_cast<std::uint8_t>(latitude & 0xFF);
+			buffer.at(1) = static_cast<std::uint8_t>((latitude >> 8) & 0xFF);
+			buffer.at(2) = static_cast<std::uint8_t>((latitude >> 16) & 0xFF);
+			buffer.at(3) = static_cast<std::uint8_t>((latitude >> 24) & 0xFF);
+			buffer.at(4) = static_cast<std::uint8_t>(longitude & 0xFF);
+			buffer.at(5) = static_cast<std::uint8_t>((longitude >> 8) & 0xFF);
+			buffer.at(6) = static_cast<std::uint8_t>((longitude >> 16) & 0xFF);
+			buffer.at(7) = static_cast<std::uint8_t>((longitude >> 24) & 0xFF);
+		}
+
 		CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundSpeedOverGroundRapidUpdate(std::shared_ptr<ControlFunction> source) :
 		  senderControlFunction(source)
 		{
@@ -224,9 +286,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::uint16_t CourseOverGroundSpeedOverGroundRapidUpdate::get_course_over_ground() const
+		std::uint16_t CourseOverGroundSpeedOverGroundRapidUpdate::get_raw_course_over_ground() const
 		{
 			return courseOverGround;
+		}
+
+		float CourseOverGroundSpeedOverGroundRapidUpdate::get_course_over_ground() const
+		{
+			return (0.0001f * courseOverGround);
 		}
 
 		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_course_over_ground(std::uint16_t course)
@@ -236,9 +303,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::uint16_t CourseOverGroundSpeedOverGroundRapidUpdate::get_speed_over_ground() const
+		std::uint16_t CourseOverGroundSpeedOverGroundRapidUpdate::get_raw_speed_over_ground() const
 		{
 			return speedOverGround;
+		}
+
+		float CourseOverGroundSpeedOverGroundRapidUpdate::get_speed_over_ground() const
+		{
+			return (0.01f * speedOverGround);
 		}
 
 		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_speed_over_ground(std::uint16_t speed)
@@ -270,6 +342,20 @@ namespace isobus
 			bool retVal = (cogReference != reference);
 			cogReference = reference;
 			return retVal;
+		}
+
+		void CourseOverGroundSpeedOverGroundRapidUpdate::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(CAN_DATA_LENGTH);
+
+			buffer.at(0) = sequenceID;
+			buffer.at(1) = (0xFC | static_cast<std::uint8_t>(cogReference));
+			buffer.at(2) = static_cast<std::uint8_t>(courseOverGround & 0xFF);
+			buffer.at(3) = static_cast<std::uint8_t>((courseOverGround >> 8) & 0xFF);
+			buffer.at(4) = static_cast<std::uint8_t>(speedOverGround & 0xFF);
+			buffer.at(5) = static_cast<std::uint8_t>((speedOverGround >> 8) & 0xFF);
+			buffer.at(6) = 0xFF; // Reserved
+			buffer.at(7) = 0xFF; // Reserved
 		}
 
 		PositionDeltaHighPrecisionRapidUpdate::PositionDeltaHighPrecisionRapidUpdate(std::shared_ptr<ControlFunction> source) :
@@ -357,6 +443,19 @@ namespace isobus
 			return retVal;
 		}
 
+		void PositionDeltaHighPrecisionRapidUpdate::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(CAN_DATA_LENGTH);
+
+			buffer.at(0) = sequenceID;
+			//! @todo Finish serializer
+		}
+
+		GNSSPositionData::GNSSPositionData(std::shared_ptr<ControlFunction> source) :
+		  senderControlFunction(source)
+		{
+		}
+
 		std::shared_ptr<ControlFunction> GNSSPositionData::get_control_function() const
 		{
 			return senderControlFunction;
@@ -374,7 +473,7 @@ namespace isobus
 
 		std::int64_t GNSSPositionData::get_raw_longitude() const
 		{
-			return std::int64_t();
+			return longitude;
 		}
 
 		double GNSSPositionData::get_longitude() const
@@ -384,17 +483,19 @@ namespace isobus
 
 		std::int32_t GNSSPositionData::get_geoidal_separation() const
 		{
-			return std::int32_t();
+			return geoidalSeparation;
 		}
 
 		bool GNSSPositionData::set_geoidal_separation(std::int32_t separation)
 		{
-			return false;
+			bool retVal = (geoidalSeparation != separation);
+			geoidalSeparation = separation;
+			return retVal;
 		}
 
 		std::uint32_t GNSSPositionData::get_timestamp() const
 		{
-			return std::uint32_t();
+			return messageTimestamp_ms;
 		}
 
 		bool GNSSPositionData::set_timestamp(std::uint32_t timestamp)
@@ -428,12 +529,12 @@ namespace isobus
 			return retVal;
 		}
 
-		GNSSPositionData::GNSSMEthod GNSSPositionData::get_gnss_method() const
+		GNSSPositionData::GNSSMethod GNSSPositionData::get_gnss_method() const
 		{
 			return method;
 		}
 
-		bool GNSSPositionData::set_gnss_method(GNSSMEthod gnssFixMethod)
+		bool GNSSPositionData::set_gnss_method(GNSSMethod gnssFixMethod)
 		{
 			bool retVal = (method != gnssFixMethod);
 			method = gnssFixMethod;
@@ -500,6 +601,72 @@ namespace isobus
 			return retVal;
 		}
 
+		void GNSSPositionData::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(MINIMUM_LENGTH_BYTES);
+
+			buffer.at(0) = sequenceID;
+			buffer.at(1) = static_cast<std::uint8_t>(positionDate & 0xFF);
+			buffer.at(2) = static_cast<std::uint8_t>((positionDate >> 8) & 0xFF);
+			buffer.at(3) = static_cast<std::uint8_t>(positionTime & 0xFF);
+			buffer.at(4) = static_cast<std::uint8_t>((positionTime >> 8) & 0xFF);
+			buffer.at(5) = static_cast<std::uint8_t>((positionTime >> 16) & 0xFF);
+			buffer.at(6) = static_cast<std::uint8_t>((positionTime >> 24) & 0xFF);
+			buffer.at(7) = static_cast<std::uint8_t>(latitude & 0xFF);
+			buffer.at(8) = static_cast<std::uint8_t>((latitude >> 8) & 0xFF);
+			buffer.at(9) = static_cast<std::uint8_t>((latitude >> 16) & 0xFF);
+			buffer.at(10) = static_cast<std::uint8_t>((latitude >> 24) & 0xFF);
+			buffer.at(11) = static_cast<std::uint8_t>((latitude >> 32) & 0xFF);
+			buffer.at(12) = static_cast<std::uint8_t>((latitude >> 40) & 0xFF);
+			buffer.at(13) = static_cast<std::uint8_t>((latitude >> 48) & 0xFF);
+			buffer.at(14) = static_cast<std::uint8_t>((latitude >> 56) & 0xFF);
+			buffer.at(15) = static_cast<std::uint8_t>(longitude & 0xFF);
+			buffer.at(16) = static_cast<std::uint8_t>((longitude >> 8) & 0xFF);
+			buffer.at(17) = static_cast<std::uint8_t>((longitude >> 16) & 0xFF);
+			buffer.at(18) = static_cast<std::uint8_t>((longitude >> 24) & 0xFF);
+			buffer.at(19) = static_cast<std::uint8_t>((longitude >> 32) & 0xFF);
+			buffer.at(20) = static_cast<std::uint8_t>((longitude >> 40) & 0xFF);
+			buffer.at(21) = static_cast<std::uint8_t>((longitude >> 48) & 0xFF);
+			buffer.at(22) = static_cast<std::uint8_t>((longitude >> 56) & 0xFF);
+			buffer.at(23) = static_cast<std::uint8_t>(altitude & 0xFF);
+			buffer.at(24) = static_cast<std::uint8_t>((altitude >> 8) & 0xFF);
+			buffer.at(25) = static_cast<std::uint8_t>((altitude >> 16) & 0xFF);
+			buffer.at(26) = static_cast<std::uint8_t>((altitude >> 24) & 0xFF);
+			buffer.at(27) = static_cast<std::uint8_t>((altitude >> 32) & 0xFF);
+			buffer.at(28) = static_cast<std::uint8_t>((altitude >> 40) & 0xFF);
+			buffer.at(29) = static_cast<std::uint8_t>((altitude >> 48) & 0xFF);
+			buffer.at(30) = static_cast<std::uint8_t>((altitude >> 56) & 0xFF);
+			buffer.at(31) = (static_cast<std::uint8_t>(systemType) & 0x0F);
+			buffer.at(31) |= ((static_cast<std::uint8_t>(method) & 0x0F) << 4);
+			buffer.at(32) = (static_cast<std::uint8_t>(integrityChecking) | 0xFC);
+			buffer.at(33) = numberOfSpaceVehicles;
+			buffer.at(34) = static_cast<std::uint8_t>(horizontalDilutionOfPrecision & 0xFF);
+			buffer.at(35) = static_cast<std::uint8_t>((horizontalDilutionOfPrecision >> 8) & 0xFF);
+			buffer.at(36) = static_cast<std::uint8_t>(positionalDilutionOfPrecision & 0xFF);
+			buffer.at(37) = static_cast<std::uint8_t>((positionalDilutionOfPrecision >> 8) & 0xFF);
+			buffer.at(38) = static_cast<std::uint8_t>(geoidalSeparation & 0xFF);
+			buffer.at(39) = static_cast<std::uint8_t>((geoidalSeparation >> 8) & 0xFF);
+			buffer.at(40) = static_cast<std::uint8_t>((geoidalSeparation >> 16) & 0xFF);
+			buffer.at(41) = static_cast<std::uint8_t>((geoidalSeparation >> 24) & 0xFF);
+			buffer.at(42) = get_number_of_reference_stations();
+
+			for (std::uint8_t i = 0; i < get_number_of_reference_stations(); i++)
+			{
+				buffer.push_back((static_cast<std::uint8_t>(referenceStations.at(i).stationType) & 0x0F) |
+				                 ((referenceStations.at(i).stationID & 0x0F) << 4));
+				buffer.push_back(static_cast<std::uint8_t>(referenceStations.at(i).stationID >> 4));
+				buffer.push_back(static_cast<std::uint8_t>(referenceStations.at(i).ageOfDGNSSCorrections & 0xFF));
+				buffer.push_back(static_cast<std::uint8_t>((referenceStations.at(i).ageOfDGNSSCorrections >> 8) & 0xFF));
+			}
+		}
+
+		Datum::Datum(std::shared_ptr<ControlFunction> source) :
+		  senderControlFunction(source)
+		{
+			referenceDatum.resize(DATUM_STRING_LENGTHS);
+			localDatum.resize(DATUM_STRING_LENGTHS);
+		}
+
 		std::shared_ptr<ControlFunction> Datum::get_control_function() const
 		{
 			return senderControlFunction;
@@ -526,6 +693,28 @@ namespace isobus
 		{
 			bool retVal = (datum != localDatum);
 			localDatum = datum;
+
+			if (localDatum.length() != DATUM_STRING_LENGTHS)
+			{
+				localDatum.resize(DATUM_STRING_LENGTHS);
+			}
+			return retVal;
+		}
+
+		std::string Datum::get_reference_datum() const
+		{
+			return referenceDatum;
+		}
+
+		bool Datum::set_reference_datum(const std::string &datum)
+		{
+			bool retVal = (datum != referenceDatum);
+			referenceDatum = datum;
+
+			if (referenceDatum.length() != DATUM_STRING_LENGTHS)
+			{
+				referenceDatum.resize(DATUM_STRING_LENGTHS);
+			}
 			return retVal;
 		}
 
@@ -568,9 +757,9 @@ namespace isobus
 			return deltaAltitude;
 		}
 
-		double Datum::get_delta_altitude() const
+		float Datum::get_delta_altitude() const
 		{
-			return (0.02 * deltaAltitude);
+			return (0.02f * deltaAltitude);
 		}
 
 		bool Datum::set_delta_altitude(std::int32_t delta)
@@ -578,6 +767,32 @@ namespace isobus
 			bool retVal = (deltaAltitude != delta);
 			deltaAltitude = delta;
 			return retVal;
+		}
+
+		void Datum::serialize(std::vector<std::uint8_t> &buffer)
+		{
+			buffer.resize(LENGTH_BYTES);
+
+			buffer.at(0) = localDatum.at(0);
+			buffer.at(1) = localDatum.at(1);
+			buffer.at(2) = localDatum.at(2);
+			buffer.at(3) = localDatum.at(3);
+			buffer.at(4) = static_cast<std::uint8_t>(deltaLatitude & 0xFF);
+			buffer.at(5) = static_cast<std::uint8_t>((deltaLatitude >> 8) & 0xFF);
+			buffer.at(6) = static_cast<std::uint8_t>((deltaLatitude >> 16) & 0xFF);
+			buffer.at(7) = static_cast<std::uint8_t>((deltaLatitude >> 24) & 0xFF);
+			buffer.at(8) = static_cast<std::uint8_t>(deltaLongitude & 0xFF);
+			buffer.at(9) = static_cast<std::uint8_t>((deltaLongitude >> 8) & 0xFF);
+			buffer.at(10) = static_cast<std::uint8_t>((deltaLongitude >> 16) & 0xFF);
+			buffer.at(11) = static_cast<std::uint8_t>((deltaLongitude >> 24) & 0xFF);
+			buffer.at(12) = static_cast<std::uint8_t>(deltaAltitude & 0xFF);
+			buffer.at(13) = static_cast<std::uint8_t>((deltaAltitude >> 8) & 0xFF);
+			buffer.at(14) = static_cast<std::uint8_t>((deltaAltitude >> 16) & 0xFF);
+			buffer.at(15) = static_cast<std::uint8_t>((deltaAltitude >> 24) & 0xFF);
+			buffer.at(16) = referenceDatum.at(0);
+			buffer.at(17) = referenceDatum.at(1);
+			buffer.at(18) = referenceDatum.at(2);
+			buffer.at(19) = referenceDatum.at(3);
 		}
 	}
 }

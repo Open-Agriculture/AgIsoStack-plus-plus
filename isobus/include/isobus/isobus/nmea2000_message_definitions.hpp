@@ -19,49 +19,104 @@
 
 namespace isobus
 {
+	/// @brief A namespace for generic NMEA2000 message definitions
 	namespace NMEA2000Messages
 	{
+		constexpr std::uint8_t MAX_SEQUENCE_ID = 252; ///< The max non-special allowable value of a NMEA2K sequence ID
+
+		/// @brief Represents the data sent in the NMEA2K PGN 127250 (0x1F112)
 		class VesselHeading
 		{
 		public:
+			/// @brief The reference which the vessel heading is relative to
 			enum class HeadingSensorReference : std::uint8_t
 			{
-				True = 0,
-				Magnetic = 1,
+				True = 0, ///< True North
+				Magnetic = 1, ///< Magnetic North
 				Error = 2,
 				NotApplicableOrNull = 3
 			};
 
+			/// @brief Constructor for a VesselHeading message data object
+			/// @param[in] source The control function sending this message
 			explicit VesselHeading(std::shared_ptr<ControlFunction> source);
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns true if the value that was set was different from the stored value
 			bool set_timestamp(std::uint32_t timestamp);
 
-			std::uint16_t get_heading() const;
+			/// @brief Returns the vessel heading in units of 0.0001 radians, which are the message's base units
+			/// @returns Vessel heading in units of 0.0001 radians
+			std::uint16_t get_raw_heading() const;
 
+			/// @brief Returns the vessel heading in radians
+			/// @returns Vessel heading in radians
+			float get_heading() const;
+
+			/// @brief Sets the vessel heading
+			/// @param[in] heading The heading to set in 0.0001 radians
+			/// @returns True if the value that was set was different from the stored value
 			bool set_heading(std::uint16_t heading);
 
-			std::int16_t get_magnetic_deviation() const;
+			/// @brief Returns the magnetic deviation in 0.0001 radians
+			/// @returns The magnetic deviation in 0.0001 radians
+			std::int16_t get_raw_magnetic_deviation() const;
 
+			/// @brief Returns the magnetic deviation in radians
+			/// @returns The magnetic deviation in radians
+			float get_magnetic_deviation() const;
+
+			/// @brief Sets the magnetic deviation in 0.0001 radians
+			/// @param[in] deviation The magnetic deviation to set, in units of 0.0001 radians
+			/// @returns true if the value that was set was different from the stored value
 			bool set_magnetic_deviation(std::uint16_t deviation);
 
-			std::int16_t get_magnetic_variation() const;
+			/// @brief Returns the magnetic variation in units of 0.0001 radians
+			/// @returns The magnetic variation in units of 0.0001 radians
+			std::int16_t get_raw_magnetic_variation() const;
 
+			/// @brief Returns the magnetic variation in units of radians
+			/// @returns The magnetic variation in units of radians
+			float get_magnetic_variation() const;
+
+			/// @brief Sets the magnetic variation, in units of 0.0001 radians
+			/// @param[in] variation The magnetic variation to set, in units of 0.0001 radians
+			/// @returns true if the value that was set was different from the stored value
 			bool set_magnetic_variation(std::int16_t variation);
 
+			/// @brief Returns the sequence ID. This is used to associate data within other PGNs with this message.
+			/// @returns The sequence ID for this message
 			std::uint8_t get_sequence_id() const;
 
+			/// @brief Sets the sequence ID for this message.
+			/// @param[in] sequenceNumber The sequence number to set. Max value is 252.
+			/// @returns true if the value that was set was different from the stored value
 			bool set_sequence_id(std::uint8_t sequenceNumber);
 
+			/// @brief Returns the reference to which the reported heading is relative to
+			/// @returns The reference to which the reported heading is relative to
 			HeadingSensorReference get_sensor_reference() const;
 
+			/// @brief Sets the reference to which the reported heading is relative to
+			/// @param[in] reference The reference to set
+			/// @returns true if the value that was set was different from the stored value
 			bool set_sensor_reference(HeadingSensorReference reference);
 
+			/// @brief Takes the current state of the object and serializes it into a buffer to be sent.
+			/// @param[in] buffer A vector to populate with the message data
+			void serialize(std::vector<std::uint8_t> &buffer);
+
 		private:
-			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100;
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100; ///< The interval in milliseconds on which this message should be sent/received
 
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::uint32_t messageTimestamp_ms = 0; ///< A timestamp in milliseconds when this message was last sent or received
@@ -72,27 +127,55 @@ namespace isobus
 			HeadingSensorReference sensorReference = HeadingSensorReference::NotApplicableOrNull; ///< Indicates what the heading is relative to, ie true or magnetic north
 		};
 
+		/// @brief Represents the data sent in the NMEA2K PGN 127251 (0x1F113)
 		class RateOfTurn
 		{
 		public:
+			/// @brief Constructor for a RateOfTurn message data object
+			/// @param[in] source The control function sending the message
 			explicit RateOfTurn(std::shared_ptr<ControlFunction> source);
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns true if the value that was set was different from the stored value
 			bool set_timestamp(std::uint32_t timestamp);
 
-			std::int32_t get_rate_of_turn() const;
+			/// @brief Returns the rate of turn of the vessel/vehicle in units of 1/32 x 10E-6 rad/s
+			/// @returns The rate of turn of the vessel/vehicle in units of 1/32 x 10E-6 rad/s
+			std::int32_t get_raw_rate_of_turn() const;
 
+			/// @brief Returns the rate of turn of the vessel/vehicle in rad/s
+			/// @returns The rate of turn of the vessel/vehicle in rad/s
+			double get_rate_of_turn() const;
+
+			/// @brief Sets the rate of turn in units of 1/32 x 10E-6 rad/s
+			/// @param[in] turnRate The rate of turn to set, in units of 1/32 x 10E-6 rad/s
+			/// @returns true if the value that was set was different from the stored value
 			bool set_rate_of_turn(std::int32_t turnRate);
 
+			/// @brief Returns the sequence ID. This is used to associate data within other PGNs with this message.
+			/// @returns The sequence ID for this message
 			std::uint8_t get_sequence_id() const;
 
+			/// @brief Sets the sequence ID for this message.
+			/// @param[in] sequenceNumber The sequence number to set. Max value is 252.
+			/// @returns true if the value that was set was different from the stored value
 			bool set_sequence_id(std::uint8_t sequenceNumber);
 
+			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
+			/// @param[in] buffer A buffer to serialize the message data into
+			void serialize(std::vector<std::uint8_t> &buffer);
+
 		private:
-			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100;
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100; ///< The interval in milliseconds on which this message should be sent/received
 
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::uint32_t messageTimestamp_ms = 0; ///< A timestamp in milliseconds when this message was last sent or received
@@ -100,25 +183,40 @@ namespace isobus
 			std::uint8_t sequenceID = 0; ///< The sequence identifier field is used to tie related PGNs together. Somewhat arbitrary.
 		};
 
+		/// @brief Represents the data sent in the NMEA2K PGN 129025 (0x1F801)
 		class PositionRapidUpdate
 		{
 		public:
+			/// @brief Constructor for a PositionRapidUpdate message data object
+			/// @param[in] source The control function sending this message
 			explicit PositionRapidUpdate(std::shared_ptr<ControlFunction> source);
 
 			static constexpr std::int32_t NOT_AVAILABLE = 0x7FFFFFFF;
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns true if the value that was set was different from the stored value
 			bool set_timestamp(std::uint32_t timestamp);
 
 			/// @attention This is MUCH less accurate than the position in PGN 1F805 (129029). Use that instead if present.
+			/// @returns The current vessel/vehicle latitude in 1*10E-7 degrees
 			std::int32_t get_raw_latitude() const;
 
 			/// @attention This is MUCH less accurate than the position in PGN 1F805 (129029). Use that instead if present.
+			/// @returns The current vessel/vehicle longitude in 1*10E-7 degrees
 			double get_latitude() const;
 
+			/// @brief Sets the current latitude in units of 1*10E-7 degrees
+			/// @param[in] latitudeToSet The latitude to set in units of 1*10E-7 degrees
+			/// @returns true if the value that was set was different from the stored value
 			bool set_latitude(std::int32_t latitudeToSet);
 
 			/// @attention This is MUCH less accurate than the position in PGN 1F805 (129029). Use that instead if present.
@@ -127,7 +225,14 @@ namespace isobus
 			/// @attention This is MUCH less accurate than the position in PGN 1F805 (129029). Use that instead if present.
 			double get_longitude() const;
 
+			/// @brief Sets the current longitude in units of 1*10E-7 degrees
+			/// @param[in] longitudeToSet The latitude to set in units of 1*10E-7 degrees
+			/// @returns true if the value that was set was different from the stored value
 			bool set_longitude(std::int32_t longitudeToSet);
+
+			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
+			/// @param[in] buffer A buffer to serialize the message data into
+			void serialize(std::vector<std::uint8_t> &buffer);
 
 		private:
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
@@ -136,40 +241,81 @@ namespace isobus
 			std::uint32_t messageTimestamp_ms = 0; ///< A timestamp in milliseconds when this message was last sent or received
 		};
 
+		/// @brief Represents the data sent in the NMEA2K PGN 129026 (0x1F802)
 		class CourseOverGroundSpeedOverGroundRapidUpdate
 		{
 		public:
+			/// @brief Enumerates the references to which the course may be relative to
 			enum class CourseOverGroudReference : std::uint8_t
 			{
-				True = 0,
-				Magnetic = 1,
+				True = 0, ///< True north
+				Magnetic = 1, ///< Magnetic North
 				Error = 2,
 				NotApplicableOrNull = 3
 			};
 
+			/// @brief Constructor for a CourseOverGroundSpeedOverGroundRapidUpdate message data object
+			/// @param[in] source The control function sending/receiving this message
 			explicit CourseOverGroundSpeedOverGroundRapidUpdate(std::shared_ptr<ControlFunction> source);
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_timestamp(std::uint32_t timestamp);
 
-			std::uint16_t get_course_over_ground() const;
+			/// @brief Returns the course over ground in its base units of 0.0001 radians (between 0 and 2 pi radians)
+			/// @returns The course over ground in its base units of 0.0001 radians
+			std::uint16_t get_raw_course_over_ground() const;
 
+			/// @brief Returns the course over ground in units of radians
+			/// @returns Course over ground in units of radians
+			float get_course_over_ground() const;
+
+			/// @brief Sets the course over ground in units of 0.0001 radians
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_course_over_ground(std::uint16_t course);
 
-			std::uint16_t get_speed_over_ground() const;
+			/// @brief Returns the speed over ground in units of 0.01 meters per second
+			/// @returns The speed over ground in units of 0.01 meters per second
+			std::uint16_t get_raw_speed_over_ground() const;
 
+			/// @brief Returns the speed over ground in units of meters per second
+			/// @returns The speed over ground in units of meters per second
+			float get_speed_over_ground() const;
+
+			/// @brief Sets the speed over ground in units of 0.01 meters per second
+			/// @param[in] speed The speed to set, in 0.01 m/s
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_speed_over_ground(std::uint16_t speed);
 
+			/// @brief Returns the sequence ID. This is used to associate data within other PGNs with this message.
+			/// @returns The sequence ID for this message
 			std::uint8_t get_sequence_id() const;
 
+			/// @brief Sets the sequence ID for this message.
+			/// @param[in] sequenceNumber The sequence number to set. Max value is 252.
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_sequence_id(std::uint8_t sequenceNumber);
 
+			/// @brief Returns the reference to which the course over ground is relative
+			/// @returns The reference to which the course is relative
 			CourseOverGroudReference get_course_over_ground_reference() const;
 
+			/// @brief Sets the reference to which the course over ground is relative
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_course_over_ground_reference(CourseOverGroudReference reference);
+
+			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
+			/// @param[in] buffer A buffer to serialize the message data into
+			void serialize(std::vector<std::uint8_t> &buffer);
 
 		private:
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
@@ -185,35 +331,74 @@ namespace isobus
 		class PositionDeltaHighPrecisionRapidUpdate
 		{
 		public:
+			/// @brief Constructor for a PositionDeltaHighPrecisionRapidUpdate message data object
+			/// @param[in] source The control function sending this message
 			explicit PositionDeltaHighPrecisionRapidUpdate(std::shared_ptr<ControlFunction> source);
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_timestamp(std::uint32_t timestamp);
 
+			/// @brief Returns the latitude delta relative to our last position in 1x10E-16 degrees
+			/// @returns Latitude delta relative to our last position in 1x10E-16 degrees
 			std::int32_t get_raw_latitude_delta() const;
 
+			/// @brief Returns the latitude delta relative to our last position in degrees
+			/// @returns Latitude delta relative to our last position in degrees
 			double get_latitude_delta() const;
 
+			/// @brief Sets the current latitude delta in units of 1x10E-16 degrees
+			/// @param[in] delta Latitude delta to set in units of 1x10E-16 degrees
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_latitude_delta(std::int32_t delta);
 
+			/// @brief Returns the longitude delta relative to our last position in 1x10E-16 degrees
+			/// @returns Longitude delta relative to our last position in 1x10E-16 degrees
 			std::int32_t get_raw_longitude_delta() const;
 
+			/// @brief Returns the longitude delta relative to our last position in degrees
+			/// @returns Longitude delta relative to our last position in degrees
 			double get_longitude_delta() const;
 
+			/// @brief Sets the current longitude delta relative to our last position in 1x10E-16 degrees
+			/// @param[in] delta Longitude delta to set in units of 1x10E-16 degrees
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_longitude_delta(std::int32_t delta);
 
+			/// @brief Returns the sequence ID. This is used to associate data within other PGNs with this message.
+			/// @returns The sequence ID for this message
 			std::uint8_t get_sequence_id() const;
 
+			/// @brief Sets the sequence ID for this message.
+			/// @param[in] sequenceNumber The sequence number to set. Max value is 252.
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_sequence_id(std::uint8_t sequenceNumber);
 
+			/// @brief Returns the raw time delta since the last reported time in 5x10e-3 seconds
+			/// @returns Time delta in units of 5x10e-3 seconds
 			std::uint8_t get_raw_time_delta() const;
 
+			/// @brief Returns the raw time delta since the last reported time in seconds
+			/// @returns Time delta in units of seconds
 			double get_time_delta() const;
 
+			/// @brief Sets the time delta, in units of 5x10e-3 seconds
+			/// @param[in] delta The time delta to set in units of 5x10e-3 seconds
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_time_delta(std::uint8_t delta);
+
+			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
+			/// @param[in] buffer A buffer to serialize the message data into
+			void serialize(std::vector<std::uint8_t> &buffer);
 
 		private:
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
@@ -224,6 +409,7 @@ namespace isobus
 			std::uint8_t timeDelta = 0; ///< The time delta in 5x10e-3 seconds
 		};
 
+		/// @brief Represents the data sent in the NMEA2K PGN 129029 (0x1F805)
 		class GNSSPositionData
 		{
 		public:
@@ -242,7 +428,8 @@ namespace isobus
 				Null = 0x0F
 			};
 
-			enum class GNSSMEthod
+			/// @brief Enumerates the GNSS methods that can be reported in this message
+			enum class GNSSMethod
 			{
 				NoGNSS = 0x00, ///< Either there is not enough data to compute a navigation solution, or the computed solution is outside of the acceptable error criteria
 				GNSSFix = 0x01, ///< Position solution has been achieved
@@ -265,59 +452,129 @@ namespace isobus
 				Unsafe = 0x03
 			};
 
+			/// @brief Constructor for a GNSSPositionData message data object
+			/// @param[in] source The control function sending this message
 			explicit GNSSPositionData(std::shared_ptr<ControlFunction> source);
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns our current position's latitude in its base units of 1x10E-16 degrees
+			/// @returns Current position's latitude in units of 1x10E-16 degrees
 			std::int64_t get_raw_latitude() const;
 
+			/// @brief Returns our current position's latitude in units of degrees
+			/// @returns Current position's latitude in units of degrees
 			double get_latitude() const;
 
+			/// @brief Returns our current position's longitude in its base units of 1x10E-16 degrees
+			/// @returns Current position's longitude in units of 1x10E-16 degrees
 			std::int64_t get_raw_longitude() const;
 
+			/// @brief Returns our current position's longitude in units of degrees
+			/// @returns Current position's longitude in units of degrees
 			double get_longitude() const;
 
+			/// @brief Returns the geoidal separation @todo units?
+			/// @details This returns the difference between the earth ellipsoid and mean-sea-level (geoid) defined by the reference datum
+			/// @returns The geoidal separation
 			std::int32_t get_geoidal_separation() const;
 
+			/// @brief Sets the geoidal separation
+			/// @details This value is the difference between the earth ellipsoid and mean-sea-level (geoid) defined by the reference datum
+			/// @param[in] separation The geoidal separation to set
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_geoidal_separation(std::int32_t separation);
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
 			bool set_timestamp(std::uint32_t timestamp);
 
+			/// @brief Returns the sequence ID. This is used to associate data within other PGNs with this message.
+			/// @returns The sequence ID for this message
 			std::uint8_t get_sequence_id() const;
 
+			/// @brief Sets the sequence ID for this message.
+			/// @param[in] sequenceNumber The sequence number to set. Max value is 252.
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_sequence_id(std::uint8_t sequenceNumber);
 
+			/// @brief Returns the reported type of GNSS system that produced this position solution
+			/// @returns The type of GNSS system that produced this position solution
 			TypeOfSystem get_type_of_system() const;
 
+			/// @brief Sets the reported type of GNSS system that produced this position solution
+			/// @param[in] type The type of system to set
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_type_of_system(TypeOfSystem type);
 
-			GNSSMEthod get_gnss_method() const;
+			/// @brief Returns the GNSS method being reported as part of this position solution, such as RTK Float or DGNSS
+			/// @returns The GNSS method being reported as part of this position solution, such as RTK Float or DGNSS
+			GNSSMethod get_gnss_method() const;
 
-			bool set_gnss_method(GNSSMEthod gnssFixMethod);
+			/// @brief Sets the GNSS method to report as the source of this position solution, such as RTK float or DGNSS
+			/// @param[in] gnssFixMethod The GNSS method to report as the source of this position solution
+			/// @returns True if the value that was set differed from the stored value, otherwise false
+			bool set_gnss_method(GNSSMethod gnssFixMethod);
 
+			/// @brief Sets the integrity being reported for this position solution if applicable
+			/// @returns The integrity being reported for this position solution
 			Integrity get_integrity() const;
 
+			/// @brief Sets the integrity reported for this position solution
+			/// @param[in] integrity The integrity to report
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_integrity(Integrity integrity);
 
+			/// @brief Returns the number of space vehicles used in this position solution
+			/// @returns The number of space vehicles used in this position solution
 			std::uint8_t get_number_of_space_vehicles() const;
 
+			/// @brief Sets the number of space vehicles in view and used in this position solution
+			/// @param[in] numberOfSVs The number of space vehicles to set
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_number_of_space_vehicles(std::uint8_t numberOfSVs);
 
+			/// @brief Returns the HDOP for this solution.
+			/// This Indicates the contribution of satellite configuration geometry to positioning error. Lower is better.
+			/// @returns The horizontal dilution of precision (HDOP)
 			std::int16_t get_horizontal_dilution_of_precision() const;
 
+			/// @brief Sets the horizontal dilution of precision (HDOP)
+			/// @param[in] hdop The positional dilution of precision to set
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_horizontal_dilution_of_precision(std::int16_t hdop);
 
+			/// @brief Returns the PDOP for this solution.
+			/// This Indicates the contribution of satellite configuration geometry to positioning error. Lower is better.
+			/// @returns The positional dilution of precision (PDOP)
 			std::int16_t get_positional_dilution_of_precision() const;
 
+			/// @brief Sets the positional dilution of precision (PDOP)
+			/// @param[in] pdop The positional dilution of precision to set
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_positional_dilution_of_precision(std::int16_t pdop);
 
+			/// @brief Returns the number of reference stations used in this position solution (if applicable to GNSS method)
+			/// @returns The number of reference stations used in this position solution
 			std::uint8_t get_number_of_reference_stations() const;
 
+			/// @brief Sets the number of reference stations used in this position solution
+			/// @param[in] stations The number of reference stations to set (if applicable to GNSS method, otherwise should be zero)
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_number_of_reference_stations(std::uint8_t stations);
 
+			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
+			/// @param[in] buffer A buffer to serialize the message data into
+			void serialize(std::vector<std::uint8_t> &buffer);
+
 		private:
+			/// @brief Used to group related reference station data together
 			class ReferenceStationData
 			{
 			public:
@@ -325,6 +582,8 @@ namespace isobus
 				TypeOfSystem stationType = TypeOfSystem::Null; ///< The type of reference station
 				std::uint16_t ageOfDGNSSCorrections = 0xFFFF; ///< Stores the age of the corrections from this reference
 			};
+
+			static constexpr std::uint8_t MINIMUM_LENGTH_BYTES = 43; ///< The minimum size of this message in bytes
 
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::vector<ReferenceStationData> referenceStations; ///< Stores data about the reference stations used to generate this position solution.
@@ -340,7 +599,7 @@ namespace isobus
 			std::uint8_t numberOfSpaceVehicles = 0; ///< Number of GPS satellites in view.
 			std::uint8_t sequenceID = 0; ///< The sequence identifier field is used to tie related PGNs together. Somewhat arbitrary.
 			TypeOfSystem systemType = TypeOfSystem::Null; ///< The type of GNSS system used when generating this message
-			GNSSMEthod method = GNSSMEthod::NoGNSS; ///< Stores the method used to provide the GNSS fix
+			GNSSMethod method = GNSSMethod::NoGNSS; ///< Stores the method used to provide the GNSS fix
 			Integrity integrityChecking = Integrity::NoIntegrityChecking; ///< Stores the integrity of the values in the message
 		};
 
@@ -349,41 +608,86 @@ namespace isobus
 		class Datum
 		{
 		public:
+			/// @brief Constructor for a Datum message data object
+			/// @param[in] source The control function sending the message
 			explicit Datum(std::shared_ptr<ControlFunction> source);
 
+			/// @brief Returns the control function sending this instance of this message
+			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns the 4 character ascii datum code
+			/// @returns The 4 character ascii datum code
 			std::string get_local_datum() const;
 
+			/// @brief Sets the local datum's 4 character ascii datum code
+			/// @param[in] datum The datum code to set
+			/// @returns True if the value that was set differed from the stored value
 			bool set_local_datum(const std::string &datum);
 
+			/// @brief Returns the 4 character ascii datum code that identifies the reference datum
+			/// @returns The 4 character ascii datum code that identifies the reference datum
 			std::string get_reference_datum() const;
 
+			/// @brief Sets the 4 character ascii datum code that identifies the reference datum
+			/// @returns True if the value that was set differed from the stored value
 			bool set_reference_datum(const std::string &datum);
 
+			/// @brief Returns latitude offset of position in the local datum from the position in the reference datum. In units of 1x10E-7 degrees
+			/// @returns Latitude offset of position in the local datum from the position in the reference datum. In units of 1x10E-7 degrees
 			std::int32_t get_raw_delta_latitude() const;
 
+			/// @brief Returns latitude offset of position in the local datum from the position in the reference datum. In units of degrees
+			/// @returns Latitude offset of position in the local datum from the position in the reference datum. In units of degrees
 			double get_delta_latitude() const;
 
+			/// @brief Sets latitude offset of position in the local datum from the position in the reference datum in units of 1x10E-7 degrees.
+			/// @param[in] delta The latitude offset to set in units of 1x10E-7 degrees
+			/// @returns True if the value that was set differed from the stored value
 			bool set_delta_latitude(std::int32_t delta);
 
+			/// @brief Returns longitude offset of position in the local datum from the position in the reference datum. In units of 1x10E-7 degrees
+			/// @returns Longitude offset of position in the local datum from the position in the reference datum. In units of 1x10E-7 degrees
 			std::int32_t get_raw_delta_longitude() const;
 
+			/// @brief Returns longitude offset of position in the local datum from the position in the reference datum. In units of degrees
+			/// @returns Longitude offset of position in the local datum from the position in the reference datum. In units of degrees
 			double get_delta_longitude() const;
 
+			/// @brief Sets longitude offset of position in the local datum from the position in the reference datum in units of 1x10E-7 degrees.
+			/// @param[in] delta The longitude offset to set in units of 1x10E-7 degrees
+			/// @returns True if the value that was set differed from the stored value
 			bool set_delta_longitude(std::int32_t delta);
 
+			/// @brief Returns the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.02 meters.
+			/// @returns The altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.02 meters.
 			std::int32_t get_raw_delta_altitude() const;
 
-			double get_delta_altitude() const;
+			/// @brief Returns the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of meters.
+			/// @returns The altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of meters.
+			float get_delta_altitude() const;
 
+			/// @brief Sets the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.02 meters.
+			/// @param[in] delta The altitude delta to set in units of 0.02 meters
+			/// @returns True if the value that was set differed from the stored value
 			bool set_delta_altitude(std::int32_t delta);
 
+			/// @brief Returns a timestamp in milliseconds corresponding to when the message was last sent or received
+			/// @returns A timestamp in milliseconds corresponding to when the message was last sent or received
 			std::uint32_t get_timestamp() const;
 
+			/// @brief Sets the time in milliseconds when the message was last sent or received
+			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
 			bool set_timestamp(std::uint32_t timestamp);
 
+			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
+			/// @param[in] buffer A buffer to serialize the message data into
+			void serialize(std::vector<std::uint8_t> &buffer);
+
 		private:
+			static constexpr std::uint8_t LENGTH_BYTES = 20; ///< The size of this message in bytes
+			static constexpr std::uint8_t DATUM_STRING_LENGTHS = 4; ///< The size of the datum codes in bytes
+
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::string localDatum = 0; ///< A 4 character ascii datum code. The first three chars are the datum ID.The fourth char is the local datum subdivision code or a null character if it is unknown or unused.
 			std::string referenceDatum = 0; ///< A 4 character ascii datum code that identifies the reference datum.
