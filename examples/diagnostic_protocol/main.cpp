@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -66,61 +67,75 @@ int main()
 
 	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 
-	// Wait to make sure address claiming is done. The time is arbitrary.
-	//! @todo Check this instead of asuming it is done
-	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	// Make sure address claiming is done before we continue
+	auto addressClaimedFuture = std::async(std::launch::async, [&TestInternalECU]() {
+		while (!TestInternalECU->get_address_valid())
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	});
+	if (addressClaimedFuture.wait_for(std::chrono::seconds(5)) == std::future_status::timeout)
+	{
+		std::cout << "Address claiming failed. Please make sure that your internal control function can claim a valid address." << std::endl;
+		return -3;
+	}
 
-	isobus::DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(TestInternalECU);
+	isobus::DiagnosticProtocol diagnosticProtocol(TestInternalECU);
+	diagnosticProtocol.initialize();
 
-	isobus::DiagnosticProtocol *diagnosticProtocol = isobus::DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(TestInternalECU);
+	// Important: we need to update the diagnostic protocol using the hardware interface periodic update event,
+	// otherwise the diagnostic protocol will not be able to update its internal state.
+	auto listenerHandle = isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener([&diagnosticProtocol]() {
+		diagnosticProtocol.update();
+	});
 
 	// Make a few test DTCs
 	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC1(1234, isobus::DiagnosticProtocol::FailureModeIdentifier::ConditionExists, isobus::DiagnosticProtocol::LampStatus::None);
 	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC2(567, isobus::DiagnosticProtocol::FailureModeIdentifier::DataErratic, isobus::DiagnosticProtocol::LampStatus::AmberWarningLampSlowFlash);
-	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC3(8910, isobus::DiagnosticProtocol::FailureModeIdentifier::BadIntellegentDevice, isobus::DiagnosticProtocol::LampStatus::RedStopLampSolid);
+	isobus::DiagnosticProtocol::DiagnosticTroubleCode testDTC3(8910, isobus::DiagnosticProtocol::FailureModeIdentifier::BadIntelligentDevice, isobus::DiagnosticProtocol::LampStatus::RedStopLampSolid);
 
-	if (nullptr != diagnosticProtocol)
-	{
-		// Set a product identification string (in case someone requests it)
-		diagnosticProtocol->set_product_identification_code("1234567890ABC");
-		diagnosticProtocol->set_product_identification_brand("Open-Agriculture");
-		diagnosticProtocol->set_product_identification_model("AgIsoStack++ CAN Stack DP Example");
+	// Set a product identification string (in case someone requests it)
+	diagnosticProtocol.set_product_identification_code("1234567890ABC");
+	diagnosticProtocol.set_product_identification_brand("Open-Agriculture");
+	diagnosticProtocol.set_product_identification_model("AgIsoStack++ CAN Stack DP Example");
 
-		// Set a software ID string (This is what tells other ECUs what version your software is)
-		diagnosticProtocol->set_software_id_field(0, "Diagnostic Protocol Example 1.0.0");
-		diagnosticProtocol->set_software_id_field(1, "Another version string x.x.x.x");
+	// Set a software ID string (This is what tells other ECUs what version your software is)
+	diagnosticProtocol.set_software_id_field(0, "Diagnostic Protocol Example 1.0.0");
+	diagnosticProtocol.set_software_id_field(1, "Another version string x.x.x.x");
 
-		// Set an ECU ID (This is what tells other ECUs more details about your specific physical ECU)
-		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::HardwareID, "Hardware ID");
-		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Location, "The Aether");
-		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "None");
-		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
-		diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1");
+	// Set an ECU ID (This is what tells other ECUs more details about your specific physical ECU)
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::HardwareID, "Hardware ID");
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Location, "The Aether");
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "None");
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1");
+	diagnosticProtocol.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Type, "AgISOStack");
 
-		// Let's say that our ECU has the capability of a universal terminal working set (as an example) and
-		// contains weak internal bus termination.
-		// This info gets reported to any ECU on the bus that requests our capabilities through the
-		// control function functionalities message.
-		diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 1, true);
-		diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_minimum_control_function_option_state(isobus::ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination, true);
-		diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::UniversalTerminalWorkingSet, 1, true);
+	// Let's say that our ECU has the capability of a universal terminal working set (as an example) and
+	// contains weak internal bus termination.
+	// This info gets reported to any ECU on the bus that requests our capabilities through the
+	// control function functionalities message.
+	diagnosticProtocol.ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 1, true);
+	diagnosticProtocol.ControlFunctionFunctionalitiesMessageInterface.set_minimum_control_function_option_state(isobus::ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination, true);
+	diagnosticProtocol.ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::UniversalTerminalWorkingSet, 1, true);
 
-		// Set the DTCs active. This should put them in the DM1 message
-		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC1, true);
-		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC2, true);
-		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC3, true);
+	std::cout << "Diagnostic Protocol initialized." << std::endl;
+	// Set the DTCs active. This should put them in the DM1 message
+	diagnosticProtocol.set_diagnostic_trouble_code_active(testDTC1, true);
+	diagnosticProtocol.set_diagnostic_trouble_code_active(testDTC2, true);
+	diagnosticProtocol.set_diagnostic_trouble_code_active(testDTC3, true);
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // Send the DM1 for a while
+	std::cout << "Diagnostic Trouble Codes set active. (DM1)" << std::endl;
+	std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // Send the DM1 for a while
 
-		// Set the DTCs inactive. This should put them in the DM2 message
-		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC1, false);
-		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC2, false);
-		diagnosticProtocol->set_diagnostic_trouble_code_active(testDTC3, false);
+	// Set the DTCs inactive. This should put them in the DM2 message
+	diagnosticProtocol.set_diagnostic_trouble_code_active(testDTC1, false);
+	diagnosticProtocol.set_diagnostic_trouble_code_active(testDTC2, false);
+	diagnosticProtocol.set_diagnostic_trouble_code_active(testDTC3, false);
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // Send the DM2 for a while
+	std::cout << "Diagnostic Trouble Codes set inactive. (DM2)" << std::endl;
+	std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // Send the DM2 for a while
 
-		diagnosticProtocol->clear_inactive_diagnostic_trouble_codes(); // All messages should now be clear!
-	}
+	diagnosticProtocol.clear_inactive_diagnostic_trouble_codes(); // All messages should now be clear!
+	std::cout << "Diagnostic Trouble Codes cleared." << std::endl;
 
 	while (running)
 	{
@@ -128,7 +143,7 @@ int main()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 
+	diagnosticProtocol.terminate();
 	isobus::CANHardwareInterface::stop();
-	isobus::DiagnosticProtocol::deassign_all_diagnostic_protocol_to_internal_control_functions();
 	return 0;
 }
