@@ -115,6 +115,15 @@ namespace isobus
 			/// @param[in] buffer A vector to populate with the message data
 			void serialize(std::vector<std::uint8_t> &buffer);
 
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
+
 		private:
 			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100; ///< The interval in milliseconds on which this message should be sent/received
 
@@ -174,6 +183,15 @@ namespace isobus
 			/// @param[in] buffer A buffer to serialize the message data into
 			void serialize(std::vector<std::uint8_t> &buffer);
 
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
+
 		private:
 			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100; ///< The interval in milliseconds on which this message should be sent/received
 
@@ -191,7 +209,7 @@ namespace isobus
 			/// @param[in] source The control function sending this message
 			explicit PositionRapidUpdate(std::shared_ptr<ControlFunction> source);
 
-			static constexpr std::int32_t NOT_AVAILABLE = 0x7FFFFFFF;
+			static constexpr std::int32_t NOT_AVAILABLE = 0x7FFFFFFF; ///< A generic value that may be reported if the position solution is invalid
 
 			/// @brief Returns the control function sending this instance of this message
 			/// @returns The control function sending this instance of this message
@@ -234,7 +252,18 @@ namespace isobus
 			/// @param[in] buffer A buffer to serialize the message data into
 			void serialize(std::vector<std::uint8_t> &buffer);
 
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
+
 		private:
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 100; ///< The transmit interval for this message as specified in NMEA2000
+
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::int32_t latitude = NOT_AVAILABLE; ///< The latitude in 1*10E-7 degrees. Negative values indicate south latitudes.
 			std::int32_t longitude = NOT_AVAILABLE; ///< The longitude in 1*10E-7 degrees. Negative values indicate west longitudes.
@@ -317,7 +346,18 @@ namespace isobus
 			/// @param[in] buffer A buffer to serialize the message data into
 			void serialize(std::vector<std::uint8_t> &buffer);
 
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
+
 		private:
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 250; ///< The transmit interval for this message as specified in NMEA2000
+
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::uint32_t messageTimestamp_ms = 0; ///< A timestamp in milliseconds when this message was last sent or received
 			std::uint16_t courseOverGround = 0; ///< This field contains the direction of the path over ground actually followed by the vessel in 0.0001 radians between 0 and 2pi rad.
@@ -400,7 +440,18 @@ namespace isobus
 			/// @param[in] buffer A buffer to serialize the message data into
 			void serialize(std::vector<std::uint8_t> &buffer);
 
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
+
 		private:
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 250; ///< The transmit interval for this message as specified in NMEA2000
+
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
 			std::uint32_t messageTimestamp_ms = 0; ///< A timestamp in milliseconds when this message was last sent or received
 			std::int32_t latitudeDelta = 0; ///< The latitude delta in 1x10E-16 degrees
@@ -460,6 +511,19 @@ namespace isobus
 			/// @returns The control function sending this instance of this message
 			std::shared_ptr<ControlFunction> get_control_function() const;
 
+			/// @brief Returns the altitude portion of the position fix in its base units of 1x10E-6 meters. Range is +/- 9.223 x 10E+12 meters
+			/// @returns Altitude portion of the position fix in its base units of 1x10E-6 meters. Range is +/- 9.223 x 10E+12 meters
+			std::int64_t get_raw_altitude() const;
+
+			/// @brief Returns the altitude portion of the position fix in scaled units of meters. Range is +/- 9.223 x 10E+12 meters
+			/// @returns Altitude portion of the position fix in scaled units of meters. Range is +/- 9.223 x 10E+12 meters
+			double get_altitude() const;
+
+			/// @brief Sets the reported altitude in units of 1x10E-6 meters. Range is +/- 9.223 x 10E+12 meters
+			/// @param[in] altitudeToSet Altitude to set in units of 1x10E-6 meters. Range is +/- 9.223 x 10E+12 meters
+			/// @returns True if the value that was set differed from the stored value, otherwise false
+			bool set_altitude(std::int64_t altitudeToSet);
+
 			/// @brief Returns our current position's latitude in its base units of 1x10E-16 degrees
 			/// @returns Current position's latitude in units of 1x10E-16 degrees
 			std::int64_t get_raw_latitude() const;
@@ -468,6 +532,11 @@ namespace isobus
 			/// @returns Current position's latitude in units of degrees
 			double get_latitude() const;
 
+			/// @brief Sets the reported latitude in its base units of 1x10E-16 degrees
+			/// @param[in] latitudeToSet The latitude to set in 1x10E-16 degrees
+			/// @returns True if the value that was set differed from the stored value, otherwise false
+			bool set_latitude(std::int64_t latitudeToSet);
+
 			/// @brief Returns our current position's longitude in its base units of 1x10E-16 degrees
 			/// @returns Current position's longitude in units of 1x10E-16 degrees
 			std::int64_t get_raw_longitude() const;
@@ -475,6 +544,11 @@ namespace isobus
 			/// @brief Returns our current position's longitude in units of degrees
 			/// @returns Current position's longitude in units of degrees
 			double get_longitude() const;
+
+			/// @brief Sets the reported longitude in its base units of 1x10E-16 degrees
+			/// @param[in] longitudeToSet The longitude to set in 1x10E-16 degrees
+			/// @returns True if the value that was set differed from the stored value, otherwise false
+			bool set_longitude(std::int64_t longitudeToSet);
 
 			/// @brief Returns the geoidal separation @todo units?
 			/// @details This returns the difference between the earth ellipsoid and mean-sea-level (geoid) defined by the reference datum
@@ -569,20 +643,56 @@ namespace isobus
 			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_number_of_reference_stations(std::uint8_t stations);
 
+			/// @brief Returns the date associated with the current position.
+			/// @returns Number of days relative to UTC since Jan 1 1970 (0 is equal to Jan 1, 1970). Max value is 65532 days.
+			std::uint16_t get_position_date() const;
+
+			/// @brief Sets the date to report relative to UTC since Jan 1 1970. Max normal value is 65532
+			/// @param[in] dateToSet Date to report relative to UTC since Jan 1 1970. Max normal value is 65532
+			/// @returns True if the value that was set differed from the stored value, otherwise false
+			bool set_position_date(std::uint16_t dateToSet);
+
+			/// @brief Returns the number of seconds since midnight
+			/// @returns Number of seconds since midnight (0 == midnight), range allows for up to two leap seconds per day
+			std::uint16_t get_position_time() const;
+
+			/// @brief Sets the number of seconds since midnight
+			/// @param[in] timeToSet Seconds since midnight (0 == midnight), range allows for up to two leap seconds per day
+			/// @returns True if the value that was set differed from the stored value, otherwise false
+			bool set_position_time(std::uint16_t timeToSet);
+
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
 			void serialize(std::vector<std::uint8_t> &buffer);
+
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
 
 		private:
 			/// @brief Used to group related reference station data together
 			class ReferenceStationData
 			{
 			public:
+				/// @brief Default constructor for a ReferenceStationData with default values
+				ReferenceStationData() = default;
+
+				/// @brief Constructor for ReferenceStationData that initializes all values to provided values
+				/// @param[in] id The station ID to set
+				/// @param[in] type The station system type to set
+				/// @param[in] age The age of DGNSS corrections to set
+				ReferenceStationData(std::uint16_t id, TypeOfSystem type, std::uint16_t age);
 				std::uint16_t stationID = 0; ///< The station ID of this reference. Can sometimes be used to infer your correction source.
 				TypeOfSystem stationType = TypeOfSystem::Null; ///< The type of reference station
 				std::uint16_t ageOfDGNSSCorrections = 0xFFFF; ///< Stores the age of the corrections from this reference
 			};
 
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 1000; ///< The transmit interval for this message as specified in NMEA2000
 			static constexpr std::uint8_t MINIMUM_LENGTH_BYTES = 43; ///< The minimum size of this message in bytes
 
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
@@ -603,7 +713,7 @@ namespace isobus
 			Integrity integrityChecking = Integrity::NoIntegrityChecking; ///< Stores the integrity of the values in the message
 		};
 
-		/// @brief A NMEA2000 message that describes datum (reference frame) information.
+		/// @brief A NMEA2000 message that describes datum (reference frame) information. PGN 129044 (0x1F814)
 		/// A common one might be the WGS84 datum or the NSRS, for example.
 		class Datum
 		{
@@ -684,13 +794,23 @@ namespace isobus
 			/// @param[in] buffer A buffer to serialize the message data into
 			void serialize(std::vector<std::uint8_t> &buffer);
 
+			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
+			/// @param[in] receivedMessage The CAN message to parse when deserializing
+			/// @returns True if the message was successfully deserialized and the data content was different than the stored content.
+			bool deserialize(const CANMessage &receivedMessage);
+
+			/// @brief Returns the timeout (the sending interval) for this message in milliseconds
+			/// @returns This message's timeout (the sending interval) in milliseconds
+			static std::uint32_t get_timeout();
+
 		private:
+			static constexpr std::uint32_t CYCLIC_MESSAGE_RATE_MS = 10000; ///< The transmit interval for this message as specified in NMEA2000
 			static constexpr std::uint8_t LENGTH_BYTES = 20; ///< The size of this message in bytes
 			static constexpr std::uint8_t DATUM_STRING_LENGTHS = 4; ///< The size of the datum codes in bytes
 
 			std::shared_ptr<ControlFunction> senderControlFunction; ///< The sender of the message data
-			std::string localDatum = 0; ///< A 4 character ascii datum code. The first three chars are the datum ID.The fourth char is the local datum subdivision code or a null character if it is unknown or unused.
-			std::string referenceDatum = 0; ///< A 4 character ascii datum code that identifies the reference datum.
+			std::string localDatum; ///< A 4 character ascii datum code. The first three chars are the datum ID.The fourth char is the local datum subdivision code or a null character if it is unknown or unused.
+			std::string referenceDatum; ///< A 4 character ascii datum code that identifies the reference datum.
 			std::int32_t deltaLatitude = 0; ///< Position in the local datum is offset from the position in the reference datum as indicated by this latitude delta. In units of 1x10E-7 degrees.
 			std::int32_t deltaLongitude = 0; ///< Position in the local datum is offset from the position in the reference datum as indicated by this longitude delta. In units of 1x10E-7 degrees.
 			std::int32_t deltaAltitude = 0; ///< The altitude delta in units of 0.02 meters. Positive values indicate Up.
