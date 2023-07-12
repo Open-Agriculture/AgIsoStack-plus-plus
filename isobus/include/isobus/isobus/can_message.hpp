@@ -115,6 +115,13 @@ namespace isobus
 		/// @return The 8-bit unsigned byte
 		std::uint8_t get_uint8_at(const std::uint32_t index) const;
 
+		/// @brief Get a 8-bit signed byte from the buffer at a specific index.
+		/// A 8-bit signed byte can hold a value between -128 and 127.
+		/// @details This function will return the byte at the specified index in the buffer.
+		/// @param[in] index The index to get the byte from
+		/// @return The 8-bit signed byte
+		std::int8_t get_int8_at(const std::uint32_t index) const;
+
 		/// @brief Get a 16-bit unsigned integer from the buffer at a specific index.
 		/// A 16-bit unsigned integer can hold a value between 0 and 65535.
 		/// @details This function will return the 2 bytes at the specified index in the buffer.
@@ -122,6 +129,14 @@ namespace isobus
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 16-bit unsigned integer
 		std::uint16_t get_uint16_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
+
+		/// @brief Get a 16-bit signed integer from the buffer at a specific index.
+		/// A 16-bit signed integer can hold a value between -32768 and 32767.
+		/// @details This function will return the 2 bytes at the specified index in the buffer.
+		/// @param[in] index The index to get the 16-bit signed integer from
+		/// @param[in] format The byte format to use when reading the integer
+		/// @return The 16-bit signed integer
+		std::int16_t get_int16_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
 		/// @brief Get a right-aligned 24-bit integer from the buffer (returned as a uint32_t) at a specific index.
 		/// A 24-bit number can hold a value between 0 and 16,777,215.
@@ -131,6 +146,14 @@ namespace isobus
 		/// @return The 24-bit unsigned integer, right aligned into a uint32_t
 		std::uint32_t get_uint24_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
+		/// @brief Get a right-aligned 24-bit integer from the buffer (returned as a int32_t) at a specific index.
+		/// A 24-bit number can hold a value between -8388608 and 8388607.
+		/// @details This function will return the 3 bytes at the specified index in the buffer.
+		/// @param[in] index The index to get the 24-bit signed integer from
+		/// @param[in] format The byte format to use when reading the integer
+		/// @return The 24-bit signed integer, right aligned into a int32_t
+		std::int32_t get_int24_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
+
 		/// @brief Get a 32-bit unsigned integer from the buffer at a specific index.
 		/// A 32-bit unsigned integer can hold a value between 0 and 4294967295.
 		/// @details This function will return the 4 bytes at the specified index in the buffer.
@@ -139,6 +162,14 @@ namespace isobus
 		/// @return The 32-bit unsigned integer
 		std::uint32_t get_uint32_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
+		/// @brief Get a 32-bit signed integer from the buffer at a specific index.
+		/// A 32-bit signed integer can hold a value between -2147483648 and 2147483647.
+		/// @details This function will return the 4 bytes at the specified index in the buffer.
+		/// @param[in] index The index to get the 32-bit signed integer from
+		/// @param[in] format The byte format to use when reading the integer
+		/// @return The 32-bit signed integer
+		std::int32_t get_int32_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
+
 		/// @brief Get a 64-bit unsigned integer from the buffer at a specific index.
 		/// A 64-bit unsigned integer can hold a value between 0 and 18446744073709551615.
 		/// @details This function will return the 8 bytes at the specified index in the buffer.
@@ -146,6 +177,14 @@ namespace isobus
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 64-bit unsigned integer
 		std::uint64_t get_uint64_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
+
+		/// @brief Get a 64-bit signed integer from the buffer at a specific index.
+		/// A 64-bit signed integer can hold a value between -9223372036854775808 and 9223372036854775807.
+		/// @details This function will return the 8 bytes at the specified index in the buffer.
+		/// @param[in] index The index to get the 64-bit signed integer from
+		/// @param[in] format The byte format to use when reading the integer
+		/// @return The 64-bit signed integer
+		std::int64_t get_int64_at(const std::uint32_t index, const ByteFormat format = ByteFormat::LittleEndian) const;
 
 		/// @brief Get a bit-boolean from the buffer at a specific index.
 		/// @details This function will return whether the bit(s) at the specified index in the buffer is/are (all) equal to 1.
