@@ -94,6 +94,11 @@ namespace isobus
 		return data.at(index);
 	}
 
+	std::int8_t CANMessage::get_int8_at(const std::uint32_t index) const
+	{
+		return static_cast<std::int8_t>(data.at(index));
+	}
+
 	std::uint16_t CANMessage::get_uint16_at(const std::uint32_t index, const ByteFormat format) const
 	{
 		std::uint16_t retVal;
@@ -106,6 +111,22 @@ namespace isobus
 		{
 			retVal = static_cast<std::uint16_t>(data.at(index)) << 8;
 			retVal |= data.at(index + 1);
+		}
+		return retVal;
+	}
+
+	std::int16_t CANMessage::get_int16_at(const std::uint32_t index, const ByteFormat format) const
+	{
+		std::int16_t retVal;
+		if (ByteFormat::LittleEndian == format)
+		{
+			retVal = static_cast<std::int16_t>(data.at(index));
+			retVal |= static_cast<std::int16_t>(data.at(index + 1)) << 8;
+		}
+		else
+		{
+			retVal = static_cast<std::int16_t>(data.at(index)) << 8;
+			retVal |= static_cast<std::int16_t>(data.at(index + 1));
 		}
 		return retVal;
 	}
@@ -128,6 +149,24 @@ namespace isobus
 		return retVal;
 	}
 
+	std::int32_t CANMessage::get_int24_at(const std::uint32_t index, const ByteFormat format) const
+	{
+		std::int32_t retVal;
+		if (ByteFormat::LittleEndian == format)
+		{
+			retVal = static_cast<std::int32_t>(data.at(index));
+			retVal |= static_cast<std::int32_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::int32_t>(data.at(index + 2)) << 16;
+		}
+		else
+		{
+			retVal = static_cast<std::int32_t>(data.at(index + 2)) << 16;
+			retVal |= static_cast<std::int32_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::int32_t>(data.at(index + 2));
+		}
+		return retVal;
+	}
+
 	std::uint32_t CANMessage::get_uint32_at(const std::uint32_t index, const ByteFormat format) const
 	{
 		std::uint32_t retVal;
@@ -144,6 +183,26 @@ namespace isobus
 			retVal |= static_cast<std::uint32_t>(data.at(index + 1)) << 16;
 			retVal |= static_cast<std::uint32_t>(data.at(index + 2)) << 8;
 			retVal |= data.at(index + 3);
+		}
+		return retVal;
+	}
+
+	std::int32_t CANMessage::get_int32_at(const std::uint32_t index, const ByteFormat format) const
+	{
+		std::int32_t retVal;
+		if (ByteFormat::LittleEndian == format)
+		{
+			retVal = static_cast<std::int32_t>(data.at(index));
+			retVal |= static_cast<std::int32_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::int32_t>(data.at(index + 2)) << 16;
+			retVal |= static_cast<std::int32_t>(data.at(index + 3)) << 24;
+		}
+		else
+		{
+			retVal = static_cast<std::int32_t>(data.at(index)) << 24;
+			retVal |= static_cast<std::int32_t>(data.at(index + 1)) << 16;
+			retVal |= static_cast<std::int32_t>(data.at(index + 2)) << 8;
+			retVal |= static_cast<std::int32_t>(data.at(index + 3));
 		}
 		return retVal;
 	}
@@ -175,6 +234,35 @@ namespace isobus
 		}
 		return retVal;
 	}
+
+	std::int64_t CANMessage::get_int64_at(const std::uint32_t index, const ByteFormat format) const
+	{
+		std::int64_t retVal;
+		if (ByteFormat::LittleEndian == format)
+		{
+			retVal = static_cast<std::int64_t>(data.at(index));
+			retVal |= static_cast<std::int64_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::int64_t>(data.at(index + 2)) << 16;
+			retVal |= static_cast<std::int64_t>(data.at(index + 3)) << 24;
+			retVal |= static_cast<std::int64_t>(data.at(index + 4)) << 32;
+			retVal |= static_cast<std::int64_t>(data.at(index + 5)) << 40;
+			retVal |= static_cast<std::int64_t>(data.at(index + 6)) << 48;
+			retVal |= static_cast<std::int64_t>(data.at(index + 7)) << 56;
+		}
+		else
+		{
+			retVal = static_cast<std::int64_t>(data.at(index)) << 56;
+			retVal |= static_cast<std::int64_t>(data.at(index + 1)) << 48;
+			retVal |= static_cast<std::int64_t>(data.at(index + 2)) << 40;
+			retVal |= static_cast<std::int64_t>(data.at(index + 3)) << 32;
+			retVal |= static_cast<std::int64_t>(data.at(index + 4)) << 24;
+			retVal |= static_cast<std::int64_t>(data.at(index + 5)) << 16;
+			retVal |= static_cast<std::int64_t>(data.at(index + 6)) << 8;
+			retVal |= static_cast<std::int64_t>(data.at(index + 7));
+		}
+		return retVal;
+	}
+
 	bool isobus::CANMessage::get_bool_at(const std::uint32_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length) const
 	{
 		assert(length <= 8 - bitIndex && "length must be less than or equal to 8 - bitIndex");
