@@ -13,6 +13,9 @@
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/nmea2000_message_definitions.hpp"
+#include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 namespace isobus
 {
@@ -129,6 +132,31 @@ namespace isobus
 			buffer.at(7) |= 0xFC;
 		}
 
+		bool VesselHeading::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+
+			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
+			{
+				retVal |= set_sequence_id(receivedMessage.get_uint8_at(0));
+				retVal |= set_heading(receivedMessage.get_uint16_at(1));
+				retVal |= set_magnetic_deviation(receivedMessage.get_uint16_at(3));
+				retVal |= set_magnetic_variation(receivedMessage.get_uint16_at(5));
+				retVal |= set_sensor_reference(static_cast<HeadingSensorReference>(receivedMessage.get_uint8_at(7) & 0x03));
+				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Can't deserialize vessel heading. DLC must be 8.");
+			}
+			return retVal;
+		}
+
+		std::uint32_t VesselHeading::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
+		}
+
 		RateOfTurn::RateOfTurn(std::shared_ptr<ControlFunction> source) :
 		  senderControlFunction(source)
 		{
@@ -192,6 +220,32 @@ namespace isobus
 			buffer.at(5) = 0xFF; // Reserved bytes
 			buffer.at(6) = 0xFF;
 			buffer.at(7) = 0xFF;
+		}
+
+		bool RateOfTurn::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+
+			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
+			{
+				std::int32_t turnRate = static_cast<std::int32_t>(receivedMessage.get_uint8_at(1));
+				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(2)) << 8);
+				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(3)) << 16);
+				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(4)) << 24);
+				retVal |= set_sequence_id(receivedMessage.get_uint8_at(0));
+				retVal |= set_rate_of_turn(turnRate);
+				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Can't deserialize rate of turn. DLC must be 8.");
+			}
+			return retVal;
+		}
+
+		std::uint32_t RateOfTurn::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
 		}
 
 		PositionRapidUpdate::PositionRapidUpdate(std::shared_ptr<ControlFunction> source) :
@@ -262,6 +316,36 @@ namespace isobus
 			buffer.at(5) = static_cast<std::uint8_t>((longitude >> 8) & 0xFF);
 			buffer.at(6) = static_cast<std::uint8_t>((longitude >> 16) & 0xFF);
 			buffer.at(7) = static_cast<std::uint8_t>((longitude >> 24) & 0xFF);
+		}
+
+		bool PositionRapidUpdate::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+
+			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
+			{
+				std::int32_t decodedLatitude = static_cast<std::int32_t>(receivedMessage.get_uint8_at(0));
+				decodedLatitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(1)) << 8);
+				decodedLatitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(2)) << 16);
+				decodedLatitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(3)) << 24);
+				std::int32_t decodedLongitude = static_cast<std::int32_t>(receivedMessage.get_uint8_at(4));
+				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(5)) << 8);
+				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(6)) << 16);
+				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(7)) << 24);
+				retVal |= set_latitude(decodedLatitude);
+				retVal |= set_longitude(decodedLongitude);
+				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Can't deserialize position rapid update. DLC must be 8.");
+			}
+			return retVal;
+		}
+
+		std::uint32_t PositionRapidUpdate::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
 		}
 
 		CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundSpeedOverGroundRapidUpdate(std::shared_ptr<ControlFunction> source) :
@@ -358,6 +442,30 @@ namespace isobus
 			buffer.at(7) = 0xFF; // Reserved
 		}
 
+		bool CourseOverGroundSpeedOverGroundRapidUpdate::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+
+			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
+			{
+				retVal |= set_sequence_id(receivedMessage.get_uint8_at(0));
+				retVal |= set_course_over_ground_reference(static_cast<CourseOverGroudReference>(receivedMessage.get_uint8_at(1) & 0x03));
+				retVal |= set_course_over_ground(receivedMessage.get_uint16_at(2));
+				retVal |= set_speed_over_ground(receivedMessage.get_uint16_at(4));
+				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Can't deserialize COG/SOG rapid update. DLC must be 8.");
+			}
+			return retVal;
+		}
+
+		std::uint32_t CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
+		}
+
 		PositionDeltaHighPrecisionRapidUpdate::PositionDeltaHighPrecisionRapidUpdate(std::shared_ptr<ControlFunction> source) :
 		  senderControlFunction(source)
 		{
@@ -451,6 +559,18 @@ namespace isobus
 			//! @todo Finish serializer
 		}
 
+		bool PositionDeltaHighPrecisionRapidUpdate::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+			//! @todo Finish deserializer
+			return retVal;
+		}
+
+		std::uint32_t PositionDeltaHighPrecisionRapidUpdate::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
+		}
+
 		GNSSPositionData::GNSSPositionData(std::shared_ptr<ControlFunction> source) :
 		  senderControlFunction(source)
 		{
@@ -459,6 +579,23 @@ namespace isobus
 		std::shared_ptr<ControlFunction> GNSSPositionData::get_control_function() const
 		{
 			return senderControlFunction;
+		}
+
+		std::int64_t GNSSPositionData::get_raw_altitude() const
+		{
+			return altitude;
+		}
+
+		double GNSSPositionData::get_altitude() const
+		{
+			return (altitude * 10E-6);
+		}
+
+		bool GNSSPositionData::set_altitude(std::int64_t altitudeToSet)
+		{
+			bool retVal = (altitude != altitudeToSet);
+			altitude = altitudeToSet;
+			return retVal;
 		}
 
 		std::int64_t GNSSPositionData::get_raw_latitude() const
@@ -471,6 +608,13 @@ namespace isobus
 			return (latitude * 10E-16);
 		}
 
+		bool GNSSPositionData::set_latitude(std::int64_t latitudeToSet)
+		{
+			bool retVal = (latitude != latitudeToSet);
+			latitude = latitudeToSet;
+			return retVal;
+		}
+
 		std::int64_t GNSSPositionData::get_raw_longitude() const
 		{
 			return longitude;
@@ -479,6 +623,13 @@ namespace isobus
 		double GNSSPositionData::get_longitude() const
 		{
 			return (longitude * 10E-16);
+		}
+
+		bool GNSSPositionData::set_longitude(std::int64_t longitudeToSet)
+		{
+			bool retVal = (longitude != longitudeToSet);
+			longitude = longitudeToSet;
+			return retVal;
 		}
 
 		std::int32_t GNSSPositionData::get_geoidal_separation() const
@@ -601,6 +752,30 @@ namespace isobus
 			return retVal;
 		}
 
+		std::uint16_t GNSSPositionData::get_position_date() const
+		{
+			return positionDate;
+		}
+
+		bool GNSSPositionData::set_position_date(std::uint16_t dateToSet)
+		{
+			bool retVal = (positionDate != dateToSet);
+			positionDate = dateToSet;
+			return retVal;
+		}
+
+		std::uint16_t GNSSPositionData::get_position_time() const
+		{
+			return positionTime;
+		}
+
+		bool GNSSPositionData::set_position_time(std::uint16_t timeToSet)
+		{
+			bool retVal = (positionTime != timeToSet);
+			positionTime = timeToSet;
+			return retVal;
+		}
+
 		void GNSSPositionData::serialize(std::vector<std::uint8_t> &buffer)
 		{
 			buffer.resize(MINIMUM_LENGTH_BYTES);
@@ -658,6 +833,61 @@ namespace isobus
 				buffer.push_back(static_cast<std::uint8_t>(referenceStations.at(i).ageOfDGNSSCorrections & 0xFF));
 				buffer.push_back(static_cast<std::uint8_t>((referenceStations.at(i).ageOfDGNSSCorrections >> 8) & 0xFF));
 			}
+		}
+
+		bool GNSSPositionData::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+
+			if (receivedMessage.get_data_length() >= MINIMUM_LENGTH_BYTES)
+			{
+				retVal = set_sequence_id(receivedMessage.get_uint8_at(0));
+				retVal |= set_position_date(receivedMessage.get_uint16_at(1));
+				retVal |= set_position_time(receivedMessage.get_uint32_at(3));
+				retVal |= set_latitude(receivedMessage.get_int64_at(7));
+				retVal |= set_longitude(receivedMessage.get_int64_at(15));
+				retVal |= set_altitude(receivedMessage.get_int64_at(23));
+				retVal |= set_type_of_system(static_cast<TypeOfSystem>(receivedMessage.get_uint8_at(31) & 0x0F));
+				retVal |= set_gnss_method(static_cast<GNSSMethod>((receivedMessage.get_uint8_at(31) >> 4) & 0x0F));
+				retVal |= set_integrity(static_cast<Integrity>(receivedMessage.get_uint8_at(32) & 0x03));
+				retVal |= set_number_of_space_vehicles(receivedMessage.get_uint8_at(33));
+				retVal |= set_horizontal_dilution_of_precision(receivedMessage.get_int16_at(34));
+				retVal |= set_positional_dilution_of_precision(receivedMessage.get_int16_at(36));
+				retVal |= set_geoidal_separation(receivedMessage.get_int32_at(38));
+
+				referenceStations.clear();
+				retVal |= set_number_of_reference_stations(receivedMessage.get_uint8_at(42));
+
+				for (std::uint8_t i = 0; i < get_number_of_reference_stations(); i++)
+				{
+					if (receivedMessage.get_data_length() >= MINIMUM_LENGTH_BYTES + (i * 4))
+					{
+						referenceStations.push_back(std::move(ReferenceStationData((receivedMessage.get_uint16_at(MINIMUM_LENGTH_BYTES + (i * 4)) >> 4), static_cast<TypeOfSystem>(receivedMessage.get_uint8_at(MINIMUM_LENGTH_BYTES + (i * 4)) & 0x0F), receivedMessage.get_uint16_at(2 + MINIMUM_LENGTH_BYTES + (i * 4)))));
+					}
+					else
+					{
+						CANStackLogger::warn("[NMEA2K]: Can't fully parse GNSS position data reference station info because message length is not long enough.");
+						break;
+					}
+				}
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Cannot deserialize GNSS position data. DLC must be >= 43 bytes.");
+			}
+			return retVal;
+		}
+
+		std::uint32_t GNSSPositionData::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
+		}
+
+		GNSSPositionData::ReferenceStationData::ReferenceStationData(std::uint16_t id, TypeOfSystem type, std::uint16_t age) :
+		  stationID(id),
+		  stationType(type),
+		  ageOfDGNSSCorrections(age)
+		{
 		}
 
 		Datum::Datum(std::shared_ptr<ControlFunction> source) :
@@ -793,6 +1023,40 @@ namespace isobus
 			buffer.at(17) = referenceDatum.at(1);
 			buffer.at(18) = referenceDatum.at(2);
 			buffer.at(19) = referenceDatum.at(3);
+		}
+
+		bool Datum::deserialize(const CANMessage &receivedMessage)
+		{
+			bool retVal = false;
+
+			if (receivedMessage.get_data_length() >= LENGTH_BYTES)
+			{
+				std::string tempString;
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(0)));
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(1)));
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(2)));
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(3)));
+				retVal = set_local_datum(tempString);
+				retVal |= set_delta_latitude(receivedMessage.get_int32_at(4));
+				retVal |= set_delta_longitude(receivedMessage.get_int32_at(8));
+				retVal |= set_delta_altitude(receivedMessage.get_int32_at(12));
+				tempString.clear();
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(16)));
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(17)));
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(18)));
+				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(19)));
+				retVal |= set_reference_datum(tempString);
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Can't deserialize Datum message. Message length must be at least 20 bytes.");
+			}
+			return retVal;
+		}
+
+		std::uint32_t Datum::get_timeout()
+		{
+			return CYCLIC_MESSAGE_RATE_MS;
 		}
 	}
 }
