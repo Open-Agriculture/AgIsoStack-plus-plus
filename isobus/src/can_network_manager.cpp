@@ -314,15 +314,18 @@ namespace isobus
 					CANStackLogger::warn("[NM]: %s control function with address '%d' was at incorrect address '%d' in the lookup table prior to deletion.", controlFunction->get_type_string().c_str(), controlFunction->get_address(), i);
 				}
 
-				if (initialized)
+				if (controlFunction->get_address() < NULL_CAN_ADDRESS)
 				{
-					// The control function was active, replace it with an new external control function
-					controlFunctionTable[controlFunction->get_can_port()][controlFunction->address] = ControlFunction::create(controlFunction->get_NAME(), controlFunction->get_address(), controlFunction->get_can_port());
-				}
-				else
-				{
-					// The network manager is not initialized yet, just remove the control function from the table
-					controlFunctionTable[controlFunction->get_can_port()][i] = nullptr;
+					if (initialized)
+					{
+						// The control function was active, replace it with an new external control function
+						controlFunctionTable[controlFunction->get_can_port()][controlFunction->address] = ControlFunction::create(controlFunction->get_NAME(), controlFunction->get_address(), controlFunction->get_can_port());
+					}
+					else
+					{
+						// The network manager is not initialized yet, just remove the control function from the table
+						controlFunctionTable[controlFunction->get_can_port()][i] = nullptr;
+					}
 				}
 			}
 		}
