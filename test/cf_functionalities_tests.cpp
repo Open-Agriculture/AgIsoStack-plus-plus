@@ -260,7 +260,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxOFunctions, 1, false);
 
 	// Test the combinations of AUX-N Inputs
-	auto aux_n_inputs_test_wrapper = [this, &cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
+	auto aux_n_inputs_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
 		bool retVal = true;
 
 		for (std::uint32_t i = 1; i <= 0x80; i = i << 1)
@@ -287,7 +287,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNInputs, 1, false);
 
 	// Test the combinations of AUX-N Functions
-	auto aux_n_functions_test_wrapper = [this, &cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
+	auto aux_n_functions_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
 		bool retVal = true;
 
 		for (std::uint32_t i = 1; i <= 0x80; i = i << 1)
@@ -353,7 +353,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TaskControllerSectionControlClient, 1, false);
 
 	// Test the combinations of Basic Tractor ECU Server Functions
-	auto basic_tecu_server_test_wrapper = [this, &cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::BasicTractorECUOptions functionalityOption) {
+	auto basic_tecu_server_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::BasicTractorECUOptions functionalityOption) {
 		bool retVal = true;
 
 		for (std::uint32_t i = 1; i <= 0x20; i = i << 1)
@@ -381,7 +381,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::BasicTractorECUServer, 1, false);
 
 	// Test the combinations of Basic Tractor ECU Client Functions
-	auto basic_tecu_client_test_wrapper = [this, &cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::BasicTractorECUOptions functionalityOption) {
+	auto basic_tecu_client_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::BasicTractorECUOptions functionalityOption) {
 		bool retVal = true;
 
 		for (std::uint32_t i = 1; i <= 0x20; i = i << 1)
@@ -409,7 +409,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::BasicTractorECUImplementClient, 1, false);
 
 	// Test TIM server options
-	auto tim_server_options_test_wrapper = [this, &cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::TractorImplementManagementOptions functionalityOption) {
+	auto tim_server_options_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::TractorImplementManagementOptions functionalityOption) {
 		bool retVal = true;
 
 		for (std::uint_fast8_t i = 1; i <= static_cast<std::uint_fast8_t>(ControlFunctionFunctionalities::TractorImplementManagementOptions::GuidanceCurvatureIsSupported); i++)
@@ -437,7 +437,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TractorImplementManagementServer, 1, false);
 
 	// Test TIM client options
-	auto tim_client_options_test_wrapper = [this, &cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::TractorImplementManagementOptions functionalityOption) {
+	auto tim_client_options_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::TractorImplementManagementOptions functionalityOption) {
 		bool retVal = true;
 
 		for (std::uint_fast8_t i = 1; i <= static_cast<std::uint_fast8_t>(ControlFunctionFunctionalities::TractorImplementManagementOptions::GuidanceCurvatureIsSupported); i++)
