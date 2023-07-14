@@ -226,9 +226,9 @@ namespace isobus
 			CANStackLogger::debug("[VT/TC]: Language and unit data received from control function " +
 			                        isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
 			                        " language is: " +
-			                        parentInterface->languageCode,
+			                        parentInterface->languageCode.c_str(),
 			                      " and country code is ",
-			                      parentInterface->countryCode.empty() ? "unknown." : parentInterface->countryCode);
+			                      parentInterface->countryCode.empty() ? "unknown." : parentInterface->countryCode.c_str());
 		}
 	}
 
