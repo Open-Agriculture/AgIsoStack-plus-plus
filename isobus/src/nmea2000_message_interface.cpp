@@ -20,6 +20,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
@@ -69,12 +70,12 @@ namespace isobus
 		return datumTransmitMessage;
 	}
 
-	NMEA2000Messages::GNSSPositionData &NMEA2000MessageInterface::gnss_position_data_transmit_message()
+	NMEA2000Messages::GNSSPositionData &NMEA2000MessageInterface::get_gnss_position_data_transmit_message()
 	{
 		return gnssPositionDataTransmitMessage;
 	}
 
-	NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate &NMEA2000MessageInterface::position_delta_high_precision_rapid_update_transmit_message()
+	NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate &NMEA2000MessageInterface::get_position_delta_high_precision_rapid_update_transmit_message()
 	{
 		return positionDeltaHighPrecisionRapidUpdateTransmitMessage;
 	}
@@ -84,12 +85,12 @@ namespace isobus
 		return positionRapidUpdateTransmitMessage;
 	}
 
-	NMEA2000Messages::RateOfTurn &NMEA2000MessageInterface::rate_of_turn_transmit_message()
+	NMEA2000Messages::RateOfTurn &NMEA2000MessageInterface::get_rate_of_turn_transmit_message()
 	{
 		return rateOfTurnTransmitMessage;
 	}
 
-	NMEA2000Messages::VesselHeading &NMEA2000MessageInterface::vessel_heading_transmit_message()
+	NMEA2000Messages::VesselHeading &NMEA2000MessageInterface::get_vessel_heading_transmit_message()
 	{
 		return vesselHeadingTransmitMessage;
 	}
@@ -315,9 +316,9 @@ namespace isobus
 	{
 		if (!initialized)
 		{
+			CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
+			CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::CourseOverGroundSpeedOverGroundRapidUpdate), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionDeltaHighPrecisionRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RateOfTurn), process_rx_message, this);
@@ -335,9 +336,9 @@ namespace isobus
 	{
 		if (initialized)
 		{
+			CANNetworkManager::CANNetwork.get_fast_packet_protocol().remove_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
+			CANNetworkManager::CANNetwork.get_fast_packet_protocol().remove_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::CourseOverGroundSpeedOverGroundRapidUpdate), process_rx_message, this);
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionDeltaHighPrecisionRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RateOfTurn), process_rx_message, this);
@@ -391,12 +392,12 @@ namespace isobus
 					if (nullptr != targetInterface->datumTransmitMessage.get_control_function())
 					{
 						targetInterface->datumTransmitMessage.serialize(messageBuffer);
-						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum),
-						                                                                    messageBuffer.data(),
-						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->datumTransmitMessage.get_control_function()),
-						                                                                    nullptr,
-						                                                                    CANIdentifier::PriorityDefault6);
+						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum),
+						                                                                                                       messageBuffer.data(),
+						                                                                                                       messageBuffer.size(),
+						                                                                                                       std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->datumTransmitMessage.get_control_function()),
+						                                                                                                       nullptr,
+						                                                                                                       CANIdentifier::PriorityDefault6);
 					}
 				}
 				break;
@@ -406,12 +407,12 @@ namespace isobus
 					if (nullptr != targetInterface->gnssPositionDataTransmitMessage.get_control_function())
 					{
 						targetInterface->gnssPositionDataTransmitMessage.serialize(messageBuffer);
-						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData),
-						                                                                    messageBuffer.data(),
-						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->gnssPositionDataTransmitMessage.get_control_function()),
-						                                                                    nullptr,
-						                                                                    CANIdentifier::Priority3);
+						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData),
+						                                                                                                       messageBuffer.data(),
+						                                                                                                       messageBuffer.size(),
+						                                                                                                       std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->gnssPositionDataTransmitMessage.get_control_function()),
+						                                                                                                       nullptr,
+						                                                                                                       CANIdentifier::Priority3);
 					}
 				}
 				break;

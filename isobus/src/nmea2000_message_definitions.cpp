@@ -50,7 +50,7 @@ namespace isobus
 
 		float VesselHeading::get_heading() const
 		{
-			return (headingReading * 0.0001f);
+			return (headingReading * 10E-4f);
 		}
 
 		bool VesselHeading::set_heading(std::uint16_t heading)
@@ -67,7 +67,7 @@ namespace isobus
 
 		float VesselHeading::get_magnetic_deviation() const
 		{
-			return (magneticDeviation * 0.0001f);
+			return (magneticDeviation * 10E-4f);
 		}
 
 		bool VesselHeading::set_magnetic_deviation(std::uint16_t deviation)
@@ -84,7 +84,7 @@ namespace isobus
 
 		float VesselHeading::get_magnetic_variation() const
 		{
-			return (magneticVariation * 0.0001f);
+			return (magneticVariation * 10E-4f);
 		}
 
 		bool VesselHeading::set_magnetic_variation(std::int16_t variation)
@@ -118,7 +118,7 @@ namespace isobus
 			return retVal;
 		}
 
-		void VesselHeading::serialize(std::vector<std::uint8_t> &buffer)
+		void VesselHeading::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(CAN_DATA_LENGTH);
 			buffer.at(0) = (sequenceID <= MAX_SEQUENCE_ID) ? sequenceID : 0xFF;
@@ -186,7 +186,7 @@ namespace isobus
 
 		double RateOfTurn::get_rate_of_turn() const
 		{
-			return (rateOfTurn * (1.0 / 32.0 * 10E-6));
+			return (static_cast<double>(rateOfTurn) * (1.0 / 32.0 * 10E-6));
 		}
 
 		bool RateOfTurn::set_rate_of_turn(std::int32_t turnRate)
@@ -208,7 +208,7 @@ namespace isobus
 			return retVal;
 		}
 
-		void RateOfTurn::serialize(std::vector<std::uint8_t> &buffer)
+		void RateOfTurn::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(CAN_DATA_LENGTH);
 
@@ -228,7 +228,7 @@ namespace isobus
 
 			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
 			{
-				std::int32_t turnRate = static_cast<std::int32_t>(receivedMessage.get_uint8_at(1));
+				auto turnRate = static_cast<std::int32_t>(receivedMessage.get_uint8_at(1));
 				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(2)) << 8);
 				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(3)) << 16);
 				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(4)) << 24);
@@ -277,12 +277,12 @@ namespace isobus
 
 		double PositionRapidUpdate::get_latitude() const
 		{
-			return (latitude * 10E-7);
+			return (static_cast<double>(latitude) * 10E-7);
 		}
 
 		double PositionRapidUpdate::get_longitude() const
 		{
-			return (longitude * 10E-7);
+			return (static_cast<double>(longitude) * 10E-7);
 		}
 
 		std::int32_t PositionRapidUpdate::get_raw_longitude() const
@@ -304,7 +304,7 @@ namespace isobus
 			return retVal;
 		}
 
-		void PositionRapidUpdate::serialize(std::vector<std::uint8_t> &buffer)
+		void PositionRapidUpdate::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(CAN_DATA_LENGTH);
 
@@ -324,11 +324,11 @@ namespace isobus
 
 			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
 			{
-				std::int32_t decodedLatitude = static_cast<std::int32_t>(receivedMessage.get_uint8_at(0));
+				auto decodedLatitude = static_cast<std::int32_t>(receivedMessage.get_uint8_at(0));
 				decodedLatitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(1)) << 8);
 				decodedLatitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(2)) << 16);
 				decodedLatitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(3)) << 24);
-				std::int32_t decodedLongitude = static_cast<std::int32_t>(receivedMessage.get_uint8_at(4));
+				auto decodedLongitude = static_cast<std::int32_t>(receivedMessage.get_uint8_at(4));
 				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(5)) << 8);
 				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(6)) << 16);
 				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(7)) << 24);
@@ -377,7 +377,7 @@ namespace isobus
 
 		float CourseOverGroundSpeedOverGroundRapidUpdate::get_course_over_ground() const
 		{
-			return (0.0001f * courseOverGround);
+			return (10E-4f * courseOverGround);
 		}
 
 		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_course_over_ground(std::uint16_t course)
@@ -394,7 +394,7 @@ namespace isobus
 
 		float CourseOverGroundSpeedOverGroundRapidUpdate::get_speed_over_ground() const
 		{
-			return (0.01f * speedOverGround);
+			return (10E-2f * speedOverGround);
 		}
 
 		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_speed_over_ground(std::uint16_t speed)
@@ -428,7 +428,7 @@ namespace isobus
 			return retVal;
 		}
 
-		void CourseOverGroundSpeedOverGroundRapidUpdate::serialize(std::vector<std::uint8_t> &buffer)
+		void CourseOverGroundSpeedOverGroundRapidUpdate::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(CAN_DATA_LENGTH);
 
@@ -495,7 +495,7 @@ namespace isobus
 
 		double PositionDeltaHighPrecisionRapidUpdate::get_latitude_delta() const
 		{
-			return (latitudeDelta * 10E-16);
+			return (static_cast<double>(latitudeDelta) * 10E-7);
 		}
 
 		bool PositionDeltaHighPrecisionRapidUpdate::set_latitude_delta(std::int32_t delta)
@@ -512,7 +512,7 @@ namespace isobus
 
 		double PositionDeltaHighPrecisionRapidUpdate::get_longitude_delta() const
 		{
-			return (longitudeDelta * 10E-16);
+			return (static_cast<double>(longitudeDelta) * 10E-7);
 		}
 
 		bool PositionDeltaHighPrecisionRapidUpdate::set_longitude_delta(std::int32_t delta)
@@ -541,7 +541,7 @@ namespace isobus
 
 		double PositionDeltaHighPrecisionRapidUpdate::get_time_delta() const
 		{
-			return (timeDelta * (5 * 10E-3));
+			return ((static_cast<double>(timeDelta) * 5.0) / 1000.0);
 		}
 
 		bool PositionDeltaHighPrecisionRapidUpdate::set_time_delta(std::uint8_t delta)
@@ -551,18 +551,36 @@ namespace isobus
 			return retVal;
 		}
 
-		void PositionDeltaHighPrecisionRapidUpdate::serialize(std::vector<std::uint8_t> &buffer)
+		void PositionDeltaHighPrecisionRapidUpdate::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(CAN_DATA_LENGTH);
 
 			buffer.at(0) = sequenceID;
-			//! @todo Finish serializer
+			buffer.at(1) = timeDelta;
+			buffer.at(2) = static_cast<std::uint8_t>(latitudeDelta & 0xFF);
+			buffer.at(3) = static_cast<std::uint8_t>((latitudeDelta >> 8) & 0xFF);
+			buffer.at(4) = static_cast<std::uint8_t>((latitudeDelta >> 16) & 0xFF);
+			buffer.at(5) = static_cast<std::uint8_t>(longitudeDelta & 0xFF);
+			buffer.at(6) = static_cast<std::uint8_t>((longitudeDelta >> 8) & 0xFF);
+			buffer.at(7) = static_cast<std::uint8_t>((longitudeDelta >> 16) & 0xFF);
 		}
 
 		bool PositionDeltaHighPrecisionRapidUpdate::deserialize(const CANMessage &receivedMessage)
 		{
 			bool retVal = false;
-			//! @todo Finish deserializer
+
+			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
+			{
+				retVal = set_sequence_id(receivedMessage.get_uint8_at(0));
+				retVal |= set_time_delta(receivedMessage.get_uint8_at(1));
+				retVal |= set_latitude_delta(receivedMessage.get_uint24_at(2));
+				retVal |= set_longitude_delta(receivedMessage.get_uint24_at(5));
+				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+			}
+			else
+			{
+				CANStackLogger::warn("[NMEA2K]: Cannot deserialize position delta high precision rapid update. DLC must be 8 bytes.");
+			}
 			return retVal;
 		}
 
@@ -588,7 +606,7 @@ namespace isobus
 
 		double GNSSPositionData::get_altitude() const
 		{
-			return (altitude * 10E-6);
+			return (static_cast<double>(altitude) * 1E-6);
 		}
 
 		bool GNSSPositionData::set_altitude(std::int64_t altitudeToSet)
@@ -605,7 +623,7 @@ namespace isobus
 
 		double GNSSPositionData::get_latitude() const
 		{
-			return (latitude * 10E-16);
+			return (static_cast<double>(latitude) * 1E-16);
 		}
 
 		bool GNSSPositionData::set_latitude(std::int64_t latitudeToSet)
@@ -622,7 +640,7 @@ namespace isobus
 
 		double GNSSPositionData::get_longitude() const
 		{
-			return (longitude * 10E-16);
+			return (static_cast<double>(longitude) * 1E-16);
 		}
 
 		bool GNSSPositionData::set_longitude(std::int64_t longitudeToSet)
@@ -632,9 +650,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::int32_t GNSSPositionData::get_geoidal_separation() const
+		std::int32_t GNSSPositionData::get_raw_geoidal_separation() const
 		{
 			return geoidalSeparation;
+		}
+
+		float GNSSPositionData::get_geoidal_separation() const
+		{
+			return (geoidalSeparation * 0.01f);
 		}
 
 		bool GNSSPositionData::set_geoidal_separation(std::int32_t separation)
@@ -752,6 +775,53 @@ namespace isobus
 			return retVal;
 		}
 
+		std::uint16_t GNSSPositionData::get_reference_station_id(std::size_t index) const
+		{
+			std::uint16_t retVal = 0;
+
+			if (index < referenceStations.size())
+			{
+				retVal = referenceStations.at(index).stationID;
+			}
+			return retVal;
+		}
+
+		std::uint16_t GNSSPositionData::get_reference_station_corrections_age(std::size_t index) const
+		{
+			std::uint16_t retVal = 0;
+
+			if (index < referenceStations.size())
+			{
+				retVal = referenceStations.at(index).ageOfDGNSSCorrections;
+			}
+			return retVal;
+		}
+
+		GNSSPositionData::TypeOfSystem GNSSPositionData::get_reference_station_system_type(std::size_t index) const
+		{
+			TypeOfSystem retVal = TypeOfSystem::Null;
+
+			if (index < referenceStations.size())
+			{
+				retVal = referenceStations.at(index).stationType;
+			}
+			return retVal;
+		}
+
+		bool GNSSPositionData::set_reference_station(std::size_t index, std::uint16_t ID, TypeOfSystem type, std::uint16_t ageOfCorrections)
+		{
+			bool retVal = false;
+
+			if (index < referenceStations.size())
+			{
+				retVal |= referenceStations.at(index).ageOfDGNSSCorrections != ageOfCorrections;
+				retVal |= referenceStations.at(index).stationID != ID;
+				retVal |= referenceStations.at(index).stationType != type;
+				referenceStations.at(index) = ReferenceStationData(ID, type, ageOfCorrections);
+			}
+			return retVal;
+		}
+
 		std::uint16_t GNSSPositionData::get_position_date() const
 		{
 			return positionDate;
@@ -764,19 +834,19 @@ namespace isobus
 			return retVal;
 		}
 
-		std::uint16_t GNSSPositionData::get_position_time() const
+		std::uint32_t GNSSPositionData::get_position_time() const
 		{
 			return positionTime;
 		}
 
-		bool GNSSPositionData::set_position_time(std::uint16_t timeToSet)
+		bool GNSSPositionData::set_position_time(std::uint32_t timeToSet)
 		{
 			bool retVal = (positionTime != timeToSet);
 			positionTime = timeToSet;
 			return retVal;
 		}
 
-		void GNSSPositionData::serialize(std::vector<std::uint8_t> &buffer)
+		void GNSSPositionData::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(MINIMUM_LENGTH_BYTES);
 
@@ -860,9 +930,11 @@ namespace isobus
 
 				for (std::uint8_t i = 0; i < get_number_of_reference_stations(); i++)
 				{
-					if (receivedMessage.get_data_length() >= MINIMUM_LENGTH_BYTES + (i * 4))
+					if (receivedMessage.get_data_length() >= static_cast<std::uint32_t>(MINIMUM_LENGTH_BYTES + (i * 4)))
 					{
-						referenceStations.push_back(std::move(ReferenceStationData((receivedMessage.get_uint16_at(MINIMUM_LENGTH_BYTES + (i * 4)) >> 4), static_cast<TypeOfSystem>(receivedMessage.get_uint8_at(MINIMUM_LENGTH_BYTES + (i * 4)) & 0x0F), receivedMessage.get_uint16_at(2 + MINIMUM_LENGTH_BYTES + (i * 4)))));
+						referenceStations.at(i) = std::move(ReferenceStationData((receivedMessage.get_uint16_at(MINIMUM_LENGTH_BYTES + (i * 4)) >> 4),
+						                                                         static_cast<TypeOfSystem>(receivedMessage.get_uint8_at(MINIMUM_LENGTH_BYTES + (i * 4)) & 0x0F),
+						                                                         receivedMessage.get_uint16_at(2 + MINIMUM_LENGTH_BYTES + (i * 4))));
 					}
 					else
 					{
@@ -955,7 +1027,7 @@ namespace isobus
 
 		double Datum::get_delta_latitude() const
 		{
-			return (deltaLatitude * 10E-7);
+			return (static_cast<double>(deltaLatitude) * 10E-7);
 		}
 
 		bool Datum::set_delta_latitude(std::int32_t delta)
@@ -967,7 +1039,7 @@ namespace isobus
 
 		double Datum::get_delta_longitude() const
 		{
-			return (deltaLongitude * 10E-7);
+			return (static_cast<double>(deltaLongitude) * 10E-7);
 		}
 
 		std::int32_t Datum::get_raw_delta_longitude() const
@@ -989,7 +1061,7 @@ namespace isobus
 
 		float Datum::get_delta_altitude() const
 		{
-			return (0.02f * deltaAltitude);
+			return (10E-2f * deltaAltitude);
 		}
 
 		bool Datum::set_delta_altitude(std::int32_t delta)
@@ -999,7 +1071,7 @@ namespace isobus
 			return retVal;
 		}
 
-		void Datum::serialize(std::vector<std::uint8_t> &buffer)
+		void Datum::serialize(std::vector<std::uint8_t> &buffer) const
 		{
 			buffer.resize(LENGTH_BYTES);
 

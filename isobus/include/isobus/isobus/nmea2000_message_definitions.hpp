@@ -113,7 +113,7 @@ namespace isobus
 
 			/// @brief Takes the current state of the object and serializes it into a buffer to be sent.
 			/// @param[in] buffer A vector to populate with the message data
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
@@ -181,7 +181,7 @@ namespace isobus
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
@@ -250,7 +250,7 @@ namespace isobus
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
@@ -344,7 +344,7 @@ namespace isobus
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
@@ -368,6 +368,7 @@ namespace isobus
 
 		/// @brief This message is a way for a GNSS receiver to provide a current position without using fast packet based on
 		/// The content of the last position data combined from the GNSS Position Data message and any prior position delta messages.
+		/// This PGN provides latitude and longitude referenced to WGS84.
 		class PositionDeltaHighPrecisionRapidUpdate
 		{
 		public:
@@ -438,7 +439,7 @@ namespace isobus
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
@@ -550,10 +551,15 @@ namespace isobus
 			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_longitude(std::int64_t longitudeToSet);
 
-			/// @brief Returns the geoidal separation @todo units?
+			/// @brief Returns the geoidal separation in units of 0.01 meters
 			/// @details This returns the difference between the earth ellipsoid and mean-sea-level (geoid) defined by the reference datum
-			/// @returns The geoidal separation
-			std::int32_t get_geoidal_separation() const;
+			/// @returns The geoidal separation in units of 0.01m
+			std::int32_t get_raw_geoidal_separation() const;
+
+			/// @brief Returns the geoidal separation in units of meters
+			/// @details This returns the difference between the earth ellipsoid and mean-sea-level (geoid) defined by the reference datum
+			/// @returns The geoidal separation in units of meters
+			float get_geoidal_separation() const;
 
 			/// @brief Sets the geoidal separation
 			/// @details This value is the difference between the earth ellipsoid and mean-sea-level (geoid) defined by the reference datum
@@ -643,6 +649,28 @@ namespace isobus
 			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_number_of_reference_stations(std::uint8_t stations);
 
+			/// @brief Returns the specified reference station's ID by index
+			/// @param[in] index The index of the reference station to get the ID of
+			/// @returns Reference station's ID by index
+			std::uint16_t get_reference_station_id(std::size_t index) const;
+
+			/// @brief Returns the specified reference station's DGNSS corrections age by index
+			/// @prarm[in] index The index of the reference station to get the DGNSS corrections age for
+			/// @returns Reference station's DGNSS corrections age by index
+			std::uint16_t get_reference_station_corrections_age(std::size_t index) const;
+
+			/// @brief Returns the specified reference station's system type by index
+			/// @param[in] index The index of the reference station to get the system type for
+			/// @returns The specified reference station's system type by index
+			TypeOfSystem get_reference_station_system_type(std::size_t index) const;
+
+			/// @brief Sets the data for the specified reference station by index
+			/// @param[in] index The index of the reference station to set
+			/// @param[in] ID The station ID to set
+			/// @param[in] type The type of reference station
+			/// @param[in] ageOfCorrections Age of the DGNSS corrections in units of 0.01 seconds
+			bool set_reference_station(std::size_t index, std::uint16_t ID, TypeOfSystem type, std::uint16_t ageOfCorrections);
+
 			/// @brief Returns the date associated with the current position.
 			/// @returns Number of days relative to UTC since Jan 1 1970 (0 is equal to Jan 1, 1970). Max value is 65532 days.
 			std::uint16_t get_position_date() const;
@@ -654,16 +682,16 @@ namespace isobus
 
 			/// @brief Returns the number of seconds since midnight
 			/// @returns Number of seconds since midnight (0 == midnight), range allows for up to two leap seconds per day
-			std::uint16_t get_position_time() const;
+			std::uint32_t get_position_time() const;
 
 			/// @brief Sets the number of seconds since midnight
 			/// @param[in] timeToSet Seconds since midnight (0 == midnight), range allows for up to two leap seconds per day
 			/// @returns True if the value that was set differed from the stored value, otherwise false
-			bool set_position_time(std::uint16_t timeToSet);
+			bool set_position_time(std::uint32_t timeToSet);
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
@@ -715,6 +743,8 @@ namespace isobus
 
 		/// @brief A NMEA2000 message that describes datum (reference frame) information. PGN 129044 (0x1F814)
 		/// A common one might be the WGS84 datum or the NSRS, for example.
+		/// @details This provides local geodetic datum and datum offsets from a reference datum.
+		/// This PGN is used to define the datum to which a position location output by the same device in other PGNs is referenced.
 		class Datum
 		{
 		public:
@@ -792,7 +822,7 @@ namespace isobus
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
-			void serialize(std::vector<std::uint8_t> &buffer);
+			void serialize(std::vector<std::uint8_t> &buffer) const;
 
 			/// @brief Deserializes a CAN message to populate this object's contents. Updates the timestamp when called.
 			/// @param[in] receivedMessage The CAN message to parse when deserializing
