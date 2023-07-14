@@ -63,12 +63,12 @@ namespace isobus
 		/// @brief Returns a GNSSPositionData object that you can use to
 		/// set the message's individual signal values, which will then be transmitted if the interface is configured to do so.
 		/// @returns GNSSPositionData used to set the individual signal values sent in the GNSS position data message
-		NMEA2000Messages::GNSSPositionData &gnss_position_data_transmit_message();
+		NMEA2000Messages::GNSSPositionData &get_gnss_position_data_transmit_message();
 
 		/// @brief Returns a PositionDeltaHighPrecisionRapidUpdate object that you can use to
 		/// set the message's individual signal values, which will then be transmitted if the interface is configured to do so.
 		/// @returns PositionDeltaHighPrecisionRapidUpdate used to set the individual signal values sent in the position delta message
-		NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate &position_delta_high_precision_rapid_update_transmit_message();
+		NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate &get_position_delta_high_precision_rapid_update_transmit_message();
 
 		/// @brief Returns a PositionRapidUpdate object that you can use to
 		/// set the message's individual signal values, which will then be transmitted if the interface is configured to do so.
@@ -78,12 +78,12 @@ namespace isobus
 		/// @brief Returns a RateOfTurn object that you can use to
 		/// set the message's individual signal values, which will then be transmitted if the interface is configured to do so.
 		/// @returns RateOfTurn used to set the individual signal values sent in the rate of turn message
-		NMEA2000Messages::RateOfTurn &rate_of_turn_transmit_message();
+		NMEA2000Messages::RateOfTurn &get_rate_of_turn_transmit_message();
 
 		/// @brief Returns a VesselHeading object that you can use to
 		/// set the message's individual signal values, which will then be transmitted if the interface is configured to do so.
 		/// @returns VesselHeading used to set the individual signal values sent in the vessel heading message
-		NMEA2000Messages::VesselHeading &vessel_heading_transmit_message();
+		NMEA2000Messages::VesselHeading &get_vessel_heading_transmit_message();
 
 		/// @brief Returns the number of unique senders of the COG & SOG message
 		/// @returns The number of unique COG & SOG message senders
