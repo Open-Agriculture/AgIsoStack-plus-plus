@@ -122,7 +122,8 @@ namespace isobus
 				tempSession->sessionCompleteCallback = txCompleteCallback;
 				tempSession->sequenceNumber = get_new_sequence_number(tempSession);
 
-				if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
+				if ((messageLength > 6) &&
+				    (0 != ((messageLength - 6) % PROTOCOL_BYTES_PER_FRAME)))
 				{
 					tempSession->packetCount++;
 				}
@@ -243,7 +244,7 @@ namespace isobus
 	{
 		if (nullptr != parent)
 		{
-			reinterpret_cast<FastPacketProtocol *>(parent)->process_message(message);
+			static_cast<FastPacketProtocol *>(parent)->process_message(message);
 		}
 	}
 
@@ -284,12 +285,18 @@ namespace isobus
 							// Continue processing the message
 							for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
 							{
-								currentSession->sessionMessage.set_data(messageData[1 + i], i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1);
+								if (static_cast<std::uint32_t>(i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1) < currentSession->sessionMessage.get_data_length())
+								{
+									currentSession->sessionMessage.set_data(messageData[1 + i], i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1);
+								}
+								else
+								{
+									break;
+								}
 							}
 							currentSession->processedPacketsThisSession++;
 
-							// Currently counting one by index and one by value, so add 1 to expected packet count
-							if (currentSession->processedPacketsThisSession >= currentSession->packetCount + 1)
+							if (static_cast<std::uint32_t>((currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1) >= currentSession->sessionMessage.get_data_length())
 							{
 								// Complete
 								// Find the appropriate callback and let them know
@@ -358,8 +365,8 @@ namespace isobus
 						else
 						{
 							// This is the middle of some message that we have no context for.
-							// Ignore the message.
-							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[FP]: Ignoring FP message, no context available.");
+							// Ignore the message for now until we receive it with a fresh packet counter.
+							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Warning, "[FP]: Ignoring FP message with PGN %u, no context available. The message may be processed when packet count returns to zero.", message.get_identifier().get_parameter_group_number());
 						}
 					}
 				}
