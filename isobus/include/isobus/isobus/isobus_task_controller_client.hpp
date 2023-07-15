@@ -215,6 +215,14 @@ namespace isobus
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
 
+		/// @brief Returns the internal control function being used by the interface to send messages
+		/// @returns The internal control function being used by the interface to send messages
+		std::shared_ptr<InternalControlFunction> get_internal_control_function() const;
+
+		/// @brief Returns the control function of the TC server with which this TC client communicates.
+		/// @returns The partner control function for the TC server
+		std::shared_ptr<PartneredControlFunction> get_partner_control_function() const;
+
 		/// @brief Returns the previously configured number of booms supported by the client
 		/// @returns The previously configured number of booms supported by the client
 		std::uint8_t get_number_booms_supported() const;

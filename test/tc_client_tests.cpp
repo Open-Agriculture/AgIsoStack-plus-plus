@@ -309,6 +309,9 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 
+	EXPECT_EQ(tcPartner, interfaceUnderTest.get_partner_control_function());
+	EXPECT_EQ(internalECU, interfaceUnderTest.get_internal_control_function());
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state

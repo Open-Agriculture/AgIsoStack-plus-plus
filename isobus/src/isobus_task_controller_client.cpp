@@ -242,6 +242,16 @@ namespace isobus
 		}
 	}
 
+	std::shared_ptr<InternalControlFunction> TaskControllerClient::get_internal_control_function() const
+	{
+		return myControlFunction;
+	}
+
+	std::shared_ptr<PartneredControlFunction> TaskControllerClient::get_partner_control_function() const
+	{
+		return partnerControlFunction;
+	}
+
 	std::uint8_t TaskControllerClient::get_number_booms_supported() const
 	{
 		return numberBoomsSupported;
