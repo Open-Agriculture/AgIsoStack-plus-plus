@@ -49,14 +49,18 @@ const std::array<std::uint16_t, SeederVtApplication::NUMBER_ONSCREEN_SECTIONS> S
 	section6EnableState_ObjPtr
 };
 
-SeederVtApplication::SeederVtApplication(std::shared_ptr<isobus::PartneredControlFunction> VTPartner, std::shared_ptr<isobus::InternalControlFunction> source) :
+SeederVtApplication::SeederVtApplication(std::shared_ptr<isobus::PartneredControlFunction> VTPartner, std::shared_ptr<isobus::PartneredControlFunction> TCPartner, std::shared_ptr<isobus::InternalControlFunction> source) :
+  TCClientInterface(TCPartner, source, nullptr),
   VTClientInterface(VTPartner, source),
+  speedMessages(source, false, false, false, false),
   txFlags(static_cast<std::uint32_t>(UpdateVTStateFlags::NumberOfFlags), processFlags, this)
 {
 }
 
-bool SeederVtApplication::Initialize()
+bool SeederVtApplication::initialize()
 {
+	bool retVal = true;
+
 	sectionControl.set_number_of_sections(NUMBER_ONSCREEN_SECTIONS);
 
 	objectPool = isobus::IOPFileInterface::read_iop_file("BasePool.iop");
@@ -72,26 +76,37 @@ bool SeederVtApplication::Initialize()
 	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(objectPool);
 
 	VTClientInterface.set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version4, objectPool.data(), objectPool.size(), objectPoolHash);
-	softkeyEventListener = VTClientInterface.add_vt_soft_key_event_listener(handle_vt_key_events);
-	buttonEventListener = VTClientInterface.add_vt_button_event_listener(handle_vt_key_events);
-	numericValueEventListener = VTClientInterface.add_vt_change_numeric_value_event_listener(handle_numeric_value_events);
+	softkeyEventListener = VTClientInterface.add_vt_soft_key_event_listener([this](const isobus::VirtualTerminalClient::VTKeyEvent &event) { this->handle_vt_key_events(event); });
+	buttonEventListener = VTClientInterface.add_vt_button_event_listener([this](const isobus::VirtualTerminalClient::VTKeyEvent &event) { this->handle_vt_key_events(event); });
+	numericValueEventListener = VTClientInterface.add_vt_change_numeric_value_event_listener([this](const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event) { this->handle_numeric_value_events(event); });
 	VTClientInterface.initialize(true);
-
-	isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(SectionControlImplementSimulator::ISO_MACHINE_SELECTED_SPEED_PGN, SectionControlImplementSimulator::process_application_can_messages, &sectionControl);
 
 	for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(UpdateVTStateFlags::NumberOfFlags); i++)
 	{
 		txFlags.set_flag(i); // Set all flags to bring the pool up with a known state
 	}
-	return true;
+
+	speedMessages.initialize();
+	machineSelectedSpeedEventHandle = speedMessages.get_machine_selected_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed) { this->handle_machine_selected_speed(mssData, changed); });
+
+	ddop = std::make_shared<isobus::DeviceDescriptorObjectPool>(3);
+	if (sectionControl.create_ddop(ddop, TCClientInterface.get_internal_control_function()->get_NAME()))
+	{
+		TCClientInterface.configure(ddop, 1, 255, 255, true, true, true, false, true);
+		TCClientInterface.add_request_value_callback(SectionControlImplementSimulator::request_value_command_callback, &sectionControl);
+		TCClientInterface.add_value_command_callback(SectionControlImplementSimulator::value_command_callback, &sectionControl);
+		TCClientInterface.initialize(true);
+	}
+	else
+	{
+		std::cout << "Failed generating DDOP. TC functionality will not work until the DDOP structure is fixed." << std::endl;
+		retVal = false;
+	}
+	return retVal;
 }
 
 void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {
-	auto application = reinterpret_cast<SeederVtApplication *>(event.parentPointer);
-
-	assert(nullptr != application);
-
 	switch (event.keyEvent)
 	{
 		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
@@ -100,86 +115,86 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 			{
 				case home_Key:
 				{
-					application->set_currently_active_screen(ActiveScreen::Main);
+					set_currently_active_screen(ActiveScreen::Main);
 				}
 				break;
 
 				case settings_Key:
 				{
-					application->set_currently_active_screen(ActiveScreen::Settings);
+					set_currently_active_screen(ActiveScreen::Settings);
 				}
 				break;
 
 				case statistics_Key:
 				{
-					application->set_currently_active_screen(ActiveScreen::Statistics);
+					set_currently_active_screen(ActiveScreen::Statistics);
 				}
 				break;
 
 				case info_Key:
 				{
-					application->set_currently_active_screen(ActiveScreen::Info);
+					set_currently_active_screen(ActiveScreen::Info);
 				}
 				break;
 
 				case autoManualToggle_Button:
 				{
-					application->sectionControl.set_is_mode_auto(!application->sectionControl.get_is_mode_auto());
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateAutoManual_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
+					sectionControl.set_is_mode_auto(!sectionControl.get_is_mode_auto());
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateAutoManual_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
 				}
 				break;
 
 				case section1Toggle_Button:
 				{
-					application->sectionControl.set_switch_state(0, !application->sectionControl.get_switch_state(0));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
+					sectionControl.set_switch_state(0, !sectionControl.get_switch_state(0));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
 				}
 				break;
 
 				case section2Toggle_Button:
 				{
-					application->sectionControl.set_switch_state(1, !application->sectionControl.get_switch_state(1));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2EnableState_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
+					sectionControl.set_switch_state(1, !sectionControl.get_switch_state(1));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2EnableState_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
 				}
 				break;
 
 				case section3Toggle_Button:
 				{
-					application->sectionControl.set_switch_state(2, !application->sectionControl.get_switch_state(2));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3EnableState_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
+					sectionControl.set_switch_state(2, !sectionControl.get_switch_state(2));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3EnableState_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
 				}
 				break;
 
 				case section4Toggle_Button:
 				{
-					application->sectionControl.set_switch_state(3, !application->sectionControl.get_switch_state(3));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4EnableState_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
+					sectionControl.set_switch_state(3, !sectionControl.get_switch_state(3));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4EnableState_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
 				}
 				break;
 
 				case section5Toggle_Button:
 				{
-					application->sectionControl.set_switch_state(4, !application->sectionControl.get_switch_state(4));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5EnableState_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
+					sectionControl.set_switch_state(4, !sectionControl.get_switch_state(4));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5EnableState_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
 				}
 				break;
 
 				case section6Toggle_Button:
 				{
-					application->sectionControl.set_switch_state(5, !application->sectionControl.get_switch_state(5));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6EnableState_ObjPtr));
-					application->txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
+					sectionControl.set_switch_state(5, !sectionControl.get_switch_state(5));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6EnableState_ObjPtr));
+					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
 				}
 				break;
 
@@ -193,15 +208,11 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 
 void SeederVtApplication::handle_numeric_value_events(const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event)
 {
-	auto application = reinterpret_cast<SeederVtApplication *>(event.parentPointer);
-
-	assert(nullptr != application);
-
 	switch (event.objectID)
 	{
 		case statisticsSelection_VarNum:
 		{
-			application->set_selected_statistic(static_cast<Statistics>(event.value));
+			set_selected_statistic(static_cast<Statistics>(event.value));
 		}
 		break;
 
@@ -210,7 +221,15 @@ void SeederVtApplication::handle_numeric_value_events(const isobus::VirtualTermi
 	}
 }
 
-void SeederVtApplication::Update()
+void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData>, bool changed)
+{
+	if (changed)
+	{
+		txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentSpeedMeter_VarNum));
+	}
+}
+
+void SeederVtApplication::update()
 {
 	// Update some polled data
 	if (isobus::SystemTiming::time_expired_ms(slowUpdateTimestamp_ms, 1000))
@@ -223,6 +242,11 @@ void SeederVtApplication::Update()
 			// These are used for displaying to the user. Address is not really needed to be known.
 			set_current_can_address(VTClientControlFunction->get_address());
 			set_current_ut_address(VTControlFunction->get_address());
+
+			if (!languageDataRequested)
+			{
+				languageDataRequested = VTClientInterface.languageCommandInterface.send_request_language_command();
+			}
 		}
 		set_current_busload(isobus::CANNetworkManager::CANNetwork.get_estimated_busload(0));
 		set_current_ut_version(VTClientInterface.get_connected_vt_version());
@@ -235,6 +259,7 @@ void SeederVtApplication::Update()
 		}
 		slowUpdateTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 	}
+	speedMessages.update();
 
 	// Send CAN messages
 	txFlags.process_all_flags();
@@ -416,7 +441,15 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			{
 				if (seeder->get_is_object_shown(currentSpeedMeter_VarNum))
 				{
-					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, seeder->sectionControl.get_machine_selected_speed_mm_per_sec());
+					auto mss = seeder->speedMessages.get_received_machine_selected_speed(0);
+					if (nullptr != mss)
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, mss->get_machine_speed());
+					}
+					else
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, 0);
+					}
 				}
 			}
 			break;
