@@ -11,6 +11,8 @@
 
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "section_control_implement_sim.hpp"
+#include "isobus/isobus/isobus_task_controller_client.hpp"
+#include "isobus/isobus/isobus_speed_distance_messages.hpp"
 
 class SeederVtApplication
 {
@@ -23,13 +25,14 @@ public:
 		Info
 	};
 
-	SeederVtApplication(std::shared_ptr<isobus::PartneredControlFunction> VTPartner, std::shared_ptr<isobus::InternalControlFunction> source);
+	SeederVtApplication(std::shared_ptr<isobus::PartneredControlFunction> VTPartner, std::shared_ptr<isobus::PartneredControlFunction> TCPartner, std::shared_ptr<isobus::InternalControlFunction> source);
 
-	bool Initialize();
+	bool initialize();
 
+	isobus::TaskControllerClient TCClientInterface;
 	isobus::VirtualTerminalClient VTClientInterface;
 
-	void Update();
+	void update();
 
 private:
 	enum class UpdateVTStateFlags : std::uint32_t
@@ -75,8 +78,9 @@ private:
 	};
 
 	static void processFlags(std::uint32_t flag, void *parentPointer);
-	static void handle_vt_key_events(const isobus::VirtualTerminalClient::VTKeyEvent &event);
-	static void handle_numeric_value_events(const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event);
+	void handle_vt_key_events(const isobus::VirtualTerminalClient::VTKeyEvent &event);
+	void handle_numeric_value_events(const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event);
+	void handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed);
 
 	bool get_is_object_shown(std::uint16_t objectID);
 
@@ -102,11 +106,15 @@ private:
 	float currentBusload = 0.0f;
 	ActiveScreen currentlyActiveScreen = ActiveScreen::Main;
 	Statistics currentlySelectedStatistic = Statistics::None;
-	isobus::LanguageCommandInterface::DistanceUnits distanceUnits = isobus::LanguageCommandInterface::DistanceUnits::Metric;
+	isobus::LanguageCommandInterface::DistanceUnits distanceUnits = isobus::LanguageCommandInterface::DistanceUnits::Metric; ///< Stores the current displayed distance units
 	isobus::VirtualTerminalClient::VTVersion utVersion = isobus::VirtualTerminalClient::VTVersion::ReservedOrUnknown; ///< Stores the UT's version for display in the pool
+	isobus::SpeedMessagesInterface speedMessages; ///< Interface for reading speed from the bus
+	std::shared_ptr<isobus::DeviceDescriptorObjectPool> ddop = nullptr; ///< Stores our application's DDOP
+	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> &, const bool &)>> machineSelectedSpeedEventHandle; ///< Handle for MSS events
 	std::uint32_t slowUpdateTimestamp_ms = 0; ///< A timestamp to limit some polled data to 1Hz update rate
 	std::uint8_t canAddress = 0xFE; ///< Stores our CAN address so we know if it changes and can update it in the pool
 	std::uint8_t utAddress = 0xFE; ///< Stores the UT's current address so we can tell if it changes and update it in the pool
+	bool languageDataRequested = false; ///< Stores if we've requested the current language data yet
 };
 
 #endif // VT_APPLICATION_HPP

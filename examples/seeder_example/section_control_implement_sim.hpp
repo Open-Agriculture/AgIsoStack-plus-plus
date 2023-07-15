@@ -12,7 +12,6 @@
 #include "isobus/isobus/can_NAME.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/isobus_device_descriptor_object_pool.hpp"
-#include "isobus/utility/event_dispatcher.hpp"
 
 /// @brief Simulates a planter rate controller with section control
 /// @note This is just an example. A real rate controller will obviously need to control rate and section
@@ -90,8 +89,8 @@ public:
 		SetpointCondensedWorkingState241To256, ///< Condensed setpoint work state for sections 241 to 256
 
 		GranularProduct, ///< The main bin element that describes the main product
-		TankCapacity, ///< The max volume content for the liquid product device element
-		TankVolume, ///< Actual Device Element Content specified as volume
+		BinCapacity, ///< The max bin content for the product device element
+		BinLevel, ///< Actual Device Element Content specified as volume
 		LifetimeApplicationVolumeTotal, ///< https://www.isobus.net/isobus/dDEntity/400
 		PrescriptionControlState, ///< https://www.isobus.net/isobus/dDEntity/203
 		ActualCulturalPractice, ///< https://www.isobus.net/isobus/dDEntity/205
@@ -102,13 +101,8 @@ public:
 		TimePresentation, ///< Describes to the TC how to display time units
 		ShortWidthPresentation, ///< Describes to the TC how to display small width units
 		LongWidthPresentation, ///< Describes to the TC how to display large width units
-		VolumePresentation, ///< Describes to the TC how to display volume units
-		VolumePerAreaPresentation ///< Describes to the TC how to display volume per area units
-	};
-
-	enum class Events
-	{
-		OnNewMachineSelectedSpeed
+		MassPresentation, ///< Describes to the TC how to display volume units
+		MassPerAreaPresentation ///< Describes to the TC how to display volume per area units
 	};
 
 	/// @brief Constructor for the simulator
@@ -171,25 +165,11 @@ public:
 	/// @returns The current section control state
 	std::uint32_t get_section_control_state() const;
 
-	/// @brief Returns the last received machine selected speed
-	/// @returns Machine selected speed in mm/s
-	std::uint16_t get_machine_selected_speed_mm_per_sec() const;
-
 	/// @brief Generates a DDOP to send to the TC
 	/// @param[in] poolToPopulate A pointer to the DDOP that will be populated
 	/// @param[in] clientName The ISO NAME to generate the DDOP for
 	/// @returns true if the DDOP was successfully created, otherwise false
 	bool create_ddop(std::shared_ptr<isobus::DeviceDescriptorObjectPool> poolToPopulate, isobus::NAME clientName) const;
-
-	/// @brief Returns the event dispatcher that this class uses to drive events to
-	/// the VT interface.
-	/// @returns The event dispatcher
-	isobus::EventDispatcher<Events> &get_event_dispatcher();
-
-	/// @brief Processes some application layer CAN messages
-	/// @param[in] messageToProcess The CAN message to process
-	/// @param[in] parentPointer A pointer back to a specific instance of this class
-	static void process_application_can_messages(isobus::CANMessage *messageToProcess, void *parentPointer);
 
 	/// @brief A callback that will be used by the TC client to read values
 	/// @param[in] elementNumber The element number associated to the value being requested
@@ -212,19 +192,14 @@ public:
 	                                   std::uint32_t processVariableValue,
 	                                   void *parentPointer);
 
-	static constexpr std::uint32_t ISO_MACHINE_SELECTED_SPEED_PGN = 61474;
-
 private:
 	static constexpr std::uint8_t NUMBER_SECTIONS_PER_CONDENSED_MESSAGE = 16; ///< Number of section states in a condensed working state message
 
-	isobus::EventDispatcher<Events> eventReporter; ///< Used to drive event signals to the VT interface
 	std::vector<bool> sectionStates; ///< Stores the commanded section states as a set of boolean values
 	std::vector<bool> switchStates; ///< Stores the UT section switch states as a set of boolean values
 	std::uint32_t targetRate = 0; ///< The target rate
-	std::uint32_t machineSelectedSpeedTimestamp_ms = 0; ///< Timestamp for when we received the last MSS message
-	std::uint16_t machineSelectedSpeedRaw = 0; ///< The raw value of the machine selected speed
 	bool setpointWorkState = false; ///< The overall work state
-	bool isAutoMode = true;
+	bool isAutoMode = true; ///< Stores auto vs manual mode setting
 };
 
 #endif // SECTION_CONTROL_IMPLEMENT_SIM_HPP

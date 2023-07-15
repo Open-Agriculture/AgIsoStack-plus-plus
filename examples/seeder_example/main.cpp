@@ -9,6 +9,7 @@
 //================================================================================================
 #include "seeder.hpp"
 
+#include <atomic>
 #include <csignal>
 
 std::atomic_bool running = { true };
