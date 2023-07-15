@@ -10,6 +10,7 @@
 #define SEEDER_HPP
 
 #include "vt_application.hpp"
+#include "isobus/isobus/isobus_diagnostic_protocol.hpp"
 
 class Seeder
 {
@@ -24,6 +25,7 @@ public:
 
 private:
 	std::unique_ptr<SeederVtApplication> VTApplication = nullptr;
+	std::unique_ptr<isobus::DiagnosticProtocol> diagnosticProtocol = nullptr;
 };
 
 #endif // SEEDER_HPP

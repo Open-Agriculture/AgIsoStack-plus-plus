@@ -67,25 +67,35 @@ bool Seeder::initialize()
 	TestDeviceNAME.set_manufacturer_code(64);
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	auto InternalECU = std::make_shared<isobus::InternalControlFunction>(TestDeviceNAME, 0x81, 0);
-	auto PartnerVT = std::make_shared<isobus::PartneredControlFunction>(0, vtNameFilters);
+	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
+	auto InternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
+	auto PartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
+	auto PartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
 
-	isobus::DiagnosticProtocol::assign_diagnostic_protocol_to_internal_control_function(InternalECU);
-	isobus::DiagnosticProtocol *diagnosticProtocol = isobus::DiagnosticProtocol::get_diagnostic_protocol_by_internal_control_function(InternalECU);
+	diagnosticProtocol = std::unique_ptr<isobus::DiagnosticProtocol>(new isobus::DiagnosticProtocol(InternalECU));
+	diagnosticProtocol->initialize();
 
 	diagnosticProtocol->set_product_identification_code("1234567890ABC");
-	diagnosticProtocol->set_product_identification_brand("Isobus++");
-	diagnosticProtocol->set_product_identification_model("Isobus++ Seeder Example");
+	diagnosticProtocol->set_product_identification_brand("AgIsoStack++");
+	diagnosticProtocol->set_product_identification_model("AgIsoStack++ Seeder Example");
 	diagnosticProtocol->set_software_id_field(0, "Example 1.0.0");
 	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::HardwareID, "1234");
 	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Location, "N/A");
-	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "Isobus++");
+	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::ManufacturerName, "Open-Agriculture");
 	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
 	diagnosticProtocol->set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "2");
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_task_controller_geo_client_option(255);
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_task_controller_section_control_client_option_state(1, 255);
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 1, true);
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::UniversalTerminalWorkingSet, 1, true);
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::TaskControllerBasicClient, 1, true);
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::TaskControllerGeoClient, 1, true);
+	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::TaskControllerSectionControlClient, 1, true);
 
-	VTApplication = std::unique_ptr<SeederVtApplication>(new SeederVtApplication(PartnerVT, InternalECU));
-	VTApplication->Initialize();
+	VTApplication = std::unique_ptr<SeederVtApplication>(new SeederVtApplication(PartnerVT, PartnerTC, InternalECU));
+	VTApplication->initialize();
 
 	return retVal;
 }
@@ -103,6 +113,7 @@ void Seeder::update()
 {
 	if (nullptr != VTApplication)
 	{
-		VTApplication->Update();
+		VTApplication->update();
+		diagnosticProtocol->update();
 	}
 }
