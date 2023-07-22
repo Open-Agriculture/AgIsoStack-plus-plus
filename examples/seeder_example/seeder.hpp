@@ -9,8 +9,8 @@
 #ifndef SEEDER_HPP
 #define SEEDER_HPP
 
-#include "vt_application.hpp"
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"
+#include "vt_application.hpp"
 
 class Seeder
 {
