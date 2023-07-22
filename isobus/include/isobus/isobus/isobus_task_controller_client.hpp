@@ -300,6 +300,12 @@ namespace isobus
 		/// @returns The version reported by the connected task controller
 		Version get_connected_tc_version() const;
 
+		/// @brief Tells the TC client that a value was changed or the TC client needs to command
+		/// a value to the TC server.
+		/// @details If you provide on-change triggers in your DDOP, this is how you can request the TC client
+		/// to update the TC server on the current value of your process data variables.
+		void on_value_changed_trigger(std::uint16_t elementNumber, std::uint16_t DDI);
+
 		/// @brief Sends a broadcast request to TCs to identify themseleves.
 		/// @details Upon receipt of this message, the TC shall display, for a period of 3 s, the TC Number
 		/// @returns `true` if the message was sent, otherwise `false`

@@ -2002,6 +2002,18 @@ namespace isobus
 		return retVal;
 	}
 
+	void TaskControllerClient::on_value_changed_trigger(std::uint16_t elementNumber, std::uint16_t DDI)
+	{
+		ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
+		const std::lock_guard<std::mutex> lock(clientMutex);
+
+		requestData.ackRequested = false;
+		requestData.elementNumber = elementNumber;
+		requestData.ddi = DDI;
+		requestData.processDataValue = 0;
+		queuedValueRequests.push_back(requestData);
+	}
+
 	bool TaskControllerClient::request_task_controller_identification() const
 	{
 		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ProcessDataCommands::TechnicalCapabilities) |
