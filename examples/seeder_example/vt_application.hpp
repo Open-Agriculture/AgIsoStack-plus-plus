@@ -66,11 +66,13 @@ private:
 		UpdateUtVersion_VarNum,
 		UpdateUtAddress_VarNum,
 		UpdateCurrentSpeedMeter_VarNum,
+		UpdateCurrentSpeedReadout_VarNum,
 		UpdateTcVersion_VarNum,
 		UpdateTcAddress_VarNum,
 		UpdateTcNumberBoomsSupported_VarNum,
 		UpdateTcSupportedSections_VarNum,
 		UpdateTcControlChannels_VarNum,
+		UpdateEnableAlarms_VarNum,
 
 		UpdateSection1Status_OutRect,
 		UpdateSection2Status_OutRect,
@@ -92,6 +94,14 @@ private:
 		UniversalTerminal,
 		TaskController,
 		Credits
+	};
+
+	/// @brief Enumerates our tolerated speed sources
+	enum class SpeedSources
+	{
+		MachineSelected,
+		GroundBased,
+		WheelBased
 	};
 
 	/// @brief Stores information associated to if an alarm mask should be shown
@@ -128,6 +138,17 @@ private:
 	/// @brief A callback for handling machine selected speed events, used to set appropriate VT flags
 	/// @param[in] event The event data to process
 	void handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed);
+
+	/// @brief A callback for handling ground based speed events, used to set appropriate VT flags
+	/// @param[in] event The event data to process
+	void handle_ground_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> mssData, bool changed);
+
+	/// @brief A callback for handling wheel based speed events, used to set appropriate VT flags
+	/// @param[in] event The event data to process
+	void handle_wheel_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> mssData, bool changed);
+
+	/// @brief Aggregates speeds and decides which speed to use
+	void process_new_speed(SpeedSources source, std::uint32_t speed);
 
 	/// @brief Returns if the selected object ID is shown currently
 	/// @param[in] objectID The object ID of the object to check the shown state of
@@ -210,13 +231,17 @@ private:
 	ActiveScreen currentlyActiveScreen = ActiveScreen::Main; ///< The currently active data mask
 	ActiveScreen previousActiveScreen = ActiveScreen::Main; ///< Stores the previous active screen so it can be returned to if needed
 	Statistics currentlySelectedStatistic = Statistics::None; ///< The currently selected statistic on the stats data mask
+	SpeedSources currentSpeedSource = SpeedSources::MachineSelected; ///< Keeps track of which speed source is currently being used
 	isobus::LanguageCommandInterface::DistanceUnits distanceUnits = isobus::LanguageCommandInterface::DistanceUnits::Metric; ///< Stores the current displayed distance units
 	isobus::VirtualTerminalClient::VTVersion utVersion = isobus::VirtualTerminalClient::VTVersion::ReservedOrUnknown; ///< Stores the UT's version for display in the pool
 	isobus::TaskControllerClient::Version tcVersion = isobus::TaskControllerClient::Version::Unknown; ///< Stores the TC's version for display in the object pool
 	isobus::SpeedMessagesInterface speedMessages; ///< Interface for reading speed from the bus
 	std::shared_ptr<isobus::DeviceDescriptorObjectPool> ddop = nullptr; ///< Stores our application's DDOP
 	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> &, const bool &)>> machineSelectedSpeedEventHandle; ///< Handle for MSS events
+	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> &, const bool &)>> groundBasedSpeedEventHandle; ///< Handle for ground based speed events
+	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> &, const bool &)>> wheelBasedSpeedEventHandle; ///< Handle for wheel based speed events
 	std::uint32_t slowUpdateTimestamp_ms = 0; ///< A timestamp to limit some polled data to 1Hz update rate
+	std::uint32_t lastMachineSpeed = 0; ///< Used to help track speed source timeouts
 	std::uint8_t canAddress = 0xFE; ///< Stores our CAN address so we know if it changes and can update it in the pool
 	std::uint8_t utAddress = 0xFE; ///< Stores the UT's current address so we can tell if it changes and update it in the pool
 	std::uint8_t tcAddress = 0xFE; ///< Stores the TC's current address so we can tell if it changes and update it in the pool
@@ -224,6 +249,7 @@ private:
 	std::uint8_t tcNumberSections = 0; ///< Stores the TC's number of supported sections so we can tell if it changes and update it in the pool
 	std::uint8_t tcNumberChannels = 0; ///< Stores the TC's number of control channels so we can tell if it changes and update it in the pool
 	bool languageDataRequested = false; ///< Stores if we've requested the current language data yet
+	bool alarmsEnabled = true; ///< Enables or disables showing alarms
 };
 
 #endif // VT_APPLICATION_HPP

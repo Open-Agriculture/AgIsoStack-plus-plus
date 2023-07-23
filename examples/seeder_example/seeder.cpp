@@ -105,6 +105,7 @@ void Seeder::terminate()
 	if (nullptr != VTApplication)
 	{
 		VTApplication->VTClientInterface.terminate();
+		VTApplication->TCClientInterface.terminate();
 	}
 	isobus::CANHardwareInterface::stop();
 }
