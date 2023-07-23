@@ -1711,6 +1711,20 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	EXPECT_EQ(true, valueRequested);
 	EXPECT_EQ(requestedDDI, 0x3B19);
 
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected); // Clear commands
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected); // Arbitrary
+	valueRequested = false;
+	requestedDDI = 0;
+	requestedElement = 0;
+
+	// Request a value using the public interface
+	interfaceUnderTest.on_value_changed_trigger(0x4, 0x3);
+	interfaceUnderTest.update();
+
+	EXPECT_EQ(true, valueRequested);
+	EXPECT_EQ(requestedDDI, 0x03);
+	EXPECT_EQ(requestedElement, 0x4);
+
 	CANHardwareInterface::stop();
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
