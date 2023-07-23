@@ -9,6 +9,7 @@
 #include "vt_application.hpp"
 
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "object_pool.hpp"
@@ -64,8 +65,8 @@ const std::array<std::uint16_t, static_cast<std::uint8_t>(SeederVtApplication::A
 SeederVtApplication::SeederVtApplication(std::shared_ptr<isobus::PartneredControlFunction> VTPartner, std::shared_ptr<isobus::PartneredControlFunction> TCPartner, std::shared_ptr<isobus::InternalControlFunction> source) :
   TCClientInterface(TCPartner, source, nullptr),
   VTClientInterface(VTPartner, source),
-  speedMessages(source, false, false, false, false),
-  txFlags(static_cast<std::uint32_t>(UpdateVTStateFlags::NumberOfFlags), processFlags, this)
+  txFlags(static_cast<std::uint32_t>(UpdateVTStateFlags::NumberOfFlags), processFlags, this),
+  speedMessages(source, false, false, false, false)
 {
 }
 
@@ -100,6 +101,8 @@ bool SeederVtApplication::initialize()
 
 	speedMessages.initialize();
 	machineSelectedSpeedEventHandle = speedMessages.get_machine_selected_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed) { this->handle_machine_selected_speed(mssData, changed); });
+	groundBasedSpeedEventHandle = speedMessages.get_ground_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool changed) { this->handle_ground_based_speed(gbsData, changed); });
+	wheelBasedSpeedEventHandle = speedMessages.get_wheel_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool changed) { this->handle_wheel_based_speed(wbsData, changed); });
 
 	ddop = std::make_shared<isobus::DeviceDescriptorObjectPool>(3);
 	if (sectionControl.create_ddop(ddop, TCClientInterface.get_internal_control_function()->get_NAME()))
@@ -157,10 +160,19 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 						    (false == alarmConditions.at(i).acknowledged))
 						{
 							alarmConditions.at(i).acknowledged = true;
-							set_currently_active_screen(previousActiveScreen);
 							break;
 						}
 					}
+
+					if (previousActiveScreen != currentlyActiveScreen)
+					{
+						set_currently_active_screen(previousActiveScreen);
+					}
+					else
+					{
+						set_currently_active_screen(ActiveScreen::Main);
+					}
+					break;
 				}
 				break;
 
@@ -180,6 +192,7 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 				case section1Toggle_Button:
 				{
 					sectionControl.set_switch_state(0, !sectionControl.get_switch_state(0));
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
 				}
@@ -188,6 +201,7 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 				case section2Toggle_Button:
 				{
 					sectionControl.set_switch_state(1, !sectionControl.get_switch_state(1));
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2EnableState_ObjPtr));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
 				}
@@ -196,6 +210,7 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 				case section3Toggle_Button:
 				{
 					sectionControl.set_switch_state(2, !sectionControl.get_switch_state(2));
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3EnableState_ObjPtr));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
 				}
@@ -204,6 +219,7 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 				case section4Toggle_Button:
 				{
 					sectionControl.set_switch_state(3, !sectionControl.get_switch_state(3));
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4EnableState_ObjPtr));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
 				}
@@ -212,6 +228,7 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 				case section5Toggle_Button:
 				{
 					sectionControl.set_switch_state(4, !sectionControl.get_switch_state(4));
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5EnableState_ObjPtr));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
 				}
@@ -220,6 +237,7 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 				case section6Toggle_Button:
 				{
 					sectionControl.set_switch_state(5, !sectionControl.get_switch_state(5));
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6EnableState_ObjPtr));
 					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
 				}
@@ -230,6 +248,9 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 			}
 		}
 		break;
+
+		default:
+			break;
 	}
 }
 
@@ -243,16 +264,75 @@ void SeederVtApplication::handle_numeric_value_events(const isobus::VirtualTermi
 		}
 		break;
 
+		case enableAlarms_VarNum:
+		{
+			alarmsEnabled = event.value;
+			txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateEnableAlarms_VarNum));
+		}
+		break;
+
 		default:
 			break;
 	}
 }
 
-void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData>, bool changed)
+void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed)
 {
 	if (changed)
 	{
+		process_new_speed(SpeedSources::MachineSelected, mssData->get_machine_speed());
+	}
+}
+
+void SeederVtApplication::handle_ground_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool changed)
+{
+	if (changed)
+	{
+		process_new_speed(SpeedSources::GroundBased, gbsData->get_machine_speed());
+	}
+}
+
+void SeederVtApplication::handle_wheel_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool changed)
+{
+	if (changed)
+	{
+		process_new_speed(SpeedSources::WheelBased, wbsData->get_machine_speed());
+	}
+}
+
+void SeederVtApplication::process_new_speed(SpeedSources source, std::uint32_t speed)
+{
+	bool shouldConsumeThisSpeed = false;
+
+	if (source == SpeedSources::MachineSelected)
+	{
+		shouldConsumeThisSpeed = true; // Best speed source.
+	}
+	else if ((SpeedSources::GroundBased == source) && (0 == speedMessages.get_number_received_machine_selected_speed_sources()))
+	{
+		shouldConsumeThisSpeed = true; // Second best speed source.
+	}
+	else if ((SpeedSources::WheelBased == source) &&
+	         (0 == speedMessages.get_number_received_machine_selected_speed_sources()) &&
+	         (0 == speedMessages.get_number_received_ground_based_speed_sources()))
+	{
+		shouldConsumeThisSpeed = true; // Third best speed source.
+	}
+
+	if (shouldConsumeThisSpeed)
+	{
+		currentSpeedSource = source;
+		lastMachineSpeed = speed;
 		txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentSpeedMeter_VarNum));
+		txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentSpeedReadout_VarNum));
+
+		// Be nice to the user and auto-clear if we're showing the alarm
+		if ((ActiveScreen::NoMachineSpeed == currentlyActiveScreen) &&
+		    (previousActiveScreen != currentlyActiveScreen))
+		{
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).acknowledged = true;
+			set_currently_active_screen(previousActiveScreen);
+		}
 	}
 }
 
@@ -294,6 +374,17 @@ void SeederVtApplication::update()
 		set_current_tc_number_channels(TCClientInterface.get_connected_tc_number_channels_supported());
 		set_current_tc_number_sections(TCClientInterface.get_connected_tc_number_sections_supported());
 		set_current_tc_version(TCClientInterface.get_connected_tc_version());
+
+		if ((0 != lastMachineSpeed) &&
+		    (0 == speedMessages.get_number_received_machine_selected_speed_command_sources()) &&
+		    (0 == speedMessages.get_number_received_ground_based_speed_sources()) &&
+		    (0 == speedMessages.get_number_received_wheel_based_speed_sources()))
+		{
+			lastMachineSpeed = 0;
+			txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentSpeedMeter_VarNum));
+			txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentSpeedReadout_VarNum));
+		}
+
 		update_alarms();
 
 		slowUpdateTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
@@ -379,36 +470,42 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 
 			case UpdateVTStateFlags::UpdateCurrentAlarms1_ObjPtr:
 			{
-				if (seeder->get_number_active_alarms() > 0)
+				if (seeder->get_is_object_shown(currentAlarms1_ObjPtr))
 				{
-					auto alarmToShow = seeder->get_active_alarm_by_priority_index(0);
-
-					if (Alarm::NumberOfAlarms != alarmToShow)
+					if (seeder->get_number_active_alarms() > 0)
 					{
-						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms1_ObjPtr, ALARM_DESCRIPTION_LINES.at(static_cast<std::uint8_t>(alarmToShow)));
-					} // else, process the flag again on the next loop
-				}
-				else
-				{
-					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms1_ObjPtr, noActiveAlarms_OutStr);
+						auto alarmToShow = seeder->get_active_alarm_by_priority_index(0);
+
+						if (Alarm::NumberOfAlarms != alarmToShow)
+						{
+							transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms1_ObjPtr, ALARM_DESCRIPTION_LINES.at(static_cast<std::uint8_t>(alarmToShow)));
+						} // else, process the flag again on the next loop
+					}
+					else
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms1_ObjPtr, noActiveAlarms_OutStr);
+					}
 				}
 			}
 			break;
 
 			case UpdateVTStateFlags::UpdateCurrentAlarms2_ObjPtr:
 			{
-				if (seeder->get_number_active_alarms() > 1)
+				if (seeder->get_is_object_shown(currentAlarms2_ObjPtr))
 				{
-					auto alarmToShow = seeder->get_active_alarm_by_priority_index(1);
-
-					if (Alarm::NumberOfAlarms != alarmToShow)
+					if (seeder->get_number_active_alarms() > 1)
 					{
-						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms2_ObjPtr, ALARM_DESCRIPTION_LINES.at(static_cast<std::uint8_t>(alarmToShow)));
-					} // else, process the flag again on the next loop
-				}
-				else
-				{
-					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms2_ObjPtr, UNDEFINED);
+						auto alarmToShow = seeder->get_active_alarm_by_priority_index(1);
+
+						if (Alarm::NumberOfAlarms != alarmToShow)
+						{
+							transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms2_ObjPtr, ALARM_DESCRIPTION_LINES.at(static_cast<std::uint8_t>(alarmToShow)));
+						} // else, process the flag again on the next loop
+					}
+					else
+					{
+						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentAlarms2_ObjPtr, UNDEFINED);
+					}
 				}
 			}
 			break;
@@ -516,15 +613,40 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			{
 				if (seeder->get_is_object_shown(currentSpeedMeter_VarNum))
 				{
-					auto mss = seeder->speedMessages.get_received_machine_selected_speed(0);
-					if (nullptr != mss)
+					// The meter uses a fixed max of "30", so we'll have to do some scaling ourselves
+					std::uint32_t currentSpeed = seeder->lastMachineSpeed;
+					switch (seeder->VTClientInterface.languageCommandInterface.get_commanded_distance_units())
 					{
-						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, mss->get_machine_speed());
+						case isobus::LanguageCommandInterface::DistanceUnits::Metric:
+						{
+							// Scale to KPH
+							currentSpeed = ((currentSpeed * 0.001f) * 3.6f); // Converting mm/s to m/s, then mm/s to kph
+						}
+						break;
+
+						case isobus::LanguageCommandInterface::DistanceUnits::ImperialUS:
+						{
+							// Scale to MPH
+							currentSpeed = ((currentSpeed * 0.001f) * 2.23694f); // Converting mm/s to m/s, then mm/s to mph
+						}
+						break;
+
+						default:
+						{
+							currentSpeed = 0; // Reserved or n/a?
+						}
+						break;
 					}
-					else
-					{
-						transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, 0);
-					}
+					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedMeter_VarNum, currentSpeed);
+				}
+			}
+			break;
+
+			case UpdateVTStateFlags::UpdateCurrentSpeedReadout_VarNum:
+			{
+				if (seeder->get_is_object_shown(currentSpeedReadout_VarNum))
+				{
+					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(currentSpeedReadout_VarNum, seeder->lastMachineSpeed);
 				}
 			}
 			break;
@@ -602,6 +724,15 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			}
 			break;
 
+			case UpdateVTStateFlags::UpdateEnableAlarms_VarNum:
+			{
+				if (seeder->get_is_object_shown(enableAlarms_VarNum))
+				{
+					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(enableAlarms_VarNum, seeder->alarmsEnabled);
+				}
+			}
+			break;
+
 			case UpdateVTStateFlags::UpdateSection1Status_OutRect:
 			case UpdateVTStateFlags::UpdateSection2Status_OutRect:
 			case UpdateVTStateFlags::UpdateSection3Status_OutRect:
@@ -615,13 +746,33 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 				{
 					std::uint32_t fillAttribute = solidRed_FillAttr;
 
-					if (seeder->sectionControl.get_actual_work_state())
+					if (seeder->sectionControl.get_is_mode_auto())
 					{
-						fillAttribute = solidGreen_FillAttr;
+						// Auto mode is TC controlled and logged
+						if (seeder->sectionControl.get_section_state(sectionIndex) && seeder->sectionControl.get_switch_state(sectionIndex))
+						{
+							fillAttribute = solidGreen_FillAttr;
+						}
+						else
+						{
+							fillAttribute = solidRed_FillAttr;
+						}
 					}
-					else if ((!seeder->sectionControl.get_is_mode_auto()) && (seeder->sectionControl.get_switch_state(sectionIndex)))
+					else
 					{
-						fillAttribute = solidYellow_FillAttr;
+						// Manual mode is basically UT display only, no TC reporting
+						if (seeder->sectionControl.get_switch_state(sectionIndex) && (0 != seeder->lastMachineSpeed))
+						{
+							fillAttribute = solidGreen_FillAttr;
+						}
+						else if (seeder->sectionControl.get_switch_state(sectionIndex))
+						{
+							fillAttribute = solidYellow_FillAttr;
+						}
+						else
+						{
+							fillAttribute = solidRed_FillAttr;
+						}
 					}
 					transmitSuccessful = seeder->VTClientInterface.send_change_attribute(SECTION_STATUS_OUTRECTS.at(sectionIndex), 5, fillAttribute); // 5 Is the attribute ID of the fill attribute
 				}
@@ -765,6 +916,15 @@ bool SeederVtApplication::get_is_object_shown(std::uint16_t objectID)
 			case currentAlarmsHeader_OutStr:
 			{
 				retVal = (ActiveScreen::Alarms == currentlyActiveScreen);
+			}
+			break;
+
+			case enableAlarms_VarNum:
+			case enableAlarms_Container:
+			case enableAlarms_InBool:
+			case enableAlarms_OutStr:
+			{
+				retVal = (ActiveScreen::Settings == currentlyActiveScreen);
 			}
 			break;
 
@@ -918,57 +1078,72 @@ void SeederVtApplication::update_alarms()
 {
 	bool updateShownMask = false;
 
-	if (0 == speedMessages.get_number_received_machine_selected_speed_command_sources())
+	if ((VTClientInterface.get_is_connected()) && (alarmsEnabled))
 	{
-		if (isobus::SystemTiming::time_expired_ms(alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).conditionTimestamp, alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).conditionTimeout))
+		if ((0 == speedMessages.get_number_received_machine_selected_speed_command_sources()) &&
+		    (0 == speedMessages.get_number_received_ground_based_speed_sources()) &&
+		    (0 == speedMessages.get_number_received_wheel_based_speed_sources()))
 		{
-			updateShownMask = true;
-			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).active = true;
-		}
-		else
-		{
-			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).active = false;
-		}
-	}
-	else
-	{
-		alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).conditionTimestamp = isobus::SystemTiming::get_timestamp_ms();
-		alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).acknowledged = false;
-		alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).active = false;
-	}
-
-	if (false == TCClientInterface.get_is_connected())
-	{
-		if (isobus::SystemTiming::time_expired_ms(alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimestamp, alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimeout))
-		{
-			updateShownMask = true;
-			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).active = true;
-		}
-		else
-		{
-			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).active = false;
-		}
-	}
-	else
-	{
-		alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimestamp = isobus::SystemTiming::get_timestamp_ms();
-		alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).acknowledged = false;
-		alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).active = false;
-	}
-
-	if (updateShownMask)
-	{
-		for (std::size_t i = 0; i < alarmConditions.size(); i++)
-		{
-			if ((alarmConditions.at(i).active) &&
-			    (false == alarmConditions.at(i).acknowledged))
+			if (isobus::SystemTiming::time_expired_ms(alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).conditionTimestamp, alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).conditionTimeout))
 			{
-				set_currently_active_screen(ALARM_SCREENS.at(i));
-				break;
+				updateShownMask = true;
+				alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).active = true;
+			}
+			else
+			{
+				alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).active = false;
 			}
 		}
+		else
+		{
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).conditionTimestamp = isobus::SystemTiming::get_timestamp_ms();
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).acknowledged = false;
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoMachineSpeed)).active = false;
+		}
+
+		if (false == TCClientInterface.get_is_connected())
+		{
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimeout = 30000; // Wait slightly longer for TC... it can take some time.
+			if (isobus::SystemTiming::time_expired_ms(alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimestamp, alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimeout))
+			{
+				updateShownMask = true;
+				alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).active = true;
+			}
+			else
+			{
+				alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).active = false;
+			}
+		}
+		else
+		{
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).conditionTimestamp = isobus::SystemTiming::get_timestamp_ms();
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).acknowledged = false;
+			alarmConditions.at(static_cast<std::uint8_t>(Alarm::NoTaskController)).active = false;
+		}
+
+		if (updateShownMask)
+		{
+			for (std::size_t i = 0; i < alarmConditions.size(); i++)
+			{
+				if ((alarmConditions.at(i).active) &&
+				    (false == alarmConditions.at(i).acknowledged))
+				{
+					set_currently_active_screen(ALARM_SCREENS.at(i));
+					break;
+				}
+			}
+		}
+		// Not ideal, but since we filter on shown screen it's not that bad. Todo, update these flags to be event driven
+		txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentAlarms1_ObjPtr));
+		txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentAlarms2_ObjPtr));
 	}
-	// Not ideal, but since we filter on shown screen it's not that bad. Todo, update these flags to be event driven
-	txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentAlarms1_ObjPtr));
-	txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateCurrentAlarms2_ObjPtr));
+	else
+	{
+		for (auto &alarm : alarmConditions)
+		{
+			alarm.conditionTimestamp = isobus::SystemTiming::get_timestamp_ms();
+			alarm.acknowledged = false;
+			alarm.active = false;
+		}
+	}
 }
