@@ -91,7 +91,7 @@ public:
 		GranularProduct, ///< The main bin element that describes the main product
 		BinCapacity, ///< The max bin content for the product device element
 		BinLevel, ///< Actual Device Element Content specified as volume
-		LifetimeApplicationVolumeTotal, ///< https://www.isobus.net/isobus/dDEntity/400
+		LifetimeApplicationCountTotal,
 		PrescriptionControlState, ///< https://www.isobus.net/isobus/dDEntity/203
 		ActualCulturalPractice, ///< https://www.isobus.net/isobus/dDEntity/205
 		TargetRate, ///< The target rate for the rate controller main product
@@ -101,8 +101,8 @@ public:
 		TimePresentation, ///< Describes to the TC how to display time units
 		ShortWidthPresentation, ///< Describes to the TC how to display small width units
 		LongWidthPresentation, ///< Describes to the TC how to display large width units
-		MassPresentation, ///< Describes to the TC how to display volume units
-		MassPerAreaPresentation ///< Describes to the TC how to display volume per area units
+		CountPresentation, ///< Describes to the TC how to display volume units
+		CountPerAreaPresentation ///< Describes to the TC how to display volume per area units
 	};
 
 	/// @brief Constructor for the simulator
@@ -125,6 +125,15 @@ public:
 	/// @param[in] index The index of the section to get the state for
 	bool get_section_state(std::uint8_t index) const;
 
+	/// @brief Sets the current commanded section state by index
+	/// @param[in] index The index of the section state to set
+	/// @param[in] value The new state for the section
+	void set_section_setpoint_state(std::uint8_t index, bool value);
+
+	/// @brief Returns the current section setpoint state by index
+	/// @param[in] index The index of the section to get the setpoint state for
+	bool get_section_setpoint_state(std::uint8_t index) const;
+
 	/// @brief Sets the current section's switch state by index
 	/// @param[in] index The index of the switch to set
 	/// @param[in] value The new state for the switch
@@ -141,6 +150,10 @@ public:
 	/// @brief Sets the target rate
 	/// @param[in] value The rate to set
 	void set_target_rate(std::uint32_t value);
+
+	/// @brief Returns the current target rate
+	/// @returns Current target rate in seeds per hectare
+	std::uint32_t get_target_rate() const;
 
 	/// @brief Returns the actual work state of the device
 	bool get_actual_work_state() const;
@@ -194,11 +207,13 @@ public:
 
 private:
 	static constexpr std::uint8_t NUMBER_SECTIONS_PER_CONDENSED_MESSAGE = 16; ///< Number of section states in a condensed working state message
+	static constexpr std::int32_t BOOM_WIDTH = 9144; // 30ft expressed in mm
 
-	std::vector<bool> sectionStates; ///< Stores the commanded section states as a set of boolean values
+	std::vector<bool> sectionStates; ///< Stores the actual section states as a set of boolean values
+	std::vector<bool> sectionSetpoints; ///< Stores the commanded section states as a set of boolean values
 	std::vector<bool> switchStates; ///< Stores the UT section switch states as a set of boolean values
-	std::uint32_t targetRate = 0; ///< The target rate
-	bool setpointWorkState = false; ///< The overall work state
+	std::uint32_t targetRate = 12000; ///< The target rate, default of 12k seeds per hectare
+	bool setpointWorkState = true; ///< The overall work state
 	bool isAutoMode = true; ///< Stores auto vs manual mode setting
 };
 
