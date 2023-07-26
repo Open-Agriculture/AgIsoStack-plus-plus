@@ -74,7 +74,7 @@ bool Seeder::initialize()
 	auto PartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 	auto PartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
 
-	diagnosticProtocol = std::unique_ptr<isobus::DiagnosticProtocol>(new isobus::DiagnosticProtocol(InternalECU));
+	diagnosticProtocol = std::make_unique<isobus::DiagnosticProtocol>(InternalECU);
 	diagnosticProtocol->initialize();
 
 	diagnosticProtocol->set_product_identification_code("1234567890ABC");
@@ -94,7 +94,7 @@ bool Seeder::initialize()
 	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::TaskControllerGeoClient, 1, true);
 	diagnosticProtocol->ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(isobus::ControlFunctionFunctionalities::Functionalities::TaskControllerSectionControlClient, 1, true);
 
-	VTApplication = std::unique_ptr<SeederVtApplication>(new SeederVtApplication(PartnerVT, PartnerTC, InternalECU));
+	VTApplication = std::make_unique<SeederVtApplication>(PartnerVT, PartnerTC, InternalECU);
 	VTApplication->initialize();
 
 	return retVal;
@@ -106,6 +106,10 @@ void Seeder::terminate()
 	{
 		VTApplication->VTClientInterface.terminate();
 		VTApplication->TCClientInterface.terminate();
+	}
+	if (nullptr != diagnosticProtocol)
+	{
+		diagnosticProtocol->terminate();
 	}
 	isobus::CANHardwareInterface::stop();
 }

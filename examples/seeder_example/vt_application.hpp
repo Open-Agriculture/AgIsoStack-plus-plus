@@ -153,7 +153,7 @@ private:
 	/// @brief Returns if the selected object ID is shown currently
 	/// @param[in] objectID The object ID of the object to check the shown state of
 	/// @returns True if the selected object ID is shown currently, otherwise false
-	bool get_is_object_shown(std::uint16_t objectID);
+	bool get_is_object_shown(std::uint16_t objectID) const;
 
 	/// @brief Returns the number of active alarms
 	/// @returns The number of currently active alarms
@@ -237,9 +237,9 @@ private:
 	isobus::TaskControllerClient::Version tcVersion = isobus::TaskControllerClient::Version::Unknown; ///< Stores the TC's version for display in the object pool
 	isobus::SpeedMessagesInterface speedMessages; ///< Interface for reading speed from the bus
 	std::shared_ptr<isobus::DeviceDescriptorObjectPool> ddop = nullptr; ///< Stores our application's DDOP
-	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> &, const bool &)>> machineSelectedSpeedEventHandle; ///< Handle for MSS events
-	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> &, const bool &)>> groundBasedSpeedEventHandle; ///< Handle for ground based speed events
-	std::shared_ptr<std::function<void(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> &, const bool &)>> wheelBasedSpeedEventHandle; ///< Handle for wheel based speed events
+	std::shared_ptr<void> machineSelectedSpeedEventHandle; ///< Handle for MSS events
+	std::shared_ptr<void> groundBasedSpeedEventHandle; ///< Handle for ground based speed events
+	std::shared_ptr<void> wheelBasedSpeedEventHandle; ///< Handle for wheel based speed events
 	std::uint32_t slowUpdateTimestamp_ms = 0; ///< A timestamp to limit some polled data to 1Hz update rate
 	std::uint32_t lastMachineSpeed = 0; ///< Used to help track speed source timeouts
 	std::uint8_t canAddress = 0xFE; ///< Stores our CAN address so we know if it changes and can update it in the pool
