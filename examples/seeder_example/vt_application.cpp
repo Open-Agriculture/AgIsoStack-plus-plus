@@ -88,7 +88,7 @@ bool SeederVtApplication::initialize()
 	// Generate a unique version string for this object pool (this is optional, and is entirely application specific behavior)
 	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(objectPool);
 
-	VTClientInterface.set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version4, objectPool.data(), objectPool.size(), objectPoolHash);
+	VTClientInterface.set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version4, objectPool.data(), static_cast<std::uint32_t>(objectPool.size()), objectPoolHash);
 	softkeyEventListener = VTClientInterface.add_vt_soft_key_event_listener([this](const isobus::VirtualTerminalClient::VTKeyEvent &event) { this->handle_vt_key_events(event); });
 	buttonEventListener = VTClientInterface.add_vt_button_event_listener([this](const isobus::VirtualTerminalClient::VTKeyEvent &event) { this->handle_vt_key_events(event); });
 	numericValueEventListener = VTClientInterface.add_vt_change_numeric_value_event_listener([this](const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event) { this->handle_numeric_value_events(event); });
@@ -122,135 +122,128 @@ bool SeederVtApplication::initialize()
 
 void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {
-	switch (event.keyEvent)
+	if (isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased == event.keyEvent)
 	{
-		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+		switch (event.objectID)
 		{
-			switch (event.objectID)
+			case home_Key:
 			{
-				case home_Key:
+				set_currently_active_screen(ActiveScreen::Main);
+			}
+			break;
+
+			case settings_Key:
+			{
+				set_currently_active_screen(ActiveScreen::Settings);
+			}
+			break;
+
+			case statistics_Key:
+			{
+				set_currently_active_screen(ActiveScreen::Statistics);
+			}
+			break;
+
+			case alarms_Key:
+			{
+				set_currently_active_screen(ActiveScreen::Alarms);
+			}
+			break;
+
+			case acknowledgeAlarm_SoftKey:
+			{
+				for (auto &alarm : alarmConditions)
+				{
+					if ((isobus::SystemTiming::time_expired_ms(alarm.conditionTimestamp, alarm.conditionTimeout)) &&
+					    (false == alarm.acknowledged))
+					{
+						alarm.acknowledged = true;
+						break;
+					}
+				}
+
+				if (previousActiveScreen != currentlyActiveScreen)
+				{
+					set_currently_active_screen(previousActiveScreen);
+				}
+				else
 				{
 					set_currently_active_screen(ActiveScreen::Main);
 				}
 				break;
-
-				case settings_Key:
-				{
-					set_currently_active_screen(ActiveScreen::Settings);
-				}
-				break;
-
-				case statistics_Key:
-				{
-					set_currently_active_screen(ActiveScreen::Statistics);
-				}
-				break;
-
-				case alarms_Key:
-				{
-					set_currently_active_screen(ActiveScreen::Alarms);
-				}
-				break;
-
-				case acknowledgeAlarm_SoftKey:
-				{
-					for (std::size_t i = 0; i < alarmConditions.size(); i++)
-					{
-						if ((isobus::SystemTiming::time_expired_ms(alarmConditions.at(i).conditionTimestamp, alarmConditions.at(i).conditionTimeout)) &&
-						    (false == alarmConditions.at(i).acknowledged))
-						{
-							alarmConditions.at(i).acknowledged = true;
-							break;
-						}
-					}
-
-					if (previousActiveScreen != currentlyActiveScreen)
-					{
-						set_currently_active_screen(previousActiveScreen);
-					}
-					else
-					{
-						set_currently_active_screen(ActiveScreen::Main);
-					}
-					break;
-				}
-				break;
-
-				case autoManualToggle_Button:
-				{
-					sectionControl.set_is_mode_auto(!sectionControl.get_is_mode_auto());
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateAutoManual_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
-				}
-				break;
-
-				case section1Toggle_Button:
-				{
-					sectionControl.set_switch_state(0, !sectionControl.get_switch_state(0));
-					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
-				}
-				break;
-
-				case section2Toggle_Button:
-				{
-					sectionControl.set_switch_state(1, !sectionControl.get_switch_state(1));
-					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2EnableState_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
-				}
-				break;
-
-				case section3Toggle_Button:
-				{
-					sectionControl.set_switch_state(2, !sectionControl.get_switch_state(2));
-					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3EnableState_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
-				}
-				break;
-
-				case section4Toggle_Button:
-				{
-					sectionControl.set_switch_state(3, !sectionControl.get_switch_state(3));
-					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4EnableState_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
-				}
-				break;
-
-				case section5Toggle_Button:
-				{
-					sectionControl.set_switch_state(4, !sectionControl.get_switch_state(4));
-					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5EnableState_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
-				}
-				break;
-
-				case section6Toggle_Button:
-				{
-					sectionControl.set_switch_state(5, !sectionControl.get_switch_state(5));
-					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6EnableState_ObjPtr));
-					txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
-				}
-				break;
-
-				default:
-					break;
 			}
-		}
-		break;
-
-		default:
 			break;
+
+			case autoManualToggle_Button:
+			{
+				sectionControl.set_is_mode_auto(!sectionControl.get_is_mode_auto());
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateAutoManual_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
+			}
+			break;
+
+			case section1Toggle_Button:
+			{
+				sectionControl.set_switch_state(0, !sectionControl.get_switch_state(0));
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
+			}
+			break;
+
+			case section2Toggle_Button:
+			{
+				sectionControl.set_switch_state(1, !sectionControl.get_switch_state(1));
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2EnableState_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection2Status_OutRect));
+			}
+			break;
+
+			case section3Toggle_Button:
+			{
+				sectionControl.set_switch_state(2, !sectionControl.get_switch_state(2));
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3EnableState_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection3Status_OutRect));
+			}
+			break;
+
+			case section4Toggle_Button:
+			{
+				sectionControl.set_switch_state(3, !sectionControl.get_switch_state(3));
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4EnableState_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection4Status_OutRect));
+			}
+			break;
+
+			case section5Toggle_Button:
+			{
+				sectionControl.set_switch_state(4, !sectionControl.get_switch_state(4));
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5EnableState_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection5Status_OutRect));
+			}
+			break;
+
+			case section6Toggle_Button:
+			{
+				sectionControl.set_switch_state(5, !sectionControl.get_switch_state(5));
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6EnableState_ObjPtr));
+				txFlags.set_flag(static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection6Status_OutRect));
+			}
+			break;
+
+			default:
+				break;
+		}
 	}
 }
 
@@ -428,7 +421,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			case UpdateVTStateFlags::UpdateSection5EnableState_ObjPtr:
 			case UpdateVTStateFlags::UpdateSection6EnableState_ObjPtr:
 			{
-				std::uint32_t sectionIndex = flag - static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr);
+				auto sectionIndex = static_cast<std::uint8_t>(flag - static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1EnableState_ObjPtr));
 
 				if (seeder->get_is_object_shown(SECTION_SWITCH_STATES.at(sectionIndex)))
 				{
@@ -549,7 +542,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			{
 				if (seeder->get_is_object_shown(busload_VarNum))
 				{
-					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(busload_VarNum, seeder->currentBusload * 100.0f);
+					transmitSuccessful = seeder->VTClientInterface.send_change_numeric_value(busload_VarNum, static_cast<std::uint32_t>(seeder->currentBusload * 100.0f));
 				}
 			}
 			break;
@@ -620,14 +613,14 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 						case isobus::LanguageCommandInterface::DistanceUnits::Metric:
 						{
 							// Scale to KPH
-							currentSpeed = ((currentSpeed * 0.001f) * 3.6f); // Converting mm/s to m/s, then mm/s to kph
+							currentSpeed = static_cast<std::uint32_t>((currentSpeed * 0.001f) * 3.6f); // Converting mm/s to m/s, then mm/s to kph
 						}
 						break;
 
 						case isobus::LanguageCommandInterface::DistanceUnits::ImperialUS:
 						{
 							// Scale to MPH
-							currentSpeed = ((currentSpeed * 0.001f) * 2.23694f); // Converting mm/s to m/s, then mm/s to mph
+							currentSpeed = static_cast<std::uint32_t>((currentSpeed * 0.001f) * 2.23694f); // Converting mm/s to m/s, then mm/s to mph
 						}
 						break;
 
@@ -740,7 +733,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 			case UpdateVTStateFlags::UpdateSection5Status_OutRect:
 			case UpdateVTStateFlags::UpdateSection6Status_OutRect:
 			{
-				std::uint32_t sectionIndex = flag - static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect);
+				auto sectionIndex = static_cast<std::uint8_t>(flag - static_cast<std::uint32_t>(UpdateVTStateFlags::UpdateSection1Status_OutRect));
 
 				if (seeder->get_is_object_shown(SECTION_STATUS_OUTRECTS.at(sectionIndex)))
 				{
@@ -809,7 +802,7 @@ void SeederVtApplication::processFlags(std::uint32_t flag, void *parentPointer)
 	}
 }
 
-bool SeederVtApplication::get_is_object_shown(std::uint16_t objectID)
+bool SeederVtApplication::get_is_object_shown(std::uint16_t objectID) const
 {
 	auto myControlFunction = VTClientInterface.get_internal_control_function();
 	bool retVal = false;
@@ -1078,7 +1071,7 @@ void SeederVtApplication::update_alarms()
 {
 	bool updateShownMask = false;
 
-	if ((VTClientInterface.get_is_connected()) && (alarmsEnabled))
+	if ((VTClientInterface.get_is_connected()) && alarmsEnabled)
 	{
 		if ((0 == speedMessages.get_number_received_machine_selected_speed_command_sources()) &&
 		    (0 == speedMessages.get_number_received_ground_based_speed_sources()) &&
