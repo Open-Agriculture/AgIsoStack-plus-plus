@@ -18,7 +18,7 @@
 
 namespace isobus
 {
-	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters) :
+	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters, CANLibBadge<PartneredControlFunction>) :
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort, Type::Partnered),
 	  NAMEFilterList(NAMEFilters)
 	{
@@ -28,7 +28,7 @@ namespace isobus
 	std::shared_ptr<PartneredControlFunction> PartneredControlFunction::create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters)
 	{
 		// Unfortunately, we can't use `std::make_shared` here because the constructor is meant to be protected
-		auto controlFunction = std::shared_ptr<PartneredControlFunction>(new PartneredControlFunction(CANPort, NAMEFilters));
+		auto controlFunction = std::shared_ptr<PartneredControlFunction>(new PartneredControlFunction(CANPort, NAMEFilters, {}));
 		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
 		return controlFunction;
 	}

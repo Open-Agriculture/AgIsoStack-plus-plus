@@ -18,7 +18,7 @@
 
 namespace isobus
 {
-	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort) :
+	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort, CANLibBadge<InternalControlFunction>) :
 	  ControlFunction(desiredName, NULL_CAN_ADDRESS, CANPort, Type::Internal),
 	  stateMachine(preferredAddress, desiredName, CANPort)
 	{
@@ -27,8 +27,8 @@ namespace isobus
 	std::shared_ptr<InternalControlFunction> InternalControlFunction::create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort)
 	{
 		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
-		auto controlFunction = std::shared_ptr<InternalControlFunction>(new InternalControlFunction(desiredName, preferredAddress, CANPort));
 		CANLibBadge<InternalControlFunction> badge; // This badge is used to allow creation of the PGN request protocol only from within this class
+		auto controlFunction = std::shared_ptr<InternalControlFunction>(new InternalControlFunction(desiredName, preferredAddress, CANPort, badge));
 		controlFunction->pgnRequestProtocol = std::make_unique<ParameterGroupNumberRequestProtocol>(controlFunction, badge);
 		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
 		return controlFunction;
