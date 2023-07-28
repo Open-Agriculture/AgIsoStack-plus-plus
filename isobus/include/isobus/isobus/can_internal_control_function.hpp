@@ -45,6 +45,12 @@ namespace isobus
 		/// @returns true if the control function was successfully removed from everywhere in the stack, otherwise false
 		bool destroy(std::uint32_t expectedRefCount = 1) override;
 
+		/// @brief The protected constructor for the internal control function, which is called by the (inherited) factory function
+		/// @param[in] desiredName The NAME for this control function to claim as
+		/// @param[in] preferredAddress The preferred NAME for this control function
+		/// @param[in] CANPort The CAN channel index for this control function to use
+		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort, CANLibBadge<InternalControlFunction>);
+
 		/// @brief Used by the network manager to tell the ICF that the address claim state machine needs to process
 		/// a J1939 command to move address.
 		void process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>);
@@ -56,13 +62,6 @@ namespace isobus
 		/// @brief Gets the PGN request protocol for this ICF
 		/// @returns The PGN request protocol for this ICF
 		std::weak_ptr<ParameterGroupNumberRequestProtocol> get_pgn_request_protocol() const;
-
-	protected:
-		/// @brief The protected constructor for the internal control function, which is called by the (inherited) factory function
-		/// @param[in] desiredName The NAME for this control function to claim as
-		/// @param[in] preferredAddress The preferred NAME for this control function
-		/// @param[in] CANPort The CAN channel index for this control function to use
-		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
 
 	private:
 		AddressClaimStateMachine stateMachine; ///< The address claimer for this ICF
