@@ -78,8 +78,7 @@ int main()
 		return -3;
 	}
 
-	auto pgnRequestProtocol = std::make_shared<isobus::ParameterGroupNumberRequestProtocol>(TestInternalECU);
-	isobus::DiagnosticProtocol diagnosticProtocol(TestInternalECU, pgnRequestProtocol);
+	isobus::DiagnosticProtocol diagnosticProtocol(TestInternalECU);
 	diagnosticProtocol.initialize();
 
 	// Important: we need to update the diagnostic protocol using the hardware interface periodic update event,

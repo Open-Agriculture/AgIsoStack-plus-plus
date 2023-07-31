@@ -74,10 +74,9 @@ namespace isobus
 		return failureModeIdentifier;
 	}
 
-	DiagnosticProtocol::DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol, NetworkType networkType) :
-	  ControlFunctionFunctionalitiesMessageInterface(internalControlFunction, pgnRequestProtocol),
+	DiagnosticProtocol::DiagnosticProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, NetworkType networkType) :
+	  ControlFunctionFunctionalitiesMessageInterface(internalControlFunction),
 	  myControlFunction(internalControlFunction),
-	  pgnRequestProtocol(pgnRequestProtocol),
 	  networkType(networkType),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
@@ -104,7 +103,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 
-			if (auto requestProtocol = pgnRequestProtocol.lock())
+			if (auto requestProtocol = myControlFunction->get_pgn_request_protocol().lock())
 			{
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1), process_parameter_group_number_request, this);
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2), process_parameter_group_number_request, this);
@@ -114,12 +113,8 @@ namespace isobus
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification), process_parameter_group_number_request, this);
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification), process_parameter_group_number_request, this);
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation), process_parameter_group_number_request, this);
-				retVal = true;
 			}
-			else
-			{
-				CANStackLogger::error("[DP] ParameterGroupNumberRequestProtocol expired in DiagnosticProtocol::initialize()");
-			}
+			retVal = true;
 		}
 		else
 		{
@@ -139,7 +134,7 @@ namespace isobus
 		{
 			initialized = false;
 
-			if (auto requestProtocol = pgnRequestProtocol.lock())
+			if (auto requestProtocol = myControlFunction->get_pgn_request_protocol().lock())
 			{
 				requestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1), process_parameter_group_number_request, this);
 				requestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2), process_parameter_group_number_request, this);

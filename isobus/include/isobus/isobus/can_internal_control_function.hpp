@@ -21,6 +21,7 @@
 namespace isobus
 {
 	class CANNetworkManager;
+	class ParameterGroupNumberRequestProtocol;
 
 	//================================================================================================
 	/// @class InternalControlFunction
@@ -39,6 +40,11 @@ namespace isobus
 		/// @param[in] CANPort The CAN channel index for this control function to use
 		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
 
+		/// @brief Destroys this control function, by removing it from the network manager
+		/// @param[in] expectedRefCount The expected number of shared pointers to this control function after removal
+		/// @returns true if the control function was successfully removed from everywhere in the stack, otherwise false
+		bool destroy(std::uint32_t expectedRefCount = 1) override;
+
 		/// @brief Used by the network manager to tell the ICF that the address claim state machine needs to process
 		/// a J1939 command to move address.
 		void process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>);
@@ -46,6 +52,10 @@ namespace isobus
 		/// @brief Updates the internal control function together with it's associated address claim state machine
 		/// @returns Wether the control function has changed address by the end of the update
 		bool update_address_claiming(CANLibBadge<CANNetworkManager>);
+
+		/// @brief Gets the PGN request protocol for this ICF
+		/// @returns The PGN request protocol for this ICF
+		std::weak_ptr<ParameterGroupNumberRequestProtocol> get_pgn_request_protocol() const;
 
 	protected:
 		/// @brief The protected constructor for the internal control function, which is called by the (inherited) factory function
@@ -56,6 +66,7 @@ namespace isobus
 
 	private:
 		AddressClaimStateMachine stateMachine; ///< The address claimer for this ICF
+		std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol for this ICF
 	};
 
 } // namespace isobus

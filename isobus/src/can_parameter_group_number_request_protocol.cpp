@@ -19,7 +19,7 @@
 namespace isobus
 {
 
-	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
+	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, CANLibBadge<InternalControlFunction>) :
 	  myControlFunction(internalControlFunction)
 	{
 		assert(nullptr != myControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");
@@ -27,7 +27,7 @@ namespace isobus
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
 	}
 
-	ParameterGroupNumberRequestProtocol ::~ParameterGroupNumberRequestProtocol()
+	ParameterGroupNumberRequestProtocol::~ParameterGroupNumberRequestProtocol()
 	{
 		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
 		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
@@ -265,7 +265,7 @@ namespace isobus
 		}
 	}
 
-	bool ParameterGroupNumberRequestProtocol::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> destination)
+	bool ParameterGroupNumberRequestProtocol::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 

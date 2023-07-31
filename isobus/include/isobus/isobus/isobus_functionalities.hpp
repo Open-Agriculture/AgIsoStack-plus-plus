@@ -161,8 +161,7 @@ namespace isobus
 
 		/// @brief Constructor for a ControlFunctionFunctionalities object
 		/// @param[in] sourceControlFunction The control function to use when sending messages
-		/// @param[in] pgnRequestProtocol The pgn request protocol for receiving control functionality requests
-		ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol);
+		explicit ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction);
 
 		/// @brief Destructor for a ControlFunctionFunctionalities object
 		~ControlFunctionFunctionalities();
@@ -468,7 +467,6 @@ namespace isobus
 		static constexpr std::uint8_t NUMBER_TIM_AUX_VALVES = 32; ///< The max number of TIM aux valves
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
-		std::weak_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol to handle PGN requests with
 		std::list<FunctionalityData> supportedFunctionalities; ///< A list of all configured functionalities and their data
 		std::mutex functionalitiesMutex; ///< Since messages come in on a different thread than the main app (probably), this mutex protects the functionality data
 		ProcessingFlags txFlags; ///< Handles retries for sending the CF functionalities message
