@@ -12,6 +12,7 @@
 
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 
 #include <algorithm>
 
@@ -27,8 +28,18 @@ namespace isobus
 	{
 		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
 		auto controlFunction = std::shared_ptr<InternalControlFunction>(new InternalControlFunction(desiredName, preferredAddress, CANPort));
+		CANLibBadge<InternalControlFunction> badge; // This badge is used to allow creation of the PGN request protocol only from within this class
+		controlFunction->pgnRequestProtocol = std::make_unique<ParameterGroupNumberRequestProtocol>(controlFunction, badge);
 		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
 		return controlFunction;
+	}
+
+	bool InternalControlFunction::destroy(std::uint32_t expectedRefCount)
+	{
+		// We need to destroy the PGN request protocol before we destroy the control function
+		pgnRequestProtocol.reset();
+
+		return ControlFunction::destroy(expectedRefCount);
 	}
 
 	void InternalControlFunction::process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>)
@@ -43,6 +54,11 @@ namespace isobus
 		address = stateMachine.get_claimed_address();
 
 		return previousAddress != address;
+	}
+
+	std::weak_ptr<ParameterGroupNumberRequestProtocol> InternalControlFunction::get_pgn_request_protocol() const
+	{
+		return pgnRequestProtocol;
 	}
 
 } // namespace isobus

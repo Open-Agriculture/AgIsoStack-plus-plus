@@ -14,7 +14,6 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
-#include "isobus/isobus/can_protocol.hpp"
 
 #include <memory>
 
@@ -33,10 +32,16 @@ namespace isobus
 	public:
 		/// @brief The constructor for this protocol
 		/// @param[in] internalControlFunction The internal control function that owns this protocol and will be used to send messages
-		explicit ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
+		ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, CANLibBadge<InternalControlFunction>);
 
 		/// @brief The destructor for this protocol
 		~ParameterGroupNumberRequestProtocol();
+
+		/// @brief Remove the copy constructor
+		ParameterGroupNumberRequestProtocol(const ParameterGroupNumberRequestProtocol &) = delete;
+
+		/// @brief Remove the copy assignment operator
+		ParameterGroupNumberRequestProtocol &operator=(const ParameterGroupNumberRequestProtocol &) = delete;
 
 		/// @brief Sends a PGN request to the specified control function
 		/// @param[in] pgn The PGN to request
@@ -149,7 +154,7 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN to acknowledge
 		/// @param[in] destination The destination control function to send the acknowledgement to
 		/// @returns true if the message was sent, false otherwise
-		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> destination);
+		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> destination) const;
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
 		std::vector<PGNRequestCallbackInfo> pgnRequestCallbacks; ///< A list of all registered PGN callbacks and the PGN associated with each callback

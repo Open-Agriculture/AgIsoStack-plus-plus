@@ -11,8 +11,8 @@ using namespace isobus;
 class TestControlFunctionFunctionalities : public ControlFunctionFunctionalities
 {
 public:
-	explicit TestControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol) :
-	  ControlFunctionFunctionalities(sourceControlFunction, pgnRequestProtocol)
+	explicit TestControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
+	  ControlFunctionFunctionalities(sourceControlFunction)
 	{
 	}
 
@@ -49,8 +49,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 
 	ASSERT_TRUE(internalECU->get_address_valid());
 
-	auto pgnRequestProtocol = std::make_shared<ParameterGroupNumberRequestProtocol>(internalECU);
-	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU, pgnRequestProtocol);
+	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -615,5 +614,5 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	EXPECT_EQ(255, testMessageData.at(19)); // 255 Sections
 
 	//! @todo try to reduce the reference count, such that that we don't use destroyed control functions later on
-	ASSERT_TRUE(internalECU->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(2));
 }

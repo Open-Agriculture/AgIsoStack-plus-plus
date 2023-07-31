@@ -16,24 +16,27 @@
 
 namespace isobus
 {
-	ControlFunctionFunctionalities::ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol) :
+	ControlFunctionFunctionalities::ControlFunctionFunctionalities(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
 	  myControlFunction(sourceControlFunction),
-	  pgnRequestProtocol(pgnRequestProtocol),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
 		set_functionality_is_supported(Functionalities::MinimumControlFunction, 1, true); // Support the absolute minimum by default
 
-		if (nullptr != pgnRequestProtocol)
+		if (auto pgnRequestProtocol = sourceControlFunction->get_pgn_request_protocol().lock())
 		{
 			pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+		}
+		else
+		{
+			CANStackLogger::error("[DP]: Failed to register PGN request callback for ControlFunctionFunctionalities due to the protocol being expired");
 		}
 	}
 
 	ControlFunctionFunctionalities::~ControlFunctionFunctionalities()
 	{
-		if (auto protocol = pgnRequestProtocol.lock())
+		if (auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol().lock())
 		{
-			protocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
+			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
 		}
 	}
 
