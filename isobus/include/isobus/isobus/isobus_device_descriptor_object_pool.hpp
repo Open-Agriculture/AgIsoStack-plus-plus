@@ -111,24 +111,24 @@ namespace isobus
 		/// C++ objects. Useful for a task controller server or to view the content
 		/// of a DDOP captured in a CAN log, for example.
 		/// @param binaryPool The binary object pool, as an array of bytes.
-		/// @param clientNAME The ISO NAME of the source ECU for this DDOP
+		/// @param clientNAME The ISO NAME of the source ECU for this DDOP, or NAME(0) to ignore checking against actual ECU NAME
 		/// @returns True if the object pool was successfully deserialized, otherwise false.
 		/// NOTE: This only means that the pool was deserialized. It does not mean that the
 		/// relationship between objects is valid. You may have to do additional
 		/// checking on the pool before using it.
-		bool deserialize_binary_object_pool(std::vector<std::uint8_t> &binaryPool, NAME clientNAME);
+		bool deserialize_binary_object_pool(std::vector<std::uint8_t> &binaryPool, NAME clientNAME = NAME(0));
 
 		/// @brief Attempts to take a binary object pool and convert it back into
 		/// C++ objects. Useful for a task controller server or to view the content
 		/// of a DDOP captured in a CAN log, for example.
 		/// @param binaryPool The binary object pool, as an array of bytes.
 		/// @param binaryPoolSizeBytes The size of the DDOP to process in bytes.
-		/// @param clientNAME The ISO NAME of the source ECU for this DDOP
+		/// @param clientNAME The ISO NAME of the source ECU for this DDOP, or NAME(0) to ignore checking against actual ECU NAME
 		/// @returns True if the object pool was successfully deserialized, otherwise false.
 		/// NOTE: This only means that the pool was deserialized. It does not mean that the
 		/// relationship between objects is valid. You may have to do additional
 		/// checking on the pool before using it.
-		bool deserialize_binary_object_pool(const std::uint8_t *binaryPool, std::uint32_t binaryPoolSizeBytes, NAME clientNAME);
+		bool deserialize_binary_object_pool(const std::uint8_t *binaryPool, std::uint32_t binaryPoolSizeBytes, NAME clientNAME = NAME(0));
 
 		/// Constructs a binary DDOP using the objects that were previously added
 		/// @param[in,out] resultantPool The binary representation of the DDOP, or an empty vector if this function returns false

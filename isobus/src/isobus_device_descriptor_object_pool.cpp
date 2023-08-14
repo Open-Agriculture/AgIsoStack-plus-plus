@@ -438,6 +438,7 @@ namespace isobus
 							std::string deviceStructureLabel;
 							std::array<std::uint8_t, 7> localizationLabel;
 							std::vector<std::uint8_t> extendedStructureLabel;
+							std::uint64_t ddopClientNAME = 0;
 
 							for (std::uint16_t i = 0; i < numberDesignatorBytes; i++)
 							{
@@ -447,6 +448,22 @@ namespace isobus
 							for (std::uint16_t i = 0; i < numberSoftwareVersionBytes; i++)
 							{
 								deviceSoftwareVersion.push_back(binaryPool[7 + numberDesignatorBytes + i]);
+							}
+
+							for (std::uint8_t i = 0; i < 8; i++)
+							{
+								std::uint64_t currentNameByte = binaryPool[7 + numberDesignatorBytes + numberSoftwareVersionBytes + i];
+								ddopClientNAME |= (currentNameByte << (8 * i));
+							}
+
+							if ((0 != clientNAME.get_full_name()) && (ddopClientNAME != clientNAME.get_full_name()))
+							{
+								CANStackLogger::error("[DDOP]: Failed adding deserialized device object. DDOP NAME doesn't match client's actual NAME.");
+								retVal = false;
+							}
+							else if (0 == clientNAME.get_full_name())
+							{
+								clientNAME.set_full_name(ddopClientNAME);
 							}
 
 							for (std::uint16_t i = 0; i < numberDeviceSerialNumberBytes; i++)
