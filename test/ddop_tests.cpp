@@ -268,6 +268,29 @@ TEST(DDOP_TESTS, DeviceTests)
 	EXPECT_EQ(false, std::static_pointer_cast<task_controller_object::DeviceObject>(tempPD)->get_use_extended_structure_label());
 
 	EXPECT_EQ(testDDOPVersion4_2.get_max_supported_task_controller_version(), 4);
+
+	// Test Setters
+	auto objectUnderTest = std::static_pointer_cast<task_controller_object::DeviceObject>(tempPD);
+	objectUnderTest->set_designator("Test");
+	EXPECT_EQ("Test", objectUnderTest->get_designator());
+	objectUnderTest->set_iso_name(1234567);
+	EXPECT_EQ(1234567, objectUnderTest->get_iso_name());
+	objectUnderTest->set_serial_number("9999");
+	EXPECT_EQ("9999", objectUnderTest->get_serial_number());
+	objectUnderTest->set_software_version("5555");
+	EXPECT_EQ("5555", objectUnderTest->get_software_version());
+
+	std::vector<std::uint8_t> testESL = { 1, 2, 3, 4, 5, 6, 7, 87 };
+	objectUnderTest->set_extended_structure_label(testESL);
+	EXPECT_EQ(testESL, objectUnderTest->get_extended_structure_label());
+	objectUnderTest->set_structure_label("TEST");
+	EXPECT_EQ("TEST", objectUnderTest->get_structure_label());
+	objectUnderTest->set_use_extended_structure_label(true);
+	EXPECT_TRUE(objectUnderTest->get_use_extended_structure_label());
+
+	std::array<std::uint8_t, 7> testLocalization = { 0, 1, 2, 3, 4, 5, 6 };
+	objectUnderTest->set_localization_label(testLocalization);
+	EXPECT_EQ(testLocalization, objectUnderTest->get_localization_label());
 }
 
 TEST(DDOP_TESTS, DeviceElementDesignatorTests)
@@ -318,6 +341,20 @@ TEST(DDOP_TESTS, DeviceElementDesignatorTests)
 	EXPECT_EQ(true, testDDOPVersion3.add_device_property("asasdfasdf", 4, 5, 0xFFFF, 12347));
 	EXPECT_EQ(true, testDDOPVersion3.add_device_element("asldkfy", 714, 8467, task_controller_object::DeviceElementObject::Type::Bin, 7786));
 	EXPECT_EQ(false, testDDOPVersion3.generate_binary_object_pool(binaryDDOP));
+
+	// Test Setters
+	auto objectUnderTest = std::static_pointer_cast<task_controller_object::DeviceElementObject>(tempPD);
+	objectUnderTest->set_element_number(200);
+	EXPECT_EQ(200, objectUnderTest->get_element_number());
+	objectUnderTest->set_object_id(3500);
+	EXPECT_EQ(3500, objectUnderTest->get_object_id());
+	objectUnderTest->set_parent_object(4444);
+	EXPECT_EQ(4444, objectUnderTest->get_parent_object());
+
+	objectUnderTest->add_reference_to_child_object(111);
+	EXPECT_EQ(1, objectUnderTest->get_number_child_objects());
+	objectUnderTest->remove_reference_to_child_object(111);
+	EXPECT_EQ(0, objectUnderTest->get_number_child_objects());
 }
 
 TEST(DDOP_TESTS, ProcessDataTests)
@@ -345,6 +382,19 @@ TEST(DDOP_TESTS, ProcessDataTests)
 	EXPECT_EQ(128, tempPD->get_designator().size());
 
 	EXPECT_EQ(tempPD->get_table_id(), "DPD");
+
+	// Test Setters
+	auto objectUnderTest = std::static_pointer_cast<task_controller_object::DeviceProcessDataObject>(tempPD);
+	objectUnderTest->set_ddi(45056);
+	EXPECT_EQ(45056, objectUnderTest->get_ddi());
+	objectUnderTest->set_device_value_presentation_object_id(25555);
+	EXPECT_EQ(25555, objectUnderTest->get_device_value_presentation_object_id());
+	objectUnderTest->set_object_id(3000);
+	EXPECT_EQ(3000, objectUnderTest->get_object_id());
+	objectUnderTest->set_properties_bitfield(0x04);
+	EXPECT_EQ(0x04, objectUnderTest->get_properties_bitfield());
+	objectUnderTest->set_trigger_methods_bitfield(0x08);
+	EXPECT_EQ(0x08, objectUnderTest->get_trigger_methods_bitfield());
 }
 
 TEST(DDOP_TESTS, PropertyTests)
@@ -392,6 +442,17 @@ TEST(DDOP_TESTS, PropertyTests)
 	tempProperty = testDDOPVersion4_2.get_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::ConnectorType));
 	ASSERT_NE(nullptr, tempProperty);
 	EXPECT_EQ(tempProperty->get_designator().size(), 128);
+
+	// Test Setters
+	auto objectUnderTest = std::static_pointer_cast<task_controller_object::DevicePropertyObject>(tempProperty);
+	objectUnderTest->set_ddi(688);
+	EXPECT_EQ(688, objectUnderTest->get_ddi());
+	objectUnderTest->set_device_value_presentation_object_id(745);
+	EXPECT_EQ(745, objectUnderTest->get_device_value_presentation_object_id());
+	objectUnderTest->set_object_id(800);
+	EXPECT_EQ(800, objectUnderTest->get_object_id());
+	objectUnderTest->set_value(4000);
+	EXPECT_EQ(4000, objectUnderTest->get_value());
 }
 
 TEST(DDOP_TESTS, PresentationTests)
@@ -424,4 +485,15 @@ TEST(DDOP_TESTS, PresentationTests)
 	tempPresentation = testDDOPVersion4.get_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation));
 	ASSERT_NE(nullptr, tempPresentation);
 	EXPECT_EQ(tempPresentation->get_designator().size(), 80);
+
+	// Test Setters
+	auto objectUnderTest = std::static_pointer_cast<task_controller_object::DeviceValuePresentationObject>(tempPresentation);
+	objectUnderTest->set_number_of_decimals(3);
+	EXPECT_EQ(3, objectUnderTest->get_number_of_decimals());
+	objectUnderTest->set_object_id(400);
+	EXPECT_EQ(400, objectUnderTest->get_object_id());
+	objectUnderTest->set_offset(50000);
+	EXPECT_EQ(50000, objectUnderTest->get_offset());
+	objectUnderTest->set_scale(10.0f);
+	EXPECT_NEAR(10.0f, objectUnderTest->get_scale(), 0.001f);
 }

@@ -45,9 +45,17 @@ namespace isobus
 			/// @returns Descriptive text for this object, UTF-8 encoded, 32 characters max
 			std::string get_designator() const;
 
+			/// @brief Updates the designator to a new value
+			/// @param[in] newDesignator The designator to set, UTF-8 encoded, 32 characters max
+			void set_designator(const std::string &newDesignator);
+
 			/// @brief Returns the object ID of the object
 			/// @returns The object ID of the object
 			std::uint16_t get_object_id() const;
+
+			/// @brief Updates the object ID of the object to a new value.
+			/// @param[in] id The object ID to set. IDs must be unique in the DDOP and less than or equal to MAX_OBJECT_ID
+			void set_object_id(std::uint16_t id);
 
 			/// @brief Returns the XML namespace for the object
 			/// @returns the XML namespace for the object
@@ -120,25 +128,49 @@ namespace isobus
 			/// @returns The software version of the device
 			std::string get_software_version() const;
 
+			/// @brief Sets the software version for the device, as reported in the DDOP.
+			/// @param[in] version The software version to set as a UTF-8 string (or ascii).
+			void set_software_version(const std::string &version);
+
 			/// @brief Returns the serial number for the device
 			/// @returns The serial number for the device
 			std::string get_serial_number() const;
+
+			/// @brief Sets the serial number for the device as reported in the DDOP
+			/// @param[in] serial The serial number to set as a UTF-8 string (or ascii)
+			void set_serial_number(const std::string &serial);
 
 			/// @brief Returns the structure label for this DDOP
 			/// @returns The structure label for this DDOP
 			std::string get_structure_label() const;
 
+			/// @brief Sets the device structure label to a new value
+			/// @param[in] label The new structure label to set
+			void set_structure_label(const std::string &label);
+
 			/// @brief Returns the localization label for this DDOP
 			/// @returns The  localization label for this DDOP
 			std::array<std::uint8_t, 7> get_localization_label() const;
+
+			/// @brief Changes the localization label to a new value
+			/// @param[in] label The new label to set
+			void set_localization_label(std::array<std::uint8_t, 7> label);
 
 			/// @brief Returns the extended structure label (if applicable)
 			/// @returns The extended structure label (if applicable)
 			std::vector<std::uint8_t> get_extended_structure_label() const;
 
+			/// @brief Sets the extended structure label to a new value. Only used for TCs with version 4+.
+			/// @param[in] label The extended structure label to report or an empty vector if none is being used.
+			void set_extended_structure_label(const std::vector<std::uint8_t> &label);
+
 			/// @brief Returns the ISO NAME associated with this DDOP
 			/// @returns The raw ISO NAME associated with this DDOP
 			std::uint64_t get_iso_name() const;
+
+			/// @brief Changes the stored ISO NAME to a new value
+			/// @param[in] name The new ISO NAME to set
+			void set_iso_name(std::uint64_t name);
 
 			/// @brief Returns if the class will append the extended structure label to its serialized form
 			/// @details This is TC version 4 behavior. For version 3, this should return false.
@@ -217,9 +249,17 @@ namespace isobus
 			/// @returns The element number
 			std::uint16_t get_element_number() const;
 
+			/// @brief Update the object's element number to a new value.
+			/// @param[in] newElementNumber The element number to set
+			void set_element_number(std::uint16_t newElementNumber);
+
 			/// @brief Returns the parent object ID
 			/// @returns The parent object ID
 			std::uint16_t get_parent_object() const;
+
+			/// @brief Updates the object ID associated to this object's parent object
+			/// @param[in] parentObjectID The object ID to set as the parent to this object
+			void set_parent_object(std::uint16_t parentObjectID);
 
 			/// @brief Returns the type of the element object
 			/// @returns The type of the element object
@@ -229,6 +269,11 @@ namespace isobus
 			/// @note You should only add Device or Device Element objects as children of this object
 			/// @param[in] childID The object ID of the child to reference from this object
 			void add_reference_to_child_object(std::uint16_t childID);
+
+			/// @brief Removes a child object reference from this object.
+			/// @param[in] childID An object ID associated to a child object to remove.
+			/// @returns true if the child object ID was found and removed, otherwise false
+			bool remove_reference_to_child_object(std::uint16_t childID);
 
 			/// @brief Returns the number of child objects added with `add_reference_to_child_object`
 			/// @returns The number of child objects added with `add_reference_to_child_object`
@@ -303,17 +348,33 @@ namespace isobus
 			/// @returns the DDI for this property
 			std::uint16_t get_ddi() const;
 
+			/// @brief Updates the DDI associated to this DPD object
+			/// @param[in] newDDI The DDI to associate with this object
+			void set_ddi(std::uint16_t newDDI);
+
 			/// @brief Returns Object identifier of the DeviceValuePresentation-Object for this object, or the null ID
 			/// @returns Object identifier of DeviceValuePresentation-Object for this object
 			std::uint16_t get_device_value_presentation_object_id() const;
+
+			/// @brief Updates the object ID to use as an associated presentation for this object
+			/// @param[in] id Object identifier of the DeviceValuePresentation to use for this object, or the null ID for none
+			void set_device_value_presentation_object_id(std::uint16_t id);
 
 			/// @brief Returns the object's properties bitfield
 			/// @returns The properties bitfield for this object
 			std::uint8_t get_properties_bitfield() const;
 
+			/// @brief Updates the properties bitfield to a new value
+			/// @param[in] properties The new properties bitfield to set
+			void set_properties_bitfield(std::uint8_t properties);
+
 			/// @brief Returns the object's available trigger methods
 			/// @returns The available trigger methods bitfield for this object
 			std::uint8_t get_trigger_methods_bitfield() const;
+
+			/// @brief Updates the object's available trigger methods bitfield to a new value
+			/// @param[in] methods The new trigger methods bitfield to set
+			void set_trigger_methods_bitfield(std::uint8_t methods);
 
 		private:
 			static const std::string tableID; ///< XML element namespace for DeviceProcessData.
@@ -345,7 +406,7 @@ namespace isobus
 			~DevicePropertyObject() override = default;
 
 			/// @brief Returns the XML element namespace for DeviceProperty.
-			/// @returns The string "DPD", the XML element namespace for DeviceProcessData.
+			/// @returns The string "DPT", the XML element namespace for DeviceProperty.
 			std::string get_table_id() const override;
 
 			/// @brief Returns the object type
@@ -368,9 +429,17 @@ namespace isobus
 			/// @returns The DDI for this object
 			std::uint16_t get_ddi() const;
 
+			/// @brief Updates the DDI associated with this DPT object to a new value
+			/// @param[in] newDDI The DDI to associate with this object's value
+			void set_ddi(std::uint16_t newDDI);
+
 			/// @brief Returns the object identifier of an associated DeviceValuePresentationObject
 			/// @returns The object identifier of an associated DeviceValuePresentationObject
 			std::uint16_t get_device_value_presentation_object_id() const;
+
+			/// @brief Updates the object ID to use as an associated presentation for this object
+			/// @param[in] id Object identifier of the DeviceValuePresentation to use for this object, or the null ID for none
+			void set_device_value_presentation_object_id(std::uint16_t id);
 
 		private:
 			static const std::string tableID; ///< XML element namespace for DeviceProperty.
@@ -417,13 +486,25 @@ namespace isobus
 			/// @returns The offset that is applied to the value for presentation
 			std::int32_t get_offset() const;
 
+			/// @brief Sets the offset that is applied to the value for presentation
+			/// @param[in] newOffset The offset to set for this object's value
+			void set_offset(std::int32_t newOffset);
+
 			/// @brief Returns the scale that is applied to the value for presentation
 			/// @returns The scale that is applied to the value for presentation
 			float get_scale() const;
 
+			/// @brief Sets the scale which will be applied to the value for presentation
+			/// @param[in] newScale The scale to set for this object's value
+			void set_scale(float newScale);
+
 			/// @brief Returns the number of decimals shown after the decimal point
 			/// @returns The number of decimals shown after the decimal point
 			std::uint8_t get_number_of_decimals() const;
+
+			/// @brief Sets the number of decimals to show when presenting objects associated with this presentation
+			/// @param[in] decimals The number of decimals to show after the decimal point
+			void set_number_of_decimals(std::uint8_t decimals);
 
 		private:
 			static const std::string tableID; ///< XML element namespace for DeviceValuePresentation.

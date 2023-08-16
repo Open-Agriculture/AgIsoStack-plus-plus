@@ -29,9 +29,19 @@ namespace isobus
 			return designator;
 		}
 
+		void Object::set_designator(const std::string &newDesignator)
+		{
+			designator = newDesignator;
+		}
+
 		std::uint16_t Object::get_object_id() const
 		{
 			return objectID;
+		}
+
+		void Object::set_object_id(std::uint16_t id)
+		{
+			objectID = id;
 		}
 
 		const std::string DeviceObject::tableID = "DVC";
@@ -141,9 +151,19 @@ namespace isobus
 			return softwareVersion;
 		}
 
+		void DeviceObject::set_software_version(const std::string &version)
+		{
+			softwareVersion = version;
+		}
+
 		std::string DeviceObject::get_serial_number() const
 		{
 			return serialNumber;
+		}
+
+		void DeviceObject::set_serial_number(const std::string &serial)
+		{
+			serialNumber = serial;
 		}
 
 		std::string DeviceObject::get_structure_label() const
@@ -151,9 +171,19 @@ namespace isobus
 			return structureLabel;
 		}
 
+		void DeviceObject::set_structure_label(const std::string &label)
+		{
+			structureLabel = label;
+		}
+
 		std::array<std::uint8_t, task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH> DeviceObject::get_localization_label() const
 		{
 			return localizationLabel;
+		}
+
+		void DeviceObject::set_localization_label(std::array<std::uint8_t, 7> label)
+		{
+			localizationLabel = label;
 		}
 
 		std::vector<std::uint8_t> DeviceObject::get_extended_structure_label() const
@@ -161,9 +191,19 @@ namespace isobus
 			return extendedStructureLabel;
 		}
 
+		void DeviceObject::set_extended_structure_label(const std::vector<std::uint8_t> &label)
+		{
+			extendedStructureLabel = label;
+		}
+
 		std::uint64_t DeviceObject::get_iso_name() const
 		{
 			return NAME;
+		}
+
+		void DeviceObject::set_iso_name(std::uint64_t name)
+		{
+			NAME = name;
 		}
 
 		bool DeviceObject::get_use_extended_structure_label() const
@@ -239,9 +279,19 @@ namespace isobus
 			return elementNumber;
 		}
 
+		void DeviceElementObject::set_element_number(std::uint16_t newElementNumber)
+		{
+			elementNumber = newElementNumber;
+		}
+
 		std::uint16_t DeviceElementObject::get_parent_object() const
 		{
 			return parentObject;
+		}
+
+		void DeviceElementObject::set_parent_object(std::uint16_t parentObjectID)
+		{
+			parentObject = parentObjectID;
 		}
 
 		DeviceElementObject::Type DeviceElementObject::get_type() const
@@ -252,6 +302,19 @@ namespace isobus
 		void DeviceElementObject::add_reference_to_child_object(std::uint16_t childID)
 		{
 			referenceList.push_back(childID);
+		}
+
+		bool DeviceElementObject::remove_reference_to_child_object(std::uint16_t childID)
+		{
+			bool retVal = false;
+
+			auto result = std::find(referenceList.begin(), referenceList.end(), childID);
+			if (result != referenceList.end())
+			{
+				retVal = true;
+				referenceList.erase(result);
+			}
+			return retVal;
 		}
 
 		std::size_t DeviceElementObject::get_number_child_objects() const
@@ -326,9 +389,19 @@ namespace isobus
 			return ddi;
 		}
 
+		void DeviceProcessDataObject::set_ddi(std::uint16_t newDDI)
+		{
+			ddi = newDDI;
+		}
+
 		std::uint16_t DeviceProcessDataObject::get_device_value_presentation_object_id() const
 		{
 			return deviceValuePresentationObject;
+		}
+
+		void DeviceProcessDataObject::set_device_value_presentation_object_id(std::uint16_t id)
+		{
+			deviceValuePresentationObject = id;
 		}
 
 		std::uint8_t DeviceProcessDataObject::get_properties_bitfield() const
@@ -336,9 +409,19 @@ namespace isobus
 			return propertiesBitfield;
 		}
 
+		void DeviceProcessDataObject::set_properties_bitfield(std::uint8_t properties)
+		{
+			propertiesBitfield = properties;
+		}
+
 		std::uint8_t DeviceProcessDataObject::get_trigger_methods_bitfield() const
 		{
 			return triggerMethodsBitfield;
+		}
+
+		void DeviceProcessDataObject::set_trigger_methods_bitfield(std::uint8_t methods)
+		{
+			triggerMethodsBitfield = methods;
 		}
 
 		const std::string DevicePropertyObject::tableID = "DPT";
@@ -407,9 +490,19 @@ namespace isobus
 			return ddi;
 		}
 
+		void DevicePropertyObject::set_ddi(std::uint16_t newDDI)
+		{
+			ddi = newDDI;
+		}
+
 		std::uint16_t DevicePropertyObject::get_device_value_presentation_object_id() const
 		{
 			return deviceValuePresentationObject;
+		}
+
+		void DevicePropertyObject::set_device_value_presentation_object_id(std::uint16_t id)
+		{
+			deviceValuePresentationObject = id;
 		}
 
 		const std::string DeviceValuePresentationObject::tableID = "DVP";
@@ -478,14 +571,29 @@ namespace isobus
 			return offset;
 		}
 
+		void DeviceValuePresentationObject::set_offset(std::int32_t newOffset)
+		{
+			offset = newOffset;
+		}
+
 		float DeviceValuePresentationObject::get_scale() const
 		{
 			return scale;
 		}
 
+		void DeviceValuePresentationObject::set_scale(float newScale)
+		{
+			scale = newScale;
+		}
+
 		std::uint8_t DeviceValuePresentationObject::get_number_of_decimals() const
 		{
 			return numberOfDecimals;
+		}
+
+		void DeviceValuePresentationObject::set_number_of_decimals(std::uint8_t decimals)
+		{
+			numberOfDecimals = decimals;
 		}
 
 	} // namespace task_controller_object
