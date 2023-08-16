@@ -116,6 +116,10 @@ namespace isobus
 			/// @returns The binary representation of the TC object, or an empty vector if object is invalid
 			std::vector<std::uint8_t> get_binary_object() const override;
 
+			/// @brief Returns the software version of the device
+			/// @returns The software version of the device
+			std::string get_software_version() const;
+
 			/// @brief Returns the serial number for the device
 			/// @returns The serial number for the device
 			std::string get_serial_number() const;

@@ -136,6 +136,11 @@ namespace isobus
 			return retVal;
 		}
 
+		std::string DeviceObject::get_software_version() const
+		{
+			return softwareVersion;
+		}
+
 		std::string DeviceObject::get_serial_number() const
 		{
 			return serialNumber;
