@@ -143,6 +143,14 @@ namespace isobus
 		/// @returns Pointer to the object matching the index, or nullptr if no match was found
 		std::shared_ptr<task_controller_object::Object> get_object_by_index(std::uint16_t index);
 
+		/// @brief Removes an object from the DDOP using its object ID.
+		/// @note This will not fix orphaned parent/child relationships.
+		/// Also, if two or more objects were created with the same ID, only one match will be removed.
+		/// You should consider the case where 2 objects have the same ID undefined behavior.
+		/// @param[in] objectID The ID of the object to remove
+		/// @returns true if the object with the specified ID was removed, otherwise false
+		bool remove_object_by_id(std::uint16_t objectID);
+
 		/// @brief Sets the TC version to use when generating a binary DDOP.
 		/// @note If you do not call this, TC version 4 is used by default
 		/// @param[in] tcVersion The version of TC you are targeting for this DDOP

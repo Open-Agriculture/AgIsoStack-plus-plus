@@ -826,6 +826,22 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DeviceDescriptorObjectPool::remove_object_by_id(std::uint16_t objectID)
+	{
+		bool retVal = false;
+
+		for (auto object = objectList.begin(); object != objectList.end(); object++)
+		{
+			if ((nullptr != *object) && (*object)->get_object_id() == objectID)
+			{
+				objectList.erase(object);
+				retVal = true;
+				break;
+			}
+		}
+		return retVal;
+	}
+
 	void DeviceDescriptorObjectPool::set_task_controller_compatibility_level(std::uint8_t tcVersion)
 	{
 		assert(tcVersion <= MAX_TC_VERSION_SUPPORTED); // You can't set the version higher than the max

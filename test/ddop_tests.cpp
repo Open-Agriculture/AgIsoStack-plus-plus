@@ -197,6 +197,23 @@ TEST(DDOP_TESTS, DDOPDetectDuplicateID)
 	EXPECT_EQ(false, testDDOP.add_device_process_data("Tank Capacity", static_cast<std::uint16_t>(DataDescriptionIndex::MaximumVolumeContent), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePresentation), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankCapacity)));
 }
 
+TEST(DDOP_TESTS, TestRemovingObjectsByID)
+{
+	DeviceDescriptorObjectPool testDDOP;
+	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
+
+	EXPECT_TRUE(testDDOP.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_TRUE(testDDOP.add_device_value_presentation("m", 0, 0.001f, 0, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation)));
+	EXPECT_TRUE(testDDOP.add_device_element("Product", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LiquidProduct), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::SprayBoom), task_controller_object::DeviceElementObject::Type::Bin, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LiquidProduct)));
+	EXPECT_TRUE(testDDOP.add_device_process_data("Tank Capacity", static_cast<std::uint16_t>(DataDescriptionIndex::MaximumVolumeContent), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::VolumePresentation), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankCapacity)));
+
+	// Try removing in reverse order
+	EXPECT_TRUE(testDDOP.remove_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::TankCapacity)));
+	EXPECT_TRUE(testDDOP.remove_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LiquidProduct)));
+	EXPECT_TRUE(testDDOP.remove_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::LongWidthPresentation)));
+	EXPECT_TRUE(testDDOP.remove_object_by_id(0));
+}
+
 TEST(DDOP_TESTS, DeviceTests)
 {
 	DeviceDescriptorObjectPool testDDOPVersion3(3);
