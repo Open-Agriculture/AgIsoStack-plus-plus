@@ -8,8 +8,6 @@ project(
     "A control function focused implementation of the major ISOBUS and J1939 transport layers"
 )
 
-set(CMAKE_BUILD_TYPE Debug)
-
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
