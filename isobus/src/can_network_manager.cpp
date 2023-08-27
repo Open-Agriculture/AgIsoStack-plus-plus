@@ -331,6 +331,32 @@ namespace isobus
 		}
 	}
 
+	void CANNetworkManager::add_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback)
+	{
+		if ((nullptr != controlFunction) &&
+		    (nullptr != callback))
+		{
+			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
+			controlFunctionStateCallbacks.emplace_back(controlFunction, callback);
+		}
+	}
+
+	void CANNetworkManager::remove_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback)
+	{
+		if ((nullptr != controlFunction) &&
+		    (nullptr != callback))
+		{
+			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
+			std::pair<std::shared_ptr<ControlFunction>, ControlFunctionStateCallback> targetCallback(controlFunction, callback);
+			auto callbackLocation = std::find(controlFunctionStateCallbacks.begin(), controlFunctionStateCallbacks.end(), targetCallback);
+
+			if (controlFunctionStateCallbacks.end() != callbackLocation)
+			{
+				controlFunctionStateCallbacks.erase(callbackLocation);
+			}
+		}
+	}
+
 	const std::list<std::shared_ptr<InternalControlFunction>> &CANNetworkManager::get_internal_control_functions() const
 	{
 		return internalControlFunctions;
@@ -436,6 +462,7 @@ namespace isobus
 						                      currentControlFunction->get_NAME().get_full_name(),
 						                      claimedAddress,
 						                      channelIndex);
+						process_control_function_state_change_callback(currentControlFunction, ControlFunctionState::Online);
 						break;
 					}
 				}
@@ -628,6 +655,7 @@ namespace isobus
 					                     foundControlFunction->get_NAME().get_full_name(),
 					                     claimedAddress,
 					                     foundControlFunction->get_can_port());
+					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 				}
 				foundControlFunction->address = claimedAddress;
 			}
@@ -669,6 +697,7 @@ namespace isobus
 						partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
 						partner->initialized = true;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
+						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
 						break;
 					}
 				}
@@ -772,6 +801,18 @@ namespace isobus
 			     (ControlFunction::Type::Internal == currentMessage.get_destination_control_function()->get_type())))
 			{
 				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
+			}
+		}
+	}
+
+	void CANNetworkManager::process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
+	{
+		const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
+		for (const auto &callback : controlFunctionStateCallbacks)
+		{
+			if (callback.first == controlFunction)
+			{
+				callback.second(callback.first, state);
 			}
 		}
 	}
@@ -889,6 +930,12 @@ namespace isobus
 						CANStackLogger::info("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
 						controlFunctionTable[channelIndex][i] = nullptr;
 						controlFunction->address = NULL_CAN_ADDRESS;
+						process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
+					}
+					else if ((nullptr != controlFunction) &&
+					         (!controlFunction->claimedAddressSinceLastAddressClaimRequest))
+					{
+						process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
 					}
 				}
 				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = 0;
