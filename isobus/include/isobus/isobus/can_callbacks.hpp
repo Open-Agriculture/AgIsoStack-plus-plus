@@ -18,7 +18,7 @@ namespace isobus
 	class InternalControlFunction;
 	class ControlFunction;
 
-	/// @brief The types of acknowldegement that can be sent in the Ack PGN
+	/// @brief The types of acknowledgement that can be sent in the Ack PGN
 	enum class AcknowledgementType : std::uint8_t
 	{
 		Positive = 0, ///< "ACK" Indicates that the request was completed
@@ -27,8 +27,17 @@ namespace isobus
 		CannotRespond = 3 ///< Signals to the requestor that we are unable to accept the request for some reason
 	};
 
+	/// @brief Enumerates the "online" states of a control function.
+	enum class ControlFunctionState
+	{
+		Offline, ///< The CF's address claim state is not valid
+		Online ///< The CF's address claim state is valid
+	};
+
 	/// @brief A callback for control functions to get CAN messages
-	typedef void (*CANLibCallback)(const CANMessage &message, void *parentPointer);
+	using CANLibCallback = void (*)(const CANMessage &message, void *parentPointer);
+	/// @brief A callback that can inform you when a control function changes state between online and offline
+	using ControlFunctionStateCallback = void (*)(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state);
 	/// @brief A callback to get chunks of data for transfer by a protocol
 	using DataChunkCallback = bool (*)(std::uint32_t callbackIndex,
 	                                   std::uint32_t bytesOffset,

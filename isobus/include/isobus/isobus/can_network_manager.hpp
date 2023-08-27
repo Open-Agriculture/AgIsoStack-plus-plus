@@ -138,6 +138,17 @@ namespace isobus
 		/// @param[in] controlFunction The control function that was created
 		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>);
 
+		/// @brief Use this to get a callback when a control function goes online or offline.
+		/// This could be useful if you want event driven notifications for when your partners are disconnected from the bus.
+		/// @param[in] controlFunction The control function you want callbacks for
+		/// @param[in] callback The callback you want to be called when the specified control function changes state
+		void add_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback);
+
+		/// @brief Used to remove callbacks added with add_control_function_status_change_callback
+		/// @param[in] controlFunction The control function you want to stop receiving callbacks for
+		/// @param[in] callback The callback you want to remove
+		void remove_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback);
+
 		/// @brief Gets all the internal control functions that are currently registered in the network manager
 		/// @returns A list of all the internal control functions
 		const std::list<std::shared_ptr<InternalControlFunction>> &get_internal_control_functions() const;
@@ -186,7 +197,7 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN to use when sending the message
 		/// @param[in] priority The CAN priority of the message being sent
 		/// @param[in] data A pointer to the data buffer to send from
-		/// @param[in] size The size of the messgage to send
+		/// @param[in] size The size of the message to send
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_can_message_raw(std::uint32_t portIndex,
 		                          std::uint8_t sourceAddress,
@@ -236,8 +247,8 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN to use when sending the message
 		/// @param[in] priority The CAN priority of the message being sent
 		/// @param[in] data A pointer to the data buffer to send from
-		/// @param[in] size The size of the messgage to send
-		/// @returns The constucted frame based on the inputs
+		/// @param[in] size The size of the message to send
+		/// @returns The constructed frame based on the inputs
 		CANMessageFrame construct_frame(std::uint32_t portIndex,
 		                                std::uint8_t sourceAddress,
 		                                std::uint8_t destAddress,
@@ -264,6 +275,12 @@ namespace isobus
 		/// @brief Processes a can message for callbacks added with add_any_control_function_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
 		void process_any_control_function_pgn_callbacks(const CANMessage &currentMessage);
+
+		/// @brief Checks the control function state callback list to see if we need to call
+		/// a control function state callback.
+		/// @param[in] controlFunction The controlFunction whose state has changed
+		/// @param[in] state The new state of the control function
+		void process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state);
 
 		/// @brief Processes a can message for callbacks added with add_protocol_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
@@ -294,7 +311,7 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN to use when sending the message
 		/// @param[in] priority The CAN priority of the message being sent
 		/// @param[in] data A pointer to the data buffer to send from
-		/// @param[in] size The size of the messgage to send
+		/// @param[in] size The size of the message to send
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_can_message_raw(std::uint32_t portIndex,
 		                          std::uint8_t sourceAddress,
@@ -319,7 +336,7 @@ namespace isobus
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
-		std::array<std::uint32_t, CAN_PORT_MAXIMUM> lastAddressClaimRequestTimestamp_ms; ///< Stores timestamps for when the last request for the address claim PGN was recieved. Used to prune stale CFs.
+		std::array<std::uint32_t, CAN_PORT_MAXIMUM> lastAddressClaimRequestTimestamp_ms; ///< Stores timestamps for when the last request for the address claim PGN was received. Used to prune stale CFs.
 
 		std::array<std::array<std::shared_ptr<ControlFunction>, NULL_CAN_ADDRESS>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
@@ -328,12 +345,14 @@ namespace isobus
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::list<CANMessage> receiveMessageList; ///< A queue of Rx messages to process
+		std::list<std::pair<std::shared_ptr<ControlFunction>, ControlFunctionStateCallback>> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
 		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
 		std::mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
+		std::mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
 		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
 		std::uint32_t updateTimestamp_ms = 0; ///< Keeps track of the last time the CAN stack was update in milliseconds
 		bool initialized = false; ///< True if the network manager has been initialized by the update function

@@ -13,6 +13,16 @@
 
 using namespace isobus;
 
+static std::shared_ptr<ControlFunction> testControlFunction = nullptr;
+static ControlFunctionState testControlFunctionState = ControlFunctionState::Offline;
+static bool wasTestStateCallbackHit = false;
+void test_control_function_state_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
+{
+	testControlFunction = controlFunction;
+	testControlFunctionState = state;
+	wasTestStateCallbackHit = true;
+}
+
 TEST(CORE_TESTS, TestCreateAndDestroyPartners)
 {
 	std::vector<isobus::NAMEFilter> vtNameFilters;
@@ -214,6 +224,11 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	std::vector<NAMEFilter> testFilter = { NAMEFilter(NAME::NAMEParameters::IdentityNumber, 967) };
 	auto testPartner = PartneredControlFunction::create(0, testFilter);
 
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(testPartner, test_control_function_state_callback);
+	EXPECT_FALSE(wasTestStateCallbackHit);
+	EXPECT_EQ(testControlFunction, nullptr);
+	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
+
 	std::uint64_t rawNAME = partnerName.get_full_name();
 
 	// Force claim some kind of partner
@@ -232,6 +247,11 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 
 	EXPECT_TRUE(testPartner->get_address_valid());
 
+	EXPECT_TRUE(wasTestStateCallbackHit);
+	EXPECT_NE(testControlFunction, nullptr);
+	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Online);
+	wasTestStateCallbackHit = false;
+
 	// Request the address claim PGN
 	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
 	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
@@ -246,6 +266,12 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_FALSE(testPartner->get_address_valid());
+
+	EXPECT_TRUE(wasTestStateCallbackHit);
+	EXPECT_NE(testControlFunction, nullptr);
+	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(testPartner, test_control_function_state_callback);
+	testControlFunction.reset();
 	EXPECT_TRUE(testPartner->destroy());
 }
 
