@@ -35,6 +35,11 @@ jobs:
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
+      - name: Set Java version for Sonar
+        uses: actions/setup-java@v3
+        with: 
+          distribution: 'temurin'
+          java-version: '17'
       - name: Set up Python 3.8 for gcovr
         uses: actions/setup-python@v4
         with:
