@@ -248,3 +248,70 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	EXPECT_FALSE(testPartner->get_address_valid());
 	EXPECT_TRUE(testPartner->destroy());
 }
+
+TEST(CORE_TESTS, SimilarControlFunctions)
+{
+	CANMessageFrame testFrame;
+	testFrame.channel = 0;
+	testFrame.isExtendedFrame = true;
+	CANNetworkManager::CANNetwork.update();
+
+	// Make a partner that is a task controller
+	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
+	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
+
+	// Request the address claim PGN
+	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
+	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
+	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
+	testFrame.data[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
+	testFrame.identifier = 0x18EAFFFE;
+	testFrame.dataLength = 3;
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	// Simulate waiting for some contention
+	std::this_thread::sleep_for(std::chrono::milliseconds(15));
+	CANNetworkManager::CANNetwork.update();
+
+	std::uint64_t rawNAME = 0xa00082000425e9f8;
+
+	// Force claim some kind of TC
+	testFrame.identifier = 0x18EEFF7A;
+	testFrame.dataLength = 8;
+	testFrame.data[0] = static_cast<std::uint8_t>(rawNAME & 0xFF);
+	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
+	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
+	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
+	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
+	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
+	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
+	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	// Partner should be valid with that same NAME
+	EXPECT_EQ(TestPartnerTC->get_NAME().get_full_name(), rawNAME);
+
+	// Now, claim something else that matches a TC. The original partner should remain the same.
+	auto testOtherTCNAME = NAME(rawNAME);
+	testOtherTCNAME.set_ecu_instance(1);
+	testOtherTCNAME.set_function_instance(1);
+	rawNAME = testOtherTCNAME.get_full_name();
+	testFrame.identifier = 0x18EEFF7B;
+	testFrame.dataLength = 8;
+	testFrame.data[0] = static_cast<std::uint8_t>(rawNAME & 0xFF);
+	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
+	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
+	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
+	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
+	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
+	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
+	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	// Partner should never change
+	EXPECT_EQ(TestPartnerTC->get_NAME().get_full_name(), 0xa00082000425e9f8);
+}
