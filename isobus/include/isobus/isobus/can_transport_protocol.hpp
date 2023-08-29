@@ -26,7 +26,7 @@ namespace isobus
 	/// network manager with an appropriate data length, and the protocol will be automatically
 	/// selected to be used. As a note, use of BAM is discouraged, as it has profound
 	/// packet timing implications for your application, and is limited to only 1 active session at a time.
-	/// That session could be busy if you are using DM1 or any other BAM protocol, causing intermittant
+	/// That session could be busy if you are using DM1 or any other BAM protocol, causing intermittent
 	/// transmit failures from this class. This is not a bug, rather a limitation of the protocol
 	/// definition.
 	//================================================================================================
@@ -58,7 +58,7 @@ namespace isobus
 			enum class Direction
 			{
 				Transmit, ///< We are transmitting a message
-				Receive ///< We are receving a message
+				Receive ///< We are receiving a message
 			};
 
 			/// @brief A useful way to compare sesson objects to each other for equality
@@ -77,19 +77,19 @@ namespace isobus
 			TransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex);
 
 			/// @brief The destructor for a TP session
-			~TransportProtocolSession();
+			~TransportProtocolSession() = default;
 
-			StateMachineState state; ///< The state machine state for this session
+			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
 			CANMessage sessionMessage; ///< A CAN message is used in the session to represent and store data like PGN
-			TransmitCompleteCallback sessionCompleteCallback; ///< A callback that is to be called when the session is completed
-			DataChunkCallback frameChunkCallback; ///< A callback that might be used to get chunks of data to send
-			std::uint32_t frameChunkCallbackMessageLength; ///< The length of the message that is being sent in chunks
-			void *parent; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
-			std::uint32_t timestamp_ms; ///< A timestamp used to track session timeouts
-			std::uint16_t lastPacketNumber; ///< The last processed sequence number for this set of packets
-			std::uint8_t packetCount; ///< The total number of packets to receive or send in this session
-			std::uint8_t processedPacketsThisSession; ///< The total processed packet count for the whole session so far
-			std::uint8_t clearToSendPacketMax; ///< The max packets that can be sent per CTS as indicated by the RTS message
+			TransmitCompleteCallback sessionCompleteCallback = nullptr; ///< A callback that is to be called when the session is completed
+			DataChunkCallback frameChunkCallback = nullptr; ///< A callback that might be used to get chunks of data to send
+			std::uint32_t frameChunkCallbackMessageLength = 0; ///< The length of the message that is being sent in chunks
+			void *parent = nullptr; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
+			std::uint32_t timestamp_ms = 0; ///< A timestamp used to track session timeouts
+			std::uint16_t lastPacketNumber = 0; ///< The last processed sequence number for this set of packets
+			std::uint8_t packetCount = 0; ///< The total number of packets to receive or send in this session
+			std::uint8_t processedPacketsThisSession = 0; ///< The total processed packet count for the whole session so far
+			std::uint8_t clearToSendPacketMax = 0; ///< The max packets that can be sent per CTS as indicated by the RTS message
 			const Direction sessionDirection; ///< Represents Tx or Rx session
 		};
 
@@ -101,7 +101,7 @@ namespace isobus
 			SystemResourcesNeeded = 2, ///< Session must be aborted because the system needs resources
 			Timeout = 3, ///< General timeout
 			ClearToSendReceivedWhileTransferInProgress = 4, ///< A CTS was received while already processing the last CTS
-			MaximumRetransmitRequestLimitReached = 5, ///< Maxmimum retries for the data has been reached
+			MaximumRetransmitRequestLimitReached = 5, ///< Maximum retries for the data has been reached
 			UnexpectedDataTransferPacketReceived = 6, ///< A data packet was received outside the proper state
 			BadSequenceNumber = 7, ///< Incorrect sequence number was received and cannot be recovered
 			DuplicateSequenceNumber = 8, ///< Re-received a sequence number we've already processed
@@ -123,7 +123,7 @@ namespace isobus
 		static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7; ///< The number of payload bytes per frame minus overhead of sequence number
 
 		/// @brief The constructor for the TransportProtocolManager
-		TransportProtocolManager();
+		TransportProtocolManager() = default;
 
 		/// @brief The destructor for the TransportProtocolManager
 		~TransportProtocolManager() final;
