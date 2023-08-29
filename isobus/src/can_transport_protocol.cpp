@@ -22,15 +22,7 @@
 namespace isobus
 {
 	TransportProtocolManager::TransportProtocolSession::TransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
-	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
-	  sessionCompleteCallback(nullptr),
-	  frameChunkCallback(nullptr),
-	  timestamp_ms(0),
-	  lastPacketNumber(0),
-	  packetCount(0),
-	  processedPacketsThisSession(0),
-	  clearToSendPacketMax(0),
 	  sessionDirection(sessionDirection)
 	{
 	}
@@ -49,14 +41,6 @@ namespace isobus
 			return frameChunkCallbackMessageLength;
 		}
 		return sessionMessage.get_data_length();
-	}
-
-	TransportProtocolManager::TransportProtocolSession::~TransportProtocolSession()
-	{
-	}
-
-	TransportProtocolManager::TransportProtocolManager()
-	{
 	}
 
 	TransportProtocolManager::~TransportProtocolManager()
@@ -741,6 +725,7 @@ namespace isobus
 					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, CANNetworkManager::CANNetwork.get_configuration().get_minimum_time_between_transport_protocol_bam_frames())))
 					{
 						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
+						std::uint32_t framesSentThisUpdate = 0;
 
 						// Try and send packets
 						for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
@@ -807,6 +792,7 @@ namespace isobus
 							                                                   session->sessionMessage.get_destination_control_function(),
 							                                                   CANIdentifier::CANPriority::PriorityLowest7))
 							{
+								framesSentThisUpdate++;
 								session->lastPacketNumber++;
 								session->processedPacketsThisSession++;
 								session->timestamp_ms = SystemTiming::get_timestamp_ms();
@@ -815,6 +801,10 @@ namespace isobus
 								{
 									// Need to wait for the frame delay time before continuing BAM session
 									break;
+								}
+								else if (framesSentThisUpdate >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_of_network_manager_protocol_frames_per_update())
+								{
+									break; // Throttle the session
 								}
 							}
 							else

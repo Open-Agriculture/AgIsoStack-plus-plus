@@ -148,7 +148,7 @@ int main()
 			std::cout << "Failed starting BAM Session with length " << i << std::endl;
 		}
 		// Wait for this session to complete before starting the next, or it will fail as only 1 BAM session is possible at a time
-		std::this_thread::sleep_for(std::chrono::milliseconds(2 * (isobus::CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames() * ((i + 1) / 7))));
+		std::this_thread::sleep_for(std::chrono::milliseconds(2 * (isobus::CANNetworkManager::CANNetwork.get_configuration().get_minimum_time_between_transport_protocol_bam_frames() * ((i + 1) / 7))));
 	}
 
 	// ETP Example
