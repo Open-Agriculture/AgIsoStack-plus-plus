@@ -21,6 +21,7 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
+#include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 
@@ -149,6 +150,10 @@ namespace isobus
 		/// Use this to register for FP multipacket messages
 		/// @returns The class instance of the NMEA2k fast packet protocol.
 		FastPacketProtocol &get_fast_packet_protocol();
+
+		/// @brief Returns the configuration of this network manager
+		/// @returns The configuration class for this network manager
+		CANNetworkConfiguration &get_configuration();
 
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
@@ -307,6 +312,7 @@ namespace isobus
 		static constexpr std::uint32_t BUSLOAD_SAMPLE_WINDOW_MS = 1000; ///< Using a 1s window to average the bus load, otherwise it's very erratic
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
 
+		CANNetworkConfiguration configuration; ///< The configuration for this network manager
 		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Static instance of the protocol manager
 		FastPacketProtocol fastPacketProtocol; ///< Instance of the fast packet protocol
 		TransportProtocolManager transportProtocol; ///< Static instance of the transport protocol manager

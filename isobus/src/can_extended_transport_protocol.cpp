@@ -21,14 +21,7 @@
 namespace isobus
 {
 	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::ExtendedTransportProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex) :
-	  state(StateMachineState::None),
 	  sessionMessage(canPortIndex),
-	  sessionCompleteCallback(nullptr),
-	  frameChunkCallback(nullptr),
-	  timestamp_ms(0),
-	  lastPacketNumber(0),
-	  packetCount(0),
-	  processedPacketsThisSession(0),
 	  sessionDirection(sessionDirection)
 	{
 	}
@@ -92,7 +85,7 @@ namespace isobus
 							case EXTENDED_REQUEST_TO_SEND_MULTIPLEXOR:
 							{
 								if ((nullptr != message.get_destination_control_function()) &&
-								    (activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+								    (activeSessions.size() < CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions()) &&
 								    (!get_session(session, message.get_source_control_function(), message.get_destination_control_function(), pgn)))
 								{
 									ExtendedTransportProtocolSession *newSession = new ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Receive, message.get_can_port_index());
@@ -114,7 +107,7 @@ namespace isobus
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[ETP]: Sent abort to address " + isobus::to_string(static_cast<int>(message.get_source_control_function()->get_address())) + " RTS when already in session");
 									close_session(session, false);
 								}
-								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+								else if ((activeSessions.size() >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions()) &&
 								         (nullptr != message.get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
@@ -134,6 +127,11 @@ namespace isobus
 									if (StateMachineState::WaitForClearToSend == session->state)
 									{
 										session->packetCount = packetsToBeSent;
+
+										if (session->packetCount > CANNetworkManager::CANNetwork.get_configuration().get_max_number_of_etp_frames_per_edpo())
+										{
+											session->packetCount = CANNetworkManager::CANNetwork.get_configuration().get_max_number_of_etp_frames_per_edpo();
+										}
 										session->timestamp_ms = SystemTiming::get_timestamp_ms();
 										// If 0 was sent as the packet number, they want us to wait.
 										// Just sit here in this state until we get a non-zero packet count
@@ -692,6 +690,7 @@ namespace isobus
 
 						if (proceedToSendDataPackets)
 						{
+							std::uint32_t framesSentThisUpdate = 0;
 							// Try and send packets
 							for (std::uint32_t i = session->lastPacketNumber; i < session->packetCount; i++)
 							{
@@ -758,9 +757,15 @@ namespace isobus
 								                                                   session->sessionMessage.get_destination_control_function(),
 								                                                   CANIdentifier::CANPriority::PriorityLowest7))
 								{
+									framesSentThisUpdate++;
 									session->lastPacketNumber++;
 									session->processedPacketsThisSession++;
 									session->timestamp_ms = SystemTiming::get_timestamp_ms();
+
+									if (framesSentThisUpdate >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_of_network_manager_protocol_frames_per_update())
+									{
+										break; // Throttle the session
+									}
 								}
 								else
 								{
