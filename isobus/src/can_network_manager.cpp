@@ -571,7 +571,8 @@ namespace isobus
 				for (const auto &partner : partneredControlFunctions)
 				{
 					if ((partner->get_can_port() == rxFrame.channel) &&
-					    (partner->check_matches_name(NAME(claimedNAME))))
+					    (partner->check_matches_name(NAME(claimedNAME))) &&
+					    (0 == partner->get_NAME().get_full_name()))
 					{
 						partner->controlFunctionNAME = NAME(claimedNAME);
 						foundControlFunction = partner;
