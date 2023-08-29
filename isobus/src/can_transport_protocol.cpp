@@ -95,7 +95,7 @@ namespace isobus
 							if (CAN_DATA_LENGTH == message.get_data_length())
 							{
 								if ((nullptr == message.get_destination_control_function()) &&
-								    (activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+								    (activeSessions.size() < CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions()) &&
 								    (!get_session(session, message.get_source_control_function(), message.get_destination_control_function(), pgn)))
 								{
 									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive, message.get_can_port_index());
@@ -131,7 +131,7 @@ namespace isobus
 							if (CAN_DATA_LENGTH == message.get_data_length())
 							{
 								if ((nullptr != message.get_destination_control_function()) &&
-								    (activeSessions.size() < CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+								    (activeSessions.size() < CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions()) &&
 								    (!get_session(session, message.get_source_control_function(), message.get_destination_control_function(), pgn)))
 								{
 									TransportProtocolSession *newSession = new TransportProtocolSession(TransportProtocolSession::Direction::Receive, message.get_can_port_index());
@@ -153,7 +153,7 @@ namespace isobus
 									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, RTS when already in CM session");
 								}
-								else if ((activeSessions.size() >= CANNetworkConfiguration::get_max_number_transport_protcol_sessions()) &&
+								else if ((activeSessions.size() >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions()) &&
 								         (nullptr != message.get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
@@ -738,7 +738,7 @@ namespace isobus
 				{
 					bool sessionStillValid = true;
 
-					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames())))
+					if ((nullptr != session->sessionMessage.get_destination_control_function()) || (SystemTiming::time_expired_ms(session->timestamp_ms, CANNetworkManager::CANNetwork.get_configuration().get_minimum_time_between_transport_protocol_bam_frames())))
 					{
 						std::uint8_t dataBuffer[CAN_DATA_LENGTH];
 

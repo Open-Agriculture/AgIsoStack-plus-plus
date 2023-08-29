@@ -346,6 +346,11 @@ namespace isobus
 		return fastPacketProtocol;
 	}
 
+	CANNetworkConfiguration &CANNetworkManager::get_configuration()
+	{
+		return configuration;
+	}
+
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;

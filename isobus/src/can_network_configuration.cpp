@@ -11,23 +11,12 @@
 
 namespace isobus
 {
-	std::uint32_t CANNetworkConfiguration::maxNumberTransportProtocolSessions = 4;
-	std::uint32_t CANNetworkConfiguration::minimumTimeBetweenTransportProtocolBAMFrames = DEFAULT_BAM_PACKET_DELAY_TIME_MS;
-
-	CANNetworkConfiguration::CANNetworkConfiguration()
-	{
-	}
-
-	CANNetworkConfiguration::~CANNetworkConfiguration()
-	{
-	}
-
-	void CANNetworkConfiguration::set_max_number_transport_protcol_sessions(std::uint32_t value)
+	void CANNetworkConfiguration::set_max_number_transport_protocol_sessions(std::uint32_t value)
 	{
 		maxNumberTransportProtocolSessions = value;
 	}
 
-	std::uint32_t CANNetworkConfiguration::get_max_number_transport_protcol_sessions()
+	std::uint32_t CANNetworkConfiguration::get_max_number_transport_protocol_sessions() const
 	{
 		return maxNumberTransportProtocolSessions;
 	}
@@ -44,8 +33,28 @@ namespace isobus
 		}
 	}
 
-	std::uint32_t CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames()
+	std::uint32_t CANNetworkConfiguration::get_minimum_time_between_transport_protocol_bam_frames() const
 	{
 		return minimumTimeBetweenTransportProtocolBAMFrames;
+	}
+
+	void CANNetworkConfiguration::set_max_number_of_etp_frames_per_edpo(std::uint8_t numberFrames)
+	{
+		extendedTransportProtocolMaxNumberOfFramesPerEDPO = numberFrames;
+	}
+
+	std::uint8_t CANNetworkConfiguration::get_max_number_of_etp_frames_per_edpo() const
+	{
+		return extendedTransportProtocolMaxNumberOfFramesPerEDPO;
+	}
+
+	void CANNetworkConfiguration::set_max_number_of_network_manager_protocol_frames_per_update(std::uint8_t numberFrames)
+	{
+		networkManagerMaxFramesToSendPerUpdate = numberFrames;
+	}
+
+	std::uint8_t CANNetworkConfiguration::get_max_number_of_network_manager_protocol_frames_per_update() const
+	{
+		return networkManagerMaxFramesToSendPerUpdate;
 	}
 }
