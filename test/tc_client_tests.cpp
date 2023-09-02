@@ -1435,7 +1435,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
 	auto internalECU = InternalControlFunction::create(clientNAME, 0x86, 0);
 	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
-	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
+	const isobus::NAMEFilter filterTaskControllerIdentity(isobus::NAME::NAMEParameters::IdentityNumber, 0x405);
+	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController, filterTaskControllerIdentity };
 	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
 	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 
