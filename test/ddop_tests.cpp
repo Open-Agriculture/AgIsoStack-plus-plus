@@ -372,6 +372,16 @@ TEST(DDOP_TESTS, DeviceElementDesignatorTests)
 	EXPECT_EQ(1, objectUnderTest->get_number_child_objects());
 	objectUnderTest->remove_reference_to_child_object(111);
 	EXPECT_EQ(0, objectUnderTest->get_number_child_objects());
+
+	// Test that invalid child objects are rejected
+	DeviceDescriptorObjectPool testDDOPWithBadChildren(3);
+	EXPECT_TRUE(testDDOPWithBadChildren.add_device("AgIsoStack++ UnitTest", "1.0.0", "123", "I++1.0", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	EXPECT_TRUE(testDDOPWithBadChildren.add_device_element("Sprayer", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
+	EXPECT_TRUE(testDDOPWithBadChildren.add_device_element("Junk Element 1", static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement), 0, task_controller_object::DeviceElementObject::Type::Function, 250));
+	EXPECT_TRUE(testDDOPWithBadChildren.generate_binary_object_pool(binaryDDOP));
+	objectUnderTest = std::static_pointer_cast<task_controller_object::DeviceElementObject>(testDDOPWithBadChildren.get_object_by_id(static_cast<std::uint16_t>(SprayerDDOPObjectIDs::MainDeviceElement)));
+	objectUnderTest->add_reference_to_child_object(250); // Set child as a DET, which is not allowed
+	EXPECT_FALSE(testDDOPWithBadChildren.generate_binary_object_pool(binaryDDOP));
 }
 
 TEST(DDOP_TESTS, ProcessDataTests)

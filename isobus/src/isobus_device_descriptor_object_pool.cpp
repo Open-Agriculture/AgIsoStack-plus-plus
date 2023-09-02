@@ -943,6 +943,16 @@ namespace isobus
 								retVal = false;
 								break;
 							}
+							else if ((task_controller_object::ObjectTypes::DeviceProcessData != child->get_object_type()) &&
+							         (task_controller_object::ObjectTypes::DeviceProperty != child->get_object_type()))
+							{
+								CANStackLogger::error("[DDOP]: Object %u has child %u which is an object type that is not allowed.",
+								                      currentDeviceElement->get_child_object_id(i),
+								                      child->get_object_id());
+								CANStackLogger::error("[DDOP]: A DET object may only have DPD and DPT children.");
+								retVal = false;
+								break;
+							}
 						}
 					}
 				}
@@ -963,6 +973,15 @@ namespace isobus
 							retVal = false;
 							break;
 						}
+						else if (task_controller_object::ObjectTypes::DeviceValuePresentation != child->get_object_type())
+						{
+							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed." +
+							                        currentProcessData->get_device_value_presentation_object_id(),
+							                      child->get_object_id());
+							CANStackLogger::error("[DDOP]: A DPD object may only have DVP children.");
+							retVal = false;
+							break;
+						}
 					}
 				}
 				break;
@@ -979,6 +998,15 @@ namespace isobus
 							CANStackLogger::error("[DDOP]: Object " +
 							                      isobus::to_string(static_cast<int>(currentProperty->get_device_value_presentation_object_id())) +
 							                      " is not found.");
+							retVal = false;
+							break;
+						}
+						else if (task_controller_object::ObjectTypes::DeviceValuePresentation != child->get_object_type())
+						{
+							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed." +
+							                        currentProperty->get_device_value_presentation_object_id(),
+							                      child->get_object_id());
+							CANStackLogger::error("[DDOP]: A DPT object may only have DVP children.");
 							retVal = false;
 							break;
 						}

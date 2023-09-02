@@ -282,10 +282,11 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	testFrame.isExtendedFrame = true;
 	CANNetworkManager::CANNetwork.update();
 
-	// Make a partner that is a task controller
-	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
-	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
-	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
+	// Make a partner that is a fuel system
+	// Using a less common function to avoid interfering with other tests when not running under CTest
+	const isobus::NAMEFilter filterFuelSystem(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::FuelSystem));
+	const std::vector<isobus::NAMEFilter> nameFilters = { filterFuelSystem };
+	auto TestPartner = isobus::PartneredControlFunction::create(0, nameFilters);
 
 	// Request the address claim PGN
 	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
@@ -301,7 +302,7 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	std::this_thread::sleep_for(std::chrono::milliseconds(15));
 	CANNetworkManager::CANNetwork.update();
 
-	std::uint64_t rawNAME = 0xa00082000425e9f8;
+	std::uint64_t rawNAME = 0xa0000F000425e9f8;
 
 	// Force claim some kind of TC
 	testFrame.identifier = 0x18EEFF7A;
@@ -318,7 +319,7 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	CANNetworkManager::CANNetwork.update();
 
 	// Partner should be valid with that same NAME
-	EXPECT_EQ(TestPartnerTC->get_NAME().get_full_name(), rawNAME);
+	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), rawNAME);
 
 	// Now, claim something else that matches a TC. The original partner should remain the same.
 	auto testOtherTCNAME = NAME(rawNAME);
@@ -339,5 +340,6 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	CANNetworkManager::CANNetwork.update();
 
 	// Partner should never change
-	EXPECT_EQ(TestPartnerTC->get_NAME().get_full_name(), 0xa00082000425e9f8);
+	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), 0xa0000F000425e9f8);
+	EXPECT_TRUE(TestPartner->destroy());
 }

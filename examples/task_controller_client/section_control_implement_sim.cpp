@@ -172,11 +172,6 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 			sectionCounter += NUMBER_SECTIONS_PER_CONDENSED_MESSAGE;
 		}
 
-		for (std::uint_fast8_t i = 0; i < get_number_of_sections(); i++)
-		{
-			boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
-		}
-
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::TankCapacity));
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::TankVolume));
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LifetimeApplicationVolumeTotal));
