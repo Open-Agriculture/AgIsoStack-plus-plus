@@ -224,7 +224,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	std::vector<NAMEFilter> testFilter = { NAMEFilter(NAME::NAMEParameters::IdentityNumber, 967) };
 	auto testPartner = PartneredControlFunction::create(0, testFilter);
 
-	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(testPartner, test_control_function_state_callback);
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
 	EXPECT_FALSE(wasTestStateCallbackHit);
 	EXPECT_EQ(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
@@ -270,7 +270,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	EXPECT_TRUE(wasTestStateCallbackHit);
 	EXPECT_NE(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
-	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(testPartner, test_control_function_state_callback);
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
 	testControlFunction.reset();
 	EXPECT_TRUE(testPartner->destroy());
 }

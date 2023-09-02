@@ -331,23 +331,21 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::add_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback)
+	void CANNetworkManager::add_control_function_status_change_callback(ControlFunctionStateCallback callback)
 	{
-		if ((nullptr != controlFunction) &&
-		    (nullptr != callback))
+		if (nullptr != callback)
 		{
 			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-			controlFunctionStateCallbacks.emplace_back(controlFunction, callback);
+			controlFunctionStateCallbacks.emplace_back(callback);
 		}
 	}
 
-	void CANNetworkManager::remove_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback)
+	void CANNetworkManager::remove_control_function_status_change_callback(ControlFunctionStateCallback callback)
 	{
-		if ((nullptr != controlFunction) &&
-		    (nullptr != callback))
+		if (nullptr != callback)
 		{
 			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-			std::pair<std::shared_ptr<ControlFunction>, ControlFunctionStateCallback> targetCallback(controlFunction, callback);
+			ControlFunctionStateCallback targetCallback(callback);
 			auto callbackLocation = std::find(controlFunctionStateCallbacks.begin(), controlFunctionStateCallbacks.end(), targetCallback);
 
 			if (controlFunctionStateCallbacks.end() != callbackLocation)
@@ -810,10 +808,7 @@ namespace isobus
 		const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
 		for (const auto &callback : controlFunctionStateCallbacks)
 		{
-			if (callback.first == controlFunction)
-			{
-				callback.second(callback.first, state);
-			}
+			callback(controlFunction, state);
 		}
 	}
 

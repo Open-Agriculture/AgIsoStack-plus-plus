@@ -140,14 +140,12 @@ namespace isobus
 
 		/// @brief Use this to get a callback when a control function goes online or offline.
 		/// This could be useful if you want event driven notifications for when your partners are disconnected from the bus.
-		/// @param[in] controlFunction The control function you want callbacks for
-		/// @param[in] callback The callback you want to be called when the specified control function changes state
-		void add_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback);
+		/// @param[in] callback The callback you want to be called when the any control function changes state
+		void add_control_function_status_change_callback(ControlFunctionStateCallback callback);
 
 		/// @brief Used to remove callbacks added with add_control_function_status_change_callback
-		/// @param[in] controlFunction The control function you want to stop receiving callbacks for
 		/// @param[in] callback The callback you want to remove
-		void remove_control_function_status_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionStateCallback callback);
+		void remove_control_function_status_change_callback(ControlFunctionStateCallback callback);
 
 		/// @brief Gets all the internal control functions that are currently registered in the network manager
 		/// @returns A list of all the internal control functions
@@ -345,7 +343,7 @@ namespace isobus
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::list<CANMessage> receiveMessageList; ///< A queue of Rx messages to process
-		std::list<std::pair<std::shared_ptr<ControlFunction>, ControlFunctionStateCallback>> controlFunctionStateCallbacks; ///< List of all control function state callbacks
+		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
