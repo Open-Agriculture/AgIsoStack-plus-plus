@@ -90,3 +90,29 @@ jobs:
         uses: github/codeql-action/analyze@v2
         with:
           category: "/language:${{matrix.language}}"
+  windows_build:
+     name: Windows Build
+     runs-on: windows-latest
+     steps:
+       - name: Checkout
+         uses: actions/checkout@v3
+         with:
+             ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
+       - name: Compile
+         run: |
+             mkdir build
+             cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+             cmake --build build --config Release
+  mac_os_build:
+     name: Mac OS Build
+     runs-on: macos-latest
+     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
+      - name: Compile
+        run: |
+            mkdir build
+            cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --config Release
