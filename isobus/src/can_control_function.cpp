@@ -29,7 +29,7 @@ namespace isobus
 	{
 		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
 		auto controlFunction = std::shared_ptr<ControlFunction>(new ControlFunction(NAMEValue, addressValue, CANPort));
-		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
+		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, CANLibBadge<ControlFunction>());
 		return controlFunction;
 	}
 

@@ -138,6 +138,14 @@ namespace isobus
 		/// @param[in] controlFunction The control function that was created
 		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>);
 
+		/// @brief Informs the network manager that a control function object has been created, so that it can be added to the network manager
+		/// @param[in] controlFunction The control function that was created
+		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<InternalControlFunction>);
+
+		/// @brief Informs the network manager that a control function object has been created, so that it can be added to the network manager
+		/// @param[in] controlFunction The control function that was created
+		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<PartneredControlFunction>);
+
 		/// @brief Use this to get a callback when a control function goes online or offline.
 		/// This could be useful if you want event driven notifications for when your partners are disconnected from the bus.
 		/// @param[in] callback The callback you want to be called when the any control function changes state
@@ -269,6 +277,10 @@ namespace isobus
 		/// @brief Returns the number of messages in the rx queue that need to be processed
 		/// @returns The number of messages in the rx queue that need to be processed
 		std::size_t get_number_can_messages_in_rx_queue();
+
+		/// @brief Informs the network manager that a control function object has been created
+		/// @param[in] controlFunction The control function that was created
+		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction);
 
 		/// @brief Processes a can message for callbacks added with add_any_control_function_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
