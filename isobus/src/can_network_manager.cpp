@@ -321,14 +321,17 @@ namespace isobus
 
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
 	{
-		if (ControlFunction::Type::Internal == controlFunction->get_type())
-		{
-			internalControlFunctions.push_back(std::static_pointer_cast<InternalControlFunction>(controlFunction));
-		}
-		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
-		{
-			partneredControlFunctions.push_back(std::static_pointer_cast<PartneredControlFunction>(controlFunction));
-		}
+		on_control_function_created(controlFunction);
+	}
+
+	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<InternalControlFunction>)
+	{
+		on_control_function_created(controlFunction);
+	}
+
+	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<PartneredControlFunction>)
+	{
+		on_control_function_created(controlFunction);
 	}
 
 	void CANNetworkManager::add_control_function_status_change_callback(ControlFunctionStateCallback callback)
@@ -787,6 +790,18 @@ namespace isobus
 	{
 		std::lock_guard<std::mutex> lock(receiveMessageMutex);
 		return receiveMessageList.size();
+	}
+
+	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction)
+	{
+		if (ControlFunction::Type::Internal == controlFunction->get_type())
+		{
+			internalControlFunctions.push_back(std::static_pointer_cast<InternalControlFunction>(controlFunction));
+		}
+		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
+		{
+			partneredControlFunctions.push_back(std::static_pointer_cast<PartneredControlFunction>(controlFunction));
+		}
 	}
 
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)

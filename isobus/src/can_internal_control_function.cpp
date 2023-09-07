@@ -30,7 +30,7 @@ namespace isobus
 		CANLibBadge<InternalControlFunction> badge; // This badge is used to allow creation of the PGN request protocol only from within this class
 		auto controlFunction = std::shared_ptr<InternalControlFunction>(new InternalControlFunction(desiredName, preferredAddress, CANPort, badge));
 		controlFunction->pgnRequestProtocol = std::make_unique<ParameterGroupNumberRequestProtocol>(controlFunction, badge);
-		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, {});
+		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, badge);
 		return controlFunction;
 	}
 
