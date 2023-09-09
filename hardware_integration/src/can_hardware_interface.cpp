@@ -1,8 +1,7 @@
 //================================================================================================
 /// @file can_hardware_interface.cpp
 ///
-/// @brief An interface for using socket CAN on linux. Mostly for testing, but it could be
-/// used in any application to get the stack hooked up to the bus.
+/// @brief The hardware abstraction layer that separates the stack from the underlying CAN driver
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 Adrian Del Grosso

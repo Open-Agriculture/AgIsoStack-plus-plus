@@ -13,9 +13,13 @@
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 
+#include <string>
+
 namespace isobus
 {
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 	std::mutex ControlFunction::controlFunctionProcessingMutex;
+#endif
 
 	isobus::ControlFunction::ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type) :
 	  controlFunctionType(type),
@@ -35,11 +39,13 @@ namespace isobus
 
 	bool ControlFunction::destroy(std::uint32_t expectedRefCount)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::lock_guard<std::mutex> lock(controlFunctionProcessingMutex);
+#endif
 
 		CANNetworkManager::CANNetwork.on_control_function_destroyed(shared_from_this(), {});
 
-		return shared_from_this().use_count() == expectedRefCount + 1;
+		return static_cast<std::uint32_t>(shared_from_this().use_count()) == expectedRefCount + 1;
 	}
 
 	std::uint8_t ControlFunction::get_address() const

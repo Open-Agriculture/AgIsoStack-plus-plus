@@ -127,8 +127,9 @@ namespace isobus
 				{
 					tempSession->packetCount++;
 				}
-
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 				std::unique_lock<std::mutex> lock(sessionMutex);
+#endif
 
 				activeSessions.push_back(tempSession);
 				retVal = true;
@@ -148,7 +149,9 @@ namespace isobus
 
 	void FastPacketProtocol::update(CANLibBadge<CANNetworkManager>)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::unique_lock<std::mutex> lock(sessionMutex);
+#endif
 
 		for (auto i : activeSessions)
 		{
@@ -225,7 +228,9 @@ namespace isobus
 	bool FastPacketProtocol::get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		returnedSession = nullptr;
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::unique_lock<std::mutex> lock(sessionMutex);
+#endif
 
 		for (auto session : activeSessions)
 		{
@@ -352,8 +357,9 @@ namespace isobus
 								{
 									currentSession->sessionMessage.set_data(messageData[2 + i], i);
 								}
-
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 								std::unique_lock<std::mutex> lock(sessionMutex);
+#endif
 
 								activeSessions.push_back(currentSession);
 							}
@@ -383,7 +389,7 @@ namespace isobus
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
 			                                 session->get_message_data_length(),
-			                                 std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
+			                                 std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
 			                                 session->parent);
@@ -498,7 +504,7 @@ namespace isobus
 						if (CANNetworkManager::CANNetwork.send_can_message(session->sessionMessage.get_identifier().get_parameter_group_number(),
 						                                                   dataBuffer.data(),
 						                                                   CAN_DATA_LENGTH,
-						                                                   std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
+						                                                   std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 						                                                   session->sessionMessage.get_destination_control_function(),
 						                                                   session->sessionMessage.get_identifier().get_priority(),
 						                                                   nullptr,

@@ -29,7 +29,9 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_protocol.hpp"
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include <mutex>
+#endif
 
 namespace isobus
 {
@@ -141,7 +143,7 @@ namespace isobus
 
 		/// @brief Ends a session and cleans up the memory associated with its metadata
 		/// @param[in] session The session to close
-		/// @param[in] successfull `true` if the session was closed successfully, otherwise `false`
+		/// @param[in] successful `true` if the session was closed successfully, otherwise `false`
 		void close_session(FastPacketProtocolSession *session, bool successfull);
 
 		/// @brief Gets the sequence number to use for a new session based on the history
@@ -206,7 +208,9 @@ namespace isobus
 		std::vector<FastPacketProtocolSession *> activeSessions; ///< A list of all active TP sessions
 		std::vector<FastPacketHistory> sessionHistory; ///< Used to keep track of sequence numbers for future sessions
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks that will be parsed as fast packet messages
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex sessionMutex; ///< A mutex to lock the sessions list in case someone starts a Tx while the stack is processing sessions
+#endif
 	};
 
 } // namespace isobus

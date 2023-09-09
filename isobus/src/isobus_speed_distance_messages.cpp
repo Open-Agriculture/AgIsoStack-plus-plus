@@ -811,7 +811,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -838,7 +838,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -862,7 +862,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -886,7 +886,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::Priority3);
 		}

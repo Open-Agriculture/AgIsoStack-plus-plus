@@ -15,11 +15,15 @@ namespace isobus
 {
 	CANStackLogger *CANStackLogger::logger = nullptr;
 	CANStackLogger::LoggingLevel CANStackLogger::currentLogLevel = LoggingLevel::Info;
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 	std::mutex CANStackLogger::loggerMutex;
+#endif
 
 	void CANStackLogger::CAN_stack_log(LoggingLevel level, const std::string &logText)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		const std::lock_guard<std::mutex> lock(loggerMutex);
+#endif
 		CANStackLogger *canStackLogger = nullptr;
 
 		if ((get_can_stack_logger(canStackLogger)) &&

@@ -29,7 +29,10 @@
 #include <deque>
 #include <list>
 #include <memory>
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include <mutex>
+#endif
 
 /// @brief This namespace encompasses all of the ISO11783 stack's functionality to reduce global namespace pollution
 namespace isobus
@@ -358,11 +361,13 @@ namespace isobus
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
 		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
 		std::mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
 		std::mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
+#endif
 		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
 		std::uint32_t updateTimestamp_ms = 0; ///< Keeps track of the last time the CAN stack was update in milliseconds
 		bool initialized = false; ///< True if the network manager has been initialized by the update function

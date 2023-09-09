@@ -551,7 +551,7 @@ namespace isobus
 
 							if (add_device_element(deviceElementDesignator, binaryPool[7 + numberDesignatorBytes], parentObject, type, uniqueID))
 							{
-								auto DETObject = std::dynamic_pointer_cast<task_controller_object::DeviceElementObject>(get_object_by_id(uniqueID));
+								auto DETObject = std::static_pointer_cast<task_controller_object::DeviceElementObject>(get_object_by_id(uniqueID));
 
 								if (nullptr != DETObject)
 								{
