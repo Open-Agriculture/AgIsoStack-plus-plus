@@ -11,8 +11,11 @@
 #define CAN_STACK_LOGGER_HPP
 
 #include <memory>
-#include <mutex>
 #include <string>
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <mutex>
+#endif
 
 namespace isobus
 {
@@ -163,7 +166,9 @@ namespace isobus
 
 		static CANStackLogger *logger; ///< A static pointer to an instance of a logger
 		static LoggingLevel currentLogLevel; ///< The current log level. Logs for levels below the current one will be dropped.
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		static std::mutex loggerMutex; ///< A mutex that protects the logger so it can be used from multiple threads
+#endif
 	};
 } // namespace isobus
 

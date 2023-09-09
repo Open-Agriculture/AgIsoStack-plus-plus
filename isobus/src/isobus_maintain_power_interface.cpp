@@ -213,7 +213,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MaintainPower),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
-		                                                      std::dynamic_pointer_cast<InternalControlFunction>(maintainPowerTransmitData.get_sender_control_function()));
+		                                                      std::static_pointer_cast<InternalControlFunction>(maintainPowerTransmitData.get_sender_control_function()));
 	}
 
 	void MaintainPowerInterface::process_flags(std::uint32_t flag, void *parentPointer)

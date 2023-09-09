@@ -341,7 +341,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(guidanceSystemCommandTransmitData.get_sender_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(guidanceSystemCommandTransmitData.get_sender_control_function()),
 			                                                        destinationControlFunction,
 			                                                        CANIdentifier::Priority3);
 		}
@@ -390,7 +390,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(guidanceMachineInfoTransmitData.get_sender_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(guidanceMachineInfoTransmitData.get_sender_control_function()),
 			                                                        destinationControlFunction,
 			                                                        CANIdentifier::Priority3);
 		}

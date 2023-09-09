@@ -578,8 +578,10 @@ namespace isobus
 		std::list<ProcessDataCallbackInfo> measurementMinimumThresholdCommands; ///< A list of measurement commands that will be processed when the value drops below a threshold
 		std::list<ProcessDataCallbackInfo> measurementMaximumThresholdCommands; ///< A list of measurement commands that will be processed when the value above a threshold
 		std::list<ProcessDataCallbackInfo> measurementOnChangeThresholdCommands; ///< A list of measurement commands that will be processed when the value changes by the specified amount
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
+#endif
 		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback
 		std::array<std::uint8_t, 7> ddopLocalizationLabel = { 0 }; ///< Stores a pre-parsed localization label, helps to avoid processing the whole DDOP during a CAN message callback
 		DDOPUploadType ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated; ///< Determines if DDOPs get generated or raw uploaded

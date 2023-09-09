@@ -22,7 +22,9 @@ namespace isobus
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort, Type::Partnered),
 	  NAMEFilterList(NAMEFilters)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
+#endif
 	}
 
 	std::shared_ptr<PartneredControlFunction> PartneredControlFunction::create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters)

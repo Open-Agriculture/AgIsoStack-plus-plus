@@ -14,7 +14,10 @@
 #include "isobus/isobus/can_NAME.hpp"
 
 #include <memory>
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include <mutex>
+#endif
 
 namespace isobus
 {
@@ -80,7 +83,9 @@ namespace isobus
 		ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type = Type::External);
 
 		friend class CANNetworkManager;
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		static std::mutex controlFunctionProcessingMutex; ///< Protects the control function tables
+#endif
 		const Type controlFunctionType; ///< The Type of the control function
 		NAME controlFunctionNAME; ///< The NAME of the control function
 		bool claimedAddressSinceLastAddressClaimRequest = false; ///< Used to mark CFs as stale if they don't claim within a certain time

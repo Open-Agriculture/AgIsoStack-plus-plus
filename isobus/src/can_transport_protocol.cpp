@@ -134,14 +134,14 @@ namespace isobus
 								         (nullptr != message.get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
-									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AlreadyInCMSession, std::static_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, RTS when already in CM session");
 								}
 								else if ((activeSessions.size() >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions()) &&
 								         (nullptr != message.get_destination_control_function()) &&
 								         (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 								{
-									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::SystemResourcesNeeded, std::static_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, No Sessions Available");
 								}
 							}
@@ -180,7 +180,7 @@ namespace isobus
 									{
 										// The session exists, but we're probably already in the TxDataSession state. Need to abort
 										// In the case of Rx'ing a CTS, we're the source in the session
-										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
+										abort_session(pgn, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, std::static_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS while in data session, PGN: " + isobus::to_string(pgn));
 									}
 								}
@@ -188,7 +188,7 @@ namespace isobus
 								{
 									// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
 									// In the case of Rx'ing a CTS, we're the source in the session
-									abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::static_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, CTS With no matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
@@ -216,14 +216,14 @@ namespace isobus
 									}
 									else
 									{
-										abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
+										abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::static_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 										close_session(session, false);
 										CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM in wrong session state, PGN: " + isobus::to_string(pgn));
 									}
 								}
 								else
 								{
-									abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::dynamic_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
+									abort_session(pgn, ConnectionAbortReason::AnyOtherError, std::static_pointer_cast<InternalControlFunction>(message.get_destination_control_function()), message.get_source_control_function());
 									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TP]: Sent abort, received EOM without matching session, PGN: " + isobus::to_string(pgn));
 								}
 							}
@@ -502,7 +502,7 @@ namespace isobus
 		{
 			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
 			                                 session->get_message_data_length(),
-			                                 std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
+			                                 std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                 session->sessionMessage.get_destination_control_function(),
 			                                 success,
 			                                 session->parent);
@@ -526,7 +526,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                                        nullptr,
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
@@ -562,7 +562,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_destination_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_destination_control_function()),
 			                                                        session->sessionMessage.get_source_control_function(),
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
@@ -586,7 +586,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
-			                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
+			                                                        std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 			                                                        session->sessionMessage.get_destination_control_function(),
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
@@ -618,7 +618,7 @@ namespace isobus
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolCommand),
 				                                                        dataBuffer,
 				                                                        CAN_DATA_LENGTH,
-				                                                        std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_destination_control_function()),
+				                                                        std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_destination_control_function()),
 				                                                        session->sessionMessage.get_source_control_function(),
 				                                                        CANIdentifier::CANPriority::PriorityDefault6);
 			}
@@ -788,7 +788,7 @@ namespace isobus
 							if (CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolData),
 							                                                   dataBuffer,
 							                                                   CAN_DATA_LENGTH,
-							                                                   std::dynamic_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
+							                                                   std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
 							                                                   session->sessionMessage.get_destination_control_function(),
 							                                                   CANIdentifier::CANPriority::PriorityLowest7))
 							{

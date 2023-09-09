@@ -19,8 +19,11 @@
 #include "isobus/utility/processing_flags.hpp"
 
 #include <list>
-#include <mutex>
 #include <vector>
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <mutex>
+#endif
 
 namespace isobus
 {
@@ -468,8 +471,10 @@ namespace isobus
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
 		std::list<FunctionalityData> supportedFunctionalities; ///< A list of all configured functionalities and their data
-		std::mutex functionalitiesMutex; ///< Since messages come in on a different thread than the main app (probably), this mutex protects the functionality data
 		ProcessingFlags txFlags; ///< Handles retries for sending the CF functionalities message
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		std::mutex functionalitiesMutex; ///< Since messages come in on a different thread than the main app (probably), this mutex protects the functionality data
+#endif
 	};
 } // namespace isobus
 #endif // ISOBUS_FUNCTIONALITIES_HPP

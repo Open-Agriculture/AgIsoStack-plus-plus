@@ -59,10 +59,12 @@ namespace isobus
 			{
 				languageCommandInterface.initialize();
 			}
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			if (spawnThread)
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#endif
 			initialized = true;
 		}
 	}
@@ -95,13 +97,14 @@ namespace isobus
 			}
 
 			shouldTerminate = true;
-
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			if (nullptr != workerThread)
 			{
 				workerThread->join();
 				delete workerThread;
 				workerThread = nullptr;
 			}
+#endif
 			initialized = false;
 			set_state(StateMachineState::Disconnected);
 			CANStackLogger::info("[VT]: VT Client connection has been terminated.");
@@ -111,7 +114,11 @@ namespace isobus
 	void VirtualTerminalClient::restart_communication()
 	{
 		CANStackLogger::info("[VT]:VT Client connection restart requested. Client will now terminate and reinitialize.");
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		bool workerNeeded = (nullptr != workerThread);
+#else
+		bool workerNeeded = false;
+#endif
 		terminate();
 		initialize(workerNeeded);
 	}
@@ -4566,6 +4573,7 @@ namespace isobus
 
 	void VirtualTerminalClient::worker_thread_function()
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		for (;;)
 		{
 			if (shouldTerminate)
@@ -4575,6 +4583,7 @@ namespace isobus
 			update();
 			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		}
+#endif
 	}
 
 } // namespace isobus

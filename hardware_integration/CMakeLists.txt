@@ -28,12 +28,24 @@ if(BUILD_TESTING AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
 endif()
 
 # Set the source files
-set(HARDWARE_INTEGRATION_SRC "can_hardware_interface.cpp")
+if(CAN_STACK_DISABLE_THREADS OR ARDUINO)
+  set(HARDWARE_INTEGRATION_SRC "can_hardware_interface_single_thread.cpp")
+  message(STATUS "CAN Stack is compiling in single-threaded mode.")
+else()
+  set(HARDWARE_INTEGRATION_SRC "can_hardware_interface.cpp")
+  message(STATUS "CAN Stack is compiling in multi-threaded mode.")
+endif()
 
 # Set the include files
-set(HARDWARE_INTEGRATION_INCLUDE
-    "can_hardware_interface.hpp" "can_hardware_plugin.hpp"
-    "available_can_drivers.hpp")
+if(CAN_STACK_DISABLE_THREADS OR ARDUINO)
+  set(HARDWARE_INTEGRATION_INCLUDE
+      "can_hardware_interface_single_thread.hpp" "can_hardware_plugin.hpp"
+      "available_can_drivers.hpp")
+else()
+  set(HARDWARE_INTEGRATION_INCLUDE
+      "can_hardware_interface.hpp" "can_hardware_plugin.hpp"
+      "available_can_drivers.hpp")
+endif()
 
 # Add the source/include files based on the CAN driver chosen
 if("SocketCAN" IN_LIST CAN_DRIVER)
