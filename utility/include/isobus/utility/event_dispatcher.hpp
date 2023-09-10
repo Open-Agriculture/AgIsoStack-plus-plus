@@ -12,8 +12,11 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <vector>
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <mutex>
+#endif
 
 namespace isobus
 {
@@ -31,7 +34,9 @@ namespace isobus
 		/// @return A shared pointer to the callback.
 		std::shared_ptr<std::function<void(const E &...)>> add_listener(const std::function<void(const E &...)> &callback)
 		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			std::lock_guard<std::mutex> lock(callbacksMutex);
+#endif
 			auto shared = std::make_shared<std::function<void(const E &...)>>(callback);
 			callbacks.push_back(shared);
 			return shared;
@@ -70,7 +75,9 @@ namespace isobus
 		/// @return The number of listeners
 		std::size_t get_listener_count()
 		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			std::lock_guard<std::mutex> lock(callbacksMutex);
+#endif
 			return callbacks.size();
 		}
 
@@ -88,7 +95,9 @@ namespace isobus
 		/// @return True if the event was successfully invoked, false otherwise.
 		void invoke(E &&...args)
 		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			std::lock_guard<std::mutex> lock(callbacksMutex);
+#endif
 			remove_expired_listeners();
 
 			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
@@ -104,7 +113,9 @@ namespace isobus
 		/// @return True if the event was successfully invoked, false otherwise.
 		void call(const E &...args)
 		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			std::lock_guard<std::mutex> lock(callbacksMutex);
+#endif
 			remove_expired_listeners();
 
 			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
@@ -117,7 +128,9 @@ namespace isobus
 
 	private:
 		std::vector<std::weak_ptr<std::function<void(const E &...)>>> callbacks; ///< The callbacks to invoke
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex callbacksMutex; ///< The mutex to protect the callbacks
+#endif
 	};
 } // namespace isobus
 
