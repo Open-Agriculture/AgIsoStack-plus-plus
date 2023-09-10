@@ -14,7 +14,7 @@ def copyfiles(srcdir, dstdir, filepattern):
 def write_isobus_hpp(includefiles, f):
     f.write(
 f"""/*******************************************************************************
-** @file        isobus.hpp
+** @file        AgIsoStack.hpp
 ** @author      Automatic Code Generation
 ** @date        {datetime.today().strftime("%B %d, %Y")} at {datetime.now().strftime("%H:%M:%S")}
 ** @brief       Includes all important files in the AgIsoStack library.
@@ -22,8 +22,8 @@ f"""/***************************************************************************
 ** Copyright {datetime.today().strftime("%Y")} The AgIsoStack++ Developers
 *******************************************************************************/
 
-#ifndef ISOBUS_HPP
-#define ISOBUS_HPP
+#ifndef AG_ISO_STACK_HPP
+#define AG_ISO_STACK_HPP
 
 """)
 
@@ -31,11 +31,11 @@ f"""/***************************************************************************
         f.write(f"#include <{includefile}>\n")
 
     f.write(f"\n");
-    f.write(f"#endif // ISOBUS_HPP\n")
+    f.write(f"#endif // AG_ISO_STACK_HPP\n")
 
 def write_library_properties(f):
         f.write(
-f"""name=AgIsoStack-plus-plus
+f"""name=AgIsoStack
 version=0.1.0
 license=MIT
 author=Adrian Del Grosso <delgrossoengineering@protonmail.com>
@@ -44,8 +44,8 @@ sentence=A free ISOBUS (ISO11783) and J1939 CAN Stack for Teensy.
 paragraph=Includes ISOBUS virtual terminal client, task controller client, and transport layer functionality. Based on the CMake AgIsoStack++ at https://github.com/Open-Agriculture/AgIsoStack-plus-plus.
 category=Communication
 architectures=teensy
-includes=isobus.hpp
-url=https://github.com/Open-Agriculture/AgIsoStack-plus-plus
+includes=AgIsoStack.hpp
+url=https://github.com/Open-Agriculture/AgIsoStack-Arduino
 
 """)
 
@@ -130,7 +130,7 @@ print("Generating isobus.hpp from files in " + "./" + sourcePath + "/*.hpp")
 headers = [os.path.normpath(i) for i in glob.glob("./" + sourcePath + "/*.hpp")]
 strippedHeaders = list(map(lambda x: x.replace('arduino_library\\src\\','').replace('arduino_library/src/',''),headers))
 print("Headers ", strippedHeaders)
-f = open(os.path.join(sourcePath, "isobus.hpp"), "w")
+f = open(os.path.join(sourcePath, "AgIsoStack.hpp"), "w")
 write_isobus_hpp(strippedHeaders, f)
 f.close()
 
