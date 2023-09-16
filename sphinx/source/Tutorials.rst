@@ -14,3 +14,4 @@ Tutorials
    Tutorials/Hardware Interface
    Tutorials/Debug Logging
    Tutorials/ISOBUS Shortcut Button
+   Tutorials/ESP32 PlatformIO
