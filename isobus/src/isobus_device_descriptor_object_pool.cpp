@@ -542,6 +542,7 @@ namespace isobus
 							std::string deviceElementDesignator;
 							std::uint16_t parentObject = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[9 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[10 + numberDesignatorBytes]) << 8));
 							std::uint16_t uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
+							std::uint16_t elementNumber = static_cast<std::uint16_t>(binaryPool[7 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[8 + numberDesignatorBytes]) << 8);
 							auto type = static_cast<task_controller_object::DeviceElementObject::Type>(binaryPool[5]);
 
 							for (std::uint16_t i = 0; i < numberDesignatorBytes; i++)
@@ -549,7 +550,7 @@ namespace isobus
 								deviceElementDesignator.push_back(binaryPool[7 + i]);
 							}
 
-							if (add_device_element(deviceElementDesignator, binaryPool[7 + numberDesignatorBytes], parentObject, type, uniqueID))
+							if (add_device_element(deviceElementDesignator, elementNumber, parentObject, type, uniqueID))
 							{
 								auto DETObject = std::static_pointer_cast<task_controller_object::DeviceElementObject>(get_object_by_id(uniqueID));
 
@@ -975,8 +976,8 @@ namespace isobus
 						}
 						else if (task_controller_object::ObjectTypes::DeviceValuePresentation != child->get_object_type())
 						{
-							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed." +
-							                        currentProcessData->get_device_value_presentation_object_id(),
+							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed.",
+							                      currentProcessData->get_device_value_presentation_object_id(),
 							                      child->get_object_id());
 							CANStackLogger::error("[DDOP]: A DPD object may only have DVP children.");
 							retVal = false;
@@ -1003,8 +1004,8 @@ namespace isobus
 						}
 						else if (task_controller_object::ObjectTypes::DeviceValuePresentation != child->get_object_type())
 						{
-							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed." +
-							                        currentProperty->get_device_value_presentation_object_id(),
+							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed.",
+							                      currentProperty->get_device_value_presentation_object_id(),
 							                      child->get_object_id());
 							CANStackLogger::error("[DDOP]: A DPT object may only have DVP children.");
 							retVal = false;
