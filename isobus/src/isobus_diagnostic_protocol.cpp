@@ -102,6 +102,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
 			CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
+			addressViolationEventHandle = CANNetworkManager::CANNetwork.get_address_violation_event_dispatcher().add_listener([this](std::shared_ptr<InternalControlFunction> affectedCF) { this->on_address_violation(affectedCF); });
 
 			if (auto requestProtocol = myControlFunction->get_pgn_request_protocol().lock())
 			{
@@ -148,6 +149,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
+			addressViolationEventHandle.reset();
 		}
 	}
 
@@ -602,6 +604,22 @@ namespace isobus
 				default:
 					break;
 			}
+		}
+	}
+
+	void DiagnosticProtocol::on_address_violation(std::shared_ptr<InternalControlFunction> affectedControlFunction)
+	{
+		if ((nullptr != affectedControlFunction) &&
+		    (!get_j1939_mode()) &&
+		    (BROADCAST_CAN_ADDRESS != affectedControlFunction->get_address()) &&
+		    (NULL_CAN_ADDRESS != affectedControlFunction->get_address()))
+		{
+			constexpr std::uint32_t ADDRESS_VIOLATION_SPN_BASE = 2000; // Defined in ISO 11783-5 section 4.4.4.3
+
+			set_diagnostic_trouble_code_active(DiagnosticTroubleCode(ADDRESS_VIOLATION_SPN_BASE + affectedControlFunction->get_address(),
+			                                                         FailureModeIdentifier::ConditionExists,
+			                                                         LampStatus::None),
+			                                   true);
 		}
 	}
 

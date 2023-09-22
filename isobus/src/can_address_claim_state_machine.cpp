@@ -44,6 +44,17 @@ namespace isobus
 		return m_currentState;
 	}
 
+	void AddressClaimStateMachine::on_address_violation()
+	{
+		if (State::AddressClaimingComplete == get_current_state())
+		{
+			CANStackLogger::warn("[AC]: Address violation for address %u",
+			                     get_claimed_address());
+
+			set_current_state(State::SendReclaimAddressOnRequest);
+		}
+	}
+
 	void AddressClaimStateMachine::process_commanded_address(std::uint8_t commandedAddress)
 	{
 		if (State::AddressClaimingComplete == get_current_state())

@@ -56,6 +56,11 @@ namespace isobus
 		/// @returns The current state of the state machine
 		State get_current_state() const;
 
+		/// @brief Used to inform the address claim state machine that two CFs are using the same source address.
+		/// This function may cause the state machine to emit an address claim depending on its state, as is
+		/// required by ISO11783-5.
+		void on_address_violation();
+
 		/// @brief Attempts to process a commanded address.
 		/// @details If the state machine has claimed successfully before,
 		/// this will attempt to move a NAME from the claimed address to the new, specified address.

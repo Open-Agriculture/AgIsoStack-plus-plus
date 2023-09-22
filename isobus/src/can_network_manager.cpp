@@ -392,6 +392,11 @@ namespace isobus
 		return configuration;
 	}
 
+	EventDispatcher<std::shared_ptr<InternalControlFunction>> &CANNetworkManager::get_address_violation_event_dispatcher()
+	{
+		return addressViolationEventDispatcher;
+	}
+
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
@@ -840,6 +845,26 @@ namespace isobus
 		}
 	}
 
+	void CANNetworkManager::process_can_message_for_address_violations(const CANMessage &currentMessage)
+	{
+		auto sourceAddress = currentMessage.get_identifier().get_source_address();
+
+		if ((BROADCAST_CAN_ADDRESS != sourceAddress) &&
+		    (NULL_CAN_ADDRESS != sourceAddress))
+		{
+			for (auto &internalCF : internalControlFunctions)
+			{
+				if ((nullptr != internalCF) &&
+				    (internalCF->get_address() == sourceAddress) &&
+				    (currentMessage.get_can_port_index() == internalCF->get_can_port()))
+				{
+					internalCF->on_address_violation({});
+					addressViolationEventDispatcher.call(internalCF);
+				}
+			}
+		}
+	}
+
 	void CANNetworkManager::process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
@@ -937,6 +962,7 @@ namespace isobus
 			CANMessage currentMessage = get_next_can_message_from_rx_queue();
 
 			update_address_table(currentMessage);
+			process_can_message_for_address_violations(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
 			process_protocol_pgn_callbacks(currentMessage);

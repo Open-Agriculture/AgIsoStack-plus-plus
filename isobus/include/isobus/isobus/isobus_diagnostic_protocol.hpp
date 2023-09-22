@@ -391,9 +391,6 @@ namespace isobus
 		/// @returns The two bit lamp state for CAN
 		std::uint8_t convert_flash_state_to_byte(FlashState flash) const;
 
-		/// @brief A utility function that will clean up PGN registrations
-		void deregister_all_pgns();
-
 		/// @brief This is a way to find the overall lamp states to report
 		/// @details This searches the active DTC list to find if a lamp is on or off, and to find the overall flash state for that lamp.
 		/// Basically, since the lamp states are global to the CAN message, we need a way to resolve the "total" lamp state from the list.
@@ -409,6 +406,11 @@ namespace isobus
 		/// @param[out] flash How the lamp should be flashing
 		/// @param[out] lampOn If the lamp state is on for any DTC
 		void get_inactive_list_lamp_state_and_flash_state(Lamps targetLamp, FlashState &flash, bool &lampOn) const;
+
+		/// @brief A callback function used to consume address violation events and activate a DTC
+		/// as required in ISO11783-5.
+		/// @param[in] affectedControlFunction The control function affected by an address violation
+		void on_address_violation(std::shared_ptr<InternalControlFunction> affectedControlFunction);
 
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
@@ -488,6 +490,7 @@ namespace isobus
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
+		std::shared_ptr<void> addressViolationEventHandle; ///< Stores the handle from registering for address violation events
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
