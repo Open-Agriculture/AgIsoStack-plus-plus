@@ -42,6 +42,11 @@ namespace isobus
 		return ControlFunction::destroy(expectedRefCount);
 	}
 
+	void InternalControlFunction::on_address_violation(CANLibBadge<CANNetworkManager>)
+	{
+		stateMachine.on_address_violation();
+	}
+
 	void InternalControlFunction::process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>)
 	{
 		stateMachine.process_commanded_address(commandedAddress);

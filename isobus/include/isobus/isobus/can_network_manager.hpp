@@ -24,6 +24,7 @@
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
+#include "isobus/utility/event_dispatcher.hpp"
 
 #include <array>
 #include <deque>
@@ -175,6 +176,11 @@ namespace isobus
 		/// @returns The configuration class for this network manager
 		CANNetworkConfiguration &get_configuration();
 
+		/// @brief Returns the network manager's event dispatcher for notifying consumers whenever an
+		/// address violation occurs involving an internal control function.
+		/// @returns An event dispatcher which can be used to get notified about address violations
+		EventDispatcher<std::shared_ptr<InternalControlFunction>> &get_address_violation_event_dispatcher();
+
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
 		friend class AddressClaimStateMachine; ///< Allows the network manager to work closely with the address claiming process
@@ -289,6 +295,13 @@ namespace isobus
 		/// @param[in] currentMessage The message to process
 		void process_any_control_function_pgn_callbacks(const CANMessage &currentMessage);
 
+		/// @brief Validates that a CAN message has not caused an address violation.
+		/// If a violation is found, the network manager will notify the affected address claim state machine
+		/// to re-claim as is required by ISO 11783-5, and will attempt to activate a DTC that is defined in ISO 11783-5.
+		/// @note Address violation occurs when two CFs are using the same source address.
+		/// @param[in] currentMessage The message to process
+		void process_can_message_for_address_violations(const CANMessage &currentMessage);
+
 		/// @brief Checks the control function state callback list to see if we need to call
 		/// a control function state callback.
 		/// @param[in] controlFunction The controlFunction whose state has changed
@@ -361,6 +374,7 @@ namespace isobus
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; // An event dispatcher for notifying consumers about address violations
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety

@@ -977,6 +977,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		// Test a suspension by another ECU. Set only our network.
 		testFrame.dataLength = 8;
+		testFrame.identifier = 0x18DFFFAB;
 		testFrame.data[0] = 0xFC;
 		testFrame.data[1] = 0xFF;
 		testFrame.data[2] = 0xFF;
@@ -1353,6 +1354,23 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(isobus::DiagnosticProtocol::FailureModeIdentifier::ConditionExists, testDTC1.get_failure_mode_identifier());
 		EXPECT_EQ(isobus::DiagnosticProtocol::FailureModeIdentifier::DataErratic, testDTC2.get_failure_mode_identifier());
 		EXPECT_EQ(isobus::DiagnosticProtocol::FailureModeIdentifier::BadIntelligentDevice, testDTC3.get_failure_mode_identifier());
+
+		// Reset back to a known state
+		protocolUnderTest.clear_active_diagnostic_trouble_codes();
+		protocolUnderTest.clear_inactive_diagnostic_trouble_codes();
+	}
+
+	{
+		// Test address violation
+		// Construct a random message from our address of 0xAA
+		testFrame.identifier = 0x18EFFFAA;
+		memset(testFrame.data, 0, sizeof(testFrame.data));
+		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.update();
+		protocolUnderTest.update();
+
+		DiagnosticProtocol::DiagnosticTroubleCode addressViolationDTC(2000 + 0xAA, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::None);
+		EXPECT_TRUE(protocolUnderTest.get_diagnostic_trouble_code_active(addressViolationDTC));
 
 		// Reset back to a known state
 		protocolUnderTest.clear_active_diagnostic_trouble_codes();

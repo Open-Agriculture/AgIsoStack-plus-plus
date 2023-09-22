@@ -51,6 +51,10 @@ namespace isobus
 		/// @param[in] CANPort The CAN channel index for this control function to use
 		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort, CANLibBadge<InternalControlFunction>);
 
+		/// @brief Used to inform the member address claim state machine that two CFs are using the same source address.
+		/// @note Address violation occurs when two CFs are using the same source address.
+		void on_address_violation(CANLibBadge<CANNetworkManager>);
+
 		/// @brief Used by the network manager to tell the ICF that the address claim state machine needs to process
 		/// a J1939 command to move address.
 		void process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>);
