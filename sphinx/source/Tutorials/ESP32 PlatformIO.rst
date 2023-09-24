@@ -221,7 +221,37 @@ This is boilerplate code that can be found in nearly every AgIsoStack project th
 
 This is the absolute minimum for the stack to address claim for you, and for it to be ready to accept your messages.
 
-11. Add your application code and build your project! Using the PlatformIO extension, click "build" to compile your project.
+11. Set up your ESP32's OS and PThread options
+
+As mentioned before, AgIsoStack is a fairly large multi-threaded library, so we need to adjust some platform settings to allow the library to run smoothly. Not doing this will probably cause your device to repeatedly crash at runtime!
+More specifically, we need to adjust the default stack size, and the amount of stack allocated to the pthreads task.
+
+In PlatformIO, run `menuconfig` by either running :code:`pio run -t menuconfig` or by selecting the option from the PlatformIO extension.
+
+.. image:: ../../images/menuconfig.png
+		:width: 400
+		:alt: Running menuconfig
+
+.. warning::
+
+	You may need to comment out the following line(s) in your root :code:`CMakeLists.txt` file if you experience an error running :code:`menuconfig`. Make sure you un-comment the line once you are done with :code:`menuconfig`.
+	
+	
+	:code:`target_add_binary_data(TestAgIsoStack.elf "src/object_pool/object_pool.iop" BINARY)`
+
+Once menuconfig is running, navigate to :code:`Component config -> PThreads` and change the settings to match the following:
+
+.. image:: ../../images/pthreads_settings.png
+		:width: 500
+		:alt: Running menuconfig
+
+Then, navigate to :code:`Component config -> FreeRTOS -> Kernel` and configure the :code:`configTICK_RATE_HZ` to be higher, at least more than 250, but not too high. A good value that worked when writing this tutorial was 1000 as shown below.
+
+.. image:: ../../images/tick_rate.png
+		:width: 500
+		:alt: Running menuconfig
+
+12. Add your application code and build your project! Using the PlatformIO extension, click "build" to compile your project.
 
 If you made it this far, but you're not sure how to use the library to make a functional application yet, or you are having trouble compiling, check out the VT Client example in the next section, and be sure to read the other tutorials.
 
