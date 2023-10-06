@@ -38,7 +38,7 @@ jobs:
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config ${{ env.BUILD_TYPE }}
       - name: Run
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{ env.BUILD_TYPE }}
+        run: ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube --exclude-throw-branches > coverage.xml
@@ -68,7 +68,7 @@ jobs:
       - name: Test
         run: |
             cd build
-            ctest -C ${{ env.BUILD_TYPE }}
+            ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
         
 
   mac_os_build:
@@ -87,4 +87,4 @@ jobs:
       - name: Test
         run: |
             cd build
-            ctest -C ${{ env.BUILD_TYPE }}
+            ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
