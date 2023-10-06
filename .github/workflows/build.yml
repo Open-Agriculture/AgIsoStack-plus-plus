@@ -4,37 +4,24 @@ on:
   push:
     branches:
       - main
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
 
-jobs:
-  approve:
-    name: Approve
-    if: github.event_name == 'pull_request_target'
-    environment:
-      name: Integrate Pull Request
-    runs-on: ubuntu-latest
-    steps:
-      - name: Approve
-        run: echo For security reasons, all pull requests need to be approved first before running any automated build CI.
+env:
+  BUILD_TYPE: Release
 
+jobs:
   build_test_analyze:
-    name: Build, Test and Analyze
+    name: Ubuntu Build, Test and Analyze
     runs-on: ubuntu-latest
     env:
-      BUILD_TYPE: Release
       BUILD_WRAPPER_OUT_DIR: build-wrapper-output
-
-    needs: approve
-    # Only run if the approve job succeeded or was skipped, as it continues on error
-    if: ${{ always() && needs.approve.result == 'success' || needs.approve.result == 'skipped' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-          ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
       - name: Set up Python 3.8 for gcovr
         uses: actions/setup-python@v4
         with:
@@ -43,11 +30,7 @@ jobs:
         run: |
           pip install gcovr==5.0 # 5.1 is not supported
       - name: Install sonar-scanner and build-wrapper
-        uses: SonarSource/sonarcloud-github-c-cpp@v1
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
-        with:
-          languages: "cpp"
+        uses: SonarSource/sonarcloud-github-c-cpp@v2
       - name: Run build-wrapper
         run: |
           mkdir build
@@ -59,54 +42,39 @@ jobs:
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube --exclude-throw-branches > coverage.xml
-      - name: Run sonar-scanner for push
+      - name: Run sonar-scanner
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        if: "${{ env.SONAR_TOKEN != '' && github.event_name == 'push' }}"
+        if: "${{ env.SONAR_TOKEN != '' }}"
         run: |
           sonar-scanner \
             --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
             --define sonar.coverageReportPaths=coverage.xml
-      - name: Run sonar-scanner for PR
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        if: "${{ env.SONAR_TOKEN != '' && github.event_name == 'pull_request_target' }}"
-        run: |
-          sonar-scanner \
-            --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
-            --define sonar.coverageReportPaths=coverage.xml \
-            --define sonar.pullrequest.github.repository=${{ github.event.pull_request.base.repo.full_name }} \
-            --define sonar.scm.revision=${{ github.event.pull_request.head.sha }} \
-            --define sonar.pullrequest.key=$PR_NUMBER \
-            --define sonar.pullrequest.branch=$PR_HEAD_REF \
-            --define sonar.pullrequest.base=$PR_BASE_REF
-          echo "SonarCloud analysis finished for PR '$PR_NUMBER' for merge into '$PR_BASE_REF' from '$PR_HEAD_REF'"
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
-        with:
-          category: "/language:${{matrix.language}}"
+
   windows_build:
-     name: Windows Build
-     runs-on: windows-latest
-     steps:
-       - name: Checkout
-         uses: actions/checkout@v3
-         with:
-             ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
-       - name: Compile
-         run: |
-             mkdir build
-             cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
-             cmake --build build --config Release
+    name: Windows Build, Test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+            ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
+      - name: Compile
+        run: |
+            mkdir build
+            cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+            cmake --build build --config ${{ env.BUILD_TYPE }}
+      - name: Test
+        run: |
+            cd build
+            ctest -C ${{ env.BUILD_TYPE }}
+        
+
   mac_os_build:
-     name: Mac OS Build
-     runs-on: macos-latest
-     steps:
+    name: Mac OS Build, Test
+    runs-on: macos-latest
+    steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -114,5 +82,9 @@ jobs:
       - name: Compile
         run: |
             mkdir build
-            cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
-            cmake --build build --config Release
+            cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+            cmake --build build --config ${{ env.BUILD_TYPE }}
+      - name: Test
+        run: |
+            cd build
+            ctest -C ${{ env.BUILD_TYPE }}
