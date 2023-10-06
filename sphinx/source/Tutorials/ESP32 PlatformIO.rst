@@ -234,10 +234,10 @@ In PlatformIO, run `menuconfig` by either running :code:`pio run -t menuconfig` 
 
 .. warning::
 
-	You may need to comment out the following line(s) in your root :code:`CMakeLists.txt` file if you experience an error running :code:`menuconfig`. Make sure you un-comment the line once you are done with :code:`menuconfig`.
+	If you are experience an error running :code:`menuconfig`, you may need to comment out the following line(s) in your :code:`CMakeLists.txt` file inside the :code:`src/` folder if present. Make sure you un-comment the line once you are done with :code:`menuconfig`.
 	
 	
-	:code:`target_add_binary_data(TestAgIsoStack.elf "src/object_pool/object_pool.iop" BINARY)`
+	:code:`target_add_binary_data(${COMPONENT_TARGET} "object_pool/object_pool.iop" BINARY)`
 
 Once menuconfig is running, navigate to :code:`Component config -> PThreads` and change the settings to match the following:
 
@@ -245,11 +245,12 @@ Once menuconfig is running, navigate to :code:`Component config -> PThreads` and
 		:width: 500
 		:alt: Running menuconfig
 
-Then, navigate to :code:`Component config -> FreeRTOS -> Kernel` and configure the :code:`configTICK_RATE_HZ` to be higher, at least more than 250, but not too high. A good value that worked when writing this tutorial was 1000 as shown below.
-
+Last, but not least, we have to increase the FreeRTOS tick rate **or** decrease the tick rate of the stack for them both to match. For increasing tick rate of FreeRTOS, navigate to :code:`Component config -> FreeRTOS -> Kernel` and configure the :code:`configTICK_RATE_HZ`. A good value is to match the update period of the stack, which by default is 4ms. So a good value for :code:`configTICK_RATE_HZ` is 250Hz.
 .. image:: ../../images/tick_rate.png
 		:width: 500
 		:alt: Running menuconfig
+
+For decreasing the update rate of the stack, set the update period to your desired value in your init/main function: :code:`isobus::CANHardwareInterface::set_can_driver_update_period(10)` for 10ms update period. This matches the default FreeRTOS tick rate of 100Hz.
 
 12. Add your application code and build your project! Using the PlatformIO extension, click "build" to compile your project.
 

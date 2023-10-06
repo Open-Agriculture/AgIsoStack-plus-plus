@@ -50,3 +50,6 @@ Makefile
 
 # Doxygen
 *docs
+
+# PlatformIO
+.pio
