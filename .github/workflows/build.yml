@@ -8,7 +8,7 @@ on:
     types: [opened, synchronize, reopened]
 
 env:
-  BUILD_TYPE: Release
+  BUILD_TYPE: Debug
 
 jobs:
   build_test_analyze:
@@ -34,7 +34,7 @@ jobs:
       - name: Run build-wrapper
         run: |
           mkdir build
-          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN
+          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config ${{ env.BUILD_TYPE }}
       - name: Run
         working-directory: ${{github.workspace}}/build
