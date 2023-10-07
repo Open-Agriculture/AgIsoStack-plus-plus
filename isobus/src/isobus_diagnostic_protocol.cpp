@@ -833,7 +833,7 @@ namespace isobus
 		};
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction);
 	}
 
@@ -850,7 +850,7 @@ namespace isobus
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction);
 	}
 
@@ -861,7 +861,7 @@ namespace isobus
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction);
 	}
 
@@ -883,7 +883,7 @@ namespace isobus
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
 			                                                        buffer.data(),
-			                                                        buffer.size(),
+			                                                        static_cast<std::uint32_t>(buffer.size()),
 			                                                        myControlFunction);
 		}
 		return retVal;
@@ -939,7 +939,7 @@ namespace isobus
 
 				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22),
 				                                                        buffer.data(),
-				                                                        buffer.size(),
+				                                                        static_cast<std::uint32_t>(buffer.size()),
 				                                                        myControlFunction,
 				                                                        currentMessageData.destination);
 				if (retVal)
