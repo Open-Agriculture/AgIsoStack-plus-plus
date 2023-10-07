@@ -228,7 +228,7 @@ namespace isobus
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      sourceControlFunction,
 		                                                      nullptr,
 		                                                      CANIdentifier::CANPriority::Priority3);

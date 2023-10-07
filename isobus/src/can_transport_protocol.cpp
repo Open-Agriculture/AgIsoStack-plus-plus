@@ -728,7 +728,7 @@ namespace isobus
 						std::uint32_t framesSentThisUpdate = 0;
 
 						// Try and send packets
-						for (std::uint8_t i = session->lastPacketNumber; i < session->packetCount; i++)
+						for (std::uint16_t i = session->lastPacketNumber; i < session->packetCount; i++)
 						{
 							dataBuffer[0] = (session->processedPacketsThisSession + 1);
 

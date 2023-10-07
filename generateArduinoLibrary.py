@@ -119,6 +119,12 @@ filePruneList = [
 "can_hardware_interface.cpp",
 "socketcand_windows_network_client.hpp",
 "socketcand_windows_network_client.cpp",
+"isobus_virtual_terminal_objects.cpp"
+"isobus_virtual_terminal_objects.hpp"
+"isobus_virtual_terminal_server_managed_working_set.hpp"
+"isobus_virtual_terminal_server_managed_working_set.cpp"
+"isobus_virtual_terminal_server.cpp"
+"isobus_virtual_terminal_server.hpp"
 "CMakeCXXCompilerId.cpp"]
 
 for punableFile in filePruneList:

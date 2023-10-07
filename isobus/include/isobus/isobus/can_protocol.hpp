@@ -53,7 +53,7 @@ namespace isobus
 
 		/// @brief Returns the number of all created protocols
 		/// @returns The number of all created protocols
-		static std::uint32_t get_number_protocols();
+		static std::size_t get_number_protocols();
 
 		/// @brief A generic way to initialize a protocol
 		/// @details The network manager will call a protocol's initialize function

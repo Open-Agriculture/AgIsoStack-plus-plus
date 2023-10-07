@@ -320,6 +320,9 @@ namespace isobus
 					}
 				}
 				break;
+
+				default:
+					break;
 			}
 		}
 	}

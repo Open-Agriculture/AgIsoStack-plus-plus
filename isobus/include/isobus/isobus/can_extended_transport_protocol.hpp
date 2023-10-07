@@ -182,7 +182,7 @@ namespace isobus
 
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
-		/// @param[in] successfull True if the session was closed successfully, false if not
+		/// @param[in] successful True if the session was closed successfully, false if not
 		void close_session(ExtendedTransportProtocolSession *session, bool successfull);
 
 		/// @brief Gets an ETP session from the passed in source and destination combination

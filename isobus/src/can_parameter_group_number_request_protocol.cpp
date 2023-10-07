@@ -18,7 +18,6 @@
 
 namespace isobus
 {
-
 	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, CANLibBadge<InternalControlFunction>) :
 	  myControlFunction(internalControlFunction)
 	{

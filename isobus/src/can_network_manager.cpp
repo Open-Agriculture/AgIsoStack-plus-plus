@@ -135,7 +135,7 @@ namespace isobus
 			CANLibProtocol *currentProtocol;
 
 			// See if any transport layer protocol can handle this message
-			for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
+			for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 			{
 				if (CANLibProtocol::get_protocol(i, currentProtocol))
 				{

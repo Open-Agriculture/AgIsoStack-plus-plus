@@ -31,7 +31,7 @@ namespace isobus
 
 	std::uint32_t CANMessage::get_data_length() const
 	{
-		return data.size();
+		return static_cast<std::uint32_t>(data.size());
 	}
 
 	std::shared_ptr<ControlFunction> CANMessage::get_source_control_function() const

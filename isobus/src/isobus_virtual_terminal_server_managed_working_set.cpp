@@ -13,7 +13,6 @@
 
 namespace isobus
 {
-
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet() :
 	  objectPoolProcessingThread(nullptr),
 	  workingSetControlFunction(nullptr),
@@ -22,20 +21,20 @@ namespace isobus
 	  workingSetID(NULL_OBJECT_ID),
 	  faultingObjectID(NULL_OBJECT_ID)
 	{
-		initialize_colour_table();
 		CANStackLogger::info("[WS]: New VT Server Object Created with no associated control function");
 	}
 
-	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet(isobus::ControlFunction *associatedControlFunction) :
+	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet(std::shared_ptr<ControlFunction> associatedControlFunction) :
 	  workingSetID(NULL_OBJECT_ID),
 	  objectPoolProcessingThread(nullptr),
 	  workingSetControlFunction(associatedControlFunction),
-	  processingState(ObjectPoolProcessingThreadState::None)
+	  processingState(ObjectPoolProcessingThreadState::None),
+	  workingSetMaintenanceMessageTimestamp_ms(0),
+	  faultingObjectID(NULL_OBJECT_ID)
 	{
-		initialize_colour_table();
 		if (nullptr != associatedControlFunction)
 		{
-			CANStackLogger::info("[WS]: New VT Server Object Created for CF " + isobus::to_string(static_cast<int>(associatedControlFunction->get_NAME().get_full_name())));
+			CANStackLogger::info("[WS]: New VT Server Object Created for CF " + to_string(static_cast<int>(associatedControlFunction->get_NAME().get_full_name())));
 		}
 		else
 		{
@@ -45,21 +44,13 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
 	{
-		for (auto key = vtObjectTree.begin(); key != vtObjectTree.end(); ++key)
-		{
-			if (nullptr != (*key).second)
-			{
-				delete (*key).second;
-				(*key).second = nullptr;
-			}
-		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
-			objectPoolProcessingThread = new std::thread([this]() { worker_thread_function(); });
+			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
 		}
 	}
 
@@ -105,13 +96,13 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState VirtualTerminalServerManagedWorkingSet::get_object_pool_processing_state()
 	{
-		const std::lock_guard<std::mutex> lock(manangedWorkingSetMutex);
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		return processingState;
 	}
 
 	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_pool_faulting_object_id()
 	{
-		std::lock_guard<std::mutex> lock(manangedWorkingSetMutex);
+		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		return faultingObjectID;
 	}
 
@@ -130,7 +121,7 @@ namespace isobus
 		return iopFilesRawData.at(index);
 	}
 
-	isobus::ControlFunction *VirtualTerminalServerManagedWorkingSet::get_control_function() const
+	std::shared_ptr<ControlFunction> VirtualTerminalServerManagedWorkingSet::get_control_function() const
 	{
 		return workingSetControlFunction;
 	}
@@ -145,9 +136,14 @@ namespace isobus
 		workingSetMaintenanceMessageTimestamp_ms = value;
 	}
 
-	VirtualTerminalServerManagedWorkingSet::VTColourVector VirtualTerminalServerManagedWorkingSet::GetVTColor(std::uint8_t index) const
+	void VirtualTerminalServerManagedWorkingSet::save_callback_handle(std::shared_ptr<void> callbackHandle)
 	{
-		return currentColourTable[index];
+		callbackHandles.push_back(callbackHandle);
+	}
+
+	VTColourVector VirtualTerminalServerManagedWorkingSet::get_colour(std::uint8_t colourIndex) const
+	{
+		return workingSetColourTable.get_colour(colourIndex);
 	}
 
 	bool VirtualTerminalServerManagedWorkingSet::parse_next_object(std::uint8_t *&iopData, std::uint32_t &iopLength)
@@ -169,9 +165,9 @@ namespace isobus
 						if (NULL_OBJECT_ID == workingSetID)
 						{
 							workingSetID = decodedID;
-							auto tempObject = new WorkingSet(&vtObjectTree);
+							auto tempObject = std::make_shared<WorkingSet>(vtObjectTree, workingSetColourTable);
 
-							if (iopLength >= tempObject->get_minumum_object_lenth())
+							if (iopLength >= tempObject->get_minumum_object_length())
 							{
 								tempObject->set_id(decodedID);
 								tempObject->set_background_color(iopData[3]);
@@ -213,7 +209,7 @@ namespace isobus
 										}
 
 										// Next, parse language list
-										if (iopLength >= (numberOfLanguagesToFollow * 2))
+										if (iopLength >= static_cast<uint16_t>(numberOfLanguagesToFollow * 2))
 										{
 											for (std::uint_fast8_t i = 0; i < numberOfLanguagesToFollow; i++)
 											{
@@ -248,7 +244,7 @@ namespace isobus
 
 							if (retVal)
 							{
-								vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+								vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 							}
 						}
 						else
@@ -260,9 +256,9 @@ namespace isobus
 
 					case VirtualTerminalObjectType::DataMask:
 					{
-						auto tempObject = new DataMask(&vtObjectTree);
+						auto tempObject = std::make_shared<DataMask>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
@@ -318,16 +314,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::AlarmMask:
 					{
-						auto tempObject = new AlarmMask(&vtObjectTree);
+						auto tempObject = std::make_shared<AlarmMask>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
@@ -406,16 +402,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::Container:
 					{
-						auto tempObject = new Container(&vtObjectTree);
+						auto tempObject = std::make_shared<Container>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -480,7 +476,7 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
@@ -493,12 +489,12 @@ namespace isobus
 
 					case VirtualTerminalObjectType::SoftKeyMask:
 					{
-						auto tempObject = new SoftKeyMask(&vtObjectTree);
+						auto tempObject = std::make_shared<SoftKeyMask>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->set_background_color(iopData[2]);
+							tempObject->set_background_color(iopData[3]);
 
 							// Now add child objects
 							const std::uint8_t childrenToFollow = iopData[4];
@@ -550,16 +546,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::Key:
 					{
-						auto tempObject = new Key(&vtObjectTree);
+						auto tempObject = std::make_shared<Key>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
@@ -616,16 +612,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::Button:
 					{
-						auto tempObject = new Button(&vtObjectTree);
+						auto tempObject = std::make_shared<Button>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -685,16 +681,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::KeyGroup:
 					{
-						auto tempObject = new KeyGroup(&vtObjectTree);
+						auto tempObject = std::make_shared<KeyGroup>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_options(iopData[3]);
@@ -759,16 +755,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::InputBoolean:
 					{
-						auto tempObject = new InputBoolean(&vtObjectTree);
+						auto tempObject = std::make_shared<InputBoolean>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
@@ -810,16 +806,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::InputString:
 					{
-						auto tempObject = new InputString(&vtObjectTree);
+						auto tempObject = std::make_shared<InputString>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -834,7 +830,7 @@ namespace isobus
 							const std::size_t lengthOfStringObject = iopData[16];
 							const int64_t iopLengthRemaining = (iopLength - 17); // Use larger signed int to detect negative rollover
 
-							if (iopLengthRemaining > (lengthOfStringObject + 2)) // +2 is for enabled byte and number of macros to follow
+							if (iopLengthRemaining > static_cast<std::uint16_t>((lengthOfStringObject + 2))) // +2 is for enabled byte and number of macros to follow
 							{
 								std::string tempString;
 								tempString.reserve(lengthOfStringObject);
@@ -843,9 +839,9 @@ namespace isobus
 								{
 									tempString.push_back(static_cast<char>(iopData[17 + i]));
 								}
-								tempObject->set_enabled(iopData[17 + lengthOfStringObject]);
-								iopData += (17 + lengthOfStringObject);
-								iopLength -= (17 + lengthOfStringObject);
+								tempObject->set_enabled(iopData[18 + lengthOfStringObject]);
+								iopData += (18 + lengthOfStringObject);
+								iopLength -= (18 + static_cast<std::uint32_t>(lengthOfStringObject));
 
 								// Next, parse macro list
 								const std::uint8_t numberOfMacrosToFollow = iopData[0];
@@ -883,16 +879,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::InputNumber:
 					{
-						auto tempObject = new InputNumber(&vtObjectTree);
+						auto tempObject = std::make_shared<InputNumber>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -924,7 +920,7 @@ namespace isobus
 								iopData[31],
 								iopData[32]
 							};
-							memcpy(&tempFloat, &floatBuffer, 4); // Feels kinda bad...
+							std::memcpy(&tempFloat, &floatBuffer, 4); // TODO Feels kinda bad...
 
 							tempObject->set_scale(tempFloat);
 							tempObject->set_number_of_decimals(iopData[33]);
@@ -968,16 +964,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::InputList:
 					{
-						auto tempObject = new InputList(&vtObjectTree);
+						auto tempObject = std::make_shared<InputList>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -991,7 +987,11 @@ namespace isobus
 							iopData += 12;
 							iopLength -= 12;
 
-							if (iopLength >= (2 * numberOfListItems))
+							const std::uint8_t numberOfMacrosToFollow = iopData[0];
+							iopData++;
+							iopLength--;
+
+							if (iopLength >= static_cast<std::uint16_t>((2 * numberOfListItems)))
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfListItems; i++)
 								{
@@ -1002,10 +1002,6 @@ namespace isobus
 								}
 
 								// Next, parse macro list
-								const std::uint8_t numberOfMacrosToFollow = iopData[0];
-								iopData++;
-								iopLength--;
-
 								const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 
 								if (iopLength >= sizeOfMacros)
@@ -1037,16 +1033,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputString:
 					{
-						auto tempObject = new OutputString(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputString>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -1109,16 +1105,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputNumber:
 					{
-						auto tempObject = new OutputNumber(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputNumber>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -1142,7 +1138,7 @@ namespace isobus
 								iopData[23],
 								iopData[24]
 							};
-							memcpy(&tempFloat, &floatBuffer, 4); // Feels kinda bad...
+							memcpy(&tempFloat, &floatBuffer, 4); // TODO Feels kinda bad...
 
 							tempObject->set_scale(tempFloat);
 							tempObject->set_number_of_decimals(iopData[25]);
@@ -1186,16 +1182,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputList:
 					{
-						auto tempObject = new OutputList(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputList>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -1209,7 +1205,7 @@ namespace isobus
 							iopData += 12;
 							iopLength -= 12;
 
-							if (iopLength >= (2 * numberOfListItems))
+							if (iopLength >= static_cast<std::uint16_t>((2 * numberOfListItems)))
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfListItems; i++)
 								{
@@ -1250,22 +1246,31 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputLine:
 					{
-						auto tempObject = new OutputLine(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputLine>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0); // Line Attributes
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
-							tempObject->set_line_direction(iopData[9]);
+
+							if (iopData[9] <= 1)
+							{
+								tempObject->set_line_direction(static_cast<OutputLine::LineDirection>(iopData[9]));
+							}
+							else
+							{
+								CANStackLogger::error("[WS]: Unknown output line direction in object %u", decodedID);
+							}
+
 							iopData += 10;
 							iopLength -= 10;
 
@@ -1300,16 +1305,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputRectangle:
 					{
-						auto tempObject = new OutputRectangle(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputRectangle>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0); // Line Attributes
@@ -1351,16 +1356,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputEllipse:
 					{
-						auto tempObject = new OutputEllipse(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputEllipse>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0); // Line Attributes
@@ -1412,16 +1417,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputPolygon:
 					{
-						auto tempObject = new OutputPolygon(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputPolygon>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -1438,7 +1443,12 @@ namespace isobus
 								iopLength -= 14;
 								iopData += 14;
 
-								if (iopLength >= (numberOfPoints * 4))
+								if (numberOfPoints < 3)
+								{
+									CANStackLogger::warn("[WS]: Output Polygon must have at least 3 points. Polygon %u will not be drawable.", decodedID);
+								}
+
+								if (iopLength >= static_cast<std::uint16_t>((numberOfPoints * 4)))
 								{
 									for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
 									{
@@ -1483,19 +1493,20 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputMeter:
 					{
-						auto tempObject = new OutputMeter(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputMeter>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
+							tempObject->set_height(tempObject->get_width());
 							tempObject->set_needle_colour(iopData[5]);
 							tempObject->set_border_colour(iopData[6]);
 							tempObject->set_arc_and_tick_colour(iopData[7]);
@@ -1536,16 +1547,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::shared_ptr<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputLinearBarGraph:
 					{
-						auto tempObject = new OutputLinearBarGraph(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputLinearBarGraph>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -1589,16 +1600,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::OutputArchedBarGraph:
 					{
-						auto tempObject = new OutputArchedBarGraph(&vtObjectTree);
+						auto tempObject = std::make_shared<OutputArchedBarGraph>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
@@ -1644,7 +1655,7 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
@@ -1663,14 +1674,15 @@ namespace isobus
 
 					case VirtualTerminalObjectType::PictureGraphic:
 					{
-						auto tempObject = new PictureGraphic(&vtObjectTree);
+						auto tempObject = std::make_shared<PictureGraphic>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_actual_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_actual_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+							tempObject->set_height(static_cast<std::uint16_t>(tempObject->get_actual_height() * (static_cast<float>(tempObject->get_width()) / static_cast<float>(tempObject->get_actual_width()))));
 
 							if (iopData[9] <= static_cast<std::uint8_t>(PictureGraphic::Format::EightBitColour))
 							{
@@ -1686,6 +1698,11 @@ namespace isobus
 								iopData += 17;
 								iopLength -= 17;
 
+								if (decodedID == 20591)
+								{
+									CANStackLogger::error("[WS]: Picture graphic has RLE but an odd number of data bytes. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+								}
+
 								if (tempObject->get_option(PictureGraphic::Options::RunLengthEncoded))
 								{
 									if (0 != (tempObject->get_number_of_bytes_in_raw_data() % 2))
@@ -1695,11 +1712,54 @@ namespace isobus
 									else
 									{
 										// Decode the RLE
+										std::size_t lineAmountLeft = tempObject->get_actual_width();
 										for (std::uint_fast32_t i = 0; i < (tempObject->get_number_of_bytes_in_raw_data() / 2); i++)
 										{
 											for (std::size_t j = 0; j < iopData[0]; j++)
 											{
-												tempObject->add_raw_data(iopData[1]);
+												switch (tempObject->get_format())
+												{
+													case PictureGraphic::Format::EightBitColour:
+													{
+														tempObject->add_raw_data(iopData[1]);
+													}
+													break;
+
+													case PictureGraphic::Format::FourBitColour:
+													{
+														tempObject->add_raw_data(iopData[1] >> 4);
+														lineAmountLeft--;
+
+														if (lineAmountLeft > 0)
+														{
+															//Unused bits at the end of a line are ignored.
+															tempObject->add_raw_data(iopData[1] & 0x0F);
+															lineAmountLeft--;
+
+															if (0 == lineAmountLeft)
+															{
+																lineAmountLeft = tempObject->get_actual_width();
+															}
+														}
+														else
+														{
+															lineAmountLeft = tempObject->get_actual_width();
+														}
+													}
+													break;
+
+													case PictureGraphic::Format::Monochrome:
+													{
+														for (std::uint_fast8_t k = 0; k < 8U; k++)
+														{
+															tempObject->add_raw_data((iopData[1] >> k) & 0x01);
+														}
+													}
+													break;
+
+													default:
+														break;
+												}
 											}
 											iopData += 2;
 											iopLength -= 2;
@@ -1729,23 +1789,6 @@ namespace isobus
 									    (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height())))
 									{
 										retVal = true;
-										std::vector<float> image_data;
-										image_data.resize(4 * (tempObject->get_actual_width() * tempObject->get_actual_height()));
-
-										// Populate the image data from the colour table
-										std::vector<std::uint8_t> &pixelData = tempObject->get_raw_data();
-										CANStackLogger::debug("[WS]: Compiling texture for object " +
-										                      isobus::to_string(static_cast<int>(tempObject->get_id())) +
-										                      " using {} bytes of raw data" +
-										                      isobus::to_string(static_cast<int>(tempObject->get_raw_data().size())));
-										for (std::size_t i = 0; i < (pixelData.size()); i++)
-										{
-											VTColourVector colour = currentColourTable[pixelData[i]];
-											image_data[(i * 4)] = colour.x;
-											image_data[(i * 4) + 1] = colour.y;
-											image_data[(i * 4) + 2] = colour.z;
-											image_data[(i * 4) + 3] = colour.w;
-										}
 									}
 									else
 									{
@@ -1769,16 +1812,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::NumberVariable:
 					{
-						auto tempObject = new NumberVariable(&vtObjectTree);
+						auto tempObject = std::make_shared<NumberVariable>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_value(static_cast<std::uint32_t>(iopData[3]) |
@@ -1796,16 +1839,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::StringVariable:
 					{
-						auto tempObject = new StringVariable(&vtObjectTree);
+						auto tempObject = std::make_shared<StringVariable>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 
@@ -1848,16 +1891,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::FontAttributes:
 					{
-						auto tempObject = new FontAttributes(&vtObjectTree);
+						auto tempObject = std::make_shared<FontAttributes>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_colour(iopData[3]);
@@ -1904,16 +1947,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::LineAttributes:
 					{
-						auto tempObject = new LineAttributes(&vtObjectTree);
+						auto tempObject = std::make_shared<LineAttributes>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
@@ -1949,16 +1992,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::FillAttributes:
 					{
-						auto tempObject = new FillAttributes(&vtObjectTree);
+						auto tempObject = std::make_shared<FillAttributes>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 
@@ -2002,16 +2045,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::InputAttributes:
 					{
-						auto tempObject = new InputAttributes(&vtObjectTree);
+						auto tempObject = std::make_shared<InputAttributes>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_validation_type(iopData[3]);
@@ -2067,16 +2110,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::ExtendedInputAttributes:
 					{
-						auto tempObject = new ExtendedInputAttributes(&vtObjectTree);
+						auto tempObject = std::make_shared<ExtendedInputAttributes>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_validation_type(iopData[3]);
@@ -2092,16 +2135,16 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
 
 					case VirtualTerminalObjectType::ColourMap:
 					{
-						auto tempObject = new ColourMap(&vtObjectTree);
+						auto tempObject = std::make_shared<ColourMap>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 						}
@@ -2112,7 +2155,7 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
@@ -2125,9 +2168,9 @@ namespace isobus
 
 					case VirtualTerminalObjectType::ObjectPointer:
 					{
-						auto tempObject = new ObjectPointer(&vtObjectTree);
+						auto tempObject = std::make_shared<ObjectPointer>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0);
@@ -2142,7 +2185,7 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
@@ -2167,11 +2210,55 @@ namespace isobus
 
 					case VirtualTerminalObjectType::Macro:
 					{
-						auto tempObject = new Macro(&vtObjectTree);
+						auto tempObject = std::make_shared<Macro>(vtObjectTree, workingSetColourTable);
 
-						if (iopLength >= tempObject->get_minumum_object_lenth())
+						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
+
+							auto numberBytesToFollow = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
+							iopLength -= 5;
+							iopData += 5;
+
+							if (0 != (numberBytesToFollow % CAN_DATA_LENGTH))
+							{
+								retVal = false;
+								CANStackLogger::error("[WS]: Macro object %u contains malformed commands", decodedID);
+							}
+							else if (iopLength >= numberBytesToFollow)
+							{
+								retVal = true;
+
+								for (std::uint16_t i = 0; i < (numberBytesToFollow / CAN_DATA_LENGTH); i++)
+								{
+									retVal = tempObject->add_command_packet({
+									  iopData[0],
+									  iopData[1],
+									  iopData[2],
+									  iopData[3],
+									  iopData[4],
+									  iopData[5],
+									  iopData[6],
+									  iopData[7],
+									});
+									iopLength -= CAN_DATA_LENGTH;
+									iopData += CAN_DATA_LENGTH;
+
+									if (!retVal)
+									{
+										CANStackLogger::error("[WS]: Macro object %u cannot be parsed because there is not enough IOP data left", decodedID);
+									}
+								}
+
+								if (retVal)
+								{
+									retVal = tempObject->get_is_valid();
+								}
+							}
+							else
+							{
+								CANStackLogger::error("[WS]: Macro object %u cannot be parsed because there is not enough IOP data left", decodedID);
+							}
 						}
 						else
 						{
@@ -2180,7 +2267,7 @@ namespace isobus
 
 						if (retVal)
 						{
-							vtObjectTree[tempObject->get_id()] = reinterpret_cast<VTObject *>(tempObject);
+							vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
 						}
 					}
 					break;
@@ -2211,12 +2298,12 @@ namespace isobus
 		return retVal;
 	}
 
-	VTObject *VirtualTerminalServerManagedWorkingSet::get_object_by_id(std::uint16_t objectID)
+	std::shared_ptr<VTObject> VirtualTerminalServerManagedWorkingSet::get_object_by_id(std::uint16_t objectID)
 	{
 		return vtObjectTree[objectID];
 	}
 
-	VTObject *VirtualTerminalServerManagedWorkingSet::get_working_set_object()
+	std::shared_ptr<VTObject> VirtualTerminalServerManagedWorkingSet::get_working_set_object()
 	{
 		return get_object_by_id(workingSetID);
 	}
@@ -2238,53 +2325,14 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
 	{
-		const std::lock_guard<std::mutex> lock(manangedWorkingSetMutex);
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		processingState = value;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_faulting_object_id(std::uint16_t value)
 	{
-		const std::lock_guard<std::mutex> lock(manangedWorkingSetMutex);
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		faultingObjectID = value;
-	}
-
-	void VirtualTerminalServerManagedWorkingSet::initialize_colour_table()
-	{
-		// The table can be altered at runtime. Init here to VT standard
-		currentColourTable[0] = VTColourVector(0.0f, 0.0f, 0.0f, 1.0f); // Black
-		currentColourTable[1] = VTColourVector(1.0f, 1.0f, 1.0f, 1.0f); // White
-		currentColourTable[2] = VTColourVector(0.0f, (153.0f / 255.0f), 0.0f, 1.0f); // Green
-		currentColourTable[3] = VTColourVector(0.0f, (153.0f / 255.0f), (153.0f / 255.0f), 1.0f); // Teal
-		currentColourTable[4] = VTColourVector((153.0f / 255.0f), 0.0f, 0.0f, 1.0f); // Maroon
-		currentColourTable[5] = VTColourVector((153.0f / 255.0f), 0.0f, (153.0f / 255.0f), 1.0f); // Purple
-		currentColourTable[6] = VTColourVector((153.0f / 255.0f), (153.0f / 255.0f), 0.0f, 1.0f); // Olive
-		currentColourTable[7] = VTColourVector((204.0f / 255.0f), (204.0f / 255.0f), (204.0f / 255.0f), 1.0f); // Silver
-		currentColourTable[8] = VTColourVector((153.0f / 255.0f), (153.0f / 255.0f), (153.0f / 255.0f), 1.0f); // Grey
-		currentColourTable[9] = VTColourVector(0.0f, 0.0f, 1.0f, 1.0f); // Blue
-		currentColourTable[10] = VTColourVector(0.0f, 1.0f, 0.0f, 1.0f); // Lime
-		currentColourTable[11] = VTColourVector(0.0f, 1.0f, 1.0f, 1.0f); // Cyan
-		currentColourTable[12] = VTColourVector(1.0f, 0.0f, 0.0f, 1.0f); // Red
-		currentColourTable[13] = VTColourVector(1.0f, 0.0f, 1.0f, 1.0f); // Magenta
-		currentColourTable[14] = VTColourVector(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
-		currentColourTable[15] = VTColourVector(0.0f, 0.0f, (153.0f / 255.0f), 1.0f); // Navy
-
-		// This section of the table increases with a pattern
-		for (std::uint8_t i = 16; i <= 231; i++)
-		{
-			std::uint8_t index = i - 16;
-
-			std::uint32_t redCounter = (index / 36);
-			std::uint32_t greenCounter = ((index / 6) % 6);
-			std::uint32_t blueCounter = (index % 6);
-
-			currentColourTable[i] = VTColourVector((51.0f * (redCounter) / 255.0f), ((51.0f * (greenCounter)) / 255.0f), ((51.0f * blueCounter) / 255.0f), 1.0f);
-		}
-
-		// The rest are proprietary. Init to white for now.
-		for (std::uint16_t i = 232; i < VT_COLOUR_TABLE_SIZE; i++)
-		{
-			currentColourTable[i] = VTColourVector(1.0f, 1.0f, 1.0f, 1.0f);
-		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
@@ -2299,7 +2347,7 @@ namespace isobus
 			                     " IOP components.");
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
-				if (!parse_iop_into_objects(iopFilesRawData[i].data(), iopFilesRawData[i].size()))
+				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
 				{
 					lSuccess = false;
 					break;
@@ -2308,7 +2356,7 @@ namespace isobus
 
 			if (lSuccess)
 			{
-				CANStackLogger::info("[WS]: Object pool sucessfully parsed.");
+				CANStackLogger::info("[WS]: Object pool successfully parsed.");
 				set_object_pool_processing_state(ObjectPoolProcessingThreadState::Success);
 			}
 			else
