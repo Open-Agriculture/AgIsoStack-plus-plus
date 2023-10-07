@@ -234,7 +234,7 @@ In PlatformIO, run `menuconfig` by either running :code:`pio run -t menuconfig` 
 
 .. warning::
 
-	If you are experience an error running :code:`menuconfig`, you may need to comment out the following line(s) in your :code:`CMakeLists.txt` file inside the :code:`src/` folder if present. Make sure you un-comment the line once you are done with :code:`menuconfig`.
+	If you are experiencing an error running :code:`menuconfig`, you may need to comment out the following line(s) in your :code:`CMakeLists.txt` file inside the :code:`src/` folder if present. Make sure you un-comment the line once you are done with :code:`menuconfig`.
 	
 	
 	:code:`target_add_binary_data(${COMPONENT_TARGET} "object_pool/object_pool.iop" BINARY)`
@@ -246,6 +246,7 @@ Once menuconfig is running, navigate to :code:`Component config -> PThreads` and
 		:alt: Running menuconfig
 
 Last, but not least, we have to increase the FreeRTOS tick rate **or** decrease the tick rate of the stack for them both to match. For increasing tick rate of FreeRTOS, navigate to :code:`Component config -> FreeRTOS -> Kernel` and configure the :code:`configTICK_RATE_HZ`. A good value is to match the update period of the stack, which by default is 4ms. So a good value for :code:`configTICK_RATE_HZ` is 250Hz.
+
 .. image:: ../../images/tick_rate.png
 		:width: 500
 		:alt: Running menuconfig
