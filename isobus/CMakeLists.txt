@@ -44,6 +44,7 @@ set(ISOBUS_SRC
     "nmea2000_message_interface.cpp"
     "can_message_data.cpp"
     "isobus_virtual_terminal_objects.cpp"
+    "isobus_virtual_terminal_server.cpp"
     "isobus_virtual_terminal_server_managed_working_set.cpp")
 
 # Prepend the source directory path to all the source files
@@ -89,6 +90,8 @@ set(ISOBUS_INCLUDE
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp"
     "can_message_data.hpp"
+    "isobus_virtual_terminal_base.hpp"
+    "isobus_virtual_terminal_server.hpp"
     "isobus_virtual_terminal_server_managed_working_set.hpp")
 
 # Prepend the include directory path to all the include files

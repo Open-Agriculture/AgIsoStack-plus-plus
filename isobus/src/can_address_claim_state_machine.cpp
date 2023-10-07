@@ -28,7 +28,7 @@ namespace isobus
 		assert(portIndex < CAN_PORT_MAXIMUM);
 		std::default_random_engine generator;
 		std::uniform_int_distribution<unsigned int> distribution(0, 255);
-		m_randomClaimDelay_ms = distribution(generator) * 0.6f; // Defined by ISO part 5
+		m_randomClaimDelay_ms = static_cast<std::uint8_t>(distribution(generator) * 0.6f); // Defined by ISO part 5
 		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_rx_message, this);
 		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim), process_rx_message, this);
 	}

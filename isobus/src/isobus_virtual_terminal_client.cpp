@@ -445,7 +445,8 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, const std::string &value)
 	{
-		return send_change_string_value(objectID, value.size(), value.c_str());
+		assert(value.length() < std::numeric_limits<std::uint16_t>::max()); // You can't send more than 65535 characters!
+		return send_change_string_value(objectID, static_cast<std::uint16_t>(value.size()), value.c_str());
 	}
 
 	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction)
@@ -1258,7 +1259,7 @@ namespace isobus
 			tempData.objectPoolDataPointer = nullptr;
 			tempData.objectPoolVectorPointer = pool;
 			tempData.dataCallback = nullptr;
-			tempData.objectPoolSize = pool->size();
+			tempData.objectPoolSize = static_cast<std::uint32_t>(pool->size());
 			tempData.autoScaleDataMaskOriginalDimension = 0;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
 			tempData.useDataCallback = false;
@@ -2001,7 +2002,7 @@ namespace isobus
 		memcpy(&buffer[1], versionLabel.data(), 32);
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction,
 		                                                      partnerControlFunction,
 		                                                      CANIdentifier::CANPriority::Priority5);
@@ -2014,7 +2015,7 @@ namespace isobus
 		memcpy(&buffer[1], versionLabel.data(), 32);
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction,
 		                                                      partnerControlFunction,
 		                                                      CANIdentifier::CANPriority::Priority5);
@@ -2027,7 +2028,7 @@ namespace isobus
 		memcpy(&buffer[1], versionLabel.data(), 32);
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction,
 		                                                      partnerControlFunction,
 		                                                      CANIdentifier::CANPriority::Priority5);
@@ -2079,7 +2080,7 @@ namespace isobus
 		}
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 		                                                      buffer.data(),
-		                                                      buffer.size(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      myControlFunction,
 		                                                      partnerControlFunction,
 		                                                      CANIdentifier::CANPriority::Priority5);

@@ -47,7 +47,7 @@ namespace isobus
 		return (nullptr != returnedProtocol);
 	}
 
-	std::uint32_t CANLibProtocol::get_number_protocols()
+	std::size_t CANLibProtocol::get_number_protocols()
 	{
 		return CANNetworkManager::CANNetwork.protocolList.size();
 	}
