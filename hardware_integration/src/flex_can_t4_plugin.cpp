@@ -14,12 +14,12 @@
 namespace isobus
 {
 #if defined(__IMXRT1062__)
-	FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_256> FlexCANT4Plugin::can0;
-	FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_256> FlexCANT4Plugin::can1;
-	FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_256> FlexCANT4Plugin::can2;
+	FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> FlexCANT4Plugin::can0;
+	FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> FlexCANT4Plugin::can1;
+	FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_512> FlexCANT4Plugin::can2;
 #elif defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-	FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_256> FlexCANT4Plugin::can0;
-	FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_256> FlexCANT4Plugin::can1;
+	FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> FlexCANT4Plugin::can0;
+	FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> FlexCANT4Plugin::can1;
 #endif
 
 	FlexCANT4Plugin::FlexCANT4Plugin(std::uint8_t channel) :
@@ -104,6 +104,7 @@ namespace isobus
 		message.id = canFrame.identifier;
 		message.len = canFrame.dataLength;
 		message.flags.extended = true;
+		message.seq = true; // Ask for sequential transmission
 		memcpy(message.buf, canFrame.data, canFrame.dataLength);
 
 		if (0 == selectedChannel)
