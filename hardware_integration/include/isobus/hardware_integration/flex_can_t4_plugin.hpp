@@ -49,12 +49,12 @@ namespace isobus
 
 	private:
 #if defined(__IMXRT1062__)
-		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_256> can0;
-		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_256> can1;
-		static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_256> can2;
+		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> can0;
+		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> can1;
+		static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_512> can2;
 #elif defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_256> can0;
-		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_256> can1;
+		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> can0;
+		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> can1;
 #endif
 		std::uint8_t selectedChannel;
 		bool isOpen = false;
