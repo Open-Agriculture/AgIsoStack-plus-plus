@@ -1890,8 +1890,12 @@ namespace isobus
 							}
 							else if (CurrentObjectPoolUploadState::Success == currentObjectPoolState)
 							{
-								objectPools[i].uploaded = true;
-								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+								if (false == objectPools[i].uploaded)
+								{
+									objectPools[i].uploaded = true;
+									CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Debug, "[VT]: Object pool %u uploaded.", i + 1);
+									currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+								}
 							}
 							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
 							{
@@ -1902,6 +1906,7 @@ namespace isobus
 							else
 							{
 								// Transfer is in progress. Nothing to do now.
+								allPoolsProcessed = false;
 								break;
 							}
 						}
