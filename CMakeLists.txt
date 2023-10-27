@@ -11,16 +11,6 @@ project(
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-# Default to C99
-if(NOT CMAKE_C_STANDARD)
-  set(CMAKE_C_STANDARD 99)
-endif()
-
-# Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif()
-
 # Make CTest available which adds the option BUILD_TESTING
 include(CTest)
 if(BUILD_TESTING
@@ -124,6 +114,11 @@ if(BUILD_TESTING)
       test/maintain_power_tests.cpp)
 
   add_executable(unit_tests ${TEST_SRC})
+  set_target_properties(
+    unit_tests
+    PROPERTIES CXX_STANDARD 14
+               CXX_EXTENSIONS OFF
+               CXX_STANDARD_REQUIRED ON)
   target_link_libraries(
     unit_tests
     PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus

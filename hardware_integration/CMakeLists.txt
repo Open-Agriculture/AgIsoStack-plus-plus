@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # Set source and include directories
 set(HARDWARE_INTEGRATION_SRC_DIR "src")
 set(HARDWARE_INTEGRATION_INCLUDE_DIR "include/isobus/hardware_integration")
@@ -120,6 +117,11 @@ prepend(HARDWARE_INTEGRATION_INCLUDE ${HARDWARE_INTEGRATION_INCLUDE_DIR}
 add_library(HardwareIntegration ${HARDWARE_INTEGRATION_SRC}
                                 ${HARDWARE_INTEGRATION_INCLUDE})
 add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
+set_target_properties(
+  HardwareIntegration
+  PROPERTIES CXX_STANDARD 14
+             CXX_EXTENSIONS OFF
+             CXX_STANDARD_REQUIRED ON)
 target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility
                                                   ${PROJECT_NAME}::Isobus)
 
