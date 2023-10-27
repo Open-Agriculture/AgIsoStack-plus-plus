@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # Set library public name
 set(ISOBUS_PUBLIC_NAME "ISOBUS")
 
@@ -86,6 +83,12 @@ prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 # Create the library from the source and include files
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
 add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
+
+set_target_properties(
+  Isobus
+  PROPERTIES CXX_STANDARD 14
+             CXX_EXTENSIONS OFF
+             CXX_STANDARD_REQUIRED ON)
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

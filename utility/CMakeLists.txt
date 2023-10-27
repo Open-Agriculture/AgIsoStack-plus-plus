@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # Set source and include directories
 set(UTILITY_SRC_DIR "src")
 set(UTILITY_INCLUDE_DIR "include/isobus/utility")
@@ -25,6 +22,12 @@ prepend(UTILITY_INCLUDE ${UTILITY_INCLUDE_DIR} ${UTILITY_INCLUDE})
 # Create the library from the source and include files
 add_library(Utility ${UTILITY_SRC} ${UTILITY_INCLUDE})
 add_library(${PROJECT_NAME}::Utility ALIAS Utility)
+
+set_target_properties(
+  Utility
+  PROPERTIES CXX_STANDARD 14
+             CXX_EXTENSIONS OFF
+             CXX_STANDARD_REQUIRED ON)
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this
