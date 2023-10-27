@@ -77,12 +77,12 @@ TEST(NMEA2000_TESTS, VesselHeadingDataInterface)
 	EXPECT_FALSE(messageDataUnderTest.set_sequence_id(4));
 	EXPECT_FALSE(messageDataUnderTest.set_timestamp(5));
 
-	EXPECT_NEAR(0.001f, messageDataUnderTest.get_heading(), 0.00005f);
+	EXPECT_NEAR(0.0001f, messageDataUnderTest.get_heading(), 0.00005f);
 	EXPECT_EQ(1, messageDataUnderTest.get_raw_heading());
 	EXPECT_EQ(2, messageDataUnderTest.get_raw_magnetic_deviation());
-	EXPECT_NEAR(0.002f, messageDataUnderTest.get_magnetic_deviation(), 0.00005f);
+	EXPECT_NEAR(0.0002f, messageDataUnderTest.get_magnetic_deviation(), 0.00005f);
 	EXPECT_EQ(-3, messageDataUnderTest.get_raw_magnetic_variation());
-	EXPECT_NEAR(-0.003f, messageDataUnderTest.get_magnetic_variation(), 0.00005f);
+	EXPECT_NEAR(-0.0003f, messageDataUnderTest.get_magnetic_variation(), 0.00005f);
 	EXPECT_EQ(VesselHeading::HeadingSensorReference::True, messageDataUnderTest.get_sensor_reference());
 	EXPECT_EQ(4, messageDataUnderTest.get_sequence_id());
 	EXPECT_EQ(5, messageDataUnderTest.get_timestamp());
@@ -152,8 +152,8 @@ TEST(NMEA2000_TESTS, PositionRapidUpdateDataInterface)
 
 	EXPECT_EQ(1000, messageDataUnderTest.get_raw_latitude());
 	EXPECT_EQ(2000, messageDataUnderTest.get_raw_longitude());
-	EXPECT_NEAR(1000 * 10E-7, messageDataUnderTest.get_latitude(), 0.000001);
-	EXPECT_NEAR(2000 * 10E-7, messageDataUnderTest.get_longitude(), 0.000001);
+	EXPECT_NEAR(1000 * 1E-7, messageDataUnderTest.get_latitude(), 0.000001);
+	EXPECT_NEAR(2000 * 1E-7, messageDataUnderTest.get_longitude(), 0.000001);
 	EXPECT_EQ(3000, messageDataUnderTest.get_timestamp());
 	EXPECT_EQ(nullptr, messageDataUnderTest.get_control_function());
 
@@ -193,7 +193,7 @@ TEST(NMEA2000_TESTS, CourseOverGroundSpeedOverGroundRapidUpdateDataInterface)
 	EXPECT_FALSE(messageDataUnderTest.set_timestamp(87));
 
 	EXPECT_EQ(50, messageDataUnderTest.get_raw_course_over_ground());
-	EXPECT_NEAR(50 * 10E-4f, messageDataUnderTest.get_course_over_ground(), 0.00005);
+	EXPECT_NEAR(50 * 1E-4f, messageDataUnderTest.get_course_over_ground(), 0.00005);
 	EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::Magnetic, messageDataUnderTest.get_course_over_ground_reference());
 	EXPECT_EQ(9, messageDataUnderTest.get_sequence_id());
 	EXPECT_EQ(75, messageDataUnderTest.get_raw_speed_over_ground());
@@ -316,11 +316,11 @@ TEST(NMEA2000_Tests, GNSSPositionDataDataInterface)
 	EXPECT_EQ(nullptr, messageDataUnderTest.get_control_function());
 	EXPECT_EQ(10000, messageDataUnderTest.get_raw_geoidal_separation());
 	EXPECT_EQ(GNSSPositionData::GNSSMethod::RTKFixedInteger, messageDataUnderTest.get_gnss_method());
-	EXPECT_EQ(-10, messageDataUnderTest.get_horizontal_dilution_of_precision());
+	EXPECT_EQ(-10, messageDataUnderTest.get_raw_horizontal_dilution_of_precision());
 	EXPECT_EQ(GNSSPositionData::Integrity::Safe, messageDataUnderTest.get_integrity());
 	EXPECT_EQ(1, messageDataUnderTest.get_number_of_reference_stations());
 	EXPECT_EQ(4, messageDataUnderTest.get_number_of_space_vehicles());
-	EXPECT_EQ(-894, messageDataUnderTest.get_positional_dilution_of_precision());
+	EXPECT_EQ(-894, messageDataUnderTest.get_raw_positional_dilution_of_precision());
 	EXPECT_EQ(5, messageDataUnderTest.get_sequence_id());
 	EXPECT_EQ(50, messageDataUnderTest.get_timestamp());
 	EXPECT_EQ(GNSSPositionData::TypeOfSystem::GPSPlusSBASPlusGLONASS, messageDataUnderTest.get_type_of_system());
@@ -331,10 +331,10 @@ TEST(NMEA2000_Tests, GNSSPositionDataDataInterface)
 	EXPECT_NEAR(-72057594037298808.0 * 1E-16, messageDataUnderTest.get_latitude(), 10E-4);
 	EXPECT_NEAR(720575.0 * 1E-16, messageDataUnderTest.get_longitude(), 10E-4);
 	EXPECT_EQ(19551, messageDataUnderTest.get_position_date());
-	EXPECT_EQ(86400, messageDataUnderTest.get_position_time());
+	EXPECT_EQ(86400, messageDataUnderTest.get_raw_position_time());
 	EXPECT_EQ(4, messageDataUnderTest.get_reference_station_id(0));
 	EXPECT_EQ(GNSSPositionData::TypeOfSystem::Galileo, messageDataUnderTest.get_reference_station_system_type(0));
-	EXPECT_EQ(100, messageDataUnderTest.get_reference_station_corrections_age(0));
+	EXPECT_EQ(100, messageDataUnderTest.get_raw_reference_station_corrections_age(0));
 	EXPECT_NEAR(100, messageDataUnderTest.get_geoidal_separation(), 0.001);
 
 	std::vector<std::uint8_t> messageBuffer;
@@ -520,12 +520,12 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		message.set_sequence_id(155);
 		message.set_speed_over_ground(544);
 
-		EXPECT_NEAR(10000 * 10E-4f, message.get_course_over_ground(), 0.001);
+		EXPECT_NEAR(10000 * 1E-4f, message.get_course_over_ground(), 0.001);
 		EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::True, message.get_course_over_ground_reference());
 		EXPECT_EQ(10000, message.get_raw_course_over_ground());
 		EXPECT_EQ(544, message.get_raw_speed_over_ground());
 		EXPECT_EQ(155, message.get_sequence_id());
-		EXPECT_NEAR(544 * 10E-2f, message.get_speed_over_ground(), 0.001);
+		EXPECT_NEAR(544 * 1E-2f, message.get_speed_over_ground(), 0.001);
 
 		interfaceUnderTest.update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
@@ -597,13 +597,13 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		EXPECT_TRUE(message.set_reference_datum("def2"));
 
 		EXPECT_EQ(25000, message.get_raw_delta_altitude());
-		EXPECT_NEAR(25000 * 10E-2f, message.get_delta_altitude(), 0.1);
+		EXPECT_NEAR(25000 * 1E-2f, message.get_delta_altitude(), 0.1);
 
 		EXPECT_EQ(12345, message.get_raw_delta_latitude());
-		EXPECT_NEAR(12345 * 10E-7, message.get_delta_latitude(), 0.001);
+		EXPECT_NEAR(12345 * 1E-7, message.get_delta_latitude(), 0.001);
 
 		EXPECT_EQ(6789, message.get_raw_delta_longitude());
-		EXPECT_NEAR(6789 * 10E-7, message.get_delta_longitude(), 0.001);
+		EXPECT_NEAR(6789 * 1E-7, message.get_delta_longitude(), 0.001);
 
 		EXPECT_EQ("abc1", message.get_local_datum());
 		EXPECT_EQ("def2", message.get_reference_datum());

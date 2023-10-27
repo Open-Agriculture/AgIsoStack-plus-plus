@@ -50,7 +50,7 @@ namespace isobus
 
 		float VesselHeading::get_heading() const
 		{
-			return (headingReading * 10E-4f);
+			return (headingReading * 1E-4f);
 		}
 
 		bool VesselHeading::set_heading(std::uint16_t heading)
@@ -67,10 +67,10 @@ namespace isobus
 
 		float VesselHeading::get_magnetic_deviation() const
 		{
-			return (magneticDeviation * 10E-4f);
+			return (magneticDeviation * 1E-4f);
 		}
 
-		bool VesselHeading::set_magnetic_deviation(std::uint16_t deviation)
+		bool VesselHeading::set_magnetic_deviation(std::int16_t deviation)
 		{
 			bool retVal = (deviation != magneticDeviation);
 			magneticDeviation = deviation;
@@ -84,7 +84,7 @@ namespace isobus
 
 		float VesselHeading::get_magnetic_variation() const
 		{
-			return (magneticVariation * 10E-4f);
+			return (magneticVariation * 1E-4f);
 		}
 
 		bool VesselHeading::set_magnetic_variation(std::int16_t variation)
@@ -186,7 +186,7 @@ namespace isobus
 
 		double RateOfTurn::get_rate_of_turn() const
 		{
-			return (static_cast<double>(rateOfTurn) * (1.0 / 32.0 * 10E-6));
+			return (static_cast<double>(rateOfTurn) * (1.0 / 32.0 * 1E-6));
 		}
 
 		bool RateOfTurn::set_rate_of_turn(std::int32_t turnRate)
@@ -277,12 +277,12 @@ namespace isobus
 
 		double PositionRapidUpdate::get_latitude() const
 		{
-			return (static_cast<double>(latitude) * 10E-7);
+			return (static_cast<double>(latitude) * 1E-7);
 		}
 
 		double PositionRapidUpdate::get_longitude() const
 		{
-			return (static_cast<double>(longitude) * 10E-7);
+			return (static_cast<double>(longitude) * 1E-7);
 		}
 
 		std::int32_t PositionRapidUpdate::get_raw_longitude() const
@@ -377,7 +377,7 @@ namespace isobus
 
 		float CourseOverGroundSpeedOverGroundRapidUpdate::get_course_over_ground() const
 		{
-			return (10E-4f * courseOverGround);
+			return (1E-4f * courseOverGround);
 		}
 
 		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_course_over_ground(std::uint16_t course)
@@ -394,7 +394,7 @@ namespace isobus
 
 		float CourseOverGroundSpeedOverGroundRapidUpdate::get_speed_over_ground() const
 		{
-			return (10E-2f * speedOverGround);
+			return (1E-2f * speedOverGround);
 		}
 
 		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_speed_over_ground(std::uint16_t speed)
@@ -739,9 +739,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::int16_t GNSSPositionData::get_horizontal_dilution_of_precision() const
+		std::int16_t GNSSPositionData::get_raw_horizontal_dilution_of_precision() const
 		{
 			return horizontalDilutionOfPrecision;
+		}
+
+		float GNSSPositionData::get_horizontal_dilution_of_precision() const
+		{
+			return (horizontalDilutionOfPrecision * 0.01f);
 		}
 
 		bool GNSSPositionData::set_horizontal_dilution_of_precision(std::int16_t hdop)
@@ -751,9 +756,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::int16_t GNSSPositionData::get_positional_dilution_of_precision() const
+		std::int16_t GNSSPositionData::get_raw_positional_dilution_of_precision() const
 		{
 			return positionalDilutionOfPrecision;
+		}
+
+		float GNSSPositionData::get_positional_dilution_of_precision() const
+		{
+			return (positionalDilutionOfPrecision * 0.01f);
 		}
 
 		bool GNSSPositionData::set_positional_dilution_of_precision(std::int16_t pdop)
@@ -786,7 +796,7 @@ namespace isobus
 			return retVal;
 		}
 
-		std::uint16_t GNSSPositionData::get_reference_station_corrections_age(std::size_t index) const
+		std::uint16_t GNSSPositionData::get_raw_reference_station_corrections_age(std::size_t index) const
 		{
 			std::uint16_t retVal = 0;
 
@@ -795,6 +805,11 @@ namespace isobus
 				retVal = referenceStations.at(index).ageOfDGNSSCorrections;
 			}
 			return retVal;
+		}
+
+		float GNSSPositionData::get_reference_station_corrections_age(std::size_t index) const
+		{
+			return (get_raw_reference_station_corrections_age(index) * 0.01f);
 		}
 
 		GNSSPositionData::TypeOfSystem GNSSPositionData::get_reference_station_system_type(std::size_t index) const
@@ -834,9 +849,14 @@ namespace isobus
 			return retVal;
 		}
 
-		std::uint32_t GNSSPositionData::get_position_time() const
+		std::uint32_t GNSSPositionData::get_raw_position_time() const
 		{
 			return positionTime;
+		}
+
+		double GNSSPositionData::get_position_time() const
+		{
+			return 1E-04 * positionTime;
 		}
 
 		bool GNSSPositionData::set_position_time(std::uint32_t timeToSet)
@@ -1027,7 +1047,7 @@ namespace isobus
 
 		double Datum::get_delta_latitude() const
 		{
-			return (static_cast<double>(deltaLatitude) * 10E-7);
+			return (static_cast<double>(deltaLatitude) * 1E-7);
 		}
 
 		bool Datum::set_delta_latitude(std::int32_t delta)
@@ -1039,7 +1059,7 @@ namespace isobus
 
 		double Datum::get_delta_longitude() const
 		{
-			return (static_cast<double>(deltaLongitude) * 10E-7);
+			return (static_cast<double>(deltaLongitude) * 1E-7);
 		}
 
 		std::int32_t Datum::get_raw_delta_longitude() const
@@ -1061,7 +1081,7 @@ namespace isobus
 
 		float Datum::get_delta_altitude() const
 		{
-			return (10E-2f * deltaAltitude);
+			return (1E-2f * deltaAltitude);
 		}
 
 		bool Datum::set_delta_altitude(std::int32_t delta)
