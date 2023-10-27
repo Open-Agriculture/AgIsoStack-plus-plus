@@ -78,7 +78,7 @@ namespace isobus
 			/// @brief Sets the magnetic deviation in 0.0001 radians
 			/// @param[in] deviation The magnetic deviation to set, in units of 0.0001 radians
 			/// @returns true if the value that was set was different from the stored value
-			bool set_magnetic_deviation(std::uint16_t deviation);
+			bool set_magnetic_deviation(std::int16_t deviation);
 
 			/// @brief Returns the magnetic variation in units of 0.0001 radians
 			/// @returns The magnetic variation in units of 0.0001 radians
@@ -623,7 +623,12 @@ namespace isobus
 			/// @brief Returns the HDOP for this solution.
 			/// This Indicates the contribution of satellite configuration geometry to positioning error. Lower is better.
 			/// @returns The horizontal dilution of precision (HDOP)
-			std::int16_t get_horizontal_dilution_of_precision() const;
+			std::int16_t get_raw_horizontal_dilution_of_precision() const;
+
+			/// @brief Returns the HDOP for this solution.
+			/// This Indicates the contribution of satellite configuration geometry to positioning error. Lower is better.
+			/// @returns The horizontal dilution of precision (HDOP)
+			float get_horizontal_dilution_of_precision() const;
 
 			/// @brief Sets the horizontal dilution of precision (HDOP)
 			/// @param[in] hdop The positional dilution of precision to set
@@ -633,7 +638,12 @@ namespace isobus
 			/// @brief Returns the PDOP for this solution.
 			/// This Indicates the contribution of satellite configuration geometry to positioning error. Lower is better.
 			/// @returns The positional dilution of precision (PDOP)
-			std::int16_t get_positional_dilution_of_precision() const;
+			std::int16_t get_raw_positional_dilution_of_precision() const;
+
+			/// @brief Returns the PDOP for this solution.
+			/// This Indicates the contribution of satellite configuration geometry to positioning error. Lower is better.
+			/// @returns The positional dilution of precision (PDOP)
+			float get_positional_dilution_of_precision() const;
 
 			/// @brief Sets the positional dilution of precision (PDOP)
 			/// @param[in] pdop The positional dilution of precision to set
@@ -657,7 +667,12 @@ namespace isobus
 			/// @brief Returns the specified reference station's DGNSS corrections age by index
 			/// @param[in] index The index of the reference station to get the DGNSS corrections age for
 			/// @returns Reference station's DGNSS corrections age by index
-			std::uint16_t get_reference_station_corrections_age(std::size_t index) const;
+			std::uint16_t get_raw_reference_station_corrections_age(std::size_t index) const;
+
+			/// @brief Returns the specified reference station's DGNSS corrections age by index
+			/// @param[in] index The index of the reference station to get the DGNSS corrections age for
+			/// @returns Reference station's DGNSS corrections age by index
+			float get_reference_station_corrections_age(std::size_t index) const;
 
 			/// @brief Returns the specified reference station's system type by index
 			/// @param[in] index The index of the reference station to get the system type for
@@ -682,10 +697,14 @@ namespace isobus
 
 			/// @brief Returns the number of seconds since midnight
 			/// @returns Number of seconds since midnight (0 == midnight), range allows for up to two leap seconds per day
-			std::uint32_t get_position_time() const;
+			std::uint32_t get_raw_position_time() const;
+
+			/// @brief Returns the number of seconds since midnight
+			/// @returns Number of seconds since midnight (0 == midnight), range allows for up to two leap seconds per day, in units of 0.0001 seconds
+			double get_position_time() const;
 
 			/// @brief Sets the number of seconds since midnight
-			/// @param[in] timeToSet Seconds since midnight (0 == midnight), range allows for up to two leap seconds per day
+			/// @param[in] timeToSet Seconds since midnight (0 == midnight), range allows for up to two leap seconds per day, in units of 0.0001 seconds
 			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_position_time(std::uint32_t timeToSet);
 
