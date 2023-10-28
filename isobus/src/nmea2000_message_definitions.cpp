@@ -143,7 +143,7 @@ namespace isobus
 				retVal |= set_magnetic_deviation(receivedMessage.get_uint16_at(3));
 				retVal |= set_magnetic_variation(receivedMessage.get_uint16_at(5));
 				retVal |= set_sensor_reference(static_cast<HeadingSensorReference>(receivedMessage.get_uint8_at(7) & 0x03));
-				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{
@@ -234,7 +234,7 @@ namespace isobus
 				turnRate |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(4)) << 24);
 				retVal |= set_sequence_id(receivedMessage.get_uint8_at(0));
 				retVal |= set_rate_of_turn(turnRate);
-				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{
@@ -334,7 +334,7 @@ namespace isobus
 				decodedLongitude |= (static_cast<std::int32_t>(receivedMessage.get_uint8_at(7)) << 24);
 				retVal |= set_latitude(decodedLatitude);
 				retVal |= set_longitude(decodedLongitude);
-				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{
@@ -452,7 +452,7 @@ namespace isobus
 				retVal |= set_course_over_ground_reference(static_cast<CourseOverGroundReference>(receivedMessage.get_uint8_at(1) & 0x03));
 				retVal |= set_course_over_ground(receivedMessage.get_uint16_at(2));
 				retVal |= set_speed_over_ground(receivedMessage.get_uint16_at(4));
-				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{
@@ -575,7 +575,7 @@ namespace isobus
 				retVal |= set_time_delta(receivedMessage.get_uint8_at(1));
 				retVal |= set_latitude_delta(receivedMessage.get_uint24_at(2));
 				retVal |= set_longitude_delta(receivedMessage.get_uint24_at(5));
-				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{

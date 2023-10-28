@@ -9,7 +9,7 @@ find_package(Threads REQUIRED)
 add_executable(NMEA2KParserTarget main.cpp)
 
 set_target_properties(
-  NMEA2KExampleTarget
+  NMEA2KParserTarget
   PROPERTIES CXX_STANDARD 14
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
