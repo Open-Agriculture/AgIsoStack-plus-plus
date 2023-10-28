@@ -670,49 +670,78 @@ namespace isobus
 			receivedCogSogMessages.erase(std::remove_if(receivedCogSogMessages.begin(),
 			                                            receivedCogSogMessages.end(),
 			                                            [](std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> message) {
-				                                            CANStackLogger::warn("[NMEA2K]: COG & SOG message Rx timeout.");
-				                                            return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout());
+				                                            if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout()))
+				                                            {
+					                                            CANStackLogger::warn("[NMEA2K]: COG & SOG message Rx timeout.");
+					                                            return true;
+				                                            }
+				                                            return false;
 			                                            }),
 			                             receivedCogSogMessages.end());
 			receivedDatumMessages.erase(std::remove_if(receivedDatumMessages.begin(),
 			                                           receivedDatumMessages.end(),
 			                                           [](std::shared_ptr<Datum> message) {
-				                                           CANStackLogger::warn("[NMEA2K]: Datum message Rx timeout.");
-				                                           return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * Datum::get_timeout());
+				                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * Datum::get_timeout()))
+				                                           {
+					                                           CANStackLogger::warn("[NMEA2K]: Datum message Rx timeout.");
+					                                           return true;
+				                                           }
+				                                           return false;
 			                                           }),
 			                            receivedDatumMessages.end());
 			receivedGNSSPositionDataMessages.erase(std::remove_if(receivedGNSSPositionDataMessages.begin(),
 			                                                      receivedGNSSPositionDataMessages.end(),
 			                                                      [](std::shared_ptr<GNSSPositionData> message) {
-				                                                      CANStackLogger::warn("[NMEA2K]: GNSS position data message Rx timeout.");
-				                                                      return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * GNSSPositionData::get_timeout());
+				                                                      if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * GNSSPositionData::get_timeout()))
+				                                                      {
+					                                                      CANStackLogger::warn("[NMEA2K]: GNSS position data message Rx timeout.");
+					                                                      return true;
+				                                                      }
+				                                                      return false;
 			                                                      }),
 			                                       receivedGNSSPositionDataMessages.end());
 			receivedPositionDeltaHighPrecisionRapidUpdateMessages.erase(std::remove_if(receivedPositionDeltaHighPrecisionRapidUpdateMessages.begin(),
 			                                                                           receivedPositionDeltaHighPrecisionRapidUpdateMessages.end(),
 			                                                                           [](std::shared_ptr<PositionDeltaHighPrecisionRapidUpdate> message) {
-				                                                                           return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionDeltaHighPrecisionRapidUpdate::get_timeout());
+				                                                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionDeltaHighPrecisionRapidUpdate::get_timeout()))
+				                                                                           {
+					                                                                           CANStackLogger::warn("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
+					                                                                           return true;
+				                                                                           }
+				                                                                           return false;
 			                                                                           }),
 			                                                            receivedPositionDeltaHighPrecisionRapidUpdateMessages.end());
 			receivedPositionRapidUpdateMessages.erase(std::remove_if(receivedPositionRapidUpdateMessages.begin(),
 			                                                         receivedPositionRapidUpdateMessages.end(),
 			                                                         [](std::shared_ptr<PositionRapidUpdate> message) {
-				                                                         CANStackLogger::warn("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
-				                                                         return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionRapidUpdate::get_timeout());
+				                                                         if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionRapidUpdate::get_timeout()))
+				                                                         {
+					                                                         CANStackLogger::warn("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
+					                                                         return true;
+				                                                         }
+				                                                         return false;
 			                                                         }),
 			                                          receivedPositionRapidUpdateMessages.end());
 			receivedRateOfTurnMessages.erase(std::remove_if(receivedRateOfTurnMessages.begin(),
 			                                                receivedRateOfTurnMessages.end(),
 			                                                [](std::shared_ptr<RateOfTurn> message) {
-				                                                CANStackLogger::warn("[NMEA2K]: Rate of turn message Rx timeout.");
-				                                                return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * RateOfTurn::get_timeout());
+				                                                if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * RateOfTurn::get_timeout()))
+				                                                {
+					                                                CANStackLogger::warn("[NMEA2K]: Rate of turn message Rx timeout.");
+					                                                return true;
+				                                                }
+				                                                return false;
 			                                                }),
 			                                 receivedRateOfTurnMessages.end());
 			receivedVesselHeadingMessages.erase(std::remove_if(receivedVesselHeadingMessages.begin(),
 			                                                   receivedVesselHeadingMessages.end(),
 			                                                   [](std::shared_ptr<VesselHeading> message) {
-				                                                   CANStackLogger::warn("[NMEA2K]: Vessel heading message Rx timeout.");
-				                                                   return SystemTiming::time_expired_ms(message->get_timestamp(), 3 * VesselHeading::get_timeout());
+				                                                   if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * VesselHeading::get_timeout()))
+				                                                   {
+					                                                   CANStackLogger::warn("[NMEA2K]: Vessel heading message Rx timeout.");
+					                                                   return true;
+				                                                   }
+				                                                   return false;
 			                                                   }),
 			                                    receivedVesselHeadingMessages.end());
 		}

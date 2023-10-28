@@ -275,7 +275,7 @@ namespace isobus
 		{
 		public:
 			/// @brief Enumerates the references to which the course may be relative to
-			enum class CourseOverGroudReference : std::uint8_t
+			enum class CourseOverGroundReference : std::uint8_t
 			{
 				True = 0, ///< True north
 				Magnetic = 1, ///< Magnetic North
@@ -336,11 +336,11 @@ namespace isobus
 
 			/// @brief Returns the reference to which the course over ground is relative
 			/// @returns The reference to which the course is relative
-			CourseOverGroudReference get_course_over_ground_reference() const;
+			CourseOverGroundReference get_course_over_ground_reference() const;
 
 			/// @brief Sets the reference to which the course over ground is relative
 			/// @returns True if the value that was set differed from the stored value, otherwise false
-			bool set_course_over_ground_reference(CourseOverGroudReference reference);
+			bool set_course_over_ground_reference(CourseOverGroundReference reference);
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus
 			/// @param[in] buffer A buffer to serialize the message data into
@@ -363,7 +363,7 @@ namespace isobus
 			std::uint16_t courseOverGround = 0; ///< This field contains the direction of the path over ground actually followed by the vessel in 0.0001 radians between 0 and 2pi rad.
 			std::uint16_t speedOverGround = 0; ///< This field contains the speed of the vessel in 0.01 m/s
 			std::uint8_t sequenceID = 0; ///< The sequence identifier field is used to tie related PGNs together. Somewhat arbitrary.
-			CourseOverGroudReference cogReference = CourseOverGroudReference::NotApplicableOrNull; ///< Used to indicate the reference for the course over ground, ie true or magnetic north
+			CourseOverGroundReference cogReference = CourseOverGroundReference::NotApplicableOrNull; ///< Used to indicate the reference for the course over ground, ie true or magnetic north
 		};
 
 		/// @brief This message is a way for a GNSS receiver to provide a current position without using fast packet based on
@@ -655,7 +655,7 @@ namespace isobus
 			std::uint16_t get_reference_station_id(std::size_t index) const;
 
 			/// @brief Returns the specified reference station's DGNSS corrections age by index
-			/// @prarm[in] index The index of the reference station to get the DGNSS corrections age for
+			/// @param[in] index The index of the reference station to get the DGNSS corrections age for
 			/// @returns Reference station's DGNSS corrections age by index
 			std::uint16_t get_reference_station_corrections_age(std::size_t index) const;
 
@@ -799,16 +799,16 @@ namespace isobus
 			/// @returns True if the value that was set differed from the stored value
 			bool set_delta_longitude(std::int32_t delta);
 
-			/// @brief Returns the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.02 meters.
-			/// @returns The altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.02 meters.
+			/// @brief Returns the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.01 meters.
+			/// @returns The altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.01 meters.
 			std::int32_t get_raw_delta_altitude() const;
 
 			/// @brief Returns the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of meters.
 			/// @returns The altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of meters.
 			float get_delta_altitude() const;
 
-			/// @brief Sets the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.02 meters.
-			/// @param[in] delta The altitude delta to set in units of 0.02 meters
+			/// @brief Sets the altitude offset of position in the local datum relative to the position in the reference datum in units of The altitude delta in units of 0.01 meters.
+			/// @param[in] delta The altitude delta to set in units of 0.01 meters
 			/// @returns True if the value that was set differed from the stored value
 			bool set_delta_altitude(std::int32_t delta);
 
@@ -843,7 +843,7 @@ namespace isobus
 			std::string referenceDatum; ///< A 4 character ascii datum code that identifies the reference datum.
 			std::int32_t deltaLatitude = 0; ///< Position in the local datum is offset from the position in the reference datum as indicated by this latitude delta. In units of 1x10E-7 degrees.
 			std::int32_t deltaLongitude = 0; ///< Position in the local datum is offset from the position in the reference datum as indicated by this longitude delta. In units of 1x10E-7 degrees.
-			std::int32_t deltaAltitude = 0; ///< The altitude delta in units of 0.02 meters. Positive values indicate Up.
+			std::int32_t deltaAltitude = 0; ///< The altitude delta in units of 0.01 meters. Positive values indicate Up.
 			std::uint32_t messageTimestamp_ms = 0; ///< A timestamp in milliseconds when this message was last sent or received
 		};
 	} // namespace NMEA2000Messages
