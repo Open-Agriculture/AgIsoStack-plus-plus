@@ -14,6 +14,7 @@ The library transparently supports the entire ISOBUS/J1939 transport layer, auto
 * Virtual Terminal Client (aka Universal Terminal)
 * ISOBUS Diagnostic Protocols
 * NMEA 2000 Fast Packet
+* Common guidance and speed messages
 
 ## Getting Started
 
@@ -28,13 +29,19 @@ cmake -S . -B build
 cmake --build build
 ```
 
+See the "Integrating this library" section below for how to compile the library as part of a top level application.
+
+### CAN Drivers
+
 A default CAN driver plug-in will be selected for you based on your OS, but when compiling you can explicitly choose to use one of the natively supported CAN drivers by supplying the `CAN_DRIVER` variable.
 
 * `-DCAN_DRIVER=SocketCAN` Will compile with Socket CAN support (This is the default for Linux)
 * `-DCAN_DRIVER=WindowsPCANBasic` Will compile with windows support for the PEAK PCAN drivers (This is the default for Windows)
 * `-DCAN_DRIVER=MacCANPCAN` Will compile with support for the MacCAN PEAK PCAN driver (This is the default for Mac OS)
-* `-DCAN_DRIVER=TWAI` Will compile with support for the ESP TWAI driver
+* `-DCAN_DRIVER=TWAI` Will compile with support for the ESP TWAI driver (This is the preferred ESP32 driver)
 * `-DCAN_DRIVER=MCP2515` Will compile with support for the MCP2515 CAN controller
+* `-DCAN_DRIVER=WindowsInnoMakerUSB2CAN` Will compile with support for the InnoMaker USB2CAN adapter (Windows)
+* `-DCAN_DRIVER=TouCAN` Will compile with support for the Rusoku TouCAN (Windows)
 
 Or specify multiple using a semicolon separated list: `-DCAN_DRIVER="<driver1>;<driver2>"`
 
@@ -53,7 +60,7 @@ cmake --build build
 
 Tests are run with GTest. They can be invoked through ctest. Once the library is compiled, navigate to the build directory to run tests.
 ```
-cmake -S . -B build -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN
+cmake -S . -B build -DBUILD_TESTING=ON
 cmake --build build
 cd build
 ctest
@@ -61,27 +68,35 @@ ctest
 
 ## Integrating this library
 
-You can integrate this library into your own project with CMake if you want. Adding it as a submodule to your project is one of the easier ways to integrate it today.
+You can integrate this library into your own project with CMake if you want. Multiple methods are supported to integrate with the library.
 
-Make sure you have cmake installed:
+Make sure you have CMake and Git installed:
 
-Ubuntu
+Ubuntu:
 ```
-sudo apt install cmake
-```
-
-RHEL
-```
-sudo dnf install cmake
+sudo apt install cmake git
 ```
 
-Then, submodule the repository into your project:
+RHEL:
+```
+sudo dnf install cmake git
+```
+
+Windows:
+
+When using windows, the suggested way to get CMake and a working build system is to install [Visual Studio](https://visualstudio.microsoft.com/vs/community/), and select the "Desktop Development with C++" workload as well as `Git` under "Individual Components".
+
+### Git Submodule
+
+Adding this library as a submodule to your project is one of the easier ways to integrate it.
+
+Submodule the repository into your project:
 
 ```
-git submodule add https://github.com/ad3154/ISO11783-CAN-Stack.git <destination_folder>
+git submodule add https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git <destination_folder>
 git submodule update --init --recursive
 ```
-Then, if you're using cmake, make sure to add the submodule to your project, and link it.
+Then, if you're using CMake, make sure to add the submodule to your project, and link it.
 It is recommended to use the ALIAS targets exposed, which all follow the name `isobus::<target_name>`.
 
 ```
@@ -89,10 +104,39 @@ find_package(Threads)
 
 add_subdirectory(<path to this submodule>)
 
-target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::SocketCANInterface)
+target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 ```
 
 A full example CMakeLists.txt file can be found on the tutorial website.
+
+### Integrating with CMake FetchContent
+
+If you don't want to use Git submodules, you can also easily integrate this library and keep it automatically updated by having CMake manage it.
+
+1. Create a folder called `cmake` in your project if you don't already have one.
+2. Inside the `cmake` folder, create a file with the following contents:
+
+```
+if(NOT TARGET isobus::Isobus)
+    include(FetchContent)
+    FetchContent_Declare(
+        AgIsoStack
+        GIT_REPOSITORY https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
+        GIT_TAG        main
+    )
+    FetchContent_MakeAvailable(AgIsoStack)
+endif()
+```
+
+3. In your top-level CMakeLists.txt file, add `list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)` after your `project` command
+4. In your top-level CMakeLists.txt file, add `find_package(AgIsoStack MODULE)` after the above line.
+5. Link the library as explained above using `target_link_libraries`
+
+Now when you configure your CMake cache, the library will be pulled from GitHub and automatically made available for your project.
+
+### Precompiled
+
+We do not officially distribute this library in binary form (DLL files, for example).
 
 ### Installing The Library
 
@@ -110,7 +154,7 @@ For a system-wide install:
 sudo cmake --install build
 ```
 
-Then, use a call to find_package() to find this package.
+Then, use a call to `find_package()` to find this package.
 
 ## Documentation
 
