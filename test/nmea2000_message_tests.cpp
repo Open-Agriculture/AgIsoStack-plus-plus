@@ -181,20 +181,20 @@ TEST(NMEA2000_TESTS, CourseOverGroundSpeedOverGroundRapidUpdateDataInterface)
 	CourseOverGroundSpeedOverGroundRapidUpdate messageDataUnderTest(nullptr);
 
 	EXPECT_TRUE(messageDataUnderTest.set_course_over_ground(50));
-	EXPECT_TRUE(messageDataUnderTest.set_course_over_ground_reference(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::Magnetic));
+	EXPECT_TRUE(messageDataUnderTest.set_course_over_ground_reference(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::Magnetic));
 	EXPECT_TRUE(messageDataUnderTest.set_sequence_id(9));
 	EXPECT_TRUE(messageDataUnderTest.set_speed_over_ground(75));
 	EXPECT_TRUE(messageDataUnderTest.set_timestamp(87));
 
 	EXPECT_FALSE(messageDataUnderTest.set_course_over_ground(50));
-	EXPECT_FALSE(messageDataUnderTest.set_course_over_ground_reference(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::Magnetic));
+	EXPECT_FALSE(messageDataUnderTest.set_course_over_ground_reference(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::Magnetic));
 	EXPECT_FALSE(messageDataUnderTest.set_sequence_id(9));
 	EXPECT_FALSE(messageDataUnderTest.set_speed_over_ground(75));
 	EXPECT_FALSE(messageDataUnderTest.set_timestamp(87));
 
 	EXPECT_EQ(50, messageDataUnderTest.get_raw_course_over_ground());
 	EXPECT_NEAR(50 * 1E-4f, messageDataUnderTest.get_course_over_ground(), 0.00005);
-	EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::Magnetic, messageDataUnderTest.get_course_over_ground_reference());
+	EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::Magnetic, messageDataUnderTest.get_course_over_ground_reference());
 	EXPECT_EQ(9, messageDataUnderTest.get_sequence_id());
 	EXPECT_EQ(75, messageDataUnderTest.get_raw_speed_over_ground());
 	EXPECT_EQ(87, messageDataUnderTest.get_timestamp());
@@ -507,7 +507,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 
 		EXPECT_EQ(testECU, message.get_control_function());
 		EXPECT_EQ(0, message.get_course_over_ground());
-		EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::NotApplicableOrNull, message.get_course_over_ground_reference());
+		EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::NotApplicableOrNull, message.get_course_over_ground_reference());
 		EXPECT_EQ(0, message.get_raw_course_over_ground());
 		EXPECT_EQ(0, message.get_raw_speed_over_ground());
 		EXPECT_EQ(0, message.get_sequence_id());
@@ -516,12 +516,12 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		EXPECT_EQ(0, message.get_timestamp());
 
 		message.set_course_over_ground(10000);
-		message.set_course_over_ground_reference(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::True);
+		message.set_course_over_ground_reference(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::True);
 		message.set_sequence_id(155);
 		message.set_speed_over_ground(544);
 
 		EXPECT_NEAR(10000 * 1E-4f, message.get_course_over_ground(), 0.001);
-		EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::True, message.get_course_over_ground_reference());
+		EXPECT_EQ(CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::True, message.get_course_over_ground_reference());
 		EXPECT_EQ(10000, message.get_raw_course_over_ground());
 		EXPECT_EQ(544, message.get_raw_speed_over_ground());
 		EXPECT_EQ(155, message.get_sequence_id());

@@ -449,7 +449,7 @@ namespace isobus
 			if (CAN_DATA_LENGTH == receivedMessage.get_data_length())
 			{
 				retVal |= set_sequence_id(receivedMessage.get_uint8_at(0));
-				retVal |= set_course_over_ground_reference(static_cast<CourseOverGroudReference>(receivedMessage.get_uint8_at(1) & 0x03));
+				retVal |= set_course_over_ground_reference(static_cast<CourseOverGroundReference>(receivedMessage.get_uint8_at(1) & 0x03));
 				retVal |= set_course_over_ground(receivedMessage.get_uint16_at(2));
 				retVal |= set_speed_over_ground(receivedMessage.get_uint16_at(4));
 				retVal |= set_timestamp(SystemTiming::get_timestamp_ms());
