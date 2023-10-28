@@ -416,12 +416,12 @@ namespace isobus
 			return retVal;
 		}
 
-		CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference CourseOverGroundSpeedOverGroundRapidUpdate::get_course_over_ground_reference() const
+		CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference CourseOverGroundSpeedOverGroundRapidUpdate::get_course_over_ground_reference() const
 		{
 			return cogReference;
 		}
 
-		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_course_over_ground_reference(CourseOverGroudReference reference)
+		bool CourseOverGroundSpeedOverGroundRapidUpdate::set_course_over_ground_reference(CourseOverGroundReference reference)
 		{
 			bool retVal = (cogReference != reference);
 			cogReference = reference;

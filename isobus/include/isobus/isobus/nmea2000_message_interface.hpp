@@ -210,7 +210,7 @@ namespace isobus
 		bool get_enable_sending_datum_cyclically() const;
 
 		/// @brief Instructs the interface to enable or disable sending the datum data message cyclically
-		/// @param[in] enable Set to true to have the interface cyclically send thedatum message cyclically
+		/// @param[in] enable Set to true to have the interface cyclically send the datum message cyclically
 		void set_enable_sending_datum_cyclically(bool enable);
 
 		/// @brief Returns if the interface has cyclic sending of the GNSS position data message enabled
@@ -226,7 +226,7 @@ namespace isobus
 		bool get_enable_sending_position_delta_high_precision_rapid_update_cyclically() const;
 
 		/// @brief Instructs the interface to enable or disable sending the position delta high precision rapid update message cyclically
-		/// @param[in] enable Set to true to have the interface cyclically send the position delta high precision rapid updat message cyclically
+		/// @param[in] enable Set to true to have the interface cyclically send the position delta high precision rapid update message cyclically
 		void set_enable_sending_position_delta_high_precision_rapid_update_cyclically(bool enable);
 
 		/// @brief Returns if the interface has cyclic sending of the position rapid update message enabled
