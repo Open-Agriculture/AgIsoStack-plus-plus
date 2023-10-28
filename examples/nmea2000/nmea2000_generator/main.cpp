@@ -89,7 +89,7 @@ int main()
 	n2kInterface.set_enable_sending_cog_sog_cyclically(true);
 	auto &cog_sog_message = n2kInterface.get_cog_sog_transmit_message();
 	cog_sog_message.set_sequence_id(sequenceIdentifier);
-	cog_sog_message.set_course_over_ground_reference(isobus::NMEA2000Messages::CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroudReference::Error);
+	cog_sog_message.set_course_over_ground_reference(isobus::NMEA2000Messages::CourseOverGroundSpeedOverGroundRapidUpdate::CourseOverGroundReference::Error);
 	cog_sog_message.set_course_over_ground(43633); // 4.3633 radians = 250 degrees
 	cog_sog_message.set_speed_over_ground(200); // 2 m/s = 7.2 km/h
 
