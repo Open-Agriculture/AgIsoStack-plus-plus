@@ -1,5 +1,15 @@
+//================================================================================================
+/// @file language_command_interface_tests.cpp
+///
+/// @brief Unit tests for the LanguageCommandInterface class
+/// @author Adrian Del Grosso
+///
+/// @copyright 2023 Adrian Del Grosso
+//================================================================================================
 #include <gtest/gtest.h>
 
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_NAME_filter.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
@@ -173,4 +183,204 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(internalECU->destroy(2));
+}
+
+TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start();
+
+	isobus::NAME TestDeviceNAME(0);
+	TestDeviceNAME.set_arbitrary_address_capable(true);
+	TestDeviceNAME.set_industry_group(3);
+	TestDeviceNAME.set_device_class(4);
+	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::EnduranceBraking));
+	TestDeviceNAME.set_identity_number(9);
+	TestDeviceNAME.set_ecu_instance(5);
+	TestDeviceNAME.set_function_instance(0);
+	TestDeviceNAME.set_device_class_instance(0);
+	TestDeviceNAME.set_manufacturer_code(64);
+
+	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x49, 0);
+	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
+
+	while ((!testECU->get_address_valid()) &&
+	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+
+	ASSERT_TRUE(testECU->get_address_valid());
+
+	CANMessageFrame testFrame;
+	memset(&testFrame, 0, sizeof(testFrame));
+	testFrame.isExtendedFrame = true;
+
+	// Get the virtual CAN plugin back to a known state
+	while (!testPlugin.get_queue_empty())
+	{
+		testPlugin.read_frame(testFrame);
+	}
+	ASSERT_TRUE(testPlugin.get_queue_empty());
+
+	LanguageCommandInterface interfaceUnderTest(testECU, true);
+
+	interfaceUnderTest.initialize();
+
+	interfaceUnderTest.set_language_code("en");
+	interfaceUnderTest.set_commanded_decimal_symbol(LanguageCommandInterface::DecimalSymbols::Comma);
+	interfaceUnderTest.set_commanded_time_format(LanguageCommandInterface::TimeFormats::TwentyFourHour);
+	interfaceUnderTest.set_commanded_date_format(LanguageCommandInterface::DateFormats::yyyymmdd);
+	interfaceUnderTest.set_commanded_distance_units(LanguageCommandInterface::DistanceUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_area_units(LanguageCommandInterface::AreaUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_volume_units(LanguageCommandInterface::VolumeUnits::US);
+	interfaceUnderTest.set_commanded_mass_units(LanguageCommandInterface::MassUnits::US);
+	interfaceUnderTest.set_commanded_temperature_units(LanguageCommandInterface::TemperatureUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_pressure_units(LanguageCommandInterface::PressureUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_force_units(LanguageCommandInterface::ForceUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_generic_units(LanguageCommandInterface::UnitSystem::US);
+	interfaceUnderTest.set_country_code("US");
+
+	EXPECT_EQ("en", interfaceUnderTest.get_language_code());
+	EXPECT_EQ(LanguageCommandInterface::DecimalSymbols::Comma, interfaceUnderTest.get_commanded_decimal_symbol());
+	EXPECT_EQ(LanguageCommandInterface::TimeFormats::TwentyFourHour, interfaceUnderTest.get_commanded_time_format());
+	EXPECT_EQ(LanguageCommandInterface::DateFormats::yyyymmdd, interfaceUnderTest.get_commanded_date_format());
+	EXPECT_EQ(LanguageCommandInterface::DistanceUnits::ImperialUS, interfaceUnderTest.get_commanded_distance_units());
+	EXPECT_EQ(LanguageCommandInterface::AreaUnits::ImperialUS, interfaceUnderTest.get_commanded_area_units());
+	EXPECT_EQ(LanguageCommandInterface::VolumeUnits::US, interfaceUnderTest.get_commanded_volume_units());
+	EXPECT_EQ(LanguageCommandInterface::MassUnits::US, interfaceUnderTest.get_commanded_mass_units());
+	EXPECT_EQ(LanguageCommandInterface::TemperatureUnits::ImperialUS, interfaceUnderTest.get_commanded_temperature_units());
+	EXPECT_EQ(LanguageCommandInterface::PressureUnits::ImperialUS, interfaceUnderTest.get_commanded_pressure_units());
+	EXPECT_EQ(LanguageCommandInterface::ForceUnits::ImperialUS, interfaceUnderTest.get_commanded_force_units());
+	EXPECT_EQ(LanguageCommandInterface::UnitSystem::US, interfaceUnderTest.get_commanded_generic_units());
+	EXPECT_EQ("US", interfaceUnderTest.get_country_code());
+
+	interfaceUnderTest.set_language_code("de");
+	interfaceUnderTest.set_commanded_decimal_symbol(LanguageCommandInterface::DecimalSymbols::Reserved);
+	interfaceUnderTest.set_commanded_time_format(LanguageCommandInterface::TimeFormats::TwelveHourAmPm);
+	interfaceUnderTest.set_commanded_date_format(LanguageCommandInterface::DateFormats::mmddyyyy);
+	interfaceUnderTest.set_commanded_distance_units(LanguageCommandInterface::DistanceUnits::Metric);
+	interfaceUnderTest.set_commanded_area_units(LanguageCommandInterface::AreaUnits::Metric);
+	interfaceUnderTest.set_commanded_volume_units(LanguageCommandInterface::VolumeUnits::Metric);
+	interfaceUnderTest.set_commanded_mass_units(LanguageCommandInterface::MassUnits::Metric);
+	interfaceUnderTest.set_commanded_temperature_units(LanguageCommandInterface::TemperatureUnits::Metric);
+	interfaceUnderTest.set_commanded_pressure_units(LanguageCommandInterface::PressureUnits::Metric);
+	interfaceUnderTest.set_commanded_force_units(LanguageCommandInterface::ForceUnits::Metric);
+	interfaceUnderTest.set_commanded_generic_units(LanguageCommandInterface::UnitSystem::Metric);
+	interfaceUnderTest.set_country_code("DE");
+
+	EXPECT_EQ("de", interfaceUnderTest.get_language_code());
+	EXPECT_EQ(LanguageCommandInterface::DecimalSymbols::Reserved, interfaceUnderTest.get_commanded_decimal_symbol());
+	EXPECT_EQ(LanguageCommandInterface::TimeFormats::TwelveHourAmPm, interfaceUnderTest.get_commanded_time_format());
+	EXPECT_EQ(LanguageCommandInterface::DateFormats::mmddyyyy, interfaceUnderTest.get_commanded_date_format());
+	EXPECT_EQ(LanguageCommandInterface::DistanceUnits::Metric, interfaceUnderTest.get_commanded_distance_units());
+	EXPECT_EQ(LanguageCommandInterface::AreaUnits::Metric, interfaceUnderTest.get_commanded_area_units());
+	EXPECT_EQ(LanguageCommandInterface::VolumeUnits::Metric, interfaceUnderTest.get_commanded_volume_units());
+	EXPECT_EQ(LanguageCommandInterface::MassUnits::Metric, interfaceUnderTest.get_commanded_mass_units());
+	EXPECT_EQ(LanguageCommandInterface::TemperatureUnits::Metric, interfaceUnderTest.get_commanded_temperature_units());
+	EXPECT_EQ(LanguageCommandInterface::PressureUnits::Metric, interfaceUnderTest.get_commanded_pressure_units());
+	EXPECT_EQ(LanguageCommandInterface::ForceUnits::Metric, interfaceUnderTest.get_commanded_force_units());
+	EXPECT_EQ(LanguageCommandInterface::UnitSystem::Metric, interfaceUnderTest.get_commanded_generic_units());
+	EXPECT_EQ("DE", interfaceUnderTest.get_country_code());
+
+	// Change settings back to the one that is trickier to encode/decode
+	interfaceUnderTest.set_language_code("en");
+	interfaceUnderTest.set_commanded_decimal_symbol(LanguageCommandInterface::DecimalSymbols::Comma);
+	interfaceUnderTest.set_commanded_time_format(LanguageCommandInterface::TimeFormats::TwelveHourAmPm);
+	interfaceUnderTest.set_commanded_date_format(LanguageCommandInterface::DateFormats::yyyymmdd);
+	interfaceUnderTest.set_commanded_distance_units(LanguageCommandInterface::DistanceUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_area_units(LanguageCommandInterface::AreaUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_volume_units(LanguageCommandInterface::VolumeUnits::US);
+	interfaceUnderTest.set_commanded_mass_units(LanguageCommandInterface::MassUnits::US);
+	interfaceUnderTest.set_commanded_temperature_units(LanguageCommandInterface::TemperatureUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_pressure_units(LanguageCommandInterface::PressureUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_force_units(LanguageCommandInterface::ForceUnits::ImperialUS);
+	interfaceUnderTest.set_commanded_generic_units(LanguageCommandInterface::UnitSystem::US);
+	interfaceUnderTest.set_country_code("US");
+
+	ASSERT_TRUE(interfaceUnderTest.send_language_command());
+
+	testPlugin.read_frame(testFrame);
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x18FE0F49, testFrame.identifier);
+	EXPECT_EQ('e', testFrame.data[0]);
+	EXPECT_EQ('n', testFrame.data[1]);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TimeFormats::TwelveHourAmPm), (testFrame.data[2] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DecimalSymbols::Comma), (testFrame.data[2] >> 6) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DateFormats::yyyymmdd), testFrame.data[3]);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::MassUnits::US), (testFrame.data[4]) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::VolumeUnits::US), (testFrame.data[4] >> 2) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::AreaUnits::ImperialUS), (testFrame.data[4] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DistanceUnits::ImperialUS), (testFrame.data[4] >> 6) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::UnitSystem::US), (testFrame.data[5]) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::ForceUnits::ImperialUS), (testFrame.data[5] >> 2) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::PressureUnits::ImperialUS), (testFrame.data[5] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TemperatureUnits::ImperialUS), (testFrame.data[5] >> 6) & 0x03);
+	EXPECT_EQ('U', testFrame.data[6]);
+	EXPECT_EQ('S', testFrame.data[7]);
+
+	// Test bad values for country and language
+	interfaceUnderTest.set_language_code("r");
+	interfaceUnderTest.set_country_code("");
+
+	ASSERT_TRUE(interfaceUnderTest.send_language_command());
+
+	testPlugin.read_frame(testFrame);
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x18FE0F49, testFrame.identifier);
+	EXPECT_EQ('r', testFrame.data[0]);
+	EXPECT_EQ(' ', testFrame.data[1]);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TimeFormats::TwelveHourAmPm), (testFrame.data[2] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DecimalSymbols::Comma), (testFrame.data[2] >> 6) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DateFormats::yyyymmdd), testFrame.data[3]);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::MassUnits::US), (testFrame.data[4]) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::VolumeUnits::US), (testFrame.data[4] >> 2) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::AreaUnits::ImperialUS), (testFrame.data[4] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DistanceUnits::ImperialUS), (testFrame.data[4] >> 6) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::UnitSystem::US), (testFrame.data[5]) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::ForceUnits::ImperialUS), (testFrame.data[5] >> 2) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::PressureUnits::ImperialUS), (testFrame.data[5] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TemperatureUnits::ImperialUS), (testFrame.data[5] >> 6) & 0x03);
+	EXPECT_EQ(' ', testFrame.data[6]);
+	EXPECT_EQ(' ', testFrame.data[7]);
+
+	interfaceUnderTest.set_language_code("ThisIsWayTooLong");
+	interfaceUnderTest.set_country_code("AndShouldBeTruncatedWhenSent");
+
+	ASSERT_TRUE(interfaceUnderTest.send_language_command());
+
+	testPlugin.read_frame(testFrame);
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_TRUE(testFrame.isExtendedFrame);
+	EXPECT_EQ(0x18FE0F49, testFrame.identifier);
+	EXPECT_EQ('T', testFrame.data[0]);
+	EXPECT_EQ('h', testFrame.data[1]);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TimeFormats::TwelveHourAmPm), (testFrame.data[2] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DecimalSymbols::Comma), (testFrame.data[2] >> 6) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DateFormats::yyyymmdd), testFrame.data[3]);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::MassUnits::US), (testFrame.data[4]) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::VolumeUnits::US), (testFrame.data[4] >> 2) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::AreaUnits::ImperialUS), (testFrame.data[4] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::DistanceUnits::ImperialUS), (testFrame.data[4] >> 6) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::UnitSystem::US), (testFrame.data[5]) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::ForceUnits::ImperialUS), (testFrame.data[5] >> 2) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::PressureUnits::ImperialUS), (testFrame.data[5] >> 4) & 0x03);
+	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TemperatureUnits::ImperialUS), (testFrame.data[5] >> 6) & 0x03);
+	EXPECT_EQ('A', testFrame.data[6]);
+	EXPECT_EQ('n', testFrame.data[7]);
+
+	testPlugin.close();
+
+	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
+	EXPECT_TRUE(testECU->destroy(2));
+	CANHardwareInterface::stop();
 }

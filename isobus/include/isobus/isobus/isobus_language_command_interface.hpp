@@ -10,6 +10,7 @@
 #ifndef ISOBUS_LANGUAGE_COMMAND_INTERFACE_HPP
 #define ISOBUS_LANGUAGE_COMMAND_INTERFACE_HPP
 
+#include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_message.hpp"
 
 #include <memory>
@@ -138,8 +139,9 @@ namespace isobus
 
 		/// @brief Constructor for a LanguageCommandInterface
 		/// @details This constructor will make a version of the class that will accept the message from any source
-		/// @param sourceControlFunction The internal control function that the interface should communicate from
-		explicit LanguageCommandInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction);
+		/// @param[in] sourceControlFunction The internal control function that the interface should communicate from
+		/// @param[in] shouldRespondToRequests Set this to true if you want this interface to respond to requests for the language command PGN (used in VT/TC servers)
+		LanguageCommandInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, bool shouldRespondToRequests = false);
 
 		/// @brief Constructor for a LanguageCommandInterface
 		/// @details This constructor will make a version of the class that will filter the message to be
@@ -173,15 +175,31 @@ namespace isobus
 		/// @return `true` if the message was sent, otherwise `false`
 		bool send_request_language_command() const;
 
+		/// @brief Sends a language command based on the current content of this class as a broadcast.
+		/// @note This is only meant to be used by a VT server or TC/DL server
+		/// @return `true` if the message was sent, otherwise `false`
+		bool send_language_command() const;
+
 		/// @brief Returns the commanded country code parsed from the last language command specifying the operator's desired language dialect.
 		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.
 		/// @return The commanded country code, or an empty string if none specified.
 		std::string get_country_code() const;
 
+		/// @brief Sets the country code specifying the operator's desired language dialect.
+		/// @attention This is meant for servers only
+		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.
+		/// @param[in] country The country code to set
+		void set_country_code(std::string country);
+
 		/// @brief Returns the commanded language code parsed from the last language command
 		/// @note If you do not support the returned language, your default shall be used
 		/// @return The commanded language code (usually 2 characters length)
 		std::string get_language_code() const;
+
+		/// @brief Sets the language
+		/// @attention This is meant for servers only!
+		/// @param[in] language The language code to set
+		void set_language_code(std::string language);
 
 		/// @brief Returns a timestamp (in ms) corresponding to when the interface last received a language command
 		/// @return timestamp in milliseconds corresponding to when the interface last received a language command
@@ -191,45 +209,100 @@ namespace isobus
 		/// @return The decimal symbol that was last commanded
 		DecimalSymbols get_commanded_decimal_symbol() const;
 
+		/// @brief Sets the decimal symbol to be used.
+		/// @attention This is meant for servers only!
+		/// @param[in] decimals The decimal symbol that was last commanded
+		void set_commanded_decimal_symbol(DecimalSymbols decimals);
+
 		/// @brief Returns the commanded time format parsed from the last language command
 		/// @return The time format that was last commanded
 		TimeFormats get_commanded_time_format() const;
+
+		/// @brief Sets the commanded time format
+		/// @attention This is meant for servers only!
+		/// @param[in] format The time format to set
+		void set_commanded_time_format(TimeFormats format);
 
 		/// @brief Returns the commanded date format parsed from the last language command
 		/// @return The date format that was last commanded
 		DateFormats get_commanded_date_format() const;
 
+		/// @brief Sets the commanded date format
+		/// @attention This is meant for servers only!
+		/// @param[in] format The date format to set
+		void set_commanded_date_format(DateFormats format);
+
 		/// @brief Returns the commanded distance units parsed from the last language command
 		/// @return The distance units that were last commanded
 		DistanceUnits get_commanded_distance_units() const;
+
+		/// @brief Sets the commanded distance units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded distance units to set
+		void set_commanded_distance_units(DistanceUnits units);
 
 		/// @brief Returns the commanded area units parsed from the last received language command
 		/// @return The area units that were last commanded
 		AreaUnits get_commanded_area_units() const;
 
+		/// @brief Sets the commanded area units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The area units to set
+		void set_commanded_area_units(AreaUnits units);
+
 		/// @brief Returns the commanded volume units parsed from the last received language command
 		/// @return The volume units that were last commanded
 		VolumeUnits get_commanded_volume_units() const;
+
+		/// @brief Sets the commanded volume units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded volume units
+		void set_commanded_volume_units(VolumeUnits units);
 
 		/// @brief Returns the commanded mass units parsed from the last received language command
 		/// @return The mass units that were last commanded
 		MassUnits get_commanded_mass_units() const;
 
+		/// @brief Sets the commanded mass units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded mass units
+		void set_commanded_mass_units(MassUnits units);
+
 		/// @brief Returns the commanded temperature units parsed from the last received language command
 		/// @return The temperature units that were last commanded
 		TemperatureUnits get_commanded_temperature_units() const;
+
+		/// @brief Sets the commanded temperature units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded temperature unit system
+		void set_commanded_temperature_units(TemperatureUnits units);
 
 		/// @brief Returns the commanded pressure units parsed from the last received language command
 		/// @return The pressure units that were last commanded
 		PressureUnits get_commanded_pressure_units() const;
 
+		/// @brief Sets the commanded pressure units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded pressure unit system to command
+		void set_commanded_pressure_units(PressureUnits units);
+
 		/// @brief Returns the commanded force units parsed from the last received language command
 		/// @return The force units that were last commanded
 		ForceUnits get_commanded_force_units() const;
 
+		/// @brief Sets the commanded force units
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded force unit system to command
+		void set_commanded_force_units(ForceUnits units);
+
 		/// @brief Returns the commanded "unit system" generic value that was parsed from the last received language command
 		/// @return The commanded unit system
 		UnitSystem get_commanded_generic_units() const;
+
+		/// @brief Sets the commanded generic unit system
+		/// @attention This is meant for servers only!
+		/// @param[in] units The commanded generic unit system to command
+		void set_commanded_generic_units(UnitSystem units);
 
 		/// @brief Returns The raw bytes that comprise the current localization data as defined in ISO11783-7
 		/// @returns The raw bytes that comprise the current localization data
@@ -241,6 +314,18 @@ namespace isobus
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 	private:
+		/// @brief This is a callback to handle clients requesting the content of our language data for things like VT/TC servers
+		/// @param[in] parameterGroupNumber The PGN to handle in the callback
+		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[out] acknowledge Tells the stack if we want to send an ACK or NACK
+		/// @param[out] acknowledgeType Tells the stack exactly how we want to do an ACK
+		/// @param[in] parentPointer A generic context pointer to locate the specific instance of this class we want
+		static bool on_language_request(std::uint32_t parameterGroupNumber,
+		                                std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                bool &acknowledge,
+		                                AcknowledgementType &acknowledgeType,
+		                                void *parentPointer);
+
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
 		std::shared_ptr<PartneredControlFunction> myPartner; ///< The partner to talk to, or nullptr to listen to all CFs
 		std::string countryCode; ///< The last received alpha-2 country code as specified by ISO 3166-1, such as "NL, FR, GB, US, DE".
@@ -258,6 +343,7 @@ namespace isobus
 		ForceUnits forceUnitSystem = ForceUnits::Metric; ///< The force units that were commanded by the last language command message
 		UnitSystem genericUnitSystem = UnitSystem::Metric; ///< The "unit system" that was commanded by the last language command message
 		bool initialized = false; ///< Tracks if initialize has been called yet for this interface
+		bool respondToRequests = false; ///< Stores if the class should respond to PGN requests for the language command
 	};
 } // namespace isobus
 

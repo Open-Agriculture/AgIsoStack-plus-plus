@@ -21,9 +21,10 @@
 
 namespace isobus
 {
-	LanguageCommandInterface::LanguageCommandInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction) :
+	LanguageCommandInterface::LanguageCommandInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, bool shouldRespondToRequests) :
 	  myControlFunction(sourceControlFunction),
-	  myPartner(nullptr)
+	  myPartner(nullptr),
+	  respondToRequests(shouldRespondToRequests)
 	{
 	}
 
@@ -38,6 +39,11 @@ namespace isobus
 		if (initialized)
 		{
 			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
+
+			if (respondToRequests && (!myControlFunction->get_pgn_request_protocol().expired()))
+			{
+				myControlFunction->get_pgn_request_protocol().lock()->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
+			}
 		}
 	}
 
@@ -48,6 +54,11 @@ namespace isobus
 			if (nullptr != myControlFunction)
 			{
 				CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
+
+				if (respondToRequests && (!myControlFunction->get_pgn_request_protocol().expired()))
+				{
+					myControlFunction->get_pgn_request_protocol().lock()->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
+				}
 				initialized = true;
 			}
 			else
@@ -87,14 +98,76 @@ namespace isobus
 		return retVal;
 	}
 
+	bool LanguageCommandInterface::send_language_command() const
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+			static_cast<std::uint8_t>(languageCode[0]),
+			static_cast<std::uint8_t>(languageCode[1]),
+			static_cast<std::uint8_t>((static_cast<std::uint8_t>(timeFormat) << 4) |
+			                          (static_cast<std::uint8_t>(decimalSymbol) << 6)),
+			static_cast<std::uint8_t>(dateFormat),
+			static_cast<std::uint8_t>(static_cast<std::uint8_t>(massUnitSystem) |
+			                          (static_cast<std::uint8_t>(volumeUnitSystem) << 2) |
+			                          (static_cast<std::uint8_t>(areaUnitSystem) << 4) |
+			                          (static_cast<std::uint8_t>(distanceUnitSystem) << 6)),
+			static_cast<std::uint8_t>(static_cast<std::uint8_t>(genericUnitSystem) |
+			                          (static_cast<std::uint8_t>(forceUnitSystem) << 2) |
+			                          (static_cast<std::uint8_t>(pressureUnitSystem) << 4) |
+			                          (static_cast<std::uint8_t>(temperatureUnitSystem) << 6)),
+			static_cast<std::uint8_t>(countryCode[0]),
+			static_cast<std::uint8_t>(countryCode[1])
+		};
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand),
+		                                                      buffer.data(),
+		                                                      buffer.size(),
+		                                                      myControlFunction,
+		                                                      nullptr);
+	}
+
 	std::string LanguageCommandInterface::get_country_code() const
 	{
 		return countryCode;
 	}
 
+	void LanguageCommandInterface::set_country_code(std::string country)
+	{
+		if (country.length() > 2)
+		{
+			CANStackLogger::warn("[VT/TC]: Language command country code should not be more than 2 characters! It will be truncated.");
+		}
+		else if (country.length() < 2)
+		{
+			CANStackLogger::warn("[VT/TC]: Language command country code should not be less than 2 characters! It will be padded.");
+		}
+
+		while (country.length() < 2)
+		{
+			country.push_back(' ');
+		}
+		countryCode = country;
+	}
+
 	std::string LanguageCommandInterface::get_language_code() const
 	{
 		return languageCode;
+	}
+
+	void LanguageCommandInterface::set_language_code(std::string language)
+	{
+		if (language.length() > 2)
+		{
+			CANStackLogger::warn("[VT/TC]: Language command language code should not be more than 2 characters! It will be truncated.");
+		}
+		else if (language.length() < 2)
+		{
+			CANStackLogger::warn("[VT/TC]: Language command language code should not be less than 2 characters! It will be padded.");
+		}
+
+		while (language.length() < 2)
+		{
+			language.push_back(' ');
+		}
+		languageCode = language;
 	}
 
 	std::uint32_t LanguageCommandInterface::get_language_command_timestamp() const
@@ -107,9 +180,19 @@ namespace isobus
 		return decimalSymbol;
 	}
 
+	void LanguageCommandInterface::set_commanded_decimal_symbol(DecimalSymbols decimals)
+	{
+		decimalSymbol = decimals;
+	}
+
 	LanguageCommandInterface::TimeFormats LanguageCommandInterface::get_commanded_time_format() const
 	{
 		return timeFormat;
+	}
+
+	void LanguageCommandInterface::set_commanded_time_format(TimeFormats format)
+	{
+		timeFormat = format;
 	}
 
 	LanguageCommandInterface::DateFormats LanguageCommandInterface::get_commanded_date_format() const
@@ -117,9 +200,19 @@ namespace isobus
 		return dateFormat;
 	}
 
+	void LanguageCommandInterface::set_commanded_date_format(DateFormats format)
+	{
+		dateFormat = format;
+	}
+
 	LanguageCommandInterface::DistanceUnits LanguageCommandInterface::get_commanded_distance_units() const
 	{
 		return distanceUnitSystem;
+	}
+
+	void LanguageCommandInterface::set_commanded_distance_units(DistanceUnits units)
+	{
+		distanceUnitSystem = units;
 	}
 
 	LanguageCommandInterface::AreaUnits LanguageCommandInterface::get_commanded_area_units() const
@@ -127,9 +220,19 @@ namespace isobus
 		return areaUnitSystem;
 	}
 
+	void LanguageCommandInterface::set_commanded_area_units(AreaUnits units)
+	{
+		areaUnitSystem = units;
+	}
+
 	LanguageCommandInterface::VolumeUnits LanguageCommandInterface::get_commanded_volume_units() const
 	{
 		return volumeUnitSystem;
+	}
+
+	void LanguageCommandInterface::set_commanded_volume_units(VolumeUnits units)
+	{
+		volumeUnitSystem = units;
 	}
 
 	LanguageCommandInterface::MassUnits LanguageCommandInterface::get_commanded_mass_units() const
@@ -137,9 +240,19 @@ namespace isobus
 		return massUnitSystem;
 	}
 
+	void LanguageCommandInterface::set_commanded_mass_units(MassUnits units)
+	{
+		massUnitSystem = units;
+	}
+
 	LanguageCommandInterface::TemperatureUnits LanguageCommandInterface::get_commanded_temperature_units() const
 	{
 		return temperatureUnitSystem;
+	}
+
+	void LanguageCommandInterface::set_commanded_temperature_units(TemperatureUnits units)
+	{
+		temperatureUnitSystem = units;
 	}
 
 	LanguageCommandInterface::PressureUnits LanguageCommandInterface::get_commanded_pressure_units() const
@@ -147,14 +260,29 @@ namespace isobus
 		return pressureUnitSystem;
 	}
 
+	void LanguageCommandInterface::set_commanded_pressure_units(PressureUnits units)
+	{
+		pressureUnitSystem = units;
+	}
+
 	LanguageCommandInterface::ForceUnits LanguageCommandInterface::get_commanded_force_units() const
 	{
 		return forceUnitSystem;
 	}
 
+	void LanguageCommandInterface::set_commanded_force_units(ForceUnits units)
+	{
+		forceUnitSystem = units;
+	}
+
 	LanguageCommandInterface::UnitSystem LanguageCommandInterface::get_commanded_generic_units() const
 	{
 		return genericUnitSystem;
+	}
+
+	void LanguageCommandInterface::set_commanded_generic_units(UnitSystem units)
+	{
+		genericUnitSystem = units;
 	}
 
 	const std::array<std::uint8_t, 7> LanguageCommandInterface::get_localization_raw_data() const
@@ -229,4 +357,22 @@ namespace isobus
 		}
 	}
 
+	bool LanguageCommandInterface::on_language_request(std::uint32_t parameterGroupNumber,
+	                                                   std::shared_ptr<ControlFunction>,
+	                                                   bool &acknowledge,
+	                                                   AcknowledgementType &acknowledgeType,
+	                                                   void *parentPointer)
+	{
+		bool retVal = false;
+
+		if ((nullptr != parentPointer) && (static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand) == parameterGroupNumber))
+		{
+			auto targetInterface = static_cast<LanguageCommandInterface *>(parentPointer);
+			acknowledge = false;
+			acknowledgeType = AcknowledgementType::Positive;
+			retVal = true;
+			targetInterface->send_language_command();
+		}
+		return retVal;
+	}
 }
