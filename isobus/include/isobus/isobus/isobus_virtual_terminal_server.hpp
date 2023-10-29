@@ -15,6 +15,7 @@
 #include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
+#include "isobus/isobus/isobus_language_command_interface.hpp"
 
 namespace isobus
 {
@@ -119,6 +120,9 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_enable_disable_object_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> &get_on_change_numeric_value_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> &get_on_change_child_location_event_dispatcher();
+
+		//----------------- Other Server Settings -----------------------------
+		LanguageCommandInterface &get_language_command_interface();
 
 	protected:
 		enum class ChangeActiveMaskErrorBit : std::uint8_t
@@ -245,6 +249,7 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onEnableDisableObjectEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> onChangeNumericValueEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> onChangeChildLocationEventDispatcher;
+		LanguageCommandInterface languageCommandInterface;
 		std::shared_ptr<InternalControlFunction> serverInternalControlFunction;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> managedWorkingSetList;
 		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> activeWorkingSet;
