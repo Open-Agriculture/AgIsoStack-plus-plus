@@ -12,10 +12,10 @@
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
-#include "isobus/isobus/isobus_language_command_interface.hpp"
 
 namespace isobus
 {
@@ -88,6 +88,7 @@ namespace isobus
 		                                                             std::vector<std::uint8_t> &wideCharRangeArray) = 0;
 
 		virtual std::vector<std::uint8_t> get_versions(NAME clientNAME) = 0;
+		virtual std::vector<std::uint8_t> get_supported_objects() const = 0;
 
 		/// @brief This function is called when the client wants the server to load a previously stored object pool.
 		/// If there exists in the VT's non-volatile memory an object pool matching the provided version label,
@@ -240,6 +241,8 @@ namespace isobus
 		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
 
 		bool send_status_message();
+
+		bool send_supported_objects(std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Cyclic update function
 		void update();
