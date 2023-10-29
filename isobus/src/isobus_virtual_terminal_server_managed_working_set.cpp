@@ -483,7 +483,169 @@ namespace isobus
 
 					case VirtualTerminalObjectType::WindowMask:
 					{
-						CANStackLogger::error("[WS]: Window mask not supported yet");
+						auto tempObject = std::make_shared<WindowMask>(vtObjectTree, workingSetColourTable);
+
+						if (iopLength >= tempObject->get_minumum_object_length())
+						{
+							retVal = true;
+							tempObject->set_id(decodedID);
+
+							if ((iopData[3] != 1) && (iopData[3] != 2))
+							{
+								CANStackLogger::warn("[WS]: Unknown window mask width for object %u. Allowed range is 1-2.", decodedID);
+							}
+							tempObject->set_width(iopData[3]);
+
+							if ((iopData[4] < 1) || (iopData[4] > 6))
+							{
+								CANStackLogger::warn("[WS]: Unknown window mask height for object %u. Allowed range is 1-6.", decodedID);
+							}
+							tempObject->set_height(iopData[4]);
+
+							if (iopData[5] > 18)
+							{
+								CANStackLogger::error("[WS]: Unknown window mask type for object %u. Allowed range is 1-18.", decodedID);
+								retVal = false;
+							}
+							else
+							{
+								tempObject->set_window_type(static_cast<WindowMask::WindowType>(iopData[5]));
+							}
+
+							if (retVal)
+							{
+								tempObject->set_background_color(iopData[6]);
+								tempObject->set_options(iopData[7]);
+
+								const std::uint16_t name = (static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8));
+								const std::uint16_t title = (static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8));
+								const std::uint16_t icon = (static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8));
+
+								tempObject->set_name_object_id(name);
+								tempObject->set_title_object_id(title);
+								tempObject->set_icon_object_id(icon);
+
+								const std::uint8_t numberOfObjectReferences = iopData[14];
+								const std::uint8_t numberOfChildObjects = iopData[15];
+								const std::uint8_t numberOfMacros = iopData[16];
+								const std::uint16_t sizeOfMacros = (numberOfMacros * 2);
+								const std::uint16_t sizeOfChildren = (numberOfChildObjects * 6); // ID, X, Y 2 bytes each
+
+								switch (tempObject->get_window_type())
+								{
+									case WindowMask::WindowType::StringOutputValue1x1:
+									case WindowMask::WindowType::NumericOutputValueNoUnits1x1:
+									case WindowMask::WindowType::SingleButton1x1:
+									case WindowMask::WindowType::StringInputValue1x1:
+									case WindowMask::WindowType::SingleButton2x1:
+									case WindowMask::WindowType::HorizontalLinearBarGraphNoUnits2x1:
+									case WindowMask::WindowType::NumericOutputValueNoUnits2x1:
+									case WindowMask::WindowType::NumericInputValueNoUnits1x1:
+									case WindowMask::WindowType::HorizontalLinearBarGraphNoUnits1x1:
+									case WindowMask::WindowType::StringOutputValue2x1:
+									case WindowMask::WindowType::StringInputValue2x1:
+									case WindowMask::WindowType::NumericInputValueNoUnits2x1:
+									{
+										if (1 != numberOfObjectReferences)
+										{
+											retVal = false;
+											CANStackLogger::error("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 1.", decodedID);
+										}
+									}
+									break;
+
+									case WindowMask::WindowType::NumericOutputValueWithUnits1x1:
+									case WindowMask::WindowType::DoubleButton2x1:
+									case WindowMask::WindowType::NumericInputValueWithUnits1x1:
+									case WindowMask::WindowType::NumericOutputValueWithUnits2x1:
+									case WindowMask::WindowType::NumericInputValueWithUnits2x1:
+									case WindowMask::WindowType::DoubleButton1x1:
+									{
+										if (2 != numberOfObjectReferences)
+										{
+											retVal = false;
+											CANStackLogger::error("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 2.", decodedID);
+										}
+									}
+									break;
+
+									case WindowMask::WindowType::Freeform:
+									{
+										if (0 != numberOfObjectReferences)
+										{
+											retVal = false;
+											CANStackLogger::error("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 0.", decodedID);
+										}
+									}
+									break;
+								}
+
+								iopLength -= tempObject->get_minumum_object_length(); // Subtract the bytes we've processed so far.
+								iopData += tempObject->get_minumum_object_length(); // Move the pointer
+
+								if (iopLength >= (2 * numberOfObjectReferences))
+								{
+									for (std::uint_fast8_t i = 0; i < numberOfObjectReferences; i++)
+									{
+										std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+										tempObject->add_child(childID, 0, 0);
+										iopLength -= 2;
+										iopData += 2;
+									}
+
+									if (iopLength >= sizeOfChildren)
+									{
+										for (std::uint_fast8_t i = 0; i < numberOfChildObjects; i++)
+										{
+											std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+											std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
+											std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+											tempObject->add_child(childID, childX, childY);
+											iopLength -= 6;
+											iopData += 6;
+										}
+
+										// Next, parse macro list
+
+										if (iopLength >= sizeOfMacros)
+										{
+											for (std::uint_fast8_t i = 0; i < numberOfMacros; i++)
+											{
+												// If the first byte is 255, then more bytes are used! 4.6.22.3
+												/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
+												iopLength -= 2;
+												iopData += 2;
+												CANStackLogger::warn("[WS]: Skipped parsing macro reference in window mask object (todo)");
+											}
+										}
+										else
+										{
+											CANStackLogger::error("[WS]: Not enough IOP data to parse macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+											retVal = false;
+										}
+									}
+									else
+									{
+										CANStackLogger::error("[WS]: Not enough IOP data to parse children for object " + isobus::to_string(static_cast<int>(decodedID)));
+										retVal = false;
+									}
+								}
+								else
+								{
+									CANStackLogger::error("[WS]: Not enough IOP data to parse object references for object " + isobus::to_string(static_cast<int>(decodedID)));
+									retVal = false;
+								}
+
+								if (retVal)
+								{
+									vtObjectTree[tempObject->get_id()] = std::static_pointer_cast<VTObject>(tempObject);
+								}
+							}
+						}
+						else
+						{
+							CANStackLogger::error("[WS]: Not enough IOP data to parse window mask object.");
+						}
 					}
 					break;
 
