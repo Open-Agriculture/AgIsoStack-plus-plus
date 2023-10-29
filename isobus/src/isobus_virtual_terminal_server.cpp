@@ -728,6 +728,12 @@ namespace isobus
 								}
 								break;
 
+								case static_cast<std::uint32_t>(Function::GetSupportedObjectsMessage):
+								{
+									parentServer->send_supported_objects(message.get_source_control_function());
+								}
+								break;
+
 								default:
 									break;
 							}
@@ -1052,6 +1058,24 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      nullptr,
+		                                                      CANIdentifier::PriorityLowest7);
+	}
+
+	bool VirtualTerminalServer::send_supported_objects(std::shared_ptr<ControlFunction> destination) const
+	{
+		auto supportedObjects = get_supported_objects();
+		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::GetSupportedObjectsMessage),
+			                                   static_cast<std::uint8_t>(supportedObjects.size()) };
+
+		for (const auto &supportedObject : supportedObjects)
+		{
+			buffer.push_back(supportedObject);
+		}
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
