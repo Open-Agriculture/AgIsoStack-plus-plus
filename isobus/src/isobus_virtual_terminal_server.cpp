@@ -16,6 +16,7 @@
 namespace isobus
 {
 	VirtualTerminalServer::VirtualTerminalServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse) :
+	  languageCommandInterface(controlFunctionToUse, true),
 	  serverInternalControlFunction(controlFunctionToUse)
 	{
 	}
@@ -93,6 +94,11 @@ namespace isobus
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> &VirtualTerminalServer::get_on_change_child_location_event_dispatcher()
 	{
 		return onChangeChildLocationEventDispatcher;
+	}
+
+	LanguageCommandInterface &VirtualTerminalServer::get_language_command_interface()
+	{
+		return languageCommandInterface;
 	}
 
 	bool VirtualTerminalServer::check_if_source_is_managed(const CANMessage &message)
