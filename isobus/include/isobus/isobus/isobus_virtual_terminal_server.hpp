@@ -19,15 +19,31 @@
 
 namespace isobus
 {
+	/// @brief This class is an abstract VT server interface.
+	/// @details The VT is a control function that provides a way for operators to interact with other
+	/// control functions via a GUI. A VT has a pixel-addressable (graphical) display.
+	/// The information that is shown in display areas are defined by Data Masks, Alarm Masks and Soft Key Masks.
+	/// The data for these masks is contained in object definitions that are loaded into a VT via the ISO 11783 CAN bus, or from non-volatile memory.
+	/// See ISO 11783-6 for the complete definition of this interface, and the objects involved.
 	class VirtualTerminalServer : public VirtualTerminalBase
 	{
 	public:
+		/// @brief Constructor for a VirtualTerminalServer
+		/// @param[in] controlFunctionToUse The internal control function to use when sending messages to VT clients
 		VirtualTerminalServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse);
 
+		/// @brief Destructor for the VirtualTerminalServer
 		~VirtualTerminalServer();
 
+		/// @brief Initializes the interface, which registers it with the network manager.
 		void initialize();
+
+		/// @brief Returns if the interface has been initialized yet.
+		/// @returns true if initialize has been called on this object, otherwise false
 		bool get_initialized() const;
+
+		/// @brief Returns a pointer to the currently active working set
+		/// @returns Pointer to the currently active working set, or nullptr if none is active
 		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> get_active_working_set() const;
 
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a Button object to the Working
@@ -121,11 +137,19 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_enable_disable_object_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> &get_on_change_numeric_value_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> &get_on_change_child_location_event_dispatcher();
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> &get_on_change_string_value_event_dispatcher();
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, FillAttributes::FillType, std::uint8_t, std::uint16_t> &get_on_change_fill_attributes_event_dispatcher();
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> &get_on_change_child_position_event_dispatcher();
 
 		//----------------- Other Server Settings -----------------------------
+
+		/// @brief Returns the language command interface for the server, which
+		/// can be used to inform clients of the current unit systems, language, and country code
+		/// @returns The language command interface for the server
 		LanguageCommandInterface &get_language_command_interface();
 
 	protected:
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change active mask response
 		enum class ChangeActiveMaskErrorBit : std::uint8_t
 		{
 			InvalidWorkingSetObjectID = 0,
@@ -133,13 +157,25 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
-		enum class ChangeChildLocationErrorBit : std::uint8_t
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change child location/position value response
+		enum class ChangeChildLocationorPositionErrorBit : std::uint8_t
 		{
 			ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject = 0,
 			TargetObjectDoesNotExistOrIsNotApplicable = 1,
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change fill attributes response
+		enum class ChangeFillAttributesErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidType = 1,
+			InvalidColour = 2,
+			InvalidPatternObjectID = 3,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change numeric value response
 		enum class ChangeNumericValueErrorBit : std::uint8_t
 		{
 			InvalidObjectID = 0,
@@ -149,6 +185,17 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change string value response
+		enum class ChangeStringValueErrorBit : std::uint8_t
+		{
+			Undefined = 0, ///< This bit should always be set to zero
+			InvalidObjectID = 1,
+			StringTooLong = 2,
+			AnyOtherError = 3,
+			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
 		enum class EnableDisableObjectErrorBit : std::uint8_t
 		{
 			Undefined = 0,
@@ -158,6 +205,7 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a hide/show object response
 		enum class HideShowObjectErrorBit : std::uint8_t
 		{
 			ReferencesToMissingChildObjects = 0,
@@ -199,6 +247,21 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Sends a response to a change child position command
+		/// @param[in] parentObjectID The object ID for the parent of the object to move
+		/// @param[in] objectID The object ID for the object to move
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change fill attributes command
+		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+
 		/// @brief Sends a response to a change numeric value command
 		/// @param[in] objectID The object ID for the object whose numeric value was meant to be changed
 		/// @param[in] errorBitfield An error bitfield
@@ -206,6 +269,13 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change string value command
+		/// @param[in] objectID The object ID for the object whose value was meant to be changed
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a response to the enable/disable object command
 		/// @param[in] objectID The object ID for the object
@@ -240,8 +310,16 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Sends the VT status message broadcast. The status message
+		/// contains information such as which working set is the active one, and information about
+		/// what the VT server is doing, such as busy flags. This message should be sent at 1 Hz.
+		/// @returns true if the message was sent, otherwise false
 		bool send_status_message();
 
+		/// @brief Sends the list of objects that the server supports to a client, usually in
+		/// response to a "get supported objects" message, which is used by a client.
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false.
 		bool send_supported_objects(std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Cyclic update function
@@ -252,6 +330,9 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onEnableDisableObjectEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> onChangeNumericValueEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> onChangeChildLocationEventDispatcher;
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> onChangeStringValueEventDispatcher;
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, FillAttributes::FillType, std::uint8_t, std::uint16_t> onChangeFillAttributesEventDispatcher;
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> onChangeChildPositionEventDispatcher;
 		LanguageCommandInterface languageCommandInterface;
 		std::shared_ptr<InternalControlFunction> serverInternalControlFunction;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> managedWorkingSetList;
