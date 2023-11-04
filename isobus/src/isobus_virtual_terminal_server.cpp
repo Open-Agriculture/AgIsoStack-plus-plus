@@ -96,6 +96,21 @@ namespace isobus
 		return onChangeChildLocationEventDispatcher;
 	}
 
+	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> &VirtualTerminalServer::get_on_change_string_value_event_dispatcher()
+	{
+		return onChangeStringValueEventDispatcher;
+	}
+
+	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, FillAttributes::FillType, std::uint8_t, std::uint16_t> &VirtualTerminalServer::get_on_change_fill_attributes_event_dispatcher()
+	{
+		return onChangeFillAttributesEventDispatcher;
+	}
+
+	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> &VirtualTerminalServer::get_on_change_child_position_event_dispatcher()
+	{
+		return onChangeChildPositionEventDispatcher;
+	}
+
 	LanguageCommandInterface &VirtualTerminalServer::get_language_command_interface()
 	{
 		return languageCommandInterface;
@@ -108,7 +123,7 @@ namespace isobus
 
 		// This is the static callback for the instance.
 		// See if we need to set up a new managed working set.
-		for (auto cf : managedWorkingSetList)
+		for (auto &cf : managedWorkingSetList)
 		{
 			if (cf->get_control_function() == message.get_source_control_function())
 			{
@@ -149,7 +164,8 @@ namespace isobus
 		auto parentServer = static_cast<VirtualTerminalServer *>(parent);
 		if ((nullptr != message.get_source_control_function()) &&
 		    (nullptr != parentServer) &&
-		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
+		    ((CAN_DATA_LENGTH <= message.get_data_length()) ||
+		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0)))) && // Technically this message can be 6 bytes
 		    (parentServer->check_if_source_is_managed(message)))
 		{
 			for (auto cf : parentServer->managedWorkingSetList)
@@ -685,19 +701,19 @@ namespace isobus
 										{
 											std::int8_t xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
 											std::int8_t yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
-											bool anyObjectMatched = anyObjectMatched = parentObject->offset_all_children_x_with_id(objectID, xRelativeChange, yRelativeChange);
+											bool anyObjectMatched = parentObject->offset_all_children_x_with_id(objectID, xRelativeChange, yRelativeChange);
 
 											parentServer->onChangeChildLocationEventDispatcher.call(cf, parentObjectId, objectID, xRelativeChange, yRelativeChange);
-											parentServer->send_change_child_location_response(parentObjectId, objectID, anyObjectMatched ? 0 : (1 << static_cast<std::uint8_t>(ChangeChildLocationErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
+											parentServer->send_change_child_location_response(parentObjectId, objectID, anyObjectMatched ? 0 : (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
 										}
 										else
 										{
-											parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
+											parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
 										}
 									}
 									else
 									{
-										parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), cf->get_control_function());
+										parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), cf->get_control_function());
 									}
 								}
 								break;
@@ -731,6 +747,181 @@ namespace isobus
 								case static_cast<std::uint32_t>(Function::GetSupportedObjectsMessage):
 								{
 									parentServer->send_supported_objects(message.get_source_control_function());
+								}
+								break;
+
+								case static_cast<std::uint32_t>(Function::ChangeStringValueCommand):
+								{
+									std::uint16_t objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									std::uint16_t numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+									auto stringObject = cf->get_object_by_id(objectIdToChange);
+
+									if (message.get_data_length() >= (numberOfBytesInString + 5))
+									{
+										if (nullptr != stringObject)
+										{
+											std::string newStringValue;
+
+											for (std::uint32_t i = 0; i < numberOfBytesInString; i++)
+											{
+												newStringValue.push_back(static_cast<char>(data.at(5 + i)));
+											}
+
+											switch (stringObject->get_object_type())
+											{
+												case VirtualTerminalObjectType::StringVariable:
+												{
+													std::static_pointer_cast<StringVariable>(stringObject)->set_value(newStringValue);
+													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
+													parentServer->onChangeStringValueEventDispatcher.call(cf, objectIdToChange, newStringValue);
+												}
+												break;
+
+												case VirtualTerminalObjectType::OutputString:
+												{
+													std::static_pointer_cast<OutputString>(stringObject)->set_value(newStringValue);
+													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
+													parentServer->onChangeStringValueEventDispatcher.call(cf, objectIdToChange, std::move(newStringValue));
+												}
+												break;
+
+												case VirtualTerminalObjectType::InputString:
+												{
+													std::static_pointer_cast<InputString>(stringObject)->set_value(newStringValue);
+													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
+													parentServer->onChangeStringValueEventDispatcher.call(cf, objectIdToChange, newStringValue);
+												}
+												break;
+
+												default:
+												{
+													parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+												}
+												break;
+											}
+										}
+										else
+										{
+											parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::AnyOtherError)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case static_cast<std::uint32_t>(Function::ChangeFillAttributesCommand):
+								{
+									std::uint16_t objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									std::uint16_t fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+									auto object = cf->get_object_by_id(objectIdToChange);
+									auto fillPatternObject = cf->get_object_by_id(fillPatternID);
+
+									if ((nullptr != object) && (VirtualTerminalObjectType::FillAttributes == object->get_object_type()))
+									{
+										auto fillObject = std::static_pointer_cast<FillAttributes>(object);
+
+										if (((nullptr != fillPatternObject) && (VirtualTerminalObjectType::PictureGraphic == fillPatternObject->get_object_type())) || (NULL_OBJECT_ID == fillPatternID))
+										{
+											if (data[3] <= static_cast<std::uint8_t>(FillAttributes::FillType::FillWithPatternGivenByFillPatternAttribute))
+											{
+												fillObject->set_fill_pattern(fillPatternID);
+												fillObject->set_type(static_cast<FillAttributes::FillType>(data[3]));
+												fillObject->set_background_color(data[4]);
+												parentServer->send_change_fill_attributes_response(objectIdToChange, 0, message.get_source_control_function());
+												parentServer->onChangeFillAttributesEventDispatcher.call(cf, objectIdToChange, static_cast<FillAttributes::FillType>(data[3]), data[4], fillPatternID);
+											}
+											else
+											{
+												parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidType)), message.get_source_control_function());
+											}
+										}
+										else
+										{
+											parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidPatternObjectID)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case static_cast<std::uint32_t>(Function::ChangeChildPositionCommand):
+								{
+									auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+									if (message.get_data_length() > CAN_DATA_LENGTH) // Must be at least 9 bytes
+									{
+										std::uint16_t newXPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+										std::uint16_t newYPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[7]) | (static_cast<std::uint16_t>(data[8]) << 8));
+										auto parentObject = cf->get_object_by_id(parentObjectId);
+										auto targetObject = cf->get_object_by_id(objectID);
+
+										if (nullptr != parentObject)
+										{
+											if (nullptr != targetObject)
+											{
+												switch (parentObject->get_object_type())
+												{
+													case VirtualTerminalObjectType::Button:
+													case VirtualTerminalObjectType::Container:
+													case VirtualTerminalObjectType::AlarmMask:
+													case VirtualTerminalObjectType::DataMask:
+													case VirtualTerminalObjectType::Key:
+													case VirtualTerminalObjectType::WorkingSet:
+													case VirtualTerminalObjectType::AuxiliaryInputType2:
+													case VirtualTerminalObjectType::WindowMask:
+													{
+														bool wasFound = false;
+
+														// If a parent object includes the child object multiple times, then each instance will be moved
+														for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
+														{
+															if (objectID == parentObject->get_child_id(i))
+															{
+																wasFound = true;
+																parentObject->set_child_x(i, newXPosition);
+																parentObject->set_child_y(i, newYPosition);
+																parentServer->onChangeChildPositionEventDispatcher.call(cf, parentObjectId, objectID, newXPosition, newYPosition);
+															}
+														}
+
+														if (wasFound)
+														{
+															parentServer->send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
+														}
+														else
+														{
+															parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
+														}
+													}
+													break;
+
+													default:
+													{
+														parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+													}
+													break;
+												}
+											}
+											else
+											{
+												parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
+											}
+										}
+										else
+										{
+											parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+									}
 								}
 								break;
 
@@ -820,6 +1011,59 @@ namespace isobus
 			buffer[6] = 0xFF;
 			buffer[7] = 0xFF;
 
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+				buffer[0] = static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
+				buffer[1] = static_cast<std::uint8_t>(parentObjectID & 0xFF),
+				buffer[2] = static_cast<std::uint8_t>(parentObjectID >> 8),
+				buffer[3] = static_cast<std::uint8_t>(objectID & 0xFF),
+				buffer[4] = static_cast<std::uint8_t>(objectID >> 8),
+				buffer[5] = errorBitfield,
+				buffer[6] = 0xFF,
+				buffer[7] = 0xFF
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeFillAttributesCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
@@ -958,6 +1202,32 @@ namespace isobus
 			buffer[6] = static_cast<std::uint8_t>(value >> 16);
 			buffer[7] = static_cast<std::uint8_t>(value >> 24);
 
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeStringValueCommand),
+				0xFF,
+				0xFF,
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF
+			};
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
