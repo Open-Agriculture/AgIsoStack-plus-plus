@@ -9,6 +9,8 @@
 #ifndef ISOBUS_VIRTUAL_TERMINAL_BASE_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_BASE_HPP
 
+#include <cstdint>
+
 namespace isobus
 {
 	class VirtualTerminalBase
