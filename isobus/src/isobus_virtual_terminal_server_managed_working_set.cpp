@@ -11,11 +11,13 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <cstring>
+
 namespace isobus
 {
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet() :
-	  objectPoolProcessingThread(nullptr),
 	  workingSetControlFunction(nullptr),
+	  objectPoolProcessingThread(nullptr),
 	  processingState(ObjectPoolProcessingThreadState::None),
 	  workingSetMaintenanceMessageTimestamp_ms(0),
 	  workingSetID(NULL_OBJECT_ID),
@@ -583,7 +585,7 @@ namespace isobus
 								iopLength -= tempObject->get_minumum_object_length(); // Subtract the bytes we've processed so far.
 								iopData += tempObject->get_minumum_object_length(); // Move the pointer
 
-								if (iopLength >= (2 * numberOfObjectReferences))
+								if (iopLength >= static_cast<std::uint32_t>(2 * numberOfObjectReferences))
 								{
 									for (std::uint_fast8_t i = 0; i < numberOfObjectReferences; i++)
 									{
@@ -1300,7 +1302,7 @@ namespace isobus
 								iopData[23],
 								iopData[24]
 							};
-							memcpy(&tempFloat, &floatBuffer, 4); // TODO Feels kinda bad...
+							std::memcpy(&tempFloat, &floatBuffer, 4); // TODO Feels kinda bad...
 
 							tempObject->set_scale(tempFloat);
 							tempObject->set_number_of_decimals(iopData[25]);
