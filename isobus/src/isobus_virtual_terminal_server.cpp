@@ -892,10 +892,12 @@ namespace isobus
 
 														if (wasFound)
 														{
+															CANStackLogger::info("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 															parentServer->send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
 														}
 														else
 														{
+															CANStackLogger::warn("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 															parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
 														}
 													}
@@ -903,6 +905,7 @@ namespace isobus
 
 													default:
 													{
+														CANStackLogger::warn("[VT Server]: Client %u change child position error. Parent object type cannot be targeted by this command: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 														parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
 													}
 													break;
@@ -910,17 +913,49 @@ namespace isobus
 											}
 											else
 											{
+												CANStackLogger::warn("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 												parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
 											}
 										}
 										else
 										{
+											CANStackLogger::warn("[VT Server]: Client %u change child position error. Parent object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 											parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
 										}
 									}
 									else
 									{
+										CANStackLogger::warn("[VT Server]: Client %u change child position error. DLC must be 9 bytes for the message to be valid.");
 										parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case static_cast<std::uint32_t>(Function::ChangeAttributeCommand):
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+									std::uint8_t attributeID = data[3];
+									std::uint32_t attributeData = static_cast<std::uint32_t>(static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
+									VTObject::AttributeError errorCode = VTObject::AttributeError::AnyOtherError;
+
+									if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
+									{
+										if (targetObject->set_attribute(attributeID, attributeData, errorCode)) // 0 Is always the read-only "type" attribute
+										{
+											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
+											CANStackLogger::info("[VT Server]: Client %u changed object %u attribute %u to %ul", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
+										}
+										else
+										{
+											parentServer->send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(errorCode)), data.at(3), message.get_source_control_function());
+											CANStackLogger::warn("[VT Server]: Client %u change object %u attribute %u to %ul error %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData, static_cast<std::uint8_t>(errorCode));
+										}
+									}
+									else
+									{
+										parentServer->send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(VTObject::AttributeError::InvalidObjectID)), data.at(3), message.get_source_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change attribute %u invalid object ID of %u", cf->get_control_function()->get_address(), attributeID, objectID);
 									}
 								}
 								break;
@@ -979,6 +1014,33 @@ namespace isobus
 				static_cast<std::uint8_t>((newMaskObjectID >> 8) & 0xFF),
 				errorBitfield,
 				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeAttributeCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>((objectID >> 8) & 0xFF),
+				attributeID,
+				errorBitfield,
 				0xFF,
 				0xFF,
 				0xFF
