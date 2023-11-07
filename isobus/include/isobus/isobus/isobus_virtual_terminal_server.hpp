@@ -239,6 +239,14 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_active_mask_response(std::uint16_t newMaskObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Sends a response to a change attribute command
+		/// @param[in] objectID The object ID for the target object
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] attributeID The attribute ID that was changed
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination);
+
 		/// @brief Sends a response to a change child location command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
 		/// @param[in] objectID The object ID for the object to move
