@@ -8,6 +8,7 @@
 //================================================================================================
 #include "isobus/isobus/can_address_claim_state_machine.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_message_data.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -329,21 +330,20 @@ namespace isobus
 
 		if (get_enabled())
 		{
-			const std::uint8_t addressClaimRequestLength = 3;
+			static const std::uint8_t ADDRESS_CLAIM_MESSAGE_LENGTH = 3;
 			const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
-			std::uint8_t dataBuffer[addressClaimRequestLength];
-
-			dataBuffer[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
-			dataBuffer[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
-			dataBuffer[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
+			std::array<const std::uint8_t, ADDRESS_CLAIM_MESSAGE_LENGTH> dataBuffer{
+				PGN & 0xFF,
+				(PGN >> 8) & 0xFF,
+				(PGN >> 16) & 0xFF,
+			};
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message_raw(m_portIndex,
 			                                                            NULL_CAN_ADDRESS,
 			                                                            BROADCAST_CAN_ADDRESS,
 			                                                            static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest),
 			                                                            static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
-			                                                            dataBuffer,
-			                                                            3,
+			                                                            DataSpanFactory::fromArray(dataBuffer),
 			                                                            {});
 		}
 		return retVal;
@@ -358,23 +358,23 @@ namespace isobus
 		if (get_enabled())
 		{
 			std::uint64_t isoNAME = m_isoname.get_full_name();
-			std::uint8_t dataBuffer[CAN_DATA_LENGTH];
+			std::array<std::uint8_t, CAN_DATA_LENGTH> dataBuffer{
+				static_cast<std::uint8_t>(isoNAME),
+				static_cast<std::uint8_t>(isoNAME >> 8),
+				static_cast<std::uint8_t>(isoNAME >> 16),
+				static_cast<std::uint8_t>(isoNAME >> 24),
+				static_cast<std::uint8_t>(isoNAME >> 32),
+				static_cast<std::uint8_t>(isoNAME >> 40),
+				static_cast<std::uint8_t>(isoNAME >> 48),
+				static_cast<std::uint8_t>(isoNAME >> 56),
+			};
 
-			dataBuffer[0] = static_cast<uint8_t>(isoNAME);
-			dataBuffer[1] = static_cast<uint8_t>(isoNAME >> 8);
-			dataBuffer[2] = static_cast<uint8_t>(isoNAME >> 16);
-			dataBuffer[3] = static_cast<uint8_t>(isoNAME >> 24);
-			dataBuffer[4] = static_cast<uint8_t>(isoNAME >> 32);
-			dataBuffer[5] = static_cast<uint8_t>(isoNAME >> 40);
-			dataBuffer[6] = static_cast<uint8_t>(isoNAME >> 48);
-			dataBuffer[7] = static_cast<uint8_t>(isoNAME >> 56);
 			retVal = CANNetworkManager::CANNetwork.send_can_message_raw(m_portIndex,
 			                                                            address,
 			                                                            BROADCAST_CAN_ADDRESS,
 			                                                            static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim),
 			                                                            static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
-			                                                            dataBuffer,
-			                                                            CAN_DATA_LENGTH,
+			                                                            DataSpanFactory::cfromArray(dataBuffer),
 			                                                            {});
 			if (retVal)
 			{
