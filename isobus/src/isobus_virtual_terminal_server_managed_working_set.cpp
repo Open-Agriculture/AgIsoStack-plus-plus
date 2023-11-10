@@ -1142,7 +1142,7 @@ namespace isobus
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)), 0, 0); // Number variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8))); // Number variable
 							tempObject->set_value(iopData[9]);
 							tempObject->set_options(iopData[11]);
 

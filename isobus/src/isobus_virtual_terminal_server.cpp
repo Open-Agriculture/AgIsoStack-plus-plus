@@ -71,6 +71,11 @@ namespace isobus
 		return 0xFF;
 	}
 
+	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &VirtualTerminalServer::get_on_repaint_event_dispatcher()
+	{
+		return onRepaintEventDispatcher;
+	}
+
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &VirtualTerminalServer::get_on_change_active_mask_event_dispatcher()
 	{
 		return onChangeActiveMaskEventDispatcher;
@@ -178,9 +183,9 @@ namespace isobus
 					{
 						case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal):
 						{
-							switch (data[0])
+							switch (static_cast<Function>(data[0]))
 							{
-								case static_cast<std::uint32_t>(Function::ObjectPoolTransferMessage):
+								case Function::ObjectPoolTransferMessage:
 								{
 									auto tempPool = data; // Make a copy of the data (ouch)
 									tempPool.erase(tempPool.begin()); // Strip off the mux byte (double ouch, good thing this is rare)
@@ -189,7 +194,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetMemoryMessage):
+								case Function::GetMemoryMessage:
 								{
 									std::uint32_t requiredMemory = (data[2] | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16) | (static_cast<std::uint32_t>(data[5]) << 24));
 									bool isEnoughMemory = parentServer->get_is_enough_memory(requiredMemory);
@@ -222,7 +227,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetNumberOfSoftKeysMessage):
+								case Function::GetNumberOfSoftKeysMessage:
 								{
 									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 									buffer[0] = static_cast<std::uint8_t>(Function::GetNumberOfSoftKeysMessage);
@@ -243,7 +248,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetTextFontDataMessage):
+								case Function::GetTextFontDataMessage:
 								{
 									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 									buffer[0] = static_cast<std::uint8_t>(Function::GetTextFontDataMessage);
@@ -263,7 +268,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetHardwareMessage):
+								case Function::GetHardwareMessage:
 								{
 									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 									buffer[0] = static_cast<std::uint8_t>(Function::GetHardwareMessage);
@@ -283,7 +288,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetSupportedWidecharsMessage):
+								case Function::GetSupportedWidecharsMessage:
 								{
 									std::vector<std::uint8_t> wideCharRangeArray;
 									std::uint8_t numberOfRanges = 0;
@@ -315,7 +320,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetVersionsMessage):
+								case Function::GetVersionsMessage:
 								{
 									auto versions = parentServer->get_versions(message.get_source_control_function()->get_NAME());
 
@@ -348,7 +353,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::LoadVersionCommand):
+								case Function::LoadVersionCommand:
 								{
 									constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
 									std::uint8_t errorCodes = 0x01; // Version label incorrect
@@ -391,7 +396,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::StoreVersionCommand):
+								case Function::StoreVersionCommand:
 								{
 									if (cf->get_any_object_pools())
 									{
@@ -453,7 +458,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::EndOfObjectPoolMessage):
+								case Function::EndOfObjectPoolMessage:
 								{
 									if (cf->get_any_object_pools())
 									{
@@ -466,7 +471,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::WorkingSetMaintenanceMessage):
+								case Function::WorkingSetMaintenanceMessage:
 								{
 									if (0 != cf->get_working_set_maintenance_message_timestamp_ms())
 									{
@@ -475,7 +480,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeNumericValueCommand):
+								case Function::ChangeNumericValueCommand:
 								{
 									std::uint32_t value = (static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
 									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
@@ -599,7 +604,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::HideShowObjectCommand):
+								case Function::HideShowObjectCommand:
 								{
 									std::uint16_t objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto lTargetObject = cf->get_object_by_id(objectId);
@@ -617,7 +622,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::EnableDisableObjectCommand):
+								case Function::EnableDisableObjectCommand:
 								{
 									std::uint16_t objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto lTargetObject = cf->get_object_by_id(objectId);
@@ -687,7 +692,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeChildLocationCommand):
+								case Function::ChangeChildLocationCommand:
 								{
 									auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
@@ -718,7 +723,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeActiveMaskCommand):
+								case Function::ChangeActiveMaskCommand:
 								{
 									auto workingSetObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto newActiveMaskObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
@@ -729,28 +734,28 @@ namespace isobus
 										if (nullptr != cf->get_object_by_id(newActiveMaskObjectId))
 										{
 											std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
-											parentServer->send_change_active_mask_response(workingSetObjectId, 0, cf->get_control_function());
+											parentServer->send_change_active_mask_response(newActiveMaskObjectId, 0, cf->get_control_function());
 											parentServer->onChangeActiveMaskEventDispatcher.call(cf, workingSetObjectId, newActiveMaskObjectId);
 										}
 										else
 										{
-											parentServer->send_change_active_mask_response(workingSetObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), cf->get_control_function());
+											parentServer->send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), cf->get_control_function());
 										}
 									}
 									else
 									{
-										parentServer->send_change_active_mask_response(workingSetObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), cf->get_control_function());
+										parentServer->send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), cf->get_control_function());
 									}
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::GetSupportedObjectsMessage):
+								case Function::GetSupportedObjectsMessage:
 								{
 									parentServer->send_supported_objects(message.get_source_control_function());
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeStringValueCommand):
+								case Function::ChangeStringValueCommand:
 								{
 									std::uint16_t objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									std::uint16_t numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
@@ -812,7 +817,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeFillAttributesCommand):
+								case Function::ChangeFillAttributesCommand:
 								{
 									std::uint16_t objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									std::uint16_t fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
@@ -850,7 +855,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeChildPositionCommand):
+								case Function::ChangeChildPositionCommand:
 								{
 									auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
@@ -892,7 +897,7 @@ namespace isobus
 
 														if (wasFound)
 														{
-															CANStackLogger::info("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+															CANStackLogger::debug("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 															parentServer->send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
 														}
 														else
@@ -931,7 +936,7 @@ namespace isobus
 								}
 								break;
 
-								case static_cast<std::uint32_t>(Function::ChangeAttributeCommand):
+								case Function::ChangeAttributeCommand:
 								{
 									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto targetObject = cf->get_object_by_id(objectID);
@@ -944,7 +949,8 @@ namespace isobus
 										if (targetObject->set_attribute(attributeID, attributeData, errorCode)) // 0 Is always the read-only "type" attribute
 										{
 											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
-											CANStackLogger::info("[VT Server]: Client %u changed object %u attribute %u to %ul", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
+											CANStackLogger::debug("[VT Server]: Client %u changed object %u attribute %u to %ul", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
+											parentServer->onRepaintEventDispatcher.call(cf);
 										}
 										else
 										{
@@ -960,8 +966,261 @@ namespace isobus
 								}
 								break;
 
+								case Function::ChangeSizeCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto newWidth = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+									auto newHeight = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+
+									if (nullptr != targetObject)
+									{
+										bool success = false;
+
+										switch (targetObject->get_object_type())
+										{
+											case VirtualTerminalObjectType::OutputMeter:
+											{
+												if (newWidth == newHeight) // Output meter must be square!
+												{
+													targetObject->set_width(newWidth);
+													targetObject->set_height(newHeight);
+													success = true;
+													CANStackLogger::debug("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", cf->get_control_function()->get_address(), objectID, newWidth, newHeight);
+													parentServer->onRepaintEventDispatcher.call(cf);
+												}
+												else
+												{
+													CANStackLogger::warn("[VT Server]: Client %u change size command: invalid new size. Meter must be square! Object: %u", cf->get_control_function()->get_address(), objectID);
+													parentServer->send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
+												}
+											}
+											break;
+
+											case VirtualTerminalObjectType::Animation:
+											case VirtualTerminalObjectType::OutputArchedBarGraph:
+											case VirtualTerminalObjectType::OutputPolygon:
+											case VirtualTerminalObjectType::OutputEllipse:
+											case VirtualTerminalObjectType::OutputRectangle:
+											case VirtualTerminalObjectType::OutputLine:
+											case VirtualTerminalObjectType::OutputList:
+											case VirtualTerminalObjectType::InputList:
+											case VirtualTerminalObjectType::Button:
+											case VirtualTerminalObjectType::Container:
+											{
+												targetObject->set_width(newWidth);
+												targetObject->set_height(newHeight);
+												success = true;
+												CANStackLogger::debug("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", cf->get_control_function()->get_address(), objectID, newWidth, newHeight);
+												parentServer->onRepaintEventDispatcher.call(cf);
+											}
+											break;
+
+											default:
+											{
+												CANStackLogger::warn("[VT Server]: Client %u change size command: invalid object type for object %u", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
+											}
+											break;
+										}
+
+										if (success)
+										{
+											parentServer->send_change_size_response(objectID, 0, message.get_source_control_function());
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u change size command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID))), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case Function::ChangeListItemCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+									auto listIndex = data[3];
+									auto targetObject = cf->get_object_by_id(objectID);
+									auto newObject = cf->get_object_by_id(newObjectID);
+
+									if (nullptr != targetObject)
+									{
+										if ((NULL_OBJECT_ID == newObjectID) || (nullptr != newObject))
+										{
+											switch (targetObject->get_object_type())
+											{
+												case VirtualTerminalObjectType::InputList:
+												{
+													if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID))
+													{
+														parentServer->send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+														CANStackLogger::debug("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+														parentServer->onRepaintEventDispatcher.call(cf);
+													}
+													else
+													{
+														parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+														CANStackLogger::warn("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+													}
+												}
+												break;
+
+												case VirtualTerminalObjectType::Animation:
+												case VirtualTerminalObjectType::ExternalObjectDefinition:
+												{
+													// @todo
+													parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+													CANStackLogger::warn("[VT Server]: Client %u change list item command: TODO object type", cf->get_control_function()->get_address());
+												}
+												break;
+
+												case VirtualTerminalObjectType::OutputList:
+												{
+													if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID))
+													{
+														parentServer->send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+														CANStackLogger::debug("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+														parentServer->onRepaintEventDispatcher.call(cf);
+													}
+													else
+													{
+														parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+														CANStackLogger::warn("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+													}
+												}
+												break;
+
+												default:
+												{
+													CANStackLogger::warn("[VT Server]: Client %u change list item command: invalid object type. Object: %u", cf->get_control_function()->get_address(), objectID);
+													parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+												}
+												break;
+											}
+										}
+										else
+										{
+											CANStackLogger::warn("[VT Server]: Client %u change list item command: invalid new object ID of %u", cf->get_control_function()->get_address(), newObjectID);
+											parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidNewListItemObjectID)), listIndex, message.get_source_control_function());
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u change list item command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
+									}
+								}
+								break;
+
+								case Function::ChangeFontAttributesCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+									std::uint8_t fontColour = data[3];
+									std::uint8_t fontSize = data[4];
+									std::uint8_t fontType = data[5];
+									std::uint8_t fontStyle = data[6];
+
+									if ((nullptr != targetObject) && 
+										(VirtualTerminalObjectType::FontAttributes == targetObject->get_object_type()))
+									{
+										if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
+										{
+											auto font = std::static_pointer_cast<FontAttributes>(targetObject);
+											font->set_background_color(fontColour);
+											font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
+											font->set_type(static_cast<FontAttributes::FontType>(fontType));
+											font->set_style(fontStyle);
+											CANStackLogger::debug("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), fontSize, objectID);
+											parentServer->send_change_font_attributes_response(objectID, 0, message.get_source_control_function());
+											parentServer->onRepaintEventDispatcher.call(cf);
+										}
+										else
+										{
+											CANStackLogger::warn("[VT Server]: Client %u change font attributes command: invalid font size %u. ObjectID: %u", cf->get_control_function()->get_address(), fontSize, objectID);
+											parentServer->send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidSize)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u change font attributes command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case Function::ChangeSoftKeyMaskCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+									auto newObject = cf->get_object_by_id(newObjectID);
+
+									if (nullptr != targetObject)
+									{
+										if ((NULL_OBJECT_ID == newObjectID) || (nullptr != newObject))
+										{
+											switch (targetObject->get_object_type())
+											{
+												case VirtualTerminalObjectType::AlarmMask:
+												{
+													if (std::static_pointer_cast<AlarmMask>(targetObject)->change_soft_key_mask(newObjectID))
+													{
+														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
+														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
+													}
+													else
+													{
+														CANStackLogger::warn("[VT Server]: Client %u change soft key mask command: failed to set mask for alarm mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
+														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+													}
+												}
+												break;
+
+												case VirtualTerminalObjectType::DataMask:
+												{
+													if (std::static_pointer_cast<DataMask>(targetObject)->change_soft_key_mask(newObjectID))
+													{
+														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
+														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
+													}
+													else
+													{
+														CANStackLogger::warn("[VT Server]: Client %u change soft key mask command: failed to set mask for data mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
+														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+													}
+												}
+												break;
+
+												default:
+												{
+													CANStackLogger::warn("[VT Server]: Client %u change soft key mask command: invalid object type for object %u", cf->get_control_function()->get_address(), objectID);
+													parentServer->send_change_soft_key_mask_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+												}
+												break;
+											}
+										}
+										else
+										{
+											CANStackLogger::warn("[VT Server]: Client %u change soft key mask command: invalid soft key object ID of %u", cf->get_control_function()->get_address(), newObjectID);
+											parentServer->send_change_soft_key_mask_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u change soft key mask command: invalid data mask or alarm mask object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_soft_key_mask_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
+									}
+								}
+								break;
+
 								default:
-									break;
+								{
+									CANStackLogger::warn("[VT Server]: Unimplemented Command!");
+								}
+								break;
 							}
 						}
 						break;
@@ -1136,6 +1395,58 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_list_item_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::uint8_t listIndex, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeListItemCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				listIndex,
+				static_cast<std::uint8_t>(newObjectID & 0xFF),
+				static_cast<std::uint8_t>(newObjectID >> 8),
+				errorBitfield,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_button_activation_message(KeyActivationCode activationCode, std::uint16_t objectId, std::uint16_t parentObjectId, std::uint8_t keyNumber, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
@@ -1274,13 +1585,67 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+				static_cast<std::uint8_t>(Function::ChangeSizeCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_soft_key_mask_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+				static_cast<std::uint8_t>(Function::ChangeSoftKeyMaskCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				static_cast<std::uint8_t>(newObjectID & 0xFF),
+				static_cast<std::uint8_t>(newObjectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
 	{
 		bool retVal = false;
 
 		if (nullptr != destination)
 		{
-			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeStringValueCommand),
 				0xFF,
 				0xFF,

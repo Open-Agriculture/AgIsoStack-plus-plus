@@ -132,6 +132,7 @@ namespace isobus
 		virtual std::uint8_t get_supported_large_fonts_bitfield() const;
 
 		//-------------- Callbacks/Event driven interface ---------------------
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &get_on_repaint_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_mask_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_hide_show_object_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_enable_disable_object_event_dispatcher();
@@ -175,6 +176,27 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change font attributes response
+		enum class ChangeFontAttributesErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidColour = 1,
+			InvalidSize = 2,
+			InvalidType = 3,
+			InvalidStyle = 4,
+			AnyOtherError = 5
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change list item response
+		enum class ChangeListItemErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidListIndex = 1,
+			InvalidNewListItemObjectID = 2,
+			Reserved = 3, ///< Set to zero
+			AnyOtherError = 4
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a change numeric value response
 		enum class ChangeNumericValueErrorBit : std::uint8_t
 		{
@@ -182,6 +204,23 @@ namespace isobus
 			InvalidValue = 1,
 			ValueInUse = 2, // such as: open for input
 			Undefined = 3,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change size response
+		enum class ChangeSizeErrorBit : std::uint8_t 
+		{
+			InvalidObjectID = 0,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change soft key mask response
+		enum class ChangeSoftKeyMaskErrorBit : std::uint8_t
+		{
+			InvalidDataOrAlarmMaskObjectID = 0,
+			InvalidSoftKeyMaskObjectID = 1,
+			MissingObjects = 2,
+			MaskOrChildObjectHasErrors = 3,
 			AnyOtherError = 4
 		};
 
@@ -265,10 +304,26 @@ namespace isobus
 
 		/// @brief Sends a response to a change fill attributes command
 		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] newObjectID The object ID for the object to place at the specified list index, or NULL_OBJECT_ID (0xFFFF)
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change font attributes command
+		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change list item command
+		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] listIndex The list index to change, numbered 0 to n
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_list_item_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::uint8_t listIndex, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a response to a change numeric value command
 		/// @param[in] objectID The object ID for the object whose numeric value was meant to be changed
@@ -277,6 +332,21 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change size command
+		/// @param[in] objectID The object ID for the object whose size was meant to be changed
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change soft key mask command
+		/// @param[in] objectID The object ID of a data mask or alarm mask
+		/// @param[in] newObjectID The object ID of the soft key mask to apply to the mask indicated by objectID
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_soft_key_mask_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a response to a change string value command
 		/// @param[in] objectID The object ID for the object whose value was meant to be changed
@@ -333,6 +403,7 @@ namespace isobus
 		/// @brief Cyclic update function
 		void update();
 
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onHideShowObjectEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onEnableDisableObjectEventDispatcher;
