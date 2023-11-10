@@ -92,12 +92,12 @@ Now we have a NAME instantiated. We still need to populate it with our control f
     myNAME.set_ecu_instance(0);
     myNAME.set_function_instance(0);
     myNAME.set_device_class_instance(0);
-    myNAME.set_manufacturer_code(64);
+    myNAME.set_manufacturer_code(1407);
 
     return 0;
    }
 
-So now, we have a NAME with actual information encoded in it. In this example, we are an on-highway steering controller, our serial number is 2, we support address arbitration, and we claim to be manufactured by manufacturer 64, which is currently an unused code (but was formerly "SpectraPhysics").
+So now, we have a NAME with actual information encoded in it. In this example, we are an on-highway steering controller, our serial number is 2, we support address arbitration, and we claim to be manufactured by manufacturer 1407 which is the Open-Agriculture manufacturer code.
 
 Make sure to change these values to match your device's identity. Use `"isobus.net" <https://www.isobus.net/isobus/>`_ as a resource if you need to figure out all these values.\
 
@@ -127,7 +127,6 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
     //! Make sure you change these for your device!!!!
-    //! This is an example device that is using a manufacturer code that is currently unused at time of writing
     myNAME.set_arbitrary_address_capable(true);
     myNAME.set_industry_group(1);
     myNAME.set_device_class(0);
@@ -136,7 +135,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     myNAME.set_ecu_instance(0);
     myNAME.set_function_instance(0);
     myNAME.set_device_class_instance(0);
-    myNAME.set_manufacturer_code(64);
+    myNAME.set_manufacturer_code(1407);
 
     // Create our InternalControlFunction
     myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
@@ -228,7 +227,6 @@ Let's see what we've got so far:
       }
 
       //! Make sure you change these for your device!!!!
-      //! This is an example device that is using a manufacturer code that is currently unused at time of writing
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -237,7 +235,7 @@ Let's see what we've got so far:
       myNAME.set_ecu_instance(0);
       myNAME.set_function_instance(0);
       myNAME.set_device_class_instance(0);
-      myNAME.set_manufacturer_code(64);
+      myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
       myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
@@ -293,7 +291,6 @@ Make sure to include `csignal`.
       std::signal(SIGINT, signal_handler);
 
       //! Make sure you change these for your device!!!!
-      //! This is an example device that is using a manufacturer code that is currently unused at time of writing
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -302,7 +299,7 @@ Make sure to include `csignal`.
       myNAME.set_ecu_instance(0);
       myNAME.set_function_instance(0);
       myNAME.set_device_class_instance(0);
-      myNAME.set_manufacturer_code(64);
+      myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
       myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
@@ -361,7 +358,6 @@ The total result:
     std::signal(SIGINT, signal_handler);
 
     //! Make sure you change these for your device!!!!
-    //! This is an example device that is using a manufacturer code that is currently unused at time of writing
     myNAME.set_arbitrary_address_capable(true);
     myNAME.set_industry_group(1);
     myNAME.set_device_class(0);
@@ -370,7 +366,7 @@ The total result:
     myNAME.set_ecu_instance(0);
     myNAME.set_function_instance(0);
     myNAME.set_device_class_instance(0);
-    myNAME.set_manufacturer_code(64);
+    myNAME.set_manufacturer_code(1407);
 
     // Create our InternalControlFunction
     myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);

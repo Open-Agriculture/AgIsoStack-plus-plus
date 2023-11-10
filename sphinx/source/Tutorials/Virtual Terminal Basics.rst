@@ -103,7 +103,6 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		isobus::NAME TestDeviceNAME(0);
 
 		//! Make sure you change these for your device!!!!
-		//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 		TestDeviceNAME.set_arbitrary_address_capable(true);
 		TestDeviceNAME.set_industry_group(1);
 		TestDeviceNAME.set_device_class(0);
@@ -112,7 +111,7 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		TestDeviceNAME.set_ecu_instance(0);
 		TestDeviceNAME.set_function_instance(0);
 		TestDeviceNAME.set_device_class_instance(0);
-		TestDeviceNAME.set_manufacturer_code(64);
+		TestDeviceNAME.set_manufacturer_code(1407);
 
 		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
@@ -495,7 +494,6 @@ Here's the final code for this example:
 		isobus::NAME TestDeviceNAME(0);
 
 		//! Make sure you change these for your device!!!!
-		//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 		TestDeviceNAME.set_arbitrary_address_capable(true);
 		TestDeviceNAME.set_industry_group(1);
 		TestDeviceNAME.set_device_class(0);
@@ -504,7 +502,7 @@ Here's the final code for this example:
 		TestDeviceNAME.set_ecu_instance(0);
 		TestDeviceNAME.set_function_instance(0);
 		TestDeviceNAME.set_device_class_instance(0);
-		TestDeviceNAME.set_manufacturer_code(64);
+		TestDeviceNAME.set_manufacturer_code(1407);
 
 		std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("VT3TestPool.iop");
 

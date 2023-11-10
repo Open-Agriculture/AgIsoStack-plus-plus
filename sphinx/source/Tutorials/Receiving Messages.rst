@@ -113,7 +113,6 @@ So, our updated tutorial program now should look like this:
       std::signal(SIGINT, signal_handler);
 
       //! Make sure you change these for your device!!!!
-      //! This is an example device that is using a manufacturer code that is currently unused at time of writing
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -122,7 +121,7 @@ So, our updated tutorial program now should look like this:
       myNAME.set_ecu_instance(0);
       myNAME.set_function_instance(0);
       myNAME.set_device_class_instance(0);
-      myNAME.set_manufacturer_code(64);
+      myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
       myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
