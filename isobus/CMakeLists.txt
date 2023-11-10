@@ -38,6 +38,7 @@ set(ISOBUS_SRC
     "isobus_guidance_interface.cpp"
     "isobus_speed_distance_messages.cpp"
     "isobus_maintain_power_interface.cpp"
+    "isobus_virtual_terminal_objects.cpp"
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp")
 
@@ -79,6 +80,7 @@ set(ISOBUS_INCLUDE
     "isobus_functionalities.hpp"
     "isobus_speed_distance_messages.hpp"
     "isobus_maintain_power_interface.hpp"
+    "isobus_virtual_terminal_objects.hpp"
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp")
 # Prepend the include directory path to all the include files

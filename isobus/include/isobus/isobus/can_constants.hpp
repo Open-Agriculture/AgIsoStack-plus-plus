@@ -9,6 +9,8 @@
 #ifndef CAN_CONSTANTS_HPP
 #define CAN_CONSTANTS_HPP
 
+#include <cstdint>
+
 namespace isobus
 {
 	constexpr std::uint64_t DEFAULT_NAME = 0xFFFFFFFFFFFFFFFF; ///< An invalid NAME used as a default
