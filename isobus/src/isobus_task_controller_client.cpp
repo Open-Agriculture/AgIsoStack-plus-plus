@@ -645,14 +645,13 @@ namespace isobus
 
 				assert(0 != dataLength);
 				transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-				                                                                    nullptr,
+				                                                                    process_internal_object_pool_upload_callback,
 				                                                                    dataLength,
 				                                                                    myControlFunction,
 				                                                                    partnerControlFunction,
 				                                                                    CANIdentifier::CANPriority::PriorityLowest7,
 				                                                                    process_tx_callback,
-				                                                                    this,
-				                                                                    process_internal_object_pool_upload_callback);
+				                                                                    this);
 				if (transmitSuccessful)
 				{
 					set_state(StateMachineState::WaitForDDOPTransfer);

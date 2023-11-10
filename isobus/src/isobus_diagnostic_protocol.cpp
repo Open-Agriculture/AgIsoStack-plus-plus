@@ -679,10 +679,10 @@ namespace isobus
 					buffer[5] = 0x00;
 					buffer[6] = 0xFF;
 					buffer[7] = 0xFF;
-					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
-					                                                        buffer.data(),
-					                                                        CAN_DATA_LENGTH,
-					                                                        myControlFunction);
+					retVal = CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
+					                                                               buffer.data(),
+					                                                               CAN_DATA_LENGTH,
+					                                                               myControlFunction);
 				}
 				else
 				{
@@ -701,10 +701,10 @@ namespace isobus
 						payloadSize = CAN_DATA_LENGTH;
 					}
 
-					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
-					                                                        buffer.data(),
-					                                                        payloadSize,
-					                                                        myControlFunction);
+					retVal = CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1),
+					                                                               buffer.data(),
+					                                                               payloadSize,
+					                                                               myControlFunction);
 				}
 			}
 		}
@@ -767,10 +767,10 @@ namespace isobus
 					buffer[5] = 0x00;
 					buffer[6] = 0xFF;
 					buffer[7] = 0xFF;
-					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
-					                                                        buffer.data(),
-					                                                        CAN_DATA_LENGTH,
-					                                                        myControlFunction);
+					retVal = CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
+					                                                               buffer.data(),
+					                                                               CAN_DATA_LENGTH,
+					                                                               myControlFunction);
 				}
 				else
 				{
@@ -789,10 +789,10 @@ namespace isobus
 						payloadSize = CAN_DATA_LENGTH;
 					}
 
-					retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
-					                                                        buffer.data(),
-					                                                        payloadSize,
-					                                                        myControlFunction);
+					retVal = CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage2),
+					                                                               buffer.data(),
+					                                                               payloadSize,
+					                                                               myControlFunction);
 				}
 			}
 		}
@@ -811,10 +811,10 @@ namespace isobus
 
 			buffer.fill(0xFF); // Reserved bytes
 			buffer[0] = SUPPORTED_DIAGNOSTIC_PROTOCOLS_BITFIELD;
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
-			                                                        buffer.data(),
-			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction);
+			retVal = CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
+			                                                               buffer.data(),
+			                                                               CAN_DATA_LENGTH,
+			                                                               myControlFunction);
 		}
 		return retVal;
 	}
@@ -831,10 +831,10 @@ namespace isobus
 			0xFF,
 			0xFF
 		};
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction);
+		return CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13),
+		                                                             buffer.data(),
+		                                                             buffer.size(),
+		                                                             myControlFunction);
 	}
 
 	bool DiagnosticProtocol::send_ecu_identification() const
@@ -848,10 +848,10 @@ namespace isobus
 		}
 
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction);
+		return CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
+		                                                             buffer.data(),
+		                                                             buffer.size(),
+		                                                             myControlFunction);
 	}
 
 	bool DiagnosticProtocol::send_product_identification() const
@@ -859,10 +859,10 @@ namespace isobus
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
 		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction);
+		return CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
+		                                                             buffer.data(),
+		                                                             buffer.size(),
+		                                                             myControlFunction);
 	}
 
 	bool DiagnosticProtocol::send_software_identification() const
@@ -881,10 +881,10 @@ namespace isobus
 			              });
 
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        myControlFunction);
+			retVal = CANNetworkManager::CANNetwork.send_can_message_global(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
+			                                                               buffer.data(),
+			                                                               buffer.size(),
+			                                                               myControlFunction);
 		}
 		return retVal;
 	}

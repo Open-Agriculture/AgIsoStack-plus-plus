@@ -1869,14 +1869,13 @@ namespace isobus
 								if (!objectPools[i].uploaded)
 								{
 									bool transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-									                                                                         nullptr,
+									                                                                         process_internal_object_pool_upload_callback,
 									                                                                         objectPools[i].objectPoolSize + 1, // Account for Mux byte
 									                                                                         myControlFunction,
 									                                                                         partnerControlFunction,
 									                                                                         CANIdentifier::CANPriority::PriorityLowest7,
 									                                                                         process_callback,
-									                                                                         this,
-									                                                                         process_internal_object_pool_upload_callback);
+									                                                                         this);
 
 									if (transmitSuccessful)
 									{
