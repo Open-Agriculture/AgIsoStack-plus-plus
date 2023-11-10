@@ -90,7 +90,6 @@ extern "C" void app_main()
 	isobus::NAME TestDeviceNAME(0);
 
 	//! Make sure you change these for your device!!!!
-	//! This is an example device that is using a manufacturer code that is currently unused at time of writing
 	TestDeviceNAME.set_arbitrary_address_capable(true);
 	TestDeviceNAME.set_industry_group(1);
 	TestDeviceNAME.set_device_class(0);
@@ -99,7 +98,7 @@ extern "C" void app_main()
 	TestDeviceNAME.set_ecu_instance(0);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(64);
+	TestDeviceNAME.set_manufacturer_code(1407);
 
 	const std::uint8_t *testPool = object_pool_start;
 

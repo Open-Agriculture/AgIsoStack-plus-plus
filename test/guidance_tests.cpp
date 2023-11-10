@@ -73,7 +73,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	TestDeviceNAME.set_ecu_instance(4);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(64);
+	TestDeviceNAME.set_manufacturer_code(1407);
 
 	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x44, 0);
 

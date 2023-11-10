@@ -872,7 +872,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	serverNAME.set_device_class(1);
 	serverNAME.set_function_code(29);
 	serverNAME.set_identity_number(645);
-	serverNAME.set_manufacturer_code(64);
+	serverNAME.set_manufacturer_code(1407);
 	std::uint64_t serverFullNAME = serverNAME.get_full_name();
 
 	testFrame.dataLength = 8;

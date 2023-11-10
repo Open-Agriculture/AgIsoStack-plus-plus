@@ -203,7 +203,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 	TestDeviceNAME.set_ecu_instance(5);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(64);
+	TestDeviceNAME.set_manufacturer_code(1407);
 
 	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x49, 0);
 	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();

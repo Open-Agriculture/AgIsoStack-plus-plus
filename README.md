@@ -156,6 +156,14 @@ sudo cmake --install build
 
 Then, use a call to `find_package()` to find this package.
 
+### Use of our SAE/ISOBUS Manufacturer Code
+
+If you are integrating with our library to create an ISO11783 or J1939 application and are not selling your software or device containing that software for-profit, then you are welcome to use our manufacturer number in your application. 
+
+If you are creating such an application for sale as a for-profit company, then we ask that you please obtain your own manufacturer code from SAE instead of using ours.
+
+Our manufacturer code is 1407 (decimal).
+
 ## Documentation
 
 You can view the pre-compiled doxygen here https://delgrossoengineering.com/isobus-docs

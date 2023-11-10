@@ -428,7 +428,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 	TestDeviceNAME.set_ecu_instance(4);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(64);
+	TestDeviceNAME.set_manufacturer_code(1407);
 
 	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x51, 0);
 
@@ -459,7 +459,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 	TestDeviceNAME.set_ecu_instance(0);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(64);
+	TestDeviceNAME.set_manufacturer_code(1407);
 	testFrame.dataLength = 8;
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
