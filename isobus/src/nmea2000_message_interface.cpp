@@ -380,7 +380,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::CourseOverGroundSpeedOverGroundRapidUpdate),
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->cogSogTransmitMessage.get_control_function()),
+						                                                                    std::static_pointer_cast<InternalControlFunction>(targetInterface->cogSogTransmitMessage.get_control_function()),
 						                                                                    nullptr,
 						                                                                    CANIdentifier::Priority2);
 					}
@@ -395,7 +395,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum),
 						                                                                                                       messageBuffer.data(),
 						                                                                                                       messageBuffer.size(),
-						                                                                                                       std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->datumTransmitMessage.get_control_function()),
+						                                                                                                       std::static_pointer_cast<InternalControlFunction>(targetInterface->datumTransmitMessage.get_control_function()),
 						                                                                                                       nullptr,
 						                                                                                                       CANIdentifier::PriorityDefault6);
 					}
@@ -410,7 +410,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData),
 						                                                                                                       messageBuffer.data(),
 						                                                                                                       messageBuffer.size(),
-						                                                                                                       std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->gnssPositionDataTransmitMessage.get_control_function()),
+						                                                                                                       std::static_pointer_cast<InternalControlFunction>(targetInterface->gnssPositionDataTransmitMessage.get_control_function()),
 						                                                                                                       nullptr,
 						                                                                                                       CANIdentifier::Priority3);
 					}
@@ -425,7 +425,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionDeltaHighPrecisionRapidUpdate),
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->positionDeltaHighPrecisionRapidUpdateTransmitMessage.get_control_function()),
+						                                                                    std::static_pointer_cast<InternalControlFunction>(targetInterface->positionDeltaHighPrecisionRapidUpdateTransmitMessage.get_control_function()),
 						                                                                    nullptr,
 						                                                                    CANIdentifier::Priority2);
 					}
@@ -440,7 +440,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionRapidUpdate),
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->positionRapidUpdateTransmitMessage.get_control_function()),
+						                                                                    std::static_pointer_cast<InternalControlFunction>(targetInterface->positionRapidUpdateTransmitMessage.get_control_function()),
 						                                                                    nullptr,
 						                                                                    CANIdentifier::Priority2);
 					}
@@ -455,7 +455,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RateOfTurn),
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->rateOfTurnTransmitMessage.get_control_function()),
+						                                                                    std::static_pointer_cast<InternalControlFunction>(targetInterface->rateOfTurnTransmitMessage.get_control_function()),
 						                                                                    nullptr,
 						                                                                    CANIdentifier::Priority2);
 					}
@@ -470,7 +470,7 @@ namespace isobus
 						transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VesselHeading),
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
-						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->vesselHeadingTransmitMessage.get_control_function()),
+						                                                                    std::static_pointer_cast<InternalControlFunction>(targetInterface->vesselHeadingTransmitMessage.get_control_function()),
 						                                                                    nullptr,
 						                                                                    CANIdentifier::Priority2);
 					}
