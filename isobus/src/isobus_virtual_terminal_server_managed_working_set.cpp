@@ -933,6 +933,7 @@ namespace isobus
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
+							tempObject->set_height((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
 							tempObject->add_child((static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8)), 0, 0); // Child Font Attribute
 							tempObject->add_child(static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8), 0, 0); // Add variable reference
 							tempObject->set_value(iopData[10]);
@@ -1862,11 +1863,6 @@ namespace isobus
 								iopData += 17;
 								iopLength -= 17;
 
-								if (decodedID == 20591)
-								{
-									CANStackLogger::error("[WS]: Picture graphic has RLE but an odd number of data bytes. Object: " + isobus::to_string(static_cast<int>(decodedID)));
-								}
-
 								if (tempObject->get_option(PictureGraphic::Options::RunLengthEncoded))
 								{
 									if (0 != (tempObject->get_number_of_bytes_in_raw_data() % 2))
@@ -1917,6 +1913,17 @@ namespace isobus
 														for (std::uint_fast8_t k = 0; k < 8U; k++)
 														{
 															tempObject->add_raw_data((iopData[1] >> k) & 0x01);
+															lineAmountLeft--;
+
+															if (0 == lineAmountLeft)
+															{
+																break;
+															}
+														}
+
+														if (0 == lineAmountLeft)
+														{
+															lineAmountLeft = tempObject->get_actual_width();
 														}
 													}
 													break;
@@ -1932,9 +1939,79 @@ namespace isobus
 								}
 								else
 								{
-									tempObject->set_raw_data(iopData, tempObject->get_number_of_bytes_in_raw_data());
-									iopData += tempObject->get_number_of_bytes_in_raw_data();
-									iopLength -= tempObject->get_number_of_bytes_in_raw_data();
+									if (iopLength >= tempObject->get_number_of_bytes_in_raw_data())
+									{
+										switch (tempObject->get_format())
+										{
+											case PictureGraphic::Format::EightBitColour:
+											{
+												tempObject->set_raw_data(iopData, tempObject->get_number_of_bytes_in_raw_data());
+												iopData += tempObject->get_number_of_bytes_in_raw_data();
+												iopLength -= tempObject->get_number_of_bytes_in_raw_data();
+											}
+											break;
+
+											case PictureGraphic::Format::FourBitColour:
+											{
+												std::size_t lineAmountLeft = tempObject->get_actual_width();
+
+												for (std::uint_fast32_t i = 0; i < tempObject->get_number_of_bytes_in_raw_data(); i++)
+												{
+													tempObject->add_raw_data(iopData[0] >> 4);
+													lineAmountLeft--;
+
+													if (lineAmountLeft > 0)
+													{
+														tempObject->add_raw_data(iopData[0] & 0x0F);
+														lineAmountLeft--;
+
+														if (0 == lineAmountLeft)
+														{
+															lineAmountLeft = tempObject->get_actual_width();
+														}
+													}
+													else
+													{
+														lineAmountLeft = tempObject->get_actual_width();
+													}
+													iopData++;
+													iopLength--;
+												}
+											}
+											break;
+
+											case PictureGraphic::Format::Monochrome:
+											{
+												std::size_t lineAmountLeft = tempObject->get_actual_width();
+
+												for (std::uint_fast32_t i = 0; i < tempObject->get_number_of_bytes_in_raw_data(); i++)
+												{
+													for (std::uint_fast8_t j = 0; j < 8U; j++)
+													{
+														tempObject->add_raw_data((iopData[0] >> j) & 0x01);
+														lineAmountLeft--;
+
+														if (0 == lineAmountLeft)
+														{
+															break;
+														}
+													}
+
+													if (0 == lineAmountLeft)
+													{
+														lineAmountLeft = tempObject->get_actual_width();
+													}
+													iopData++;
+													iopLength--;
+												}
+											}
+											break;
+										}
+									}
+									else
+									{
+										CANStackLogger::error("[WS]: Not enough IOP data to deserialize picture graphic's pixel data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+									}
 								}
 
 								if (iopLength >= sizeOfMacros)
@@ -2453,6 +2530,10 @@ namespace isobus
 					break;
 				}
 			}
+			else
+			{
+				CANStackLogger::error("[WS]: Duplicate object ID detected, %u", decodedID);
+			}
 
 			if (!retVal)
 			{
@@ -2472,7 +2553,7 @@ namespace isobus
 		return get_object_by_id(workingSetID);
 	}
 
-	bool VirtualTerminalServerManagedWorkingSet::get_object_id_exists(std::uint16_t objectID) const
+	bool VirtualTerminalServerManagedWorkingSet::get_object_id_exists(std::uint16_t objectID)
 	{
 		bool retVal;
 
@@ -2482,7 +2563,7 @@ namespace isobus
 		}
 		else
 		{
-			retVal = true;
+			retVal = (nullptr != vtObjectTree[objectID]);
 		}
 		return retVal;
 	}

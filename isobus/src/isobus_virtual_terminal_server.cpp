@@ -611,9 +611,9 @@ namespace isobus
 
 									if ((nullptr != lTargetObject) && (VirtualTerminalObjectType::Container == lTargetObject->get_object_type()))
 									{
-										std::static_pointer_cast<Container>(lTargetObject)->set_hidden(0 != data[3]);
+										std::static_pointer_cast<Container>(lTargetObject)->set_hidden(0 == data[3]);
 										parentServer->send_hide_show_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-										parentServer->onHideShowObjectEventDispatcher.call(cf, objectId, (0 != data[3]));
+										parentServer->onHideShowObjectEventDispatcher.call(cf, objectId, (0 == data[3]));
 									}
 									else
 									{
