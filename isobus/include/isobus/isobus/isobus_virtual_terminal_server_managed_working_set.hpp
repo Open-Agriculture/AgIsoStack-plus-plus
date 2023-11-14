@@ -91,7 +91,7 @@ namespace isobus
 
 		/// @brief Checks if the object pool contains an object with the supplied object ID
 		/// @returns true if an object with the specified ID exists in the object pool
-		bool get_object_id_exists(std::uint16_t objectID) const;
+		bool get_object_id_exists(std::uint16_t objectID);
 
 		/// @brief Sets the object pool processing state to a new value
 		/// @param[in] value The new state of processing the object pool
