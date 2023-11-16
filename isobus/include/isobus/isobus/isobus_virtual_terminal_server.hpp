@@ -139,7 +139,6 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> &get_on_change_numeric_value_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> &get_on_change_child_location_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> &get_on_change_string_value_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, FillAttributes::FillType, std::uint8_t, std::uint16_t> &get_on_change_fill_attributes_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> &get_on_change_child_position_event_dispatcher();
 
 		//----------------- Other Server Settings -----------------------------
@@ -208,7 +207,7 @@ namespace isobus
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a change size response
-		enum class ChangeSizeErrorBit : std::uint8_t 
+		enum class ChangeSizeErrorBit : std::uint8_t
 		{
 			InvalidObjectID = 0,
 			AnyOtherError = 4
@@ -257,6 +256,11 @@ namespace isobus
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
 		bool check_if_source_is_managed(const CANMessage &message);
+
+		/// @brief Maps a VTVersion to its corresponding byte representation
+		/// @param[in] version The version to get the corresponding byte for
+		/// @returns The VT version byte associated to the specified version
+		static std::uint8_t get_vt_version_byte(VTVersion version);
 
 		/// @brief Processes a CAN message from any VT client
 		/// @param[in] message The CAN message being received
@@ -410,7 +414,6 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> onChangeNumericValueEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> onChangeChildLocationEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> onChangeStringValueEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, FillAttributes::FillType, std::uint8_t, std::uint16_t> onChangeFillAttributesEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> onChangeChildPositionEventDispatcher;
 		LanguageCommandInterface languageCommandInterface;
 		std::shared_ptr<InternalControlFunction> serverInternalControlFunction;

@@ -106,11 +106,6 @@ namespace isobus
 		return onChangeStringValueEventDispatcher;
 	}
 
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, FillAttributes::FillType, std::uint8_t, std::uint16_t> &VirtualTerminalServer::get_on_change_fill_attributes_event_dispatcher()
-	{
-		return onChangeFillAttributesEventDispatcher;
-	}
-
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> &VirtualTerminalServer::get_on_change_child_position_event_dispatcher()
 	{
 		return onChangeChildPositionEventDispatcher;
@@ -148,7 +143,7 @@ namespace isobus
 				auto &data = message.get_data();
 
 				CANStackLogger::info("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
-				if (data[2] > static_cast<std::uint8_t>(get_version()))
+				if (data[2] > get_vt_version_byte(get_version()))
 				{
 					CANStackLogger::warn("[VT Server]: Client %u version %u is not supported", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
 				}
@@ -160,6 +155,45 @@ namespace isobus
 				CANStackLogger::warn("[VT Server]: Received a non-status message from a client at address %u, but they are not connected to this VT.", message.get_identifier().get_source_address());
 				send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), serverInternalControlFunction, message.get_source_control_function());
 			}
+		}
+		return retVal;
+	}
+
+	std::uint8_t VirtualTerminalServer::get_vt_version_byte(VTVersion version)
+	{
+		std::uint8_t retVal = 2;
+
+		switch (version)
+		{
+			case VTVersion::Version3:
+			{
+				retVal = 3;
+			}
+			break;
+
+			case VTVersion::Version4:
+			{
+				retVal = 4;
+			}
+			break;
+
+			case VTVersion::Version5:
+			{
+				retVal = 5;
+			}
+			break;
+
+			case VTVersion::Version6:
+			{
+				retVal = 6;
+			}
+			break;
+
+			default:
+			{
+				// Report version 2
+			}
+			break;
 		}
 		return retVal;
 	}
@@ -189,7 +223,7 @@ namespace isobus
 								{
 									auto tempPool = data; // Make a copy of the data (ouch)
 									tempPool.erase(tempPool.begin()); // Strip off the mux byte (double ouch, good thing this is rare)
-									CANStackLogger::info("[VT Server]: An ecu at address %u transferred &u bytes of object pool data to us.", message.get_identifier().get_source_address(), static_cast<std::uint32_t>(tempPool.size()));
+									CANStackLogger::info("[VT Server]: An ecu at address %u transferred %u bytes of object pool data to us.", message.get_identifier().get_source_address(), static_cast<std::uint32_t>(tempPool.size()));
 									cf->add_iop_raw_data(tempPool);
 								}
 								break;
@@ -485,6 +519,7 @@ namespace isobus
 									std::uint32_t value = (static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
 									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto lTargetObject = cf->get_object_by_id(objectId);
+									bool logSuccess = true;
 
 									if (nullptr != lTargetObject)
 									{
@@ -587,19 +622,29 @@ namespace isobus
 												//Todo std::static_pointer_cast<Animation>(lTargetObject)->set_value(value);
 												// parentServer->onChangeNumericValueEventDispatcher.call(objectId, value);
 												parentServer->send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::AnyOtherError)), value, cf->get_control_function());
+												CANStackLogger::warn("[VT Server]: Client %u change numeric value for animation not implemented yet", cf->get_control_function()->get_address());
+												logSuccess = false;
 											}
 											break;
 
 											default:
 											{
 												parentServer->send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, cf->get_control_function());
+												CANStackLogger::warn("[VT Server]: Client %u change numeric value invalid object type. ID: %u", cf->get_control_function()->get_address(), objectId);
+												logSuccess = false;
 											}
 											break;
+										}
+
+										if (logSuccess)
+										{
+											CANStackLogger::debug("[VT Server]: Client %u change numeric value command: change object ID %u to be %u", cf->get_control_function()->get_address(), objectId, value);
 										}
 									}
 									else
 									{
 										parentServer->send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, cf->get_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change numeric value invalid object ID of %u", cf->get_control_function()->get_address(), objectId);
 									}
 								}
 								break;
@@ -614,10 +659,20 @@ namespace isobus
 										std::static_pointer_cast<Container>(lTargetObject)->set_hidden(0 == data[3]);
 										parentServer->send_hide_show_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
 										parentServer->onHideShowObjectEventDispatcher.call(cf, objectId, (0 == data[3]));
+
+										if (0 == data[3])
+										{
+											CANStackLogger::debug("[VT Server]: Client %u hide object command %u", cf->get_control_function()->get_address(), objectId);
+										}
+										else
+										{
+											CANStackLogger::debug("[VT Server]: Client %u show object command %u", cf->get_control_function()->get_address(), objectId);
+										}
 									}
 									else
 									{
 										parentServer->send_hide_show_object_response(objectId, (1 << static_cast<std::uint8_t>(HideShowObjectErrorBit::InvalidObjectID)), (0 != data[3]), cf->get_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u hide/show object command failed. It can only affect containers! ID: %u", cf->get_control_function()->get_address(), objectId);
 									}
 								}
 								break;
@@ -709,16 +764,28 @@ namespace isobus
 											bool anyObjectMatched = parentObject->offset_all_children_x_with_id(objectID, xRelativeChange, yRelativeChange);
 
 											parentServer->onChangeChildLocationEventDispatcher.call(cf, parentObjectId, objectID, xRelativeChange, yRelativeChange);
-											parentServer->send_change_child_location_response(parentObjectId, objectID, anyObjectMatched ? 0 : (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
+
+											if (anyObjectMatched)
+											{
+												parentServer->send_change_child_location_response(parentObjectId, objectID, 0, cf->get_control_function());
+												CANStackLogger::debug("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", cf->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
+											}
+											else
+											{
+												parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
+												CANStackLogger::warn("[VT Server]: Client %u change child location failed because the target object with ID %u isn't applicable", cf->get_control_function()->get_address(), objectID);
+											}
 										}
 										else
 										{
 											parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
+											CANStackLogger::warn("[VT Server]: Client %u change child location failed because the target object with ID %u doesn't exist", cf->get_control_function()->get_address(), objectID);
 										}
 									}
 									else
 									{
 										parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), cf->get_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", cf->get_control_function()->get_address(), parentObject);
 									}
 								}
 								break;
@@ -736,15 +803,18 @@ namespace isobus
 											std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
 											parentServer->send_change_active_mask_response(newActiveMaskObjectId, 0, cf->get_control_function());
 											parentServer->onChangeActiveMaskEventDispatcher.call(cf, workingSetObjectId, newActiveMaskObjectId);
+											CANStackLogger::debug("[VT Server]: Client %u changed active mask to object %u for working set object %u", cf->get_control_function()->get_address(), newActiveMaskObjectId, workingSetObjectId);
 										}
 										else
 										{
 											parentServer->send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), cf->get_control_function());
+											CANStackLogger::warn("[VT Server]: Client %u change active mask failed because the new mask object ID %u was not valid.", cf->get_control_function()->get_address(), newActiveMaskObjectId);
 										}
 									}
 									else
 									{
 										parentServer->send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), cf->get_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change active mask failed because the working set object ID %u was not valid.", cf->get_control_function()->get_address(), workingSetObjectId);
 									}
 								}
 								break;
@@ -752,6 +822,7 @@ namespace isobus
 								case Function::GetSupportedObjectsMessage:
 								{
 									parentServer->send_supported_objects(message.get_source_control_function());
+									CANStackLogger::debug("[VT Server]: Sent supported object list to client %u", cf->get_control_function()->get_address());
 								}
 								break;
 
@@ -778,7 +849,8 @@ namespace isobus
 												{
 													std::static_pointer_cast<StringVariable>(stringObject)->set_value(newStringValue);
 													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
-													parentServer->onChangeStringValueEventDispatcher.call(cf, objectIdToChange, newStringValue);
+													parentServer->onRepaintEventDispatcher.call(cf);
+													CANStackLogger::debug("[VT Server]: Client %u change string value command for string variable object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
 												}
 												break;
 
@@ -786,7 +858,8 @@ namespace isobus
 												{
 													std::static_pointer_cast<OutputString>(stringObject)->set_value(newStringValue);
 													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
-													parentServer->onChangeStringValueEventDispatcher.call(cf, objectIdToChange, std::move(newStringValue));
+													parentServer->onRepaintEventDispatcher.call(cf);
+													CANStackLogger::debug("[VT Server]: Client %u change string value command for output string object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
 												}
 												break;
 
@@ -794,13 +867,15 @@ namespace isobus
 												{
 													std::static_pointer_cast<InputString>(stringObject)->set_value(newStringValue);
 													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
-													parentServer->onChangeStringValueEventDispatcher.call(cf, objectIdToChange, newStringValue);
+													parentServer->onRepaintEventDispatcher.call(cf);
+													CANStackLogger::debug("[VT Server]: Client %u change string value command for input string object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
 												}
 												break;
 
 												default:
 												{
 													parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+													CANStackLogger::warn("[VT Server]: Client %u change string value command for object %u failed because the object ID was for an object that isn't a string.", cf->get_control_function()->get_address(), objectIdToChange);
 												}
 												break;
 											}
@@ -808,11 +883,13 @@ namespace isobus
 										else
 										{
 											parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+											CANStackLogger::warn("[VT Server]: Client %u change string value command for object %u failed because the object ID was invalid.", cf->get_control_function()->get_address(), objectIdToChange);
 										}
 									}
 									else
 									{
 										parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::AnyOtherError)), message.get_source_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change string value command for object %u failed because data length is not valid when compared to the amount sent.", cf->get_control_function()->get_address(), objectIdToChange);
 									}
 								}
 								break;
@@ -836,21 +913,25 @@ namespace isobus
 												fillObject->set_type(static_cast<FillAttributes::FillType>(data[3]));
 												fillObject->set_background_color(data[4]);
 												parentServer->send_change_fill_attributes_response(objectIdToChange, 0, message.get_source_control_function());
-												parentServer->onChangeFillAttributesEventDispatcher.call(cf, objectIdToChange, static_cast<FillAttributes::FillType>(data[3]), data[4], fillPatternID);
+												parentServer->onRepaintEventDispatcher.call(cf);
+												CANStackLogger::debug("[VT Server]: Client %u change fill attributes command for object %u", cf->get_control_function()->get_address(), objectIdToChange);
 											}
 											else
 											{
 												parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidType)), message.get_source_control_function());
+												CANStackLogger::warn("[VT Server]: Client %u change fill attributes of object %u invalid fill object type. Must be a picture graphic.", cf->get_control_function()->get_address(), objectIdToChange);
 											}
 										}
 										else
 										{
 											parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidPatternObjectID)), message.get_source_control_function());
+											CANStackLogger::warn("[VT Server]: Client %u change fill attributes invalid pattern object ID of %u for object %u", cf->get_control_function()->get_address(), fillPatternID, objectIdToChange);
 										}
 									}
 									else
 									{
 										parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change fill attributes invalid object ID of %u", cf->get_control_function()->get_address(), objectIdToChange);
 									}
 								}
 								break;
@@ -949,7 +1030,7 @@ namespace isobus
 										if (targetObject->set_attribute(attributeID, attributeData, errorCode)) // 0 Is always the read-only "type" attribute
 										{
 											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
-											CANStackLogger::debug("[VT Server]: Client %u changed object %u attribute %u to %ul", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
+											CANStackLogger::debug("[VT Server]: Client %u changed object %u attribute %u to %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
 											parentServer->onRepaintEventDispatcher.call(cf);
 										}
 										else
@@ -1003,6 +1084,7 @@ namespace isobus
 											case VirtualTerminalObjectType::OutputEllipse:
 											case VirtualTerminalObjectType::OutputRectangle:
 											case VirtualTerminalObjectType::OutputLine:
+											case VirtualTerminalObjectType::OutputNumber:
 											case VirtualTerminalObjectType::OutputList:
 											case VirtualTerminalObjectType::InputList:
 											case VirtualTerminalObjectType::Button:
@@ -1123,8 +1205,8 @@ namespace isobus
 									std::uint8_t fontType = data[5];
 									std::uint8_t fontStyle = data[6];
 
-									if ((nullptr != targetObject) && 
-										(VirtualTerminalObjectType::FontAttributes == targetObject->get_object_type()))
+									if ((nullptr != targetObject) &&
+									    (VirtualTerminalObjectType::FontAttributes == targetObject->get_object_type()))
 									{
 										if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
 										{
