@@ -103,7 +103,7 @@ namespace isobus
 		                                                             std::uint8_t &numberOfRanges,
 		                                                             std::vector<std::uint8_t> &wideCharRangeArray) = 0;
 
-		virtual std::vector<std::uint8_t> get_versions(NAME clientNAME) = 0;
+		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
 		virtual std::vector<std::uint8_t> get_supported_objects() const = 0;
 
 		/// @brief This function is called when the client wants the server to load a previously stored object pool.

@@ -362,16 +362,20 @@ namespace isobus
 									buffer.push_back(static_cast<std::uint32_t>(Function::GetVersionsResponse));
 
 									CANStackLogger::debug("[VT Server]: Client %u requests stored versions", message.get_source_control_function()->get_address());
-									if (0 != (versions.size() % 7))
+
+									if (versions.size() > 255)
 									{
-										CANStackLogger::error("[VT Server]: get_versions returned illegal version lengths!");
+										CANStackLogger::warn("[VT Server]: get_versions returned too many versions! This client should really delete some.");
 									}
 
-									buffer.push_back(static_cast<std::uint8_t>(versions.size() / 7));
+									buffer.push_back(static_cast<std::uint8_t>(versions.size() & 0xFF));
 
-									for (const auto &versionByte : versions)
+									for (const auto &version : versions)
 									{
-										buffer.push_back(versionByte);
+										for (const auto &versionByte : version)
+										{
+											buffer.push_back(versionByte);
+										}
 									}
 
 									while (buffer.size() < CAN_DATA_LENGTH)
