@@ -125,6 +125,21 @@ namespace isobus
 		/// @returns The requested object pool associated with the version label.
 		virtual bool save_version(const std::vector<std::uint8_t> &objectPool, const std::vector<std::uint8_t> &versionLabel, NAME clientNAME) = 0;
 
+		/// @brief This function is called when the client wants the server to delete a stored object pool.
+		/// All object pool files matching the specified version label should then be deleted from the VT's
+		/// non-volatile storage.
+		/// @param[in] versionLabel The version label for the object pool(s) to delete
+		/// @param[in] clientNAME The NAME of the client that is requesting deletion
+		/// @returns True if the version was deleted from VT non-volatile storage, otherwise false.
+		virtual bool delete_version(const std::vector<std::uint8_t> &versionLabel, NAME clientNAME) = 0;
+
+		/// @brief This function is called when the client wants the server to delete ALL stored object pools associated to it's NAME.
+		/// All object pool files matching the specified client NAME should then be deleted from the VT's
+		/// non-volatile storage.
+		/// @param[in] clientNAME The NAME of the client that is requesting deletion
+		/// @returns True if all relevant object pools were deleted from VT non-volatile storage, otherwise false.
+		virtual bool delete_all_versions(NAME clientNAME) = 0;
+
 		//------------ Optional functions you can override --------------------
 		virtual VirtualTerminalBase::GraphicMode get_graphic_mode() const;
 		virtual std::uint8_t get_powerup_time() const;
@@ -134,12 +149,6 @@ namespace isobus
 		//-------------- Callbacks/Event driven interface ---------------------
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &get_on_repaint_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_mask_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_hide_show_object_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_enable_disable_object_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> &get_on_change_numeric_value_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> &get_on_change_child_location_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> &get_on_change_string_value_event_dispatcher();
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> &get_on_change_child_position_event_dispatcher();
 
 		//----------------- Other Server Settings -----------------------------
 
@@ -231,6 +240,14 @@ namespace isobus
 			StringTooLong = 2,
 			AnyOtherError = 3,
 			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a delete version response
+		enum class DeleteVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			AnyOtherError = 3
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
@@ -359,6 +376,12 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Sends a response to a delete version command
+		/// @param[in] errorBitfield An error bitfield to report back to the client
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to the enable/disable object command
 		/// @param[in] objectID The object ID for the object
 		/// @param[in] errorBitfield An error bitfield
@@ -407,14 +430,10 @@ namespace isobus
 		/// @brief Cyclic update function
 		void update();
 
+		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
+
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onHideShowObjectEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onEnableDisableObjectEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> onChangeNumericValueEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> onChangeChildLocationEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> onChangeStringValueEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> onChangeChildPositionEventDispatcher;
 		LanguageCommandInterface languageCommandInterface;
 		std::shared_ptr<InternalControlFunction> serverInternalControlFunction;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> managedWorkingSetList;
