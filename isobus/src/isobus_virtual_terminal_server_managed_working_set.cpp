@@ -143,6 +143,11 @@ namespace isobus
 		callbackHandles.push_back(callbackHandle);
 	}
 
+	void VirtualTerminalServerManagedWorkingSet::clear_callback_handles()
+	{
+		callbackHandles.clear();
+	}
+
 	VTColourVector VirtualTerminalServerManagedWorkingSet::get_colour(std::uint8_t colourIndex) const
 	{
 		return workingSetColourTable.get_colour(colourIndex);
