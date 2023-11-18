@@ -12,6 +12,10 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
+
+#include <iomanip>
+#include <sstream>
 
 namespace isobus
 {
@@ -79,36 +83,6 @@ namespace isobus
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &VirtualTerminalServer::get_on_change_active_mask_event_dispatcher()
 	{
 		return onChangeActiveMaskEventDispatcher;
-	}
-
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &VirtualTerminalServer::get_on_hide_show_object_event_dispatcher()
-	{
-		return onHideShowObjectEventDispatcher;
-	}
-
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &VirtualTerminalServer::get_on_enable_disable_object_event_dispatcher()
-	{
-		return onEnableDisableObjectEventDispatcher;
-	}
-
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint32_t> &VirtualTerminalServer::get_on_change_numeric_value_event_dispatcher()
-	{
-		return onChangeNumericValueEventDispatcher;
-	}
-
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::int8_t, std::int8_t> &VirtualTerminalServer::get_on_change_child_location_event_dispatcher()
-	{
-		return onChangeChildLocationEventDispatcher;
-	}
-
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::string> &VirtualTerminalServer::get_on_change_string_value_event_dispatcher()
-	{
-		return onChangeStringValueEventDispatcher;
-	}
-
-	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t, std::uint16_t, std::uint16_t> &VirtualTerminalServer::get_on_change_child_position_event_dispatcher()
-	{
-		return onChangeChildPositionEventDispatcher;
 	}
 
 	LanguageCommandInterface &VirtualTerminalServer::get_language_command_interface()
@@ -438,8 +412,8 @@ namespace isobus
 								{
 									if (cf->get_any_object_pools())
 									{
-										constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
-										std::string cfName = std::to_string(cf->get_control_function()->get_NAME().get_full_name());
+										std::ostringstream nameString;
+										nameString << std::hex << std::setfill('0') << std::setw(16) << cf->get_control_function()->get_NAME().get_full_name();
 										std::vector<std::uint8_t> versionLabel;
 										bool allPoolsSaved = true;
 										versionLabel.reserve(VERSION_LABEL_LENGTH);
@@ -455,11 +429,11 @@ namespace isobus
 
 											if (didSave)
 											{
-												CANStackLogger::info("[VT Server]: Object pool %u for NAME %s was stored", i, cfName);
+												CANStackLogger::info("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
 											}
 											else
 											{
-												CANStackLogger::warn("[VT Server]: Object pool %u for NAME %s could not be stored.", i, cfName);
+												CANStackLogger::error("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
 												allPoolsSaved = false;
 												break;
 											}
@@ -492,6 +466,33 @@ namespace isobus
 									{
 										// Whomever this is is being bad, send them a NACK
 										parentServer->send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), parentServer->serverInternalControlFunction, cf->get_control_function());
+									}
+								}
+								break;
+
+								case Function::DeleteVersionCommand:
+								{
+									std::vector<std::uint8_t> versionLabel;
+									std::ostringstream nameString;
+									nameString << std::hex << std::setfill('0') << std::setw(16) << cf->get_control_function()->get_NAME().get_full_name();
+									versionLabel.reserve(VERSION_LABEL_LENGTH);
+
+									for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
+									{
+										versionLabel.push_back(data[i + 1]);
+									}
+
+									bool wasDeleted = parentServer->delete_version(versionLabel, cf->get_control_function()->get_NAME());
+
+									if (wasDeleted)
+									{
+										CANStackLogger::info("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str());
+										parentServer->send_delete_version_response(0, cf->get_control_function());
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Delete version failed for client NAME %s", nameString.str());
+										parentServer->send_delete_version_response((1 << static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), cf->get_control_function());
 									}
 								}
 								break;
@@ -532,7 +533,7 @@ namespace isobus
 											case VirtualTerminalObjectType::InputBoolean:
 											{
 												std::static_pointer_cast<InputBoolean>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -540,7 +541,7 @@ namespace isobus
 											case VirtualTerminalObjectType::InputNumber:
 											{
 												std::static_pointer_cast<InputNumber>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -548,7 +549,7 @@ namespace isobus
 											case VirtualTerminalObjectType::InputList:
 											{
 												std::static_pointer_cast<InputList>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -556,7 +557,7 @@ namespace isobus
 											case VirtualTerminalObjectType::OutputNumber:
 											{
 												std::static_pointer_cast<OutputNumber>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -564,7 +565,7 @@ namespace isobus
 											case VirtualTerminalObjectType::OutputList:
 											{
 												std::static_pointer_cast<OutputList>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -572,7 +573,7 @@ namespace isobus
 											case VirtualTerminalObjectType::OutputMeter:
 											{
 												std::static_pointer_cast<OutputMeter>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -580,7 +581,7 @@ namespace isobus
 											case VirtualTerminalObjectType::OutputLinearBarGraph:
 											{
 												std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -588,7 +589,7 @@ namespace isobus
 											case VirtualTerminalObjectType::OutputArchedBarGraph:
 											{
 												std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -596,7 +597,7 @@ namespace isobus
 											case VirtualTerminalObjectType::NumberVariable:
 											{
 												std::static_pointer_cast<NumberVariable>(lTargetObject)->set_value(value);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -605,7 +606,7 @@ namespace isobus
 											{
 												std::static_pointer_cast<ObjectPointer>(lTargetObject)->pop_child();
 												std::static_pointer_cast<ObjectPointer>(lTargetObject)->add_child(value, 0, 0);
-												parentServer->onChangeNumericValueEventDispatcher.call(cf, objectId, value);
+												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
 											break;
@@ -662,7 +663,7 @@ namespace isobus
 									{
 										std::static_pointer_cast<Container>(lTargetObject)->set_hidden(0 == data[3]);
 										parentServer->send_hide_show_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-										parentServer->onHideShowObjectEventDispatcher.call(cf, objectId, (0 == data[3]));
+										parentServer->onRepaintEventDispatcher.call(cf);
 
 										if (0 == data[3])
 										{
@@ -696,7 +697,7 @@ namespace isobus
 												{
 													std::static_pointer_cast<InputBoolean>(lTargetObject)->set_enabled((0 != data[3]));
 													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onEnableDisableObjectEventDispatcher.call(cf, objectId, (0 != data[3]));
+													parentServer->onRepaintEventDispatcher.call(cf);
 												}
 												break;
 
@@ -704,7 +705,7 @@ namespace isobus
 												{
 													std::static_pointer_cast<InputList>(lTargetObject)->set_option(InputList::Options::Enabled, (0 != data[3]));
 													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onEnableDisableObjectEventDispatcher.call(cf, objectId, (0 != data[3]));
+													parentServer->onRepaintEventDispatcher.call(cf);
 												}
 												break;
 
@@ -712,7 +713,7 @@ namespace isobus
 												{
 													std::static_pointer_cast<InputString>(lTargetObject)->set_enabled((0 != data[3]));
 													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onEnableDisableObjectEventDispatcher.call(cf, objectId, (0 != data[3]));
+													parentServer->onRepaintEventDispatcher.call(cf);
 												}
 												break;
 
@@ -720,7 +721,7 @@ namespace isobus
 												{
 													std::static_pointer_cast<InputNumber>(lTargetObject)->set_option2(InputNumber::Options2::Enabled, (0 != data[3]));
 													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onEnableDisableObjectEventDispatcher.call(cf, objectId, (0 != data[3]));
+													parentServer->onRepaintEventDispatcher.call(cf);
 												}
 												break;
 
@@ -728,7 +729,7 @@ namespace isobus
 												{
 													std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
 													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onEnableDisableObjectEventDispatcher.call(cf, objectId, (0 != data[3]));
+													parentServer->onRepaintEventDispatcher.call(cf);
 												}
 												break;
 
@@ -767,7 +768,7 @@ namespace isobus
 											std::int8_t yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
 											bool anyObjectMatched = parentObject->offset_all_children_x_with_id(objectID, xRelativeChange, yRelativeChange);
 
-											parentServer->onChangeChildLocationEventDispatcher.call(cf, parentObjectId, objectID, xRelativeChange, yRelativeChange);
+											parentServer->onRepaintEventDispatcher.call(cf);
 
 											if (anyObjectMatched)
 											{
@@ -976,7 +977,7 @@ namespace isobus
 																wasFound = true;
 																parentObject->set_child_x(i, newXPosition);
 																parentObject->set_child_y(i, newYPosition);
-																parentServer->onChangeChildPositionEventDispatcher.call(cf, parentObjectId, objectID, newXPosition, newYPosition);
+																parentServer->onRepaintEventDispatcher.call(cf);
 															}
 														}
 
@@ -1304,7 +1305,7 @@ namespace isobus
 
 								default:
 								{
-									CANStackLogger::warn("[VT Server]: Unimplemented Command!");
+									CANStackLogger::error("[VT Server]: Unimplemented Command %u", data[0]);
 								}
 								break;
 							}
@@ -1737,6 +1738,32 @@ namespace isobus
 				0xFF,
 				static_cast<std::uint8_t>(objectID & 0xFF),
 				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::DeleteVersionCommand),
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
 				errorBitfield,
 				0xFF,
 				0xFF
