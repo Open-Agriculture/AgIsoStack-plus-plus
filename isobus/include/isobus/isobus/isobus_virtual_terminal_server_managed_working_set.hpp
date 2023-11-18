@@ -77,6 +77,10 @@ namespace isobus
 		/// which is useful for keeping track of callback lifetimes in a VT server
 		void save_callback_handle(std::shared_ptr<void> callbackHandle);
 
+		/// @brief Clears all event callback handles for the this working set
+		/// which is useful if you want to stop drawing this working set
+		void clear_callback_handles();
+
 		/// @brief Returns a colour from this working set's current colour table, by index
 		/// @param[in] colourIndex The index into the VT's colour table to retrieve
 		/// @returns A colour from this working set's current colour table, by index
