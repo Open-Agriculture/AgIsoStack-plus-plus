@@ -624,7 +624,6 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t softKeyMask = NULL_OBJECT_ID; ///< Object ID of a soft key mask for this alarm mask, or the null ID
 		Priority maskPriority = Priority::High; ///< The priority of this mask
 		AcousticSignal signalPriority = AcousticSignal::Highest; ///< The acoustic signal priority for this mask
 	};
