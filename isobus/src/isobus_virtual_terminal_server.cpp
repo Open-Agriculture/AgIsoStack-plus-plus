@@ -113,7 +113,7 @@ namespace isobus
 			    (message.get_data()[1] & 0x01)) // Init bit is set
 			{
 				// This CF is probably trying to initiate communication with us.
-				managedWorkingSetList.emplace_back(std::move(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function())));
+				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
 				auto &data = message.get_data();
 
 				CANStackLogger::info("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
@@ -486,12 +486,12 @@ namespace isobus
 
 									if (wasDeleted)
 									{
-										CANStackLogger::info("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str());
+										CANStackLogger::info("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str().c_str());
 										parentServer->send_delete_version_response(0, cf->get_control_function());
 									}
 									else
 									{
-										CANStackLogger::warn("[VT Server]: Delete version failed for client NAME %s", nameString.str());
+										CANStackLogger::warn("[VT Server]: Delete version failed for client NAME %s", nameString.str().c_str());
 										parentServer->send_delete_version_response((1 << static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), cf->get_control_function());
 									}
 								}
@@ -790,7 +790,7 @@ namespace isobus
 									else
 									{
 										parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), cf->get_control_function());
-										CANStackLogger::warn("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", cf->get_control_function()->get_address(), parentObject);
+										CANStackLogger::warn("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", cf->get_control_function()->get_address(), parentObjectId);
 									}
 								}
 								break;
@@ -1436,14 +1436,14 @@ namespace isobus
 		if (nullptr != destination)
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-				buffer[0] = static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
-				buffer[1] = static_cast<std::uint8_t>(parentObjectID & 0xFF),
-				buffer[2] = static_cast<std::uint8_t>(parentObjectID >> 8),
-				buffer[3] = static_cast<std::uint8_t>(objectID & 0xFF),
-				buffer[4] = static_cast<std::uint8_t>(objectID >> 8),
-				buffer[5] = errorBitfield,
-				buffer[6] = 0xFF,
-				buffer[7] = 0xFF
+				static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
+				static_cast<std::uint8_t>(parentObjectID & 0xFF),
+				static_cast<std::uint8_t>(parentObjectID >> 8),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF
 			};
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
