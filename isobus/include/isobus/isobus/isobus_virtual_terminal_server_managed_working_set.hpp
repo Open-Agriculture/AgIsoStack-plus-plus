@@ -111,14 +111,14 @@ namespace isobus
 		VTColourTable workingSetColourTable; ///< This working set's colour table
 		std::map<std::uint16_t, std::shared_ptr<VTObject>> vtObjectTree; ///< The C++ object representation (deserialized) of the object pool being managed
 		std::vector<std::vector<std::uint8_t>> iopFilesRawData; ///< Raw IOP File data from the client
-		std::unique_ptr<std::thread> objectPoolProcessingThread; ///< A thread to process the object pool with, since that can be fairly time consuming.
+		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
 		std::mutex managedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
-		std::shared_ptr<ControlFunction> workingSetControlFunction; ///< Stores the control function associated with this working set
+		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<std::shared_ptr<void>> callbackHandles; ///< A convenient way to associate callback handles to a working set
-		ObjectPoolProcessingThreadState processingState; ///< Stores the state of processing the object pool
-		std::uint32_t workingSetMaintenanceMessageTimestamp_ms; ///< A timestamp (in ms) to track sending of the maintenance message
-		std::uint16_t workingSetID; ///< Stores the object ID of the working set object itself
-		std::uint16_t faultingObjectID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
+		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
+		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
+		std::uint16_t workingSetID = NULL_OBJECT_ID; ///< Stores the object ID of the working set object itself
+		std::uint16_t faultingObjectID = NULL_OBJECT_ID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
 	};
 } // namespace isobus
 
