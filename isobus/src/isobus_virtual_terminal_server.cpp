@@ -766,7 +766,7 @@ namespace isobus
 										{
 											std::int8_t xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
 											std::int8_t yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
-											bool anyObjectMatched = parentObject->offset_all_children_x_with_id(objectID, xRelativeChange, yRelativeChange);
+											bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
 
 											parentServer->onRepaintEventDispatcher.call(cf);
 
@@ -837,7 +837,7 @@ namespace isobus
 									std::uint16_t numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
 									auto stringObject = cf->get_object_by_id(objectIdToChange);
 
-									if (message.get_data_length() >= (numberOfBytesInString + 5))
+									if (message.get_data_length() >= static_cast<std::uint32_t>(numberOfBytesInString + 5))
 									{
 										if (nullptr != stringObject)
 										{
