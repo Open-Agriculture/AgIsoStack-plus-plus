@@ -15,24 +15,13 @@
 
 namespace isobus
 {
-	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet() :
-	  workingSetControlFunction(nullptr),
-	  objectPoolProcessingThread(nullptr),
-	  processingState(ObjectPoolProcessingThreadState::None),
-	  workingSetMaintenanceMessageTimestamp_ms(0),
-	  workingSetID(NULL_OBJECT_ID),
-	  faultingObjectID(NULL_OBJECT_ID)
+	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet()
 	{
 		CANStackLogger::info("[WS]: New VT Server Object Created with no associated control function");
 	}
 
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet(std::shared_ptr<ControlFunction> associatedControlFunction) :
-	  workingSetID(NULL_OBJECT_ID),
-	  objectPoolProcessingThread(nullptr),
-	  workingSetControlFunction(associatedControlFunction),
-	  processingState(ObjectPoolProcessingThreadState::None),
-	  workingSetMaintenanceMessageTimestamp_ms(0),
-	  faultingObjectID(NULL_OBJECT_ID)
+	  workingSetControlFunction(associatedControlFunction)
 	{
 		if (nullptr != associatedControlFunction)
 		{
@@ -2303,7 +2292,17 @@ namespace isobus
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->set_validation_type(iopData[3]);
+
+							if (iopData[3] <= static_cast<std::uint8_t>(InputAttributes::ValidationType::InvalidCharactersAreListed))
+							{
+								tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(iopData[3] & 0x01));
+							}
+							else
+							{
+								tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(iopData[3] & 0x01));
+								CANStackLogger::warn("[WS]: Invalid input attributes validation type. Validation type must be < 2");
+							}
+
 							const std::uint8_t validationStringLength = iopData[4];
 							iopData += 5;
 							iopLength -= 5;
@@ -2368,7 +2367,16 @@ namespace isobus
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->set_validation_type(iopData[3]);
+
+							if (iopData[3] <= static_cast<std::uint8_t>(ExtendedInputAttributes::ValidationType::InvalidCharactersAreListed))
+							{
+								tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(iopData[3] & 0x01));
+							}
+							else
+							{
+								tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(iopData[3] & 0x01));
+								CANStackLogger::warn("[WS]: Invalid extended input attributes validation type. Validation type must be < 2");
+							}
 
 							const std::uint8_t numberOfCodePlanesToFollow = iopData[4];
 							tempObject->set_number_of_code_planes(numberOfCodePlanesToFollow);
