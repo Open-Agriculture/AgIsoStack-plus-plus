@@ -1,13 +1,13 @@
 //================================================================================================
 /// @file can_message_data.hpp
 ///
-/// @brief Contains common types and functions for working with the data of a CAN message.
+/// @brief Contains common types and functions for working with an arbitrary amount of items.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Open Agriculture
+/// @copyright 2023 Open Agriculture
 //================================================================================================
-#ifndef CAN_MESSAGE_DATA_HPP
-#define CAN_MESSAGE_DATA_HPP
+#ifndef DATA_SPAN_HPP
+#define DATA_SPAN_HPP
 
 #include <array>
 #include <cstddef>
@@ -101,4 +101,4 @@ namespace isobus
 		}
 	};
 }
-#endif // CAN_MESSAGE_DATA_HPP
+#endif // DATA_SPAN_HPP

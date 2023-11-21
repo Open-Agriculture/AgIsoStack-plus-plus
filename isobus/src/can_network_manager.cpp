@@ -122,7 +122,7 @@ namespace isobus
 	                                         void *parentPointer)
 	{
 		return send_can_message(parameterGroupNumber,
-		                        DataSpan<const std::uint8_t>(dataBuffer, dataLength),
+		                        CANDataSpan(dataBuffer, dataLength),
 		                        sourceControlFunction,
 		                        destinationControlFunction,
 		                        priority,
@@ -219,7 +219,7 @@ namespace isobus
 	}
 
 	bool CANNetworkManager::send_can_message(std::uint32_t parameterGroupNumber,
-	                                         DataSpan<const std::uint8_t> data,
+	                                         CANDataSpan data,
 	                                         std::shared_ptr<InternalControlFunction> sourceControlFunction,
 	                                         std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                         CANIdentifier::CANPriority priority,
@@ -310,7 +310,7 @@ namespace isobus
 	                                                 void *parentPointer)
 	{
 		return send_can_message(parameterGroupNumber,
-		                        DataSpan<const std::uint8_t>(data.begin(), data.size()),
+		                        CANDataSpan(data.begin(), data.size()),
 		                        sourceControlFunction,
 		                        destinationControlFunction,
 		                        priority,
@@ -354,7 +354,7 @@ namespace isobus
 		                        parentPointer);
 	}
 
-	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber, DataSpan<const std::uint8_t> data, std::shared_ptr<InternalControlFunction> sourceControlFunction, CANIdentifier::CANPriority priority, TransmitCompleteCallback txCompleteCallback, void *parentPointer)
+	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber, CANDataSpan data, std::shared_ptr<InternalControlFunction> sourceControlFunction, CANIdentifier::CANPriority priority, TransmitCompleteCallback txCompleteCallback, void *parentPointer)
 	{
 		return send_can_message(parameterGroupNumber,
 		                        data,
@@ -368,7 +368,7 @@ namespace isobus
 	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber, std::initializer_list<std::uint8_t> data, std::shared_ptr<InternalControlFunction> sourceControlFunction, CANIdentifier::CANPriority priority, TransmitCompleteCallback txCompleteCallback, void *parentPointer)
 	{
 		return send_can_message(parameterGroupNumber,
-		                        DataSpan<const std::uint8_t>(data.begin(), data.size()),
+		                        CANDataSpan(data.begin(), data.size()),
 		                        sourceControlFunction,
 		                        nullptr, // To denote a global message we pass a null destination
 		                        priority,
@@ -429,7 +429,7 @@ namespace isobus
 	                                             std::uint8_t destAddress,
 	                                             std::uint32_t parameterGroupNumber,
 	                                             std::uint8_t priority,
-	                                             DataSpan<const std::uint8_t> data,
+	                                             CANDataSpan data,
 	                                             CANLibBadge<AddressClaimStateMachine>) const
 	{
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data);
@@ -931,7 +931,7 @@ namespace isobus
 	                                                   std::uint8_t destAddress,
 	                                                   std::uint32_t parameterGroupNumber,
 	                                                   std::uint8_t priority,
-	                                                   DataSpan<const std::uint8_t> data) const
+	                                                   CANDataSpan data) const
 	{
 		CANMessageFrame txFrame;
 		txFrame.identifier = DEFAULT_IDENTIFIER;
@@ -1207,7 +1207,7 @@ namespace isobus
 	                                             std::uint8_t destAddress,
 	                                             std::uint32_t parameterGroupNumber,
 	                                             std::uint8_t priority,
-	                                             DataSpan<const std::uint8_t> data) const
+	                                             CANDataSpan data) const
 	{
 		CANMessageFrame tempFrame = construct_frame(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data);
 		bool retVal = false;
