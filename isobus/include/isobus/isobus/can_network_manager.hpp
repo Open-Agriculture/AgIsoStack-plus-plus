@@ -20,7 +20,6 @@
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
-#include "isobus/isobus/can_message_data.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
@@ -103,7 +102,6 @@ namespace isobus
 		float get_estimated_busload(std::uint8_t canChannel);
 
 		/// @brief Sends a CAN message with the specified parameter group number and data buffer to the specified destination control function.
-		/// @deprecated Use the `send_can_message` function with a DataSpan instead.
 		/// @details This function will automatically choose an appropriate transport protocol if needed.
 		/// If you don't specify a destination (or use nullptr) you message will be sent as a broadcast
 		/// @param parameterGroupNumber The parameter group number of the CAN message.
@@ -158,7 +156,7 @@ namespace isobus
 		/// @param parentPointer A pointer to the parent object that gets passed to the txCompleteCallback.
 		/// @return True if the message is successfully enqueued, false otherwise.
 		bool send_can_message(std::uint32_t parameterGroupNumber,
-		                      DataSpan<const std::uint8_t> data,
+		                      CANDataSpan data,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
 		                      std::shared_ptr<ControlFunction> destinationControlFunction,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
@@ -185,7 +183,6 @@ namespace isobus
 		                      void *parentPointer = nullptr);
 
 		/// @brief Broadcast a CAN message with the specified parameter group number and data buffer. (Destination Address=0xFF)
-		/// @deprecated Use the `send_can_message_global` function with a DataSpan instead.
 		/// @details This function will automatically choose an appropriate transport protocol if needed.
 		/// @param parameterGroupNumber The parameter group number of the CAN message.
 		/// @param dataBuffer The data buffer containing the data to be sent.
@@ -231,7 +228,7 @@ namespace isobus
 		/// @param parentPointer A pointer to the parent object that gets passed to the txCompleteCallback.
 		/// @return True if the message is successfully enqueued, false otherwise.
 		bool send_can_message_global(std::uint32_t parameterGroupNumber,
-		                             DataSpan<const std::uint8_t> data,
+		                             CANDataSpan data,
 		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
 		                             CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                             TransmitCompleteCallback txCompleteCallback = nullptr,
@@ -355,7 +352,7 @@ namespace isobus
 		                          std::uint8_t destAddress,
 		                          std::uint32_t parameterGroupNumber,
 		                          std::uint8_t priority,
-		                          DataSpan<const std::uint8_t> data,
+		                          CANDataSpan data,
 		                          CANLibBadge<AddressClaimStateMachine>) const;
 
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
@@ -404,7 +401,7 @@ namespace isobus
 		                                std::uint8_t destAddress,
 		                                std::uint32_t parameterGroupNumber,
 		                                std::uint8_t priority,
-		                                DataSpan<const std::uint8_t> data) const;
+		                                CANDataSpan data) const;
 
 		/// @brief Returns a control function based on a CAN address and channel index
 		/// @param[in] channelIndex The CAN channel index of the CAN message being processed
@@ -478,7 +475,7 @@ namespace isobus
 		                          std::uint8_t destAddress,
 		                          std::uint32_t parameterGroupNumber,
 		                          std::uint8_t priority,
-		                          DataSpan<const std::uint8_t> data) const;
+		                          CANDataSpan data) const;
 
 		/// @brief Gets a PGN callback for the global address by index
 		/// @param[in] index The index of the callback to get

@@ -8,7 +8,6 @@
 //================================================================================================
 #include "isobus/isobus/can_address_claim_state_machine.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
-#include "isobus/isobus/can_message_data.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
