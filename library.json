@@ -9,6 +9,13 @@
     },
     "license": "MIT",
     "homepage": "https://isobusplusplus.com/",
+    "export": {
+        "include": [
+            "isobus/*",
+            "utility/*",
+            "hardware_integration/*"
+        ]
+    },
     "build": {
         "flags": [
             "-Ihardware_integration/include",

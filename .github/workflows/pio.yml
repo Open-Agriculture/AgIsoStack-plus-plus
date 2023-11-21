@@ -7,7 +7,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         example: [examples/virtual_terminal/esp32_platformio_object_pool]
 
     steps:
@@ -23,9 +23,7 @@ jobs:
           python-version: '3.9'
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
-
+      - name: Install AgIsoStack library in PlatformIO
+        run: pio pkg install -g -l ./
       - name: Build PlatformIO examples
-        run: pio ci --lib="." --project-option="build_unflags = -std=gnu++11" --project-option="build_flags = -std=gnu++14" --board=denky32
-        env:
-          PLATFORMIO_CI_SRC: ${{ matrix.example }}/src
-          PLATFORMIO_BUILD_FLAGS: -I${{ matrix.example }}/include
+        run: pio run -d ${{ matrix.example }} -e local_agisostack
