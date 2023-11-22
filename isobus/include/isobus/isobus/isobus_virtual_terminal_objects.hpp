@@ -148,9 +148,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a generic VT object. Sets up default values and the pointer to the member object pool
-		/// @param[in] memberObjectPool a reference to the object tree that this object will be a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		VTObject(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		VTObject() = default;
+
+		/// @brief Virtual destructor for a generic VT object
+		virtual ~VTObject() = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -162,16 +163,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		virtual bool get_is_valid() const = 0;
+		virtual bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const = 0;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool A map of all objects in the current object pool, keyed by their object ID. Used to validate some object references.
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		virtual bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) = 0;
+		virtual bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) = 0;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -212,10 +214,6 @@ namespace isobus
 		/// @brief Sets the background color attribute of this object
 		/// @param[in] value The new background color attribute for this object (index to the actual color in the color table)
 		void set_background_color(std::uint8_t value);
-
-		/// @brief Returns a VT object from its member pool by ID, or the null id if it does not exist
-		/// @returns The object with the corresponding ID
-		std::shared_ptr<VTObject> get_object_by_id(std::uint16_t objectID) const;
 
 		/// @brief Returns the number of child objects within this object
 		std::uint16_t get_number_children() const;
@@ -268,6 +266,12 @@ namespace isobus
 		/// This is meant to be a faster way to deal with objects that only have a max of 1 child.
 		void pop_child();
 
+		/// @brief Returns a VT object from its member pool by ID, or the null id if it does not exist
+		/// @param[in] objectID The object ID to search for
+		/// @param[in] objectPool The object pool to search in
+		/// @returns The object with the corresponding ID
+		static std::shared_ptr<VTObject> get_object_by_id(std::uint16_t objectID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool);
+
 	protected:
 		/// @brief Storage for child object data
 		class ChildObjectData
@@ -288,20 +292,6 @@ namespace isobus
 			std::int16_t yLocation = 0; ///< Relative Y location of the top left corner of the object
 		};
 
-		/// @brief A helper function to swap a child object of specified type with a new object.
-		/// This is meant to be used to replace attributes of which there can be only 1, such as a string variable in an output string.
-		/// @param[in] newID The new child object's ID
-		/// @param[in] typeToRemove The object type of both the current child, and the new child (they must match)
-		/// @returns True if the replacement succeeded, otherwise false
-		bool replace_only_child_of_type(std::uint16_t newID, VirtualTerminalObjectType typeToRemove);
-
-		/// @brief A helper function to get the first child object of the specified type
-		/// @param[in] typeToFind The object type to find
-		/// @returns The object ID of the first child object of the specified type, or NULL_OBJECT_ID if none were found
-		std::uint16_t get_first_child_of_type(VirtualTerminalObjectType typeToFind) const;
-
-		VTColourTable &colourTable; ///< A reference to the current object pool's colour table. Useful for rendering most objects.
-		std::map<std::uint16_t, std::shared_ptr<VTObject>> &thisObjectPool; ///< A pointer to the rest of the object pool. Convenient for lookups by object ID.
 		std::vector<ChildObjectData> children; ///< List of child objects
 		std::uint16_t objectID = NULL_OBJECT_ID; ///< Object identifier. Shall be unique within the object pool.
 		std::uint16_t width = 0; ///< The width of the object. Not always applicable, but often used.
@@ -327,9 +317,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a working set object
-		/// @param[in] memberObjectPool a reference to the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		WorkingSet() = default;
+
+		/// @brief Virtual destructor for a working set object
+		~WorkingSet() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -341,16 +332,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -400,9 +392,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a data mask object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		DataMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		DataMask() = default;
+
+		/// @brief Virtual destructor for a data mask object
+		~DataMask() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -414,16 +407,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -433,13 +427,25 @@ namespace isobus
 		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
 		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
 
-		/// @brief Changes the soft key mask associated to this data mask to a new object ID
+		/// @brief Changes the soft key mask associated to this data mask to a new object ID.
+		/// Performs error checking on the type of the assigned object to ensure it is a soft key mask.
 		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this data mask
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @returns True if the mask was changed, false if the new ID was not valid and the mask was not changed
-		bool change_soft_key_mask(std::uint16_t newMaskID);
+		bool change_soft_key_mask(std::uint16_t newMaskID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool);
+
+		/// @brief Changes the soft key mask associated to this data mask to a new object ID, but
+		/// does no checking on the validity of the new object ID.
+		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this data mask
+		void set_soft_key_mask(std::uint16_t newMaskID);
+
+		/// @brief Returns the object ID of the soft key mask associated with this data mask
+		/// @returns The object ID of the soft key mask associated with this data mask
+		std::uint16_t get_soft_key_mask() const;
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
+		std::uint16_t softKeyMaskObjectID = NULL_OBJECT_ID; ///< The object ID of the soft key mask associated with this data mask
 	};
 
 	/// @brief Similar to a data mask, but takes priority and will be shown over data masks.
@@ -469,7 +475,7 @@ namespace isobus
 
 		/// @brief Enumerates the acoustic signal values for the alarm mask. Works only if your VT has a way to make sounds.
 		/// @details The result of this setting is somewhat proprietary depending on your VT
-		enum AcousticSignal : std::uint8_t
+		enum class AcousticSignal : std::uint8_t
 		{
 			Highest = 0, ///< Most aggressive beeping
 			Medium = 1, ///< Medium beeping
@@ -478,9 +484,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a alarm mask object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		AlarmMask() = default;
+
+		/// @brief Virtual destructor for a alarm mask object
+		~AlarmMask() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -492,16 +499,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -531,10 +539,21 @@ namespace isobus
 		/// @param value The acoustic signal priority to set
 		void set_signal_priority(AcousticSignal value);
 
-		/// @brief Changes the soft key mask associated to this alarm mask to a new object ID
-		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this alarm mask
+		/// @brief Changes the soft key mask associated to this alarm mask to a new object ID.
+		/// Performs error checking on the type of the assigned object to ensure it is a soft key mask.
+		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this data mask
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @returns True if the mask was changed, false if the new ID was not valid and the mask was not changed
-		bool change_soft_key_mask(std::uint16_t newMaskID);
+		bool change_soft_key_mask(std::uint16_t newMaskID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool);
+
+		/// @brief Changes the soft key mask associated to this alarm mask to a new object ID, but
+		/// does no checking on the validity of the new object ID.
+		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this alarm mask
+		void set_soft_key_mask(std::uint16_t newMaskID);
+
+		/// @brief Returns the object ID of the soft key mask associated with this alarm mask
+		/// @returns The object ID of the soft key mask associated with this alarm mask
+		std::uint16_t get_soft_key_mask() const;
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
@@ -563,9 +582,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a container object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		Container() = default;
+
+		/// @brief Virtual destructor for a container object
+		~Container() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -577,16 +597,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -628,9 +649,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a soft key mask object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		SoftKeyMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		SoftKeyMask() = default;
+
+		/// @brief Virtual destructor for a soft key mask object
+		~SoftKeyMask() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -642,16 +664,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -682,9 +705,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a key object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		Key() = default;
+
+		/// @brief Virtual destructor for a key object
+		~Key() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -696,16 +720,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -752,9 +777,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a key group object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		KeyGroup(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		KeyGroup() = default;
+
+		/// @brief Virtual destructor for a key group object
+		~KeyGroup() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -766,16 +792,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -820,7 +847,7 @@ namespace isobus
 		static constexpr std::uint8_t MAX_CHILD_KEYS = 4; ///< There shall be a max of 4 keys per group according to the standard
 
 	private:
-		bool validate_name(std::uint16_t nameIDToValidate) const; ///< Validates that the specified name ID is valid for this object
+		bool validate_name(std::uint16_t nameIDToValidate, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const; ///< Validates that the specified name ID is valid for this object
 
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
@@ -864,9 +891,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a button object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		Button(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		Button() = default;
+
+		/// @brief Virtual destructor for a button object
+		~Button() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -878,16 +906,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -955,9 +984,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an input boolean object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		InputBoolean(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		InputBoolean() = default;
+
+		/// @brief Virtual destructor for an input boolean object
+		~InputBoolean() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -969,16 +999,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1006,9 +1037,30 @@ namespace isobus
 		/// @param[in] isEnabled The new state for the enabled attribute for this object
 		void set_enabled(bool isEnabled);
 
+		/// @brief Returns the object ID of a font attributes object that defines the foreground colour, or the null ID
+		/// @returns The object ID of a font attributes object that defines the foreground colour, or the null ID
+		std::uint16_t get_foreground_colour_object_id() const;
+
+		/// @brief Sets the object ID of the foreground colour object.
+		/// Does not perform error checking on the type of the supplied object.
+		/// @param[in] fontAttributeValue The object ID of the foreground colour object
+		void set_foreground_colour_object_id(std::uint16_t fontAttributeValue);
+
+		/// @brief Returns the object ID of a number variable object that contains the value of the Input Boolean object
+		/// or the null ID if the "value" attribute is used instead.
+		/// @returns The object ID of a number variable object that contains the value of the Input Boolean object, or the null ID
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the object ID of the number variable object that contains the value of the Input Boolean object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] numberVariableValue The object ID of the number variable object that contains the value of the Input Boolean object, or the null ID
+		void set_variable_reference(std::uint16_t numberVariableValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
+		std::uint16_t foregroundColourObjectID = NULL_OBJECT_ID; ///< Object ID of a font attributes that contains the foreground colour of the Input Boolean object
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a number variable object that contains the value of the Input Boolean object
 		std::uint8_t value = 0; ///< Used only if it has no number variable child object
 		bool enabled = false; ///< If the bool is interactable
 	};
@@ -1062,9 +1114,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a input string object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		InputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		InputString() = default;
+
+		/// @brief Virtual destructor for a input string object
+		~InputString() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1076,16 +1129,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1139,13 +1193,41 @@ namespace isobus
 		/// @param[in] value The new string value
 		void set_value(const std::string &value);
 
+		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Input String object
+		/// @returns The object ID of a font attributes object that defines the font attributes of the Input String object
+		std::uint16_t get_font_attributes() const;
+
+		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Input String object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Input String object
+		void set_font_attributes(std::uint16_t fontAttributesValue);
+
+		/// @brief Returns the object ID of a string variable object that contains the value of the Input String object
+		/// @returns The object ID of a string variable object that contains the value of the Input String object
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the object ID of a string variable object that contains the value of the Input String object.
+		/// Does no error checking on the type of the supplied object.
+		void set_variable_reference(std::uint16_t variableReferenceValue);
+
+		/// @brief Returns the object ID of a input attributes object that defines what can be input into the Input String object.
+		/// @returns The object ID of a input attributes object that defines the input attributes of the Input String object
+		std::uint16_t get_input_attributes() const;
+
+		/// @brief Sets the object ID of a input attributes object that defines what can be input into the Input String object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] inputAttributesValue The object ID of a input attributes object that defines the input attributes of the Input String object
+		void set_input_attributes(std::uint16_t inputAttributesValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 19; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
+		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
+		std::uint16_t inputAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a input attributes object that will be used to determine what can be input into this object.
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a string variable object that will be used in place of the string value attribute if it is not NULL_OBJECT_ID.
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
-		std::uint8_t length = 0; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
 		bool enabled = false; ///< If the string is interactable
 	};
 
@@ -1213,9 +1295,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an input number object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		InputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		InputNumber() = default;
+
+		/// @brief Virtual destructor for an input number object
+		~InputNumber() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1227,16 +1310,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1350,6 +1434,24 @@ namespace isobus
 		/// @param[in] inputValue The value to set for the input number
 		void set_value(std::uint32_t inputValue);
 
+		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Input Number object
+		/// @returns The object ID of a font attributes object that defines the font attributes of the Input Number object
+		std::uint16_t get_font_attributes() const;
+
+		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Input Number object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Input Number object
+		void set_font_attributes(std::uint16_t fontAttributesValue);
+
+		/// @brief Returns the object ID of a number variable object that contains the value of the Input Number object
+		/// @returns The object ID of a number variable object that contains the value of the Input Number object
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the object ID of a number variable object that contains the value of the Input Number object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] variableReferenceValue The object ID of a number variable object that contains the value of the Input Number object
+		void set_variable_reference(std::uint16_t variableReferenceValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 38; ///< The fewest bytes of IOP data that can represent this object
 
@@ -1358,6 +1460,8 @@ namespace isobus
 		std::uint32_t minimumValue = 0; ///< Raw minimum value for the input before scaling
 		std::uint32_t value = 0; ///< The raw value of the object, used if no number variable child has been set
 		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
+		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a number variable object that will be used in place of the value attribute if it is not NULL_OBJECT_ID.
 		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
 		std::uint8_t options = 0; ///< Options byte 1
 		std::uint8_t options2 = 0; ///< Options byte 2
@@ -1392,9 +1496,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an input list object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		InputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		InputList() = default;
+
+		/// @brief Virtual destructor for an input list object
+		~InputList() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1406,16 +1511,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1459,8 +1565,9 @@ namespace isobus
 		/// @brief Changes a list item to a new ID by index
 		/// @param[in] index The index to change (starting from 0)
 		/// @param[in] newListItem The object ID to use as the new list item at the specified index
+		/// @param[in] objectPool The object pool to use to look up the object ID
 		/// @returns True if the operation was successful, otherwise false (perhaps the index is out of bounds?)
-		bool change_list_item(std::uint8_t index, std::uint16_t newListItem);
+		bool change_list_item(std::uint8_t index, std::uint16_t newListItem, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool);
 
 		/// @brief Returns the number of items in the list
 		/// @note This is not the number of children, it's the number of allocated
@@ -1530,9 +1637,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output string object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputString() = default;
+
+		/// @brief Virtual destructor for an output string object
+		~OutputString() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1544,16 +1652,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1597,13 +1706,31 @@ namespace isobus
 		/// @param[in] value The new value for the string
 		void set_value(const std::string &value);
 
+		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Output String object
+		/// @returns The object ID of a font attributes object that defines the font attributes of the Output String object
+		std::uint16_t get_font_attributes() const;
+
+		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Output String object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Output String object
+		void set_font_attributes(std::uint16_t fontAttributesValue);
+
+		/// @brief Returns the object ID of a string variable object that contains the value of the Output String object
+		/// @returns The object ID of a string variable object that contains the value of the Output String object
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the object ID of a string variable object that contains the value of the Output String object.
+		/// Does no error checking on the type of the supplied object.
+		void set_variable_reference(std::uint16_t variableReferenceValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
+		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a string variable object that will be used in place of the string value attribute if it is not NULL_OBJECT_ID.
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
-		std::uint8_t length = 0; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
@@ -1658,9 +1785,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output number object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputNumber() = default;
+
+		/// @brief Virtual destructor for an output number object
+		~OutputNumber() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1672,16 +1800,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1722,24 +1851,24 @@ namespace isobus
 		float get_scale() const;
 
 		/// @brief Sets the scale factor for the output number
-		/// @param[in] value The new value for the scale factor
-		void set_scale(float value);
+		/// @param[in] scaleValue The new value for the scale factor
+		void set_scale(float scaleValue);
 
 		/// @brief Returns the offset that is applied to the output number
 		/// @returns The offset of the output number
 		std::int32_t get_offset() const;
 
 		/// @brief Sets the offset of the output number
-		/// @param[in] value The offset to set for the output number
-		void set_offset(std::int32_t value);
+		/// @param[in] offsetValue The offset to set for the output number
+		void set_offset(std::int32_t offsetValue);
 
 		/// @brief Returns the number of decimals to render in the output number
 		/// @returns The number of decimals to render in the output number
 		std::uint8_t get_number_of_decimals() const;
 
 		/// @brief Sets the number of decimals to render in the output number
-		/// @param[in] value The number of decimals to render in the output number
-		void set_number_of_decimals(std::uint8_t value);
+		/// @param[in] decimalValue The number of decimals to render in the output number
+		void set_number_of_decimals(std::uint8_t decimalValue);
 
 		/// @brief Returns if the "format" option is set for this object
 		/// @details The format option determines if fixed decimal or exponential notation is used.
@@ -1750,8 +1879,8 @@ namespace isobus
 		/// @brief Sets the format option for this object.
 		/// @details The format option determines if fixed decimal or exponential notation is used.
 		/// A value of `false` is fixed decimal notation, and `true` is exponential notation
-		/// @param[in] value `true` to use fixed decimal notation (####.nn), `false` to use exponential ([−]###.nnE[+/−]##)
-		void set_format(bool value);
+		/// @param[in] shouldFormatAsExponential `true` to use fixed decimal notation (####.nn), `false` to use exponential ([−]###.nnE[+/−]##)
+		void set_format(bool shouldFormatAsExponential);
 
 		/// @brief Returns the value of the output number (only matters if there's no child number variable object).
 		/// @returns The value of the output number.
@@ -1761,12 +1890,33 @@ namespace isobus
 		/// @param[in] inputValue The value to set for the output number
 		void set_value(std::uint32_t inputValue);
 
+		/// @brief A dedicated way to set the stored variable reference so we don't have
+		/// to worry about the child object list getting messed up from changing the attribute
+		/// or a list item.
+		/// @param[in] referencedObjectID The object ID of a number variable to set as the value reference
+		void set_variable_reference(std::uint16_t referencedObjectID);
+
+		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
+		/// @returns The variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Output Number object
+		/// @returns The object ID of a font attributes object that defines the font attributes of the Output Number object
+		std::uint16_t get_font_attributes() const;
+
+		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Output Number object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Output Number object
+		void set_font_attributes(std::uint16_t fontAttributesValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 29; ///< The fewest bytes of IOP data that can represent this object
 
 		float scale = 1.0f; ///< Scale to be applied to the input value and min/max values.
 		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
 		std::uint32_t value = 0; ///< Raw unsigned value of the output field before scaling (unsigned 32-bit integer). Used only if variable reference attribute is NULL
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a number variable that will be used as the value, or the NULL_OBJECT_ID if not used.
+		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
 		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
@@ -1791,9 +1941,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output list object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputList() = default;
+
+		/// @brief Virtual destructor for an output list object
+		~OutputList() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1805,16 +1956,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1856,8 +2008,9 @@ namespace isobus
 		/// @brief Changes a list item to a new ID by index
 		/// @param[in] index The index to change (starting from 0)
 		/// @param[in] newListItem The object ID to use as the new list item at the specified index
+		/// @param[in] objectPool The object pool to use to look up the object ID
 		/// @returns True if the operation was successful, otherwise false (perhaps the index is out of bounds?)
-		bool change_list_item(std::uint8_t index, std::uint16_t newListItem);
+		bool change_list_item(std::uint8_t index, std::uint16_t newListItem, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool);
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
@@ -1892,9 +2045,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output line object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputLine(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputLine() = default;
+
+		/// @brief Virtual destructor for an output line object
+		~OutputLine() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1906,16 +2060,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -1939,9 +2094,19 @@ namespace isobus
 		/// @param[in] value The line direction to set (see details).
 		void set_line_direction(LineDirection value);
 
+		/// @brief Returns the object ID of the line attributes used to display this line
+		/// @returns The object ID of the line attributes used to display this line
+		std::uint16_t get_line_attributes() const;
+
+		/// @brief Sets the object ID of the line attributes used to display this line.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] lineAttributesObject The object ID of the line attributes used to display this line
+		void set_line_attributes(std::uint16_t lineAttributesObject);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 11; ///< The fewest bytes of IOP data that can represent this object
 
+		std::uint16_t lineAttributes = NULL_OBJECT_ID; ///< Object ID of line attributes used to display this line
 		std::uint8_t lineDirection = 0; ///< 0 = Line is drawn from top left to bottom right of enclosing virtual rectangle, 1 = Line is drawn from bottom left to top right
 	};
 
@@ -1972,9 +2137,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output rectangle object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputRectangle(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputRectangle() = default;
+
+		/// @brief Virtual destructor for an output rectangle object
+		~OutputRectangle() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1986,16 +2152,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2015,9 +2182,29 @@ namespace isobus
 		/// @param[in] value The line suppression bitfield to set.
 		void set_line_suppression_bitfield(std::uint8_t value);
 
+		/// @brief Returns the object ID of the line attributes used to display this rectangle's lines
+		/// @returns The object ID of the line attributes used to display this rectangle's lines
+		std::uint16_t get_line_attributes() const;
+
+		/// @brief Sets the object ID of the line attributes used to display this rectangle's lines.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] lineAttributesObject The object ID of the line attributes used to display this rectangle's lines
+		void set_line_attributes(std::uint16_t lineAttributesObject);
+
+		/// @brief Returns the object ID of the fill attributes used to display this rectangle's fill
+		/// @returns The object ID of the fill attributes used to display this rectangle's fill
+		std::uint16_t get_fill_attributes() const;
+
+		/// @brief Sets the object ID of the fill attributes used to display this rectangle's fill.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] fillAttributesObject The object ID of the fill attributes used to display this rectangle's fill
+		void set_fill_attributes(std::uint16_t fillAttributesObject);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
+		std::uint16_t lineAttributes = NULL_OBJECT_ID; ///< Object ID of line attributes used to display this rectangle
+		std::uint16_t fillAttributes = NULL_OBJECT_ID; ///< Object ID of fill attributes used to display this rectangle
 		std::uint8_t lineSuppressionBitfield = 0; ///< Bitfield of line suppression options
 	};
 
@@ -2051,9 +2238,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output ellipse object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputEllipse(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputEllipse() = default;
+
+		/// @brief Virtual destructor for an output ellipse object
+		~OutputEllipse() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2065,16 +2253,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2115,9 +2304,29 @@ namespace isobus
 		/// @param[in] value The end angle/2 (in degrees) from positive X axis counter clockwise(90° is straight up).
 		void set_end_angle(std::uint8_t value);
 
+		/// @brief Returns the object ID of the line attributes used to display this ellipse's lines
+		/// @returns The object ID of the line attributes used to display this ellipse's lines
+		std::uint16_t get_line_attributes() const;
+
+		/// @brief Sets the object ID of the line attributes used to display this ellipse's lines.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] lineAttributesObject The object ID of the line attributes used to display this ellipse's lines
+		void set_line_attributes(std::uint16_t lineAttributesObject);
+
+		/// @brief Returns the object ID of the fill attributes used to display this ellipse's fill
+		/// @returns The object ID of the fill attributes used to display this ellipse's fill
+		std::uint16_t get_fill_attributes() const;
+
+		/// @brief Sets the object ID of the fill attributes used to display this ellipse's fill.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] fillAttributesObject The object ID of the fill attributes used to display this ellipse's fill
+		void set_fill_attributes(std::uint16_t fillAttributesObject);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 15; ///< The fewest bytes of IOP data that can represent this object
 
+		std::uint16_t lineAttributes = NULL_OBJECT_ID; ///< Object ID of line attributes used to display this ellipse
+		std::uint16_t fillAttributes = NULL_OBJECT_ID; ///< Object ID of fill attributes used to display this ellipse
 		std::uint8_t ellipseType = 0; ///< The type of ellipse
 		std::uint8_t startAngle = 0; ///< Start angle/2 (in degrees) from positive X axis counter clockwise (90° is straight up).
 		std::uint8_t endAngle = 0; ///< End angle/2 (in degrees) from positive X axis counter clockwise (90° is straight up)
@@ -2158,9 +2367,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output polygon object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputPolygon(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputPolygon() = default;
+
+		/// @brief Virtual destructor for an output polygon object
+		~OutputPolygon() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2172,16 +2382,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2213,10 +2424,30 @@ namespace isobus
 		/// @param[in] value The new polygon type for this object
 		void set_type(PolygonType value);
 
+		/// @brief Returns the object ID of the line attributes used to display this polygon's lines
+		/// @returns The object ID of the line attributes used to display this polygon's lines
+		std::uint16_t get_line_attributes() const;
+
+		/// @brief Sets the object ID of the line attributes used to display this polygon's lines.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] lineAttributesObject The object ID of the line attributes used to display this polygon's lines
+		void set_line_attributes(std::uint16_t lineAttributesObject);
+
+		/// @brief Returns the object ID of the fill attributes used to display this polygon's fill
+		/// @returns The object ID of the fill attributes used to display this polygon's fill
+		std::uint16_t get_fill_attributes() const;
+
+		/// @brief Sets the object ID of the fill attributes used to display this polygon's fill.
+		/// Does not perform any error checking on the type of the object specified.
+		/// @param[in] fillAttributesObject The object ID of the fill attributes used to display this polygon's fill
+		void set_fill_attributes(std::uint16_t fillAttributesObject);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 14; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<PolygonPoint> pointList; ///< List of points that make up the polygon. Must be at least 3 points!
+		std::uint16_t fillAttributes = NULL_OBJECT_ID; ///< Object ID of fill attributes used to display this polygon
+		std::uint16_t lineAttributes = NULL_OBJECT_ID; ///< Object ID of line attributes used to display this polygon
 		std::uint8_t polygonType = 0; ///< The polygon type. Affects how the object gets drawn.
 	};
 
@@ -2255,9 +2486,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output meter object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputMeter(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputMeter() = default;
+
+		/// @brief Virtual destructor for an output meter object
+		~OutputMeter() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2269,16 +2501,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2378,12 +2611,24 @@ namespace isobus
 		/// @param[in] value End angle/2 (in degrees) from positive X axis anticlockwise(90° is straight up).
 		void set_end_angle(std::uint8_t value);
 
+		/// @brief Returns the value reference object ID, which is a number variable object
+		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
+		/// @returns The object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the value reference object ID, which is a number variable object
+		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
+		/// Does not do any checking on the type of the object ID.
+		/// @param[in] variableReferenceValue The object ID of a number variable to use for the target value
+		void set_variable_reference(std::uint16_t variableReferenceValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 21; ///< The fewest bytes of IOP data that can represent this object
 
 		std::uint16_t minValue = 0; ///< Minimum value. Represents value when needle is at the start of arc
 		std::uint16_t maxValue = 0; ///< Maximum value. Represents when the needle is at the end of the arc.
 		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
 		std::uint8_t needleColour = 0; ///< Needle (indicator) colour
 		std::uint8_t borderColour = 0; ///< Border colour (if drawn)
 		std::uint8_t arcAndTickColour = 0; ///< Meter arc and tick colour (if drawn)
@@ -2430,9 +2675,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output linear bar graph object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputLinearBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputLinearBarGraph() = default;
+
+		/// @brief Virtual destructor for an output linear bar graph object
+		~OutputLinearBarGraph() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2444,16 +2690,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2546,6 +2793,17 @@ namespace isobus
 		/// @param[in] optionValue The new value of the option bit
 		void set_option(Options option, bool optionValue);
 
+		/// @brief Returns the value reference object ID, which is a number variable object
+		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
+		/// @returns The object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the value reference object ID, which is a number variable object
+		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
+		/// Does not do any checking on the type of the object ID.
+		/// @param[in] variableReferenceValue The object ID of a number variable to use for the target value
+		void set_variable_reference(std::uint16_t variableReferenceValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 24; ///< The fewest bytes of IOP data that can represent this object
 
@@ -2554,6 +2812,7 @@ namespace isobus
 		std::uint16_t targetValue = 0; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
 		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
 		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which to retrieve the bar graph’s value.
 		std::uint8_t numberOfTicks = 0; ///< Number of ticks to draw along the bar graph
 		std::uint8_t colour = 0; ///< Bar graph fill and border colour.
 		std::uint8_t targetLineColour = 0; ///< Target line colour (if drawn).
@@ -2598,9 +2857,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output arched bar graph object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		OutputArchedBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		OutputArchedBarGraph() = default;
+
+		/// @brief Virtual destructor for an output arched bar graph object
+		~OutputArchedBarGraph() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2612,16 +2872,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2733,6 +2994,17 @@ namespace isobus
 		/// @param[in] value The object ID of a number variable to use for the target value
 		void set_target_value_reference(std::uint16_t value);
 
+		/// @brief Returns the value reference object ID, which is a number variable object
+		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
+		/// @returns The object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the value reference object ID, which is a number variable object
+		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
+		/// Does not do any checking on the type of the object ID.
+		/// @param[in] variableReferenceValue The object ID of a number variable to use for the target value
+		void set_variable_reference(std::uint16_t variableReferenceValue);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 27; ///< The fewest bytes of IOP data that can represent this object
 
@@ -2741,12 +3013,13 @@ namespace isobus
 		std::uint16_t maxValue = 0; ///< Maximum value. Represents when the needle is at the end of the arc.
 		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
 		std::uint16_t targetValue = 0; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
-		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
+		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which to retrieve the bar graph’s target value.
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which to retrieve the bar graph’s value.
 		std::uint8_t targetLineColour = 0; ///< Target line colour (if drawn)
 		std::uint8_t colour = 0; ///< Bar graph fill and border colour
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 		std::uint8_t startAngle = 0; ///< Start angle / 2 in degrees from positive X axis counterclockwise
-		std::uint8_t endAngle = 0; ///< End angle / 2 in degrees from positve X axis counterclockwise
+		std::uint8_t endAngle = 0; ///< End angle / 2 in degrees from positive X axis counterclockwise
 	};
 
 	/// @brief This object displays a picture graphic (bitmap)
@@ -2785,9 +3058,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a picture graphic (bitmap) object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		PictureGraphic(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		PictureGraphic() = default;
+
+		/// @brief Virtual destructor for a picture graphic (bitmap) object
+		~PictureGraphic() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2799,16 +3073,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2912,9 +3187,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a number variable object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		NumberVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		NumberVariable() = default;
+
+		/// @brief Virtual destructor for a number variable object
+		~NumberVariable() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2926,16 +3202,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -2973,9 +3250,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a string variable object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		StringVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		StringVariable() = default;
+
+		/// @brief Virtual destructor for a string variable object
+		~StringVariable() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2987,16 +3265,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3008,7 +3287,7 @@ namespace isobus
 
 		/// @brief Returns the actual string value stored in this object
 		/// @returns The string value stored in this object
-		std::string get_value();
+		std::string get_value() const;
 
 		/// @brief Sets the actual string value stored in this object
 		/// @param[in] value The new string value for this object
@@ -3087,9 +3366,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a font attributes object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		FontAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		FontAttributes() = default;
+
+		/// @brief Virtual destructor for a font attributes object
+		~FontAttributes() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3101,16 +3381,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3135,7 +3416,7 @@ namespace isobus
 		/// @brief Returns a specific font style bit's state
 		/// @param[in] styleSetting The font style bit to check
 		/// @returns The state of the selected style bit
-		bool get_style(FontStyleBits styleSetting);
+		bool get_style(FontStyleBits styleSetting) const;
 
 		/// @brief Sets a specific font style bit to a new value
 		/// @param[in] bit The style bit to change
@@ -3196,9 +3477,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a line attributes object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		LineAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		LineAttributes() = default;
+
+		/// @brief Virtual destructor for a line attributes object
+		~LineAttributes() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3210,16 +3492,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3269,9 +3552,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a fill attributes object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		FillAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		FillAttributes() = default;
+
+		/// @brief Virtual destructor for a fill attributes object
+		~FillAttributes() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3283,16 +3567,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3348,9 +3633,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a input attributes object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		InputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		InputAttributes() = default;
+
+		/// @brief Virtual destructor for a input attributes object
+		~InputAttributes() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3362,16 +3648,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3428,9 +3715,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an extended input attributes object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		ExtendedInputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		ExtendedInputAttributes() = default;
+
+		/// @brief Virtual destructor for an extended input attributes object
+		~ExtendedInputAttributes() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3442,16 +3730,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3508,9 +3797,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a object pointer object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		ObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		ObjectPointer() = default;
+
+		/// @brief Virtual destructor for a object pointer object
+		~ObjectPointer() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3522,16 +3812,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3541,8 +3832,18 @@ namespace isobus
 		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
 		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
 
+		/// @brief Returns the object id of the object this object points to
+		/// @returns The object id of the object this object points to
+		std::uint16_t get_value() const;
+
+		/// @brief Sets the object id of the object this object points to.
+		/// Does not do error checking on the type of object this object points to.
+		/// @param[in] objectIDToPointTo The object id of the object this object points to
+		void set_value(std::uint16_t objectIDToPointTo);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
+		std::uint16_t value = NULL_OBJECT_ID; ///< Object ID of the object this object points to, or the NULL Object ID if the pointer should not be drawn
 	};
 
 	/// @brief The External Object Pointer object, available in VT version 5 and later, allows a Working Set to display
@@ -3563,9 +3864,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a object pointer object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		ExternalObjectPointer() = default;
+
+		/// @brief Virtual destructor for a object pointer object
+		~ExternalObjectPointer() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3577,16 +3879,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3689,9 +3992,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a macro object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		Macro(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		Macro() = default;
+
+		/// @brief Virtual destructor for a macro object
+		~Macro() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3703,16 +4007,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3743,6 +4048,10 @@ namespace isobus
 		/// @returns true if the specified command packet was removed, otherwise false (index out of range)
 		bool remove_command_packet(std::uint8_t index);
 
+		/// @brief Returns if the command packets in this macro are valid
+		/// @returns true if the command packets in this macro are valid, otherwise false
+		bool get_are_command_packets_valid() const;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
 		static const std::array<std::uint8_t, 28> ALLOWED_COMMANDS_LOOKUP_TABLE; ///< The list of all allowed commands in a table for easy lookup when validating macro content
@@ -3765,9 +4074,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a colour map object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		ColourMap(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		ColourMap() = default;
+
+		/// @brief Virtual destructor for a colour map object
+		~ColourMap() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3779,16 +4089,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get
@@ -3872,9 +4183,10 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a window mask object
-		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
-		/// @param[in] currentColourTable a reference to the current colour table the working set is using
-		WindowMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+		WindowMask() = default;
+
+		/// @brief Virtual destructor for a window mask object
+		~WindowMask() override = default;
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -3886,16 +4198,17 @@ namespace isobus
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
-		bool get_is_valid() const override;
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
 		/// returns true, this value is undefined.
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
-		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
 		/// @param[in] attributeID The ID of the attribute to get

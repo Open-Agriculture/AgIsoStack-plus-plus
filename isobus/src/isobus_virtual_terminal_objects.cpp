@@ -59,12 +59,6 @@ namespace isobus
 		colourTable.at(colourIndex) = newColour;
 	}
 
-	VTObject::VTObject(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  colourTable(currentColourTable),
-	  thisObjectPool(memberObjectPool)
-	{
-	}
-
 	std::uint16_t VTObject::get_id() const
 	{
 		return objectID;
@@ -103,11 +97,6 @@ namespace isobus
 	void VTObject::set_background_color(std::uint8_t value)
 	{
 		backgroundColor = value;
-	}
-
-	std::shared_ptr<VTObject> VTObject::get_object_by_id(std::uint16_t objectID) const
-	{
-		return thisObjectPool[objectID];
 	}
 
 	std::uint16_t VTObject::get_number_children() const
@@ -204,59 +193,27 @@ namespace isobus
 		}
 	}
 
+	std::shared_ptr<VTObject> VTObject::get_object_by_id(std::uint16_t objectID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
+	{
+		std::shared_ptr<VTObject> retVal = nullptr;
+
+		if ((NULL_OBJECT_ID != objectID) && (objectPool.find(objectID) != objectPool.end()))
+		{
+			auto object = objectPool.at(objectID);
+			if (nullptr != object)
+			{
+				retVal = object;
+			}
+		}
+		return retVal;
+	}
+
 	VTObject::ChildObjectData::ChildObjectData(std::uint16_t objectId,
 	                                           std::int16_t x,
 	                                           std::int16_t y) :
 	  id(objectId),
 	  xLocation(x),
 	  yLocation(y)
-	{
-	}
-
-	bool VTObject::replace_only_child_of_type(std::uint16_t newID, VirtualTerminalObjectType typeToRemove)
-	{
-		bool retVal = false;
-
-		for (std::uint16_t i = 0; i < get_number_children(); i++)
-		{
-			std::uint16_t childID = get_child_id(i);
-			auto childObject = thisObjectPool[childID];
-
-			if ((NULL_OBJECT_ID != childID) && (nullptr != childObject) && (typeToRemove == childObject->get_object_type()))
-			{
-				remove_child(childID, get_child_x(i), get_child_y(i));
-				break;
-			}
-		}
-
-		if ((NULL_OBJECT_ID == newID) || (nullptr != thisObjectPool[newID]))
-		{
-			add_child(newID, 0, 0);
-			retVal = true;
-		}
-		return retVal;
-	}
-
-	std::uint16_t VTObject::get_first_child_of_type(VirtualTerminalObjectType typeToFind) const
-	{
-		std::uint16_t retVal = NULL_OBJECT_ID;
-
-		for (std::uint16_t i = 0; i < get_number_children(); i++)
-		{
-			std::uint16_t childID = get_child_id(i);
-			auto childObject = thisObjectPool[childID];
-
-			if ((NULL_OBJECT_ID != childID) && (nullptr != childObject) && (typeToFind == childObject->get_object_type()))
-			{
-				retVal = childID;
-				break;
-			}
-		}
-		return retVal;
-	}
-
-	WorkingSet::WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
@@ -270,13 +227,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool WorkingSet::get_is_valid() const
+	bool WorkingSet::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		for (const auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -312,7 +269,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -421,11 +378,6 @@ namespace isobus
 		activeMask = value;
 	}
 
-	DataMask::DataMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType DataMask::get_object_type() const
 	{
 		return VirtualTerminalObjectType::DataMask;
@@ -436,14 +388,14 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool DataMask::get_is_valid() const
+	bool DataMask::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 		std::uint8_t numberOfSoftKeyMasks = 0;
 
 		for (auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -503,7 +455,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool DataMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool DataMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -521,7 +473,7 @@ namespace isobus
 				case DataMask::AttributeName::SoftKeyMask:
 				{
 					returnedError = AttributeError::InvalidAttributeID;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::SoftKeyMask);
+					retVal = change_soft_key_mask(static_cast<std::uint16_t>(rawAttributeData), objectPool);
 				}
 				break;
 
@@ -563,7 +515,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::SoftKeyMask):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::SoftKeyMask);
+					returnedAttributeData = get_soft_key_mask();
 					retVal = true;
 				}
 				break;
@@ -578,14 +530,33 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DataMask::change_soft_key_mask(std::uint16_t newMaskID)
+	bool DataMask::change_soft_key_mask(std::uint16_t newMaskID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
 	{
-		return replace_only_child_of_type(newMaskID, VirtualTerminalObjectType::SoftKeyMask);
+		bool retVal = false;
+
+		if (NULL_OBJECT_ID == newMaskID)
+		{
+			set_soft_key_mask(newMaskID);
+			retVal = true;
+		}
+		else if ((objectPool.end() != objectPool.find(newMaskID)) &&
+		         (nullptr != objectPool.at(newMaskID)) &&
+		         (VirtualTerminalObjectType::SoftKeyMask == objectPool.at(newMaskID)->get_object_type()))
+		{
+			set_soft_key_mask(newMaskID);
+			retVal = true;
+		}
+		return retVal;
 	}
 
-	AlarmMask::AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	void DataMask::set_soft_key_mask(std::uint16_t newMaskID)
 	{
+		softKeyMaskObjectID = newMaskID;
+	}
+
+	std::uint16_t DataMask::get_soft_key_mask() const
+	{
+		return softKeyMaskObjectID;
 	}
 
 	VirtualTerminalObjectType AlarmMask::get_object_type() const
@@ -598,13 +569,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool AlarmMask::get_is_valid() const
+	bool AlarmMask::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
 		for (auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -652,7 +623,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool AlarmMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool AlarmMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -670,7 +641,7 @@ namespace isobus
 				case AlarmMask::AttributeName::SoftKeyMask:
 				{
 					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::SoftKeyMask);
+					retVal = change_soft_key_mask(static_cast<std::uint16_t>(rawAttributeData), objectPool);
 				}
 				break;
 
@@ -740,7 +711,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::SoftKeyMask):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::SoftKeyMask);
+					returnedAttributeData = get_soft_key_mask();
 					retVal = true;
 				}
 				break;
@@ -789,14 +760,32 @@ namespace isobus
 		signalPriority = value;
 	}
 
-	bool AlarmMask::change_soft_key_mask(std::uint16_t newMaskID)
+	bool AlarmMask::change_soft_key_mask(std::uint16_t newMaskID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
 	{
-		return replace_only_child_of_type(newMaskID, VirtualTerminalObjectType::SoftKeyMask);
+		bool retVal = false;
+
+		if (NULL_OBJECT_ID == newMaskID)
+		{
+			set_soft_key_mask(newMaskID);
+			retVal = true;
+		}
+		else if ((nullptr != objectPool.at(newMaskID)) &&
+		         (VirtualTerminalObjectType::SoftKeyMask == objectPool.at(newMaskID)->get_object_type()))
+		{
+			set_soft_key_mask(newMaskID);
+			retVal = true;
+		}
+		return retVal;
 	}
 
-	Container::Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	void AlarmMask::set_soft_key_mask(std::uint16_t newMaskID)
 	{
+		softKeyMask = newMaskID;
+	}
+
+	std::uint16_t AlarmMask::get_soft_key_mask() const
+	{
+		return softKeyMask;
 	}
 
 	VirtualTerminalObjectType Container::get_object_type() const
@@ -809,13 +798,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool Container::get_is_valid() const
+	bool Container::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
 		for (auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -863,7 +852,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool Container::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool Container::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		// All attributes are read only
 		returnedError = AttributeError::InvalidAttributeID;
@@ -926,11 +915,6 @@ namespace isobus
 		hidden = value;
 	}
 
-	SoftKeyMask::SoftKeyMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType SoftKeyMask::get_object_type() const
 	{
 		return VirtualTerminalObjectType::SoftKeyMask;
@@ -941,13 +925,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool SoftKeyMask::get_is_valid() const
+	bool SoftKeyMask::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
 		for (auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -973,7 +957,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool SoftKeyMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool SoftKeyMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1034,11 +1018,6 @@ namespace isobus
 		return retVal;
 	}
 
-	Key::Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType Key::get_object_type() const
 	{
 		return VirtualTerminalObjectType::Key;
@@ -1049,13 +1028,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool Key::get_is_valid() const
+	bool Key::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
 		for (auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1095,7 +1074,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool Key::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool Key::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1180,11 +1159,6 @@ namespace isobus
 		keyCode = value;
 	}
 
-	KeyGroup::KeyGroup(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType KeyGroup::get_object_type() const
 	{
 		return VirtualTerminalObjectType::KeyGroup;
@@ -1195,7 +1169,7 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool KeyGroup::get_is_valid() const
+	bool KeyGroup::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
@@ -1203,7 +1177,7 @@ namespace isobus
 		{
 			for (auto &child : children)
 			{
-				auto childObject = get_object_by_id(child.id);
+				auto childObject = get_object_by_id(child.id, objectPool);
 				if (nullptr != childObject)
 				{
 					switch (childObject->get_object_type())
@@ -1219,12 +1193,10 @@ namespace isobus
 						{
 							auto objectPointer = std::static_pointer_cast<ObjectPointer>(childObject);
 
-							if (objectPointer->get_number_children() > 0)
+							if (NULL_OBJECT_ID != objectPointer->get_value())
 							{
-								auto objectPointerChildObject = thisObjectPool[objectPointer->get_child_id(0)];
-
-								if ((nullptr != objectPointerChildObject) &&
-								    (VirtualTerminalObjectType::Key == objectPointerChildObject->get_object_type()))
+								if ((nullptr != get_object_by_id(objectPointer->get_value(), objectPool)) &&
+								    (VirtualTerminalObjectType::Key == get_object_by_id(objectPointer->get_value(), objectPool)->get_object_type()))
 								{
 									// Valid Child Object
 								}
@@ -1249,7 +1221,7 @@ namespace isobus
 				}
 			}
 
-			if (!validate_name(nameID))
+			if (!validate_name(nameID, objectPool))
 			{
 				anyWrongChildType = true;
 			}
@@ -1262,7 +1234,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool KeyGroup::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool KeyGroup::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1279,17 +1251,18 @@ namespace isobus
 
 				case AttributeName::Name:
 				{
-					auto newName = static_cast<std::uint16_t>(rawAttributeData);
-					auto newNameObject = thisObjectPool[newName];
+					returnedError = AttributeError::InvalidValue;
 
-					if (validate_name(newName))
+					if (objectPool.find(objectID) != objectPool.end())
 					{
-						nameID = newName;
-						retVal = true;
-					}
-					else
-					{
-						returnedError = AttributeError::InvalidValue;
+						auto newName = static_cast<std::uint16_t>(rawAttributeData);
+						auto newNameObject = objectPool.at(newName);
+
+						if (validate_name(newName, objectPool))
+						{
+							nameID = newName;
+							retVal = true;
+						}
 					}
 				}
 				break;
@@ -1393,9 +1366,9 @@ namespace isobus
 		}
 	}
 
-	bool KeyGroup::validate_name(std::uint16_t nameIDToValidate) const
+	bool KeyGroup::validate_name(std::uint16_t nameIDToValidate, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
-		auto newNameObject = thisObjectPool[nameIDToValidate];
+		auto newNameObject = objectPool.at(nameIDToValidate);
 		bool retVal = false;
 
 		if ((NULL_OBJECT_ID != nameIDToValidate) &&
@@ -1407,7 +1380,7 @@ namespace isobus
 			{
 				if (newNameObject->get_number_children() > 0)
 				{
-					auto label = thisObjectPool[std::static_pointer_cast<ObjectPointer>(newNameObject)->get_child_id(0)];
+					auto label = objectPool.at(std::static_pointer_cast<ObjectPointer>(newNameObject)->get_child_id(0));
 
 					if ((nullptr != label) &&
 					    (VirtualTerminalObjectType::OutputString == label->get_object_type()))
@@ -1424,11 +1397,6 @@ namespace isobus
 		return retVal;
 	}
 
-	Button::Button(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType Button::get_object_type() const
 	{
 		return VirtualTerminalObjectType::Button;
@@ -1439,13 +1407,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool Button::get_is_valid() const
+	bool Button::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
 		for (auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1484,7 +1452,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool Button::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool Button::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1657,11 +1625,6 @@ namespace isobus
 		}
 	}
 
-	InputBoolean::InputBoolean(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType InputBoolean::get_object_type() const
 	{
 		return VirtualTerminalObjectType::InputBoolean;
@@ -1672,51 +1635,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool InputBoolean::get_is_valid() const
+	bool InputBoolean::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (const auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto variableReference = get_object_by_id(get_variable_reference(), objectPool);
 
-			if (nullptr != childObject)
+			if (nullptr != variableReference)
 			{
-				std::uint8_t numberOfFontAttributes = 0;
-
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::NumberVariable:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Object
-					}
-					break;
-
-					case VirtualTerminalObjectType::FontAttributes:
-					{
-						numberOfFontAttributes++;
-					}
-					break;
-
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
-				}
-
-				if (numberOfFontAttributes > 1)
+				if (VirtualTerminalObjectType::NumberVariable != variableReference->get_object_type())
 				{
 					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify that the foreground colour is a font attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_foreground_colour_object_id())
+		{
+			auto foregroundColour = get_object_by_id(get_foreground_colour_object_id(), objectPool);
+
+			if (nullptr != foregroundColour)
+			{
+				if (VirtualTerminalObjectType::FontAttributes != foregroundColour->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool InputBoolean::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool InputBoolean::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1741,14 +1714,50 @@ namespace isobus
 				case AttributeName::ForegroundColour:
 				{
 					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+
+					if (NULL_OBJECT_ID == rawAttributeData)
+					{
+						set_foreground_colour_object_id(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else if (objectPool.find(static_cast<std::uint16_t>(rawAttributeData)) != objectPool.end())
+					{
+						if (nullptr != objectPool.at(static_cast<std::uint16_t>(rawAttributeData)) &&
+						    (VirtualTerminalObjectType::FontAttributes == objectPool.at(static_cast<std::uint16_t>(rawAttributeData))->get_object_type()))
+						{
+							set_foreground_colour_object_id(static_cast<std::uint16_t>(rawAttributeData));
+							retVal = true;
+						}
+						else
+						{
+							returnedError = AttributeError::InvalidValue;
+						}
+					}
 				}
 				break;
 
 				case AttributeName::VariableReference:
 				{
 					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+
+					if (NULL_OBJECT_ID == rawAttributeData)
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else if (objectPool.find(static_cast<std::uint16_t>(rawAttributeData)) != objectPool.end())
+					{
+						if (nullptr != objectPool.at(static_cast<std::uint16_t>(rawAttributeData)) &&
+						    (VirtualTerminalObjectType::NumberVariable == objectPool.at(static_cast<std::uint16_t>(rawAttributeData))->get_object_type()))
+						{
+							set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+							retVal = true;
+						}
+						else
+						{
+							returnedError = AttributeError::InvalidValue;
+						}
+					}
 				}
 				break;
 
@@ -1812,14 +1821,14 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::ForegroundColour):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FontAttributes);
+					returnedAttributeData = get_foreground_colour_object_id();
 					retVal = true;
 				}
 				break;
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -1868,9 +1877,24 @@ namespace isobus
 		enabled = isEnabled;
 	}
 
-	InputString::InputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t InputBoolean::get_foreground_colour_object_id() const
 	{
+		return foregroundColourObjectID;
+	}
+
+	void InputBoolean::set_foreground_colour_object_id(std::uint16_t fontAttributeValue)
+	{
+		foregroundColourObjectID = fontAttributeValue;
+	}
+
+	std::uint16_t InputBoolean::get_variable_reference() const
+	{
+		return variableReference;
+	}
+
+	void InputBoolean::set_variable_reference(std::uint16_t numberVariableValue)
+	{
+		variableReference = numberVariableValue;
 	}
 
 	VirtualTerminalObjectType InputString::get_object_type() const
@@ -1883,39 +1907,76 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool InputString::get_is_valid() const
+	bool InputString::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::StringVariable:
-					case VirtualTerminalObjectType::FontAttributes:
-					case VirtualTerminalObjectType::InputAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto objectToCheck = get_object_by_id(get_variable_reference(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != objectToCheck)
+			{
+				if (VirtualTerminalObjectType::StringVariable != objectToCheck->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		if (NULL_OBJECT_ID != get_input_attributes())
+		{
+			auto objectToCheck = get_object_by_id(get_input_attributes(), objectPool);
+
+			if (nullptr != objectToCheck)
+			{
+				if (VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		if (NULL_OBJECT_ID != get_font_attributes())
+		{
+			auto objectToCheck = get_object_by_id(get_font_attributes(), objectPool);
+
+			if (nullptr != objectToCheck)
+			{
+				if (VirtualTerminalObjectType::FontAttributes != objectToCheck->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool InputString::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool InputString::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1946,15 +2007,37 @@ namespace isobus
 
 				case AttributeName::FontAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+					auto fontAttributesObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fontAttributesObject) &&
+					     (VirtualTerminalObjectType::FontAttributes == fontAttributesObject->get_object_type())))
+					{
+						set_font_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
 				case AttributeName::InputAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::InputAttributes);
+					auto inputAttributesObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != inputAttributesObject) &&
+					     (VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type())))
+					{
+						set_input_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -1967,8 +2050,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::StringVariable);
+					auto variableReferenceObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableReferenceObject) &&
+					     (VirtualTerminalObjectType::StringVariable == variableReferenceObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -2038,14 +2132,14 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::FontAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FontAttributes);
+					returnedAttributeData = get_font_attributes();
 					retVal = true;
 				}
 				break;
 
 				case static_cast<std::uint8_t>(AttributeName::InputAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::InputAttributes);
+					returnedAttributeData = get_input_attributes();
 					retVal = true;
 				}
 				break;
@@ -2059,7 +2153,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -2145,9 +2239,34 @@ namespace isobus
 		stringValue = value;
 	}
 
-	InputNumber::InputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t InputString::get_font_attributes() const
 	{
+		return fontAttributes;
+	}
+
+	void InputString::set_font_attributes(std::uint16_t fontAttributesValue)
+	{
+		fontAttributes = fontAttributesValue;
+	}
+
+	std::uint16_t InputString::get_variable_reference() const
+	{
+		return variableReference;
+	}
+
+	void InputString::set_variable_reference(std::uint16_t variableReferenceValue)
+	{
+		variableReference = variableReferenceValue;
+	}
+
+	std::uint16_t InputString::get_input_attributes() const
+	{
+		return inputAttributes;
+	}
+
+	void InputString::set_input_attributes(std::uint16_t inputAttributesValue)
+	{
+		inputAttributes = inputAttributesValue;
 	}
 
 	VirtualTerminalObjectType InputNumber::get_object_type() const
@@ -2160,38 +2279,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool InputNumber::get_is_valid() const
+	bool InputNumber::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::NumberVariable:
-					case VirtualTerminalObjectType::FontAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto variableReference = get_object_by_id(get_variable_reference(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != variableReference)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableReference->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify that the font attributes is a font attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_font_attributes())
+		{
+			auto fontAttributes = get_object_by_id(get_font_attributes(), objectPool);
+
+			if (nullptr != fontAttributes)
+			{
+				if (VirtualTerminalObjectType::FontAttributes != fontAttributes->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool InputNumber::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool InputNumber::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -2222,8 +2364,19 @@ namespace isobus
 
 				case AttributeName::FontAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+					auto fontAttributesObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fontAttributesObject) &&
+					     (VirtualTerminalObjectType::FontAttributes == fontAttributesObject->get_object_type())))
+					{
+						set_font_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -2236,8 +2389,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -2344,7 +2508,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::FontAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FontAttributes);
+					returnedAttributeData = get_font_attributes();
 					retVal = true;
 				}
 				break;
@@ -2358,7 +2522,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -2567,9 +2731,24 @@ namespace isobus
 		value = inputValue;
 	}
 
-	InputList::InputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t InputNumber::get_font_attributes() const
 	{
+		return fontAttributes;
+	}
+
+	void InputNumber::set_font_attributes(std::uint16_t fontAttributesValue)
+	{
+		fontAttributes = fontAttributesValue;
+	}
+
+	std::uint16_t InputNumber::get_variable_reference() const
+	{
+		return variableReference;
+	}
+
+	void InputNumber::set_variable_reference(std::uint16_t variableReferenceValue)
+	{
+		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType InputList::get_object_type() const
@@ -2582,13 +2761,13 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool InputList::get_is_valid() const
+	bool InputList::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
 		for (const auto &child : children)
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -2627,7 +2806,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool InputList::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool InputList::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -2651,8 +2830,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
-					retVal = true;
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -2776,17 +2966,17 @@ namespace isobus
 		value = inputValue;
 	}
 
-	bool InputList::change_list_item(std::uint8_t index, std::uint16_t newListItem)
+	bool InputList::change_list_item(std::uint8_t index, std::uint16_t newListItem, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
 	{
 		bool retVal = false;
 
 		if ((index < children.size()) &&
 		    ((NULL_OBJECT_ID == newListItem) ||
-		     (nullptr != thisObjectPool[newListItem])))
+		     (nullptr != get_object_by_id(newListItem, objectPool))))
 		{
-			if (nullptr != thisObjectPool[newListItem])
+			if (nullptr != get_object_by_id(newListItem, objectPool))
 			{
-				switch (thisObjectPool[newListItem]->get_object_type())
+				switch (get_object_by_id(newListItem, objectPool)->get_object_type())
 				{
 					case VirtualTerminalObjectType::WorkingSet:
 					case VirtualTerminalObjectType::Container:
@@ -2847,11 +3037,6 @@ namespace isobus
 		numberOfListItems = value;
 	}
 
-	OutputString::OutputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType OutputString::get_object_type() const
 	{
 		return VirtualTerminalObjectType::OutputString;
@@ -2862,38 +3047,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputString::get_is_valid() const
+	bool OutputString::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::StringVariable:
-					case VirtualTerminalObjectType::FontAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto variableReference = get_object_by_id(get_variable_reference(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != variableReference)
+			{
+				if (VirtualTerminalObjectType::StringVariable != variableReference->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify that the font attributes is a font attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_font_attributes())
+		{
+			auto fontAttributes = get_object_by_id(get_font_attributes(), objectPool);
+
+			if (nullptr != fontAttributes)
+			{
+				if (VirtualTerminalObjectType::FontAttributes != fontAttributes->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputString::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputString::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -2924,8 +3132,19 @@ namespace isobus
 
 				case AttributeName::FontAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+					auto fontAttributesObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fontAttributesObject) &&
+					     (VirtualTerminalObjectType::FontAttributes == fontAttributesObject->get_object_type())))
+					{
+						set_font_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -2938,8 +3157,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::StringVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3002,7 +3232,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::FontAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FontAttributes);
+					returnedAttributeData = get_font_attributes();
 					retVal = true;
 				}
 				break;
@@ -3016,7 +3246,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -3085,9 +3315,24 @@ namespace isobus
 		stringValue = value;
 	}
 
-	OutputNumber::OutputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputString::get_font_attributes() const
 	{
+		return fontAttributes;
+	}
+
+	void OutputString::set_font_attributes(std::uint16_t fontAttributesValue)
+	{
+		fontAttributes = fontAttributesValue;
+	}
+
+	std::uint16_t OutputString::get_variable_reference() const
+	{
+		return variableReference;
+	}
+
+	void OutputString::set_variable_reference(std::uint16_t variableReferenceValue)
+	{
+		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType OutputNumber::get_object_type() const
@@ -3100,38 +3345,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputNumber::get_is_valid() const
+	bool OutputNumber::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::NumberVariable:
-					case VirtualTerminalObjectType::FontAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto variableReference = get_object_by_id(get_variable_reference(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != variableReference)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableReference->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify that the font attributes is a font attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_font_attributes())
+		{
+			auto fontAttributes = get_object_by_id(get_font_attributes(), objectPool);
+
+			if (nullptr != fontAttributes)
+			{
+				if (VirtualTerminalObjectType::FontAttributes != fontAttributes->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputNumber::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputNumber::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -3162,8 +3430,19 @@ namespace isobus
 
 				case AttributeName::FontAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+					auto fontAttributesObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fontAttributesObject) &&
+					     (VirtualTerminalObjectType::FontAttributes == fontAttributesObject->get_object_type())))
+					{
+						set_font_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3176,8 +3455,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3270,7 +3560,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::FontAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FontAttributes);
+					returnedAttributeData = get_font_attributes();
 					retVal = true;
 				}
 				break;
@@ -3284,7 +3574,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -3378,9 +3668,9 @@ namespace isobus
 		return scale;
 	}
 
-	void OutputNumber::set_scale(float value)
+	void OutputNumber::set_scale(float scaleValue)
 	{
-		scale = value;
+		scale = scaleValue;
 	}
 
 	std::int32_t OutputNumber::get_offset() const
@@ -3388,9 +3678,9 @@ namespace isobus
 		return offset;
 	}
 
-	void OutputNumber::set_offset(std::int32_t value)
+	void OutputNumber::set_offset(std::int32_t offsetValue)
 	{
-		offset = value;
+		offset = offsetValue;
 	}
 
 	std::uint8_t OutputNumber::get_number_of_decimals() const
@@ -3398,9 +3688,9 @@ namespace isobus
 		return numberOfDecimals;
 	}
 
-	void OutputNumber::set_number_of_decimals(std::uint8_t value)
+	void OutputNumber::set_number_of_decimals(std::uint8_t decimalValue)
 	{
-		numberOfDecimals = value;
+		numberOfDecimals = decimalValue;
 	}
 
 	bool OutputNumber::get_format() const
@@ -3408,9 +3698,9 @@ namespace isobus
 		return format;
 	}
 
-	void OutputNumber::set_format(bool value)
+	void OutputNumber::set_format(bool shouldFormatAsExponential)
 	{
-		format = value;
+		format = shouldFormatAsExponential;
 	}
 
 	std::uint32_t OutputNumber::get_value() const
@@ -3423,9 +3713,24 @@ namespace isobus
 		value = inputValue;
 	}
 
-	OutputList::OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	void OutputNumber::set_variable_reference(std::uint16_t referencedObjectID)
 	{
+		variableReference = referencedObjectID;
+	}
+
+	std::uint16_t OutputNumber::get_variable_reference() const
+	{
+		return variableReference;
+	}
+
+	std::uint16_t OutputNumber::get_font_attributes() const
+	{
+		return fontAttributes;
+	}
+
+	void OutputNumber::set_font_attributes(std::uint16_t fontAttributesValue)
+	{
+		fontAttributes = fontAttributesValue;
 	}
 
 	VirtualTerminalObjectType OutputList::get_object_type() const
@@ -3438,20 +3743,60 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputList::get_is_valid() const
+	bool OutputList::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
+			auto variableReference = get_object_by_id(get_variable_reference(), objectPool);
+
+			if (nullptr != variableReference)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableReference->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
 				{
-					case VirtualTerminalObjectType::NumberVariable:
 					case VirtualTerminalObjectType::OutputString:
 					case VirtualTerminalObjectType::Macro:
+					case VirtualTerminalObjectType::WorkingSet:
+					case VirtualTerminalObjectType::Container:
+					case VirtualTerminalObjectType::Button:
+					case VirtualTerminalObjectType::KeyGroup:
+					case VirtualTerminalObjectType::InputBoolean:
+					case VirtualTerminalObjectType::InputString:
+					case VirtualTerminalObjectType::InputNumber:
+					case VirtualTerminalObjectType::InputList:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::OutputMeter:
+					case VirtualTerminalObjectType::OutputLinearBarGraph:
+					case VirtualTerminalObjectType::OutputArchedBarGraph:
+					case VirtualTerminalObjectType::Animation:
+					case VirtualTerminalObjectType::PictureGraphic:
+					case VirtualTerminalObjectType::ScaledGraphic:
+					case VirtualTerminalObjectType::ObjectPointer:
+					case VirtualTerminalObjectType::ExternalObjectPointer:
+					case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+					case VirtualTerminalObjectType::AuxiliaryInputType2:
+					case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
 					{
 						// Valid Child Object
 					}
@@ -3469,7 +3814,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool OutputList::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputList::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -3493,8 +3838,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3550,7 +3906,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -3592,14 +3948,14 @@ namespace isobus
 		value = aValue;
 	}
 
-	bool OutputList::change_list_item(std::uint8_t index, std::uint16_t newListItem)
+	bool OutputList::change_list_item(std::uint8_t index, std::uint16_t newListItem, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
 	{
 		bool retVal = false;
 
 		if ((index < children.size()) &&
 		    ((NULL_OBJECT_ID == newListItem) ||
-		     ((nullptr != thisObjectPool[newListItem]) &&
-		      (VirtualTerminalObjectType::NumberVariable == thisObjectPool[newListItem]->get_object_type()))))
+		     ((nullptr != get_object_by_id(newListItem, objectPool)) &&
+		      (VirtualTerminalObjectType::NumberVariable == get_object_by_id(newListItem, objectPool)->get_object_type()))))
 		{
 			children.at(index).id = newListItem;
 			retVal = true;
@@ -3617,47 +3973,48 @@ namespace isobus
 		return variableReference;
 	}
 
-	OutputLine::OutputLine(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType OutputLine::get_object_type() const
 	{
 		return VirtualTerminalObjectType::OutputLine;
 	}
 
-	bool OutputLine::get_is_valid() const
+	bool OutputLine::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the line attributes is a line attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_line_attributes())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::LineAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto lineAttributesObject = get_object_by_id(get_line_attributes(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != lineAttributesObject)
+			{
+				if (VirtualTerminalObjectType::LineAttributes != lineAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputLine::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputLine::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -3667,8 +4024,19 @@ namespace isobus
 			{
 				case AttributeName::LineAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+					auto lineAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != lineAttributeObject) &&
+					     (VirtualTerminalObjectType::LineAttributes == lineAttributeObject->get_object_type())))
+					{
+						set_line_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3745,7 +4113,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::LineAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::LineAttributes);
+					returnedAttributeData = get_line_attributes();
 					retVal = true;
 				}
 				break;
@@ -3782,9 +4150,14 @@ namespace isobus
 		lineDirection = static_cast<std::uint8_t>(value);
 	}
 
-	OutputRectangle::OutputRectangle(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputLine::get_line_attributes() const
 	{
+		return lineAttributes;
+	}
+
+	void OutputLine::set_line_attributes(std::uint16_t lineAttributesObject)
+	{
+		lineAttributes = lineAttributesObject;
 	}
 
 	VirtualTerminalObjectType OutputRectangle::get_object_type() const
@@ -3797,38 +4170,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputRectangle::get_is_valid() const
+	bool OutputRectangle::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the line attributes is a line attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_line_attributes())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::LineAttributes:
-					case VirtualTerminalObjectType::FillAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto lineAttributesObject = get_object_by_id(get_line_attributes(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != lineAttributesObject)
+			{
+				if (VirtualTerminalObjectType::LineAttributes != lineAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify the fill attributes is a fill attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_fill_attributes())
+		{
+			auto fillAttributesObject = get_object_by_id(get_fill_attributes(), objectPool);
+
+			if (nullptr != fillAttributesObject)
+			{
+				if (VirtualTerminalObjectType::FillAttributes != fillAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputRectangle::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputRectangle::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -3838,8 +4234,19 @@ namespace isobus
 			{
 				case AttributeName::LineAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+					auto lineAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != lineAttributeObject) &&
+					     (VirtualTerminalObjectType::LineAttributes == lineAttributeObject->get_object_type())))
+					{
+						set_line_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3866,8 +4273,19 @@ namespace isobus
 
 				case AttributeName::FillAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FillAttributes);
+					auto fillAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fillAttributeObject) &&
+					     (VirtualTerminalObjectType::FillAttributes == fillAttributeObject->get_object_type())))
+					{
+						set_fill_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -3916,7 +4334,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::LineAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::LineAttributes);
+					returnedAttributeData = get_line_attributes();
 					retVal = true;
 				}
 				break;
@@ -3930,7 +4348,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::FillAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FillAttributes);
+					returnedAttributeData = get_fill_attributes();
 					retVal = true;
 				}
 				break;
@@ -3955,9 +4373,24 @@ namespace isobus
 		lineSuppressionBitfield = value;
 	}
 
-	OutputEllipse::OutputEllipse(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputRectangle::get_line_attributes() const
 	{
+		return lineAttributes;
+	}
+
+	void OutputRectangle::set_line_attributes(std::uint16_t lineAttributesObject)
+	{
+		lineAttributes = lineAttributesObject;
+	}
+
+	std::uint16_t OutputRectangle::get_fill_attributes() const
+	{
+		return fillAttributes;
+	}
+
+	void OutputRectangle::set_fill_attributes(std::uint16_t fillAttributesObject)
+	{
+		fillAttributes = fillAttributesObject;
 	}
 
 	VirtualTerminalObjectType OutputEllipse::get_object_type() const
@@ -3970,38 +4403,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputEllipse::get_is_valid() const
+	bool OutputEllipse::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the line attributes is a line attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_line_attributes())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::LineAttributes:
-					case VirtualTerminalObjectType::FillAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto lineAttributesObject = get_object_by_id(get_line_attributes(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != lineAttributesObject)
+			{
+				if (VirtualTerminalObjectType::LineAttributes != lineAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify the fill attributes is a fill attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_fill_attributes())
+		{
+			auto fillAttributesObject = get_object_by_id(get_fill_attributes(), objectPool);
+
+			if (nullptr != fillAttributesObject)
+			{
+				if (VirtualTerminalObjectType::FillAttributes != fillAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputEllipse::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputEllipse::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -4011,8 +4467,19 @@ namespace isobus
 			{
 				case AttributeName::LineAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+					auto lineAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != lineAttributeObject) &&
+					     (VirtualTerminalObjectType::LineAttributes == lineAttributeObject->get_object_type())))
+					{
+						set_line_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -4060,8 +4527,19 @@ namespace isobus
 
 				case AttributeName::FillAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FillAttributes);
+					auto fillAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fillAttributeObject) &&
+					     (VirtualTerminalObjectType::FillAttributes == fillAttributeObject->get_object_type())))
+					{
+						set_fill_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -4110,7 +4588,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::LineAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::LineAttributes);
+					returnedAttributeData = get_line_attributes();
 					retVal = true;
 				}
 				break;
@@ -4138,7 +4616,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::FillAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FillAttributes);
+					returnedAttributeData = get_fill_attributes();
 					retVal = true;
 				}
 				break;
@@ -4183,9 +4661,24 @@ namespace isobus
 		endAngle = value;
 	}
 
-	OutputPolygon::OutputPolygon(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputEllipse::get_line_attributes() const
 	{
+		return lineAttributes;
+	}
+
+	void OutputEllipse::set_line_attributes(std::uint16_t lineAttributesObject)
+	{
+		lineAttributes = lineAttributesObject;
+	}
+
+	std::uint16_t OutputEllipse::get_fill_attributes() const
+	{
+		return fillAttributes;
+	}
+
+	void OutputEllipse::set_fill_attributes(std::uint16_t fillAttributesObject)
+	{
+		fillAttributes = fillAttributesObject;
 	}
 
 	VirtualTerminalObjectType OutputPolygon::get_object_type() const
@@ -4198,38 +4691,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputPolygon::get_is_valid() const
+	bool OutputPolygon::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the line attributes is a line attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_line_attributes())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::LineAttributes:
-					case VirtualTerminalObjectType::FillAttributes:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto lineAttributesObject = get_object_by_id(get_line_attributes(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != lineAttributesObject)
+			{
+				if (VirtualTerminalObjectType::LineAttributes != lineAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify the fill attributes is a fill attribute or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_fill_attributes())
+		{
+			auto fillAttributesObject = get_object_by_id(get_fill_attributes(), objectPool);
+
+			if (nullptr != fillAttributesObject)
+			{
+				if (VirtualTerminalObjectType::FillAttributes != fillAttributesObject->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputPolygon::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputPolygon::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -4253,15 +4769,37 @@ namespace isobus
 
 				case AttributeName::LineAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+					auto lineAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != lineAttributeObject) &&
+					     (VirtualTerminalObjectType::LineAttributes == lineAttributeObject->get_object_type())))
+					{
+						set_line_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
 				case AttributeName::FillAttributes:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FillAttributes);
+					auto fillAttributeObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != fillAttributeObject) &&
+					     (VirtualTerminalObjectType::FillAttributes == fillAttributeObject->get_object_type())))
+					{
+						set_fill_attributes(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -4324,14 +4862,14 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::LineAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::LineAttributes);
+					returnedAttributeData = get_line_attributes();
 					retVal = true;
 				}
 				break;
 
 				case static_cast<std::uint8_t>(AttributeName::FillAttributes):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::FillAttributes);
+					returnedAttributeData = get_fill_attributes();
 					retVal = true;
 				}
 				break;
@@ -4384,9 +4922,24 @@ namespace isobus
 		polygonType = static_cast<std::uint8_t>(value);
 	}
 
-	OutputMeter::OutputMeter(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputPolygon::get_line_attributes() const
 	{
+		return lineAttributes;
+	}
+
+	void OutputPolygon::set_line_attributes(std::uint16_t lineAttributesObject)
+	{
+		lineAttributes = lineAttributesObject;
+	}
+
+	std::uint16_t OutputPolygon::get_fill_attributes() const
+	{
+		return fillAttributes;
+	}
+
+	void OutputPolygon::set_fill_attributes(std::uint16_t fillAttributesObject)
+	{
+		fillAttributes = fillAttributesObject;
 	}
 
 	VirtualTerminalObjectType OutputMeter::get_object_type() const
@@ -4399,37 +4952,43 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputMeter::get_is_valid() const
+	bool OutputMeter::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::NumberVariable:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto variableObject = get_object_by_id(get_variable_reference(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != variableObject)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableObject->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputMeter::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputMeter::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -4509,8 +5068,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -4622,7 +5192,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -4756,9 +5326,14 @@ namespace isobus
 		endAngle = value;
 	}
 
-	OutputLinearBarGraph::OutputLinearBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputMeter::get_variable_reference() const
 	{
+		return variableReference;
+	}
+
+	void OutputMeter::set_variable_reference(std::uint16_t variableReferenceValue)
+	{
+		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType OutputLinearBarGraph::get_object_type() const
@@ -4771,37 +5346,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputLinearBarGraph::get_is_valid() const
+	bool OutputLinearBarGraph::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if (nullptr != childObject)
-			{
-				switch (childObject->get_object_type())
-				{
-					case VirtualTerminalObjectType::NumberVariable:
-					case VirtualTerminalObjectType::Macro:
-					{
-						// Valid Child Object
-					}
-					break;
+			auto variableObject = get_object_by_id(get_variable_reference(), objectPool);
 
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+			if (nullptr != variableObject)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableObject->get_object_type())
+				{
+					anyWrongChildType = true;
 				}
 			}
+			else
+			{
+				anyWrongChildType = true;
+			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify the target value variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_target_value_reference())
+		{
+			auto variableObject = get_object_by_id(get_target_value_reference(), objectPool);
+
+			if (nullptr != variableObject)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableObject->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputLinearBarGraph::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputLinearBarGraph::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -4867,8 +5466,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -4980,7 +5590,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -5118,9 +5728,14 @@ namespace isobus
 		}
 	}
 
-	OutputArchedBarGraph::OutputArchedBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputLinearBarGraph::get_variable_reference() const
 	{
+		return variableReference;
+	}
+
+	void OutputLinearBarGraph::set_variable_reference(std::uint16_t variableReferenceValue)
+	{
+		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType OutputArchedBarGraph::get_object_type() const
@@ -5133,25 +5748,61 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool OutputArchedBarGraph::get_is_valid() const
+	bool OutputArchedBarGraph::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
-		for (const auto &child : children)
+		// Verify the variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto childObject = get_object_by_id(child.id);
-			if ((nullptr != childObject) &&
-			    ((VirtualTerminalObjectType::NumberVariable != childObject->get_object_type()) &&
-			     (VirtualTerminalObjectType::Macro != childObject->get_object_type())))
+			auto variableObject = get_object_by_id(get_variable_reference(), objectPool);
+
+			if (nullptr != variableObject)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableObject->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
 			{
 				anyWrongChildType = true;
 			}
 		}
-		return ((!anyWrongChildType) &&
-		        (NULL_OBJECT_ID != objectID));
+
+		// Verify the target value variable reference is a number variable or NULL_OBJECT_ID
+		if (NULL_OBJECT_ID != get_target_value_reference())
+		{
+			auto variableObject = get_object_by_id(get_target_value_reference(), objectPool);
+
+			if (nullptr != variableObject)
+			{
+				if (VirtualTerminalObjectType::NumberVariable != variableObject->get_object_type())
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if ((nullptr == childObject) ||
+			    (VirtualTerminalObjectType::Macro != childObject->get_object_type()))
+			{
+				anyWrongChildType = true;
+				break;
+			}
+		}
+		return (!anyWrongChildType);
 	}
 
-	bool OutputArchedBarGraph::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool OutputArchedBarGraph::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -5231,7 +5882,19 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					auto variableObject = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    ((nullptr != variableObject) &&
+					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					{
+						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -5350,7 +6013,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::VariableReference):
 				{
-					returnedAttributeData = get_first_child_of_type(VirtualTerminalObjectType::NumberVariable);
+					returnedAttributeData = get_variable_reference();
 					retVal = true;
 				}
 				break;
@@ -5501,9 +6164,14 @@ namespace isobus
 		targetValueReference = value;
 	}
 
-	PictureGraphic::PictureGraphic(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	std::uint16_t OutputArchedBarGraph::get_variable_reference() const
 	{
+		return variableReference;
+	}
+
+	void OutputArchedBarGraph::set_variable_reference(std::uint16_t variableReferenceValue)
+	{
+		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType PictureGraphic::get_object_type() const
@@ -5516,12 +6184,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool PictureGraphic::get_is_valid() const
+	bool PictureGraphic::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool PictureGraphic::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool PictureGraphic::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -5725,11 +6393,6 @@ namespace isobus
 		transparencyColour = value;
 	}
 
-	NumberVariable::NumberVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType NumberVariable::get_object_type() const
 	{
 		return VirtualTerminalObjectType::NumberVariable;
@@ -5740,12 +6403,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool NumberVariable::get_is_valid() const
+	bool NumberVariable::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool NumberVariable::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool NumberVariable::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -5793,11 +6456,6 @@ namespace isobus
 		value = aValue;
 	}
 
-	StringVariable::StringVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType StringVariable::get_object_type() const
 	{
 		return VirtualTerminalObjectType::StringVariable;
@@ -5808,12 +6466,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool StringVariable::get_is_valid() const
+	bool StringVariable::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool StringVariable::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool StringVariable::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -5844,7 +6502,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::string StringVariable::get_value()
+	std::string StringVariable::get_value() const
 	{
 		return value;
 	}
@@ -5852,11 +6510,6 @@ namespace isobus
 	void StringVariable::set_value(const std::string &aValue)
 	{
 		value = aValue;
-	}
-
-	FontAttributes::FontAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
 	}
 
 	VirtualTerminalObjectType FontAttributes::get_object_type() const
@@ -5869,12 +6522,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool FontAttributes::get_is_valid() const
+	bool FontAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool FontAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool FontAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -5999,7 +6652,7 @@ namespace isobus
 		return style;
 	}
 
-	bool FontAttributes::get_style(FontStyleBits styleSetting)
+	bool FontAttributes::get_style(FontStyleBits styleSetting) const
 	{
 		return (style >> static_cast<std::uint8_t>(styleSetting)) & 0x01;
 	}
@@ -6188,11 +6841,6 @@ namespace isobus
 		return retVal;
 	}
 
-	LineAttributes::LineAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType LineAttributes::get_object_type() const
 	{
 		return VirtualTerminalObjectType::LineAttributes;
@@ -6203,12 +6851,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool LineAttributes::get_is_valid() const
+	bool LineAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		return true;
 	}
 
-	bool LineAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool LineAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -6307,11 +6955,6 @@ namespace isobus
 		lineArtBitpattern = value;
 	}
 
-	FillAttributes::FillAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType FillAttributes::get_object_type() const
 	{
 		return VirtualTerminalObjectType::FillAttributes;
@@ -6322,12 +6965,14 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool FillAttributes::get_is_valid() const
+	bool FillAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
-		return true;
+		return ((NULL_OBJECT_ID == get_fill_pattern()) ||
+		        ((nullptr != get_object_by_id(get_fill_pattern(), objectPool)) &&
+		         (VirtualTerminalObjectType::PictureGraphic == get_object_by_id(get_fill_pattern(), objectPool)->get_object_type())));
 	}
 
-	bool FillAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool FillAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -6358,8 +7003,23 @@ namespace isobus
 
 				case AttributeName::FillPattern:
 				{
-					set_fill_pattern(static_cast<std::uint16_t>(rawAttributeData));
-					retVal = true;
+					auto fillPictureGraphic = get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool);
+
+					if (NULL_OBJECT_ID == rawAttributeData)
+					{
+						set_fill_pattern(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else if ((nullptr != fillPictureGraphic) &&
+					         (VirtualTerminalObjectType::PictureGraphic == fillPictureGraphic->get_object_type()))
+					{
+						set_fill_pattern(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -6443,11 +7103,6 @@ namespace isobus
 		type = value;
 	}
 
-	InputAttributes::InputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType InputAttributes::get_object_type() const
 	{
 		return VirtualTerminalObjectType::InputAttributes;
@@ -6458,12 +7113,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool InputAttributes::get_is_valid() const
+	bool InputAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool InputAttributes::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool InputAttributes::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -6521,11 +7176,6 @@ namespace isobus
 		validationType = newValidationType;
 	}
 
-	ExtendedInputAttributes::ExtendedInputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType ExtendedInputAttributes::get_object_type() const
 	{
 		return VirtualTerminalObjectType::ExtendedInputAttributes;
@@ -6536,12 +7186,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool ExtendedInputAttributes::get_is_valid() const
+	bool ExtendedInputAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool ExtendedInputAttributes::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool ExtendedInputAttributes::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -6599,11 +7249,6 @@ namespace isobus
 		validationType = value;
 	}
 
-	ObjectPointer::ObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType ObjectPointer::get_object_type() const
 	{
 		return VirtualTerminalObjectType::ObjectPointer;
@@ -6614,15 +7259,25 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool ObjectPointer::get_is_valid() const
+	bool ObjectPointer::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
-		return true;
+		return ((NULL_OBJECT_ID == value) || (nullptr != get_object_by_id(value, objectPool)));
 	}
 
-	bool ObjectPointer::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool ObjectPointer::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
+	}
+
+	std::uint16_t ObjectPointer::get_value() const
+	{
+		return value;
+	}
+
+	void ObjectPointer::set_value(std::uint16_t objectIDToPointTo)
+	{
+		value = objectIDToPointTo;
 	}
 
 	bool ObjectPointer::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
@@ -6663,11 +7318,6 @@ namespace isobus
 		return retVal;
 	}
 
-	ExternalObjectPointer::ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType ExternalObjectPointer::get_object_type() const
 	{
 		return VirtualTerminalObjectType::ExternalObjectPointer;
@@ -6678,12 +7328,16 @@ namespace isobus
 		return 9;
 	}
 
-	bool ExternalObjectPointer::get_is_valid() const
+	bool ExternalObjectPointer::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
-		return true;
+		bool isDefaultObjectValid = (NULL_OBJECT_ID == get_default_object_id()) ||
+		  (nullptr != objectPool.at(get_default_object_id()));
+		bool isExternalNAMEIDValid = (NULL_OBJECT_ID == get_external_reference_name_id()) ||
+		  (nullptr != objectPool.at(get_external_reference_name_id()));
+		return (isDefaultObjectValid && isExternalNAMEIDValid);
 	}
 
-	bool ExternalObjectPointer::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool ExternalObjectPointer::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -6694,22 +7348,30 @@ namespace isobus
 				case AttributeName::DefaultObjectID:
 				{
 					if ((NULL_OBJECT_ID == rawAttributeData) ||
-					    (nullptr != thisObjectPool[static_cast<std::uint16_t>(rawAttributeData)]))
+					    (nullptr != get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool)))
 					{
 						set_default_object_id(static_cast<std::uint16_t>(rawAttributeData));
 						retVal = true;
 					}
 					else
 					{
-						returnedError = AttributeError::AnyOtherError;
+						returnedError = AttributeError::InvalidValue;
 					}
 				}
 				break;
 
 				case AttributeName::ExternalReferenceNAMEID:
 				{
-					set_external_reference_name_id(static_cast<std::uint16_t>(rawAttributeData));
-					retVal = true;
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    (nullptr != get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool)))
+					{
+						set_external_reference_name_id(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::InvalidValue;
+					}
 				}
 				break;
 
@@ -6840,11 +7502,6 @@ namespace isobus
 		static_cast<std::uint8_t>(Command::ExecuteExtendedMacro)
 	};
 
-	Macro::Macro(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType Macro::get_object_type() const
 	{
 		return VirtualTerminalObjectType::Macro;
@@ -6855,40 +7512,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool Macro::get_is_valid() const
+	bool Macro::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
-		bool retVal = true;
-
-		if (commandPackets.empty())
-		{
-			retVal = true;
-		}
-		else
-		{
-			for (const auto &command : commandPackets)
-			{
-				bool currentCommandAllowed = false;
-
-				for (const auto &allowedCommand : ALLOWED_COMMANDS_LOOKUP_TABLE)
-				{
-					if (command.at(0) == allowedCommand)
-					{
-						currentCommandAllowed = true;
-						break;
-					}
-				}
-
-				if (!currentCommandAllowed)
-				{
-					retVal = false;
-					break;
-				}
-			}
-		}
-		return retVal;
+		return get_are_command_packets_valid();
 	}
 
-	bool Macro::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool Macro::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -6960,9 +7589,37 @@ namespace isobus
 		return retVal;
 	}
 
-	ColourMap::ColourMap(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
+	bool Macro::get_are_command_packets_valid() const
 	{
+		bool retVal = true;
+
+		if (commandPackets.empty())
+		{
+			retVal = true;
+		}
+		else
+		{
+			for (const auto &command : commandPackets)
+			{
+				bool currentCommandAllowed = false;
+
+				for (const auto &allowedCommand : ALLOWED_COMMANDS_LOOKUP_TABLE)
+				{
+					if (command.at(0) == allowedCommand)
+					{
+						currentCommandAllowed = true;
+						break;
+					}
+				}
+
+				if (!currentCommandAllowed)
+				{
+					retVal = false;
+					break;
+				}
+			}
+		}
+		return retVal;
 	}
 
 	VirtualTerminalObjectType ColourMap::get_object_type() const
@@ -6975,12 +7632,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool ColourMap::get_is_valid() const
+	bool ColourMap::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool ColourMap::set_attribute(std::uint8_t, std::uint32_t, AttributeError &returnedError)
+	bool ColourMap::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -7060,11 +7717,6 @@ namespace isobus
 		return retVal;
 	}
 
-	WindowMask::WindowMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
-	  VTObject(memberObjectPool, currentColourTable)
-	{
-	}
-
 	VirtualTerminalObjectType WindowMask::get_object_type() const
 	{
 		return VirtualTerminalObjectType::WindowMask;
@@ -7075,7 +7727,7 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool WindowMask::get_is_valid() const
+	bool WindowMask::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
 
@@ -7083,7 +7735,7 @@ namespace isobus
 		{
 			if (NULL_OBJECT_ID != title)
 			{
-				auto titleObject = get_object_by_id(title);
+				auto titleObject = get_object_by_id(title, objectPool);
 
 				if (nullptr != titleObject)
 				{
@@ -7101,7 +7753,7 @@ namespace isobus
 						else
 						{
 							std::uint16_t titleObjectPointedTo = std::static_pointer_cast<ObjectPointer>(titleObject)->get_child_id(0);
-							auto child = get_object_by_id(titleObjectPointedTo);
+							auto child = get_object_by_id(titleObjectPointedTo, objectPool);
 
 							if ((nullptr != child) && (VirtualTerminalObjectType::OutputString == child->get_object_type()))
 							{
@@ -7130,7 +7782,7 @@ namespace isobus
 
 			if (NULL_OBJECT_ID != name)
 			{
-				auto nameObject = get_object_by_id(name);
+				auto nameObject = get_object_by_id(name, objectPool);
 
 				if (nullptr != nameObject)
 				{
@@ -7148,7 +7800,7 @@ namespace isobus
 						else
 						{
 							std::uint16_t titleObjectPointedTo = std::static_pointer_cast<ObjectPointer>(nameObject)->get_child_id(0);
-							auto child = get_object_by_id(titleObjectPointedTo);
+							auto child = get_object_by_id(titleObjectPointedTo, objectPool);
 
 							if ((nullptr != child) && (VirtualTerminalObjectType::OutputString == child->get_object_type()))
 							{
@@ -7177,7 +7829,7 @@ namespace isobus
 
 			if (NULL_OBJECT_ID != icon)
 			{
-				auto nameObject = get_object_by_id(icon);
+				auto nameObject = get_object_by_id(icon, objectPool);
 
 				if (nullptr != nameObject)
 				{
@@ -7239,8 +7891,8 @@ namespace isobus
 			{
 				if (2 == get_number_children())
 				{
-					auto outputNum = get_object_by_id(get_child_id(0));
-					auto outputString = get_object_by_id(get_child_id(1));
+					auto outputNum = get_object_by_id(get_child_id(0), objectPool);
+					auto outputString = get_object_by_id(get_child_id(1), objectPool);
 
 					if ((nullptr == outputNum) ||
 					    (nullptr == outputString) ||
@@ -7262,7 +7914,7 @@ namespace isobus
 			{
 				if (1 == get_number_children())
 				{
-					auto outputNum = get_object_by_id(get_child_id(0));
+					auto outputNum = get_object_by_id(get_child_id(0), objectPool);
 
 					if ((nullptr == outputNum) ||
 					    (VirtualTerminalObjectType::OutputNumber != outputNum->get_object_type()))
@@ -7282,7 +7934,7 @@ namespace isobus
 			{
 				if (1 == get_number_children())
 				{
-					auto outputString = get_object_by_id(get_child_id(0));
+					auto outputString = get_object_by_id(get_child_id(0), objectPool);
 
 					if ((nullptr == outputString) ||
 					    (VirtualTerminalObjectType::OutputString != outputString->get_object_type()))
@@ -7302,8 +7954,8 @@ namespace isobus
 			{
 				if (2 == get_number_children())
 				{
-					auto inputNum = get_object_by_id(get_child_id(0));
-					auto outputString = get_object_by_id(get_child_id(1));
+					auto inputNum = get_object_by_id(get_child_id(0), objectPool);
+					auto outputString = get_object_by_id(get_child_id(1), objectPool);
 
 					if ((nullptr == inputNum) ||
 					    (nullptr == outputString) ||
@@ -7325,7 +7977,7 @@ namespace isobus
 			{
 				if (1 == get_number_children())
 				{
-					auto inputNum = get_object_by_id(get_child_id(0));
+					auto inputNum = get_object_by_id(get_child_id(0), objectPool);
 
 					if ((nullptr == inputNum) ||
 					    (VirtualTerminalObjectType::InputNumber != inputNum->get_object_type()))
@@ -7345,7 +7997,7 @@ namespace isobus
 			{
 				if (1 == get_number_children())
 				{
-					auto inputStr = get_object_by_id(get_child_id(0));
+					auto inputStr = get_object_by_id(get_child_id(0), objectPool);
 
 					if ((nullptr == inputStr) ||
 					    (VirtualTerminalObjectType::InputString != inputStr->get_object_type()))
@@ -7365,7 +8017,7 @@ namespace isobus
 			{
 				if (1 == get_number_children())
 				{
-					auto outputBargraph = get_object_by_id(get_child_id(0));
+					auto outputBargraph = get_object_by_id(get_child_id(0), objectPool);
 
 					if ((nullptr == outputBargraph) ||
 					    (VirtualTerminalObjectType::OutputLinearBarGraph != outputBargraph->get_object_type()))
@@ -7385,7 +8037,7 @@ namespace isobus
 			{
 				if (1 == get_number_children())
 				{
-					auto button = get_object_by_id(get_child_id(0));
+					auto button = get_object_by_id(get_child_id(0), objectPool);
 
 					if ((nullptr == button) ||
 					    (VirtualTerminalObjectType::Button != button->get_object_type()))
@@ -7405,8 +8057,8 @@ namespace isobus
 			{
 				if (2 == get_number_children())
 				{
-					auto button1 = get_object_by_id(get_child_id(0));
-					auto button2 = get_object_by_id(get_child_id(1));
+					auto button1 = get_object_by_id(get_child_id(0), objectPool);
+					auto button2 = get_object_by_id(get_child_id(1), objectPool);
 
 					if ((nullptr == button1) ||
 					    (nullptr == button2) ||
@@ -7432,7 +8084,7 @@ namespace isobus
 		return !anyWrongChildType;
 	}
 
-	bool WindowMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	bool WindowMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
