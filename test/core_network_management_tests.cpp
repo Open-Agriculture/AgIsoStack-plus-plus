@@ -2,6 +2,7 @@
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
+#include "isobus/isobus/can_control_function_reference.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -342,4 +343,41 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	// Partner should never change
 	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), 0xa0000F000425e9f8);
 	EXPECT_TRUE(TestPartner->destroy());
+}
+
+TEST(CORE_TESTS, ControlFunctionReference)
+{
+	// Test case 1: ControlFunctionReference with a valid control function
+	auto controlFunction = ControlFunction::create(NAME(0), 0x01, 0);
+	ControlFunctionReference cfr(controlFunction);
+	EXPECT_FALSE(cfr.is_stale());
+	EXPECT_TRUE(cfr.has_valid_address());
+	std::uint8_t address;
+	EXPECT_TRUE(cfr.get_address(address));
+	EXPECT_EQ(address, controlFunction->get_address());
+	EXPECT_FALSE(cfr.is_broadcast());
+	EXPECT_TRUE(controlFunction->destroy());
+
+	// Test case 3: ControlFunction expired
+	controlFunction.reset();
+	EXPECT_TRUE(cfr.is_stale());
+	EXPECT_FALSE(cfr.has_valid_address());
+	EXPECT_FALSE(cfr.get_address(address));
+	EXPECT_FALSE(cfr.is_broadcast());
+
+	// Test case 2: ControlFunctionReference with a control function that has an invalid address
+	controlFunction = ControlFunction::create(NAME(0), NULL_CAN_ADDRESS, 0);
+	cfr = ControlFunctionReference(controlFunction);
+	EXPECT_FALSE(cfr.is_stale());
+	EXPECT_FALSE(cfr.has_valid_address());
+	EXPECT_FALSE(cfr.get_address(address));
+	EXPECT_FALSE(cfr.is_broadcast());
+	EXPECT_TRUE(controlFunction->destroy());
+
+	// Test case 4: ControlFunctionReference with destination broadcast
+	EXPECT_FALSE(ControlFunctionReference::ANY_CONTROL_FUNCTION.is_stale());
+	EXPECT_TRUE(ControlFunctionReference::ANY_CONTROL_FUNCTION.has_valid_address());
+	EXPECT_TRUE(ControlFunctionReference::ANY_CONTROL_FUNCTION.get_address(address));
+	EXPECT_EQ(address, BROADCAST_CAN_ADDRESS);
+	EXPECT_TRUE(ControlFunctionReference::ANY_CONTROL_FUNCTION.is_broadcast());
 }

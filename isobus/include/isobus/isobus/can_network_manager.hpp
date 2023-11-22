@@ -16,6 +16,7 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_control_function_reference.hpp"
 #include "isobus/isobus/can_extended_transport_protocol.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
@@ -117,7 +118,7 @@ namespace isobus
 		                      const std::uint8_t *dataBuffer,
 		                      std::uint32_t dataLength,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
+		                      ControlFunctionReference destinationControlFunction = ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
@@ -139,7 +140,7 @@ namespace isobus
 		                      DataChunkCallback frameChunkCallback,
 		                      std::uint32_t dataLength,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
+		                      ControlFunctionReference destinationControlFunction = ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
@@ -158,7 +159,7 @@ namespace isobus
 		bool send_can_message(std::uint32_t parameterGroupNumber,
 		                      CANDataSpan data,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
+		                      ControlFunctionReference destinationControlFunction = ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
@@ -177,7 +178,7 @@ namespace isobus
 		bool send_can_message(std::uint32_t parameterGroupNumber,
 		                      std::initializer_list<std::uint8_t> data,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
+		                      ControlFunctionReference destinationControlFunction = ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);

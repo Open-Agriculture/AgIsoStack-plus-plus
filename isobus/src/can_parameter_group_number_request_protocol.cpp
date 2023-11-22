@@ -9,6 +9,7 @@
 /// @copyright 2022 Adrian Del Grosso
 //================================================================================================
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
+#include "isobus/isobus/can_control_function_reference.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -297,8 +298,7 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction,
-			                                                        nullptr);
+			                                                        myControlFunction);
 		}
 		return retVal;
 	}

@@ -230,7 +230,7 @@ namespace isobus
 		                                                      buffer.data(),
 		                                                      buffer.size(),
 		                                                      sourceControlFunction,
-		                                                      nullptr,
+		                                                      ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                                                      CANIdentifier::Priority3);
 	}
 }

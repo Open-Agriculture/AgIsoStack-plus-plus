@@ -2359,7 +2359,7 @@ namespace isobus
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
 		                                                      myControlFunction,
-		                                                      nullptr,
+		                                                      ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
@@ -2420,7 +2420,7 @@ namespace isobus
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
 		                                                      myControlFunction,
-		                                                      nullptr,
+		                                                      ControlFunctionReference::ANY_CONTROL_FUNCTION,
 		                                                      CANIdentifier::Priority3);
 	}
 
@@ -2505,7 +2505,7 @@ namespace isobus
 				                                                        buffer.data(),
 				                                                        CAN_DATA_LENGTH,
 				                                                        myControlFunction,
-				                                                        nullptr,
+				                                                        ControlFunctionReference::ANY_CONTROL_FUNCTION,
 				                                                        CANIdentifier::Priority3);
 			}
 		}

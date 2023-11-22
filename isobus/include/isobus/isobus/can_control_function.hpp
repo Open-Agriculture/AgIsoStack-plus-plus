@@ -75,6 +75,8 @@ namespace isobus
 		std::string get_type_string() const;
 
 	protected:
+		friend class CANNetworkManager;
+
 		/// @brief The protected constructor for the control function, which is called by the (inherited) factory function
 		/// @param[in] NAMEValue The NAME of the control function
 		/// @param[in] addressValue The current address of the control function
@@ -82,7 +84,6 @@ namespace isobus
 		/// @param[in] type The 'Type' of control function to create
 		ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type = Type::External);
 
-		friend class CANNetworkManager;
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		static std::mutex controlFunctionProcessingMutex; ///< Protects the control function tables
 #endif

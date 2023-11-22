@@ -116,7 +116,7 @@ namespace isobus
 	                                         const std::uint8_t *dataBuffer,
 	                                         std::uint32_t dataLength,
 	                                         std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                         std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                         ControlFunctionReference destinationControlFunction,
 	                                         CANIdentifier::CANPriority priority,
 	                                         TransmitCompleteCallback txCompleteCallback,
 	                                         void *parentPointer)
@@ -134,16 +134,22 @@ namespace isobus
 	                                         DataChunkCallback frameChunkCallback,
 	                                         std::uint32_t dataLength,
 	                                         std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                         std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                         ControlFunctionReference destinationControlFunction,
 	                                         CANIdentifier::CANPriority priority,
 	                                         TransmitCompleteCallback txCompleteCallback,
 	                                         void *parentPointer)
 	{
 		bool retVal = false;
 
-		const std::uint8_t destinationAddress = (nullptr != destinationControlFunction) ? destinationControlFunction->get_address() : BROADCAST_CAN_ADDRESS;
-
-		if (frameChunkCallback == nullptr)
+		std::uint8_t destinationAddress;
+		if (!destinationControlFunction.get_address(destinationAddress))
+		{
+			// If there is no valid reference to a control function as a destination, then we don't know where to send the message to
+			CANStackLogger::warn("[NM]: Cannot send message with invalid destination control function, source: %hu, pgn: 0x%05x",
+			                     sourceControlFunction->get_address(),
+			                     parameterGroupNumber);
+		}
+		else if (frameChunkCallback == nullptr)
 		{
 			// If the chunk callback is null, then we can't send a meaningful message
 			CANStackLogger::warn("[NM]: Cannot send message with null chunk callback, source: %hu, destination %hu, pgn: 0x%05x",
@@ -183,7 +189,7 @@ namespace isobus
 					                                                    nullptr,
 					                                                    dataLength,
 					                                                    sourceControlFunction,
-					                                                    destinationControlFunction,
+					                                                    destinationControlFunction.lock(), //! TODO: switch protocol to use the wrapper instead
 					                                                    txCompleteCallback,
 					                                                    parentPointer,
 					                                                    frameChunkCallback);
@@ -211,7 +217,12 @@ namespace isobus
 				if (retVal && (nullptr != txCompleteCallback))
 				{
 					// Message is sent within a single frame, so handle the tx callback now
-					txCompleteCallback(parameterGroupNumber, dataLength, sourceControlFunction, destinationControlFunction, true, parentPointer);
+					txCompleteCallback(parameterGroupNumber,
+					                   dataLength,
+					                   sourceControlFunction,
+					                   destinationControlFunction.lock(), //! TODO: switch callback to use the wrapper instead
+					                   true,
+					                   parentPointer);
 				}
 			}
 		}
@@ -221,23 +232,28 @@ namespace isobus
 	bool CANNetworkManager::send_can_message(std::uint32_t parameterGroupNumber,
 	                                         CANDataSpan data,
 	                                         std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                         std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                         ControlFunctionReference destinationControlFunction,
 	                                         CANIdentifier::CANPriority priority,
 	                                         TransmitCompleteCallback txCompleteCallback,
 	                                         void *parentPointer)
 	{
 		bool retVal = false;
 
-		const std::uint8_t destinationAddress = (nullptr != destinationControlFunction) ? destinationControlFunction->get_address() : BROADCAST_CAN_ADDRESS;
-
-		if (data.begin() == nullptr)
+		std::uint8_t destinationAddress;
+		if (!destinationControlFunction.get_address(destinationAddress))
+		{
+			// If there is no valid reference to a control function as a destination, then we don't know where to send the message to
+			CANStackLogger::warn("[NM]: Cannot send message with invalid destination control function, source: %hu, pgn: 0x%05x",
+			                     sourceControlFunction->get_address(),
+			                     parameterGroupNumber);
+		}
+		else if (data.begin() == nullptr)
 		{
 			// If the data buffer is null, then we can't send a meaningful message
 			CANStackLogger::warn("[NM]: Cannot send message with null data buffer, source: %hu, destination %hu, pgn: 0x%05x",
 			                     sourceControlFunction->get_address(),
 			                     destinationAddress,
 			                     parameterGroupNumber);
-			retVal = false;
 		}
 		else if ((nullptr == sourceControlFunction) || !sourceControlFunction->get_address_valid())
 		{
@@ -245,7 +261,6 @@ namespace isobus
 			CANStackLogger::warn("[NM]: Cannot send message with invalid source control function, destination %hu, pgn: 0x%05x",
 			                     destinationAddress,
 			                     parameterGroupNumber);
-			retVal = false;
 		}
 		else if ((0 == data.size()) || (data.size() > CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH))
 		{
@@ -255,7 +270,6 @@ namespace isobus
 			                     sourceControlFunction->get_address(),
 			                     destinationAddress,
 			                     parameterGroupNumber);
-			retVal = false;
 		}
 		else
 		{
@@ -270,7 +284,7 @@ namespace isobus
 					                                                    data.begin(),
 					                                                    data.size(),
 					                                                    sourceControlFunction,
-					                                                    destinationControlFunction,
+					                                                    destinationControlFunction.lock(), //! TODO: switch protocol to use the wrapper instead
 					                                                    txCompleteCallback,
 					                                                    parentPointer,
 					                                                    nullptr);
@@ -294,7 +308,12 @@ namespace isobus
 				if (retVal && (nullptr != txCompleteCallback))
 				{
 					// Message is sent within a single frame, so handle the tx callback now
-					txCompleteCallback(parameterGroupNumber, data.size(), sourceControlFunction, destinationControlFunction, retVal, parentPointer);
+					txCompleteCallback(parameterGroupNumber,
+					                   data.size(),
+					                   sourceControlFunction,
+					                   destinationControlFunction.lock(), //! @TODO: switch callback to use the wrapper instead
+					                   retVal,
+					                   parentPointer);
 				}
 			}
 		}
@@ -304,7 +323,7 @@ namespace isobus
 	bool isobus::CANNetworkManager::send_can_message(std::uint32_t parameterGroupNumber,
 	                                                 std::initializer_list<std::uint8_t> data,
 	                                                 std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                                 std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                                 ControlFunctionReference destinationControlFunction,
 	                                                 CANIdentifier::CANPriority priority,
 	                                                 TransmitCompleteCallback txCompleteCallback,
 	                                                 void *parentPointer)

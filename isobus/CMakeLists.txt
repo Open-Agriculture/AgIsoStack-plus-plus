@@ -39,7 +39,8 @@ set(ISOBUS_SRC
     "isobus_speed_distance_messages.cpp"
     "isobus_maintain_power_interface.cpp"
     "nmea2000_message_definitions.cpp"
-    "nmea2000_message_interface.cpp")
+    "nmea2000_message_interface.cpp"
+    "can_control_function_reference.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
@@ -80,7 +81,8 @@ set(ISOBUS_INCLUDE
     "isobus_speed_distance_messages.hpp"
     "isobus_maintain_power_interface.hpp"
     "nmea2000_message_definitions.hpp"
-    "nmea2000_message_interface.hpp")
+    "nmea2000_message_interface.hpp"
+    "can_control_function_reference.hpp")
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 

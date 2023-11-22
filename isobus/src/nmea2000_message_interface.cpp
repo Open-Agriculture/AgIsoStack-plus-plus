@@ -381,7 +381,7 @@ namespace isobus
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
 						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->cogSogTransmitMessage.get_control_function()),
-						                                                                    nullptr,
+						                                                                    ControlFunctionReference::ANY_CONTROL_FUNCTION,
 						                                                                    CANIdentifier::Priority2);
 					}
 				}
@@ -426,7 +426,7 @@ namespace isobus
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
 						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->positionDeltaHighPrecisionRapidUpdateTransmitMessage.get_control_function()),
-						                                                                    nullptr,
+						                                                                    ControlFunctionReference::ANY_CONTROL_FUNCTION,
 						                                                                    CANIdentifier::Priority2);
 					}
 				}
@@ -441,7 +441,7 @@ namespace isobus
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
 						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->positionRapidUpdateTransmitMessage.get_control_function()),
-						                                                                    nullptr,
+						                                                                    ControlFunctionReference::ANY_CONTROL_FUNCTION,
 						                                                                    CANIdentifier::Priority2);
 					}
 				}
@@ -456,7 +456,7 @@ namespace isobus
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
 						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->rateOfTurnTransmitMessage.get_control_function()),
-						                                                                    nullptr,
+						                                                                    ControlFunctionReference::ANY_CONTROL_FUNCTION,
 						                                                                    CANIdentifier::Priority2);
 					}
 				}
@@ -471,7 +471,7 @@ namespace isobus
 						                                                                    messageBuffer.data(),
 						                                                                    messageBuffer.size(),
 						                                                                    std::dynamic_pointer_cast<InternalControlFunction>(targetInterface->vesselHeadingTransmitMessage.get_control_function()),
-						                                                                    nullptr,
+						                                                                    ControlFunctionReference::ANY_CONTROL_FUNCTION,
 						                                                                    CANIdentifier::Priority2);
 					}
 				}

@@ -1932,8 +1932,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      nullptr);
+		                                                      myControlFunction);
 	}
 
 	void TaskControllerClient::set_common_config_items(std::uint8_t maxNumberBoomsSupported,
@@ -2059,8 +2058,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      nullptr);
+		                                                      myControlFunction);
 	}
 
 } // namespace isobus

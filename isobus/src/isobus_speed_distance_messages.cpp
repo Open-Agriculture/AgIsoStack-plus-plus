@@ -812,7 +812,7 @@ namespace isobus
 			                                                        buffer.data(),
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
-			                                                        nullptr,
+			                                                        ControlFunctionReference::ANY_CONTROL_FUNCTION,
 			                                                        CANIdentifier::Priority3);
 		}
 		return retVal;
@@ -839,7 +839,7 @@ namespace isobus
 			                                                        buffer.data(),
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
-			                                                        nullptr,
+			                                                        ControlFunctionReference::ANY_CONTROL_FUNCTION,
 			                                                        CANIdentifier::Priority3);
 		}
 		return retVal;
@@ -863,7 +863,7 @@ namespace isobus
 			                                                        buffer.data(),
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
-			                                                        nullptr,
+			                                                        ControlFunctionReference::ANY_CONTROL_FUNCTION,
 			                                                        CANIdentifier::Priority3);
 		}
 		return retVal;
@@ -887,7 +887,7 @@ namespace isobus
 			                                                        buffer.data(),
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
-			                                                        nullptr,
+			                                                        ControlFunctionReference::ANY_CONTROL_FUNCTION,
 			                                                        CANIdentifier::Priority3);
 		}
 		return retVal;

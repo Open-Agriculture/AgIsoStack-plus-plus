@@ -527,7 +527,7 @@ namespace isobus
 			                                                        dataBuffer,
 			                                                        CAN_DATA_LENGTH,
 			                                                        std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
-			                                                        nullptr,
+			                                                        ControlFunctionReference::ANY_CONTROL_FUNCTION,
 			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
 		return retVal;

@@ -120,8 +120,7 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
-		                                                      myControlFunction,
-		                                                      nullptr);
+		                                                      myControlFunction);
 	}
 
 	std::string LanguageCommandInterface::get_country_code() const
