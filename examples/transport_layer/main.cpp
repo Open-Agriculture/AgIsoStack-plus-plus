@@ -97,7 +97,7 @@ int main()
 	}
 
 	// Send a classic CAN message to global (0xFF) (8 bytes or less)
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message_global(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, TestInternalECU))
+	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, TestInternalECU))
 	{
 		std::cout << "Sent a broadcast CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
@@ -138,7 +138,7 @@ int main()
 		}
 
 		// Send message
-		if (isobus::CANNetworkManager::CANNetwork.send_can_message_global(0xEF00, TPTestBuffer, i, TestInternalECU))
+		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, TestInternalECU))
 		{
 			std::cout << "Started BAM Session with length " << i << std::endl;
 		}

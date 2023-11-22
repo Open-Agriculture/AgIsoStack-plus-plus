@@ -318,64 +318,6 @@ namespace isobus
 		                        parentPointer);
 	}
 
-	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber,
-	                                                        const std::uint8_t *dataBuffer,
-	                                                        std::uint32_t dataLength,
-	                                                        std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                                        CANIdentifier::CANPriority priority,
-	                                                        TransmitCompleteCallback txCompleteCallback,
-	                                                        void *parentPointer)
-	{
-		return send_can_message(parameterGroupNumber,
-		                        dataBuffer,
-		                        dataLength,
-		                        sourceControlFunction,
-		                        nullptr, // To denote a global message we pass a null destination
-		                        priority,
-		                        txCompleteCallback,
-		                        parentPointer);
-	}
-
-	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber,
-	                                                        DataChunkCallback frameChunkCallback,
-	                                                        std::uint32_t dataLength,
-	                                                        std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                                        CANIdentifier::CANPriority priority,
-	                                                        TransmitCompleteCallback txCompleteCallback,
-	                                                        void *parentPointer)
-	{
-		return send_can_message(parameterGroupNumber,
-		                        frameChunkCallback,
-		                        dataLength,
-		                        sourceControlFunction,
-		                        nullptr, // To denote a global message we pass a null destination
-		                        priority,
-		                        txCompleteCallback,
-		                        parentPointer);
-	}
-
-	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber, CANDataSpan data, std::shared_ptr<InternalControlFunction> sourceControlFunction, CANIdentifier::CANPriority priority, TransmitCompleteCallback txCompleteCallback, void *parentPointer)
-	{
-		return send_can_message(parameterGroupNumber,
-		                        data,
-		                        sourceControlFunction,
-		                        nullptr, // To denote a global message we pass a null destination
-		                        priority,
-		                        txCompleteCallback,
-		                        parentPointer);
-	}
-
-	bool isobus::CANNetworkManager::send_can_message_global(std::uint32_t parameterGroupNumber, std::initializer_list<std::uint8_t> data, std::shared_ptr<InternalControlFunction> sourceControlFunction, CANIdentifier::CANPriority priority, TransmitCompleteCallback txCompleteCallback, void *parentPointer)
-	{
-		return send_can_message(parameterGroupNumber,
-		                        CANDataSpan(data.begin(), data.size()),
-		                        sourceControlFunction,
-		                        nullptr, // To denote a global message we pass a null destination
-		                        priority,
-		                        txCompleteCallback,
-		                        parentPointer);
-	}
-
 	void CANNetworkManager::receive_can_message(const CANMessage &message)
 	{
 		if (initialized)
