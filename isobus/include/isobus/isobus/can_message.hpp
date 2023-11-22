@@ -19,7 +19,7 @@
 
 namespace isobus
 {
-	/// @brief A read-only span of data provided by a CAN message
+	/// @brief A read-only span of data for a CAN message
 	using CANDataSpan = DataSpan<const std::uint8_t>;
 
 	//================================================================================================

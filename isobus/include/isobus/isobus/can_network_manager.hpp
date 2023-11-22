@@ -118,7 +118,7 @@ namespace isobus
 		                      const std::uint8_t *dataBuffer,
 		                      std::uint32_t dataLength,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction,
+		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
@@ -140,7 +140,7 @@ namespace isobus
 		                      DataChunkCallback frameChunkCallback,
 		                      std::uint32_t dataLength,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction,
+		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
@@ -159,7 +159,7 @@ namespace isobus
 		bool send_can_message(std::uint32_t parameterGroupNumber,
 		                      CANDataSpan data,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction,
+		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
@@ -178,78 +178,10 @@ namespace isobus
 		bool send_can_message(std::uint32_t parameterGroupNumber,
 		                      std::initializer_list<std::uint8_t> data,
 		                      std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                      std::shared_ptr<ControlFunction> destinationControlFunction,
+		                      std::shared_ptr<ControlFunction> destinationControlFunction = nullptr,
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr);
-
-		/// @brief Broadcast a CAN message with the specified parameter group number and data buffer. (Destination Address=0xFF)
-		/// @details This function will automatically choose an appropriate transport protocol if needed.
-		/// @param[in] parameterGroupNumber The parameter group number of the CAN message.
-		/// @param[in] dataBuffer The data buffer containing the data to be sent.
-		/// @param[in] dataLength The length of the data buffer.
-		/// @param[in] sourceControlFunction The source control function of the CAN message.
-		/// @param[in] priority The priority of the CAN message.
-		/// @param[in] txCompleteCallback The callback function to be called when the transmission is complete.
-		/// @param[in] parentPointer A pointer to the parent object that gets passed to the txCompleteCallback.
-		/// @return True if the message is successfully enqueued, false otherwise.
-		bool send_can_message_global(std::uint32_t parameterGroupNumber,
-		                             const std::uint8_t *dataBuffer,
-		                             std::uint32_t dataLength,
-		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                             CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
-		                             TransmitCompleteCallback txCompleteCallback = nullptr,
-		                             void *parentPointer = nullptr);
-
-		/// @brief Broadcast a CAN message with the specified parameter group number and data from chunk callback. (Destination Address=0xFF)
-		/// @details This function will automatically choose an appropriate transport protocol if needed.
-		/// @param[in] parameterGroupNumber The parameter group number of the CAN message.
-		/// @param[in] frameChunkCallback The callback function to be called to get the data to be sent in chunks.
-		/// @param[in] dataLength The total length of the data to be sent.
-		/// @param[in] sourceControlFunction The source control function of the CAN message.
-		/// @param[in] priority The priority of the CAN message.
-		/// @param[in] txCompleteCallback The callback function to be called when the transmission is complete.
-		/// @param[in] parentPointer A pointer to the parent object that gets passed to the txCompleteCallback.
-		/// @return True if the message is successfully enqueued, false otherwise.
-		bool send_can_message_global(std::uint32_t parameterGroupNumber,
-		                             DataChunkCallback frameChunkCallback,
-		                             std::uint32_t dataLength,
-		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                             CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
-		                             TransmitCompleteCallback txCompleteCallback = nullptr,
-		                             void *parentPointer = nullptr);
-
-		/// @brief Broadcast a CAN message with the specified parameter group number and data. (Destination Address=0xFF)
-		/// @details This function will automatically choose an appropriate transport protocol if needed.
-		/// @param parameterGroupNumber The parameter group number of the CAN message.
-		/// @param data The data to be sent.
-		/// @param sourceControlFunction The source control function of the CAN message.
-		/// @param priority The priority of the CAN message.
-		/// @param txCompleteCallback The callback function to be called when the transmission is complete.
-		/// @param parentPointer A pointer to the parent object that gets passed to the txCompleteCallback.
-		/// @return True if the message is successfully enqueued, false otherwise.
-		bool send_can_message_global(std::uint32_t parameterGroupNumber,
-		                             CANDataSpan data,
-		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                             CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
-		                             TransmitCompleteCallback txCompleteCallback = nullptr,
-		                             void *parentPointer = nullptr);
-
-		/// @brief Broadcast a CAN message with the specified parameter group number and data.
-		/// @details This function will automatically choose an appropriate transport protocol if needed.
-		/// @param parameterGroupNumber The parameter group number of the CAN message.
-		/// @param data The data to be sent.
-		/// @param sourceControlFunction The source control function of the CAN message.
-		/// @param priority The priority of the CAN message.
-		/// @param txCompleteCallback The callback function to be called when the transmission is complete.
-		/// @param parentPointer A pointer to the parent object that gets passed to the txCompleteCallback.
-		/// @return True if the message is successfully enqueued, false otherwise.
-		bool send_can_message_global(std::uint32_t parameterGroupNumber,
-		                             std::initializer_list<std::uint8_t> data,
-		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                             CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
-		                             TransmitCompleteCallback txCompleteCallback = nullptr,
-		                             void *parentPointer = nullptr);
 
 		/// @brief This is the main function used by the stack to receive CAN messages and add them to a queue.
 		/// @details This function is called by the stack itself when you call can_lib_process_rx_message.
