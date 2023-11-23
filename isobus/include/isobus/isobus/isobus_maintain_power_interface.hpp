@@ -94,6 +94,7 @@ namespace isobus
 			};
 
 			/// @brief Constructor for a MaintainPowerData object, which stores information sent/received in a maintain power message.
+			/// @param[in] sendingControlFunction The control function to use if sending the message
 			explicit MaintainPowerData(std::shared_ptr<ControlFunction> sendingControlFunction);
 
 			/// @brief Sets the reported implement in-work state
@@ -218,6 +219,7 @@ namespace isobus
 		/// @brief Returns the content of a received maintain power message
 		/// based on the index of the sender. Use this to read the received messages' content.
 		/// @param[in] index An index of senders of the maintain power message
+		/// @returns A pointer to the maintain power message data, or nullptr if the index is out of range
 		std::shared_ptr<MaintainPowerData> get_received_maintain_power(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated maintain power messages are received.

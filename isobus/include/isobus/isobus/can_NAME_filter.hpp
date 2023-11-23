@@ -39,6 +39,7 @@ namespace isobus
 		std::uint32_t get_value() const;
 
 		/// @brief Returns true if a NAME matches this filter class's components
+		/// @param[in] nameToCompare A NAME to compare against this filter
 		/// @returns true if a NAME matches this filter class's components
 		bool check_name_matches_filter(const NAME &nameToCompare) const;
 

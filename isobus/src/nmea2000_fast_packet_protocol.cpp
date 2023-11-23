@@ -189,11 +189,11 @@ namespace isobus
 		}
 	}
 
-	void FastPacketProtocol::close_session(FastPacketProtocolSession *session, bool successfull)
+	void FastPacketProtocol::close_session(FastPacketProtocolSession *session, bool successful)
 	{
 		if (nullptr != session)
 		{
-			process_session_complete_callback(session, successfull);
+			process_session_complete_callback(session, successful);
 			for (auto currentSession = activeSessions.begin(); currentSession != activeSessions.end(); currentSession++)
 			{
 				if (session == *currentSession)

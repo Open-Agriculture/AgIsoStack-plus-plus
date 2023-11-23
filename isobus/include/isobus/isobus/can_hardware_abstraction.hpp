@@ -18,6 +18,7 @@ namespace isobus
 {
 	/// @brief The sending abstraction layer between the hardware and the stack
 	/// @param[in] frame The frame to transmit from the hardware
+	/// @returns true if the frame was successfully sent, false otherwise
 	bool send_can_message_frame_to_hardware(const CANMessageFrame &frame);
 
 	/// @brief The receiving abstraction layer between the hardware and the stack

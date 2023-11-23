@@ -116,6 +116,7 @@ namespace isobus
 
 		/// @brief Attempts to write a frame using the driver assigned to a frame's channel
 		/// @param[in] frame The frame to try and write to the bus
+		/// @returns `true` if the frame was transmitted, otherwise `false`
 		static bool transmit_can_frame_from_buffer(const isobus::CANMessageFrame &frame);
 
 		static isobus::EventDispatcher<const isobus::CANMessageFrame &> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event

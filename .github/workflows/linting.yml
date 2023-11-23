@@ -34,3 +34,13 @@ jobs:
         run: find . -name CMakeLists.txt | xargs cmake-format -i
       - name: Check cmake-format
         run: git diff --patch-with-stat --exit-code
+  doxygen:
+    name: verify doxygen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Generate Doxygen Documentation
+        uses: mattnotmitt/doxygen-action@1.9.5
+        with:
+          doxyfile-path: 'doxyfile'

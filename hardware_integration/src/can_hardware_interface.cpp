@@ -43,7 +43,7 @@ namespace isobus
 		return CANHardwareInterface::transmit_can_frame(frame);
 	}
 
-	bool CANHardwareInterface::set_number_of_can_channels(uint8_t value)
+	bool CANHardwareInterface::set_number_of_can_channels(std::uint8_t value)
 	{
 		std::lock_guard<std::mutex> lock(hardwareChannelsMutex);
 

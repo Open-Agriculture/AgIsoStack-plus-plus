@@ -51,6 +51,7 @@ namespace isobus
 		void open() override;
 
 		/// @brief Resets the MCP2515
+		/// @returns `true` if the reset was successful, otherwise `false`
 		bool reset();
 
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.

@@ -523,6 +523,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The parsed content of the machine selected speed message
 		std::shared_ptr<MachineSelectedSpeedData> get_received_machine_selected_speed(std::size_t index);
 
 		/// @brief Returns the content of the wheel-based speed message
@@ -531,6 +532,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The parsed content of the wheel-based speed message
 		std::shared_ptr<WheelBasedMachineSpeedData> get_received_wheel_based_speed(std::size_t index);
 
 		/// @brief Returns the content of the ground-based speed message
@@ -539,6 +541,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The parsed content of the ground-based speed message
 		std::shared_ptr<GroundBasedSpeedData> get_received_ground_based_speed(std::size_t index);
 
 		/// @brief Returns the content of the machine selected speed command message
@@ -547,6 +550,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The parsed content of the machine selected speed command message
 		std::shared_ptr<MachineSelectedSpeedCommandData> get_received_machine_selected_speed_command(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated wheel-based speed messages are received.

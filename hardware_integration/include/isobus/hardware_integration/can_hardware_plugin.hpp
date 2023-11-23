@@ -27,10 +27,11 @@ namespace isobus
 		/// @returns `true` if the driver is good/connected, `false` if the driver is not usable
 		virtual bool get_is_valid() const = 0;
 
-		/// @brief Disconnects the driver from the hardware
+		/// @brief Disconnects the driver from the hardware.
 		virtual void close() = 0;
 
-		/// @brief Connects the driver to the hardware
+		/// @brief Connects the driver to the hardware. This will be called to initialize the driver
+		/// and connect it to the hardware.
 		virtual void open() = 0;
 
 		/// @brief Reads one frame from the bus synchronously

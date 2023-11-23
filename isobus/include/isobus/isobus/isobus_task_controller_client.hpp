@@ -304,6 +304,8 @@ namespace isobus
 		/// a value to the TC server.
 		/// @details If you provide on-change triggers in your DDOP, this is how you can request the TC client
 		/// to update the TC server on the current value of your process data variables.
+		/// @param[in] elementNumber The element number of the process data variable that changed
+		/// @param[in] DDI The DDI of the process data variable that changed
 		void on_value_changed_trigger(std::uint16_t elementNumber, std::uint16_t DDI);
 
 		/// @brief Sends a broadcast request to TCs to identify themseleves.
@@ -406,6 +408,12 @@ namespace isobus
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief The callback passed to the network manager's send function to know when a Tx is completed
+		/// @param[in] parameterGroupNumber The parameter group number of the message that was sent
+		/// @param[in] dataLength The number of bytes sent
+		/// @param[in] sourceControlFunction The control function that sent the message
+		/// @param[in] destinationControlFunction The control function that received the message
+		/// @param[in] successful Whether the message was sent successfully
+		/// @param[in] parentPointer A context variable that is passed back through the callback
 		static void process_tx_callback(std::uint32_t parameterGroupNumber,
 		                                std::uint32_t dataLength,
 		                                std::shared_ptr<InternalControlFunction> sourceControlFunction,
@@ -422,6 +430,7 @@ namespace isobus
 
 		/// @brief Sends a process data message with 1 mux byte and all 0xFFs as payload
 		/// @details This just reduces code duplication by consolidating common message formats
+		/// @param[in] multiplexor The multiplexor to use for the message
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_generic_process_data(std::uint8_t multiplexor) const;
 
@@ -475,6 +484,9 @@ namespace isobus
 		bool send_status() const;
 
 		/// @brief Sends the value command message for a specific DDI/Element number combo
+		/// @param[in] elementNumber The element number for the command
+		/// @param[in] ddi The DDI for the command
+		/// @param[in] value The value to send
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::uint32_t value) const;
 
@@ -526,6 +538,7 @@ namespace isobus
 		{
 			/// @brief Allows easy comparison of callback data
 			/// @param obj the object to compare against
+			/// @returns true if the ddi and element numbers of the provided objects match, otherwise false
 			bool operator==(const ProcessDataCallbackInfo &obj) const;
 			std::uint32_t processDataValue; ///< The value of the value set command
 			std::uint32_t lastValue; ///< Used for measurement commands to store timestamp or previous values
@@ -540,6 +553,7 @@ namespace isobus
 		{
 			/// @brief Allows easy comparison of callback data
 			/// @param obj the object to compare against
+			/// @returns true if the callback and parent pointer match, otherwise false
 			bool operator==(const RequestValueCommandCallbackInfo &obj) const;
 			RequestValueCommandCallback callback = nullptr; ///< The callback itself
 			void *parent; ///< The parent pointer, generic context value
@@ -550,6 +564,7 @@ namespace isobus
 		{
 			/// @brief Allows easy comparison of callback data
 			/// @param obj the object to compare against
+			/// @returns true if the callback and parent pointer match, otherwise false
 			bool operator==(const ValueCommandCallbackInfo &obj) const;
 			ValueCommandCallback callback; ///< The callback itself
 			void *parent; ///< The parent pointer, generic context value

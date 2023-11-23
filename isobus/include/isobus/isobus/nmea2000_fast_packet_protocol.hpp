@@ -95,10 +95,12 @@ namespace isobus
 			enum class Direction
 			{
 				Transmit, ///< We are transmitting a message
-				Receive ///< We are receving a message
+				Receive ///< We are receiving a message
 			};
 
-			/// @brief A useful way to compare sesson objects to each other for equality
+			/// @brief A useful way to compare session objects to each other for equality
+			/// @param[in] obj The object to compare against
+			/// @returns true if the objects are equal, false otherwise
 			bool operator==(const FastPacketProtocolSession &obj);
 
 			/// @brief Get the total number of bytes that will be sent or received in this session
@@ -144,7 +146,7 @@ namespace isobus
 		/// @brief Ends a session and cleans up the memory associated with its metadata
 		/// @param[in] session The session to close
 		/// @param[in] successful `true` if the session was closed successfully, otherwise `false`
-		void close_session(FastPacketProtocolSession *session, bool successfull);
+		void close_session(FastPacketProtocolSession *session, bool successful);
 
 		/// @brief Gets the sequence number to use for a new session based on the history
 		/// @param[in] session The new session we're starting
@@ -155,7 +157,7 @@ namespace isobus
 		/// @param[in,out] returnedSession The returned session
 		/// @param[in] parameterGroupNumber The PGN
 		/// @param[in] source The session source control function
-		/// @param[in] destination The sesssion destination control function
+		/// @param[in] destination The session destination control function
 		/// @returns `true` if a session was found that matches, otherwise `false`
 		bool get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 

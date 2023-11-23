@@ -68,6 +68,7 @@ namespace isobus
 
 		/// @brief Assignment operator for a CAN identifier
 		/// @param[in] obj rhs of the operator
+		/// @returns The lhs of the operator, now assigned the rhs value
 		CANIdentifier &operator=(const CANIdentifier &obj);
 
 		/// @brief Returns the raw encoded ID of the CAN identifier

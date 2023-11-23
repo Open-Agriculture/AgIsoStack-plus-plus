@@ -320,6 +320,7 @@ namespace isobus
 		/// @param[out] acknowledge Tells the stack if we want to send an ACK or NACK
 		/// @param[out] acknowledgeType Tells the stack exactly how we want to do an ACK
 		/// @param[in] parentPointer A generic context pointer to locate the specific instance of this class we want
+		/// @returns `true` if the message was handled, otherwise `false`
 		static bool on_language_request(std::uint32_t parameterGroupNumber,
 		                                std::shared_ptr<ControlFunction> requestingControlFunction,
 		                                bool &acknowledge,

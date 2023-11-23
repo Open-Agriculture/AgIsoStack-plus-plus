@@ -56,8 +56,8 @@ namespace isobus
 		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> can0;
 		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> can1;
 #endif
-		std::uint8_t selectedChannel;
-		bool isOpen = false;
+		std::uint8_t selectedChannel; ///< The channel that this plugin is assigned to
+		bool isOpen = false; ///< Tracks if the connection is open/connected
 	};
 }
 #endif // FLEX_CAN_T4_PLUGIN_HPP

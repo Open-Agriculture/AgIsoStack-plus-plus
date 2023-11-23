@@ -75,10 +75,12 @@ namespace isobus
 			enum class Direction
 			{
 				Transmit, ///< We are transmitting a message
-				Receive ///< We are receving a message
+				Receive ///< We are receiving a message
 			};
 
-			/// @brief A useful way to compare sesson objects to each other for equality
+			/// @brief A useful way to compare session objects to each other for equality
+			/// @param[in] obj The object to compare against
+			/// @returns true if the objects are equal, false if not
 			bool operator==(const ExtendedTransportProtocolSession &obj);
 
 			/// @brief Get the total number of bytes that will be sent or received in this session
@@ -175,6 +177,7 @@ namespace isobus
 		/// @param[in] reason The reason we're aborting the session
 		/// @param[in] source The source control function from which we'll send the abort
 		/// @param[in] destination The destination control function to which we'll send the abort
+		/// @returns true if the abort was sent OK, false if not sent
 		bool abort_session(std::uint32_t parameterGroupNumber, ConnectionAbortReason reason, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Gracefully closes a session to prepare for a new session
@@ -186,6 +189,7 @@ namespace isobus
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
+		/// @returns true if a matching session was found, false if not
 		bool get_session(ExtendedTransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Gets an ETP session from the passed in source and destination and PGN combination
@@ -193,6 +197,7 @@ namespace isobus
 		/// @param[in] destination The destination control function for the session
 		/// @param[in] parameterGroupNumber The PGN of the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
+		/// @returns true if a matching session was found, false if not
 		bool get_session(ExtendedTransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber) const;
 
 		/// @brief Processes end of session callbacks

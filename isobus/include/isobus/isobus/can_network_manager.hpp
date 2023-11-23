@@ -89,6 +89,7 @@ namespace isobus
 		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
+		/// @param[in] controlFunction The control function to get the internal control function from
 		/// @returns An internal control function casted from the passed in control function
 		std::shared_ptr<InternalControlFunction> get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction);
 
@@ -106,6 +107,15 @@ namespace isobus
 		/// If you don't specify a destination (or use nullptr) you message will be sent as a broadcast
 		/// if it is valid to do so.
 		/// You can also get a callback on success or failure of the transmit.
+		/// @param[in] parameterGroupNumber The PGN to use when sending the message
+		/// @param[in] dataBuffer A pointer to the data buffer to send from
+		/// @param[in] dataLength The size of the message to send
+		/// @param[in] sourceControlFunction The control function that is sending the message
+		/// @param[in] destinationControlFunction The control function that the message is destined for or nullptr if broadcast
+		/// @param[in] priority The CAN priority of the message being sent
+		/// @param[in] txCompleteCallback A callback to be called when the message is sent or fails to send
+		/// @param[in] parentPointer A generic context variable that helps identify what object the callback is destined for
+		/// @param[in] frameChunkCallback A callback which can be supplied to have the tack call you back to get chunks of the message as they are sent
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool send_can_message(std::uint32_t parameterGroupNumber,
 		                      const std::uint8_t *dataBuffer,
@@ -189,7 +199,7 @@ namespace isobus
 		friend class DiagnosticProtocol; ///< Allows the diagnostic protocol to access the protected functions on the network manager
 		friend class ParameterGroupNumberRequestProtocol; ///< Allows the PGN request protocol to access the network manager protected functions
 		friend class FastPacketProtocol; ///< Allows the FP protocol to access the network manager protected functions
-		friend class CANLibProtocol;
+		friend class CANLibProtocol; ///< Allows the CANLib protocol base class functions to access the network manager protected functions
 
 		/// @brief Adds a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for
@@ -374,7 +384,7 @@ namespace isobus
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
-		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; // An event dispatcher for notifying consumers about address violations
+		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex receiveMessageMutex; ///< A mutex for receive messages thread safety
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
