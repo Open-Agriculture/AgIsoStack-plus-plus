@@ -101,6 +101,7 @@ namespace isobus
 		CANLibCallback get_callback() const;
 
 		/// @brief Returns the parent pointer for this data object
+		/// @returns The parent pointer for this data object
 		void *get_parent() const;
 
 		/// @brief Returns the ICF being used as a filter for this callback

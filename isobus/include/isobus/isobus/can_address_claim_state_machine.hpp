@@ -89,13 +89,16 @@ namespace isobus
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief Sets the current state machine state
+		/// @param[in] value The state to set the state machine to
 		void set_current_state(State value);
 
 		/// @brief Sends the PGN request for the address claim PGN
+		/// @returns true if the message was sent, otherwise false
 		bool send_request_to_claim() const;
 
 		/// @brief Sends the address claim message
 		/// @param[in] address The address to claim
+		/// @returns true if the message was sent, otherwise false
 		bool send_address_claim(std::uint8_t address);
 
 		NAME m_isoname; ///< The ISO NAME to claim as

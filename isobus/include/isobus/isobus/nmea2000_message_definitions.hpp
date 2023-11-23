@@ -238,9 +238,11 @@ namespace isobus
 			bool set_latitude(std::int32_t latitudeToSet);
 
 			/// @attention This is MUCH less accurate than the position in PGN 1F805 (129029). Use that instead if present.
+			/// @returns The current vessel/vehicle longitude in 1*10E-7 degrees
 			std::int32_t get_raw_longitude() const;
 
 			/// @attention This is MUCH less accurate than the position in PGN 1F805 (129029). Use that instead if present.
+			/// @returns The current vessel/vehicle longitude in 1*10E-7 degrees
 			double get_longitude() const;
 
 			/// @brief Sets the current longitude in units of 1*10E-7 degrees
@@ -309,6 +311,7 @@ namespace isobus
 			float get_course_over_ground() const;
 
 			/// @brief Sets the course over ground in units of 0.0001 radians
+			/// @param[in] course The course to set, in 0.0001 radians
 			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_course_over_ground(std::uint16_t course);
 
@@ -339,6 +342,7 @@ namespace isobus
 			CourseOverGroundReference get_course_over_ground_reference() const;
 
 			/// @brief Sets the reference to which the course over ground is relative
+			/// @param[in] reference The reference to set (as enumerated in CourseOverGroundReference)
 			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_course_over_ground_reference(CourseOverGroundReference reference);
 
@@ -573,6 +577,7 @@ namespace isobus
 
 			/// @brief Sets the time in milliseconds when the message was last sent or received
 			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_timestamp(std::uint32_t timestamp);
 
 			/// @brief Returns the sequence ID. This is used to associate data within other PGNs with this message.
@@ -684,6 +689,7 @@ namespace isobus
 			/// @param[in] ID The station ID to set
 			/// @param[in] type The type of reference station
 			/// @param[in] ageOfCorrections Age of the DGNSS corrections in units of 0.01 seconds
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_reference_station(std::size_t index, std::uint16_t ID, TypeOfSystem type, std::uint16_t ageOfCorrections);
 
 			/// @brief Returns the date associated with the current position.
@@ -789,6 +795,7 @@ namespace isobus
 			std::string get_reference_datum() const;
 
 			/// @brief Sets the 4 character ascii datum code that identifies the reference datum
+			/// @param[in] datum The datum code to set, must be 4 characters
 			/// @returns True if the value that was set differed from the stored value
 			bool set_reference_datum(const std::string &datum);
 
@@ -837,6 +844,7 @@ namespace isobus
 
 			/// @brief Sets the time in milliseconds when the message was last sent or received
 			/// @param[in] timestamp The timestamp (in milliseconds) to set for when this message was sent or received
+			/// @returns True if the value that was set differed from the stored value, otherwise false
 			bool set_timestamp(std::uint32_t timestamp);
 
 			/// @brief Serializes the current state of this object into a buffer to be sent on the CAN bus

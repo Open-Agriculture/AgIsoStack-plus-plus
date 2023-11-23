@@ -62,6 +62,8 @@ namespace isobus
 			};
 
 			/// @brief A useful way to compare sesson objects to each other for equality
+			/// @param[in] obj The object to compare to
+			/// @returns true if the objects are equal, false if not
 			bool operator==(const TransportProtocolSession &obj);
 
 			/// @brief Get the total number of bytes that will be sent or received in this session
@@ -216,6 +218,7 @@ namespace isobus
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
+		/// @returns true if a matching session was found, false if not
 		bool get_session(TransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Gets a TP session from the passed in source and destination and PGN combination
@@ -223,6 +226,7 @@ namespace isobus
 		/// @param[in] destination The destination control function for the session
 		/// @param[in] parameterGroupNumber The PGN of the session
 		/// @param[out] session The found session, or nullptr if no session matched the supplied parameters
+		/// @returns true if a matching session was found, false if not
 		bool get_session(TransportProtocolSession *&session, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber);
 
 		/// @brief Updates the state machine of a Tp session

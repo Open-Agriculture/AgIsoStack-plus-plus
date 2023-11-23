@@ -455,6 +455,7 @@ namespace isobus
 		/// @param[out] acknowledge Tells the PGN request protocol to ACK ack the request
 		/// @param[out] acknowledgeType Tells the PGN request protocol what kind of ACK to use
 		/// @param[in] parentPointer A generic context variable, usually the "this" pointer of the registrant for callbacks
+		/// @returns true if the PGN was handled, otherwise false
 		static bool pgn_request_handler(std::uint32_t parameterGroupNumber,
 		                                std::shared_ptr<ControlFunction> requestingControlFunction,
 		                                bool &acknowledge,

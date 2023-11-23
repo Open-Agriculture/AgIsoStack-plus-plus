@@ -204,7 +204,7 @@ namespace isobus
 			FailureModeIdentifier get_failure_mode_identifier() const;
 
 		private:
-			friend class DiagnosticProtocol;
+			friend class DiagnosticProtocol; ///< Allows the protocol to set the occurrence count
 			std::uint32_t suspectParameterNumber = 0xFFFFFFFF; ///< This 19-bit number is used to identify the item for which diagnostics are being reported
 			FailureModeIdentifier failureModeIdentifier = FailureModeIdentifier::ConditionExists; ///< The FMI defines the type of failure detected in the sub-system identified by an SPN
 			LampStatus lampState = LampStatus::None; ///< The J1939 lamp state for this DTC
@@ -221,6 +221,7 @@ namespace isobus
 		~DiagnosticProtocol();
 
 		/// @brief The protocol's initializer function
+		/// @returns true if the protocol was initialized, false if it was already initialized
 		bool initialize();
 
 		/// @brief Returns if the protocol has been initialized

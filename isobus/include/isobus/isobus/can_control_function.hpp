@@ -43,6 +43,7 @@ namespace isobus
 		/// @param[in] NAMEValue The NAME of the control function
 		/// @param[in] addressValue The current address of the control function
 		/// @param[in] CANPort The CAN channel index that the control function communicates on
+		/// @returns A shared pointer to a ControlFunction object created with the parameters passed in
 		static std::shared_ptr<ControlFunction> create(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort);
 
 		/// @brief Destroys this control function, by removing it from the network manager
@@ -82,7 +83,7 @@ namespace isobus
 		/// @param[in] type The 'Type' of control function to create
 		ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type = Type::External);
 
-		friend class CANNetworkManager;
+		friend class CANNetworkManager; ///< The network manager needs access to the control function's internals
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		static std::mutex controlFunctionProcessingMutex; ///< Protects the control function tables
 #endif

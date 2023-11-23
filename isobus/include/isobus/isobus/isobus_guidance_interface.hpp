@@ -262,6 +262,7 @@ namespace isobus
 			/// @brief Sets the exit code for the guidance system
 			/// @details This parameter is used to indicate why the guidance system cannot currently accept
 			/// remote commands or has most recently stopped accepting remote commands.
+			/// @param[in] exitCode The exit code for the guidance system to report
 			/// @returns The exit code for the guidance system
 			bool set_guidance_system_command_exit_reason_code(std::uint8_t exitCode);
 
@@ -334,6 +335,7 @@ namespace isobus
 		/// @param[in] index An index of senders of the agricultural guidance machine info message
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
+		/// @returns The content of the agricultural guidance machine info message
 		std::shared_ptr<GuidanceMachineInfo> get_received_guidance_machine_info(std::size_t index);
 
 		/// @brief Returns the content of the agricultural guidance curvature command message
@@ -341,6 +343,7 @@ namespace isobus
 		/// @param[in] index An index of senders of the agricultural guidance curvature command message
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
+		/// @returns The content of the agricultural guidance curvature command message
 		std::shared_ptr<GuidanceSystemCommand> get_received_guidance_system_command(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance machine info messages are received.

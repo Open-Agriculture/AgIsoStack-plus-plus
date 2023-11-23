@@ -138,6 +138,7 @@ namespace isobus
 
 		/// @brief Attempts to write a frame using the driver assigned to a frame's channel
 		/// @param[in] frame The frame to try and write to the bus
+		/// @returns `true` if the frame was sent from the buffer, otherwise `false`
 		static bool transmit_can_frame_from_buffer(const isobus::CANMessageFrame &frame);
 
 		/// @brief The periodic update thread executes this function

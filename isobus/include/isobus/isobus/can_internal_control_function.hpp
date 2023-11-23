@@ -38,6 +38,7 @@ namespace isobus
 		/// @param[in] desiredName The NAME for this control function to claim as
 		/// @param[in] preferredAddress The preferred NAME for this control function
 		/// @param[in] CANPort The CAN channel index for this control function to use
+		/// @returns A shared pointer to an InternalControlFunction object created with the parameters passed in
 		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
 
 		/// @brief Destroys this control function, by removing it from the network manager
@@ -57,6 +58,7 @@ namespace isobus
 
 		/// @brief Used by the network manager to tell the ICF that the address claim state machine needs to process
 		/// a J1939 command to move address.
+		/// @param[in] commandedAddress The address that the ICF has been commanded to move to
 		void process_commanded_address(std::uint8_t commandedAddress, CANLibBadge<CANNetworkManager>);
 
 		/// @brief Updates the internal control function together with it's associated address claim state machine

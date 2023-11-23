@@ -285,6 +285,7 @@ namespace isobus
 
 			/// @brief Allows easy comparison of two `AssignedAuxiliaryFunction` objects
 			/// @param[in] other the object to compare against
+			/// @returns true if the objects are equal, false otherwise
 			bool operator==(const AssignedAuxiliaryFunction &other) const;
 
 			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
@@ -1491,6 +1492,12 @@ namespace isobus
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 		/// @brief The callback passed to the network manager's send function to know when a Tx is completed
+		/// @param[in] parameterGroupNumber The parameter group number of the message that was sent
+		/// @param[in] dataLength The length of the data that was sent
+		/// @param[in] sourceControlFunction The control function that sent the message
+		/// @param[in] destinationControlFunction The control function that received the message or nullptr for a broadcast
+		/// @param[in] successful true if the message was sent successfully
+		/// @param[in] parentPointer A context variable to find the relevant VT client class
 		static void process_callback(std::uint32_t parameterGroupNumber,
 		                             std::uint32_t dataLength,
 		                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
@@ -1522,6 +1529,7 @@ namespace isobus
 		bool scale_object_pools();
 
 		/// @brief Returns if the specified object type can be scaled
+		/// @param[in] type The object type to check
 		/// @returns true if the object is inherently scalable
 		static bool get_is_object_scalable(VirtualTerminalObjectType type);
 

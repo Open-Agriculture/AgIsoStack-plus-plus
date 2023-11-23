@@ -119,6 +119,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the COG & SOG message
 		std::shared_ptr<NMEA2000Messages::CourseOverGroundSpeedOverGroundRapidUpdate> get_received_course_speed_over_ground_message(std::size_t index) const;
 
 		/// @brief Returns the content of the Datum message
@@ -127,6 +128,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the Datum message
 		std::shared_ptr<NMEA2000Messages::Datum> get_received_datum_message(std::size_t index) const;
 
 		/// @brief Returns the content of the GNSS position data message
@@ -135,6 +137,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the GNSS position data message
 		std::shared_ptr<NMEA2000Messages::GNSSPositionData> get_received_gnss_position_data_message(std::size_t index) const;
 
 		/// @brief Returns the content of the position delta high precision rapid update message
@@ -143,6 +146,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the position delta high precision rapid update message
 		std::shared_ptr<NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate> get_received_position_delta_high_precision_rapid_update_message(std::size_t index) const;
 
 		/// @brief Returns the content of the position rapid update message
@@ -151,6 +155,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the position rapid update message
 		std::shared_ptr<NMEA2000Messages::PositionRapidUpdate> get_received_position_rapid_update_message(std::size_t index) const;
 
 		/// @brief Returns the content of the rate of turn message
@@ -159,6 +164,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the rate of turn message
 		std::shared_ptr<NMEA2000Messages::RateOfTurn> get_received_rate_of_turn_message(std::size_t index) const;
 
 		/// @brief Returns the content of the vessel heading message
@@ -167,6 +173,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
+		/// @returns The content of the vessel heading message
 		std::shared_ptr<NMEA2000Messages::VesselHeading> get_received_vessel_heading_message(std::size_t index) const;
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated COG & SOG messages are received.

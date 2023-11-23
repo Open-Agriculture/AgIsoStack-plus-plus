@@ -280,6 +280,7 @@ namespace isobus
 			std::size_t get_number_child_objects() const;
 
 			/// @brief Returns a child object ID by index
+			/// @param[in] index The index of the child object ID to return
 			/// @returns Child object ID by index, or NULL_OBJECT_ID if the index is out of range
 			std::uint16_t get_child_object_id(std::size_t index);
 

@@ -41,6 +41,7 @@ namespace isobus
 		/// @brief The factory function to construct a partnered control function
 		/// @param[in] CANPort The CAN channel associated with this control function definition
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
+		/// @returns A shared pointer to a PartneredControlFunction object created with the parameters passed in
 		static std::shared_ptr<PartneredControlFunction> create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
 
 		/// @brief the constructor for a PartneredControlFunction, which is called by the factory function
