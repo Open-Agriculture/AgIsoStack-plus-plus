@@ -43,6 +43,7 @@ set(ISOBUS_SRC
     "isobus_virtual_terminal_objects.cpp"
     "isobus_virtual_terminal_client_state_tracker.cpp"
     "isobus_virtual_terminal_client_update_helper.cpp"
+    "isobus_task_controller_server.cpp"
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp"
     "can_message_data.cpp")
@@ -87,9 +88,9 @@ set(ISOBUS_INCLUDE
     "isobus_functionalities.hpp"
     "isobus_speed_distance_messages.hpp"
     "isobus_maintain_power_interface.hpp"
-    "isobus_virtual_terminal_objects.hpp"
     "isobus_virtual_terminal_client_state_tracker.hpp"
     "isobus_virtual_terminal_client_update_helper.hpp"
+    "isobus_task_controller_server.hpp"
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp"
     "isobus_preferred_addresses.hpp"
