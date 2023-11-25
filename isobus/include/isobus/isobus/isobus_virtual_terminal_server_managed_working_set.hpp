@@ -14,11 +14,14 @@
 #include <mutex>
 #include <thread>
 
+#include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 
 namespace isobus
 {
+	class VirtualTerminalServer;
+
 	/// @brief Defines a managed working set.
 	/// @details This class is meant to be used as the basis for a VT server.
 	/// It keeps track of one active object pool.
@@ -90,6 +93,14 @@ namespace isobus
 		/// @returns The working set's object tree
 		const std::map<std::uint16_t, std::shared_ptr<VTObject>> &get_object_tree() const;
 
+		/// @brief Tells the server where this pool originated from.
+		/// @returns True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
+		bool get_was_object_pool_loaded_from_non_volatile_memory() const;
+
+		/// @brief Tells the server where this pool originated from.
+		/// @param[in] True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
+		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>);
+
 	private:
 		/// @brief Parses one object in the remaining object pool data
 		/// @param[in,out] iopData A pointer to some object pool data
@@ -123,6 +134,7 @@ namespace isobus
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
 		std::uint16_t workingSetID = NULL_OBJECT_ID; ///< Stores the object ID of the working set object itself
 		std::uint16_t faultingObjectID = NULL_OBJECT_ID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
+		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 	};
 } // namespace isobus
 
