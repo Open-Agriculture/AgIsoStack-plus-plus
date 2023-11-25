@@ -1003,7 +1003,8 @@ namespace isobus
 								{
 									tempString.push_back(static_cast<char>(iopData[17 + i]));
 								}
-								tempObject->set_enabled(iopData[18 + lengthOfStringObject]);
+
+								tempObject->set_enabled(iopData[17 + lengthOfStringObject]);
 								iopData += (18 + lengthOfStringObject);
 								iopLength -= (18 + static_cast<std::uint32_t>(lengthOfStringObject));
 
