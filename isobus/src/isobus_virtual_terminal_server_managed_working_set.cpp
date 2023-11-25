@@ -142,6 +142,11 @@ namespace isobus
 		return workingSetColourTable.get_colour(colourIndex);
 	}
 
+	const std::map<std::uint16_t, std::shared_ptr<VTObject>> &VirtualTerminalServerManagedWorkingSet::get_object_tree() const
+	{
+		return vtObjectTree;
+	}
+
 	bool VirtualTerminalServerManagedWorkingSet::parse_next_object(std::uint8_t *&iopData, std::uint32_t &iopLength)
 	{
 		bool retVal = false;
@@ -161,7 +166,7 @@ namespace isobus
 						if (NULL_OBJECT_ID == workingSetID)
 						{
 							workingSetID = decodedID;
-							auto tempObject = std::make_shared<WorkingSet>(vtObjectTree, workingSetColourTable);
+							auto tempObject = std::make_shared<WorkingSet>();
 
 							if (iopLength >= tempObject->get_minumum_object_length())
 							{
@@ -252,13 +257,13 @@ namespace isobus
 
 					case VirtualTerminalObjectType::DataMask:
 					{
-						auto tempObject = std::make_shared<DataMask>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<DataMask>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
-							tempObject->add_child(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8), 0, 0); // soft key mask
+							tempObject->set_soft_key_mask(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
 							// Now add child objects
 							const std::uint8_t childrenToFollow = iopData[6];
 							const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
@@ -317,13 +322,13 @@ namespace isobus
 
 					case VirtualTerminalObjectType::AlarmMask:
 					{
-						auto tempObject = std::make_shared<AlarmMask>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<AlarmMask>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
-							tempObject->add_child(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8), 0, 0); // soft key mask
+							tempObject->set_soft_key_mask(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
 
 							if (iopData[6] <= static_cast<std::uint8_t>(AlarmMask::Priority::Low))
 							{
@@ -405,7 +410,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::Container:
 					{
-						auto tempObject = std::make_shared<Container>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<Container>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -479,7 +484,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::WindowMask:
 					{
-						auto tempObject = std::make_shared<WindowMask>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<WindowMask>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -647,7 +652,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::SoftKeyMask:
 					{
-						auto tempObject = std::make_shared<SoftKeyMask>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<SoftKeyMask>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -711,7 +716,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::Key:
 					{
-						auto tempObject = std::make_shared<Key>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<Key>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -777,7 +782,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::Button:
 					{
-						auto tempObject = std::make_shared<Button>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<Button>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -846,14 +851,14 @@ namespace isobus
 
 					case VirtualTerminalObjectType::KeyGroup:
 					{
-						auto tempObject = std::make_shared<KeyGroup>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<KeyGroup>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_options(iopData[3]);
-							tempObject->add_child(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8), 0, 0); // Output string for the object's name/label
-							tempObject->add_child(static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8), 0, 0); // Key group icon
+							tempObject->set_name_object_id(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)); // Output string for the object's name/label
+							tempObject->set_key_group_icon(static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8));
 
 							// Parse children
 							const std::uint8_t numberChildrenToFollow = iopData[8];
@@ -920,7 +925,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::InputBoolean:
 					{
-						auto tempObject = std::make_shared<InputBoolean>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<InputBoolean>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -928,8 +933,8 @@ namespace isobus
 							tempObject->set_background_color(iopData[3]);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8)), 0, 0); // Child Font Attribute
-							tempObject->add_child(static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8), 0, 0); // Add variable reference
+							tempObject->set_foreground_colour_object_id((static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8))); // Child Font Attribute
+							tempObject->set_variable_reference(static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)); // Add variable reference
 							tempObject->set_value(iopData[10]);
 							tempObject->set_enabled(iopData[11]);
 
@@ -972,7 +977,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::InputString:
 					{
-						auto tempObject = std::make_shared<InputString>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<InputString>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -980,10 +985,10 @@ namespace isobus
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_background_color(iopData[7]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)), 0, 0); // Font Attributes
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8)), 0, 0); // Input Attributes
+							tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
+							tempObject->set_input_attributes((static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8)));
 							tempObject->set_options(iopData[12]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[13]) | (static_cast<std::uint16_t>(iopData[14]) << 8)), 0, 0); // Number variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[13]) | (static_cast<std::uint16_t>(iopData[14]) << 8))); // Number variable
 							tempObject->set_justification_bitfield(iopData[15]);
 
 							const std::size_t lengthOfStringObject = iopData[16];
@@ -1045,7 +1050,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::InputNumber:
 					{
-						auto tempObject = std::make_shared<InputNumber>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<InputNumber>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1053,9 +1058,9 @@ namespace isobus
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_background_color(iopData[7]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)), 0, 0); // Font Attributes
+							tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
 							tempObject->set_options(iopData[10]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8)), 0, 0); // Number variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8))); // Number variable
 							tempObject->set_value(static_cast<std::uint32_t>(iopData[13]) |
 							                      (static_cast<std::uint32_t>(iopData[14]) << 8) |
 							                      (static_cast<std::uint32_t>(iopData[15]) << 16) |
@@ -1130,7 +1135,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::InputList:
 					{
-						auto tempObject = std::make_shared<InputList>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<InputList>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1199,7 +1204,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputString:
 					{
-						auto tempObject = std::make_shared<OutputString>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputString>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1207,9 +1212,9 @@ namespace isobus
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_background_color(iopData[7]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)), 0, 0); // Font Attributes
+							tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
 							tempObject->set_options(iopData[10]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8)), 0, 0); // String Variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8))); // String Variable
 							tempObject->set_justification_bitfield(iopData[13]);
 
 							const std::uint16_t stringLengthToFollow = (static_cast<std::uint16_t>(iopData[14]) | (static_cast<std::uint16_t>(iopData[15]) << 8));
@@ -1271,7 +1276,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputNumber:
 					{
-						auto tempObject = std::make_shared<OutputNumber>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputNumber>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1279,9 +1284,9 @@ namespace isobus
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_background_color(iopData[7]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)), 0, 0); // Font Attributes
+							tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
 							tempObject->set_options(iopData[10]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8)), 0, 0); // Number Variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8))); // Number Variable
 							tempObject->set_value(static_cast<std::uint32_t>(iopData[13]) |
 							                      (static_cast<std::uint32_t>(iopData[14]) << 8) |
 							                      (static_cast<std::uint32_t>(iopData[15]) << 16) |
@@ -1348,14 +1353,14 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputList:
 					{
-						auto tempObject = std::make_shared<OutputList>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputList>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)), 0, 0); // Number Variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
 							tempObject->set_value(iopData[9]);
 
 							// Parse children
@@ -1412,12 +1417,12 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputLine:
 					{
-						auto tempObject = std::make_shared<OutputLine>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputLine>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0); // Line Attributes
+							tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
 
@@ -1471,16 +1476,16 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputRectangle:
 					{
-						auto tempObject = std::make_shared<OutputRectangle>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputRectangle>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0); // Line Attributes
+							tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
 							tempObject->set_line_suppression_bitfield(iopData[9]);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8)), 0, 0); // Fill Attributes
+							tempObject->set_fill_attributes((static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8)));
 							iopData += 12;
 							iopLength -= 12;
 
@@ -1522,12 +1527,12 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputEllipse:
 					{
-						auto tempObject = std::make_shared<OutputEllipse>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputEllipse>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0); // Line Attributes
+							tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
 
@@ -1536,7 +1541,7 @@ namespace isobus
 								tempObject->set_ellipse_type(static_cast<OutputEllipse::EllipseType>(iopData[9]));
 								tempObject->set_start_angle(iopData[10]);
 								tempObject->set_end_angle(iopData[11]);
-								tempObject->add_child((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)), 0, 0); // Fill Attributes
+								tempObject->set_fill_attributes((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)));
 								iopData += 14;
 								iopLength -= 14;
 
@@ -1583,15 +1588,15 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputPolygon:
 					{
-						auto tempObject = std::make_shared<OutputPolygon>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputPolygon>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
 							tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)), 0, 0); // Line Attributes
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)), 0, 0); // Fill Attributes
+							tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+							tempObject->set_fill_attributes((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
 
 							if (iopData[11] <= 3)
 							{
@@ -1659,7 +1664,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputMeter:
 					{
-						auto tempObject = std::make_shared<OutputMeter>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputMeter>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1675,7 +1680,7 @@ namespace isobus
 							tempObject->set_end_angle(iopData[11]);
 							tempObject->set_min_value((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)));
 							tempObject->set_max_value((static_cast<std::uint16_t>(iopData[14]) | (static_cast<std::uint16_t>(iopData[15]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[16]) | (static_cast<std::uint16_t>(iopData[17]) << 8)), 0, 0); // Number Variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[16]) | (static_cast<std::uint16_t>(iopData[17]) << 8))); // Number Variable
 							tempObject->set_value((static_cast<std::uint16_t>(iopData[18]) | (static_cast<std::uint16_t>(iopData[19]) << 8)));
 							const std::uint8_t numberOfMacrosToFollow = iopData[20];
 							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
@@ -1713,7 +1718,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputLinearBarGraph:
 					{
-						auto tempObject = std::make_shared<OutputLinearBarGraph>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputLinearBarGraph>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1726,7 +1731,7 @@ namespace isobus
 							tempObject->set_number_of_ticks(iopData[10]);
 							tempObject->set_min_value((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8)));
 							tempObject->set_max_value((static_cast<std::uint16_t>(iopData[13]) | (static_cast<std::uint16_t>(iopData[14]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[15]) | (static_cast<std::uint16_t>(iopData[16]) << 8)), 0, 0); // Number Variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[15]) | (static_cast<std::uint16_t>(iopData[16]) << 8))); // Number Variable
 							tempObject->set_value((static_cast<std::uint16_t>(iopData[17]) | (static_cast<std::uint16_t>(iopData[18]) << 8)));
 							tempObject->set_target_value_reference((static_cast<std::uint16_t>(iopData[19]) | (static_cast<std::uint16_t>(iopData[20]) << 8)));
 							tempObject->set_target_value((static_cast<std::uint16_t>(iopData[21]) | (static_cast<std::uint16_t>(iopData[22]) << 8)));
@@ -1766,7 +1771,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::OutputArchedBarGraph:
 					{
-						auto tempObject = std::make_shared<OutputArchedBarGraph>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<OutputArchedBarGraph>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -1781,7 +1786,7 @@ namespace isobus
 							tempObject->set_bar_graph_width((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)));
 							tempObject->set_min_value((static_cast<std::uint16_t>(iopData[14]) | (static_cast<std::uint16_t>(iopData[15]) << 8)));
 							tempObject->set_max_value((static_cast<std::uint16_t>(iopData[16]) | (static_cast<std::uint16_t>(iopData[17]) << 8)));
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[18]) | (static_cast<std::uint16_t>(iopData[19]) << 8)), 0, 0); // Number Variable
+							tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[18]) | (static_cast<std::uint16_t>(iopData[19]) << 8))); // Number Variable
 							tempObject->set_value((static_cast<std::uint16_t>(iopData[20]) | (static_cast<std::uint16_t>(iopData[21]) << 8)));
 							tempObject->set_target_value_reference((static_cast<std::uint16_t>(iopData[22]) | (static_cast<std::uint16_t>(iopData[23]) << 8)));
 							tempObject->set_target_value((static_cast<std::uint16_t>(iopData[24]) | (static_cast<std::uint16_t>(iopData[25]) << 8)));
@@ -1833,7 +1838,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::PictureGraphic:
 					{
-						auto tempObject = std::make_shared<PictureGraphic>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<PictureGraphic>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2054,7 +2059,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::NumberVariable:
 					{
-						auto tempObject = std::make_shared<NumberVariable>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<NumberVariable>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2081,7 +2086,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::StringVariable:
 					{
-						auto tempObject = std::make_shared<StringVariable>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<StringVariable>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2133,7 +2138,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::FontAttributes:
 					{
-						auto tempObject = std::make_shared<FontAttributes>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<FontAttributes>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2189,7 +2194,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::LineAttributes:
 					{
-						auto tempObject = std::make_shared<LineAttributes>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<LineAttributes>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2234,7 +2239,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::FillAttributes:
 					{
-						auto tempObject = std::make_shared<FillAttributes>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<FillAttributes>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2287,7 +2292,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::InputAttributes:
 					{
-						auto tempObject = std::make_shared<InputAttributes>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<InputAttributes>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2362,7 +2367,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::ExtendedInputAttributes:
 					{
-						auto tempObject = std::make_shared<ExtendedInputAttributes>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<ExtendedInputAttributes>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2396,7 +2401,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::ColourMap:
 					{
-						auto tempObject = std::make_shared<ColourMap>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<ColourMap>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2422,12 +2427,12 @@ namespace isobus
 
 					case VirtualTerminalObjectType::ObjectPointer:
 					{
-						auto tempObject = std::make_shared<ObjectPointer>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<ObjectPointer>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
 							tempObject->set_id(decodedID);
-							tempObject->add_child((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)), 0, 0);
+							tempObject->set_value((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
 							iopLength -= 5;
 							iopData += 5;
 							retVal = true;
@@ -2464,7 +2469,7 @@ namespace isobus
 
 					case VirtualTerminalObjectType::Macro:
 					{
-						auto tempObject = std::make_shared<Macro>(vtObjectTree, workingSetColourTable);
+						auto tempObject = std::make_shared<Macro>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
 						{
@@ -2506,7 +2511,12 @@ namespace isobus
 
 								if (retVal)
 								{
-									retVal = tempObject->get_is_valid();
+									retVal = tempObject->get_are_command_packets_valid();
+
+									if (!retVal)
+									{
+										CANStackLogger::error("[WS]: Macro object %u contains malformed commands", decodedID);
+									}
 								}
 							}
 							else
