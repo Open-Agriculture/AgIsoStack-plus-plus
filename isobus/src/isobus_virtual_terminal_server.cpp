@@ -604,8 +604,7 @@ namespace isobus
 
 											case VirtualTerminalObjectType::ObjectPointer:
 											{
-												std::static_pointer_cast<ObjectPointer>(lTargetObject)->pop_child();
-												std::static_pointer_cast<ObjectPointer>(lTargetObject)->add_child(value, 0, 0);
+												std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(value);
 												parentServer->onRepaintEventDispatcher.call(cf);
 												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
 											}
@@ -1032,7 +1031,7 @@ namespace isobus
 
 									if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
 									{
-										if (targetObject->set_attribute(attributeID, attributeData, errorCode)) // 0 Is always the read-only "type" attribute
+										if (targetObject->set_attribute(attributeID, attributeData, cf->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
 										{
 											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
 											CANStackLogger::debug("[VT Server]: Client %u changed object %u attribute %u to %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
@@ -1140,7 +1139,7 @@ namespace isobus
 											{
 												case VirtualTerminalObjectType::InputList:
 												{
-													if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID))
+													if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID, cf->get_object_tree()))
 													{
 														parentServer->send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
 														CANStackLogger::debug("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
@@ -1165,7 +1164,7 @@ namespace isobus
 
 												case VirtualTerminalObjectType::OutputList:
 												{
-													if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID))
+													if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID, cf->get_object_tree()))
 													{
 														parentServer->send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
 														CANStackLogger::debug("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
@@ -1253,7 +1252,7 @@ namespace isobus
 											{
 												case VirtualTerminalObjectType::AlarmMask:
 												{
-													if (std::static_pointer_cast<AlarmMask>(targetObject)->change_soft_key_mask(newObjectID))
+													if (std::static_pointer_cast<AlarmMask>(targetObject)->change_soft_key_mask(newObjectID, cf->get_object_tree()))
 													{
 														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
 														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
@@ -1268,7 +1267,7 @@ namespace isobus
 
 												case VirtualTerminalObjectType::DataMask:
 												{
-													if (std::static_pointer_cast<DataMask>(targetObject)->change_soft_key_mask(newObjectID))
+													if (std::static_pointer_cast<DataMask>(targetObject)->change_soft_key_mask(newObjectID, cf->get_object_tree()))
 													{
 														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
 														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
