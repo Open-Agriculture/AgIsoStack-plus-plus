@@ -147,6 +147,16 @@ namespace isobus
 		return vtObjectTree;
 	}
 
+	bool VirtualTerminalServerManagedWorkingSet::get_was_object_pool_loaded_from_non_volatile_memory() const
+	{
+		return wasLoadedFromNonVolatileMemory;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>)
+	{
+		wasLoadedFromNonVolatileMemory = value;
+	}
+
 	bool VirtualTerminalServerManagedWorkingSet::parse_next_object(std::uint8_t *&iopData, std::uint32_t &iopLength)
 	{
 		bool retVal = false;
