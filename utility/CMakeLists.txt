@@ -25,7 +25,7 @@ add_library(${PROJECT_NAME}::Utility ALIAS Utility)
 
 set_target_properties(
   Utility
-  PROPERTIES CXX_STANDARD 14
+  PROPERTIES CXX_STANDARD 20
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 

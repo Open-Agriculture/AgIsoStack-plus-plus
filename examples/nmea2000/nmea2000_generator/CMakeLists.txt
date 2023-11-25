@@ -10,7 +10,7 @@ add_executable(NMEA2KGeneratorTarget main.cpp)
 
 set_target_properties(
   NMEA2KGeneratorTarget
-  PROPERTIES CXX_STANDARD 14
+  PROPERTIES CXX_STANDARD 20
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 

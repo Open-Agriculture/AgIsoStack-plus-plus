@@ -13,7 +13,7 @@ add_executable(
 
 set_target_properties(
   TaskControllerClientExample
-  PROPERTIES CXX_STANDARD 14
+  PROPERTIES CXX_STANDARD 20
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 

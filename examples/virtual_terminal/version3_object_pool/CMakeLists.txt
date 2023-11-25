@@ -10,7 +10,7 @@ add_executable(VT3ExampleTarget main.cpp console_logger.cpp objectPoolObjects.h)
 
 set_target_properties(
   VT3ExampleTarget
-  PROPERTIES CXX_STANDARD 14
+  PROPERTIES CXX_STANDARD 20
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 

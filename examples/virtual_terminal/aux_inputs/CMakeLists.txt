@@ -10,7 +10,7 @@ add_executable(VTAuxInputsExample main.cpp console_logger.cpp object_pool_ids.h)
 
 set_target_properties(
   VTAuxInputsExample
-  PROPERTIES CXX_STANDARD 14
+  PROPERTIES CXX_STANDARD 20
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 
