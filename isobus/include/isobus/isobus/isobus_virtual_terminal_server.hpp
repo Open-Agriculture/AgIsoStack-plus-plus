@@ -95,6 +95,15 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_string_value_message(std::uint16_t objectId, const std::string &value, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to a load version command
+		/// The reason this is exposed is because you will need to send this message after
+		/// the object pool processing thread completes at some point to tell the client to proceed if their
+		/// object pool was loaded via a load version command.
+		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
+		/// @param[in] destination The VT client to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
+
 		// ----------- Mandatory Functions you must implement -----------------------
 		virtual bool get_is_enough_memory(std::uint32_t requestedMemory) const = 0;
 		virtual VTVersion get_version() const = 0;
