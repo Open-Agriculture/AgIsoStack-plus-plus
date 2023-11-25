@@ -1644,6 +1644,45 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_change_string_value_message(std::uint16_t objectId, const std::string &value, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			if (value.length() > 255)
+			{
+				CANStackLogger::warn("[VT Server] Truncated user input string value to the maximum of 255. The string was: " + value);
+			}
+
+			std::vector<std::uint8_t> buffer = {
+
+				static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
+				static_cast<std::uint8_t>(objectId & 0xFF),
+				static_cast<std::uint8_t>(objectId >> 8),
+				static_cast<std::uint8_t>(value.length() > 255 ? 255 : value.length())
+			};
+				
+			for (std::uint16_t i = 0; i < value.length() && i < 255; i++)
+			{
+				buffer.push_back(static_cast<std::uint8_t>(value.at(i)));
+			}
+
+			while (buffer.size() < CAN_DATA_LENGTH)
+			{
+				buffer.push_back(0xFF); // The standard specifies the message must be padded to 8 bytes
+			}
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        buffer.size(),
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination)
 	{
 		bool retVal = false;

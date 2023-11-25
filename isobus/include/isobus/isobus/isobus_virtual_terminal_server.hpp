@@ -86,6 +86,15 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_soft_key_activation_message(KeyActivationCode activationCode, std::uint16_t objectId, std::uint16_t parentObjectId, std::uint8_t keyNumber, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends the VT Change String Value Message.
+		/// The VT uses this message to transfer a string entered into an Input String object or referenced String
+		/// Variable object.
+		/// @param[in] objectId The object ID that was altered, either for a string variable or an input string
+		/// @param[in] value The entered string
+		/// @param[in] destination The VT client to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_string_value_message(std::uint16_t objectId, const std::string &value, std::shared_ptr<ControlFunction> destination) const;
+
 		// ----------- Mandatory Functions you must implement -----------------------
 		virtual bool get_is_enough_memory(std::uint32_t requestedMemory) const = 0;
 		virtual VTVersion get_version() const = 0;
