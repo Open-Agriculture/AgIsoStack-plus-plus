@@ -86,6 +86,10 @@ namespace isobus
 		/// @returns A colour from this working set's current colour table, by index
 		VTColourVector get_colour(std::uint8_t colourIndex) const;
 
+		/// @brief Returns the working set's object tree
+		/// @returns The working set's object tree
+		const std::map<std::uint16_t, std::shared_ptr<VTObject>> &get_object_tree() const;
+
 	private:
 		/// @brief Parses one object in the remaining object pool data
 		/// @param[in,out] iopData A pointer to some object pool data
