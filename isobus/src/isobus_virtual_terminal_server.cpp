@@ -388,23 +388,9 @@ namespace isobus
 									if (cf->get_any_object_pools())
 									{
 										cf->start_parsing_thread();
+										cf->set_was_object_pool_loaded_from_non_volatile_memory(true, {});
 										CANStackLogger::debug("[VT Server]: Starting parsing thread for loaded pool data.");
 									}
-									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-									buffer[0] = static_cast<std::uint8_t>(Function::LoadVersionCommand);
-									buffer[1] = 0xFF; // Reserved
-									buffer[2] = 0xFF; // Reserved
-									buffer[3] = 0xFF; // Reserved
-									buffer[4] = 0xFF; // Reserved
-									buffer[5] = errorCodes;
-									buffer[6] = 0xFF; // Reserved
-									buffer[7] = 0xFF; // Reserved
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               CAN_DATA_LENGTH,
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
 								}
 								break;
 
@@ -851,7 +837,15 @@ namespace isobus
 											{
 												case VirtualTerminalObjectType::StringVariable:
 												{
-													std::static_pointer_cast<StringVariable>(stringObject)->set_value(newStringValue);
+													auto stringVariable = std::static_pointer_cast<StringVariable>(stringObject);
+
+													// The transferred string is allowed to be smaller than the length of the value attribute of the target object
+													// and in this case the VT shall pad the value attribute with space characters.
+													while (newStringValue.length() < stringVariable->get_value().length())
+													{
+														newStringValue.push_back(' ');
+													}
+													stringVariable->set_value(newStringValue);
 													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
 													parentServer->onRepaintEventDispatcher.call(cf);
 													CANStackLogger::debug("[VT Server]: Client %u change string value command for string variable object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
@@ -860,7 +854,15 @@ namespace isobus
 
 												case VirtualTerminalObjectType::OutputString:
 												{
-													std::static_pointer_cast<OutputString>(stringObject)->set_value(newStringValue);
+													auto outputString = std::static_pointer_cast<OutputString>(stringObject);
+
+													// The transferred string is allowed to be smaller than the length of the value attribute of the target object
+													// and in this case the VT shall pad the value attribute with space characters.
+													while (newStringValue.length() < outputString->get_value().length())
+													{
+														newStringValue.push_back(' ');
+													}
+													outputString->set_value(newStringValue);
 													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
 													parentServer->onRepaintEventDispatcher.call(cf);
 													CANStackLogger::debug("[VT Server]: Client %u change string value command for output string object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
@@ -869,7 +871,15 @@ namespace isobus
 
 												case VirtualTerminalObjectType::InputString:
 												{
-													std::static_pointer_cast<InputString>(stringObject)->set_value(newStringValue);
+													auto inputString = std::static_pointer_cast<InputString>(stringObject);
+
+													// The transferred string is allowed to be smaller than the length of the value attribute of the target object
+													// and in this case the VT shall pad the value attribute with space characters.
+													while (newStringValue.length() < inputString->get_value().length())
+													{
+														newStringValue.push_back(' ');
+													}
+													inputString->set_value(newStringValue);
 													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
 													parentServer->onRepaintEventDispatcher.call(cf);
 													CANStackLogger::debug("[VT Server]: Client %u change string value command for input string object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
@@ -1662,7 +1672,7 @@ namespace isobus
 				static_cast<std::uint8_t>(objectId >> 8),
 				static_cast<std::uint8_t>(value.length() > 255 ? 255 : value.length())
 			};
-				
+
 			for (std::uint16_t i = 0; i < value.length() && i < 255; i++)
 			{
 				buffer.push_back(static_cast<std::uint8_t>(value.at(i)));
@@ -1676,6 +1686,32 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        CANIdentifier::PriorityLowest7);
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::LoadVersionCommand),
+				0xFF, // Reserved
+				0xFF, // Reserved
+				0xFF, // Reserved
+				0xFF, // Reserved
+				errorCodes,
+				0xFF, // Reserved
+				0xFF // Reserved
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
 			                                                        CANIdentifier::PriorityLowest7);
