@@ -17,6 +17,8 @@
 
 #include "isobus/isobus/can_internal_control_function.hpp"
 
+#include <string>
+
 namespace isobus
 {
 	/// @brief A namespace for generic NMEA2000 message definitions
