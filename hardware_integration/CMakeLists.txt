@@ -104,6 +104,13 @@ if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_INCLUDE
        "innomaker_usb2can_windows_plugin.hpp")
 endif()
+if("SYS_TEC" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "sys_tec_windows_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "sys_tec_windows_plugin.hpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "Usbcan32.h")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "UsbCanLs.h")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "UsbCanUp.h")
+endif()
 
 # Prepend the source directory path to all the source files
 prepend(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR}
@@ -261,6 +268,45 @@ if("TouCAN" IN_LIST CAN_DRIVER)
     message(
       FATAL_ERROR
         "TouCAN Selected but no supported OS was detected. Only Windows is supported currently."
+    )
+  endif()
+endif()
+if("SYS_TEC" IN_LIST CAN_DRIVER)
+  if(MSVC)
+    # See https://gitlab.kitware.com/cmake/cmake/-/issues/15170
+    set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
+  endif()
+  if(WIN32)
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
+                                                   STREQUAL "X86")
+      message(STATUS "Detected x86, linking to SYS TEC x86 library")
+      message(
+        AUTHOR_WARNING
+          "Make sure you've installed the driver for your SYS TEC device before using this plugin.
+          https://www.systec-electronic.com/ ")
+      target_link_libraries(
+        HardwareIntegration
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/USBCAN32.lib)
+    elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR
+                                                      STREQUAL "x64")
+      message(STATUS "Detected x64, linking to SYS TEC x64 library")
+      message(
+        AUTHOR_WARNING
+          "Make sure you've installed the driver for your SYS TEC device before using this plugin.
+          https://www.systec-electronic.com/ ")
+      target_link_libraries(
+        HardwareIntegration
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/USBCAN64.lib)
+    else()
+      message(
+        FATAL_ERROR
+          "SYS TEC Selected but no supported processor arch was detected. Only x64 and x86 are supported."
+      )
+    endif()
+  else()
+    message(
+      FATAL_ERROR
+        "SYS TEC Selected but no supported OS was detected. Only Windows is supported currently."
     )
   endif()
 endif()
