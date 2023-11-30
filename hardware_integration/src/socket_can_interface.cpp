@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <vector>
 
 namespace isobus
 {
@@ -215,5 +216,30 @@ namespace isobus
 			close();
 		}
 		return retVal;
+	}
+
+	std::vector<std::string> SocketCANInterface::get_CAN_interfaces_list()
+	{
+		struct ifaddrs *ifaddr, *ifa;
+		std::vector<std::string> canInterfaceList {};
+		
+		if (getifaddrs(&ifaddr) == -1) {
+			perror("getifaddrs"); 
+			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SocketCAN] " + "enable to retrieve the all available CAN Interfaces");
+			return canInterfaceList;
+		}
+
+		for (ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
+		
+			if (ifa->ifa_addr != nullptr && ifa->ifa_addr->sa_family == AF_INET) {
+		
+				struct sockaddr_in *addr = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
+				canInterfaceList.push_back(ifa->ifa_name);
+				
+			}
+		}
+		
+		freeifaddrs(ifaddr);
+		return canInterfaceList;
 	}
 }

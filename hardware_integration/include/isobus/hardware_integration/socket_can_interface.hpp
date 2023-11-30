@@ -11,6 +11,7 @@
 #define SOCKET_CAN_INTERFACE_HPP
 
 #include <string>
+#include <vector>
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
@@ -58,6 +59,10 @@ namespace isobus
 		/// @param[in] canFrame The frame to write to the bus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
+
+		/// @brief get list of all available CAN interfaces
+		/// @returns std::vector<std::string> 
+		static std::vector<std::string> get_CAN_interfaces_list();
 
 	private:
 		struct sockaddr_can *pCANDevice; ///< The structure for CAN sockets
