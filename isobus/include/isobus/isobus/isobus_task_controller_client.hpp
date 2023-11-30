@@ -211,6 +211,10 @@ namespace isobus
 		               bool reportToTCSupportsPeerControlAssignment,
 		               bool reportToTCSupportsImplementSectionControl);
 
+		/// @brief Calling this function will reset the task controller client's connection
+		/// with the TC server, and cause it to reconnect after a short delay.
+		void restart();
+
 		// Calling this will stop the worker thread if it exists
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
@@ -312,6 +316,34 @@ namespace isobus
 		/// @details Upon receipt of this message, the TC shall display, for a period of 3 s, the TC Number
 		/// @returns `true` if the message was sent, otherwise `false`
 		bool request_task_controller_identification() const;
+
+		/// @brief If the TC client is connected to a TC, calling this function will
+		/// cause the TC client interface to delete the currently active DDOP, reupload it,
+		/// then reactivate it using the pool passed into the parameter of this function.
+		/// This process is faster than restarting the whole interface, and you have to
+		/// call it if you change certain things in your DDOP at runtime after the DDOP has already been activated.
+		/// @param[in] binaryDDOP The updated device descriptor object pool to upload to the TC
+		/// @returns true if the interface accepted the command to reupload the pool, or false if the command cannot be handled right now
+		bool reupload_device_descriptor_object_pool(std::shared_ptr<std::vector<std::uint8_t>> binaryDDOP);
+
+		/// @brief If the TC client is connected to a TC, calling this function will
+		/// cause the TC client interface to delete the currently active DDOP, reupload it,
+		/// then reactivate it using the pool passed into the parameter of this function.
+		/// This process is faster than restarting the whole interface, and you have to
+		/// call it if you change certain things in your DDOP at runtime after the DDOP has already been activated.
+		/// @param[in] binaryDDOP The updated device descriptor object pool to upload to the TC
+		/// @param[in] DDOPSize The number of bytes in the binary DDOP that will be uploaded
+		/// @returns true if the interface accepted the command to reupload the pool, or false if the command cannot be handled right now
+		bool reupload_device_descriptor_object_pool(std::uint8_t const *binaryDDOP, std::uint32_t DDOPSize);
+
+		/// @brief If the TC client is connected to a TC, calling this function will
+		/// cause the TC client interface to delete the currently active DDOP, reupload it,
+		/// then reactivate it using the pool passed into the parameter of this function.
+		/// This process is faster than restarting the whole interface, and you have to
+		/// call it if you change certain things in your DDOP at runtime after the DDOP has already been activated.
+		/// @param[in] DDOP The updated device descriptor object pool to upload to the TC
+		/// @returns true if the interface accepted the command to reupload the pool, or false if the command cannot be handled right now
+		bool reupload_device_descriptor_object_pool(std::shared_ptr<DeviceDescriptorObjectPool> DDOP);
 
 		/// @brief The cyclic update function for this interface.
 		/// @note This function may be called by the TC worker thread if you called
@@ -598,6 +630,7 @@ namespace isobus
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 #endif
 		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback
+		std::string previousStructureLabel; ///< Stores the last structure label we used, helps to warn the user if they aren't updating the label properly
 		std::array<std::uint8_t, 7> ddopLocalizationLabel = { 0 }; ///< Stores a pre-parsed localization label, helps to avoid processing the whole DDOP during a CAN message callback
 		DDOPUploadType ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated; ///< Determines if DDOPs get generated or raw uploaded
 		StateMachineState currentState = StateMachineState::Disconnected; ///< Tracks the internal state machine's current state
@@ -627,6 +660,7 @@ namespace isobus
 		bool supportsTCGEOWithPositionBasedControl = false; ///< Determines if the client reports TC-GEO with position control capability to the TC
 		bool supportsPeerControlAssignment = false; ///< Determines if the client reports peer control assignment capability to the TC
 		bool supportsImplementSectionControl = false; ///< Determines if the client reports implement section control capability to the TC
+		bool shouldReuploadAfterDDOPDeletion = false; ///< Used to determine how the state machine should progress when updating a DDOP
 	};
 } // namespace isobus
 

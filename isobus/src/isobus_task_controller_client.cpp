@@ -230,6 +230,17 @@ namespace isobus
 		}
 	}
 
+	void TaskControllerClient::restart()
+	{
+		if (initialized)
+		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+			const std::lock_guard<std::mutex> lock(clientMutex);
+#endif
+			set_state(StateMachineState::Disconnected);
+		}
+	}
+
 	void TaskControllerClient::terminate()
 	{
 		if (initialized)
@@ -244,7 +255,7 @@ namespace isobus
 			shouldTerminate = true;
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if (nullptr != workerThread)
+			if ((nullptr != workerThread) && (workerThread->get_id() != std::this_thread::get_id()))
 			{
 				workerThread->join();
 				delete workerThread;
@@ -319,6 +330,84 @@ namespace isobus
 		return (get_is_connected() && (0 != (0x01 & tcStatusBitfield)));
 	}
 
+	bool TaskControllerClient::reupload_device_descriptor_object_pool(std::shared_ptr<std::vector<std::uint8_t>> binaryDDOP)
+	{
+		bool retVal = false;
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(clientMutex);
+#endif
+
+		if (StateMachineState::Connected == get_state())
+		{
+			assert(nullptr != binaryDDOP); // Client will not work without a DDOP.
+			assert(!binaryDDOP->empty()); // Client will not work without a DDOP.
+			ddopStructureLabel.clear();
+			generatedBinaryDDOP.clear();
+			ddopLocalizationLabel.fill(0x00);
+			userSuppliedVectorDDOP = binaryDDOP;
+			ddopUploadMode = DDOPUploadType::UserProvidedVector;
+			userSuppliedBinaryDDOP = nullptr;
+			userSuppliedBinaryDDOPSize_bytes = 0;
+			shouldReuploadAfterDDOPDeletion = true;
+			set_state(StateMachineState::DeactivateObjectPool);
+			retVal = true;
+			CANStackLogger::info("[TC]: Requested to change the DDOP. Object pool will be deactivated for a little while.");
+		}
+		return retVal;
+	}
+
+	bool TaskControllerClient::reupload_device_descriptor_object_pool(std::uint8_t const *binaryDDOP, std::uint32_t DDOPSize)
+	{
+		bool retVal = false;
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(clientMutex);
+#endif
+
+		if (StateMachineState::Connected == get_state())
+		{
+			assert(nullptr != binaryDDOP); // Client will not work without a DDOP.
+			assert(0 != DDOPSize);
+			generatedBinaryDDOP.clear();
+			ddopStructureLabel.clear();
+			userSuppliedVectorDDOP = nullptr;
+			ddopLocalizationLabel.fill(0x00);
+			ddopUploadMode = DDOPUploadType::UserProvidedBinaryPointer;
+			userSuppliedBinaryDDOP = binaryDDOP;
+			userSuppliedBinaryDDOPSize_bytes = DDOPSize;
+			shouldReuploadAfterDDOPDeletion = true;
+			set_state(StateMachineState::DeactivateObjectPool);
+			retVal = true;
+			CANStackLogger::info("[TC]: Requested to change the DDOP. Object pool will be deactivated for a little while.");
+		}
+		return retVal;
+	}
+
+	bool TaskControllerClient::reupload_device_descriptor_object_pool(std::shared_ptr<DeviceDescriptorObjectPool> DDOP)
+	{
+		bool retVal = false;
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(clientMutex);
+#endif
+
+		if (StateMachineState::Connected == get_state())
+		{
+			assert(nullptr != DDOP); // Client will not work without a DDOP.
+			generatedBinaryDDOP.clear();
+			ddopStructureLabel.clear();
+			userSuppliedVectorDDOP = nullptr;
+			ddopLocalizationLabel.fill(0x00);
+			ddopUploadMode = DDOPUploadType::ProgramaticallyGenerated;
+			clientDDOP = DDOP;
+			userSuppliedBinaryDDOP = nullptr;
+			userSuppliedBinaryDDOPSize_bytes = 0;
+			shouldReuploadAfterDDOPDeletion = true;
+			set_state(StateMachineState::DeactivateObjectPool);
+			retVal = true;
+			CANStackLogger::info("[TC]: Requested to change the DDOP. Object pool will be deactivated for a little while.");
+		}
+		return retVal;
+	}
+
 	void TaskControllerClient::update()
 	{
 		switch (currentState)
@@ -326,6 +415,7 @@ namespace isobus
 			case StateMachineState::Disconnected:
 			{
 				enableStatusMessage = false;
+				shouldReuploadAfterDDOPDeletion = false;
 
 				if (get_was_ddop_supplied())
 				{
@@ -480,6 +570,13 @@ namespace isobus
 						{
 							process_labels_from_ddop();
 							CANStackLogger::debug("[TC]: DDOP Generated, size: " + isobus::to_string(static_cast<int>(generatedBinaryDDOP.size())));
+
+							if ((!previousStructureLabel.empty()) && (ddopStructureLabel == previousStructureLabel))
+							{
+								CANStackLogger::error("[TC]: You didn't properly update your new DDOP's structure label. ISO11783-10 states that an update to an object pool must include an updated structure label.");
+							}
+							previousStructureLabel = ddopStructureLabel;
+
 							set_state(StateMachineState::RequestStructureLabel);
 						}
 						else
@@ -740,9 +837,18 @@ namespace isobus
 			{
 				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TC]: Timeout waiting for deactivate object pool response. Client terminated.");
-					set_state(StateMachineState::Disconnected);
-					terminate();
+					if (shouldReuploadAfterDDOPDeletion)
+					{
+						CANStackLogger::warn("[TC]: Timeout waiting for deactivate object pool response. This is unusual, but we're just going to reconnect anyways.");
+						shouldReuploadAfterDDOPDeletion = false;
+						set_state(StateMachineState::ProcessDDOP);
+					}
+					else
+					{
+						CANStackLogger::error("[TC]: Timeout waiting for deactivate object pool response. Client terminated.");
+						set_state(StateMachineState::Disconnected);
+						terminate();
+					}
 				}
 			}
 			break;
@@ -1356,6 +1462,11 @@ namespace isobus
 										if (0 == messageData[1])
 										{
 											CANStackLogger::info("[TC]: Object pool deactivated OK.");
+
+											if (parentTC->shouldReuploadAfterDDOPDeletion)
+											{
+												parentTC->set_state(StateMachineState::SendDeleteObjectPool);
+											}
 										}
 										else
 										{
@@ -1371,7 +1482,7 @@ namespace isobus
 
 								case DeviceDescriptorCommands::ObjectPoolDeleteResponse:
 								{
-									// Message content of this is unreliable, the standard is ambigious on what to even check.
+									// Message content of this is unreliable, the standard is ambiguous on what to even check.
 									// Plus, if the delete failed, the recourse is the same, always proceed.
 									if (StateMachineState::WaitForDeleteObjectPoolResponse == parentTC->get_state())
 									{

@@ -889,6 +889,26 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	EXPECT_NO_THROW(interfaceUnderTest.update());
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForDDOPTransfer);
 
+	// Pretend we got connected, and simulate replacing the DDOP. Should leave the connected state to
+	// process the DDOP again.
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+	interfaceUnderTest.reupload_device_descriptor_object_pool(DerivedTestTCClient::testBinaryDDOP, sizeof(DerivedTestTCClient::testBinaryDDOP));
+	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+
+	// And one more time for a vector
+	auto testVectorDDOP = std::make_shared<std::vector<std::uint8_t>>(DerivedTestTCClient::testBinaryDDOP, DerivedTestTCClient::testBinaryDDOP + sizeof(DerivedTestTCClient::testBinaryDDOP));
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+	interfaceUnderTest.reupload_device_descriptor_object_pool(testVectorDDOP);
+	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+
+	// Test the same conditions with a binary DDOP
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+	interfaceUnderTest.reupload_device_descriptor_object_pool(testDDOP);
+	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
+
 	// Cleanup
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected);
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
@@ -1125,6 +1145,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestVersion);
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionResponse);
+
+	// Test resetting the state machine
+	interfaceUnderTest.restart();
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
 	//! @Todo Add other states
 
