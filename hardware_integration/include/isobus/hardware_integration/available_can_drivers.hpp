@@ -42,4 +42,8 @@
 #include "isobus/hardware_integration/toucan_vscp_canal.hpp"
 #endif
 
+#ifdef ISOBUS_SYS_TEC_AVAILABLE
+#include "isobus/hardware_integration/sys_tec_windows_plugin.hpp"
+#endif
+
 #endif // AVAILABLE_CAN_DRIVERS_HPP

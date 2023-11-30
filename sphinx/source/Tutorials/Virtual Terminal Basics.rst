@@ -79,6 +79,8 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
 	#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
 		canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
+	#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
+		canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
 	#endif
 		if (nullptr == canDriver)
 		{
@@ -469,6 +471,8 @@ Here's the final code for this example:
 		canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
 	#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
 		canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
+	#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
+		canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
 	#endif
 		if (nullptr == canDriver)
 		{
