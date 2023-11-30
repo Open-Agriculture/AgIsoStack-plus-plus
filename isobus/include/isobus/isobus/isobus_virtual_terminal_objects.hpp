@@ -4328,6 +4328,353 @@ namespace isobus
 		std::uint8_t windowType = 0; ///< The window type, which implies its size
 	};
 
+	/// @brief Defines an auxiliary function type 1 object
+	/// @details The Auxiliary Function Type 1 object defines the function attributes and designator of an Auxiliary Function.
+	/// @note This object is parsed and validated but not utilized by version 3 or later VTs in making Auxiliary Control Assignments
+	class AuxiliaryFunctionType1 : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+
+			NumberOfAttributes = 1
+		};
+
+		/// @brief Enumerates the different kinds of auxiliary functions (type 1)
+		enum class FunctionType : std::uint8_t
+		{
+			LatchingBoolean = 0,
+			Analogue = 1,
+			NonLatchingBoolean = 2
+		};
+
+		/// @brief Constructor for a auxiliary function type 1 object
+		AuxiliaryFunctionType1() = default;
+
+		/// @brief Virtual destructor for a auxiliary function type 1 object
+		~AuxiliaryFunctionType1() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the function type
+		/// @returns The function type
+		FunctionType get_function_type() const;
+
+		/// @brief Sets the function type
+		/// @param[in] type The function type
+		void set_function_type(FunctionType type);
+
+	private:
+		FunctionType functionType = FunctionType::LatchingBoolean; ///< The function type
+	};
+
+	/// @brief Defines an auxiliary function type 2 object
+	/// @details The Auxiliary Function Type 2 object defines the function attributes and designator of an Auxiliary Function.
+	class AuxiliaryFunctionType2 : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			FunctionAttributes = 2,
+
+			NumberOfAttributes = 3
+		};
+
+		/// @brief Aux inputs must be one of these types, and the input and function types must match.
+		/// @details This is table J.5 in ISO 11783-6 (2018)
+		enum class FunctionType : std::uint8_t
+		{
+			BooleanLatchingOnOff = 0, ///< Two-position switch (maintains position) (Single Pole, Double Throw)
+			Analouge = 1, ///< Maintains position setting
+			BooleanNonLatchingIncreaseValue = 2, ///< Two-position switch (return to off) (Momentary Single Pole, Double Throw)
+			AnalougeReturnTo50Percent = 3, ///< Two way analogue (return to centre position)
+			AnalougeReturnTo0PercentIncreaseValue = 4, ///< One way analogue input (returns to 0%)
+			DualBooleanBothLatching = 5, ///< Three-Position Switch (latching in all positions) (Single Pole, Three Position, Centre Off)
+			DualBooleanBothNonLatching = 6, ///< Three-Position Switch, (returning to centre position) (Momentary Single Pole, Three Position, Centre Off)
+			DualBooleanLatchingUp = 7, ///< Three-Position Switch, latching in up position, momentary down (Single Pole, Three Position, Centre Off)
+			DualBooleanLatchingDown = 8, ///< Three-Position Switch, latching in down position, momentary up (Single Pole, Three Position, Centre Off)
+			CombinedAnalougeReturnTo50PercentWithDualBooleanLatching = 9, ///< Two way analogue (return to centre position) with latching Boolean at 0% and 100% positions
+			CombinedAnalougeMaintainsPositionWithDualBooleanLatching = 10, ///< Analogue maintains position setting with latching Boolean at 0% and 100% positions
+			QuadratureBooleanNonLatching = 11, ///< Two quadrature mounted Three-Position Switches, (returning to centre position) (Momentary Single Pole, Three Position, Centre Off)
+			QuadratureAnalouge = 12, ///< Two quadrature mounted analogue maintain position setting. The centre position of each analogue axis is at 50 % value
+			QuadratureAnalougeReturnTo50Percent = 13, ///< Two quadrature mounted analogue returns to centre position (The centre position of each analogue axis is at 50 %)
+			BidirectionalEncoder = 14, ///< Count increases when turning in the encoders "increase" direction and count decreases when turning in the opposite direction
+			ReservedRangeStart = 15, ///< Reserved for future use
+			ReservedRangeEnd = 31 ///< Used for Remove assignment command
+		};
+
+		/// @brief Enumerates bit offsets of attributes of auxiliary functions to be assigned to an input control
+		enum FunctionAttribute
+		{
+			CriticalControl = 5, ///< If this bit is 1, This function can only be controlled by a critical Auxiliary Input (see ISO 15077)
+			AssignmentRestriction = 6, ///< If this bit is 1, This function, if assigned, can only be assigned as specified in the Preferred Assignment command
+			SingleAssignment = 7, ///< If 1, Function shall not be assigned with other Auxiliary Functions to same input. Otherwise it can be assigned with other functions to the same input
+		};
+
+		/// @brief Constructor for a auxiliary function type 2 object
+		AuxiliaryFunctionType2() = default;
+
+		/// @brief Virtual destructor for a auxiliary function type 2 object
+		~AuxiliaryFunctionType2() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the function type
+		/// @returns The function type
+		FunctionType get_function_type() const;
+
+		/// @brief Sets the function type
+		/// @param[in] type The function type
+		void set_function_type(FunctionType type);
+
+		/// @brief returns the value of a specified function attribute
+		/// @param[in] attributeToCheck The function attribute to check
+		/// @returns The value of a specified function attribute
+		bool get_function_attribute(FunctionAttribute attributeToCheck) const;
+
+		/// @brief Sets the value of a specified function attribute
+		/// @param[in] attributeToSet The function attribute to set
+		/// @param[in] value The value to set the function attribute to
+		void set_function_attribute(FunctionAttribute attributeToSet, bool value);
+
+	private:
+		std::uint8_t functionAttributesBitfield = 0; ///< Bitfield of function attributes defined in `FunctionAttribute` enum plus the `FunctionType`
+	};
+
+	/// @brief Defines an auxiliary input type 1 object
+	/// @details The Auxiliary Input Type 1 object defines the designator, the key, switch or dial number and the function
+	/// type for an Auxiliary Input.
+	/// @note This object is parsed and validated but not utilized by version 3 or later VTs in making Auxiliary Control Assignments
+	class AuxiliaryInputType1 : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+
+			NumberOfAttributes = 1
+		};
+
+		/// @brief Enumerates the different kinds of auxiliary functions (type 1)
+		enum class FunctionType : std::uint8_t
+		{
+			LatchingBoolean = 0,
+			Analogue = 1,
+			NonLatchingBoolean = 2
+		};
+
+		/// @brief Constructor for a auxiliary input type 1 object
+		AuxiliaryInputType1() = default;
+
+		/// @brief Virtual destructor for a auxiliary input type 1 object
+		~AuxiliaryInputType1() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the function type
+		/// @returns The function type
+		FunctionType get_function_type() const;
+
+		/// @brief Sets the function type
+		/// @param[in] type The function type
+		void set_function_type(FunctionType type);
+
+		/// @brief Returns the identification number of the input. Maximum value is 250.
+		/// @details This number is used by the Auxiliary Input units to identify a
+		/// particular input when sending an Auxiliary Input status message.
+		/// @returns The identification number of the input
+		std::uint8_t get_input_id() const;
+
+		/// @brief Sets the identification number of the input. Maximum value is 250.
+		/// @details This number is used by the Auxiliary Input units to identify a
+		/// particular input when sending an Auxiliary Input status message.
+		/// @param[in] id The identification number of the input
+		/// @returns true if the identification number was set, otherwise false (value was >250)
+		bool set_input_id(std::uint8_t id);
+
+	private:
+		FunctionType functionType = FunctionType::LatchingBoolean; ///< The function type
+		std::uint8_t inputID = 0; ///< The identification number of the input. This number is used by the Auxiliary Input units to identify a particular input when sending an Auxiliary Input status message.
+	};
+
+	/// @brief Defines an auxiliary input type 2 object
+	class AuxiliaryInputType2 : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			FunctionAttributes = 2,
+
+			NumberOfAttributes = 3
+		};
+
+		/// @brief Enumerates bit offsets of attributes of auxiliary inputs
+		enum FunctionAttribute
+		{
+			CriticalControl = 5, ///< If this bit is 1, This input can control a critical (auxiliary) function
+			AssignmentRestriction = 6, ///< Reserved, set to 0
+			SingleAssignment = 7, ///< If 1, Input shall only be assigned to a single Auxiliary Function
+		};
+
+		/// @brief Constructor for a auxiliary input type 2 object
+		AuxiliaryInputType2() = default;
+
+		/// @brief Virtual destructor for a auxiliary input type 2 object
+		~AuxiliaryInputType2() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the type of input function that the input control performs when assigned
+		/// @returns The type of input function that the input control performs when assigned
+		AuxiliaryFunctionType2::FunctionType get_function_type() const;
+
+		/// @brief Sets the type of input function that the input control performs when assigned
+		/// @param[in] type The type of input function that the input control performs when assigned
+		void set_function_type(AuxiliaryFunctionType2::FunctionType type);
+
+		/// @brief returns the value of a specified function attribute
+		/// @param[in] attributeToCheck The function attribute to check
+		/// @returns The value of a specified function attribute
+		bool get_function_attribute(FunctionAttribute attributeToCheck) const;
+
+		/// @brief Sets the value of a specified function attribute
+		/// @param[in] attributeToSet The function attribute to set
+		/// @param[in] value The value to set the function attribute to
+		void set_function_attribute(FunctionAttribute attributeToSet, bool value);
+
+	private:
+		std::uint8_t functionAttributesBitfield = 0; ///< Bitfield of function attributes defined in `FunctionAttribute` enum plus the `FunctionType`
+	};
+
 } // namespace isobus
 
 #endif // ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP

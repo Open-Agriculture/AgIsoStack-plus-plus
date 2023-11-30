@@ -8238,4 +8238,463 @@ namespace isobus
 		}
 	}
 
+	VirtualTerminalObjectType AuxiliaryFunctionType1::get_object_type() const
+	{
+		return VirtualTerminalObjectType::AuxiliaryFunctionType1;
+	}
+
+	std::uint32_t AuxiliaryFunctionType1::get_minumum_object_length() const
+	{
+		return 6;
+	}
+
+	bool AuxiliaryFunctionType1::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		// Despite modern VTs not using this object, we still have to validate it.
+		bool anyWrongChildType = false;
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if (nullptr != childObject)
+			{
+				switch (childObject->get_object_type())
+				{
+					case VirtualTerminalObjectType::OutputString:
+					case VirtualTerminalObjectType::OutputNumber:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::PictureGraphic:
+					{
+						// Valid
+					}
+					break;
+
+					default:
+					{
+						anyWrongChildType = true;
+					}
+					break;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true; // Some invalid child ID
+				break;
+			}
+		}
+		return !anyWrongChildType;
+	}
+
+	bool AuxiliaryFunctionType1::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false; // All attributes are read only
+	}
+
+	bool AuxiliaryFunctionType1::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		if (attributeID == static_cast<std::uint8_t>(AttributeName::Type))
+		{
+			returnedAttributeData = static_cast<std::uint32_t>(get_object_type());
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	AuxiliaryFunctionType1::FunctionType AuxiliaryFunctionType1::get_function_type() const
+	{
+		return functionType;
+	}
+
+	void AuxiliaryFunctionType1::set_function_type(FunctionType type)
+	{
+		functionType = type;
+	}
+
+	VirtualTerminalObjectType AuxiliaryFunctionType2::get_object_type() const
+	{
+		return VirtualTerminalObjectType::AuxiliaryFunctionType2;
+	}
+
+	std::uint32_t AuxiliaryFunctionType2::get_minumum_object_length() const
+	{
+		return 6;
+	}
+
+	bool AuxiliaryFunctionType2::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		bool anyWrongChildType = false;
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if (nullptr != childObject)
+			{
+				switch (childObject->get_object_type())
+				{
+					case VirtualTerminalObjectType::OutputString:
+					case VirtualTerminalObjectType::OutputNumber:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputList:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::OutputMeter:
+					case VirtualTerminalObjectType::OutputLinearBarGraph:
+					case VirtualTerminalObjectType::OutputArchedBarGraph:
+					case VirtualTerminalObjectType::PictureGraphic:
+					case VirtualTerminalObjectType::ObjectPointer:
+					case VirtualTerminalObjectType::ScaledGraphic:
+					{
+						// Valid
+					}
+					break;
+
+					default:
+					{
+						anyWrongChildType = true;
+					}
+					break;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true; // Some invalid child ID
+				break;
+			}
+		}
+		return !anyWrongChildType;
+	}
+
+	bool AuxiliaryFunctionType2::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID == static_cast<std::uint8_t>(AttributeName::BackgroundColour))
+		{
+			set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+			retVal = true;
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
+	bool AuxiliaryFunctionType2::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		switch (attributeID)
+		{
+			case static_cast<std::uint8_t>(AttributeName::Type):
+			{
+				returnedAttributeData = static_cast<std::uint32_t>(get_object_type());
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::BackgroundColour):
+			{
+				returnedAttributeData = static_cast<std::uint32_t>(get_background_color());
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::FunctionAttributes):
+			{
+				returnedAttributeData = functionAttributesBitfield;
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				// Do nothing return false
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	AuxiliaryFunctionType2::FunctionType AuxiliaryFunctionType2::get_function_type() const
+	{
+		return static_cast<FunctionType>(functionAttributesBitfield & 0x1F);
+	}
+
+	void AuxiliaryFunctionType2::set_function_type(FunctionType type)
+	{
+		functionAttributesBitfield &= 0xE0;
+		functionAttributesBitfield |= static_cast<std::uint8_t>(type) & 0x1F;
+	}
+
+	bool AuxiliaryFunctionType2::get_function_attribute(FunctionAttribute attributeToCheck) const
+	{
+		return (0 != ((1 << static_cast<std::uint8_t>(attributeToCheck)) & functionAttributesBitfield));
+	}
+
+	void AuxiliaryFunctionType2::set_function_attribute(FunctionAttribute attributeToSet, bool value)
+	{
+		if (value)
+		{
+			functionAttributesBitfield |= (1 << static_cast<std::uint8_t>(attributeToSet));
+		}
+		else
+		{
+			functionAttributesBitfield &= ~(1 << static_cast<std::uint8_t>(attributeToSet));
+		}
+	}
+
+	VirtualTerminalObjectType AuxiliaryInputType1::get_object_type() const
+	{
+		return VirtualTerminalObjectType::AuxiliaryInputType1;
+	}
+
+	std::uint32_t AuxiliaryInputType1::get_minumum_object_length() const
+	{
+		return 7;
+	}
+
+	bool AuxiliaryInputType1::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		bool anyWrongChildType = false;
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if (nullptr != childObject)
+			{
+				switch (childObject->get_object_type())
+				{
+					case VirtualTerminalObjectType::OutputString:
+					case VirtualTerminalObjectType::OutputNumber:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::PictureGraphic:
+					{
+						// Valid
+					}
+					break;
+
+					default:
+					{
+						anyWrongChildType = true;
+					}
+					break;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true; // Some invalid child ID
+				break;
+			}
+		}
+		return !anyWrongChildType;
+	}
+
+	bool AuxiliaryInputType1::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false; // All attributes are read only
+	}
+
+	bool AuxiliaryInputType1::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		if (attributeID == static_cast<std::uint8_t>(AttributeName::Type))
+		{
+			returnedAttributeData = static_cast<std::uint32_t>(get_object_type());
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	AuxiliaryInputType1::FunctionType AuxiliaryInputType1::get_function_type() const
+	{
+		return functionType;
+	}
+
+	void AuxiliaryInputType1::set_function_type(FunctionType type)
+	{
+		functionType = type;
+	}
+
+	std::uint8_t AuxiliaryInputType1::get_input_id() const
+	{
+		return inputID;
+	}
+
+	bool AuxiliaryInputType1::set_input_id(std::uint8_t id)
+	{
+		bool retVal = false;
+
+		if (id <= 250) // The range is defined in ISO 11783-6 table J.3
+		{
+			inputID = id;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	VirtualTerminalObjectType AuxiliaryInputType2::get_object_type() const
+	{
+		return VirtualTerminalObjectType::AuxiliaryInputType2;
+	}
+
+	std::uint32_t AuxiliaryInputType2::get_minumum_object_length() const
+	{
+		return 6;
+	}
+
+	bool AuxiliaryInputType2::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		bool anyWrongChildType = false;
+
+		for (const auto &child : children)
+		{
+			auto childObject = get_object_by_id(child.id, objectPool);
+
+			if (nullptr != childObject)
+			{
+				switch (childObject->get_object_type())
+				{
+					case VirtualTerminalObjectType::OutputString:
+					case VirtualTerminalObjectType::OutputNumber:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputList:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::OutputMeter:
+					case VirtualTerminalObjectType::OutputLinearBarGraph:
+					case VirtualTerminalObjectType::OutputArchedBarGraph:
+					case VirtualTerminalObjectType::PictureGraphic:
+					case VirtualTerminalObjectType::ObjectPointer:
+					case VirtualTerminalObjectType::ScaledGraphic:
+					{
+						// Valid
+					}
+					break;
+
+					default:
+					{
+						anyWrongChildType = true;
+					}
+					break;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true; // Some invalid child ID
+				break;
+			}
+		}
+		return !anyWrongChildType;
+	}
+
+	bool AuxiliaryInputType2::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		switch (attributeID)
+		{
+			case static_cast<std::uint8_t>(AttributeName::BackgroundColour):
+			{
+				set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::FunctionAttributes):
+			{
+				functionAttributesBitfield = (static_cast<std::uint8_t>(rawAttributeData));
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				returnedError = AttributeError::InvalidAttributeID;
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	bool AuxiliaryInputType2::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		switch (attributeID)
+		{
+			case static_cast<std::uint8_t>(AttributeName::Type):
+			{
+				returnedAttributeData = static_cast<std::uint32_t>(get_object_type());
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::FunctionAttributes):
+			{
+				returnedAttributeData = functionAttributesBitfield;
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::BackgroundColour):
+			{
+				returnedAttributeData = get_background_color();
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				// Do nothing return false
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	AuxiliaryFunctionType2::FunctionType AuxiliaryInputType2::get_function_type() const
+	{
+		return static_cast<AuxiliaryFunctionType2::FunctionType>(functionAttributesBitfield & 0x1F);
+	}
+
+	void AuxiliaryInputType2::set_function_type(AuxiliaryFunctionType2::FunctionType type)
+	{
+		functionAttributesBitfield &= 0xE0;
+		functionAttributesBitfield |= static_cast<std::uint8_t>(type) & 0x1F;
+	}
+
+	bool AuxiliaryInputType2::get_function_attribute(FunctionAttribute attributeToCheck) const
+	{
+		return (0 != ((1 << static_cast<std::uint8_t>(attributeToCheck)) & functionAttributesBitfield));
+	}
+
+	void AuxiliaryInputType2::set_function_attribute(FunctionAttribute attributeToSet, bool value)
+	{
+		if (value)
+		{
+			functionAttributesBitfield |= (1 << static_cast<std::uint8_t>(attributeToSet));
+		}
+		else
+		{
+			functionAttributesBitfield &= ~(1 << static_cast<std::uint8_t>(attributeToSet));
+		}
+	}
+
 } // namespace isobus
