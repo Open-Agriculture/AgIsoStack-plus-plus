@@ -162,6 +162,7 @@ namespace isobus
 		virtual std::uint32_t get_minumum_object_length() const = 0;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool A map of all objects in the current object pool, keyed by their object ID
 		/// @returns `true` if the object passed basic error checks
 		virtual bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const = 0;
 
@@ -216,6 +217,7 @@ namespace isobus
 		void set_background_color(std::uint8_t value);
 
 		/// @brief Returns the number of child objects within this object
+		/// @returns The number of child objects within this object
 		std::uint16_t get_number_children() const;
 
 		/// @brief Adds an object as a child to another object, which essentially creates a tree of object association
@@ -226,14 +228,17 @@ namespace isobus
 
 		/// @brief Returns the ID of the child by index, if one was added previously
 		/// @note NULL_OBJECT_ID is a valid child, so you should always check the number of children to know if the return value of this is "valid"
+		/// @param[in] index The index of the child to retrieve
 		/// @returns The ID of the child at the specified index, or NULL_OBJECT_ID if the index is out of range
 		std::uint16_t get_child_id(std::uint16_t index) const;
 
 		/// @brief Returns the X offset of the child object associated with the specified index into the parent object
+		/// @param[in] index The index of the child to retrieve
 		/// @returns The relative X position of the child, and always 0 if the index is out of range
 		std::int16_t get_child_x(std::uint16_t index) const;
 
 		/// @brief Returns the Y offset of the child object associated with the specified index into the parent object
+		/// @param[in] index The index of the child to retrieve
 		/// @returns The relative Y position of the child, and always 0 if the index is out of range
 		std::int16_t get_child_y(std::uint16_t index) const;
 
@@ -331,6 +336,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating this object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -406,6 +412,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -498,6 +505,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -596,6 +604,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -663,6 +672,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -719,6 +729,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -791,6 +802,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -847,7 +859,11 @@ namespace isobus
 		static constexpr std::uint8_t MAX_CHILD_KEYS = 4; ///< There shall be a max of 4 keys per group according to the standard
 
 	private:
-		bool validate_name(std::uint16_t nameIDToValidate, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const; ///< Validates that the specified name ID is valid for this object
+		/// @brief Validates that the specified name ID is valid for this object
+		/// @param[in] nameIDToValidate The name's object ID to validate
+		/// @param[in] objectPool The object pool to use when validating the name object
+		/// @returns True if the name ID is valid for this object, otherwise false
+		bool validate_name(std::uint16_t nameIDToValidate, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const;
 
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
@@ -905,6 +921,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -998,6 +1015,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -1128,6 +1146,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -1208,6 +1227,7 @@ namespace isobus
 
 		/// @brief Sets the object ID of a string variable object that contains the value of the Input String object.
 		/// Does no error checking on the type of the supplied object.
+		/// @param[in] variableReferenceValue The object ID of a string variable object that contains the value of the Input String object
 		void set_variable_reference(std::uint16_t variableReferenceValue);
 
 		/// @brief Returns the object ID of a input attributes object that defines what can be input into the Input String object.
@@ -1309,6 +1329,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -1510,6 +1531,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -1560,6 +1582,7 @@ namespace isobus
 		void set_variable_reference(std::uint16_t referencedObjectID);
 
 		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
+		/// @returns The variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
 		std::uint16_t get_variable_reference() const;
 
 		/// @brief Changes a list item to a new ID by index
@@ -1651,6 +1674,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -1721,6 +1745,7 @@ namespace isobus
 
 		/// @brief Sets the object ID of a string variable object that contains the value of the Output String object.
 		/// Does no error checking on the type of the supplied object.
+		/// @param[in] variableReferenceValue The object ID of a string variable object that contains the value of the Output String object
 		void set_variable_reference(std::uint16_t variableReferenceValue);
 
 	private:
@@ -1799,6 +1824,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -1955,6 +1981,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2003,6 +2030,7 @@ namespace isobus
 		void set_variable_reference(std::uint16_t referencedObjectID);
 
 		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
+		/// @returns The variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
 		std::uint16_t get_variable_reference() const;
 
 		/// @brief Changes a list item to a new ID by index
@@ -2059,6 +2087,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2151,6 +2180,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2252,6 +2282,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2381,6 +2412,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2500,6 +2532,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2689,6 +2722,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -2871,6 +2905,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3072,6 +3107,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3201,6 +3237,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3264,6 +3301,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3380,6 +3418,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3491,6 +3530,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3566,6 +3606,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3647,6 +3688,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3729,6 +3771,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3811,6 +3854,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -3878,6 +3922,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -4006,6 +4051,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -4045,6 +4091,7 @@ namespace isobus
 		bool get_command_packet(std::uint8_t index, std::array<std::uint8_t, CAN_DATA_LENGTH> &command);
 
 		/// @brief Deletes a command packet from the macro by index
+		/// @param[in] index The index of the packet to delete
 		/// @returns true if the specified command packet was removed, otherwise false (index out of range)
 		bool remove_command_packet(std::uint8_t index);
 
@@ -4088,6 +4135,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
@@ -4197,6 +4245,7 @@ namespace isobus
 		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
