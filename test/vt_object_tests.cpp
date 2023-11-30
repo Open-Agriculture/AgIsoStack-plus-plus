@@ -2975,3 +2975,172 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ObjectPointerTests)
 	EXPECT_TRUE(externalObject->get_attribute(static_cast<std::uint8_t>(ObjectPointer::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectPointer));
 }
+
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryInputType1Tests)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+	auto auxiliaryInput = std::make_shared<AuxiliaryInputType1>();
+
+	run_baseline_tests(auxiliaryInput.get());
+	EXPECT_EQ(auxiliaryInput->get_object_type(), VirtualTerminalObjectType::AuxiliaryInputType1);
+
+	auxiliaryInput->set_function_type(AuxiliaryInputType1::FunctionType::Analogue);
+	EXPECT_EQ(AuxiliaryInputType1::FunctionType::Analogue, auxiliaryInput->get_function_type());
+
+	EXPECT_TRUE(auxiliaryInput->set_input_id(200));
+	EXPECT_EQ(200, auxiliaryInput->get_input_id());
+
+	EXPECT_FALSE(auxiliaryInput->set_input_id(254)); // Max is 250
+	EXPECT_EQ(200, auxiliaryInput->get_input_id());
+
+	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
+
+	// Test all attributes are read only
+	EXPECT_FALSE(auxiliaryInput->set_attribute(static_cast<std::uint8_t>(AuxiliaryInputType1::AttributeName::Type), 0xFFFF, objects, error));
+
+	uint32_t testValue = 0;
+
+	EXPECT_TRUE(auxiliaryInput->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType1::AttributeName::Type), testValue));
+	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryInputType1));
+
+	auxiliaryInput->set_id(5);
+	objects[auxiliaryInput->get_id()] = auxiliaryInput;
+
+	// Add a valid object, an output rectangle
+	auto outputRectangle = std::make_shared<OutputRectangle>();
+	outputRectangle->set_id(10);
+	objects[outputRectangle->get_id()] = outputRectangle;
+
+	auxiliaryInput->add_child(outputRectangle->get_id(), 0, 0);
+
+	EXPECT_TRUE(auxiliaryInput->get_is_valid(objects));
+
+	// Add an invalid object, a data mask
+	auto dataMask = std::make_shared<DataMask>();
+	dataMask->set_id(11);
+	objects[dataMask->get_id()] = dataMask;
+
+	auxiliaryInput->add_child(dataMask->get_id(), 0, 0);
+
+	EXPECT_FALSE(auxiliaryInput->get_is_valid(objects));
+}
+
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryInputType2Tests)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+	auto auxiliaryInput = std::make_shared<AuxiliaryInputType2>();
+
+	run_baseline_tests(auxiliaryInput.get());
+	EXPECT_EQ(auxiliaryInput->get_object_type(), VirtualTerminalObjectType::AuxiliaryInputType2);
+
+	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
+
+	// Test all attributes are read only
+	EXPECT_FALSE(auxiliaryInput->set_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::Type), 0xFFFF, objects, error));
+
+	uint32_t testValue = 0;
+
+	EXPECT_TRUE(auxiliaryInput->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::Type), testValue));
+	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryInputType2));
+
+	auxiliaryInput->set_background_color(24);
+	EXPECT_TRUE(auxiliaryInput->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::BackgroundColour), testValue));
+	EXPECT_EQ(testValue, 24);
+	EXPECT_TRUE(auxiliaryInput->set_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::BackgroundColour), 0, objects, error));
+	EXPECT_EQ(0, auxiliaryInput->get_background_color());
+
+	// Test bitfield of attributes
+	auxiliaryInput->set_function_type(AuxiliaryFunctionType2::FunctionType::CombinedAnalougeReturnTo50PercentWithDualBooleanLatching);
+	auxiliaryInput->set_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl, true);
+	EXPECT_TRUE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl));
+	EXPECT_FALSE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::SingleAssignment));
+	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::CombinedAnalougeReturnTo50PercentWithDualBooleanLatching, auxiliaryInput->get_function_type());
+	auxiliaryInput->set_function_type(AuxiliaryFunctionType2::FunctionType::AnalougeReturnTo50Percent);
+	EXPECT_TRUE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl));
+	auxiliaryInput->set_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl, false);
+	EXPECT_FALSE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl));
+	auxiliaryInput->set_function_attribute(AuxiliaryInputType2::FunctionAttribute::AssignmentRestriction, true);
+	EXPECT_TRUE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::AssignmentRestriction));
+	EXPECT_FALSE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl));
+	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::AnalougeReturnTo50Percent, auxiliaryInput->get_function_type());
+}
+
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType1Tests)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+	auto auxiliaryFunction = std::make_shared<AuxiliaryFunctionType1>();
+
+	run_baseline_tests(auxiliaryFunction.get());
+	EXPECT_EQ(auxiliaryFunction->get_object_type(), VirtualTerminalObjectType::AuxiliaryFunctionType1);
+
+	auxiliaryFunction->set_function_type(AuxiliaryFunctionType1::FunctionType::Analogue);
+	EXPECT_EQ(AuxiliaryFunctionType1::FunctionType::Analogue, auxiliaryFunction->get_function_type());
+
+	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
+
+	// Test all attributes are read only
+	EXPECT_FALSE(auxiliaryFunction->set_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType1::AttributeName::Type), 0xFFFF, objects, error));
+
+	uint32_t testValue = 0;
+
+	EXPECT_TRUE(auxiliaryFunction->get_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType1::AttributeName::Type), testValue));
+	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryFunctionType1));
+
+	// Add a valid object, an output rectangle
+	auto outputRectangle = std::make_shared<OutputRectangle>();
+	outputRectangle->set_id(10);
+	objects[outputRectangle->get_id()] = outputRectangle;
+
+	auxiliaryFunction->add_child(outputRectangle->get_id(), 0, 0);
+
+	EXPECT_TRUE(auxiliaryFunction->get_is_valid(objects));
+
+	// Add an invalid object, a data mask
+	auto dataMask = std::make_shared<DataMask>();
+	dataMask->set_id(11);
+	objects[dataMask->get_id()] = dataMask;
+
+	auxiliaryFunction->add_child(dataMask->get_id(), 0, 0);
+
+	EXPECT_FALSE(auxiliaryFunction->get_is_valid(objects));
+}
+
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType2Tests)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+	auto auxiliaryFunction = std::make_shared<AuxiliaryFunctionType2>();
+
+	run_baseline_tests(auxiliaryFunction.get());
+	EXPECT_EQ(auxiliaryFunction->get_object_type(), VirtualTerminalObjectType::AuxiliaryFunctionType2);
+
+	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
+
+	// Test all attributes are read only
+	EXPECT_FALSE(auxiliaryFunction->set_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::Type), 0xFFFF, objects, error));
+
+	uint32_t testValue = 0;
+
+	EXPECT_TRUE(auxiliaryFunction->get_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::Type), testValue));
+	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryFunctionType2));
+
+	auxiliaryFunction->set_background_color(24);
+	EXPECT_TRUE(auxiliaryFunction->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::BackgroundColour), testValue));
+	EXPECT_EQ(testValue, 24);
+	EXPECT_TRUE(auxiliaryFunction->set_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::BackgroundColour), 0, objects, error));
+	EXPECT_EQ(0, auxiliaryFunction->get_background_color());
+
+	// Test bitfield of attributes
+	auxiliaryFunction->set_function_type(AuxiliaryFunctionType2::FunctionType::CombinedAnalougeReturnTo50PercentWithDualBooleanLatching);
+	auxiliaryFunction->set_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl, true);
+	EXPECT_TRUE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl));
+	EXPECT_FALSE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::SingleAssignment));
+	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::CombinedAnalougeReturnTo50PercentWithDualBooleanLatching, auxiliaryFunction->get_function_type());
+	auxiliaryFunction->set_function_type(AuxiliaryFunctionType2::FunctionType::AnalougeReturnTo50Percent);
+	EXPECT_TRUE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl));
+	auxiliaryFunction->set_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl, false);
+	EXPECT_FALSE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl));
+	auxiliaryFunction->set_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::AssignmentRestriction, true);
+	EXPECT_TRUE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::AssignmentRestriction));
+	EXPECT_FALSE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl));
+	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::AnalougeReturnTo50Percent, auxiliaryFunction->get_function_type());
+}
