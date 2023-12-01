@@ -350,6 +350,7 @@ namespace isobus
 			userSuppliedBinaryDDOPSize_bytes = 0;
 			shouldReuploadAfterDDOPDeletion = true;
 			set_state(StateMachineState::DeactivateObjectPool);
+			clear_queues();
 			retVal = true;
 			CANStackLogger::info("[TC]: Requested to change the DDOP. Object pool will be deactivated for a little while.");
 		}
@@ -376,6 +377,7 @@ namespace isobus
 			userSuppliedBinaryDDOPSize_bytes = DDOPSize;
 			shouldReuploadAfterDDOPDeletion = true;
 			set_state(StateMachineState::DeactivateObjectPool);
+			clear_queues();
 			retVal = true;
 			CANStackLogger::info("[TC]: Requested to change the DDOP. Object pool will be deactivated for a little while.");
 		}
@@ -402,6 +404,7 @@ namespace isobus
 			userSuppliedBinaryDDOPSize_bytes = 0;
 			shouldReuploadAfterDDOPDeletion = true;
 			set_state(StateMachineState::DeactivateObjectPool);
+			clear_queues();
 			retVal = true;
 			CANStackLogger::info("[TC]: Requested to change the DDOP. Object pool will be deactivated for a little while.");
 		}
