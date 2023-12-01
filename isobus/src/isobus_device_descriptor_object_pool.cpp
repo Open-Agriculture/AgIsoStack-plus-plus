@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 namespace isobus
 {
@@ -789,6 +791,184 @@ namespace isobus
 				{
 					CANStackLogger::error("[DDOP]: Failed to create all object binaries. Your DDOP is invalid.");
 					retVal = false;
+					break;
+				}
+			}
+		}
+		else
+		{
+			CANStackLogger::error("[DDOP]: Failed to resolve all object IDs in DDOP. Your DDOP contains invalid object references.");
+			retVal = false;
+		}
+		return retVal;
+	}
+
+	bool DeviceDescriptorObjectPool::generate_task_data_iso_xml(std::string &resultantString)
+	{
+		bool retVal = true;
+
+		resultantString.clear();
+
+		if (taskControllerCompatibilityLevel > MAX_TC_VERSION_SUPPORTED)
+		{
+			CANStackLogger::warn("[DDOP]: An XML DDOP is being generated for a TC version that is unsupported. This may cause issues.");
+		}
+
+		if (resolve_parent_ids_to_objects())
+		{
+			std::ostringstream xmlOutput;
+			std::ios initialStreamFormat(NULL);
+			std::size_t numberOfDevices = 1;
+			std::size_t numberOfElements = 1;
+			initialStreamFormat.copyfmt(xmlOutput);
+			retVal = true;
+
+			xmlOutput << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" << std::endl;
+			xmlOutput << "<ISO11783_TaskData VersionMajor=\"3\" VersionMinor=\"0\" DataTransferOrigin=\"1\">" << std::endl;
+
+			// Find the device object, which will be the first object written
+			for (std::size_t i = 0; i < size(); i++)
+			{
+				auto currentObject = get_object_by_index(static_cast<std::uint16_t>(i));
+
+				if ((nullptr != currentObject) &&
+				    (task_controller_object::ObjectTypes::Device == currentObject->get_object_type()))
+				{
+					// Found device
+					auto rootDevice = std::static_pointer_cast<task_controller_object::DeviceObject>(currentObject);
+					xmlOutput << "<DVC A=\"DVC-" << static_cast<int>(numberOfDevices);
+					numberOfDevices++;
+					xmlOutput << "\" B=\"" << rootDevice->get_designator();
+					xmlOutput << "\" C=\"" << rootDevice->get_software_version();
+					xmlOutput << "\" D=\"" << std::uppercase << std::hex << std::setfill('0') << std::setw(16) << static_cast<unsigned long long int>(rootDevice->get_iso_name());
+					xmlOutput.copyfmt(initialStreamFormat);
+					xmlOutput << "\" E=\"" << rootDevice->get_serial_number();
+					xmlOutput << "\" F=\"";
+
+					auto lStructureLabel = rootDevice->get_structure_label();
+					for (std::uint8_t j = 0; j < 7; j++)
+					{
+						std::uint8_t structureByte = static_cast<std::uint8_t>(lStructureLabel.at(6 - j));
+						xmlOutput << std::uppercase << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(structureByte);
+					}
+
+					xmlOutput << "\" G=\"";
+
+					for (std::uint_fast8_t j = 0; j < 7; j++)
+					{
+						xmlOutput << std::uppercase << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(rootDevice->get_localization_label().at(6 - j));
+					}
+					xmlOutput.copyfmt(initialStreamFormat);
+					xmlOutput << "\">" << std::endl;
+
+					// Next, process all elements
+					for (std::size_t j = 0; j < this->size(); j++)
+					{
+						auto currentSubObject = get_object_by_index(static_cast<std::uint16_t>(j));
+
+						if ((nullptr != currentSubObject) &&
+						    (task_controller_object::ObjectTypes::DeviceElement == currentSubObject->get_object_type()))
+						{
+							auto deviceElement = std::static_pointer_cast<task_controller_object::DeviceElementObject>(currentSubObject);
+
+							xmlOutput << "\t<DET A=\"DET-" << static_cast<int>(numberOfElements);
+							numberOfElements++;
+							xmlOutput << "\" B=\"" << static_cast<int>(deviceElement->get_object_id());
+							xmlOutput << "\" C=\"" << static_cast<int>(deviceElement->get_type());
+							xmlOutput << "\" D=\"" << deviceElement->get_designator();
+							xmlOutput << "\" E=\"" << static_cast<int>(deviceElement->get_element_number());
+							xmlOutput << "\" F=\"" << static_cast<int>(deviceElement->get_parent_object());
+
+							if (deviceElement->get_number_child_objects() > 0)
+							{
+								xmlOutput << "\">" << std::endl;
+
+								// Process a list of all device object references
+								for (std::size_t k = 0; k < deviceElement->get_number_child_objects(); k++)
+								{
+									xmlOutput << "\t\t<DOR A=\"" << static_cast<int>(deviceElement->get_child_object_id(k)) << "\"/>" << std::endl;
+								}
+								xmlOutput << "\t</DET>" << std::endl;
+							}
+							else
+							{
+								xmlOutput << "\"/>" << std::endl;
+							}
+						}
+					}
+
+					// Next, process all DPDs
+					for (std::size_t j = 0; j < this->size(); j++)
+					{
+						auto currentSubObject = get_object_by_index(static_cast<std::uint16_t>(j));
+
+						if ((nullptr != currentSubObject) &&
+						    (task_controller_object::ObjectTypes::DeviceProcessData == currentSubObject->get_object_type()))
+						{
+							auto deviceProcessData = std::static_pointer_cast<task_controller_object::DeviceProcessDataObject>(currentSubObject);
+
+							xmlOutput << "\t<DPD A=\"" << static_cast<int>(deviceProcessData->get_object_id());
+							xmlOutput << "\" B=\"" << std::uppercase << std::hex << std::setfill('0') << std::setw(4) << static_cast<int>(deviceProcessData->get_ddi());
+							xmlOutput.copyfmt(initialStreamFormat);
+							xmlOutput << "\" C=\"" << static_cast<int>(deviceProcessData->get_properties_bitfield());
+							xmlOutput << "\" D=\"" << static_cast<int>(deviceProcessData->get_trigger_methods_bitfield());
+							xmlOutput << "\" E=\"" << deviceProcessData->get_designator();
+							if (0xFFFF != deviceProcessData->get_device_value_presentation_object_id())
+							{
+								xmlOutput << "\" F=\"" << static_cast<int>(deviceProcessData->get_device_value_presentation_object_id());
+							}
+							xmlOutput << "\"/>" << std::endl;
+						}
+					}
+
+					// Next, process all child DPTs
+					for (std::size_t j = 0; j < this->size(); j++)
+					{
+						auto currentSubObject = get_object_by_index(static_cast<std::uint16_t>(j));
+
+						if ((nullptr != currentSubObject) &&
+						    (task_controller_object::ObjectTypes::DeviceProperty == currentSubObject->get_object_type()))
+						{
+							auto deviceProperty = std::static_pointer_cast<task_controller_object::DevicePropertyObject>(currentSubObject);
+
+							xmlOutput << "\t<DPT A=\"" << static_cast<int>(deviceProperty->get_object_id());
+							xmlOutput << "\" B=\"" << std::uppercase << std::hex << std::setfill('0') << std::setw(4) << static_cast<int>(deviceProperty->get_ddi());
+							xmlOutput.copyfmt(initialStreamFormat);
+							xmlOutput << "\" C=\"" << static_cast<int>(deviceProperty->get_value());
+							xmlOutput << "\" D=\"" << deviceProperty->get_designator();
+							if (0xFFFF != deviceProperty->get_device_value_presentation_object_id())
+							{
+								xmlOutput << "\" E=\"" << static_cast<int>(deviceProperty->get_device_value_presentation_object_id());
+							}
+							xmlOutput << "\"/>" << std::endl;
+						}
+					}
+
+					// Next, process all child DVPs
+					for (std::size_t j = 0; j < this->size(); j++)
+					{
+						auto currentSubObject = get_object_by_index(static_cast<std::uint16_t>(j));
+
+						if ((nullptr != currentSubObject) &&
+						    (task_controller_object::ObjectTypes::DeviceValuePresentation == currentSubObject->get_object_type()))
+						{
+							auto deviceValuePresentation = std::static_pointer_cast<task_controller_object::DeviceValuePresentationObject>(currentSubObject);
+
+							xmlOutput << "\t<DVP A=\"" << static_cast<int>(deviceValuePresentation->get_object_id());
+							xmlOutput << "\" B=\"" << static_cast<int>(deviceValuePresentation->get_offset());
+							xmlOutput << "\" C=\"" << std::fixed << std::setprecision(6) << deviceValuePresentation->get_scale();
+							xmlOutput.copyfmt(initialStreamFormat);
+							xmlOutput << "\" D=\"" << static_cast<int>(deviceValuePresentation->get_number_of_decimals());
+							xmlOutput << "\" E=\"" << deviceValuePresentation->get_designator();
+							xmlOutput << "\"/>" << std::endl;
+						}
+					}
+
+					// Close DVC object
+					xmlOutput << "</DVC>" << std::endl;
+					xmlOutput << "</ISO11783_TaskData>" << std::endl;
+					resultantString = xmlOutput.str();
+					CANStackLogger::debug("[DDOP]: Generated ISO XML DDOP data OK");
 					break;
 				}
 			}
