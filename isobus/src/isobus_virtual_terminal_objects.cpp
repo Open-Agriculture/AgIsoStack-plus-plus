@@ -8697,4 +8697,115 @@ namespace isobus
 		}
 	}
 
+	VirtualTerminalObjectType AuxiliaryControlDesignatorType2::get_object_type() const
+	{
+		return VirtualTerminalObjectType::AuxiliaryControlDesignatorType2;
+	}
+
+	std::uint32_t AuxiliaryControlDesignatorType2::get_minumum_object_length() const
+	{
+		return 6;
+	}
+
+	bool AuxiliaryControlDesignatorType2::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		bool retVal = (((NULL_OBJECT_ID == auxiliaryObjectID) || ((nullptr != get_object_by_id(auxiliaryObjectID, objectPool)))) && (pointerType <= 3));
+
+		if (retVal)
+		{
+			// Check the referenced object is valid
+			auto object = get_object_by_id(auxiliaryObjectID, objectPool);
+
+			if ((VirtualTerminalObjectType::AuxiliaryFunctionType2 == object->get_object_type()) ||
+			    (VirtualTerminalObjectType::AuxiliaryInputType2 == object->get_object_type()))
+			{
+				// Valid
+			}
+			else
+			{
+				retVal = false;
+			}
+		}
+		return retVal;
+	}
+
+	bool AuxiliaryControlDesignatorType2::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	{
+		bool retVal = false;
+		returnedError = AttributeError::InvalidAttributeID;
+
+		if (static_cast<std::uint8_t>(AttributeName::AuxiliaryObjectID) == attributeID)
+		{
+			if ((NULL_OBJECT_ID == rawAttributeData) ||
+			    ((nullptr != get_object_by_id(static_cast<std::uint16_t>(rawAttributeData), objectPool)) &&
+			     ((VirtualTerminalObjectType::AuxiliaryFunctionType2 == objectPool.at(static_cast<std::uint16_t>(rawAttributeData))->get_object_type()) ||
+			      (VirtualTerminalObjectType::AuxiliaryInputType2 == objectPool.at(static_cast<std::uint16_t>(rawAttributeData))->get_object_type()))))
+			{
+				set_auxiliary_object_id(static_cast<std::uint16_t>(rawAttributeData));
+				retVal = true;
+			}
+			else
+			{
+				returnedError = AttributeError::InvalidValue;
+			}
+		}
+		return retVal;
+	}
+
+	bool AuxiliaryControlDesignatorType2::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		switch (attributeID)
+		{
+			case static_cast<std::uint8_t>(AttributeName::Type):
+			{
+				returnedAttributeData = static_cast<std::uint32_t>(get_object_type());
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::PointerType):
+			{
+				returnedAttributeData = get_pointer_type();
+				retVal = true;
+			}
+			break;
+
+			case static_cast<std::uint8_t>(AttributeName::AuxiliaryObjectID):
+			{
+				returnedAttributeData = get_auxiliary_object_id();
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				// Invalid attribute ID
+			}
+			break;
+		}
+		return retVal;
+	}
+
+	std::uint16_t AuxiliaryControlDesignatorType2::get_auxiliary_object_id() const
+	{
+		return auxiliaryObjectID;
+	}
+
+	void AuxiliaryControlDesignatorType2::set_auxiliary_object_id(std::uint16_t id)
+	{
+		auxiliaryObjectID = id;
+	}
+
+	std::uint8_t AuxiliaryControlDesignatorType2::get_pointer_type() const
+	{
+		return pointerType;
+	}
+
+	void AuxiliaryControlDesignatorType2::set_pointer_type(std::uint8_t type)
+	{
+		pointerType = type;
+	}
+
 } // namespace isobus
