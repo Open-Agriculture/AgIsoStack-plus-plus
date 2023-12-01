@@ -7,14 +7,14 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Isobus-plus-plus'
-copyright = '2022, Adrian Del Grosso'
+copyright = '2022-2023, The Open-Agriculture Developers'
 author = 'Adrian Del Grosso'
 release = '1.0.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+extensions = ["sphinx_rtd_theme"]
 
 templates_path = ['_templates']
 exclude_patterns = []
