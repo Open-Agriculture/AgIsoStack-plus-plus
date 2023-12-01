@@ -4675,6 +4675,90 @@ namespace isobus
 		std::uint8_t functionAttributesBitfield = 0; ///< Bitfield of function attributes defined in `FunctionAttribute` enum plus the `FunctionType`
 	};
 
+	/// @brief Defines an auxiliary control designator type 2 object.
+	/// Auxiliary Control Designator Type 2 Object Pointers allow the Working Set to place Auxiliary Input
+	/// Type 2 and Auxiliary Function Type 2 designators in the Data Mask at Working Set defined coordinates.
+	class AuxiliaryControlDesignatorType2 : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			PointerType = 1,
+			AuxiliaryObjectID = 2,
+
+			NumberOfAttributes = 3
+		};
+
+		/// @brief Constructor for a auxiliary control designator type 2 object
+		AuxiliaryControlDesignatorType2() = default;
+
+		/// @brief Virtual destructor for a auxiliary control designator type 2 object
+		~AuxiliaryControlDesignatorType2() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the object ID of the referenced auxiliary object or the null object ID.
+		/// Used in conjunction with the pointer type.
+		/// @returns The object ID of the referenced auxiliary object or the null object ID
+		std::uint16_t get_auxiliary_object_id() const;
+
+		/// @brief Sets the object ID of the referenced auxiliary object
+		/// Used in conjunction with the pointer type.
+		/// @param[in] id The object ID of the referenced auxiliary object or the null object ID
+		void set_auxiliary_object_id(std::uint16_t id);
+
+		/// @brief Returns the pointer type, which describes how this object should be rendered
+		/// @details If the pointer type is 0 or 2, the pointer points to Auxiliary Object referenced in the auxiliaryObjectID, or the working set object
+		/// and the VT shall display that auxiliary object designator (pointer type 0) or Working Set designator (pointer type 2).
+		/// If the Auxiliary Control designator Object Pointer is of pointer type 1 or 3, then this pointer references
+		/// Auxiliary Object(s) that have an assignment relationship to the object referenced by the auxiliary object
+		/// attribute within this object pool.The VT shall display the assigned auxiliary object designator (pointer type 1) or
+		/// its Working Set designator (pointer type 3).
+		/// If the pointer type is 1, the pointer points to
+		/// @returns The pointer type, which describes how this object should be rendered
+		std::uint8_t get_pointer_type() const;
+
+		/// @brief Sets the pointer type which describes how this object should be rendered
+		/// @param[in] type The pointer type, which describes how this object should be rendered
+		void set_pointer_type(std::uint8_t type);
+
+	private:
+		std::uint16_t auxiliaryObjectID = NULL_OBJECT_ID; ///< Object ID of a referenced Auxiliary Function or Auxiliary Input object or NULL_OBJECT_ID
+		std::uint8_t pointerType = 0; ///< The pointer type, defines how this should be rendered
+	};
+
 } // namespace isobus
 
 #endif // ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP

@@ -3063,6 +3063,32 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryInputType2Tests)
 	EXPECT_TRUE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::AssignmentRestriction));
 	EXPECT_FALSE(auxiliaryInput->get_function_attribute(AuxiliaryInputType2::FunctionAttribute::CriticalControl));
 	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::AnalougeReturnTo50Percent, auxiliaryInput->get_function_type());
+	EXPECT_TRUE(auxiliaryInput->set_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::FunctionAttributes), 0, objects, error));
+	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::BooleanLatchingOnOff, auxiliaryInput->get_function_type());
+	EXPECT_TRUE(auxiliaryInput->get_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::FunctionAttributes), testValue));
+	EXPECT_EQ(0, testValue);
+
+	// Test validity
+	auxiliaryInput->set_id(5);
+	objects[auxiliaryInput->get_id()] = auxiliaryInput;
+
+	// Add a valid object, an output rectangle
+	auto outputRectangle = std::make_shared<OutputRectangle>();
+	outputRectangle->set_id(10);
+	objects[outputRectangle->get_id()] = outputRectangle;
+
+	auxiliaryInput->add_child(outputRectangle->get_id(), 0, 0);
+
+	EXPECT_TRUE(auxiliaryInput->get_is_valid(objects));
+
+	// Add an invalid object, a data mask
+	auto dataMask = std::make_shared<DataMask>();
+	dataMask->set_id(11);
+	objects[dataMask->get_id()] = dataMask;
+
+	auxiliaryInput->add_child(dataMask->get_id(), 0, 0);
+
+	EXPECT_FALSE(auxiliaryInput->get_is_valid(objects));
 }
 
 TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType1Tests)
@@ -3115,7 +3141,6 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType2Tests)
 
 	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
 
-	// Test all attributes are read only
 	EXPECT_FALSE(auxiliaryFunction->set_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::Type), 0xFFFF, objects, error));
 
 	uint32_t testValue = 0;
@@ -3143,4 +3168,72 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType2Tests)
 	EXPECT_TRUE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::AssignmentRestriction));
 	EXPECT_FALSE(auxiliaryFunction->get_function_attribute(AuxiliaryFunctionType2::FunctionAttribute::CriticalControl));
 	EXPECT_EQ(AuxiliaryFunctionType2::FunctionType::AnalougeReturnTo50Percent, auxiliaryFunction->get_function_type());
+
+	// Test validity
+	auxiliaryFunction->set_id(5);
+	objects[auxiliaryFunction->get_id()] = auxiliaryFunction;
+
+	// Add a valid object, an output rectangle
+	auto outputRectangle = std::make_shared<OutputRectangle>();
+	outputRectangle->set_id(10);
+	objects[outputRectangle->get_id()] = outputRectangle;
+
+	auxiliaryFunction->add_child(outputRectangle->get_id(), 0, 0);
+
+	EXPECT_TRUE(auxiliaryFunction->get_is_valid(objects));
+
+	// Add an invalid object, a data mask
+	auto dataMask = std::make_shared<DataMask>();
+	dataMask->set_id(11);
+	objects[dataMask->get_id()] = dataMask;
+
+	auxiliaryFunction->add_child(dataMask->get_id(), 0, 0);
+
+	EXPECT_FALSE(auxiliaryFunction->get_is_valid(objects));
+}
+
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryControlDesignatorType2Tests)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+	auto auxiliaryControlDesignator = std::make_shared<AuxiliaryControlDesignatorType2>();
+
+	run_baseline_tests(auxiliaryControlDesignator.get());
+	EXPECT_EQ(auxiliaryControlDesignator->get_object_type(), VirtualTerminalObjectType::AuxiliaryControlDesignatorType2);
+
+	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
+
+	EXPECT_FALSE(auxiliaryControlDesignator->set_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::Type), 0xFFFF, objects, error));
+
+	uint32_t testValue = 0;
+	auxiliaryControlDesignator->set_id(10);
+	objects[auxiliaryControlDesignator->get_id()] = auxiliaryControlDesignator;
+
+	auto testChild1 = std::make_shared<isobus::AuxiliaryFunctionType2>();
+	testChild1->set_id(100);
+	objects[testChild1->get_id()] = testChild1;
+
+	auto testChild2 = std::make_shared<isobus::AuxiliaryInputType2>();
+	testChild2->set_id(200);
+	objects[testChild2->get_id()] = testChild2;
+
+	EXPECT_TRUE(auxiliaryControlDesignator->set_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::AuxiliaryObjectID), 100, objects, error));
+	EXPECT_EQ(100, auxiliaryControlDesignator->get_auxiliary_object_id());
+	EXPECT_TRUE(auxiliaryControlDesignator->set_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::AuxiliaryObjectID), 200, objects, error));
+	EXPECT_EQ(200, auxiliaryControlDesignator->get_auxiliary_object_id());
+
+	auto testChild3 = std::make_shared<isobus::DataMask>();
+	testChild3->set_id(300);
+	objects[testChild3->get_id()] = testChild3;
+
+	EXPECT_FALSE(auxiliaryControlDesignator->set_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::AuxiliaryObjectID), 300, objects, error));
+	EXPECT_EQ(200, auxiliaryControlDesignator->get_auxiliary_object_id());
+
+	auxiliaryControlDesignator->set_pointer_type(3);
+	EXPECT_EQ(3, auxiliaryControlDesignator->get_pointer_type());
+
+	EXPECT_FALSE(auxiliaryControlDesignator->set_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::PointerType), 2, objects, error));
+	EXPECT_EQ(3, auxiliaryControlDesignator->get_pointer_type());
+
+	auxiliaryControlDesignator->get_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::PointerType), testValue);
+	EXPECT_EQ(3, testValue);
 }
