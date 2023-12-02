@@ -83,6 +83,11 @@ public:
 		memcpy(chunkBuffer, &staticTestPool.data()[bytesOffset], numberOfBytesNeeded);
 		return true;
 	}
+
+	void test_wrapper_process_command_queue()
+	{
+		VirtualTerminalClient::process_command_queue();
+	}
 };
 
 std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
@@ -901,8 +906,10 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	ASSERT_TRUE(serverVT.get_queue_empty());
 	EXPECT_TRUE(vtPartner->get_address_valid());
 
-	// Test Change active mask
-	interfaceUnderTest.send_change_active_mask(123, 456);
+	// Test send change active mask command while not connected queues the command
+	ASSERT_TRUE(interfaceUnderTest.send_change_active_mask(123, 456));
+	interfaceUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	interfaceUnderTest.test_wrapper_process_command_queue();
 
 	serverVT.read_frame(testFrame);
 
@@ -988,7 +995,9 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(123, objectID);
 	EXPECT_EQ(1, testFrame.data[4]); // Transparent
 	EXPECT_EQ(1, testFrame.data[5]); // Length
-	EXPECT_EQ('a', testFrame.data[6]); // Length
+	EXPECT_EQ('a', testFrame.data[6]);
+
+	//! @todo test send command that utilizes transport protocol so queue also gets tested
 
 	serverVT.close();
 	CANHardwareInterface::stop();
