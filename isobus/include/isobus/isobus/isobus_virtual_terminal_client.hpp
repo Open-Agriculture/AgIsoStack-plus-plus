@@ -533,6 +533,11 @@ namespace isobus
 		void update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked = false);
 
 		// Command Messages
+		/// @brief Set whether the client should queue commands when sending them to the VT server failed first try. (Default: true).
+		/// This can happen if a transport protocol is busy with sending another message.
+		/// @param[in] shouldQueueCommands Whether the client should queue commands when sending them to the VT server failed first try
+		void set_should_queue_commands(const bool shouldQueueCommands);
+
 		/// @brief Sends a hide/show object command
 		/// @details This command is used to hide or show a Container object.
 		/// This pertains to the visibility of the object as well as its
@@ -540,8 +545,8 @@ namespace isobus
 		/// objects, the VT generates an error in the response.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] command The target hide/show state of the object
-		/// @returns true if the message was sent successfully
-		bool send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command) const;
+		/// @returns true if the message is being sent successfully
+		bool send_hide_show_object(std::uint16_t objectID, HideShowObjectCommand command);
 
 		/// @brief Sends an enable/disable object command
 		/// @details This command is used to enable or disable an input field object
@@ -550,19 +555,19 @@ namespace isobus
 		/// It is allowed to enable already enabled objects and to disable already disabled objects.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] command The target enable/disable state of the object
-		/// @returns true if the message was sent successfully
-		bool send_enable_disable_object(std::uint16_t objectID, EnableDisableObjectCommand command) const;
+		/// @returns true if the message is being sent successfully
+		bool send_enable_disable_object(std::uint16_t objectID, EnableDisableObjectCommand command);
 
 		/// @brief Sends a select input object command
 		/// @details This command is used to force the selection of an input field, Button, or Key object.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] option The method by which the object will be selected
-		/// @returns true if the message was sent successfully
-		bool send_select_input_object(std::uint16_t objectID, SelectInputObjectOptions option) const;
+		/// @returns true if the message is being sent successfully
+		bool send_select_input_object(std::uint16_t objectID, SelectInputObjectOptions option);
 
 		/// @brief Sends the ESC message (Escape)
-		/// @returns true if the message was sent successfully
-		bool send_ESC() const;
+		/// @returns true if the message is being sent successfully
+		bool send_ESC();
 
 		/// @brief Sends the control audio signal command
 		/// @details This command may be used to control the audio on the VT.
@@ -572,8 +577,8 @@ namespace isobus
 		/// @param[in] frequency_hz The audio frequency to command in Hz
 		/// @param[in] duration_ms Duration of the signal activation
 		/// @param[in] offTimeDuration_ms The amount of silent time in the signal
-		/// @returns true if the message was sent successfully
-		bool send_control_audio_signal(std::uint8_t activations, std::uint16_t frequency_hz, std::uint16_t duration_ms, std::uint16_t offTimeDuration_ms) const;
+		/// @returns true if the message is being sent successfully
+		bool send_control_audio_signal(std::uint8_t activations, std::uint16_t frequency_hz, std::uint16_t duration_ms, std::uint16_t offTimeDuration_ms);
 
 		/// @brief Sends the set audio volume command
 		/// @details This command applies to subsequent Control Audio Signal commands.
@@ -581,8 +586,8 @@ namespace isobus
 		/// the Audio device is busy bit in the response.This command should not affect in any way
 		/// the volume settings of other Working Sets and shall not affect the volume of Alarm Masks.
 		/// @param[in] volume_percent The volume percentage to set the VT server to
-		/// @returns true if the message was sent successfully
-		bool send_set_audio_volume(std::uint8_t volume_percent) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_audio_volume(std::uint8_t volume_percent);
 
 		/// @brief Sends the change child location command
 		/// @details The Change Child Location command is used to change the position of an object. The new position is set
@@ -597,8 +602,8 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] relativeXPositionChange The amount to change the X position by (px)
 		/// @param[in] relativeYPositionChange The amount to change the Y position by (px)
-		/// @returns true if the message was sent successfully
-		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange);
 
 		/// @brief Sends the change child position command
 		/// @details The new position is set relative to the parent object's position.
@@ -615,8 +620,8 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] xPosition The new X position of the object (px)
 		/// @param[in] yPosition The new Y position of the object (px)
-		/// @returns true if the message was sent successfully
-		bool send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition);
 
 		/// @brief Sends the change size command
 		/// @details A value of 0 for width or height or both
@@ -624,22 +629,22 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] newWidth The new width of the object
 		/// @param[in] newHeight The new height of the object
-		/// @returns true if the message was sent successfully
-		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight);
 
 		/// @brief Sends the change background colour command
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] colour The new background colour of the object
-		/// @returns true if the message was sent successfully
-		bool send_change_background_colour(std::uint16_t objectID, std::uint8_t colour) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_background_colour(std::uint16_t objectID, std::uint8_t colour);
 
 		/// @brief Sends the change numeric value command
 		/// @details The size of the object shall not be changed by this command. Only the object indicated in the
 		/// command is to be changed, variables referenced by the object are not changed.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] value The new numeric value of the object
-		/// @returns true if the message was sent successfully
-		bool send_change_numeric_value(std::uint16_t objectID, std::uint32_t value) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_numeric_value(std::uint16_t objectID, std::uint32_t value);
 
 		/// @brief Sends the change string value command
 		/// @details The size of the object shall not be changed by this command. Only the object indicated in the
@@ -649,8 +654,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] stringLength The length of the string to be sent
 		/// @param[in] value The string to be sent
-		/// @returns true if the message was sent successfully
-		bool send_change_string_value(std::uint16_t objectID, uint16_t stringLength, const char *value) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_string_value(std::uint16_t objectID, uint16_t stringLength, const char *value);
 
 		/// @brief Sends the change string value command (with a c++ string instead of buffer + length)
 		/// @details The size of the object shall not be changed by this command. Only the object indicated in the
@@ -659,16 +664,16 @@ namespace isobus
 		/// this case the VT shall pad the value attribute with space characters.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] value The string to be sent
-		/// @returns true if the message was sent successfully
-		bool send_change_string_value(std::uint16_t objectID, const std::string &value) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_string_value(std::uint16_t objectID, const std::string &value);
 
 		/// @brief Sends the change endpoint command, which changes the end of an output line
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] width_px The width to change the output line to
 		/// @param[in] height_px The height to change the output line to
 		/// @param[in] direction The line direction (refer to output line object attributes)
-		/// @returns true if the message was sent successfully
-		bool send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction);
 
 		/// @brief Sends the change font attributes command
 		/// @details This command is used to change the Font Attributes in a Font Attributes object.
@@ -677,8 +682,8 @@ namespace isobus
 		/// @param[in] size Font size
 		/// @param[in] type Font Type
 		/// @param[in] styleBitfield The font style encoded as a bitfield
-		/// @returns true if the message was sent successfully
-		bool send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield);
 
 		/// @brief Sends the change line attributes command
 		/// @details This command is used to change the Line Attributes in a Line Attributes object.
@@ -686,8 +691,8 @@ namespace isobus
 		/// @param[in] colour See the standard VT colour palette for more details
 		/// @param[in] width The line width
 		/// @param[in] lineArtBitmask The line art, encoded as a bitfield (See ISO11783-6 for details)
-		/// @returns true if the message was sent successfully
-		bool send_change_line_attributes(std::uint16_t objectID, std::uint8_t colour, std::uint8_t width, std::uint16_t lineArtBitmask) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_line_attributes(std::uint16_t objectID, std::uint8_t colour, std::uint8_t width, std::uint16_t lineArtBitmask);
 
 		/// @brief Sends the change fill attributes command
 		/// @details This command is used to change the Fill Attributes in a Fill Attributes object.
@@ -695,16 +700,16 @@ namespace isobus
 		/// @param[in] fillType The fill type
 		/// @param[in] colour See the standard VT colour palette for more details
 		/// @param[in] fillPatternObjectID Object ID to a fill pattern or NULL_OBJECT_ID
-		/// @returns true if the message was sent successfully
-		bool send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t colour, std::uint16_t fillPatternObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t colour, std::uint16_t fillPatternObjectID);
 
 		/// @brief Sends the change active mask command
 		/// @details This command is used to change the active mask of a Working Set
 		/// to either a Data Mask object or an Alarm Mask object.
 		/// @param[in] workingSetObjectID The ID of the working set
 		/// @param[in] newActiveMaskObjectID The object ID of the new active mask
-		/// @returns true if the message was sent successfully
-		bool send_change_active_mask(std::uint16_t workingSetObjectID, std::uint16_t newActiveMaskObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_active_mask(std::uint16_t workingSetObjectID, std::uint16_t newActiveMaskObjectID);
 
 		/// @brief Sends the change softkey mask command
 		/// @details This command is used to change the Soft Key Mask associated with a
@@ -712,8 +717,8 @@ namespace isobus
 		/// @param[in] type The mask type, alarm or data
 		/// @param[in] dataOrAlarmMaskObjectID The object ID of the target mask
 		/// @param[in] newSoftKeyMaskObjectID The object ID of the new softkey mask
-		/// @returns true if the message was sent successfully
-		bool send_change_softkey_mask(MaskType type, std::uint16_t dataOrAlarmMaskObjectID, std::uint16_t newSoftKeyMaskObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_softkey_mask(MaskType type, std::uint16_t dataOrAlarmMaskObjectID, std::uint16_t newSoftKeyMaskObjectID);
 
 		/// @brief Sends the change attribute command
 		/// @details This command is used to change any attribute with an assigned Attribute ID.
@@ -721,8 +726,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] attributeID The attribute ID of the attribute being changed
 		/// @param[in] value The new attribute value
-		/// @returns true if the message was sent successfully
-		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, std::uint32_t value) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, std::uint32_t value);
 
 		/// @brief Sends the change attribute command (for float values)
 		/// @details This command is used to change a float attribute with an assigned Attribute ID.
@@ -730,8 +735,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] attributeID The attribute ID of the attribute being changed
 		/// @param[in] value The new attribute value
-		/// @returns true if the message was sent successfully
-		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value);
 
 		/// @brief Sends the change priority command
 		/// @details This command is used to change the priority of an Alarm Mask.
@@ -741,8 +746,8 @@ namespace isobus
 		/// or should no longer be the active Working Set and mask.
 		/// @param[in] alarmMaskObjectID The object ID of the target alarm mask
 		/// @param[in] priority The new priority for the mask
-		/// @returns true if the message was sent successfully
-		bool send_change_priority(std::uint16_t alarmMaskObjectID, AlarmMaskPriority priority) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_priority(std::uint16_t alarmMaskObjectID, AlarmMaskPriority priority);
 
 		/// @brief Sends the change list item command
 		/// @details This command is used to change a list item in an Input List object,
@@ -752,8 +757,8 @@ namespace isobus
 		/// @param[in] objectID The object ID of the list
 		/// @param[in] listIndex The index in the list to edit
 		/// @param[in] newObjectID The new object ID for the specified list index, or NULL_OBJECT_ID.
-		/// @returns true if the message was sent successfully
-		bool send_change_list_item(std::uint16_t objectID, std::uint8_t listIndex, std::uint16_t newObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_list_item(std::uint16_t objectID, std::uint8_t listIndex, std::uint16_t newObjectID);
 
 		/// @brief Sends the lock unlock mask command
 		/// @details This command is used by a Working Set to disallow or allow
@@ -765,14 +770,14 @@ namespace isobus
 		/// @param[in] state The target lock/unlock state
 		/// @param[in] objectID The object ID of the target mask
 		/// @param[in] timeout_ms The max time to lock the mask, or 0 for no timeout. Does not apply to unlock commands.
-		/// @returns true if the message was sent successfully
-		bool send_lock_unlock_mask(MaskLockState state, std::uint16_t objectID, std::uint16_t timeout_ms) const;
+		/// @returns true if the message is being sent successfully
+		bool send_lock_unlock_mask(MaskLockState state, std::uint16_t objectID, std::uint16_t timeout_ms);
 
 		/// @brief Sends the execute macro command
 		/// @details This command is used to execute a Macro.
 		/// @param[in] objectID The ID of the target object
-		/// @returns true if the message was sent successfully
-		bool send_execute_macro(std::uint16_t objectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_execute_macro(std::uint16_t objectID);
 
 		/// @brief Sends the change object label command
 		/// @details This command is used by an ECU to change a label of an object.
@@ -780,8 +785,8 @@ namespace isobus
 		/// @param[in] labelStringObjectID The label's object ID
 		/// @param[in] fontType The font type or NULL_OBJECT_ID
 		/// @param[in] graphicalDesignatorObjectID Object ID of an object to be used as a graphic representation of the object label or NULL_OBJECT_ID
-		/// @returns true if the message was sent successfully
-		bool send_change_object_label(std::uint16_t objectID, std::uint16_t labelStringObjectID, std::uint8_t fontType, std::uint16_t graphicalDesignatorObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_object_label(std::uint16_t objectID, std::uint16_t labelStringObjectID, std::uint8_t fontType, std::uint16_t graphicalDesignatorObjectID);
 
 		/// @brief Sends change polygon point command
 		/// @details This command is used by a Working Set to modify a point in an Output Polygon object.
@@ -789,8 +794,8 @@ namespace isobus
 		/// @param[in] pointIndex The index of the point in the polygon to edit
 		/// @param[in] newXValue The new X axis value (px)
 		/// @param[in] newYValue The new Y axis value (px)
-		/// @returns true if the message was sent successfully
-		bool send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue);
 
 		/// @brief Sends the change polygon scale command
 		/// @details This command is used by a Working Set to change the scale of a complete Output Polygon object. This
@@ -798,24 +803,24 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] widthAttribute New width attribute
 		/// @param[in] heightAttribute New height attribute
-		/// @returns true if the message was sent successfully
-		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute);
 
 		/// @brief Sends the select colour map or palette command
 		/// @param[in] objectID The object to select
-		/// @returns true if the message was sent successfully
-		bool send_select_colour_map_or_palette(std::uint16_t objectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_select_colour_map_or_palette(std::uint16_t objectID);
 
 		/// @brief Sends the execute extended macro command
 		/// @details Executes an extended macro
 		/// @param[in] objectID The object ID of the extended macro to execute
-		/// @returns true if the message was sent successfully
-		bool send_execute_extended_macro(std::uint16_t objectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_execute_extended_macro(std::uint16_t objectID);
 
 		/// @brief Sends the select active working set command
 		/// @param[in] NAMEofWorkingSetMasterForDesiredWorkingSet The NAME of the target working set master
-		/// @returns true if the message was sent successfully
-		bool send_select_active_working_set(std::uint64_t NAMEofWorkingSetMasterForDesiredWorkingSet) const;
+		/// @returns true if the message is being sent successfully
+		bool send_select_active_working_set(std::uint64_t NAMEofWorkingSetMasterForDesiredWorkingSet);
 
 		// Graphics Context Commands:
 		/// @brief Sends the set graphics cursor command
@@ -823,8 +828,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] xPosition The new X position (px)
 		/// @param[in] yPosition The new Y position (px)
-		/// @returns true if the message was sent successfully
-		bool send_set_graphics_cursor(std::uint16_t objectID, std::int16_t xPosition, std::int16_t yPosition) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_graphics_cursor(std::uint16_t objectID, std::int16_t xPosition, std::int16_t yPosition);
 
 		/// @brief Sends the move graphics cursor command
 		/// @details This command alters the graphics cursor x/y attributes of the object
@@ -833,23 +838,23 @@ namespace isobus
 		/// @param[in] xOffset The new relative X offset of the cursor
 		/// @param[in] yOffset The new relative Y offset of the cursor
 		/// @returns true if the message was sent successfully
-		bool send_move_graphics_cursor(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset) const;
+		bool send_move_graphics_cursor(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
 
 		/// @brief Sends the set foreground colour command
 		/// @details This command modifies the foreground colour
 		/// attribute.The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] colour See standard colour palette, 0-255
-		/// @returns true if the message was sent successfully
-		bool send_set_foreground_colour(std::uint16_t objectID, std::uint8_t colour) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_foreground_colour(std::uint16_t objectID, std::uint8_t colour);
 
 		/// @brief Sends the set background colour command
 		/// @details This command modifies the background colour
 		/// attribute.The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] colour See standard colour palette, 0-255
-		/// @returns true if the message was sent successfully
-		bool send_set_background_colour(std::uint16_t objectID, std::uint8_t colour) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_background_colour(std::uint16_t objectID, std::uint8_t colour);
 
 		/// @brief Sends the set line attributes object id
 		/// @details This command modifies the Output Line object
@@ -858,8 +863,8 @@ namespace isobus
 		/// The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] lineAttributeobjectID The object ID of the line attribute
-		/// @returns true if the message was sent successfully
-		bool send_set_line_attributes_object_id(std::uint16_t objectID, std::uint16_t lineAttributeobjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_line_attributes_object_id(std::uint16_t objectID, std::uint16_t lineAttributeobjectID);
 
 		/// @brief Sends the fill attributes object id
 		/// @details This command modifies the fill object attribute. All
@@ -868,8 +873,8 @@ namespace isobus
 		/// graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] fillAttributeobjectID The object ID of the fill attribute
-		/// @returns true if the message was sent successfully
-		bool send_set_fill_attributes_object_id(std::uint16_t objectID, std::uint16_t fillAttributeobjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_fill_attributes_object_id(std::uint16_t objectID, std::uint16_t fillAttributeobjectID);
 
 		/// @brief Sends the set fill attributes object ID command
 		/// @details This command modifies the font object attribute. All
@@ -878,8 +883,8 @@ namespace isobus
 		/// The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] fontAttributesObjectID The object ID of the font attribute
-		/// @returns true if the message was sent successfully
-		bool send_set_font_attributes_object_id(std::uint16_t objectID, std::uint16_t fontAttributesObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_set_font_attributes_object_id(std::uint16_t objectID, std::uint16_t fontAttributesObjectID);
 
 		/// @brief Sends the erase rectangle command
 		/// @details Fills the rectangle at the graphics cursor using the
@@ -889,8 +894,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] width The width of the rectangle
 		/// @param[in] height The height of the rectangle
-		/// @returns true if the message was sent successfully
-		bool send_erase_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height) const;
+		/// @returns true if the message is being sent successfully
+		bool send_erase_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
 
 		/// @brief Sends the draw point command
 		/// @details Sets the pixel to the foreground colour. The graphics
@@ -898,8 +903,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] xOffset The pixel X offset relative to the cursor
 		/// @param[in] yOffset The pixel Y offset relative to the cursor
-		/// @returns true if the message was sent successfully
-		bool send_draw_point(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_point(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
 
 		/// @brief Sends the draw line command
 		/// @details Draws a line from the graphics cursor to the specified
@@ -910,8 +915,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] xOffset The pixel X offset relative to the cursor
 		/// @param[in] yOffset The pixel Y offset relative to the cursor
-		/// @returns true if the message was sent successfully
-		bool send_draw_line(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_line(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset);
 
 		/// @brief Sends the draw rectangle command
 		/// @details Draws a rectangle at the graphics cursor. The
@@ -923,8 +928,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] width The width of the rectangle (px)
 		/// @param[in] height The height of the rectangle (px)
-		/// @returns true if the message was sent successfully
-		bool send_draw_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
 
 		/// @brief Sends the draw closed ellipse message
 		/// @details Draws a closed ellipse bounded by the rectangle
@@ -937,8 +942,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] width The width of the ellipse (px)
 		/// @param[in] height The height of the ellipse (px)
-		/// @returns true if the message was sent successfully
-		bool send_draw_closed_ellipse(std::uint16_t objectID, std::uint16_t width, std::uint16_t height) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_closed_ellipse(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
 
 		/// @brief Sends the draw polygon command
 		/// @details Draws a polygon from the graphics cursor to the first
@@ -958,8 +963,8 @@ namespace isobus
 		/// @param[in] numberOfPoints Number of points in the polygon
 		/// @param[in] listOfXOffsetsRelativeToCursor A list of X offsets for the points, relative to the cursor
 		/// @param[in] listOfYOffsetsRelativeToCursor A list of Y offsets for the points, relative to the cursor
-		/// @returns true if the message was sent successfully
-		bool send_draw_polygon(std::uint16_t objectID, std::uint8_t numberOfPoints, std::int16_t *listOfXOffsetsRelativeToCursor, std::int16_t *listOfYOffsetsRelativeToCursor) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_polygon(std::uint16_t objectID, std::uint8_t numberOfPoints, const std::int16_t *listOfXOffsetsRelativeToCursor, const std::int16_t *listOfYOffsetsRelativeToCursor);
 
 		/// @brief Sends the draw text command
 		/// @details Draws the given text using the Font Attributes object.
@@ -971,8 +976,8 @@ namespace isobus
 		/// @param[in] transparent Denotes if the text background is transparent
 		/// @param[in] textLength String length
 		/// @param[in] value A buffer to the text to draw with length `textLength`
-		/// @returns true if the message was sent successfully
-		bool send_draw_text(std::uint16_t objectID, bool transparent, std::uint8_t textLength, const char *value) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_text(std::uint16_t objectID, bool transparent, std::uint8_t textLength, const char *value);
 
 		/// @brief Sends the pan viewport command
 		/// @details This command modifies the viewport X and Y
@@ -982,8 +987,8 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] xAttribute The viewport X attribute
 		/// @param[in] yAttribute The viewport Y attribute
-		/// @returns true if the message was sent successfully
-		bool send_pan_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute) const;
+		/// @returns true if the message is being sent successfully
+		bool send_pan_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute);
 
 		/// @brief Sends the zoom viewport command
 		/// @details This command allows magnification of the viewport
@@ -991,8 +996,8 @@ namespace isobus
 		/// zoom value. The graphics cursor is not moved.
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] zoom Zoom value, -32.0 to 32.0
-		/// @returns true if the message was sent successfully
-		bool send_zoom_viewport(std::uint16_t objectID, float zoom) const;
+		/// @returns true if the message is being sent successfully
+		bool send_zoom_viewport(std::uint16_t objectID, float zoom);
 
 		/// @brief Sends the pan and zoom viewport command
 		/// @details This command allows both panning and zooming at the same time.
@@ -1000,8 +1005,8 @@ namespace isobus
 		/// @param[in] xAttribute The viewport X attribute
 		/// @param[in] yAttribute The viewport Y attribute
 		/// @param[in] zoom Zoom value, -32.0 to 32.0
-		/// @returns true if the message was sent successfully
-		bool send_pan_and_zoom_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute, float zoom) const;
+		/// @returns true if the message is being sent successfully
+		bool send_pan_and_zoom_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute, float zoom);
 
 		/// @brief Sends the change viewport size command
 		/// @details This command changes the size of the viewport and
@@ -1010,39 +1015,39 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] width The width of the viewport
 		/// @param[in] height The height of the viewport
-		/// @returns true if the message was sent successfully
-		bool send_change_viewport_size(std::uint16_t objectID, std::uint16_t width, std::uint16_t height) const;
+		/// @returns true if the message is being sent successfully
+		bool send_change_viewport_size(std::uint16_t objectID, std::uint16_t width, std::uint16_t height);
 
 		/// @brief Sends the draw VT object command
 		/// @details his command draws the VT Object specified by the Object ID
 		/// at the current graphics cursor location.
 		/// @param[in] graphicsContextObjectID The ID of the target graphics context object
 		/// @param[in] VTObjectID The object ID to draw
-		/// @returns true if the message was sent successfully
-		bool send_draw_vt_object(std::uint16_t graphicsContextObjectID, std::uint16_t VTObjectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_draw_vt_object(std::uint16_t graphicsContextObjectID, std::uint16_t VTObjectID);
 
 		/// @brief Sends the copy canvas to picture graphic command
 		/// @details This command copies the current canvas of the
 		/// Graphics Context Object into the Picture Graphic object specified.
 		/// @param[in] graphicsContextObjectID The ID of the target graphics context object
 		/// @param[in] objectID The picture graphic's object ID to copy to
-		/// @returns true if the message was sent successfully
-		bool send_copy_canvas_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_copy_canvas_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID);
 
 		/// @brief Sends the copy viewport to picture graphic command
 		/// @details This command copies the current Viewport of the GCO into the
 		/// specified picture graphic.
 		/// @param[in] graphicsContextObjectID The ID of the target graphics context object
 		/// @param[in] objectID The picture graphic's object ID to copy to
-		/// @returns true if the message was sent successfully
-		bool send_copy_viewport_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_copy_viewport_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID);
 
 		// VT Querying
 		/// @brief Sends the get attribute value message
 		/// @param[in] objectID The object ID to query
 		/// @param[in] attributeID The attribute object to query
-		/// @returns true if the message was sent successfully
-		bool send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID) const;
+		/// @returns true if the message is being sent successfully
+		bool send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID);
 
 		// Get Softkeys Response
 		/// @brief Returns the number of X axis pixels in a softkey
@@ -1567,6 +1572,29 @@ namespace isobus
 		/// @returns true if the object was resized, otherwise false
 		bool resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type);
 
+		/// @brief Sends a command to the VT server
+		/// @param[in] data The data to send, including the function-code
+		/// @param[in] priority The priority of the message
+		/// @returns true if the message was sent successfully
+		bool send_command(const std::vector<std::uint8_t> &data, CANIdentifier::CANPriority priority) const;
+
+		/// @brief Tries to send a command to the VT server, and queues it if it fails
+		/// @param[in] data The data to send, including the function-code
+		/// @param[in] priority The priority of the message
+		/// @param[in] replace If true, the message will replace any existing message with the same priority and function-code
+		/// @returns true if the message was sent/queued successfully
+		bool queue_command(const std::vector<std::uint8_t> &data, CANIdentifier::CANPriority priority, bool replace = false);
+
+		/// @brief Replaces the first message in the queue with the same function-code and priority, and removes the rest
+		/// @note This will not queue a message if one does not already exist.
+		/// @param[in] data The data to send, including the function-code
+		/// @param[in] priority The priority of the message
+		/// @returns true if the message was replaced successfully
+		bool replace_command(const std::vector<std::uint8_t> &data, CANIdentifier::CANPriority priority);
+
+		/// @brief Tries to send all messages in the queue
+		void process_command_queue();
+
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
@@ -1624,6 +1652,10 @@ namespace isobus
 		bool sendWorkingSetMaintenance = false; ///< Used internally to enable and disable cyclic sending of the working set maintenance message
 		bool sendAuxiliaryMaintenance = false; ///< Used internally to enable and disable cyclic sending of the auxiliary maintenance message
 		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
+
+		// Command queue
+		std::vector<std::pair<std::vector<std::uint8_t>, CANIdentifier::CANPriority>> commandQueue; ///< A queue of commands to send to the VT server
+		bool commandQueueEnabled = true; ///< Determines if the command queue is enabled
 
 		// Activation event callbacks
 		EventDispatcher<VTKeyEvent> softKeyEventDispatcher; ///< A list of all soft key event callbacks
