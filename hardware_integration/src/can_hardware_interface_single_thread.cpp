@@ -39,7 +39,7 @@ namespace isobus
 
 		while (value > hardwareChannels.size())
 		{
-			hardwareChannels.push_back(std::make_unique<CANHardware>());
+			hardwareChannels.emplace_back(new CANHardware());
 			hardwareChannels.back()->frameHandler = nullptr;
 		}
 		while (value < hardwareChannels.size())
