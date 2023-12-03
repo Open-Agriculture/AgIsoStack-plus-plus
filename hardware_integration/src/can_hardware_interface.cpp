@@ -55,7 +55,7 @@ namespace isobus
 
 		while (value > hardwareChannels.size())
 		{
-			hardwareChannels.push_back(std::make_unique<CANHardware>());
+			hardwareChannels.emplace_back(new CANHardware());
 			hardwareChannels.back()->receiveMessageThread = nullptr;
 			hardwareChannels.back()->frameHandler = nullptr;
 		}
@@ -136,8 +136,8 @@ namespace isobus
 			return false;
 		}
 
-		updateThread = std::make_unique<std::thread>(update_thread_function);
-		wakeupThread = std::make_unique<std::thread>(periodic_update_function);
+		updateThread.reset(new std::thread(update_thread_function));
+		wakeupThread.reset(new std::thread(periodic_update_function));
 
 		threadsStarted = true;
 
@@ -149,7 +149,7 @@ namespace isobus
 
 				if (hardwareChannels[i]->frameHandler->get_is_valid())
 				{
-					hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_can_frame_thread_function, static_cast<std::uint8_t>(i));
+					hardwareChannels[i]->receiveMessageThread.reset(new std::thread(receive_can_frame_thread_function, static_cast<std::uint8_t>(i)));
 				}
 			}
 		}

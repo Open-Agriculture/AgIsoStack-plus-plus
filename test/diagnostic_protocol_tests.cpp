@@ -12,7 +12,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 	NAME TestDeviceNAME(0);
 	auto TestInternalECU = InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 
-	auto diagnosticProtocol = std::make_unique<DiagnosticProtocol>(TestInternalECU);
+	std::unique_ptr<DiagnosticProtocol> diagnosticProtocol;
+	diagnosticProtocol.reset(new DiagnosticProtocol(TestInternalECU));
 	EXPECT_TRUE(diagnosticProtocol->initialize());
 	EXPECT_FALSE(diagnosticProtocol->initialize()); // Should not be able to initialize twice
 
