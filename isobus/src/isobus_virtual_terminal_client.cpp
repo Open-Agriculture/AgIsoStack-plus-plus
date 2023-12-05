@@ -1237,7 +1237,6 @@ namespace isobus
 			tempData.objectPoolSize = size;
 			tempData.autoScaleDataMaskOriginalDimension = 0;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
-			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
 			tempData.versionLabel = version;
@@ -1267,7 +1266,6 @@ namespace isobus
 			tempData.objectPoolSize = pool->size();
 			tempData.autoScaleDataMaskOriginalDimension = 0;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
-			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
 			tempData.versionLabel = version;
@@ -1305,7 +1303,6 @@ namespace isobus
 			tempData.objectPoolVectorPointer = nullptr;
 			tempData.dataCallback = value;
 			tempData.objectPoolSize = poolTotalSize;
-			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = true;
 			tempData.uploaded = false;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
@@ -2263,7 +2260,7 @@ namespace isobus
 				{
 					if (!vtClient->objectPools.empty())
 					{
-						transmitSuccessful = vtClient->send_working_set_maintenance(false, vtClient->objectPools[0].version);
+						transmitSuccessful = vtClient->send_working_set_maintenance(false);
 
 						if (transmitSuccessful)
 						{
