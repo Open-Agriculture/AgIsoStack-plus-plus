@@ -23,8 +23,6 @@
 #include <map>
 #include <unordered_map>
 
-static constexpr std::uint8_t SUPPORTED_VT_VERSION = 0x06;
-
 namespace isobus
 {
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
@@ -1768,6 +1766,8 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_working_set_maintenance(bool initializing) const
 	{
+		static constexpr std::uint8_t SUPPORTED_VT_VERSION = 0x06;
+
 		std::uint8_t versionByte;
 		std::uint8_t bitmask = (initializing ? 0x01 : 0x00);
 
