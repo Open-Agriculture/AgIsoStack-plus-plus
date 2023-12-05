@@ -1338,7 +1338,6 @@ namespace isobus
 			std::uint32_t objectPoolSize; ///< The size of the object pool
 			std::uint32_t autoScaleDataMaskOriginalDimension; ///< The original length or width of this object pool's data mask area (in pixels)
 			std::uint32_t autoScaleSoftKeyDesignatorOriginalHeight; ///< The original height of a soft key designator as designed in the pool (in pixels)
-			VTVersion version; ///< The version of the object pool. Must be the same for all pools!
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
 			bool uploaded; ///< The upload state of this pool
 		};

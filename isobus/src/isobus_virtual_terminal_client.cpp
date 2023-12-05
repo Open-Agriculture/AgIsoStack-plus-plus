@@ -1376,7 +1376,7 @@ namespace isobus
 					if (0 != objectPools.size())
 					{
 						set_state(StateMachineState::SendGetMemory);
-						send_working_set_maintenance(true, objectPools[0].version);
+						send_working_set_maintenance(true);
 						lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
 						sendWorkingSetMaintenance = true;
 						sendAuxiliaryMaintenance = true;
