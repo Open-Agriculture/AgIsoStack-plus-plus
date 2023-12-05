@@ -1370,6 +1370,8 @@ namespace isobus
 		/// @returns true if the message was sent
 		bool send_delete_object_pool() const;
 
+		bool send_working_set_maintenance(bool initializing) const;
+
 		/// @brief Sends the working set maintenance message
 		/// @param[in] initializing Used to set the initializing bit
 		/// @param[in] workingSetVersion The version supported by the working set

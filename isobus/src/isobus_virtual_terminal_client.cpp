@@ -1764,47 +1764,14 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_working_set_maintenance(bool initializing, VTVersion workingSetVersion) const
+	bool VirtualTerminalClient::send_working_set_maintenance(bool initializing) const
 	{
 		std::uint8_t versionByte;
 		std::uint8_t bitmask = (initializing ? 0x01 : 0x00);
 
-		switch (workingSetVersion)
-		{
-			case VTVersion::Version3:
-			{
-				versionByte = 0x03;
-			}
-			break;
-
-			case VTVersion::Version4:
-			{
-				versionByte = 0x04;
-			}
-			break;
-
-			case VTVersion::Version5:
-			{
-				versionByte = 0x05;
-			}
-			break;
-
-			case VTVersion::Version6:
-			{
-				versionByte = 0x06;
-			}
-			break;
-
-			default:
-			{
-				versionByte = 0xFF;
-			}
-			break;
-		}
-
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage),
 			                                                         bitmask,
-			                                                         versionByte,
+			                                                         0x06,
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF,
