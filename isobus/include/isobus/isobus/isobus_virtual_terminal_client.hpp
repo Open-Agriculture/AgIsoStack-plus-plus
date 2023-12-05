@@ -1370,13 +1370,10 @@ namespace isobus
 		/// @returns true if the message was sent
 		bool send_delete_object_pool() const;
 
-		bool send_working_set_maintenance(bool initializing) const;
-
 		/// @brief Sends the working set maintenance message
 		/// @param[in] initializing Used to set the initializing bit
-		/// @param[in] workingSetVersion The version supported by the working set
 		/// @returns true if the message was sent
-		bool send_working_set_maintenance(bool initializing, VTVersion workingSetVersion) const;
+		bool send_working_set_maintenance(bool initializing) const;
 
 		/// @brief Sends the get memory message
 		/// @details This message checks to see if the VT has enough memory available to store your object pool(s)

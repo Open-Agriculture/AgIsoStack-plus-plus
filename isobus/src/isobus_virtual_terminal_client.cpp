@@ -23,6 +23,8 @@
 #include <map>
 #include <unordered_map>
 
+static constexpr std::uint8_t SUPPORTED_VT_VERSION = 0x06;
+
 namespace isobus
 {
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
@@ -1771,7 +1773,7 @@ namespace isobus
 
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage),
 			                                                         bitmask,
-			                                                         0x06,
+			                                                         SUPPORTED_VT_VERSION,
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF,
