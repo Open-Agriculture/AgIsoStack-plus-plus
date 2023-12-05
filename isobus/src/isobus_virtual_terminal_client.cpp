@@ -1237,7 +1237,6 @@ namespace isobus
 			tempData.objectPoolSize = size;
 			tempData.autoScaleDataMaskOriginalDimension = 0;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
-			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
 			tempData.versionLabel = version;
@@ -1267,7 +1266,6 @@ namespace isobus
 			tempData.objectPoolSize = pool->size();
 			tempData.autoScaleDataMaskOriginalDimension = 0;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
-			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = false;
 			tempData.uploaded = false;
 			tempData.versionLabel = version;
@@ -1305,7 +1303,6 @@ namespace isobus
 			tempData.objectPoolVectorPointer = nullptr;
 			tempData.dataCallback = value;
 			tempData.objectPoolSize = poolTotalSize;
-			tempData.version = poolSupportedVTVersion;
 			tempData.useDataCallback = true;
 			tempData.uploaded = false;
 			tempData.autoScaleSoftKeyDesignatorOriginalHeight = 0;
@@ -1376,7 +1373,7 @@ namespace isobus
 					if (0 != objectPools.size())
 					{
 						set_state(StateMachineState::SendGetMemory);
-						send_working_set_maintenance(true, objectPools[0].version);
+						send_working_set_maintenance(true);
 						lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
 						sendWorkingSetMaintenance = true;
 						sendAuxiliaryMaintenance = true;
@@ -1764,47 +1761,16 @@ namespace isobus
 		                                                      CANIdentifier::PriorityLowest7);
 	}
 
-	bool VirtualTerminalClient::send_working_set_maintenance(bool initializing, VTVersion workingSetVersion) const
+	bool VirtualTerminalClient::send_working_set_maintenance(bool initializing) const
 	{
+		static constexpr std::uint8_t SUPPORTED_VT_VERSION = 0x06;
+
 		std::uint8_t versionByte;
 		std::uint8_t bitmask = (initializing ? 0x01 : 0x00);
 
-		switch (workingSetVersion)
-		{
-			case VTVersion::Version3:
-			{
-				versionByte = 0x03;
-			}
-			break;
-
-			case VTVersion::Version4:
-			{
-				versionByte = 0x04;
-			}
-			break;
-
-			case VTVersion::Version5:
-			{
-				versionByte = 0x05;
-			}
-			break;
-
-			case VTVersion::Version6:
-			{
-				versionByte = 0x06;
-			}
-			break;
-
-			default:
-			{
-				versionByte = 0xFF;
-			}
-			break;
-		}
-
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage),
 			                                                         bitmask,
-			                                                         versionByte,
+			                                                         SUPPORTED_VT_VERSION,
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF,
@@ -2294,7 +2260,7 @@ namespace isobus
 				{
 					if (!vtClient->objectPools.empty())
 					{
-						transmitSuccessful = vtClient->send_working_set_maintenance(false, vtClient->objectPools[0].version);
+						transmitSuccessful = vtClient->send_working_set_maintenance(false);
 
 						if (transmitSuccessful)
 						{
