@@ -2548,12 +2548,256 @@ namespace isobus
 					break;
 
 					case VirtualTerminalObjectType::AuxiliaryFunctionType1:
+					{
+						auto tempObject = std::make_shared<AuxiliaryFunctionType1>();
+
+						CANStackLogger::warn("[WS]: Deserializing an Aux function type 1 object. This object is parsed and validated but NOT utilized by version 3 or later VTs in making Auxiliary Control Assignments.");
+
+						if (iopLength >= tempObject->get_minumum_object_length())
+						{
+							tempObject->set_id(decodedID);
+							tempObject->set_background_color(iopData[3]);
+
+							if (iopData[4] <= 2)
+							{
+								tempObject->set_function_type(static_cast<AuxiliaryFunctionType1::FunctionType>(iopData[4]));
+
+								const std::uint8_t numberOfObjectsToFollow = iopData[5];
+								const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+								iopData += 6;
+								iopLength -= 6;
+
+								if (iopLength >= numberOfBytesToFollow)
+								{
+									for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
+									{
+										const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+										const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+										const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+
+										tempObject->add_child(objectID, xPosition, yPosition);
+										iopData += 6;
+										iopLength -= 6;
+									}
+									retVal = true;
+								}
+								else
+								{
+									CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 1 object's children.");
+								}
+							}
+							else
+							{
+								CANStackLogger::error("[WS]: Auxiliary function type 1 object with ID %u has an invalid function type. The function type must be 2 or less.", decodedID);
+							}
+						}
+						else
+						{
+							CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 1 object.");
+						}
+					}
+					break;
+
 					case VirtualTerminalObjectType::AuxiliaryInputType1:
+					{
+						auto tempObject = std::make_shared<AuxiliaryInputType1>();
+
+						CANStackLogger::warn("[WS]: Deserializing an Aux input type 1 object. This object is parsed and validated but NOT utilized by version 3 or later VTs in making Auxiliary Control Assignments.");
+
+						if (iopLength >= tempObject->get_minumum_object_length())
+						{
+							tempObject->set_id(decodedID);
+							tempObject->set_background_color(iopData[3]);
+
+							if (iopData[4] <= 2)
+							{
+								tempObject->set_function_type(static_cast<AuxiliaryInputType1::FunctionType>(iopData[4]));
+
+								if (iopData[5] <= 250)
+								{
+									tempObject->set_input_id(iopData[5]);
+
+									const std::uint8_t numberOfObjectsToFollow = iopData[6];
+									const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+									iopData += 7;
+									iopLength -= 7;
+
+									if (iopLength >= numberOfBytesToFollow)
+									{
+										for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
+										{
+											const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+											const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+											const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+
+											tempObject->add_child(objectID, xPosition, yPosition);
+											iopData += 6;
+											iopLength -= 6;
+										}
+										retVal = true;
+									}
+									else
+									{
+										CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 2 object's children.");
+									}
+								}
+								else
+								{
+									CANStackLogger::error("[WS]: Auxiliary input type 1 object %u has an invalid input ID. Input ID must be 250 or less, but was decoded as %u", decodedID, iopData[5]);
+								}
+							}
+							else
+							{
+								CANStackLogger::error("[WS]: Auxiliary input type 1 object %u has an invalid function type. Function type must be 2 or less.");
+							}
+						}
+						else
+						{
+							CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary input type 1 object");
+						}
+					}
+					break;
+
 					case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+					{
+						auto tempObject = std::make_shared<AuxiliaryFunctionType2>();
+
+						if (iopLength >= tempObject->get_minumum_object_length())
+						{
+							tempObject->set_id(decodedID);
+							tempObject->set_background_color(iopData[3]);
+
+							if ((iopData[4] & 0x1F) >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
+							{
+								CANStackLogger::error("[WS]: Auxiliary function type 2 with object ID %u has a reserved function type.", decodedID);
+							}
+							else if ((iopData[4] & 0x1F) == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
+							{
+								CANStackLogger::error("[WS]: Auxiliary function type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
+							}
+							else
+							{
+								tempObject->set_function_type(static_cast<AuxiliaryFunctionType2::FunctionType>(iopData[4] & 0x1F));
+								tempObject->set_function_attribute(AuxiliaryFunctionType2::CriticalControl, 0 != (iopData[4] & 0x20));
+								tempObject->set_function_attribute(AuxiliaryFunctionType2::AssignmentRestriction, 0 != (iopData[4] & 0x40));
+								tempObject->set_function_attribute(AuxiliaryFunctionType2::SingleAssignment, 0 != (iopData[4] & 0x80));
+
+								const std::uint8_t numberOfObjectsToFollow = iopData[5];
+								const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+								iopData += 6;
+								iopLength -= 6;
+
+								if (iopLength >= numberOfBytesToFollow)
+								{
+									for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
+									{
+										const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+										const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+										const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+
+										tempObject->add_child(objectID, xPosition, yPosition);
+										iopData += 6;
+										iopLength -= 6;
+									}
+									retVal = true;
+								}
+								else
+								{
+									CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 2 object's children.");
+								}
+							}
+						}
+						else
+						{
+							CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 2 object");
+						}
+					}
+					break;
+
 					case VirtualTerminalObjectType::AuxiliaryInputType2:
+					{
+						auto tempObject = std::make_shared<AuxiliaryInputType2>();
+
+						if (iopLength >= tempObject->get_minumum_object_length())
+						{
+							tempObject->set_id(decodedID);
+							tempObject->set_background_color(iopData[3]);
+
+							if ((iopData[4] & 0x1F) >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
+							{
+								CANStackLogger::error("[WS]: Auxiliary input type 2 with object ID %u has a reserved function type.", decodedID);
+							}
+							else if ((iopData[4] & 0x1F) == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
+							{
+								CANStackLogger::error("[WS]: Auxiliary input type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
+							}
+							else
+							{
+								tempObject->set_function_type(static_cast<AuxiliaryFunctionType2::FunctionType>(iopData[4] & 0x1F));
+								tempObject->set_function_attribute(AuxiliaryInputType2::CriticalControl, 0 != (iopData[4] & 0x20));
+								tempObject->set_function_attribute(AuxiliaryInputType2::SingleAssignment, 0 != (iopData[4] & 0x80));
+
+								if (0 != (iopData[4] & 0x40))
+								{
+									CANStackLogger::warn("[WS]: Auxiliary input type 2 with object ID %u is using the assignment restriction attribute, which is reserved and should be zero.", decodedID);
+								}
+
+								const std::uint8_t numberOfObjectsToFollow = iopData[5];
+								const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+								iopData += 6;
+								iopLength -= 6;
+
+								if (iopLength >= numberOfBytesToFollow)
+								{
+									for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
+									{
+										const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+										const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+										const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+										tempObject->add_child(objectID, xPosition, yPosition);
+										iopData += 6;
+										iopLength -= 6;
+									}
+									retVal = true;
+								}
+								else
+								{
+									CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary input type 2 object's children.");
+								}
+							}
+						}
+						else
+						{
+							CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary input type 2 object");
+						}
+					}
+					break;
+
 					case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
 					{
-						CANStackLogger::error("[WS]: Auxiliary objects not supported yet");
+						auto tempObject = std::make_shared<AuxiliaryControlDesignatorType2>();
+
+						if (iopLength >= tempObject->get_minumum_object_length())
+						{
+							tempObject->set_id(decodedID);
+
+							if (iopData[3] <= 3)
+							{
+								tempObject->set_pointer_type(iopData[3]);
+								tempObject->set_auxiliary_object_id((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
+								iopData += 6;
+								iopLength -= 6;
+								retVal = true;
+							}
+							else
+							{
+								CANStackLogger::error("[WS]: Auxiliary control designator type 2 object %u  has an invalid pointer type. Pointer type must be 3 or less.");
+							}
+						}
+						else
+						{
+							CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary control designator type 2 object");
+						}
 					}
 					break;
 
