@@ -916,7 +916,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(0x14E72637, testFrame.identifier);
 
 	EXPECT_EQ(173, testFrame.data[0]); // VT Function
 
@@ -933,7 +933,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(0x14E72637, testFrame.identifier);
 	EXPECT_EQ(160, testFrame.data[0]); // VT function
 
 	std::uint16_t objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
@@ -949,7 +949,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(0x14E72637, testFrame.identifier);
 	EXPECT_EQ(160, testFrame.data[0]); // VT function
 
 	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
@@ -965,7 +965,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(0x14E72637, testFrame.identifier);
 	EXPECT_EQ(161, testFrame.data[0]); // VT function
 	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
 	EXPECT_EQ(1234, objectID);
@@ -976,7 +976,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(0x14E72637, testFrame.identifier);
 	EXPECT_EQ(161, testFrame.data[0]); // VT function
 	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
 	EXPECT_EQ(1234, objectID);
@@ -989,7 +989,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x1CE72637, testFrame.identifier);
+	EXPECT_EQ(0x14E72637, testFrame.identifier);
 	EXPECT_EQ(184, testFrame.data[0]); // VT function (graphics context command)
 	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
 	EXPECT_EQ(123, objectID);
