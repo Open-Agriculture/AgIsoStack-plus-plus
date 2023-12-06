@@ -1572,23 +1572,20 @@ namespace isobus
 
 		/// @brief Sends a command to the VT server
 		/// @param[in] data The data to send, including the function-code
-		/// @param[in] priority The priority of the message
 		/// @returns true if the message was sent successfully
-		bool send_command(const std::vector<std::uint8_t> &data, CANIdentifier::CANPriority priority) const;
+		bool send_command(const std::vector<std::uint8_t> &data) const;
 
 		/// @brief Tries to send a command to the VT server, and queues it if it fails
 		/// @param[in] data The data to send, including the function-code
-		/// @param[in] priority The priority of the message
 		/// @param[in] replace If true, the message will replace any existing message with the same priority and function-code
 		/// @returns true if the message was sent/queued successfully
-		bool queue_command(const std::vector<std::uint8_t> &data, CANIdentifier::CANPriority priority, bool replace = false);
+		bool queue_command(const std::vector<std::uint8_t> &data, bool replace = false);
 
 		/// @brief Replaces the first message in the queue with the same function-code and priority, and removes the rest
 		/// @note This will not queue a message if one does not already exist.
 		/// @param[in] data The data to send, including the function-code
-		/// @param[in] priority The priority of the message
 		/// @returns true if the message was replaced successfully
-		bool replace_command(const std::vector<std::uint8_t> &data, CANIdentifier::CANPriority priority);
+		bool replace_command(const std::vector<std::uint8_t> &data);
 
 		/// @brief Tries to send all messages in the queue
 		void process_command_queue();
@@ -1652,7 +1649,7 @@ namespace isobus
 		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
 
 		// Command queue
-		std::vector<std::pair<std::vector<std::uint8_t>, CANIdentifier::CANPriority>> commandQueue; ///< A queue of commands to send to the VT server
+		std::vector<std::vector<std::uint8_t>> commandQueue; ///< A queue of commands to send to the VT server
 		bool commandQueueEnabled = true; ///< Determines if the command queue is enabled
 
 		// Activation event callbacks
