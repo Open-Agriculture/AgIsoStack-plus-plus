@@ -8,11 +8,8 @@ find_package(Threads REQUIRED)
 
 add_executable(NMEA2KFastPacketTarget main.cpp)
 
-set_target_properties(
-  NMEA2KFastPacketTarget
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(NMEA2KFastPacketTarget PUBLIC cxx_std_11)
+set_target_properties(NMEA2KFastPacketTarget PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
   NMEA2KFastPacketTarget PRIVATE isobus::Isobus isobus::HardwareIntegration

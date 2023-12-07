@@ -92,7 +92,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ("", interfaceUnderTest.get_language_code());
 
 	// This contains: "en", Comma, 24 hour time, yyyymmdd, imperial, imperial, US, US, Metric, Metric, Imperial, Metric, "US", one junk byte at the end
-	std::uint8_t testData[] = { 'e', 'n', 0b00001111, 0x04, 0b01011010, 0b00000100, 'U', 'S', 0xFF };
+	std::uint8_t testData[] = { 'e', 'n', 0x0F, 0x04, 0x5A, 0x04, 'U', 'S', 0xFF };
 
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData, 9);
@@ -113,7 +113,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	EXPECT_EQ("US", interfaceUnderTest.get_country_code());
 
 	// This contains: "de", point, 12 hour time, ddmmyyyy, metric, no action, US, Metric, Reserved, Reserved, Imperial, Metric, No country code
-	std::uint8_t testData2[] = { 'd', 'e', 0b01011000, 0x00, 0b00111000, 0b10100100, 0xFF, 0xFF };
+	std::uint8_t testData2[] = { 'd', 'e', 0x58, 0x00, 0x38, 0xA4, 0xFF, 0xFF };
 
 	testMessage.set_data_size(0); // Resets the CAN message data vector
 	testMessage.set_data(testData2, 8);

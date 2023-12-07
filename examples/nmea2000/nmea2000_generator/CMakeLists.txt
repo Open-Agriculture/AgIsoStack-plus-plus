@@ -8,11 +8,8 @@ find_package(Threads REQUIRED)
 
 add_executable(NMEA2KGeneratorTarget main.cpp)
 
-set_target_properties(
-  NMEA2KGeneratorTarget
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(NMEA2KGeneratorTarget PUBLIC cxx_std_11)
+set_target_properties(NMEA2KGeneratorTarget PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
   NMEA2KGeneratorTarget PRIVATE isobus::Isobus isobus::HardwareIntegration

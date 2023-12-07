@@ -8,11 +8,8 @@ find_package(Threads REQUIRED)
 
 add_executable(TransportLayerExampleTarget main.cpp)
 
-set_target_properties(
-  TransportLayerExampleTarget
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(TransportLayerExampleTarget PUBLIC cxx_std_11)
+set_target_properties(TransportLayerExampleTarget PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
   TransportLayerExampleTarget

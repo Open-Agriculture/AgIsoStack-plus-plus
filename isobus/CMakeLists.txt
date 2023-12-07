@@ -90,11 +90,8 @@ prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
 add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
 
-set_target_properties(
-  Isobus
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(Isobus PUBLIC cxx_std_11)
+set_target_properties(Isobus PROPERTIES CXX_EXTENSIONS OFF)
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

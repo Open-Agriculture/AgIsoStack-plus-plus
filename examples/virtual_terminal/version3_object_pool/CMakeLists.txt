@@ -8,11 +8,8 @@ find_package(Threads REQUIRED)
 
 add_executable(VT3ExampleTarget main.cpp console_logger.cpp objectPoolObjects.h)
 
-set_target_properties(
-  VT3ExampleTarget
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(VT3ExampleTarget PUBLIC cxx_std_11)
+set_target_properties(VT3ExampleTarget PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
   VT3ExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration
