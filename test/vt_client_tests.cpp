@@ -434,7 +434,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
 	EXPECT_EQ(clientUnderTest.test_wrapper_remap_font_to_scale(VirtualTerminalClient::FontSize::Size16x16, 1.5f), VirtualTerminalClient::FontSize::Size16x24);
 
 	// Set and test supported Fonts
-	clientUnderTest.test_wrapper_set_supported_fonts(0b01010101, 0b01010101);
+	clientUnderTest.test_wrapper_set_supported_fonts(0x55, 0x55); // 0x55 = 01010101
 
 	// Small fonts
 	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size6x8));
@@ -472,7 +472,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
 	EXPECT_EQ(VirtualTerminalClient::FontSize::Size96x128, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x128));
 	EXPECT_EQ(VirtualTerminalClient::FontSize::Size128x192, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
 
-	clientUnderTest.test_wrapper_set_supported_fonts(0b10101010, 0b10101010);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xAA, 0xAA); // 0xAA = 10101010
 	// Small fonts
 	EXPECT_EQ(false, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size6x8));
 	EXPECT_EQ(true, clientUnderTest.get_font_size_supported(VirtualTerminalClient::FontSize::Size8x8));
