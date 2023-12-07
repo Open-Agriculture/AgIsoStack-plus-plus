@@ -6,15 +6,11 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(DiagnosticProtocolExampleTarget main.cpp)
+add_executable(DiagnosticProtocolExample main.cpp)
 
-set_target_properties(
-  DiagnosticProtocolExampleTarget
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(DiagnosticProtocolExample PUBLIC cxx_std_11)
+set_target_properties(DiagnosticProtocolExample PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
-  DiagnosticProtocolExampleTarget
-  PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads
-          isobus::Utility)
+  DiagnosticProtocolExample PRIVATE isobus::Isobus isobus::HardwareIntegration
+                                    Threads::Threads isobus::Utility)

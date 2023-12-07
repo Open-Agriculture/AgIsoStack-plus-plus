@@ -23,11 +23,8 @@ prepend(UTILITY_INCLUDE ${UTILITY_INCLUDE_DIR} ${UTILITY_INCLUDE})
 add_library(Utility ${UTILITY_SRC} ${UTILITY_INCLUDE})
 add_library(${PROJECT_NAME}::Utility ALIAS Utility)
 
-set_target_properties(
-  Utility
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(Utility PUBLIC cxx_std_11)
+set_target_properties(Utility PROPERTIES CXX_EXTENSIONS OFF)
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

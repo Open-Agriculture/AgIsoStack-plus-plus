@@ -124,11 +124,9 @@ prepend(HARDWARE_INTEGRATION_INCLUDE ${HARDWARE_INTEGRATION_INCLUDE_DIR}
 add_library(HardwareIntegration ${HARDWARE_INTEGRATION_SRC}
                                 ${HARDWARE_INTEGRATION_INCLUDE})
 add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
-set_target_properties(
-  HardwareIntegration
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+
+target_compile_features(HardwareIntegration PUBLIC cxx_std_11)
+set_target_properties(HardwareIntegration PROPERTIES CXX_EXTENSIONS OFF)
 target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility
                                                   ${PROJECT_NAME}::Isobus)
 

@@ -8,11 +8,8 @@ find_package(Threads REQUIRED)
 
 add_executable(GuidanceExampleTarget main.cpp console_logger.cpp)
 
-set_target_properties(
-  GuidanceExampleTarget
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(GuidanceExampleTarget PUBLIC cxx_std_11)
+set_target_properties(GuidanceExampleTarget PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
   GuidanceExampleTarget PRIVATE isobus::Isobus isobus::HardwareIntegration

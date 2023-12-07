@@ -120,7 +120,7 @@ if(BUILD_TESTING)
   add_executable(unit_tests ${TEST_SRC})
   set_target_properties(
     unit_tests
-    PROPERTIES CXX_STANDARD 14
+    PROPERTIES CXX_STANDARD 11
                CXX_EXTENSIONS OFF
                CXX_STANDARD_REQUIRED ON)
   target_link_libraries(

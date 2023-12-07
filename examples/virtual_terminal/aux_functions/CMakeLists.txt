@@ -9,11 +9,8 @@ find_package(Threads REQUIRED)
 add_executable(VTAuxFunctionsExample main.cpp console_logger.cpp
                                      object_pool_ids.h)
 
-set_target_properties(
-  VTAuxFunctionsExample
-  PROPERTIES CXX_STANDARD 14
-             CXX_EXTENSIONS OFF
-             CXX_STANDARD_REQUIRED ON)
+target_compile_features(VTAuxFunctionsExample PUBLIC cxx_std_11)
+set_target_properties(VTAuxFunctionsExample PROPERTIES CXX_EXTENSIONS OFF)
 
 target_link_libraries(
   VTAuxFunctionsExample PRIVATE isobus::Isobus isobus::HardwareIntegration

@@ -640,10 +640,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.identifier = 0x18FE0FF7;
 	testFrame.data[0] = 'e';
 	testFrame.data[1] = 'n',
-	testFrame.data[2] = 0b00001111;
+	testFrame.data[2] = 0x0F;
 	testFrame.data[3] = 0x04;
-	testFrame.data[4] = 0b01011010;
-	testFrame.data[5] = 0b00000100;
+	testFrame.data[4] = 0x5A;
+	testFrame.data[5] = 0x04;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
@@ -663,7 +663,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[0] = 0x10; // Mux
 	testFrame.data[1] = 0x04; // Version number (Version 4)
 	testFrame.data[2] = 0xFF; // Max boot time (Not available)
-	testFrame.data[3] = 0b0011111; // Supports all options
+	testFrame.data[3] = 0x1F; // Supports all options
 	testFrame.data[4] = 0x00; // Reserved options = 0
 	testFrame.data[5] = 0x01; // Number of booms for section control (1)
 	testFrame.data[6] = 0x20; // Number of sections for section control (32)
