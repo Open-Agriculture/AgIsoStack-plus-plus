@@ -4330,7 +4330,7 @@ namespace isobus
 		bool alreadyReplaced = false;
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			bool matchesFunctionCode = (it[0][0] == data[0]);
+			bool matchesFunctionCode = (it->at(0) == data[0]);
 			if (matchesFunctionCode)
 			{
 				if (!alreadyReplaced)
