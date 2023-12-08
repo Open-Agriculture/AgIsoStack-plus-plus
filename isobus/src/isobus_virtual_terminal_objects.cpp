@@ -193,6 +193,28 @@ namespace isobus
 		}
 	}
 
+	std::uint8_t VTObject::get_number_macros() const
+	{
+		return static_cast<std::uint8_t>(macros.size());
+	}
+
+	void VTObject::add_macro(MacroMetadata macroToAdd)
+	{
+		macros.push_back(macroToAdd);
+	}
+
+	MacroMetadata VTObject::get_macro(std::uint8_t index) const
+	{
+		if (index < macros.size())
+		{
+			return macros[index];
+		}
+		else
+		{
+			return { EventID::Reserved, NULL_OBJECT_ID };
+		}
+	}
+
 	std::shared_ptr<VTObject> VTObject::get_object_by_id(std::uint16_t objectID, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
 	{
 		std::shared_ptr<VTObject> retVal = nullptr;
@@ -3161,7 +3183,7 @@ namespace isobus
 
 					if ((NULL_OBJECT_ID == rawAttributeData) ||
 					    ((nullptr != variableObject) &&
-					     (VirtualTerminalObjectType::NumberVariable == variableObject->get_object_type())))
+					     (VirtualTerminalObjectType::StringVariable == variableObject->get_object_type())))
 					{
 						set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
 						retVal = true;

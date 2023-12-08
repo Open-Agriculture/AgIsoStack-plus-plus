@@ -87,6 +87,52 @@ namespace isobus
 		Reserved = 255 ///< Reserved for future use. (See Clause D.14 Get Supported Objects message)
 	};
 
+	/// @brief Enumerates VT events. Events can be uniquely associated with a Macro object to execute when the event occurs.
+	/// These are defined in ISO 11783-6:2018 Table A.2
+	enum class EventID : std::uint8_t
+	{
+		Reserved = 0, ///< Reserved
+		OnActivate = 1, ///< Working set is made active
+		OnDeactivate = 2, ///< Working set is made inactive
+		OnShow = 3, ///< For Container objects, triggered by the hide/show command, with "show" indicated; For mask objects, when the mask is made visible on the display.
+		OnHide = 4, ///< For Container objects, triggered by the hide/show command, with "hide" indicated; for mask objects, when the mask is removed from the display.
+		// OnRefresh - An object that is already on display is redrawn (Macros cannot be associated with this event so no event ID is defined).
+		OnEnable = 5, ///< Input object is enabled (only enabled input objects can be navigated to). An Animation object is enabled for animation
+		OnDisable = 6, ///< Input object is disabled (only enabled input objects can be navigated to). An Animation object is disabled for animation.
+		OnChangeActiveMask = 7, ///< Change Active mask command
+		OnChangeSoftKeyMask = 8, ///< Change Soft Key mask command
+		OnChangeAttribute = 9, ///< Change Attribute command
+		OnChangeBackgroundColour = 10, ///< Change Background Colour command
+		ChangeFontAttributes = 11, ///< Change Font Attributes command
+		ChangeLineAttributes = 12, ///< Change Line Attributes command
+		ChangeFillAttributes = 13, ///< Change Fill Attributes command
+		ChangeChildLocation = 14, ///< Change Child Location command
+		OnChangeSize = 15, ///< Change Size command
+		OnChangeValue = 16, ///< Change numeric value or change string value command
+		OnChangePriority = 17, ///< Change Priority command
+		OnChangeEndpoint = 18, ///< Change Endpoint command
+		OnInputFieldSelection = 19, ///< The input field, Key or Button has received focus, operator has navigated onto the input field or Button or the VT has received the Select Input Object command.
+		OnInputFieldDeselection = 20, ///< The input field, Key or Button has lost focus, operator has navigated off of the input field or Button or the VT has received the Select Input Object command
+		OnESC = 21, ///< Input aborted on an input field either by the operator or the Working Set.
+		OnEntryOfAValue = 22, ///< Operator completes entry by activating the ENTER means - value does not have to change
+		OnEntryOfANewValue = 23, ///< Operator completes entry by activating the ENTER means - value has changed
+		OnKeyPress = 24, ///< A Soft Key or Button is pressed
+		OnKeyRelease = 25, ///< A Soft Key or Button is released
+		OnChangeChildPosition = 26, ///< Change Child Position command
+		OnPointingEventPress = 27, ///< Operator touches/clicks an area that causes a pointing event
+		OnPointingEventRelease = 28, ///< Operator touch/click is released
+		ProprietaryRangeBegin = 240, ///< Proprietary range begin
+		ProprietaryRangeEnd = 254, ///< Proprietary range end
+		UseExtendedMacroReference = 255 ///< This is not an event. When value is found in the event list of an object, it indicates that a 16 bit Macro Object ID reference is used
+	};
+
+	/// @brief A helper structure to group a macro ID with an event ID
+	struct MacroMetadata
+	{
+		EventID event; ///< The event that triggers this macro
+		std::uint16_t macroID; ///< The ID of the macro to execute
+	};
+
 	/// @brief VT 3 component colour vector
 	class VTColourVector
 	{
@@ -271,6 +317,19 @@ namespace isobus
 		/// This is meant to be a faster way to deal with objects that only have a max of 1 child.
 		void pop_child();
 
+		/// @brief Returns the number of macros referenced by this object
+		/// @returns The number of macros referenced by this object
+		std::uint8_t get_number_macros() const;
+
+		/// @brief Adds a macro to the list of macros referenced by this object
+		/// @param[in] macroToAdd The macro to add, which includes the event ID and macro ID
+		void add_macro(MacroMetadata macroToAdd);
+
+		/// @brief Returns the macro ID at the specified index
+		/// @param[in] index The index of the macro to retrieve
+		/// @returns The macro metadata at the specified index, or NULL_OBJECT_ID + EventID::Reserved if the index is out of range
+		MacroMetadata get_macro(std::uint8_t index) const;
+
 		/// @brief Returns a VT object from its member pool by ID, or the null id if it does not exist
 		/// @param[in] objectID The object ID to search for
 		/// @param[in] objectPool The object pool to search in
@@ -298,6 +357,7 @@ namespace isobus
 		};
 
 		std::vector<ChildObjectData> children; ///< List of child objects
+		std::vector<MacroMetadata> macros; ///< List of macros referenced by this object
 		std::uint16_t objectID = NULL_OBJECT_ID; ///< Object identifier. Shall be unique within the object pool.
 		std::uint16_t width = 0; ///< The width of the object. Not always applicable, but often used.
 		std::uint16_t height = 0; ///< The height of the object. Not always applicable, but often used.
