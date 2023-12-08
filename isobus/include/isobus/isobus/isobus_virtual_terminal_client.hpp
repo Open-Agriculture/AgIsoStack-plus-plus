@@ -1673,4 +1673,23 @@ namespace isobus
 
 } // namespace isobus
 
+// Required for FontSize to be used as a key in std::unordered_map, issue in C++11: https://cplusplus.github.io/LWG/issue2148
+#if __cplusplus < 201402L
+namespace std
+{
+	/// @brief Hashes a font size
+	template<>
+	struct hash<isobus::VirtualTerminalClient::FontSize>
+	{
+		/// @brief Hashes a font size
+		/// @param fontSize The font size to hash
+		/// @return The hash of the font size
+		size_t operator()(const isobus::VirtualTerminalClient::FontSize &fontSize) const
+		{
+			return static_cast<size_t>(fontSize);
+		}
+	};
+}
+#endif
+
 #endif // ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP
