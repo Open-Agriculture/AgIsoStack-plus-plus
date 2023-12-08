@@ -120,6 +120,12 @@ namespace isobus
 		/// @param[in] value The object ID to set as the faulting object
 		void set_object_pool_faulting_object_id(std::uint16_t value);
 
+		/// @brief Returns the event ID from a byte. Does validation to ensure that the byte is valid.
+		/// If the proprietary range or reserved range is used, it will be considered invalid and event 0 will be returned.
+		/// @param[in] eventByte The byte to convert to an event ID
+		/// @returns The event ID from a byte, or event 0 if the byte is invalid
+		static EventID get_event_from_byte(std::uint8_t eventByte);
+
 		/// @brief The object pool processing thread will execute this function when it runs
 		void worker_thread_function();
 
