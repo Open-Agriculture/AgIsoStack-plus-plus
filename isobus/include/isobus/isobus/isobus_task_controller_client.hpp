@@ -587,7 +587,7 @@ namespace isobus
 			/// @param obj the object to compare against
 			/// @returns true if the callback and parent pointer match, otherwise false
 			bool operator==(const RequestValueCommandCallbackInfo &obj) const;
-			RequestValueCommandCallback callback = nullptr; ///< The callback itself
+			RequestValueCommandCallback callback; ///< The callback itself
 			void *parent; ///< The parent pointer, generic context value
 		};
 
