@@ -380,6 +380,14 @@ void SeederVtApplication::update()
 
 		update_alarms();
 
+		if (!VTClientInterface.get_is_connected())
+		{
+			for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(UpdateVTStateFlags::NumberOfFlags); i++)
+			{
+				txFlags.set_flag(i); // Set all flags to bring the pool up with a known state
+			}
+		}
+
 		slowUpdateTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 	}
 	speedMessages.update();
