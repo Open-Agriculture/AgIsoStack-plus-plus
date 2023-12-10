@@ -6,6 +6,8 @@
 #include "isobus/isobus/isobus_shortcut_button_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 static ShortcutButtonInterface::StopAllImplementOperationsState lastCallbackValue = ShortcutButtonInterface::StopAllImplementOperationsState::Error;
@@ -17,54 +19,12 @@ static void testCallback(ShortcutButtonInterface::StopAllImplementOperationsStat
 
 TEST(ISB_TESTS, ShortcutButtonRxTests)
 {
-	VirtualCANPlugin serverPlugin;
-	serverPlugin.open();
-
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(2);
-	clientNAME.set_ecu_instance(4);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x97, 0);
-
-	CANMessageFrame testFrame;
-
-	// Force claim some other ECU
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFF74;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x13;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x83;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-	// Get the virtual CAN plugin back to a known state
-	while (!serverPlugin.get_queue_empty())
-	{
-		serverPlugin.read_frame(testFrame);
-	}
-	ASSERT_TRUE(serverPlugin.get_queue_empty());
-	ASSERT_TRUE(internalECU->get_address_valid());
+	auto internalECU = test_helpers::claim_internal_control_function(0x97, 0);
+	test_helpers::force_claim_partnered_control_function(0x74, 0);
 	// End boilerplate **********************************
 
 	ShortcutButtonInterface interfaceUnderTest(internalECU, false);
@@ -78,7 +38,10 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
 	// Send a valid message to stop
+	CANMessageFrame testFrame = {};
 	testFrame.identifier = 0x18FD0274;
+	testFrame.isExtendedFrame = true;
+	testFrame.dataLength = 8;
 	testFrame.data[0] = 0xFF;
 	testFrame.data[1] = 0xFF;
 	testFrame.data[2] = 0xFF;
@@ -240,41 +203,13 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(2);
-	clientNAME.set_ecu_instance(4);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x98, 0);
-
-	CANMessageFrame testFrame;
-
-	// Force claim some other ECU
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFF74;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x13;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x83;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0);
+	test_helpers::force_claim_partnered_control_function(0x74, 0);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!serverPlugin.get_queue_empty())
 	{
 		serverPlugin.read_frame(testFrame);

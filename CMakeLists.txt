@@ -65,71 +65,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 if(BUILD_TESTING)
-  find_package(GTest QUIET)
-  if(NOT GTest_FOUND)
-    # Find GoogleTest
-    include(FetchContent)
-    FetchContent_Declare(
-      googletest
-      GIT_REPOSITORY https://github.com/google/googletest.git
-      GIT_TAG release-1.12.1)
-
-    # For Windows: Prevent overriding the parent project's compiler/linker
-    # settings
-    set(gtest_force_shared_crt
-        ON
-        CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-
-    # For before CMAKE 3.20, GTest::gtest_main didn't exist, so add it in All
-    # linking to gtest should be done using the new GTest::gtest_main library
-    # for forward compatability
-    if(NOT TARGET GTest::gtest_main)
-      add_library(GTest::gtest_main ALIAS GTest::Main)
-    endif()
-  endif()
-
-  # For cmake<3.20 and older GTest
-  if(NOT TARGET GTest::gtest_main)
-    set_target_properties(GTest::Main PROPERTIES IMPORTED_GLOBAL TRUE)
-    add_library(GTest::gtest_main ALIAS GTest::Main)
-  endif()
-
-  # Set test source files
-  set(TEST_SRC
-      test/identifier_tests.cpp
-      test/diagnostic_protocol_tests.cpp
-      test/core_network_management_tests.cpp
-      test/virtual_can_plugin_tests.cpp
-      test/address_claim_tests.cpp
-      test/can_name_tests.cpp
-      test/hardware_interface_tests.cpp
-      test/vt_client_tests.cpp
-      test/language_command_interface_tests.cpp
-      test/tc_client_tests.cpp
-      test/ddop_tests.cpp
-      test/event_dispatcher_tests.cpp
-      test/isb_tests.cpp
-      test/cf_functionalities_tests.cpp
-      test/guidance_tests.cpp
-      test/speed_distance_message_tests.cpp
-      test/maintain_power_tests.cpp
-      test/vt_object_tests.cpp
-      test/nmea2000_message_tests.cpp)
-
-  add_executable(unit_tests ${TEST_SRC})
-  set_target_properties(
-    unit_tests
-    PROPERTIES CXX_STANDARD 11
-               CXX_EXTENSIONS OFF
-               CXX_STANDARD_REQUIRED ON)
-  target_link_libraries(
-    unit_tests
-    PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
-            ${PROJECT_NAME}::HardwareIntegration ${PROJECT_NAME}::Utility)
-
-  include(GoogleTest)
-  gtest_discover_tests(unit_tests name_tests identifier_tests)
+  add_subdirectory("test")
 endif()
 
 install(

@@ -177,6 +177,11 @@ namespace isobus
 		/// @returns A list of all the partnered control functions
 		const std::list<std::shared_ptr<PartneredControlFunction>> &get_partnered_control_functions() const;
 
+		/// @brief Gets all the control functions that are known to the network manager
+		/// @param[in] includingOffline If true, all control functions are returned, otherwise only online control functions are returned
+		/// @returns A list of all the control functions
+		std::list<std::shared_ptr<ControlFunction>> get_control_functions(bool includingOffline) const;
+
 		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
 		/// Use this to register for FP multipacket messages
 		/// @returns The class instance of the NMEA2k fast packet protocol.

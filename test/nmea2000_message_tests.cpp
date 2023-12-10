@@ -7,6 +7,8 @@
 #include "isobus/isobus/nmea2000_message_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 using namespace NMEA2000Messages;
 
@@ -430,52 +432,11 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x51, 0);
-
-	CANMessageFrame testFrame;
-	testFrame.timestamp_us = 0;
-	testFrame.identifier = 0;
-	testFrame.channel = 0;
-	std::memset(testFrame.data, 0, sizeof(testFrame.data));
-	testFrame.dataLength = 0;
-	testFrame.isExtendedFrame = true;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!testECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(testECU->get_address_valid());
-
-	// Force claim some other ECU
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(2);
-	TestDeviceNAME.set_device_class(0);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::ExhaustEmissionControl));
-	TestDeviceNAME.set_identity_number(275);
-	TestDeviceNAME.set_ecu_instance(0);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFF52;
-	testFrame.data[0] = static_cast<std::uint8_t>(TestDeviceNAME.get_full_name() & 0xFF);
-	testFrame.data[1] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 8) & 0xFF);
-	testFrame.data[2] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 16) & 0xFF);
-	testFrame.data[3] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 24) & 0xFF);
-	testFrame.data[4] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 32) & 0xFF);
-	testFrame.data[5] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 40) & 0xFF);
-	testFrame.data[6] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 48) & 0xFF);
-	testFrame.data[7] = static_cast<std::uint8_t>((TestDeviceNAME.get_full_name() >> 56) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
-	CANNetworkManager::CANNetwork.update();
+	auto testECU = test_helpers::claim_internal_control_function(0x51, 0);
+	test_helpers::force_claim_partnered_control_function(0x52, 0);
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!testPlugin.get_queue_empty())
 	{
 		testPlugin.read_frame(testFrame);
