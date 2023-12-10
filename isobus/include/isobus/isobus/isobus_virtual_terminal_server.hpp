@@ -42,6 +42,10 @@ namespace isobus
 		/// @returns true if initialize has been called on this object, otherwise false
 		bool get_initialized() const;
 
+		/// @brief Returns the internal control function used by the VT server
+		/// @returns The internal control function used by the VT server
+		std::shared_ptr<InternalControlFunction> get_internal_control_function() const;
+
 		/// @brief Returns a pointer to the currently active working set
 		/// @returns Pointer to the currently active working set, or nullptr if none is active
 		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> get_active_working_set() const;
@@ -103,6 +107,14 @@ namespace isobus
 		/// @param[in] destination The VT client to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Conditionally executes a macro. If the object passed in is of the specified type, and
+		/// a macro is defined for that object, the macro will be executed if the macro event matches the
+		/// event ID of the macro.
+		/// @param[in] object The object to check for a macro (or macros) to execute
+		/// @param[in] macroEvent The event ID of the macro(s) to execute
+		/// @param[in] targetObjectType The type of object that the macro is defined for. Used to validate the object
+		void processMacro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset);
 
 		// ----------- Mandatory Functions you must implement -----------------------
 		virtual bool get_is_enough_memory(std::uint32_t requestedMemory) const = 0;
@@ -167,6 +179,7 @@ namespace isobus
 		//-------------- Callbacks/Event driven interface ---------------------
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &get_on_repaint_event_dispatcher();
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_mask_event_dispatcher();
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_focus_object_event_dispatcher();
 
 		//----------------- Other Server Settings -----------------------------
 
@@ -181,6 +194,14 @@ namespace isobus
 		{
 			InvalidWorkingSetObjectID = 0,
 			InvalidMaskObjectID = 1,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change background colour response
+		enum class ChangeBackgroundColourErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidColourCode = 1,
 			AnyOtherError = 4
 		};
 
@@ -230,6 +251,14 @@ namespace isobus
 			InvalidValue = 1,
 			ValueInUse = 2, // such as: open for input
 			Undefined = 3,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change priority response
+		enum class ChangePriorityErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidPriority = 1,
 			AnyOtherError = 4
 		};
 
@@ -288,9 +317,39 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a select input object response
+		enum class SelectInputObjectErrorBit : std::uint8_t
+		{
+			ObjectIsDisabled = 0,
+			InvalidObjectID = 1,
+			ObjectIsNotOnTheActiveMaskOrIsInAHiddenContainer = 2,
+			CouldNotCompleteAnotherFieldIsBeingModified = 3,
+			AnyOtherError = 4,
+			InvalidOptionValue = 5
+		};
+
+		/// @brief Enumerates the different responses to a select input object message
+		enum class SelectInputObjectResponse : std::uint8_t
+		{
+			ObjectIsNotSelectedOrIsNullOrError = 0,
+			ObjectIsSelected = 1,
+			ObjectIsOpenedForEdit = 2 // VT version 4 and later
+		};
+
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
 		bool check_if_source_is_managed(const CANMessage &message);
+
+		/// @brief Processes a macro's execution synchronously as if it were a CAN message.
+		/// Basically, if you want the server to execute a macro as if it were a CAN message, you can call this function
+		/// though it will require you to create a CAN message to pass in. If you don't want to use this and
+		/// instead want to manually affect the required changes in the object pool, that's fine too.
+		/// @param[in] message The macro to execute
+		void execute_macro_as_rx_message(const CANMessage &message);
+
+		/// @brief Returns the priority to use, depending on the VT version
+		/// @returns The priority to use, depending on the VT version
+		CANIdentifier::CANPriority get_priority() const;
 
 		/// @brief Maps a VTVersion to its corresponding byte representation
 		/// @param[in] version The version to get the corresponding byte for
@@ -324,6 +383,14 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to a change background colour command
+		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] colour The colour the background was set to
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_background_colour_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t colour, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a response to a change child location command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
@@ -433,6 +500,22 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Sends a response to the change priority command
+		/// @param[in] objectID The object ID for the object
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] priority The priority that was set by the client
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to the select input object command
+		/// @param[in] objectID The object ID for the object
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] response The response to the select input object command
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination);
+
 		/// @brief Sends the VT status message broadcast. The status message
 		/// contains information such as which working set is the active one, and information about
 		/// what the VT server is doing, such as busy flags. This message should be sent at 1 Hz.
@@ -452,6 +535,7 @@ namespace isobus
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher;
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher;
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onFocusObjectEventDispatcher;
 		LanguageCommandInterface languageCommandInterface;
 		std::shared_ptr<InternalControlFunction> serverInternalControlFunction;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> managedWorkingSetList;
