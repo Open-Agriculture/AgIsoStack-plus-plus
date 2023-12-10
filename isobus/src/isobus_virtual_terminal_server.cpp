@@ -153,6 +153,40 @@ namespace isobus
 		}
 	}
 
+	bool VirtualTerminalServer::execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		auto object = workingSet->get_object_by_id(objectIDOfMacro);
+		bool retVal = false;
+
+		if ((nullptr != object) && (VirtualTerminalObjectType::Macro == object->get_object_type()))
+		{
+			auto macro = std::static_pointer_cast<Macro>(object);
+
+			if (macro->get_are_command_packets_valid())
+			{
+				isobus::CANMessage message(workingSet->get_control_function()->get_can_port());
+				message.set_destination_control_function(get_internal_control_function());
+				message.set_source_control_function(workingSet->get_control_function());
+				message.set_identifier(isobus::CANIdentifier(0x14E70000));
+				CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
+				retVal = true;
+
+				for (std::uint16_t j = 0; j < macro->get_number_of_commands(); j++)
+				{
+					std::array<std::uint8_t, 8> commandPacket = { 0 };
+
+					if (macro->get_command_packet(static_cast<std::uint8_t>(j), commandPacket))
+					{
+						message.set_data(commandPacket.data(), commandPacket.size());
+						CANStackLogger::debug("[VT Server]: Executing macro command %u", j);
+						execute_macro_as_rx_message(message);
+					}
+				}
+			}
+		}
+		return retVal;
+	}
+
 	CANIdentifier::CANPriority VirtualTerminalServer::get_priority() const
 	{
 		if (VTVersion::Version6 == get_version())
@@ -1537,6 +1571,74 @@ namespace isobus
 								}
 								break;
 
+								case Function::ExecuteMacroCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]));
+									auto targetObject = cf->get_object_by_id(objectID);
+
+									if (nullptr != targetObject)
+									{
+										if (VirtualTerminalObjectType::Macro == targetObject->get_object_type())
+										{
+											if (parentServer->execute_macro(objectID, cf))
+											{
+												CANStackLogger::debug("[VT Server]: Client %u execute macro command %u: completed.", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_execute_macro_or_extended_macro_response(objectID, 0, message.get_source_control_function(), false);
+											}
+											else
+											{
+												CANStackLogger::error("[VT Server]: Client %u execute macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), false);
+											}
+										}
+										else
+										{
+											CANStackLogger::warn("[VT Server]: Client %u execute macro command: object ID %u is not a macro!", cf->get_control_function()->get_address(), objectID);
+											parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), false);
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u execute macro command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), false);
+									}
+								}
+								break;
+
+								case Function::ExecuteExtendedMacroCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+
+									if (nullptr != targetObject)
+									{
+										if (VirtualTerminalObjectType::Macro == targetObject->get_object_type())
+										{
+											if (parentServer->execute_macro(objectID, cf))
+											{
+												CANStackLogger::debug("[VT Server]: Client %u execute extended macro command %u: completed.", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_execute_macro_or_extended_macro_response(objectID, 0, message.get_source_control_function(), true);
+											}
+											else
+											{
+												CANStackLogger::error("[VT Server]: Client %u execute extended macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), true);
+											}
+										}
+										else
+										{
+											CANStackLogger::warn("[VT Server]: Client %u execute extended macro command: object ID %u is not a macro!", cf->get_control_function()->get_address(), objectID);
+											parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), true);
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u execute extended macro command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), true);
+									}
+								}
+								break;
+
 								default:
 								{
 									CANStackLogger::error("[VT Server]: Unimplemented Command %u", data[0]);
@@ -1991,6 +2093,7 @@ namespace isobus
 						message.set_destination_control_function(get_internal_control_function());
 						message.set_source_control_function(workingset->get_control_function());
 						message.set_identifier(isobus::CANIdentifier(0x14E70000));
+						CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
 
 						for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
 						{
@@ -1999,7 +2102,7 @@ namespace isobus
 							if (macro->get_command_packet(j, commandPacket))
 							{
 								message.set_data(commandPacket.data(), commandPacket.size());
-								CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
+								CANStackLogger::debug("[VT Server]: Executing macro command %u", j);
 								execute_macro_as_rx_message(message);
 							}
 						}
@@ -2185,6 +2288,44 @@ namespace isobus
 		buffer[5] = (faultingObjectID >> 8);
 		buffer[6] = errorCodes;
 		buffer[7] = 0xFF; // Reserved
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		if (extendedMacro)
+		{
+			buffer[0] = static_cast<std::uint8_t>(Function::ExecuteExtendedMacroCommand);
+		}
+		else
+		{
+			buffer[0] = static_cast<std::uint8_t>(Function::ExecuteMacroCommand);
+		}
+
+		buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
+
+		if (extendedMacro)
+		{
+			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+		}
+		else
+		{
+			buffer[2] = 0xFF;
+		}
+
+		buffer[3] = errorBitfield;
+		buffer[4] = 0xFF;
+		buffer[5] = 0xFF;
+		buffer[6] = 0xFF;
+		buffer[7] = 0xFF;
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
