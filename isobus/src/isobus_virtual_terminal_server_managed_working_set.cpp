@@ -157,6 +157,26 @@ namespace isobus
 		wasLoadedFromNonVolatileMemory = value;
 	}
 
+	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
+	{
+		focusedObject = objectID;
+	}
+
+	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_focus() const
+	{
+		return focusedObject;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_auxiliary_input_maintenance_timestamp_ms(std::uint32_t value)
+	{
+		auxiliaryInputMaintenanceMessageTimestamp_ms = value;
+	}
+
+	std::uint32_t VirtualTerminalServerManagedWorkingSet::get_auxiliary_input_maintenance_timestamp_ms() const
+	{
+		return auxiliaryInputMaintenanceMessageTimestamp_ms;
+	}
+
 	bool VirtualTerminalServerManagedWorkingSet::parse_next_object(std::uint8_t *&iopData, std::uint32_t &iopLength)
 	{
 		bool retVal = false;

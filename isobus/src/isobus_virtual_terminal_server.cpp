@@ -50,6 +50,11 @@ namespace isobus
 		return initialized;
 	}
 
+	std::shared_ptr<InternalControlFunction> VirtualTerminalServer::get_internal_control_function() const
+	{
+		return serverInternalControlFunction;
+	}
+
 	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> VirtualTerminalServer::get_active_working_set() const
 	{
 		return activeWorkingSet;
@@ -83,6 +88,11 @@ namespace isobus
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &VirtualTerminalServer::get_on_change_active_mask_event_dispatcher()
 	{
 		return onChangeActiveMaskEventDispatcher;
+	}
+
+	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &VirtualTerminalServer::get_on_focus_object_event_dispatcher()
+	{
+		return onFocusObjectEventDispatcher;
 	}
 
 	LanguageCommandInterface &VirtualTerminalServer::get_language_command_interface()
@@ -131,6 +141,28 @@ namespace isobus
 			}
 		}
 		return retVal;
+	}
+
+	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
+	{
+		if ((message.get_destination_control_function() == serverInternalControlFunction) &&
+		    (message.get_source_control_function() != nullptr) &&
+		    (CAN_DATA_LENGTH == message.get_data_length()))
+		{
+			process_rx_message(message, this);
+		}
+	}
+
+	CANIdentifier::CANPriority VirtualTerminalServer::get_priority() const
+	{
+		if (VTVersion::Version6 == get_version())
+		{
+			return CANIdentifier::CANPriority::Priority5;
+		}
+		else
+		{
+			return CANIdentifier::CANPriority::PriorityLowest7;
+		}
 	}
 
 	std::uint8_t VirtualTerminalServer::get_vt_version_byte(VTVersion version)
@@ -219,7 +251,7 @@ namespace isobus
 
 									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 									buffer[0] = static_cast<std::uint8_t>(Function::GetMemoryMessage);
-									buffer[1] = static_cast<std::uint8_t>(parentServer->get_version());
+									buffer[1] = static_cast<std::uint8_t>(get_vt_version_byte(parentServer->get_version()));
 									buffer[2] = static_cast<std::uint8_t>(!isEnoughMemory);
 									buffer[3] = 0xFF; // Reserved
 									buffer[4] = 0xFF; // Reserved
@@ -231,7 +263,7 @@ namespace isobus
 									                                               CAN_DATA_LENGTH,
 									                                               parentServer->serverInternalControlFunction,
 									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
+									                                               parentServer->get_priority());
 								}
 								break;
 
@@ -252,7 +284,7 @@ namespace isobus
 									                                               CAN_DATA_LENGTH,
 									                                               parentServer->serverInternalControlFunction,
 									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
+									                                               parentServer->get_priority());
 								}
 								break;
 
@@ -272,7 +304,7 @@ namespace isobus
 									                                               CAN_DATA_LENGTH,
 									                                               parentServer->serverInternalControlFunction,
 									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
+									                                               parentServer->get_priority());
 								}
 								break;
 
@@ -292,7 +324,7 @@ namespace isobus
 									                                               CAN_DATA_LENGTH,
 									                                               parentServer->serverInternalControlFunction,
 									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
+									                                               parentServer->get_priority());
 								}
 								break;
 
@@ -324,7 +356,7 @@ namespace isobus
 									                                               static_cast<std::uint32_t>(buffer.size()),
 									                                               parentServer->serverInternalControlFunction,
 									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
+									                                               parentServer->get_priority());
 								}
 								break;
 
@@ -361,7 +393,7 @@ namespace isobus
 									                                               static_cast<std::uint32_t>(buffer.size()),
 									                                               parentServer->serverInternalControlFunction,
 									                                               message.get_source_control_function(),
-									                                               CANIdentifier::PriorityLowest7);
+									                                               parentServer->get_priority());
 								}
 								break;
 
@@ -446,7 +478,7 @@ namespace isobus
 										                                               CAN_DATA_LENGTH,
 										                                               parentServer->serverInternalControlFunction,
 										                                               message.get_source_control_function(),
-										                                               CANIdentifier::PriorityLowest7);
+										                                               parentServer->get_priority());
 									}
 									else
 									{
@@ -629,6 +661,7 @@ namespace isobus
 										if (logSuccess)
 										{
 											CANStackLogger::debug("[VT Server]: Client %u change numeric value command: change object ID %u to be %u", cf->get_control_function()->get_address(), objectId, value);
+											parentServer->processMacro(lTargetObject, isobus::EventID::OnChangeValue, lTargetObject->get_object_type(), cf);
 										}
 									}
 									else
@@ -642,21 +675,23 @@ namespace isobus
 								case Function::HideShowObjectCommand:
 								{
 									std::uint16_t objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto lTargetObject = cf->get_object_by_id(objectId);
+									auto targetObject = cf->get_object_by_id(objectId);
 
-									if ((nullptr != lTargetObject) && (VirtualTerminalObjectType::Container == lTargetObject->get_object_type()))
+									if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
 									{
-										std::static_pointer_cast<Container>(lTargetObject)->set_hidden(0 == data[3]);
+										std::static_pointer_cast<Container>(targetObject)->set_hidden(0 == data[3]);
 										parentServer->send_hide_show_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
 										parentServer->onRepaintEventDispatcher.call(cf);
 
 										if (0 == data[3])
 										{
 											CANStackLogger::debug("[VT Server]: Client %u hide object command %u", cf->get_control_function()->get_address(), objectId);
+											parentServer->processMacro(targetObject, EventID::OnHide, targetObject->get_object_type(), cf);
 										}
 										else
 										{
 											CANStackLogger::debug("[VT Server]: Client %u show object command %u", cf->get_control_function()->get_address(), objectId);
+											parentServer->processMacro(targetObject, EventID::OnShow, targetObject->get_object_type(), cf);
 										}
 									}
 									else
@@ -759,6 +794,7 @@ namespace isobus
 											{
 												parentServer->send_change_child_location_response(parentObjectId, objectID, 0, cf->get_control_function());
 												CANStackLogger::debug("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", cf->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
+												parentServer->processMacro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), cf);
 											}
 											else
 											{
@@ -994,6 +1030,7 @@ namespace isobus
 														{
 															CANStackLogger::debug("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 															parentServer->send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
+															parentServer->processMacro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), cf);
 														}
 														else
 														{
@@ -1046,6 +1083,7 @@ namespace isobus
 											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
 											CANStackLogger::debug("[VT Server]: Client %u changed object %u attribute %u to %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
 											parentServer->onRepaintEventDispatcher.call(cf);
+											parentServer->processMacro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), cf);
 										}
 										else
 										{
@@ -1123,6 +1161,7 @@ namespace isobus
 										if (success)
 										{
 											parentServer->send_change_size_response(objectID, 0, message.get_source_control_function());
+											parentServer->processMacro(targetObject, EventID::OnChangeSize, targetObject->get_object_type(), cf);
 										}
 									}
 									else
@@ -1266,6 +1305,7 @@ namespace isobus
 													{
 														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
 														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
+														parentServer->processMacro(targetObject, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, cf);
 													}
 													else
 													{
@@ -1281,6 +1321,7 @@ namespace isobus
 													{
 														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
 														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
+														parentServer->processMacro(targetObject, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, cf);
 													}
 													else
 													{
@@ -1309,6 +1350,190 @@ namespace isobus
 										CANStackLogger::warn("[VT Server]: Client %u change soft key mask command: invalid data mask or alarm mask object ID of %u", cf->get_control_function()->get_address(), objectID);
 										parentServer->send_change_soft_key_mask_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
 									}
+								}
+								break;
+
+								case Function::ChangeBackgroundColourCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+									std::uint8_t backgroundColour = data[3];
+
+									if (nullptr != targetObject)
+									{
+										switch (targetObject->get_object_type())
+										{
+											case VirtualTerminalObjectType::AuxiliaryInputType2:
+											case VirtualTerminalObjectType::WorkingSet:
+											case VirtualTerminalObjectType::DataMask:
+											case VirtualTerminalObjectType::AlarmMask:
+											case VirtualTerminalObjectType::SoftKeyMask:
+											case VirtualTerminalObjectType::Key:
+											case VirtualTerminalObjectType::Button:
+											case VirtualTerminalObjectType::InputNumber:
+											case VirtualTerminalObjectType::InputBoolean:
+											case VirtualTerminalObjectType::InputString:
+											case VirtualTerminalObjectType::OutputString:
+											case VirtualTerminalObjectType::OutputNumber:
+											case VirtualTerminalObjectType::GraphicsContext:
+											case VirtualTerminalObjectType::WindowMask:
+											{
+												targetObject->set_background_color(backgroundColour);
+												CANStackLogger::debug("[VT Server]: Client %u change background colour command: colour = %u", cf->get_control_function()->get_address(), objectID, backgroundColour);
+												parentServer->send_change_background_colour_response(objectID, 0, backgroundColour, message.get_source_control_function());
+												parentServer->processMacro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), cf);
+											}
+											break;
+
+											default:
+											{
+												CANStackLogger::warn("[VT Server]: Client %u change background colour command: invalid object type for object %u", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
+											}
+											break;
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u change background colour command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
+									}
+								}
+								break;
+
+								case Function::ChangePriorityCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+									std::uint8_t newPriority = data[3];
+
+									if (nullptr != targetObject)
+									{
+										if (VirtualTerminalObjectType::AlarmMask == targetObject->get_object_type())
+										{
+											if (newPriority <= static_cast<std::uint8_t>(AlarmMaskPriority::Low))
+											{
+												parentServer->send_change_priority_response(objectID, 0, newPriority, message.get_source_control_function());
+												CANStackLogger::debug("[VT Server]: Client %u change priority command: New Priority %u", cf->get_control_function()->get_address(), newPriority);
+												parentServer->processMacro(targetObject, EventID::OnChangePriority, VirtualTerminalObjectType::AlarmMask, cf);
+											}
+											else
+											{
+												parentServer->send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidPriority)), newPriority, message.get_source_control_function());
+												CANStackLogger::warn("[VT Server]: Client %u change priority command: Invalid Priority %u. Must be 2 or less.", cf->get_control_function()->get_address(), newPriority);
+											}
+										}
+										else
+										{
+											parentServer->send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
+											CANStackLogger::warn("[VT Server]: Client %u change priority command: invalid object ID of %u - the object must be an alarm mask.", cf->get_control_function()->get_address(), objectID);
+										}
+									}
+									else
+									{
+										parentServer->send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u change priority command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+									}
+								}
+								break;
+
+								case Function::SelectInputObjectCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+
+									if (nullptr != targetObject)
+									{
+										switch (targetObject->get_object_type())
+										{
+											case VirtualTerminalObjectType::Button:
+											case VirtualTerminalObjectType::Key:
+											{
+												if (get_vt_version_byte(parentServer->get_version()) > 3)
+												{
+													if (0 == data[3])
+													{
+														// 0 in Version 4+ means to activate the object for input
+														cf->set_object_focus(objectID);
+														CANStackLogger::debug("[VT Server]: Client %u select input object %u and open for input", cf->get_control_function()->get_address(), objectID);
+														parentServer->onFocusObjectEventDispatcher.call(cf, objectID, true);
+														parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
+														parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+													}
+													else if (0xFF == data[3])
+													{
+														// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
+														cf->set_object_focus(objectID);
+														CANStackLogger::debug("[VT Server]: Client %u select input object %u", cf->get_control_function()->get_address(), objectID);
+														parentServer->onFocusObjectEventDispatcher.call(cf, objectID, false);
+														parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
+														parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+													}
+													else
+													{
+														CANStackLogger::warn("[VT Server]: Client %u select input object command: Illegal option byte", cf->get_control_function()->get_address(), objectID);
+														parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+													}
+												}
+												else
+												{
+													parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+													CANStackLogger::warn("[VT Server]: Client %u select input object command: buttons and keys can only be selected when the server is version 4 or higher.", cf->get_control_function()->get_address(), objectID);
+												}
+											}
+											break;
+
+											case VirtualTerminalObjectType::InputNumber:
+											case VirtualTerminalObjectType::InputString:
+											case VirtualTerminalObjectType::InputList:
+											{
+												if (0 == data[3])
+												{
+													// 0 in Version 4+ means to activate the object for input
+													cf->set_object_focus(objectID);
+													CANStackLogger::debug("[VT Server]: Client %u select input object %u and open for input", cf->get_control_function()->get_address(), objectID);
+													parentServer->onFocusObjectEventDispatcher.call(cf, objectID, true);
+													parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
+													parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+												}
+												else if (0xFF == data[3])
+												{
+													// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
+													cf->set_object_focus(objectID);
+													CANStackLogger::debug("[VT Server]: Client %u select input object %u", cf->get_control_function()->get_address(), objectID);
+													parentServer->onFocusObjectEventDispatcher.call(cf, objectID, false);
+													parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
+													parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+												}
+												else
+												{
+													CANStackLogger::warn("[VT Server]: Client %u select input object command: Illegal option byte", cf->get_control_function()->get_address(), objectID);
+													parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+												}
+											}
+											break;
+
+											default:
+											{
+												CANStackLogger::warn("[VT Server]: Client %u select input object command: invalid object type", cf->get_control_function()->get_address(), objectID);
+												parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+											}
+											break;
+										}
+									}
+									else
+									{
+										parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+										CANStackLogger::warn("[VT Server]: Client %u select input object command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+									}
+								}
+								break;
+
+								case Function::AuxiliaryInputTypeTwoMaintenanceMessage:
+								{
+									// Todo? auto modelIdentificationCode = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									// Todo? bool isReady = (1 == data[3]);
+									cf->set_auxiliary_input_maintenance_timestamp_ms(SystemTiming::get_timestamp_ms());
 								}
 								break;
 
@@ -1352,7 +1577,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        source,
 			                                                        nullptr,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1379,7 +1604,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1406,7 +1631,34 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_background_colour_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t colour, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeBackgroundColourCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>((objectID >> 8) & 0xFF),
+				colour,
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1433,7 +1685,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1460,7 +1712,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1486,7 +1738,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1512,7 +1764,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1538,7 +1790,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1565,7 +1817,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1593,7 +1845,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1621,7 +1873,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1649,7 +1901,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1688,7 +1940,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1714,9 +1966,47 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
+	}
+
+	void VirtualTerminalServer::processMacro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset)
+	{
+		if (nullptr != object)
+		{
+			if (targetObjectType == object->get_object_type())
+			{
+				for (std::uint8_t i = 0; i < object->get_number_macros(); i++)
+				{
+					auto macroMetadata = object->get_macro(i);
+					auto macro = std::static_pointer_cast<isobus::Macro>(workingset->get_object_by_id(macroMetadata.macroID));
+
+					if ((nullptr != macro) &&
+					    (macro->get_object_type() == isobus::VirtualTerminalObjectType::Macro) &&
+					    (macroMetadata.event == macroEvent) &&
+					    (macro->get_are_command_packets_valid()))
+					{
+						isobus::CANMessage message(workingset->get_control_function()->get_can_port());
+						message.set_destination_control_function(get_internal_control_function());
+						message.set_source_control_function(workingset->get_control_function());
+						message.set_identifier(isobus::CANIdentifier(0x14E70000));
+
+						for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
+						{
+							std::array<std::uint8_t, 8> commandPacket = { 0 };
+
+							if (macro->get_command_packet(j, commandPacket))
+							{
+								message.set_data(commandPacket.data(), commandPacket.size());
+								CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
+								execute_macro_as_rx_message(message);
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	bool VirtualTerminalServer::send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination)
@@ -1741,7 +2031,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1768,7 +2058,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1795,7 +2085,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1821,7 +2111,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1847,7 +2137,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1874,7 +2164,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        serverInternalControlFunction,
 			                                                        destination,
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        get_priority());
 		}
 		return retVal;
 	}
@@ -1901,7 +2191,7 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      destination,
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      get_priority());
 	}
 
 	bool VirtualTerminalServer::send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination)
@@ -1922,7 +2212,49 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      destination,
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::ChangePriorityCommand);
+		buffer[1] = (objectID & 0xFF);
+		buffer[2] = ((objectID >> 8) & 0xFF);
+		buffer[3] = priority;
+		buffer[4] = errorBitfield;
+		buffer[5] = 0xFF; // Reserved
+		buffer[6] = 0xFF; // Reserved
+		buffer[7] = 0xFF; // Reserved
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::SelectInputObjectCommand);
+		buffer[1] = (objectID & 0xFF);
+		buffer[2] = ((objectID >> 8) & 0xFF);
+		buffer[3] = static_cast<std::uint8_t>(response);
+		buffer[4] = errorBitfield;
+		buffer[5] = 0xFF; // Reserved
+		buffer[6] = 0xFF; // Reserved
+		buffer[7] = 0xFF; // Reserved
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
 	}
 
 	bool VirtualTerminalServer::send_status_message()
@@ -1942,7 +2274,7 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      nullptr,
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      get_priority());
 	}
 
 	bool VirtualTerminalServer::send_supported_objects(std::shared_ptr<ControlFunction> destination) const
@@ -1960,7 +2292,7 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      destination,
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      get_priority());
 	}
 
 	void VirtualTerminalServer::update()
