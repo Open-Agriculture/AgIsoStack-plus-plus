@@ -6,6 +6,8 @@
 #include "isobus/isobus/isobus_guidance_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 #include <cmath>
 
 using namespace isobus;
@@ -64,38 +66,10 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	isobus::NAME TestDeviceNAME(0);
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(3);
-	TestDeviceNAME.set_device_class(4);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::AdaptiveFrontLightingSystem));
-	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(4);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
-
-	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x44, 0);
-
-	CANMessageFrame testFrame;
-	testFrame.timestamp_us = 0;
-	testFrame.identifier = 0;
-	testFrame.channel = 0;
-	std::memset(testFrame.data, 0, sizeof(testFrame.data));
-	testFrame.dataLength = 0; ///< The length of the data used in the frame
-	testFrame.isExtendedFrame = true; ///< Denotes if the frame is extended format
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!testECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(testECU->get_address_valid());
+	auto testECU = test_helpers::claim_internal_control_function(0x44, 0);
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!testPlugin.get_queue_empty())
 	{
 		testPlugin.read_frame(testFrame);
@@ -224,14 +198,6 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 {
 	TestGuidanceInterface interfaceUnderTest(nullptr, nullptr);
-	CANMessageFrame testFrame;
-
-	testFrame.timestamp_us = 0;
-	testFrame.identifier = 0;
-	testFrame.channel = 0;
-	std::memset(testFrame.data, 0, sizeof(testFrame.data));
-	testFrame.dataLength = 0;
-	testFrame.isExtendedFrame = true;
 
 	EXPECT_FALSE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
 	EXPECT_FALSE(interfaceUnderTest.test_wrapper_send_guidance_machine_info());
@@ -249,21 +215,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
-	// Force claim some other ECU
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFF46;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x05;
-	testFrame.data[2] = 0x04;
-	testFrame.data[3] = 0x12;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x01;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
-	CANNetworkManager::CANNetwork.update();
+	test_helpers::force_claim_partnered_control_function(0x46, 0);
 
 	// Register callbacks to test
 	auto guidanceCommandListener = interfaceUnderTest.get_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
@@ -273,8 +225,10 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 
 	// Test commanded curvature
 	std::uint16_t testCurvature = std::roundf(4 * ((94.25f + 8032) / 0.25f)) / 4.0f; // manually encode a curvature of 94.25 km-1
-	testFrame.dataLength = 8;
+	CANMessageFrame testFrame = {};
 	testFrame.identifier = 0xCADFF46;
+	testFrame.isExtendedFrame = true;
+	testFrame.dataLength = 8;
 	testFrame.data[0] = static_cast<std::uint8_t>(testCurvature & 0xFF);
 	testFrame.data[1] = static_cast<std::uint8_t>((testCurvature >> 8) & 0xFF);
 	testFrame.data[2] = 0xFD; // Intended to steer + reserved bits set to 1

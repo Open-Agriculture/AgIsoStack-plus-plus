@@ -6,6 +6,8 @@
 #include "isobus/isobus/isobus_speed_distance_messages.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 #include <cmath>
 
 using namespace isobus;
@@ -92,38 +94,11 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	isobus::NAME TestDeviceNAME(0);
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(3);
-	TestDeviceNAME.set_device_class(4);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::Alarm1SystemControlForMarineEngines));
-	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(5);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
-
-	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x45, 0);
-
-	CANMessageFrame testFrame;
-	testFrame.timestamp_us = 0;
-	testFrame.identifier = 0;
-	testFrame.channel = 0;
-	std::memset(testFrame.data, 0, sizeof(testFrame.data));
-	testFrame.dataLength = 0; ///< The length of the data used in the frame
-	testFrame.isExtendedFrame = true; ///< Denotes if the frame is extended format
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!testECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
+	auto testECU = test_helpers::claim_internal_control_function(0x45, 0);
 	ASSERT_TRUE(testECU->get_address_valid());
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!testPlugin.get_queue_empty())
 	{
 		testPlugin.read_frame(testFrame);
@@ -372,14 +347,9 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 {
 	TestSpeedInterface interfaceUnderTest(nullptr);
-	CANMessageFrame testFrame;
-
-	testFrame.timestamp_us = 0;
-	testFrame.identifier = 0;
-	testFrame.channel = 0;
-	std::memset(testFrame.data, 0, sizeof(testFrame.data));
-	testFrame.dataLength = 0;
+	CANMessageFrame testFrame = {};
 	testFrame.isExtendedFrame = true;
+	testFrame.dataLength = 8;
 
 	ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_ground_based_speed());
 	ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
@@ -402,21 +372,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_wheel_based_speed(0));
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_machine_selected_speed_command(0));
 
-	// Force claim some other ECU
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFF46;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x05;
-	testFrame.data[2] = 0x04;
-	testFrame.data[3] = 0x12;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x01;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
-	CANNetworkManager::CANNetwork.update();
+	test_helpers::force_claim_partnered_control_function(0x46, 0);
 
 	// Register callbacks to test
 	auto mssListener = interfaceUnderTest.get_machine_selected_speed_data_event_publisher().add_listener(TestSpeedInterface::test_mss_callback);

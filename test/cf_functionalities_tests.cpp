@@ -6,6 +6,8 @@
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 class TestControlFunctionFunctionalities : public ControlFunctionFunctionalities
@@ -31,23 +33,8 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(2);
-	clientNAME.set_function_instance(3);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::TirePressureControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x50, 0);
-
-	CANMessageFrame testFrame;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(internalECU->get_address_valid());
+	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0);
+	auto otherECU = test_helpers::force_claim_partnered_control_function(0x12, 0);
 
 	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
 
@@ -511,6 +498,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TractorImplementManagementServer, 1, false);
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!requesterPlugin.get_queue_empty())
 	{
 		requesterPlugin.read_frame(testFrame);
@@ -519,6 +507,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 
 	// Simulate a request for the message
 	testFrame.identifier = 0x18EA50F7;
+	testFrame.identifier = test_helpers::create_extended_can_id(6, 0xEA00, otherECU, internalECU);
 	testFrame.data[0] = 0x8E;
 	testFrame.data[1] = 0xFC;
 	testFrame.data[2] = 0x00;
@@ -615,4 +604,5 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 
 	//! @todo try to reduce the reference count, such that that we don't use destroyed control functions later on
 	ASSERT_TRUE(internalECU->destroy(2));
+	ASSERT_TRUE(otherECU->destroy());
 }
