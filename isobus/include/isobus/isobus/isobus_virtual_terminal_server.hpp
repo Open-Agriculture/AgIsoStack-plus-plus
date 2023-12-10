@@ -307,6 +307,14 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in an execute macro response
+		enum class ExecuteMacroResponseErrorBit : std::uint8_t
+		{
+			ObjectDoesntExist = 0,
+			ObjectIsNotAMacro = 1,
+			AnyOtherError = 2
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a hide/show object response
 		enum class HideShowObjectErrorBit : std::uint8_t
 		{
@@ -346,6 +354,12 @@ namespace isobus
 		/// instead want to manually affect the required changes in the object pool, that's fine too.
 		/// @param[in] message The macro to execute
 		void execute_macro_as_rx_message(const CANMessage &message);
+
+		/// @brief Executes a macro synchronously by object ID.
+		/// @param[in] objectIDOfMacro The object ID of the macro to execute
+		/// @param[in] workingSet The working set to execute the macro on
+		/// @returns true if the macro was executed, otherwise false
+		bool execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
 		/// @brief Returns the priority to use, depending on the VT version
 		/// @returns The priority to use, depending on the VT version
@@ -491,6 +505,14 @@ namespace isobus
 		                                      std::uint16_t faultingObjectID,
 		                                      std::uint8_t errorCodes,
 		                                      std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to the execute macro or extended macro command
+		/// @param[in] objectID The object ID for the macro
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @param[in] extendedMacro True if the macro is an extended macro, otherwise false
+		/// @returns true if the message was sent, otherwise false
+		bool send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro);
 
 		/// @brief Sends a response to the hide/show object command
 		/// @param[in] objectID The object ID for the object
