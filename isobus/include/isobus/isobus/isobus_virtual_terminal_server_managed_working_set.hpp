@@ -101,6 +101,24 @@ namespace isobus
 		/// @param[in] True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
 		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>);
 
+		/// @brief Sets the object ID of the currently focused object
+		/// @param[in] objectID The object ID to set as the focused object
+		void set_object_focus(std::uint16_t objectID);
+
+		/// @brief Returns the object ID of the currently focused object
+		/// @returns The object ID of the currently focused object
+		std::uint16_t get_object_focus() const;
+
+		/// @brief Sets the timestamp for when we received the last auxiliary input maintenance message
+		/// from the client.
+		/// @param[in] value New timestamp value in milliseconds
+		void set_auxiliary_input_maintenance_timestamp_ms(std::uint32_t value);
+
+		/// @brief Returns the timestamp for when we received the last auxiliary input maintenance message
+		/// from the client.
+		/// @returns The timestamp for when we received the last auxiliary input maintenance message
+		std::uint32_t get_auxiliary_input_maintenance_timestamp_ms() const;
+
 	private:
 		/// @brief Parses one object in the remaining object pool data
 		/// @param[in,out] iopData A pointer to some object pool data
@@ -138,8 +156,10 @@ namespace isobus
 		std::vector<std::shared_ptr<void>> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
+		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
 		std::uint16_t workingSetID = NULL_OBJECT_ID; ///< Stores the object ID of the working set object itself
 		std::uint16_t faultingObjectID = NULL_OBJECT_ID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
+		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 	};
 } // namespace isobus
