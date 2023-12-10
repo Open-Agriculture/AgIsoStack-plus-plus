@@ -18,6 +18,8 @@
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
@@ -194,27 +196,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	isobus::NAME TestDeviceNAME(0);
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(3);
-	TestDeviceNAME.set_device_class(4);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::EnduranceBraking));
-	TestDeviceNAME.set_identity_number(9);
-	TestDeviceNAME.set_ecu_instance(5);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
-
-	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x49, 0);
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!testECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(testECU->get_address_valid());
+	auto testECU = test_helpers::claim_internal_control_function(0x49, 0);
 
 	CANMessageFrame testFrame;
 	memset(&testFrame, 0, sizeof(testFrame));

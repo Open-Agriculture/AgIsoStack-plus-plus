@@ -6,6 +6,8 @@
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 class DerivedTestTCClient : public TaskControllerClient
@@ -270,7 +272,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x84, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x84, 0);
 
 	CANMessageFrame testFrame;
 
@@ -288,24 +290,9 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
-
 	CANNetworkManager::CANNetwork.update();
 
-	// Force claim a partner
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFFF7;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x12;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto tcPartner = test_helpers::force_claim_partnered_control_function(0xF7, 0);
 
 	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 
@@ -547,44 +534,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(2);
-	clientNAME.set_ecu_instance(1);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x83, 0);
-
-	CANMessageFrame testFrame;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(internalECU->get_address_valid());
-
-	std::vector<isobus::NAMEFilter> tcNameFilters;
-	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
-	tcNameFilters.push_back(testFilter);
-
-	auto tcPartner = PartneredControlFunction::create(0, tcNameFilters);
-
-	// Force claim a partner
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFFF7;
-	testFrame.data[0] = 0x04;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x12;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto internalECU = test_helpers::claim_internal_control_function(0x83, 0);
+	auto tcPartner = test_helpers::force_claim_partnered_control_function(0xF7, 0);
 
 	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 	interfaceUnderTest.initialize(false);
@@ -592,6 +543,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!serverTC.get_queue_empty())
 	{
 		serverTC.read_frame(testFrame);
@@ -1453,40 +1405,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(2);
-	clientNAME.set_ecu_instance(1);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x86, 0);
-	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
-	const isobus::NAMEFilter filterTaskControllerIdentity(isobus::NAME::NAMEParameters::IdentityNumber, 0x405);
-	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController, filterTaskControllerIdentity };
-	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
-	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	// Force claim a partner
-	CANMessageFrame testFrame;
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFFF7;
-	testFrame.data[0] = 0x05;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x13;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto internalECU = test_helpers::claim_internal_control_function(0x86, 0);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF7, 0);
 
 	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
 	interfaceUnderTest.initialize(false);
@@ -1494,15 +1414,15 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!serverTC.get_queue_empty())
 	{
 		serverTC.read_frame(testFrame);
 	}
 	ASSERT_TRUE(serverTC.get_queue_empty());
-	ASSERT_TRUE(TestPartnerTC->get_address_valid());
-
 	// End boilerplate **********************************
 
+	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
 	interfaceUnderTest.configure(blankDDOP, 1, 32, 32, true, false, true, false, true);
 	interfaceUnderTest.add_request_value_callback(request_value_command_callback, nullptr);
 	interfaceUnderTest.add_value_command_callback(value_command_callback, nullptr);

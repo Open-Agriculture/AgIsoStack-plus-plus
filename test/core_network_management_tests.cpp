@@ -11,6 +11,8 @@
 #include <memory>
 #include <thread>
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 static std::shared_ptr<ControlFunction> testControlFunction = nullptr;
@@ -96,58 +98,20 @@ TEST(CORE_TESTS, BusloadTest)
 
 TEST(CORE_TESTS, CommandedAddress)
 {
-	VirtualCANPlugin testPlugin;
-	testPlugin.open();
-
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	isobus::NAME TestDeviceNAME(0);
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(3);
-	TestDeviceNAME.set_device_class(4);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::FuelPropertiesSensor));
-	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(1);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
-
-	auto testECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x43, 0);
-
-	CANMessageFrame testFrame;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!testECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(testECU->get_address_valid());
-
-	// Force claim some other ECU
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFFF8;
-	testFrame.data[0] = 0x03;
-	testFrame.data[1] = 0x04;
-	testFrame.data[2] = 0x00;
-	testFrame.data[3] = 0x02;
-	testFrame.data[4] = 0x00;
-	testFrame.data[5] = 0x89;
-	testFrame.data[6] = 0x00;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
-	CANNetworkManager::CANNetwork.update();
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0);
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
 
 	// Let's construct a short BAM session for commanded address
 	// We'll ignore the 50ms timing for the unit test
 
+	CANMessageFrame testFrame = {};
 	testFrame.identifier = 0x18ECFFF8; // TP Command broadcast
+	testFrame.isExtendedFrame = true;
+	testFrame.dataLength = 8;
 	testFrame.data[0] = 0x20; // BAM Mux
 	testFrame.data[1] = 9; // Data Length
 	testFrame.data[2] = 0; // Data Length MSB
@@ -158,7 +122,7 @@ TEST(CORE_TESTS, CommandedAddress)
 	testFrame.data[7] = 0x00; // PGN MSB
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 
-	std::uint64_t rawNAME = testECU->get_NAME().get_full_name();
+	std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
 
 	// data packet 1
 	testFrame.identifier = 0x18EBFFF8;
@@ -185,35 +149,28 @@ TEST(CORE_TESTS, CommandedAddress)
 	CANNetworkManager::CANNetwork.update();
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
-	EXPECT_EQ(0x04, testECU->get_address());
+	EXPECT_EQ(0x04, internalECU->get_address());
 
-	EXPECT_TRUE(testECU->destroy());
-	testPlugin.close();
+	EXPECT_TRUE(internalECU->destroy());
+	EXPECT_TRUE(externalECU->destroy());
 	CANHardwareInterface::stop();
 }
 
 TEST(CORE_TESTS, InvalidatingControlFunctions)
 {
-	CANMessageFrame testFrame;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	NAME partnerName(0);
-	partnerName.set_arbitrary_address_capable(true);
-	partnerName.set_device_class(6);
-	partnerName.set_ecu_instance(3);
-	partnerName.set_function_code(130);
-	partnerName.set_industry_group(3);
-	partnerName.set_identity_number(967);
-
-	CANNetworkManager::CANNetwork.update();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start();
 
 	// Request the address claim PGN
-	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
-	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
-	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
-	testFrame.data[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
+	CANMessageFrame testFrame = {};
 	testFrame.identifier = 0x18EAFFFE;
+	testFrame.isExtendedFrame = true;
 	testFrame.dataLength = 3;
+	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
+	testFrame.data[0] = (PGN & 0xFF);
+	testFrame.data[1] = ((PGN >> 8) & 0xFF);
+	testFrame.data[2] = ((PGN >> 16) & 0xFF);
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
@@ -221,32 +178,12 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	std::this_thread::sleep_for(std::chrono::milliseconds(15));
 	CANNetworkManager::CANNetwork.update();
 
-	std::vector<NAMEFilter> testFilter = { NAMEFilter(NAME::NAMEParameters::IdentityNumber, 967) };
-	auto testPartner = PartneredControlFunction::create(0, testFilter);
-
 	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
 	EXPECT_FALSE(wasTestStateCallbackHit);
 	EXPECT_EQ(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
 
-	std::uint64_t rawNAME = partnerName.get_full_name();
-
-	// Force claim some kind of partner
-	testFrame.identifier = 0x18EEFF79;
-	testFrame.dataLength = 8;
-	testFrame.data[0] = static_cast<std::uint8_t>(rawNAME & 0xFF);
-	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
-	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
-	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
-	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
-	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
-	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
-	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
-	CANNetworkManager::CANNetwork.update();
-
-	EXPECT_TRUE(testPartner->get_address_valid());
-
+	auto testPartner = test_helpers::force_claim_partnered_control_function(0x79, 0);
 	EXPECT_TRUE(wasTestStateCallbackHit);
 	EXPECT_NE(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Online);
@@ -266,13 +203,14 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_FALSE(testPartner->get_address_valid());
-
 	EXPECT_TRUE(wasTestStateCallbackHit);
 	EXPECT_NE(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
+
 	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
 	testControlFunction.reset();
 	EXPECT_TRUE(testPartner->destroy());
+	CANHardwareInterface::stop();
 }
 
 TEST(CORE_TESTS, SimilarControlFunctions)

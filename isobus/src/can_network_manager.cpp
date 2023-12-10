@@ -385,6 +385,29 @@ namespace isobus
 		return partneredControlFunctions;
 	}
 
+	std::list<std::shared_ptr<ControlFunction>> isobus::CANNetworkManager::get_control_functions(bool includingOffline) const
+	{
+		std::list<std::shared_ptr<ControlFunction>> retVal;
+
+		for (std::uint8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
+		{
+			for (std::uint8_t address = 0; address < NULL_CAN_ADDRESS; address++)
+			{
+				if (nullptr != controlFunctionTable[channelIndex][address])
+				{
+					retVal.push_back(controlFunctionTable[channelIndex][address]);
+				}
+			}
+		}
+
+		if (includingOffline)
+		{
+			retVal.insert(retVal.end(), inactiveControlFunctions.begin(), inactiveControlFunctions.end());
+		}
+
+		return retVal;
+	}
+
 	FastPacketProtocol &CANNetworkManager::get_fast_packet_protocol()
 	{
 		return fastPacketProtocol;

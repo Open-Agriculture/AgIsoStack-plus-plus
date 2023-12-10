@@ -8,6 +8,8 @@
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 class DerivedTestVTClient : public VirtualTerminalClient
@@ -204,12 +206,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 
 	if (0 == testPool.size())
 	{
 		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
+		testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 	}
 
 	EXPECT_NE(0, testPool.size());
@@ -260,12 +262,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
+	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 
 	if (0 == DerivedTestVTClient::staticTestPool.size())
 	{
 		// Try a different path to mitigate differences between how IDEs run the unit test
-		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
+		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 	}
 
 	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
@@ -309,12 +311,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
+	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 
 	if (0 == testPool.size())
 	{
 		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
+		testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
 	}
 
 	EXPECT_NE(0, testPool.size());
@@ -845,54 +847,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(4);
-	clientNAME.set_arbitrary_address_capable(true);
-	clientNAME.set_function_code(6);
-	clientNAME.set_identity_number(975);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::ControlHead));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x37, 0);
-
-	CANMessageFrame testFrame;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(internalECU->get_address_valid());
-
-	std::vector<isobus::NAMEFilter> vtNameFilters;
-	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-	vtNameFilters.push_back(testFilter);
-
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
-
-	// Force claim a partner
-	NAME serverNAME(0);
-	serverNAME.set_arbitrary_address_capable(true);
-	serverNAME.set_device_class(1);
-	serverNAME.set_function_code(29);
-	serverNAME.set_identity_number(645);
-	serverNAME.set_manufacturer_code(1407);
-	std::uint64_t serverFullNAME = serverNAME.get_full_name();
-
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFF26;
-	testFrame.data[0] = static_cast<std::uint8_t>(serverFullNAME & 0xFF);
-	testFrame.data[1] = static_cast<std::uint8_t>((serverFullNAME >> 8) & 0xFF);
-	testFrame.data[2] = static_cast<std::uint8_t>((serverFullNAME >> 16) & 0xFF);
-	testFrame.data[3] = static_cast<std::uint8_t>((serverFullNAME >> 24) & 0xFF);
-	testFrame.data[4] = static_cast<std::uint8_t>((serverFullNAME >> 32) & 0xFF);
-	testFrame.data[5] = static_cast<std::uint8_t>((serverFullNAME >> 40) & 0xFF);
-	testFrame.data[6] = static_cast<std::uint8_t>((serverFullNAME >> 48) & 0xFF);
-	testFrame.data[7] = static_cast<std::uint8_t>((serverFullNAME >> 56) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x26, 0);
 
 	DerivedTestVTClient interfaceUnderTest(vtPartner, internalECU);
 	interfaceUnderTest.initialize(false);
@@ -900,12 +856,12 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!serverVT.get_queue_empty())
 	{
 		serverVT.read_frame(testFrame);
 	}
 	ASSERT_TRUE(serverVT.get_queue_empty());
-	EXPECT_TRUE(vtPartner->get_address_valid());
 
 	// Test send change active mask command while not connected queues the command
 	ASSERT_TRUE(interfaceUnderTest.send_change_active_mask(123, 456));

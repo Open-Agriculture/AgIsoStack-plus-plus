@@ -5,6 +5,8 @@
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
@@ -33,26 +35,6 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 
 TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 {
-	NAME TestDeviceNAME(0);
-
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(2);
-	TestDeviceNAME.set_device_class(6);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::DriveAxleControlBrakes));
-	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(0);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
-
-	auto TestInternalECU = InternalControlFunction::create(TestDeviceNAME, 0xAA, 0);
-
-	DiagnosticProtocol protocolUnderTest(TestInternalECU, DiagnosticProtocol::NetworkType::SAEJ1939Network1PrimaryVehicleNetwork);
-
-	EXPECT_FALSE(protocolUnderTest.get_initialized());
-	protocolUnderTest.initialize();
-	EXPECT_TRUE(protocolUnderTest.get_initialized());
-
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
@@ -60,41 +42,16 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
+	auto TestInternalECU = test_helpers::claim_internal_control_function(0xAA, 0);
+	auto TestPartneredECU = test_helpers::force_claim_partnered_control_function(0xAB, 0);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU, DiagnosticProtocol::NetworkType::SAEJ1939Network1PrimaryVehicleNetwork);
 
-	while ((!TestInternalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(TestInternalECU->get_address_valid());
-
-	CANMessageFrame testFrame;
-
-	testFrame.timestamp_us = 0;
-	testFrame.identifier = 0;
-	testFrame.channel = 0;
-	std::memset(testFrame.data, 0, sizeof(testFrame.data));
-	testFrame.dataLength = 0;
-	testFrame.isExtendedFrame = true;
-
-	// Force claim some other partner
-	testFrame.dataLength = 8;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
-	testFrame.identifier = 0x18EEFFAB;
-	testFrame.data[0] = 0x04;
-	testFrame.data[1] = 0x05;
-	testFrame.data[2] = 0x07;
-	testFrame.data[3] = 0x12;
-	testFrame.data[4] = 0x01;
-	testFrame.data[5] = 0x82;
-	testFrame.data[6] = 0x01;
-	testFrame.data[7] = 0xA0;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	EXPECT_FALSE(protocolUnderTest.get_initialized());
+	protocolUnderTest.initialize();
+	EXPECT_TRUE(protocolUnderTest.get_initialized());
 
 	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
 	while (!testPlugin.get_queue_empty())
 	{
 		testPlugin.read_frame(testFrame);
@@ -115,7 +72,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
-		testFrame.identifier = 0x18EAAAAB;
+		testFrame.identifier = test_helpers::create_extended_can_id(6, 0xEA00, TestInternalECU, TestPartneredECU);
 		testFrame.data[0] = 0xC5;
 		testFrame.data[1] = 0xFD;
 		testFrame.data[2] = 0x00;
