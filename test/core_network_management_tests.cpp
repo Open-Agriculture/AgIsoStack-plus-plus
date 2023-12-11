@@ -12,6 +12,7 @@
 #include <thread>
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 
 using namespace isobus;
 
@@ -108,44 +109,55 @@ TEST(CORE_TESTS, CommandedAddress)
 	// Let's construct a short BAM session for commanded address
 	// We'll ignore the 50ms timing for the unit test
 
-	CANMessageFrame testFrame = {};
-	testFrame.identifier = 0x18ECFFF8; // TP Command broadcast
-	testFrame.isExtendedFrame = true;
-	testFrame.dataLength = 8;
-	testFrame.data[0] = 0x20; // BAM Mux
-	testFrame.data[1] = 9; // Data Length
-	testFrame.data[2] = 0; // Data Length MSB
-	testFrame.data[3] = 2; // Packet count
-	testFrame.data[4] = 0xFF; // Reserved
-	testFrame.data[5] = 0xD8; // PGN LSB
-	testFrame.data[6] = 0xFE; // PGN middle byte
-	testFrame.data[7] = 0x00; // PGN MSB
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	// Broadcast Announce Message
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	  7,
+	  0xEC00, // Transport Protocol Connection Management
+	  externalECU,
+	  {
+	    0x20, // BAM Mux
+	    9, // Data Length
+	    0, // Data Length MSB
+	    2, // Packet count
+	    0xFF, // Reserved
+	    0xD8, // PGN LSB
+	    0xFE, // PGN middle byte
+	    0x00, // PGN MSB
+	  }));
 
 	std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
 
 	// data packet 1
-	testFrame.identifier = 0x18EBFFF8;
-	testFrame.data[0] = 1;
-	testFrame.data[1] = static_cast<std::uint8_t>(rawNAME & 0xFF);
-	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
-	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
-	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
-	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
-	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
-	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	  7,
+	  0xEB00, // Transport Protocol Data Transfer
+	  externalECU,
+	  {
+	    1, // Sequence Number
+	    static_cast<std::uint8_t>(rawNAME),
+	    static_cast<std::uint8_t>(rawNAME >> 8),
+	    static_cast<std::uint8_t>(rawNAME >> 16),
+	    static_cast<std::uint8_t>(rawNAME >> 24),
+	    static_cast<std::uint8_t>(rawNAME >> 32),
+	    static_cast<std::uint8_t>(rawNAME >> 40),
+	    static_cast<std::uint8_t>(rawNAME >> 48),
+	  }));
 
 	// data packet 2
-	testFrame.data[0] = 2;
-	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
-	testFrame.data[2] = 0x04; // Address
-	testFrame.data[3] = 0xFF;
-	testFrame.data[4] = 0xFF;
-	testFrame.data[5] = 0xFF;
-	testFrame.data[6] = 0xFF;
-	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	  7,
+	  0xEB00, // Transport Protocol Data Transfer
+	  externalECU,
+	  {
+	    2, // Sequence Number
+	    static_cast<std::uint8_t>(rawNAME >> 56),
+	    0x04, // Address
+	    0xFF,
+	    0xFF,
+	    0xFF,
+	    0xFF,
+	    0xFF,
+	  }));
 	CANNetworkManager::CANNetwork.update();
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -162,16 +174,11 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	// Request the address claim PGN
-	CANMessageFrame testFrame = {};
-	testFrame.identifier = 0x18EAFFFE;
-	testFrame.isExtendedFrame = true;
-	testFrame.dataLength = 3;
-	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
-	testFrame.data[0] = (PGN & 0xFF);
-	testFrame.data[1] = ((PGN >> 8) & 0xFF);
-	testFrame.data[2] = ((PGN >> 16) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	// Request the address claim PGN to simulate a control function starting to claim an address
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	  0xEE00, // Address Claim PGN
+	  nullptr,
+	  nullptr));
 	CANNetworkManager::CANNetwork.update();
 
 	// Simulate waiting for some contention
@@ -183,19 +190,18 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	EXPECT_EQ(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Offline);
 
+	// Make a control function claim it's address
 	auto testPartner = test_helpers::force_claim_partnered_control_function(0x79, 0);
 	EXPECT_TRUE(wasTestStateCallbackHit);
 	EXPECT_NE(testControlFunction, nullptr);
 	EXPECT_EQ(testControlFunctionState, ControlFunctionState::Online);
 	wasTestStateCallbackHit = false;
 
-	// Request the address claim PGN
-	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
-	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
-	testFrame.data[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
-	testFrame.identifier = 0x18EAFFFE;
-	testFrame.dataLength = 3;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	// Request the address claim PGN again
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	  0xEE00, // Address Claim PGN
+	  nullptr,
+	  nullptr));
 	CANNetworkManager::CANNetwork.update();
 
 	// Now, if we wait a while, that partner didn't claim again, so it should be invalid.
@@ -215,9 +221,6 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 
 TEST(CORE_TESTS, SimilarControlFunctions)
 {
-	CANMessageFrame testFrame;
-	testFrame.channel = 0;
-	testFrame.isExtendedFrame = true;
 	CANNetworkManager::CANNetwork.update();
 
 	// Make a partner that is a fuel system
@@ -227,13 +230,11 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	auto TestPartner = isobus::PartneredControlFunction::create(0, nameFilters);
 
 	// Request the address claim PGN
-	const auto PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
-	testFrame.data[0] = (PGN & std::numeric_limits<std::uint8_t>::max());
-	testFrame.data[1] = ((PGN >> 8) & std::numeric_limits<std::uint8_t>::max());
-	testFrame.data[2] = ((PGN >> 16) & std::numeric_limits<std::uint8_t>::max());
-	testFrame.identifier = 0x18EAFFFE;
-	testFrame.dataLength = 3;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	  0xEE00, // Address Claim PGN
+	  nullptr,
+	  nullptr));
+	CANNetworkManager::CANNetwork.update();
 	CANNetworkManager::CANNetwork.update();
 
 	// Simulate waiting for some contention
@@ -243,38 +244,46 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	std::uint64_t rawNAME = 0xa0000F000425e9f8;
 
 	// Force claim some kind of TC
-	testFrame.identifier = 0x18EEFF7A;
-	testFrame.dataLength = 8;
-	testFrame.data[0] = static_cast<std::uint8_t>(rawNAME & 0xFF);
-	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
-	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
-	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
-	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
-	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
-	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
-	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto firstTC = test_helpers::create_mock_control_function(0x7A);
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	  6,
+	  0xEE00, // Address Claim PGN
+	  firstTC,
+	  {
+	    static_cast<std::uint8_t>(rawNAME),
+	    static_cast<std::uint8_t>(rawNAME >> 8),
+	    static_cast<std::uint8_t>(rawNAME >> 16),
+	    static_cast<std::uint8_t>(rawNAME >> 24),
+	    static_cast<std::uint8_t>(rawNAME >> 32),
+	    static_cast<std::uint8_t>(rawNAME >> 40),
+	    static_cast<std::uint8_t>(rawNAME >> 48),
+	    static_cast<std::uint8_t>(rawNAME >> 56),
+	  }));
 	CANNetworkManager::CANNetwork.update();
 
 	// Partner should be valid with that same NAME
 	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), rawNAME);
 
 	// Now, claim something else that matches a TC. The original partner should remain the same.
-	auto testOtherTCNAME = NAME(rawNAME);
-	testOtherTCNAME.set_ecu_instance(1);
-	testOtherTCNAME.set_function_instance(1);
-	rawNAME = testOtherTCNAME.get_full_name();
-	testFrame.identifier = 0x18EEFF7B;
-	testFrame.dataLength = 8;
-	testFrame.data[0] = static_cast<std::uint8_t>(rawNAME & 0xFF);
-	testFrame.data[1] = static_cast<std::uint8_t>((rawNAME >> 8) & 0xFF);
-	testFrame.data[2] = static_cast<std::uint8_t>((rawNAME >> 16) & 0xFF);
-	testFrame.data[3] = static_cast<std::uint8_t>((rawNAME >> 24) & 0xFF);
-	testFrame.data[4] = static_cast<std::uint8_t>((rawNAME >> 32) & 0xFF);
-	testFrame.data[5] = static_cast<std::uint8_t>((rawNAME >> 40) & 0xFF);
-	testFrame.data[6] = static_cast<std::uint8_t>((rawNAME >> 48) & 0xFF);
-	testFrame.data[7] = static_cast<std::uint8_t>((rawNAME >> 56) & 0xFF);
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	auto secondTCNAME = NAME(rawNAME);
+	secondTCNAME.set_ecu_instance(1);
+	secondTCNAME.set_function_instance(1);
+	rawNAME = secondTCNAME.get_full_name();
+	auto secondTC = test_helpers::create_mock_control_function(0x7B);
+	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	  6,
+	  0xEE00, // Address Claim PGN
+	  secondTC,
+	  {
+	    static_cast<std::uint8_t>(rawNAME),
+	    static_cast<std::uint8_t>(rawNAME >> 8),
+	    static_cast<std::uint8_t>(rawNAME >> 16),
+	    static_cast<std::uint8_t>(rawNAME >> 24),
+	    static_cast<std::uint8_t>(rawNAME >> 32),
+	    static_cast<std::uint8_t>(rawNAME >> 40),
+	    static_cast<std::uint8_t>(rawNAME >> 48),
+	    static_cast<std::uint8_t>(rawNAME >> 56),
+	  }));
 	CANNetworkManager::CANNetwork.update();
 
 	// Partner should never change

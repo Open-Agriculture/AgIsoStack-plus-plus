@@ -7,6 +7,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 
 using namespace isobus;
 
@@ -506,8 +507,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	ASSERT_TRUE(requesterPlugin.get_queue_empty());
 
 	// Simulate a request for the message
-	testFrame.identifier = 0x18EA50F7;
-	testFrame.identifier = test_helpers::create_extended_can_id(6, 0xEA00, otherECU, internalECU);
+	testFrame.identifier = test_helpers::create_ext_can_id(6, 0xEA00, otherECU, internalECU);
 	testFrame.data[0] = 0x8E;
 	testFrame.data[1] = 0xFC;
 	testFrame.data[2] = 0x00;

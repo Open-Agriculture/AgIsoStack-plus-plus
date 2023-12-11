@@ -31,7 +31,8 @@ if(NOT TARGET GTest::gtest_main)
 endif()
 
 # Set test include files
-set(TEST_INCLUDE helpers/control_function_helpers.hpp)
+set(TEST_INCLUDE helpers/control_function_helpers.hpp
+                 helpers/messaging_helpers.hpp)
 
 # Set test source files
 set(TEST_SRC
@@ -54,7 +55,8 @@ set(TEST_SRC
     maintain_power_tests.cpp
     vt_object_tests.cpp
     nmea2000_message_tests.cpp
-    helpers/control_function_helpers.cpp)
+    helpers/control_function_helpers.cpp
+    helpers/messaging_helpers.cpp)
 
 add_executable(unit_tests ${TEST_SRC} ${TEST_INCLUDE})
 set_target_properties(
