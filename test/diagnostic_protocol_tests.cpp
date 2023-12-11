@@ -6,6 +6,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 
 using namespace isobus;
 
@@ -72,7 +73,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
-		testFrame.identifier = test_helpers::create_extended_can_id(6, 0xEA00, TestInternalECU, TestPartneredECU);
+		testFrame.identifier = test_helpers::create_ext_can_id(6, 0xEA00, TestInternalECU, TestPartneredECU);
 		testFrame.data[0] = 0xC5;
 		testFrame.data[1] = 0xFD;
 		testFrame.data[2] = 0x00;
