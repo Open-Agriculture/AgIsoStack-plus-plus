@@ -63,7 +63,7 @@ Here's an example:
 
 	std::uint8_t testMessageData[100] = {0};
 
-	isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, 100, someInternalControlFunction, nullptr, isobus::CANIdentifier::PriorityLowest7, nullptr);
+	isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, 100, someInternalControlFunction, nullptr, isobus::CANIdentifier::CANPriority::PriorityLowest7, nullptr);
 
 This example would send a 100 byte message from `someInternalControlFunction` to the broadcast address with the PGN 0x1F001.
 

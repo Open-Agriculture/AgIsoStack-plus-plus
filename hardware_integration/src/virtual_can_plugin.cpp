@@ -78,8 +78,13 @@ namespace isobus
 
 	bool VirtualCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
+		return read_frame(canFrame, 1000);
+	}
+
+	bool VirtualCANPlugin::read_frame(isobus::CANMessageFrame &canFrame, std::uint32_t timeout) const
+	{
 		std::unique_lock<std::mutex> lock(mutex);
-		ourDevice->condition.wait_for(lock, std::chrono::milliseconds(1000), [this] { return !ourDevice->queue.empty() || !running; });
+		ourDevice->condition.wait_for(lock, std::chrono::milliseconds(timeout), [this] { return !ourDevice->queue.empty() || !running; });
 		if (!ourDevice->queue.empty())
 		{
 			canFrame = ourDevice->queue.front();
@@ -93,5 +98,11 @@ namespace isobus
 	{
 		const std::lock_guard<std::mutex> lock(mutex);
 		return ourDevice->queue.empty();
+	}
+
+	void VirtualCANPlugin::clear_queue() const
+	{
+		const std::lock_guard<std::mutex> lock(mutex);
+		ourDevice->queue.clear();
 	}
 }

@@ -57,10 +57,16 @@ namespace isobus
 		/// @brief Connects to the socket
 		void open() override;
 
-		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
+		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read. Times out after 1 second.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
 		bool read_frame(isobus::CANMessageFrame &canFrame) override;
+
+		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
+		/// @param[in, out] canFrame The CAN frame that was read
+		/// @param[in] timeout The timeout in milliseconds
+		/// @returns `true` if a CAN frame was read, otherwise `false`
+		bool read_frame(isobus::CANMessageFrame &canFrame, std::uint32_t timeout) const;
 
 		/// @brief Writes a frame to the bus (synchronous)
 		/// @param[in] canFrame The frame to write to the bus
@@ -71,9 +77,12 @@ namespace isobus
 		/// @param[in] canFrame The frame to write to the bus
 		void write_frame_as_if_received(const isobus::CANMessageFrame &canFrame) const;
 
-		/// @brief Returns if the internal message queue is empty or not
-		/// @returns `true` if the internal message queue is empty, otherwise false
+		/// @brief Returns if the internal received message queue is empty or not
+		/// @returns `true` if the internal received message queue is empty, otherwise false
 		bool get_queue_empty() const;
+
+		/// @brief Clear the internal received message queue
+		void clear_queue() const;
 
 	private:
 		/// @brief A struct holding information about a virtual CAN device

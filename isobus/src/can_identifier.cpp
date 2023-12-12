@@ -42,21 +42,6 @@ namespace isobus
 		m_RawIdentifier |= static_cast<std::uint32_t>(sourceAddress);
 	}
 
-	CANIdentifier::CANIdentifier(const CANIdentifier &copiedObject)
-	{
-		m_RawIdentifier = copiedObject.m_RawIdentifier;
-	}
-
-	CANIdentifier::~CANIdentifier()
-	{
-	}
-
-	CANIdentifier &CANIdentifier::operator=(const CANIdentifier &obj)
-	{
-		m_RawIdentifier = obj.m_RawIdentifier;
-		return *this;
-	}
-
 	CANIdentifier::CANPriority CANIdentifier::get_priority() const
 	{
 		const std::uint8_t EXTENDED_IDENTIFIER_MASK = 0x07;

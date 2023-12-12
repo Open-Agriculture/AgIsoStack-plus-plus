@@ -39,9 +39,34 @@ namespace isobus
 		return source;
 	}
 
+	bool CANMessage::has_valid_source_control_function() const
+	{
+		return (nullptr != source) && source->get_address_valid();
+	}
+
 	std::shared_ptr<ControlFunction> CANMessage::get_destination_control_function() const
 	{
 		return destination;
+	}
+
+	bool CANMessage::has_valid_destination_control_function() const
+	{
+		return (nullptr != destination) && destination->get_address_valid();
+	}
+
+	bool CANMessage::is_broadcast() const
+	{
+		return identifier.get_destination_address() == CANIdentifier::GLOBAL_ADDRESS;
+	}
+
+	bool CANMessage::is_destination_our_device() const
+	{
+		return has_valid_destination_control_function() && destination->get_type() == ControlFunction::Type::Internal;
+	}
+
+	bool CANMessage::is_destination(std::shared_ptr<ControlFunction> controlFunction) const
+	{
+		return has_valid_destination_control_function() && destination == controlFunction;
 	}
 
 	CANIdentifier CANMessage::get_identifier() const
@@ -84,7 +109,7 @@ namespace isobus
 		destination = value;
 	}
 
-	void CANMessage::set_identifier(CANIdentifier value)
+	void CANMessage::set_identifier(const CANIdentifier &value)
 	{
 		identifier = value;
 	}

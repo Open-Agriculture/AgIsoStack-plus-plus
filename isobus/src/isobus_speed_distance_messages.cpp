@@ -813,7 +813,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
-			                                                        CANIdentifier::Priority3);
+			                                                        CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -840,7 +840,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
-			                                                        CANIdentifier::Priority3);
+			                                                        CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -864,7 +864,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
 			                                                        nullptr,
-			                                                        CANIdentifier::Priority3);
+			                                                        CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -888,7 +888,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
 			                                                        nullptr,
-			                                                        CANIdentifier::Priority3);
+			                                                        CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}

@@ -24,7 +24,7 @@ namespace isobus
 	{
 	public:
 		/// @brief Defines all the CAN frame priorities that can be encoded in a frame ID
-		enum CANPriority
+		enum class CANPriority
 		{
 			PriorityHighest0 = 0, ///< Highest CAN priority
 			Priority1 = 1, ///< Priority highest - 1
@@ -37,7 +37,7 @@ namespace isobus
 		};
 
 		/// @brief Defines if a frame is a standard (11 bit) or extended (29 bit) ID frame
-		enum Type
+		enum class Type
 		{
 			Standard = 0, ///< Frame is an 11bit ID standard (legacy) message with no PGN and highest priority
 			Extended = 1 ///< Frame is a modern 29 bit ID CAN frame
@@ -59,17 +59,8 @@ namespace isobus
 		              std::uint8_t destinationAddress,
 		              std::uint8_t sourceAddress);
 
-		/// @brief Copy constructor for a CAN Identifier
-		/// @param[in] copiedObject The object to copy
-		CANIdentifier(const CANIdentifier &copiedObject);
-
 		/// @brief Destructor for the CANIdentifier
-		~CANIdentifier();
-
-		/// @brief Assignment operator for a CAN identifier
-		/// @param[in] obj rhs of the operator
-		/// @returns The lhs of the operator, now assigned the rhs value
-		CANIdentifier &operator=(const CANIdentifier &obj);
+		~CANIdentifier() = default;
 
 		/// @brief Returns the raw encoded ID of the CAN identifier
 		/// @returns The raw encoded ID of the CAN identifier
