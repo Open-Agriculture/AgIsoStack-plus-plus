@@ -250,11 +250,6 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::set_should_queue_commands(const bool shouldQueueCommands)
-	{
-		commandQueueEnabled = shouldQueueCommands;
-	}
-
 	isobus::VirtualTerminalClient::AssignedAuxiliaryFunction::AssignedAuxiliaryFunction(const std::uint16_t functionObjectID, const std::uint16_t inputObjectID, const AuxiliaryTypeTwoFunctionType functionType) :
 	  functionObjectID(functionObjectID), inputObjectID(inputObjectID), functionType(functionType)
 	{
@@ -1765,7 +1760,6 @@ namespace isobus
 	{
 		static constexpr std::uint8_t SUPPORTED_VT_VERSION = 0x06;
 
-		std::uint8_t versionByte;
 		std::uint8_t bitmask = (initializing ? 0x01 : 0x00);
 
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage),
@@ -3033,6 +3027,50 @@ namespace isobus
 							}
 						}
 						break;
+
+						case static_cast<std::uint8_t>(Function::HideShowObjectCommand):
+						case static_cast<std::uint8_t>(Function::EnableDisableObjectCommand):
+						case static_cast<std::uint8_t>(Function::SelectInputObjectCommand):
+						case static_cast<std::uint8_t>(Function::ESCCommand):
+						case static_cast<std::uint8_t>(Function::ControlAudioSignalCommand):
+						case static_cast<std::uint8_t>(Function::SetAudioVolumeCommand):
+						case static_cast<std::uint8_t>(Function::ChangeChildLocationCommand):
+						case static_cast<std::uint8_t>(Function::ChangeChildPositionCommand):
+						case static_cast<std::uint8_t>(Function::ChangeSizeCommand):
+						case static_cast<std::uint8_t>(Function::ChangeBackgroundColourCommand):
+						case static_cast<std::uint8_t>(Function::ChangeNumericValueCommand):
+						case static_cast<std::uint8_t>(Function::ChangeStringValueCommand):
+						case static_cast<std::uint8_t>(Function::ChangeEndPointCommand):
+						case static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand):
+						case static_cast<std::uint8_t>(Function::ChangeLineAttributesCommand):
+						case static_cast<std::uint8_t>(Function::ChangeFillAttributesCommand):
+						case static_cast<std::uint8_t>(Function::ChangeActiveMaskCommand):
+						case static_cast<std::uint8_t>(Function::ChangeSoftKeyMaskCommand):
+						case static_cast<std::uint8_t>(Function::ChangeAttributeCommand):
+						case static_cast<std::uint8_t>(Function::ChangePriorityCommand):
+						case static_cast<std::uint8_t>(Function::ChangeListItemCommand):
+						case static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand):
+						case static_cast<std::uint8_t>(Function::LockUnlockMaskCommand):
+						case static_cast<std::uint8_t>(Function::ExecuteMacroCommand):
+						case static_cast<std::uint8_t>(Function::ChangeObjectLabelCommand):
+						case static_cast<std::uint8_t>(Function::ChangePolygonPointCommand):
+						case static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand):
+						case static_cast<std::uint8_t>(Function::GraphicsContextCommand):
+						case static_cast<std::uint8_t>(Function::GetAttributeValueMessage):
+						case static_cast<std::uint8_t>(Function::SelectColourMapCommand):
+						case static_cast<std::uint8_t>(Function::ExecuteExtendedMacroCommand):
+						case static_cast<std::uint8_t>(Function::SelectActiveWorkingSet):
+						{
+							// By checking if it's a response with our control functions, we verify that it's a response to a request we sent.
+							// This because we only support Working Set Masters at the moment.
+							if ((parentVT->myControlFunction == message.get_destination_control_function()) &&
+							    (parentVT->partnerControlFunction == message.get_source_control_function()))
+							{
+								parentVT->commandAwaitingResponse = false;
+								parentVT->process_command_queue();
+							}
+						}
+						break;
 					}
 				}
 				break;
@@ -4288,20 +4326,40 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::send_command(const std::vector<std::uint8_t> &data) const
+	bool VirtualTerminalClient::send_command(const std::vector<std::uint8_t> &data)
 	{
+		if (commandAwaitingResponse)
+		{
+			if (SystemTiming::time_expired_ms(lastCommandTimestamp_ms, 1500))
+			{
+				CANStackLogger::warn("[VT]: Server response to a command timed out");
+				commandAwaitingResponse = false;
+			}
+			else
+			{
+				// We're still waiting for a response to the last command, so we can't send another one yet
+				return false;
+			}
+		}
+
 		if (!get_is_connected())
 		{
 			CANStackLogger::error("[VT]: Cannot send command, not connected");
 			return false;
 		}
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      data.data(),
-		                                                      data.size(),
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		bool success = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                              data.data(),
+		                                                              data.size(),
+		                                                              myControlFunction,
+		                                                              partnerControlFunction,
+		                                                              CANIdentifier::CANPriority::Priority5);
+		if (success)
+		{
+			commandAwaitingResponse = true;
+			lastCommandTimestamp_ms = SystemTiming::get_timestamp_ms();
+		}
+		return success;
 	}
 
 	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace)
@@ -4311,16 +4369,14 @@ namespace isobus
 			return true;
 		}
 
-		if (!commandQueueEnabled)
-		{
-			return false;
-		}
-
 		if (replace && replace_command(data))
 		{
 			return true;
 		}
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		std::lock_guard<std::mutex> lock(commandQueueMutex);
+#endif
 		commandQueue.emplace_back(data);
 		return true;
 	}
@@ -4350,6 +4406,9 @@ namespace isobus
 
 	void VirtualTerminalClient::process_command_queue()
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		std::lock_guard<std::mutex> lock(commandQueueMutex);
+#endif
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
 			if (send_command(*it))

@@ -23,6 +23,7 @@
 #include <vector>
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <mutex>
 #include <thread>
 #endif
 
@@ -533,10 +534,6 @@ namespace isobus
 		void update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked = false);
 
 		// Command Messages
-		/// @brief Set whether the client should queue commands when sending them to the VT server failed first try. (Default: true).
-		/// This can happen if a transport protocol is busy with sending another message.
-		/// @param[in] shouldQueueCommands Whether the client should queue commands when sending them to the VT server failed first try
-		void set_should_queue_commands(const bool shouldQueueCommands);
 
 		/// @brief Sends a hide/show object command
 		/// @details This command is used to hide or show a Container object.
@@ -1573,7 +1570,7 @@ namespace isobus
 		/// @brief Sends a command to the VT server
 		/// @param[in] data The data to send, including the function-code
 		/// @returns true if the message was sent successfully
-		bool send_command(const std::vector<std::uint8_t> &data) const;
+		bool send_command(const std::vector<std::uint8_t> &data);
 
 		/// @brief Tries to send a command to the VT server, and queues it if it fails
 		/// @param[in] data The data to send, including the function-code
@@ -1650,7 +1647,11 @@ namespace isobus
 
 		// Command queue
 		std::vector<std::vector<std::uint8_t>> commandQueue; ///< A queue of commands to send to the VT server
-		bool commandQueueEnabled = true; ///< Determines if the command queue is enabled
+		bool commandAwaitingResponse = false; ///< Determines if we are currently waiting for a response to a command
+		std::uint32_t lastCommandTimestamp_ms = 0; ///< The timestamp of the last command sent
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		std::mutex commandQueueMutex; ///< A mutex to protect the command queue
+#endif
 
 		// Activation event callbacks
 		EventDispatcher<VTKeyEvent> softKeyEventDispatcher; ///< A list of all soft key event callbacks
