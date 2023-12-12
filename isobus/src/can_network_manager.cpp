@@ -162,11 +162,11 @@ namespace isobus
 				if (nullptr == destinationControlFunction)
 				{
 					// Todo move binding of dest address to hardware layer
-					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), 0xFF, parameterGroupNumber, priority, dataBuffer, dataLength);
+					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), 0xFF, parameterGroupNumber, static_cast<std::uint8_t>(priority), dataBuffer, dataLength);
 				}
 				else if (destinationControlFunction->get_address_valid())
 				{
-					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, priority, dataBuffer, dataLength);
+					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, static_cast<std::uint8_t>(priority), dataBuffer, dataLength);
 				}
 
 				if ((retVal) &&

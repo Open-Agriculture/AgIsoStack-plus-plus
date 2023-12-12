@@ -81,7 +81,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	interfaceUnderTest.initialize();
 
 	CANMessage testMessage(0);
-	testMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, 0xFE0F, CANIdentifier::PriorityDefault6, 0x80, 0x81));
+	testMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, 0xFE0F, CANIdentifier::CANPriority::PriorityDefault6, 0x80, 0x81));
 
 	// Make a message that is too short
 	std::uint8_t shortMessage[] = { 'r', 'u' };

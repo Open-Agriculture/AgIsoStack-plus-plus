@@ -344,7 +344,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(guidanceSystemCommandTransmitData.get_sender_control_function()),
 			                                                        destinationControlFunction,
-			                                                        CANIdentifier::Priority3);
+			                                                        CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -393,7 +393,7 @@ namespace isobus
 			                                                        buffer.size(),
 			                                                        std::static_pointer_cast<InternalControlFunction>(guidanceMachineInfoTransmitData.get_sender_control_function()),
 			                                                        destinationControlFunction,
-			                                                        CANIdentifier::Priority3);
+			                                                        CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}

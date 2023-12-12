@@ -70,9 +70,30 @@ namespace isobus
 		/// @returns The source control function that the message is from
 		std::shared_ptr<ControlFunction> get_source_control_function() const;
 
+		/// @brief Returns whether the message is sent by a device that claimed its address on the bus.
+		/// @returns True if the source of the message is valid, false otherwise
+		bool has_valid_source_control_function() const;
+
 		/// @brief Gets the destination control function that the message is to
 		/// @returns The destination control function that the message is to
 		std::shared_ptr<ControlFunction> get_destination_control_function() const;
+
+		/// @brief Returns whether the message is sent to a specific device on the bus.
+		/// @returns True if the destination of the message is valid, false otherwise
+		bool has_valid_destination_control_function() const;
+
+		/// @brief Returns whether the message is sent as a broadcast message / to all devices on the bus.
+		/// @returns True if the destination of the message is everyone, false otherwise
+		bool is_broadcast() const;
+
+		/// @brief Returns whether the message is destined for our device on the bus.
+		/// @returns True if the message is destined for our device, false otherwise
+		bool is_destination_our_device() const;
+
+		/// @brief Returns whether the message is destined for the control function.
+		/// @param[in] controlFunction The control function to check
+		/// @returns True if the message is destined for the control function, false otherwise
+		bool is_destination(std::shared_ptr<ControlFunction> controlFunction) const;
 
 		/// @brief Returns the identifier of the message
 		/// @returns The identifier of the message
@@ -106,7 +127,7 @@ namespace isobus
 
 		/// @brief Sets the CAN ID of the message
 		/// @param[in] value The CAN ID for the message
-		void set_identifier(CANIdentifier value);
+		void set_identifier(const CANIdentifier &value);
 
 		/// @brief Get a 8-bit unsigned byte from the buffer at a specific index.
 		/// A 8-bit unsigned byte can hold a value between 0 and 255.

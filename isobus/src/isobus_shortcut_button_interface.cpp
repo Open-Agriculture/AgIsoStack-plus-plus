@@ -231,6 +231,6 @@ namespace isobus
 		                                                      buffer.size(),
 		                                                      sourceControlFunction,
 		                                                      nullptr,
-		                                                      CANIdentifier::Priority3);
+		                                                      CANIdentifier::CANPriority::Priority3);
 	}
 }
