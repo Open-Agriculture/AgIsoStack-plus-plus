@@ -895,6 +895,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 
 	DerivedTestVTClient interfaceUnderTest(vtPartner, internalECU);
+	interfaceUnderTest.initialize(false);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -908,11 +909,11 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 
 	// Test send change active mask command while not connected queues the command
 	ASSERT_TRUE(interfaceUnderTest.send_change_active_mask(123, 456));
+	ASSERT_TRUE(serverVT.get_queue_empty());
 	interfaceUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 	interfaceUnderTest.test_wrapper_process_command_queue();
 
-	serverVT.read_frame(testFrame);
-
+	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
@@ -926,10 +927,28 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	std::uint16_t newActiveMaskObjectID = (static_cast<std::uint16_t>(testFrame.data[3]) | (static_cast<std::uint16_t>(testFrame.data[4]) << 8));
 	EXPECT_EQ(456, newActiveMaskObjectID);
 
-	// Test send_hide_show_object
-	interfaceUnderTest.send_hide_show_object(1234, VirtualTerminalClient::HideShowObjectCommand::HideObject);
+	// Test send_hide_show_object, but since we have not yet sent a response to the change active mask command, it should queue the command
+	ASSERT_TRUE(interfaceUnderTest.send_hide_show_object(1234, VirtualTerminalClient::HideShowObjectCommand::HideObject));
+	ASSERT_TRUE(serverVT.get_queue_empty());
+	interfaceUnderTest.test_wrapper_process_command_queue();
+	ASSERT_FALSE(serverVT.read_frame(testFrame));
 
-	serverVT.read_frame(testFrame);
+	// Send a response to the change active mask command
+	testFrame.identifier = 0x14E63726; // VT->ECU
+	testFrame.data[0] = 173; // VT Function
+	testFrame.data[1] = 123 & 0xFF;
+	testFrame.data[2] = (123 >> 8) & 0xFF;
+	testFrame.data[3] = 0; // Success
+	testFrame.data[4] = 0xFF; // Reserved
+	testFrame.data[5] = 0xFF; // Reserved
+	testFrame.data[6] = 0xFF; // Reserved
+	testFrame.data[7] = 0xFF; // Reserved
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	interfaceUnderTest.test_wrapper_process_command_queue();
+
+	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
@@ -944,24 +963,22 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(0xFF, testFrame.data[6]); // Reserved
 	EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 
-	interfaceUnderTest.send_hide_show_object(1234, VirtualTerminalClient::HideShowObjectCommand::ShowObject);
-	serverVT.read_frame(testFrame);
-	EXPECT_EQ(0, testFrame.channel);
-	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
-	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x14E72637, testFrame.identifier);
-	EXPECT_EQ(160, testFrame.data[0]); // VT function
+	// Send a response to the hide object command
+	testFrame.identifier = 0x14E63726; // VT->ECU
+	testFrame.data[0] = 160; // VT Function
+	testFrame.data[1] = 1234 & 0xFF;
+	testFrame.data[2] = (1234 >> 8) & 0xFF;
+	testFrame.data[3] = 0; // Hide
+	testFrame.data[4] = 0xFF; // Reserved
+	testFrame.data[5] = 0xFF; // Reserved
+	testFrame.data[6] = 0xFF; // Reserved
+	testFrame.data[7] = 0xFF; // Reserved
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
 
-	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
-	EXPECT_EQ(1234, objectID);
-	EXPECT_EQ(1, testFrame.data[3]); // Show
-	EXPECT_EQ(0xFF, testFrame.data[4]); // Reserved
-	EXPECT_EQ(0xFF, testFrame.data[5]); // Reserved
-	EXPECT_EQ(0xFF, testFrame.data[6]); // Reserved
-	EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
-
-	interfaceUnderTest.send_enable_disable_object(1234, VirtualTerminalClient::EnableDisableObjectCommand::DisableObject);
-	serverVT.read_frame(testFrame);
+	ASSERT_TRUE(serverVT.get_queue_empty());
+	ASSERT_TRUE(interfaceUnderTest.send_enable_disable_object(1234, VirtualTerminalClient::EnableDisableObjectCommand::DisableObject));
+	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
@@ -971,21 +988,24 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(1234, objectID);
 	EXPECT_EQ(0, testFrame.data[3]); // Disable
 
-	interfaceUnderTest.send_enable_disable_object(1234, VirtualTerminalClient::EnableDisableObjectCommand::EnableObject);
-	serverVT.read_frame(testFrame);
-	EXPECT_EQ(0, testFrame.channel);
-	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
-	EXPECT_TRUE(testFrame.isExtendedFrame);
-	EXPECT_EQ(0x14E72637, testFrame.identifier);
-	EXPECT_EQ(161, testFrame.data[0]); // VT function
-	objectID = (static_cast<std::uint16_t>(testFrame.data[1]) | (static_cast<std::uint16_t>(testFrame.data[2]) << 8));
-	EXPECT_EQ(1234, objectID);
-	EXPECT_EQ(1, testFrame.data[3]); // Disable
+	// Send a response to the disable object command
+	testFrame.identifier = 0x14E63726; // VT->ECU
+	testFrame.data[0] = 161; // VT Function
+	testFrame.data[1] = 1234 & 0xFF;
+	testFrame.data[2] = (1234 >> 8) & 0xFF;
+	testFrame.data[3] = 0; // Disable
+	testFrame.data[4] = 0xFF; // Reserved
+	testFrame.data[5] = 0xFF; // Reserved
+	testFrame.data[6] = 0xFF; // Reserved
+	testFrame.data[7] = 0xFF; // Reserved
+	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
 
 	// Test draw text
 	const std::string testString = "a";
-	interfaceUnderTest.send_draw_text(123, true, 1, testString.data());
-	serverVT.read_frame(testFrame);
+	ASSERT_TRUE(serverVT.get_queue_empty());
+	ASSERT_TRUE(interfaceUnderTest.send_draw_text(123, true, 1, testString.data()));
+	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_TRUE(testFrame.isExtendedFrame);
@@ -996,8 +1016,6 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	EXPECT_EQ(1, testFrame.data[4]); // Transparent
 	EXPECT_EQ(1, testFrame.data[5]); // Length
 	EXPECT_EQ('a', testFrame.data[6]);
-
-	//! @todo test send command that utilizes transport protocol so queue also gets tested
 
 	serverVT.close();
 	CANHardwareInterface::stop();
