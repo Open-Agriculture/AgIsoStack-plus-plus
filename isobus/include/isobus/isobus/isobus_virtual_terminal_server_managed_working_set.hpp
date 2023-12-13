@@ -120,6 +120,12 @@ namespace isobus
 		std::uint32_t get_auxiliary_input_maintenance_timestamp_ms() const;
 
 	private:
+		/// @brief Adds an object to the object tree, and replaces an object of the same type
+		/// if there's already one in the tree with the same ID.
+		/// @param[in] objectToAdd The object to add to the object tree
+		/// @returns true if the object was added or replaced, otherwise false
+		bool add_or_replace_object(std::shared_ptr<VTObject> objectToAdd);
+
 		/// @brief Parses one object in the remaining object pool data
 		/// @param[in,out] iopData A pointer to some object pool data
 		/// @param[in,out] iopLength The number of bytes remaining in the object pool
