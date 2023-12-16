@@ -56,7 +56,7 @@ namespace isobus
 
 	bool CANMessage::is_broadcast() const
 	{
-		return identifier.get_destination_address() == CANIdentifier::GLOBAL_ADDRESS;
+		return (!has_valid_destination_control_function()) || (destination->get_address() == CANIdentifier::GLOBAL_ADDRESS);
 	}
 
 	bool CANMessage::is_destination_our_device() const
