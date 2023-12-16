@@ -57,4 +57,14 @@ namespace isobus
 	{
 		return networkManagerMaxFramesToSendPerUpdate;
 	}
+
+	void CANNetworkConfiguration::set_number_of_packets_per_cts_message(std::uint8_t numberFrames)
+	{
+		numberOfPacketsPerCTSMessage = numberFrames;
+	}
+
+	std::uint8_t CANNetworkConfiguration::get_number_of_packets_per_cts_message() const
+	{
+		return numberOfPacketsPerCTSMessage;
+	}
 }

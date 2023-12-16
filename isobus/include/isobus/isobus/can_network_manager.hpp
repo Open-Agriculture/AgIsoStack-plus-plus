@@ -371,9 +371,9 @@ namespace isobus
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
 
 		CANNetworkConfiguration configuration; ///< The configuration for this network manager
-		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Static instance of the protocol manager
+		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Instance of the extended transport protocol manager
 		FastPacketProtocol fastPacketProtocol; ///< Instance of the fast packet protocol
-		TransportProtocolManager transportProtocol; ///< Static instance of the transport protocol manager
+		TransportProtocolManager transportProtocol; ///< Instance of the transport protocol manager
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window

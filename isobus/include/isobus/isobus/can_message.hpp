@@ -13,11 +13,15 @@
 
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_identifier.hpp"
+#include "isobus/utility/data_span.hpp"
 
 #include <vector>
 
 namespace isobus
 {
+	/// @brief A read-only span of data for a CAN message
+	using CANDataSpan = DataSpan<const std::uint8_t>;
+
 	//================================================================================================
 	/// @class CANMessage
 	///

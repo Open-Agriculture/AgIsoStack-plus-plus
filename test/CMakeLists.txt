@@ -36,9 +36,10 @@ set(TEST_INCLUDE helpers/control_function_helpers.hpp
 
 # Set test source files
 set(TEST_SRC
-    identifier_tests.cpp
-    diagnostic_protocol_tests.cpp
     core_network_management_tests.cpp
+    identifier_tests.cpp
+    transport_protocol_tests.cpp
+    diagnostic_protocol_tests.cpp
     virtual_can_plugin_tests.cpp
     address_claim_tests.cpp
     can_name_tests.cpp
