@@ -308,7 +308,6 @@ namespace isobus
 							{
 								send_end_of_session_acknowledgement(tempSession);
 							}
-							CANNetworkManager::CANNetwork.process_any_control_function_pgn_callbacks(tempSession->sessionMessage);
 							CANNetworkManager::CANNetwork.protocol_message_callback(tempSession->sessionMessage);
 							close_session(tempSession, true);
 						}

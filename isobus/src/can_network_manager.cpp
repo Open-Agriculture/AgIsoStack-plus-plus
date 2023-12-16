@@ -33,7 +33,6 @@ namespace isobus
 	{
 		receiveMessageList.clear();
 		initialized = true;
-		transportProtocol.initialize({});
 		extendedTransportProtocol.initialize({});
 	}
 
@@ -132,25 +131,47 @@ namespace isobus
 		    ((parameterGroupNumber == static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim)) ||
 		     (sourceControlFunction->get_address_valid())))
 		{
-			CANLibProtocol *currentProtocol;
-
-			// See if any transport layer protocol can handle this message
-			for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
+			std::unique_ptr<CANMessageData> messageData;
+			if (nullptr != frameChunkCallback)
 			{
-				if (CANLibProtocol::get_protocol(i, currentProtocol))
+				messageData.reset(new CANMessageDataCallback(dataLength, frameChunkCallback, parentPointer));
+			}
+			else
+			{
+				messageData.reset(new CANMessageDataView(dataBuffer, dataLength));
+			}
+			if (transportProtocol.protocol_transmit_message(parameterGroupNumber,
+			                                                messageData,
+			                                                sourceControlFunction,
+			                                                destinationControlFunction,
+			                                                transmitCompleteCallback,
+			                                                parentPointer))
+			{
+				// Successfully sent via the transport protocol
+				retVal = true;
+			}
+			else
+			{
+				//! @todo convert the other protocols to stop using the abstract protocollib class
+				CANLibProtocol *currentProtocol;
+				// See if any transport layer protocol can handle this message
+				for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 				{
-					retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
-					                                                    dataBuffer,
-					                                                    dataLength,
-					                                                    sourceControlFunction,
-					                                                    destinationControlFunction,
-					                                                    transmitCompleteCallback,
-					                                                    parentPointer,
-					                                                    frameChunkCallback);
-
-					if (retVal)
+					if (CANLibProtocol::get_protocol(i, currentProtocol))
 					{
-						break;
+						retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
+						                                                    dataBuffer,
+						                                                    dataLength,
+						                                                    sourceControlFunction,
+						                                                    destinationControlFunction,
+						                                                    transmitCompleteCallback,
+						                                                    parentPointer,
+						                                                    frameChunkCallback);
+
+						if (retVal)
+						{
+							break;
+						}
 					}
 				}
 			}
@@ -210,6 +231,9 @@ namespace isobus
 		update_internal_cfs();
 
 		prune_inactive_control_functions();
+
+		// Update transport protocols
+		transportProtocol.update();
 
 		for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 		{
@@ -459,7 +483,14 @@ namespace isobus
 		return retVal;
 	}
 
-	CANNetworkManager::CANNetworkManager()
+	CANNetworkManager::CANNetworkManager() :
+	  transportProtocol([this](std::uint32_t parameterGroupNumber,
+	                           CANDataSpan data,
+	                           std::shared_ptr<InternalControlFunction> sourceControlFunction,
+	                           std::shared_ptr<ControlFunction> destinationControlFunction,
+	                           CANIdentifier::CANPriority priority) { return this->send_can_message(parameterGroupNumber, data.begin(), data.size(), sourceControlFunction, destinationControlFunction, priority); },
+	                    [this](const CANMessage &message) { this->protocol_message_callback(message); },
+	                    &configuration)
 	{
 		currentBusloadBitAccumulator.fill(0);
 		lastAddressClaimRequestTimestamp_ms.fill(0);
@@ -991,6 +1022,7 @@ namespace isobus
 			process_can_message_for_address_violations(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
+			transportProtocol.process_message(currentMessage);
 			process_protocol_pgn_callbacks(currentMessage);
 			process_any_control_function_pgn_callbacks(currentMessage);
 
@@ -1047,6 +1079,7 @@ namespace isobus
 	void CANNetworkManager::protocol_message_callback(const CANMessage &message)
 	{
 		process_can_message_for_global_and_partner_callbacks(message);
+		process_any_control_function_pgn_callbacks(message);
 		process_can_message_for_commanded_address(message);
 	}
 
