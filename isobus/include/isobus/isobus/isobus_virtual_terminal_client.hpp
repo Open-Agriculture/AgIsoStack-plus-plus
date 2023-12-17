@@ -1123,10 +1123,10 @@ namespace isobus
 		/// @returns The VT version supported supported by the VT server
 		VTVersion get_connected_vt_version() const;
 
-		/// @brief Returns if the VT version is supported by the VT server
+		/// @brief Returns whether the VT version is supported by the VT server
 		/// @param[in] value The VT version to check against
 		/// @returns true if the VT version is supported by the VT server
-		bool get_vt_version_supported(VTVersion value) const;
+		bool is_vt_version_supported(VTVersion value) const;
 
 		/// @brief Returns the current data mask displayed by the VT server
 		/// @returns The object ID of the data mask visible
