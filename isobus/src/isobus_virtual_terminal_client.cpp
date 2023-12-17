@@ -1197,7 +1197,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::get_vt_version_supported(VTVersion minimumVersion) const
+	bool VirtualTerminalClient::is_vt_version_supported(VTVersion minimumVersion) const
 	{
 		bool retVal = false;
 
@@ -2092,7 +2092,7 @@ namespace isobus
 		{
 			errorCode |= 0x01;
 		}
-		if ((isAlreadyAssigned) && (false == get_vt_version_supported(VTVersion::Version6)))
+		if ((isAlreadyAssigned) && (false == is_vt_version_supported(VTVersion::Version6)))
 		{
 			errorCode |= 0x02;
 		}
@@ -2325,12 +2325,35 @@ namespace isobus
 								std::uint16_t objectID = message.get_uint16_at(2);
 								std::uint16_t parentObjectID = message.get_uint16_at(4);
 								std::uint8_t keyNumber = message.get_uint8_at(6);
-								if (parentVT->get_vt_version_supported(VTVersion::Version6))
+								std::uint8_t transactionNumber = 0xF;
+								if (parentVT->is_vt_version_supported(VTVersion::Version6))
 								{
-									//! @todo process TAN
+									transactionNumber = message.get_uint8_at(7) >> 4;
 								}
 
 								parentVT->softKeyEventDispatcher.invoke({ parentVT, objectID, parentObjectID, keyNumber, static_cast<KeyActivationCode>(keyCode) });
+
+								// Send response
+								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+									static_cast<std::uint8_t>(Function::SoftKeyActivationMessage),
+									keyCode,
+									static_cast<std::uint8_t>(objectID),
+									static_cast<std::uint8_t>(objectID >> 8),
+									static_cast<std::uint8_t>(parentObjectID),
+									static_cast<std::uint8_t>(parentObjectID >> 8),
+									keyNumber,
+									0xFF,
+								};
+								if (parentVT->is_vt_version_supported(VTVersion::Version6))
+								{
+									buffer[7] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
+								}
+								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+								                                               buffer.data(),
+								                                               CAN_DATA_LENGTH,
+								                                               parentVT->myControlFunction,
+								                                               parentVT->partnerControlFunction,
+								                                               CANIdentifier::CANPriority::Priority5);
 							}
 						}
 						break;
@@ -2343,11 +2366,35 @@ namespace isobus
 								std::uint16_t objectID = message.get_uint16_at(2);
 								std::uint16_t parentObjectID = message.get_uint16_at(4);
 								std::uint8_t keyNumber = message.get_uint8_at(6);
-								if (parentVT->get_vt_version_supported(VTVersion::Version6))
+								std::uint8_t transactionNumber = 0xF;
+								if (parentVT->is_vt_version_supported(VTVersion::Version6))
 								{
-									//! @todo process TAN
+									transactionNumber = message.get_uint8_at(7) >> 4;
 								}
+
 								parentVT->buttonEventDispatcher.invoke({ parentVT, objectID, parentObjectID, keyNumber, static_cast<KeyActivationCode>(keyCode) });
+
+								// Send response
+								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+									static_cast<std::uint8_t>(Function::ButtonActivationMessage),
+									keyCode,
+									static_cast<std::uint8_t>(objectID),
+									static_cast<std::uint8_t>(objectID >> 8),
+									static_cast<std::uint8_t>(parentObjectID),
+									static_cast<std::uint8_t>(parentObjectID >> 8),
+									keyNumber,
+									0xFF,
+								};
+								if (parentVT->is_vt_version_supported(VTVersion::Version6))
+								{
+									buffer[7] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
+								}
+								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+								                                               buffer.data(),
+								                                               CAN_DATA_LENGTH,
+								                                               parentVT->myControlFunction,
+								                                               parentVT->partnerControlFunction,
+								                                               CANIdentifier::CANPriority::Priority5);
 							}
 						}
 						break;
@@ -2359,14 +2406,15 @@ namespace isobus
 
 							std::uint8_t touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
 							std::uint16_t parentMaskObjectID = NULL_OBJECT_ID;
-							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
-								// VT version is at least 6
+								// VT version is 6 or later
 								touchState = message.get_uint8_at(5) & 0x0F;
+								transactionNumber = message.get_uint8_at(5) >> 4;
 								parentMaskObjectID = message.get_uint16_at(6);
-								//! @todo process TAN
 							}
-							else if (parentVT->get_vt_version_supported(VTVersion::Version4))
+							else if (parentVT->is_vt_version_supported(VTVersion::Version4))
 							{
 								// VT version is either 4 or 5
 								touchState = message.get_uint8_at(5);
@@ -2376,6 +2424,34 @@ namespace isobus
 							{
 								parentVT->pointingEventDispatcher.invoke({ parentVT, xPosition, yPosition, parentMaskObjectID, static_cast<KeyActivationCode>(touchState) });
 							}
+
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::PointingEventMessage),
+								static_cast<std::uint8_t>(xPosition),
+								static_cast<std::uint8_t>(xPosition >> 8),
+								static_cast<std::uint8_t>(yPosition),
+								static_cast<std::uint8_t>(yPosition >> 8),
+								0xFF,
+								0xFF,
+								0xFF,
+							};
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								// VT version is 6 or later
+								buffer[5] = static_cast<std::uint8_t>((transactionNumber << 4) | touchState);
+							}
+							if (parentVT->is_vt_version_supported(VTVersion::Version4))
+							{
+								// VT version is either 4 or 5
+								buffer[5] = touchState;
+							}
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2385,17 +2461,46 @@ namespace isobus
 							bool objectSelected = (0x01 == message.get_uint8_at(3));
 							bool objectOpenForInput = true;
 
-							if (parentVT->get_vt_version_supported(VTVersion::Version4))
+							if (parentVT->is_vt_version_supported(VTVersion::Version4))
 							{
 								objectOpenForInput = message.get_bool_at(4, 0);
 							}
 
-							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
-								//! @todo process TAN
+								transactionNumber = message.get_uint8_at(7) >> 4;
 							}
 
 							parentVT->selectInputObjectEventDispatcher.invoke({ parentVT, objectID, objectSelected, objectOpenForInput });
+
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTSelectInputObjectMessage),
+								static_cast<std::uint8_t>(objectID),
+								static_cast<std::uint8_t>(objectID >> 8),
+								static_cast<std::uint8_t>(objectSelected ? 0x01 : 0x00),
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+							};
+
+							if (parentVT->is_vt_version_supported(VTVersion::Version4))
+							{
+								buffer[4] = (objectOpenForInput ? 0x01 : 0x00);
+							}
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								buffer[7] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
+							}
+
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2406,12 +2511,32 @@ namespace isobus
 							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
 							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
 							{
-								if (parentVT->get_vt_version_supported(VTVersion::Version6))
+								std::uint8_t transactionNumber = 0xF;
+								if (parentVT->is_vt_version_supported(VTVersion::Version6))
 								{
-									//! @todo process TAN
+									// VT version is 6 or later
+									transactionNumber = message.get_uint8_at(7) >> 4;
 								}
 
 								parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, static_cast<ESCMessageErrorCode>(errorCode) });
+
+								// Send response
+								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+									static_cast<std::uint8_t>(Function::VTESCMessage),
+									static_cast<std::uint8_t>(objectID),
+									static_cast<std::uint8_t>(objectID >> 8),
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF,
+									static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
+								};
+								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+								                                               buffer.data(),
+								                                               CAN_DATA_LENGTH,
+								                                               parentVT->myControlFunction,
+								                                               parentVT->partnerControlFunction,
+								                                               CANIdentifier::CANPriority::Priority5);
 							}
 						}
 						break;
@@ -2420,12 +2545,36 @@ namespace isobus
 						{
 							std::uint16_t objectID = message.get_uint16_at(1);
 							std::uint32_t value = message.get_uint32_at(4);
-
-							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
-								//! @todo process TAN
+								// VT version is 6 or later
+								transactionNumber = message.get_uint8_at(7) >> 4;
 							}
+
 							parentVT->changeNumericValueEventDispatcher.invoke({ parentVT, value, objectID });
+
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTChangeNumericValueMessage),
+								static_cast<std::uint8_t>(objectID),
+								static_cast<std::uint8_t>(objectID >> 8),
+								0xFF,
+								static_cast<std::uint8_t>(value),
+								static_cast<std::uint8_t>(value >> 8),
+								static_cast<std::uint8_t>(value >> 16),
+								static_cast<std::uint8_t>(value >> 24),
+							};
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								buffer[3] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
+							}
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2449,6 +2598,24 @@ namespace isobus
 							                                                   maskOrChildHasErrors,
 							                                                   anyOtherError,
 							                                                   poolDeleted });
+
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTChangeActiveMaskMessage),
+								static_cast<std::uint8_t>(maskObjectID),
+								static_cast<std::uint8_t>(maskObjectID >> 8),
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF
+							};
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2469,6 +2636,24 @@ namespace isobus
 							                                                    maskOrChildHasErrors,
 							                                                    anyOtherError,
 							                                                    poolDeleted });
+
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTChangeSoftKeyMaskMessage),
+								static_cast<std::uint8_t>(dataOrAlarmMaskID),
+								static_cast<std::uint8_t>(dataOrAlarmMaskID >> 8),
+								static_cast<std::uint8_t>(softKeyMaskID),
+								static_cast<std::uint8_t>(softKeyMaskID >> 8),
+								0xFF,
+								0xFF,
+								0xFF
+							};
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2479,6 +2664,24 @@ namespace isobus
 							std::string value = std::string(message.get_data().begin() + 4, message.get_data().begin() + 4 + stringLength);
 
 							parentVT->changeStringValueEventDispatcher.invoke({ value, parentVT, objectID });
+
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
+								0xFF,
+								0xFF,
+								static_cast<std::uint8_t>(objectID),
+								static_cast<std::uint8_t>(objectID >> 8),
+								0xFF,
+								0xFF,
+								0xFF
+							};
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2497,10 +2700,26 @@ namespace isobus
 								parentVT->userLayoutHideShowEventDispatcher.invoke({ parentVT, objectID, hidden });
 							}
 
-							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							// Send response
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+							std::copy_n(message.get_data().begin(), CAN_DATA_LENGTH, buffer.begin());
+							// Make sure we comply with standard specifications
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
-								//! @todo process TAN
+								// VT version is 6 or later
+								buffer[7] |= 0x0F;
 							}
+							else
+							{
+								// VT version is 5 or prior
+								buffer[7] = 0xFF;
+							}
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
 						}
 						break;
 
@@ -2510,9 +2729,27 @@ namespace isobus
 
 							parentVT->audioSignalTerminationEventDispatcher.invoke({ parentVT, terminated });
 
-							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
-								//! @todo process TAN
+								// VT version is 6 or later, send response (VT version 5 and prior does not have a response)
+								transactionNumber = message.get_uint8_at(2) >> 4;
+								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+									static_cast<std::uint8_t>(Function::VTControlAudioSignalTerminationMessage),
+									static_cast<std::uint8_t>(terminated ? 0x01 : 0x00),
+									static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF,
+									0xFF,
+								};
+								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+								                                               buffer.data(),
+								                                               CAN_DATA_LENGTH,
+								                                               parentVT->myControlFunction,
+								                                               parentVT->partnerControlFunction,
+								                                               CANIdentifier::CANPriority::Priority5);
 							}
 						}
 						break;
@@ -2657,7 +2894,7 @@ namespace isobus
 							// bool inputActive = message.get_bool_at(7, 1); // Only in learn mode?
 							// bool controlIsLocked = false;
 							// bool interactionWhileLocked = false;
-							if (parentVT->get_vt_version_supported(VTVersion::Version6))
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
 								// controlIsLocked = message.get_bool_at(7, 2);
 								// interactionWhileLocked = message.get_bool_at(7, 3);
