@@ -43,7 +43,7 @@ namespace isobus
 		}
 		else
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error getting status: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::error("[TWAI] Error getting status: " + isobus::to_string(esp_err_to_name(error)));
 		}
 		return false;
 	}
@@ -53,12 +53,12 @@ namespace isobus
 		esp_err_t error = twai_stop();
 		if (ESP_OK != error)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error stopping driver: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::error("[TWAI] Error stopping driver: " + isobus::to_string(esp_err_to_name(error)));
 		}
 		error = twai_driver_uninstall();
 		if (ESP_OK != error)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error uninstalling driver: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::error("[TWAI] Error uninstalling driver: " + isobus::to_string(esp_err_to_name(error)));
 		}
 	}
 
@@ -67,12 +67,12 @@ namespace isobus
 		esp_err_t error = twai_driver_install(generalConfig, timingConfig, filterConfig);
 		if (ESP_OK != error)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[TWAI] Error installing driver: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::critical("[TWAI] Error installing driver: " + isobus::to_string(esp_err_to_name(error)));
 		}
 		error = twai_start();
 		if (ESP_OK != error)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[TWAI] Error starting driver: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::critical("[TWAI] Error starting driver: " + isobus::to_string(esp_err_to_name(error)));
 		}
 	}
 
@@ -101,7 +101,7 @@ namespace isobus
 		}
 		else if (ESP_ERR_TIMEOUT != error)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error receiving message: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::error("[TWAI] Error receiving message: " + isobus::to_string(esp_err_to_name(error)));
 		}
 
 		return retVal;
@@ -124,7 +124,7 @@ namespace isobus
 		}
 		else
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[TWAI] Error sending message: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::error("[TWAI] Error sending message: " + isobus::to_string(esp_err_to_name(error)));
 		}
 		return retVal;
 	}

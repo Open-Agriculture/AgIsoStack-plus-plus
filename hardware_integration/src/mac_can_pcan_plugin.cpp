@@ -41,7 +41,7 @@ namespace isobus
 
 		if (PCAN_ERROR_OK != openResult)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[MacCAN]: Error trying to connect to PCAN probe");
+			isobus::CANStackLogger::critical("[MacCAN]: Error trying to connect to PCAN probe");
 		}
 	}
 

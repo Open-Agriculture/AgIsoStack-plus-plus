@@ -37,7 +37,7 @@ namespace isobus
 		}
 		else
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SPI-ESP] Failed to add SPI device: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::critical("[SPI-ESP] Failed to add SPI device: " + isobus::to_string(esp_err_to_name(error)));
 		}
 
 		return ESP_OK == error;
@@ -48,7 +48,7 @@ namespace isobus
 		esp_err_t error = spi_bus_remove_device(spiDevice);
 		if (ESP_OK != error)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPI-ESP] Failed to remove SPI device: " + isobus::to_string(esp_err_to_name(error)));
+			isobus::CANStackLogger::error("[SPI-ESP] Failed to remove SPI device: " + isobus::to_string(esp_err_to_name(error)));
 		}
 		if (ESP_ERR_INVALID_STATE == error || ESP_OK == error)
 		{
@@ -81,20 +81,20 @@ namespace isobus
 				if (ESP_OK != error)
 				{
 					success = false;
-					isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Warning, "[SPI-ESP] Failed to transmit SPI transaction frame: " + isobus::to_string(esp_err_to_name(error)));
+					isobus::CANStackLogger::warn("[SPI-ESP] Failed to transmit SPI transaction frame: " + isobus::to_string(esp_err_to_name(error)));
 				}
 				xSemaphoreGive(spiMutex);
 			}
 			else
 			{
 				success = false;
-				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Error, "[SPI-ESP] Failed to obtain SPI mutex in transmit().");
+				isobus::CANStackLogger::error("[SPI-ESP] Failed to obtain SPI mutex in transmit().");
 			}
 		}
 		else
 		{
 			success = false;
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SPI-ESP] SPI device not initialized, pherhaps you forgot to call init()?");
+			isobus::CANStackLogger::critical("[SPI-ESP] SPI device not initialized, pherhaps you forgot to call init()?");
 		}
 	}
 
