@@ -248,7 +248,7 @@ namespace isobus
 			}
 			else
 			{
-				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[CAN Rx Thread]: CAN Channel " + isobus::to_string(channelIndex) + " appears to be invalid.");
+				isobus::CANStackLogger::critical("[CAN Rx Thread]: CAN Channel " + isobus::to_string(channelIndex) + " appears to be invalid.");
 			}
 		}
 	}

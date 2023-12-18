@@ -42,7 +42,7 @@ namespace isobus
 
 		if (PCAN_ERROR_OK != openResult)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[PCAN]: Error trying to connect to PCAN probe");
+			isobus::CANStackLogger::critical("[PCAN]: Error trying to connect to PCAN probe");
 		}
 	}
 

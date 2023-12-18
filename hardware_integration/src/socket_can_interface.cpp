@@ -180,7 +180,7 @@ namespace isobus
 			}
 			else if (errno == ENETDOWN)
 			{
-				isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SocketCAN] " + get_device_name() + " interface is down.");
+				isobus::CANStackLogger::critical("[SocketCAN] " + get_device_name() + " interface is down.");
 				close();
 			}
 		}
@@ -211,7 +211,7 @@ namespace isobus
 		}
 		else if (errno == ENETDOWN)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SocketCAN] " + get_device_name() + " interface is down.");
+			isobus::CANStackLogger::critical("[SocketCAN] " + get_device_name() + " interface is down.");
 			close();
 		}
 		return retVal;

@@ -20,7 +20,7 @@ namespace isobus
 	{
 		if (channel > USBCAN_CHANNEL_CH1)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[SYSTEC]: Invalid channel");
+			isobus::CANStackLogger::critical("[SYSTEC]: Invalid channel");
 		}
 	}
 

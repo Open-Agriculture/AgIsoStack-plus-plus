@@ -1202,7 +1202,7 @@ namespace isobus
 						std::uint32_t targetParameterGroupNumber = message.get_uint24_at(5);
 						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData) == targetParameterGroupNumber)
 						{
-							CANStackLogger::CAN_stack_log(CANStackLogger::LoggingLevel::Error, "[TC]: The TC Server is NACK-ing our messages. Disconnecting.");
+							CANStackLogger::error("[TC]: The TC Server is NACK-ing our messages. Disconnecting.");
 							parentTC->set_state(StateMachineState::Disconnected);
 						}
 					}

@@ -26,7 +26,7 @@ namespace isobus
 
 		if (serialNumber > MAX_SERIAL_LENGTH)
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[TouCAN]: Invalid serial number. Must be 8 digits max.");
+			isobus::CANStackLogger::critical("[TouCAN]: Invalid serial number. Must be 8 digits max.");
 			serialNumber = 0;
 		}
 		serialString = isobus::to_string(serialNumber);
@@ -73,7 +73,7 @@ namespace isobus
 		}
 		else
 		{
-			isobus::CANStackLogger::CAN_stack_log(isobus::CANStackLogger::LoggingLevel::Critical, "[TouCAN]: Error trying to connect to TouCAN probe. Check your device ID and serial number.");
+			isobus::CANStackLogger::critical("[TouCAN]: Error trying to connect to TouCAN probe. Check your device ID and serial number.");
 		}
 	}
 
