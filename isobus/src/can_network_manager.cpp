@@ -33,7 +33,6 @@ namespace isobus
 	{
 		receiveMessageList.clear();
 		initialized = true;
-		extendedTransportProtocol.initialize({});
 	}
 
 	std::shared_ptr<ControlFunction> CANNetworkManager::get_control_function(std::uint8_t channelIndex, std::uint8_t address, CANLibBadge<AddressClaimStateMachine>) const
@@ -148,6 +147,16 @@ namespace isobus
 			                                                parentPointer))
 			{
 				// Successfully sent via the transport protocol
+				retVal = true;
+			}
+			else if (extendedTransportProtocol.protocol_transmit_message(parameterGroupNumber,
+			                                                             messageData,
+			                                                             sourceControlFunction,
+			                                                             destinationControlFunction,
+			                                                             transmitCompleteCallback,
+			                                                             parentPointer))
+			{
+				// Successfully sent via the extended transport protocol
 				retVal = true;
 			}
 			else
@@ -490,7 +499,14 @@ namespace isobus
 	                           std::shared_ptr<ControlFunction> destinationControlFunction,
 	                           CANIdentifier::CANPriority priority) { return this->send_can_message(parameterGroupNumber, data.begin(), data.size(), sourceControlFunction, destinationControlFunction, priority); },
 	                    [this](const CANMessage &message) { this->protocol_message_callback(message); },
-	                    &configuration)
+	                    &configuration),
+	  extendedTransportProtocol([this](std::uint32_t parameterGroupNumber,
+	                                   CANDataSpan data,
+	                                   std::shared_ptr<InternalControlFunction> sourceControlFunction,
+	                                   std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                   CANIdentifier::CANPriority priority) { return this->send_can_message(parameterGroupNumber, data.begin(), data.size(), sourceControlFunction, destinationControlFunction, priority); },
+	                            [this](const CANMessage &message) { this->protocol_message_callback(message); },
+	                            &configuration)
 	{
 		currentBusloadBitAccumulator.fill(0);
 		lastAddressClaimRequestTimestamp_ms.fill(0);

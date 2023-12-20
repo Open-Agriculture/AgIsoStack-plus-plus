@@ -18,8 +18,6 @@
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 
-#include <functional>
-
 namespace isobus
 {
 	//================================================================================================
@@ -42,13 +40,29 @@ namespace isobus
 		enum class StateMachineState
 		{
 			None, ///< Protocol session is not in progress
-			ClearToSend, ///< We are sending clear to send message
-			RxDataSession, ///< Rx data session is in progress
-			RequestToSend, ///< We are sending the request to send message
+			SendBroadcastAnnounce, ///< We are sending the broadcast announce message (BAM)
+			SendRequestToSend, ///< We are sending the request to send message
 			WaitForClearToSend, ///< We are waiting for a clear to send message
-			BroadcastAnnounce, ///< We are sending the broadcast announce message (BAM)
-			TxDataSession, ///< A Tx data session is in progress
-			WaitForEndOfMessageAcknowledge ///< We are waiting for an end of message acknowledgement
+			SendClearToSend, ///< We are sending clear to send message
+			WaitForDataTransferPacket, ///< We are waiting for data transfer packets
+			SendDataTransferPackets, ///< A Tx data session is in progress
+			WaitForEndOfMessageAcknowledge, ///< We are waiting for an end of message acknowledgement
+		};
+
+		/// @brief A list of all defined abort reasons in ISO11783
+		enum class ConnectionAbortReason : std::uint8_t
+		{
+			Reserved = 0, ///< Reserved, not to be used, but should be tolerated
+			AlreadyInCMSession = 1, ///< We are already in a connection mode session and can't support another
+			SystemResourcesNeeded = 2, ///< Session must be aborted because the system needs resources
+			Timeout = 3, ///< General timeout
+			ClearToSendReceivedWhileTransferInProgress = 4, ///< A CTS was received while already processing the last CTS
+			MaximumRetransmitRequestLimitReached = 5, ///< Maximum retries for the data has been reached
+			UnexpectedDataTransferPacketReceived = 6, ///< A data packet was received outside the proper state
+			BadSequenceNumber = 7, ///< Incorrect sequence number was received and cannot be recovered
+			DuplicateSequenceNumber = 8, ///< Re-received a sequence number we've already processed
+			TotalMessageSizeTooBig = 9, ///< TP Can't support a message this large (>1785 bytes)
+			AnyOtherError = 250 ///< Any reason not defined in the standard
 		};
 
 		//================================================================================================
@@ -216,7 +230,7 @@ namespace isobus
 			Direction direction; ///< The direction of the session
 			std::uint32_t parameterGroupNumber; ///< The PGN of the message
 			std::unique_ptr<CANMessageData> data; ///< The data buffer for the message
-			std::uint32_t totalMessageSize; ///< The total size of the message in bytes
+			std::uint16_t totalMessageSize; ///< The total size of the message in bytes
 			std::shared_ptr<ControlFunction> source; ///< The source control function
 			std::shared_ptr<ControlFunction> destination; ///< The destination control function
 
@@ -232,34 +246,11 @@ namespace isobus
 			void *parent = nullptr; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
 		};
 
-		///  @brief A list of all defined abort reasons in ISO11783
-		enum class ConnectionAbortReason : std::uint8_t
-		{
-			Reserved = 0, ///< Reserved, not to be used, but should be tolerated
-			AlreadyInCMSession = 1, ///< We are already in a connection mode session and can't support another
-			SystemResourcesNeeded = 2, ///< Session must be aborted because the system needs resources
-			Timeout = 3, ///< General timeout
-			ClearToSendReceivedWhileTransferInProgress = 4, ///< A CTS was received while already processing the last CTS
-			MaximumRetransmitRequestLimitReached = 5, ///< Maximum retries for the data has been reached
-			UnexpectedDataTransferPacketReceived = 6, ///< A data packet was received outside the proper state
-			BadSequenceNumber = 7, ///< Incorrect sequence number was received and cannot be recovered
-			DuplicateSequenceNumber = 8, ///< Re-received a sequence number we've already processed
-			TotalMessageSizeTooBig = 9, ///< TP Can't support a message this large (>1785 bytes)
-			AnyOtherError = 250 ///< Any other error not enumerated above, 0xFE
-		};
-
-		using SendCANFrameCallback = std::function<bool(std::uint32_t parameterGroupNumber,
-		                                                CANDataSpan data,
-		                                                std::shared_ptr<InternalControlFunction> sourceControlFunction,
-		                                                std::shared_ptr<ControlFunction> destinationControlFunction,
-		                                                CANIdentifier::CANPriority priority)>; ///< A callback for sending a CAN frame
-		using CANMessageReceivedCallback = std::function<void(const CANMessage &message)>; ///< A callback for when a complete CAN message is received using the TP protocol
-
-		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 0x10; ///< TP.CM_RTS Multiplexor
-		static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 0x11; ///< TP.CM_CTS Multiplexor
-		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x13; ///< TP.CM_EOM_ACK Multiplexor
-		static constexpr std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 0x20; ///< TP.BAM Multiplexor
-		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF; ///< Abort multiplexor
+		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 16; ///< TP.CM_RTS Multiplexor
+		static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 17; ///< TP.CM_CTS Multiplexor
+		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 19; ///< TP.CM_EOM_ACK Multiplexor
+		static constexpr std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 32; ///< TP.BAM Multiplexor
+		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 255; ///< Abort multiplexor
 		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 1785; ///< The max number of bytes that this protocol can transfer
 		static constexpr std::uint32_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
 		static constexpr std::uint32_t T2_T3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard
@@ -273,8 +264,8 @@ namespace isobus
 		/// @param[in] sendCANFrameCallback A callback for sending a CAN frame to hardware
 		/// @param[in] canMessageReceivedCallback A callback for when a complete CAN message is received using the TP protocol
 		/// @param[in] configuration The configuration to use for this protocol
-		TransportProtocolManager(const SendCANFrameCallback &sendCANFrameCallback,
-		                         const CANMessageReceivedCallback &canMessageReceivedCallback,
+		TransportProtocolManager(const CANMessageFrameCallback &sendCANFrameCallback,
+		                         const CANMessageCallback &canMessageReceivedCallback,
 		                         const CANNetworkConfiguration *configuration);
 
 		/// @brief Updates all sessions managed by this protocol manager instance.
@@ -333,15 +324,15 @@ namespace isobus
 		/// @returns true if the BAM was sent, false if sending was not successful
 		bool send_broadcast_announce_message(const TransportProtocolSession &session) const;
 
-		/// @brief Sends the "clear to send" message
-		/// @param[in] session The session for which we're sending the CTS
-		/// @returns true if the CTS was sent, false if sending was not successful
-		bool send_clear_to_send(TransportProtocolSession &session) const;
-
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
 		/// @returns true if the RTS was sent, false if sending was not successful
 		bool send_request_to_send(const TransportProtocolSession &session) const;
+
+		/// @brief Sends the "clear to send" message
+		/// @param[in] session The session for which we're sending the CTS
+		/// @returns true if the CTS was sent, false if sending was not successful
+		bool send_clear_to_send(TransportProtocolSession &session) const;
 
 		/// @brief Sends the "end of message acknowledgement" message for the provided session
 		/// @param[in] session The session for which we're sending the EOM ACK
@@ -408,8 +399,8 @@ namespace isobus
 		void update_state_machine(TransportProtocolSession &session);
 
 		std::vector<TransportProtocolSession> activeSessions; ///< A list of all active TP sessions
-		const SendCANFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
-		const CANMessageReceivedCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the TP protocol
+		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
+		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the TP protocol
 		const CANNetworkConfiguration *configuration; ///< The configuration to use for this protocol
 	};
 

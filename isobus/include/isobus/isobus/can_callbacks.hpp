@@ -10,6 +10,7 @@
 #ifndef CAN_CALLBACKS_HPP
 #define CAN_CALLBACKS_HPP
 
+#include <functional>
 #include "isobus/isobus/can_message.hpp"
 
 namespace isobus
@@ -36,6 +37,14 @@ namespace isobus
 
 	/// @brief A callback for control functions to get CAN messages
 	using CANLibCallback = void (*)(const CANMessage &message, void *parentPointer);
+	/// @brief A callback for communicating CAN messages
+	using CANMessageCallback = std::function<void(const CANMessage &message)>;
+	/// @brief A callback for communicating CAN message frames
+	using CANMessageFrameCallback = std::function<bool(std::uint32_t parameterGroupNumber,
+	                                                   CANDataSpan data,
+	                                                   std::shared_ptr<InternalControlFunction> sourceControlFunction,
+	                                                   std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                                   CANIdentifier::CANPriority priority)>; ///< A callback for sending a CAN frame
 	/// @brief A callback that can inform you when a control function changes state between online and offline
 	using ControlFunctionStateCallback = void (*)(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state);
 	/// @brief A callback to get chunks of data for transfer by a protocol

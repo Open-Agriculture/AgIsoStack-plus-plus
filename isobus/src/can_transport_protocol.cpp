@@ -201,8 +201,8 @@ namespace isobus
 		return totalNumberOfPackets;
 	}
 
-	TransportProtocolManager::TransportProtocolManager(const SendCANFrameCallback &sendCANFrameCallback,
-	                                                   const CANMessageReceivedCallback &canMessageReceivedCallback,
+	TransportProtocolManager::TransportProtocolManager(const CANMessageFrameCallback &sendCANFrameCallback,
+	                                                   const CANMessageCallback &canMessageReceivedCallback,
 	                                                   const CANNetworkConfiguration *configuration) :
 	  sendCANFrameCallback(sendCANFrameCallback),
 	  canMessageReceivedCallback(canMessageReceivedCallback),
@@ -238,7 +238,7 @@ namespace isobus
 			                                                                                       0xFF, // Arbitrary - unused for broadcast
 			                                                                                       source,
 			                                                                                       nullptr); // Global destination
-			newSession.set_state(StateMachineState::RxDataSession);
+			newSession.set_state(StateMachineState::WaitForDataTransferPacket);
 			activeSessions.push_back(std::move(newSession));
 
 			CANStackLogger::debug("[TP]: New rx broadcast message session for 0x%05X. Source: %hu", parameterGroupNumber, source->get_address());
@@ -289,7 +289,7 @@ namespace isobus
 			                                                                                       clearToSendPacketMax,
 			                                                                                       source,
 			                                                                                       destination);
-			newSession.set_state(StateMachineState::ClearToSend);
+			newSession.set_state(StateMachineState::SendClearToSend);
 			activeSessions.push_back(std::move(newSession));
 		}
 	}
@@ -329,7 +329,7 @@ namespace isobus
 				// Just sit here in this state until we get a non-zero packet count
 				if (0 != packetsToBeSent)
 				{
-					session->set_state(StateMachineState::TxDataSession);
+					session->set_state(StateMachineState::SendDataTransferPackets);
 				}
 			}
 		}
@@ -349,7 +349,7 @@ namespace isobus
 		{
 			if (StateMachineState::WaitForEndOfMessageAcknowledge == session->state)
 			{
-				CANStackLogger::debug("[TP]: Completed rx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
+				CANStackLogger::debug("[TP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
 				session->state = StateMachineState::None;
 				close_session(*session, true);
 			}
@@ -519,7 +519,7 @@ namespace isobus
 		auto session = get_session(source, destination);
 		if (nullptr != session)
 		{
-			if (StateMachineState::RxDataSession != session->state)
+			if (StateMachineState::WaitForDataTransferPacket != session->state)
 			{
 				CANStackLogger::warn("[TP]: Received a Data Transfer message from %hu while not expecting one, sending abort", source->get_address());
 				abort_session(*session, ConnectionAbortReason::UnexpectedDataTransferPacketReceived);
@@ -651,7 +651,7 @@ namespace isobus
 		if (session.is_broadcast())
 		{
 			// Broadcast message
-			session.set_state(StateMachineState::BroadcastAnnounce);
+			session.set_state(StateMachineState::SendBroadcastAnnounce);
 			CANStackLogger::debug("[TP]: New broadcast tx session for 0x%05X. Source: %hu",
 			                      parameterGroupNumber,
 			                      source->get_address());
@@ -659,7 +659,7 @@ namespace isobus
 		else
 		{
 			// Destination specific message
-			session.set_state(StateMachineState::RequestToSend);
+			session.set_state(StateMachineState::SendRequestToSend);
 			CANStackLogger::debug("[TP]: New tx session for 0x%05X. Source: %hu, destination: %hu",
 			                      parameterGroupNumber,
 			                      source->get_address(),
@@ -695,7 +695,7 @@ namespace isobus
 	void TransportProtocolManager::send_data_transfer_packets(TransportProtocolSession &session)
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
-		std::uint32_t framesToSend = session.get_cts_number_of_packets_remaining();
+		std::uint8_t framesToSend = session.get_cts_number_of_packets_remaining();
 		if (session.is_broadcast())
 		{
 			framesToSend = 1;
@@ -710,10 +710,10 @@ namespace isobus
 		{
 			buffer[0] = session.get_last_sequence_number() + 1;
 
-			std::uint8_t dataOffset = session.get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
+			std::uint16_t dataOffset = session.get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
 			for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
 			{
-				std::uint32_t index = dataOffset + j;
+				std::uint16_t index = dataOffset + j;
 				if (index < session.get_message_length())
 				{
 					buffer[1 + j] = session.get_data().get_byte(index);
@@ -764,11 +764,20 @@ namespace isobus
 			case StateMachineState::None:
 				break;
 
-			case StateMachineState::ClearToSend:
+			case StateMachineState::SendBroadcastAnnounce:
 			{
-				if (send_clear_to_send(session))
+				if (send_broadcast_announce_message(session))
 				{
-					session.set_state(StateMachineState::RxDataSession);
+					session.set_state(StateMachineState::SendDataTransferPackets);
+				}
+			}
+			break;
+
+			case StateMachineState::SendRequestToSend:
+			{
+				if (send_request_to_send(session))
+				{
+					session.set_state(StateMachineState::WaitForClearToSend);
 				}
 			}
 			break;
@@ -791,35 +800,17 @@ namespace isobus
 				}
 			}
 			break;
-			case StateMachineState::WaitForEndOfMessageAcknowledge:
+
+			case StateMachineState::SendClearToSend:
 			{
-				if (SystemTiming::time_expired_ms(session.timestamp_ms, T2_T3_TIMEOUT_MS))
+				if (send_clear_to_send(session))
 				{
-					CANStackLogger::error("[TP]: Timeout tx session for 0x%05X (expected EOMA)", session.get_parameter_group_number());
-					abort_session(session, ConnectionAbortReason::Timeout);
+					session.set_state(StateMachineState::WaitForDataTransferPacket);
 				}
 			}
 			break;
 
-			case StateMachineState::RequestToSend:
-			{
-				if (send_request_to_send(session))
-				{
-					session.set_state(StateMachineState::WaitForClearToSend);
-				}
-			}
-			break;
-
-			case StateMachineState::BroadcastAnnounce:
-			{
-				if (send_broadcast_announce_message(session))
-				{
-					session.set_state(StateMachineState::TxDataSession);
-				}
-			}
-			break;
-
-			case StateMachineState::TxDataSession:
+			case StateMachineState::SendDataTransferPackets:
 			{
 				if (session.is_broadcast() && (!SystemTiming::time_expired_ms(session.timestamp_ms, configuration->get_minimum_time_between_transport_protocol_bam_frames())))
 				{
@@ -832,7 +823,7 @@ namespace isobus
 			}
 			break;
 
-			case StateMachineState::RxDataSession:
+			case StateMachineState::WaitForDataTransferPacket:
 			{
 				if (session.is_broadcast())
 				{
@@ -860,6 +851,16 @@ namespace isobus
 						CANStackLogger::error("[TP]: Timeout for destination-specific rx session (expected sequencial data frame)");
 						abort_session(session, ConnectionAbortReason::Timeout);
 					}
+				}
+			}
+			break;
+
+			case StateMachineState::WaitForEndOfMessageAcknowledge:
+			{
+				if (SystemTiming::time_expired_ms(session.timestamp_ms, T2_T3_TIMEOUT_MS))
+				{
+					CANStackLogger::error("[TP]: Timeout tx session for 0x%05X (expected EOMA)", session.get_parameter_group_number());
+					abort_session(session, ConnectionAbortReason::Timeout);
 				}
 			}
 			break;
@@ -959,6 +960,30 @@ namespace isobus
 		return retVal;
 	}
 
+	bool TransportProtocolManager::send_request_to_send(const TransportProtocolSession &session) const
+	{
+		bool retVal = false;
+		if (auto source = session.get_source())
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+				REQUEST_TO_SEND_MULTIPLEXOR,
+				static_cast<std::uint8_t>(session.get_message_length() & 0xFF),
+				static_cast<std::uint8_t>((session.get_message_length() >> 8) & 0xFF),
+				session.get_total_number_of_packets(),
+				session.get_rts_number_of_packet_limit(),
+				static_cast<std::uint8_t>(session.get_parameter_group_number() & 0xFF),
+				static_cast<std::uint8_t>((session.get_parameter_group_number() >> 8) & 0xFF),
+				static_cast<std::uint8_t>((session.get_parameter_group_number() >> 16) & 0xFF)
+			};
+			retVal = sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement),
+			                              CANDataSpan(buffer.data(), buffer.size()),
+			                              std::static_pointer_cast<InternalControlFunction>(source),
+			                              session.get_destination(),
+			                              CANIdentifier::CANPriority::PriorityLowest7);
+		}
+		return retVal;
+	}
+
 	bool TransportProtocolManager::send_clear_to_send(TransportProtocolSession &session) const
 	{
 		bool retVal = false;
@@ -996,30 +1021,6 @@ namespace isobus
 				session.set_cts_number_of_packets(packetsThisSegment);
 				session.set_acknowledged_packet_number(session.get_last_packet_number());
 			}
-		}
-		return retVal;
-	}
-
-	bool TransportProtocolManager::send_request_to_send(const TransportProtocolSession &session) const
-	{
-		bool retVal = false;
-		if (auto source = session.get_source())
-		{
-			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-				REQUEST_TO_SEND_MULTIPLEXOR,
-				static_cast<std::uint8_t>(session.get_message_length() & 0xFF),
-				static_cast<std::uint8_t>((session.get_message_length() >> 8) & 0xFF),
-				session.get_total_number_of_packets(),
-				session.get_rts_number_of_packet_limit(),
-				static_cast<std::uint8_t>(session.get_parameter_group_number() & 0xFF),
-				static_cast<std::uint8_t>((session.get_parameter_group_number() >> 8) & 0xFF),
-				static_cast<std::uint8_t>((session.get_parameter_group_number() >> 16) & 0xFF)
-			};
-			retVal = sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement),
-			                              CANDataSpan(buffer.data(), buffer.size()),
-			                              std::static_pointer_cast<InternalControlFunction>(source),
-			                              session.get_destination(),
-			                              CANIdentifier::CANPriority::PriorityLowest7);
 		}
 		return retVal;
 	}
