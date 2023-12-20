@@ -25,7 +25,7 @@ using namespace isobus;
 
 // Forward declarations
 void check_can_message(const CANMessage &message, void *);
-void print_progress_bar(const TransportProtocolSessionBase *session);
+void print_progress_bar(const std::shared_ptr<TransportProtocolSessionBase> session);
 
 // The example sends a series of CAN messages of incrementing length to itself and checks that the data is correct
 int main()
@@ -121,17 +121,26 @@ int main()
 	// Send (Extended) Transport Protocol destination-destination specific messages of exponentially increasing size
 	// This will take a while to complete
 	std::uint32_t message_length = 9; // Arbitrary starting point
+	std::shared_ptr<TransportProtocolSessionBase> session = nullptr;
 	while (running && (message_length <= MAX_MESSAGE_SIZE_BYTES) && (message_length <= MAX_ETP_MESSAGE_SIZE_BYTES))
 	{
-		if (CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), message_length, originatorECU, recipientPartner))
+		if (session == nullptr)
 		{
-			std::cout << std::endl; // End the progress bar
-			std::cout << "Sending a Transport Protocol Message with length " << message_length << std::endl;
-			message_length *= 2;
+			if (CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), message_length, originatorECU, recipientPartner))
+			{
+				std::cout << "Sending a Transport Protocol Message with length " << message_length << std::endl;
+				message_length *= 2;
+				session = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0).front();
+			}
 		}
 		else
 		{
-			print_progress_bar(CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0).front());
+			print_progress_bar(session);
+			if (session.use_count() == 1) // We are the only ones holding a reference to the session, so it must be done/failed
+			{
+				std::cout << std::endl; // End the progress bar
+				session = nullptr;
+			}
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(4));
 	}
@@ -141,15 +150,23 @@ int main()
 	message_length = 11; // Arbitrary starting point
 	while (running && (message_length <= MAX_MESSAGE_SIZE_BYTES) && (message_length <= MAX_TP_MESSAGE_SIZE_BYTES))
 	{
-		if (CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), message_length, originatorECU))
+		if (session == nullptr)
 		{
-			std::cout << std::endl; // End the progress bar
-			std::cout << "Sending a Broadcast Transport Protocol Message with length " << message_length << std::endl;
-			message_length *= 2;
+			if (CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), message_length, originatorECU))
+			{
+				std::cout << "Sending a Broadcast Transport Protocol Message with length " << message_length << std::endl;
+				message_length *= 2;
+				session = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0).front();
+			}
 		}
 		else
 		{
-			print_progress_bar(CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0).front());
+			print_progress_bar(session);
+			if (session.use_count() == 1) // We are the only ones holding a reference to the session, so it must be done/failed
+			{
+				std::cout << std::endl; // End the progress bar
+				session = nullptr;
+			}
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(4));
 	}
@@ -171,7 +188,7 @@ void check_can_message(const CANMessage &message, void *)
 	}
 }
 
-void print_progress_bar(const TransportProtocolSessionBase *session)
+void print_progress_bar(const std::shared_ptr<TransportProtocolSessionBase> session)
 {
 	constexpr std::uint8_t width = 50;
 	float percentage = session->get_percentage_bytes_transferred();

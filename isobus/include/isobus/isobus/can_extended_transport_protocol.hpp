@@ -72,18 +72,7 @@ namespace isobus
 		class ExtendedTransportProtocolSession : public TransportProtocolSessionBase
 		{
 		public:
-			~ExtendedTransportProtocolSession() override = default; ///< Default destructor
-			ExtendedTransportProtocolSession(const ExtendedTransportProtocolSession &obj) = delete; ///< No copy constructor
-			ExtendedTransportProtocolSession &operator=(const ExtendedTransportProtocolSession &obj) = delete; ///< No copy assignment operator
-
-			/// @brief The move constructor for a session
-			/// @param[in] obj The session to move
-			ExtendedTransportProtocolSession(ExtendedTransportProtocolSession &&obj) noexcept;
-
-			/// @brief The move assignment operator for a session
-			/// @param[in] obj The session to move
-			/// @returns A reference to the moved session
-			ExtendedTransportProtocolSession &operator=(ExtendedTransportProtocolSession &&obj) noexcept;
+			using TransportProtocolSessionBase::TransportProtocolSessionBase; ///< Inherit the base constructor
 
 			/// @brief Get the state of the session
 			/// @return The state of the session
@@ -93,14 +82,8 @@ namespace isobus
 			/// @return The number of bytes that have been sent or received
 			std::uint32_t get_total_bytes_transferred() const override;
 
-			/// @brief Get the percentage of bytes that have been sent or received in this session
-		/// @return The percentage of bytes that have been sent or received (between 0 and 1)
-			float get_percentage_bytes_transferred() const override;
-
 		protected:
 			friend class ExtendedTransportProtocolManager; ///< Allows the ETP manager full access
-
-			using TransportProtocolSessionBase::TransportProtocolSessionBase; ///< Inherit the base constructor
 
 			/// @brief Set the state of the session
 			/// @param[in] value The state to set the session to
@@ -202,7 +185,7 @@ namespace isobus
 		/// @brief Gets all the active transport protocol sessions that are currently active
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
 		/// @returns A list of all the active transport protocol sessions
-		std::vector<const ExtendedTransportProtocolSession *> get_sessions() const;
+		const std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> &get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -228,7 +211,7 @@ namespace isobus
 		/// @param[in] session The session to abort
 		/// @param[in] reason The reason we're aborting the session
 		/// @returns true if the abort was send OK, false if not sent
-		bool abort_session(const ExtendedTransportProtocolSession &session, ConnectionAbortReason reason);
+		bool abort_session(std::shared_ptr<ExtendedTransportProtocolSession> &session, ConnectionAbortReason reason);
 
 		/// @brief Send an abort with no corresponding session with the specified abort reason. Sends a CAN message.
 		/// @param[in] sender The sender of the abort
@@ -244,31 +227,31 @@ namespace isobus
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
 		/// @param[in] successful Denotes if the session was successful
-		void close_session(const ExtendedTransportProtocolSession &session, bool successful);
+		void close_session(std::shared_ptr<ExtendedTransportProtocolSession> &session, bool successful);
 
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
 		/// @returns true if the RTS was sent, false if sending was not successful
-		bool send_request_to_send(const ExtendedTransportProtocolSession &session) const;
+		bool send_request_to_send(std::shared_ptr<ExtendedTransportProtocolSession> &session) const;
 
 		/// @brief Sends the "clear to send" message
 		/// @param[in] session The session for which we're sending the CTS
 		/// @returns true if the CTS was sent, false if sending was not successful
-		bool send_clear_to_send(ExtendedTransportProtocolSession &session) const;
+		bool send_clear_to_send(std::shared_ptr<ExtendedTransportProtocolSession> &session) const;
 
 		/// @brief Sends the "data packet offset" message for the provided session
 		/// @param[in] session The session for which we're sending the DPO
 		/// @returns true if the DPO was sent, false if sending was not successful
-		bool send_data_packet_offset(ExtendedTransportProtocolSession &session) const;
+		bool send_data_packet_offset(std::shared_ptr<ExtendedTransportProtocolSession> &session) const;
 
 		/// @brief Sends the "end of message acknowledgement" message for the provided session
 		/// @param[in] session The session for which we're sending the EOM ACK
 		/// @returns true if the EOM was sent, false if sending was not successful
-		bool send_end_of_session_acknowledgement(const ExtendedTransportProtocolSession &session) const;
+		bool send_end_of_session_acknowledgement(std::shared_ptr<ExtendedTransportProtocolSession> &session) const;
 
 		///@brief Sends data transfer packets for the specified ExtendedTransportProtocolSession.
 		/// @param[in] session The ExtendedTransportProtocolSession for which to send data transfer packets.
-		void send_data_transfer_packets(ExtendedTransportProtocolSession &session) const;
+		void send_data_transfer_packets(std::shared_ptr<ExtendedTransportProtocolSession> &session) const;
 
 		/// @brief Processes a request to send a message over the CAN transport protocol.
 		/// @param[in] source The shared pointer to the source control function.
@@ -319,13 +302,13 @@ namespace isobus
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @returns a matching session, or nullptr if no session matched the supplied parameters
-		ExtendedTransportProtocolSession *get_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		std::shared_ptr<ExtendedTransportProtocolSession> get_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Update the state machine for the passed in session
 		/// @param[in] session The session to update
-		void update_state_machine(ExtendedTransportProtocolSession &session);
+		void update_state_machine(std::shared_ptr<ExtendedTransportProtocolSession> &session);
 
-		std::vector<ExtendedTransportProtocolSession> activeSessions; ///< A list of all active ETP sessions
+		std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> activeSessions; ///< A list of all active ETP sessions
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the ETP protocol
 		const CANNetworkConfiguration *configuration; ///< The configuration to use for this protocol

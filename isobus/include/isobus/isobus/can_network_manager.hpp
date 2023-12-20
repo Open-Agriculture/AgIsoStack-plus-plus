@@ -186,7 +186,7 @@ namespace isobus
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
 		/// @param[in] canPortIndex The CAN channel index to get the transport protocol sessions for
 		/// @returns A list of all the active transport protocol sessions
-		std::vector<const TransportProtocolSessionBase *> get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const;
+		std::list<std::shared_ptr<TransportProtocolSessionBase>> get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const;
 
 		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
 		/// Use this to register for FP multipacket messages

@@ -62,6 +62,11 @@ namespace isobus
 		return source;
 	}
 
+	float TransportProtocolSessionBase::get_percentage_bytes_transferred() const
+	{
+		return static_cast<float>(get_total_bytes_transferred()) / static_cast<float>(get_message_length());
+	}
+
 	std::shared_ptr<ControlFunction> TransportProtocolSessionBase::get_destination() const
 	{
 		return destination;

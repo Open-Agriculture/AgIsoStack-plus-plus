@@ -445,18 +445,11 @@ namespace isobus
 		return retVal;
 	}
 
-	std::vector<const TransportProtocolSessionBase *> isobus::CANNetworkManager::get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const
+	std::list<std::shared_ptr<TransportProtocolSessionBase>> isobus::CANNetworkManager::get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const
 	{
-		std::vector<const TransportProtocolSessionBase *> retVal;
-
-		for (auto currentSession : transportProtocols[canPortIndex]->get_sessions())
-		{
-			retVal.push_back(currentSession);
-		}
-		for (auto currentSession : extendedTransportProtocols[canPortIndex]->get_sessions())
-		{
-			retVal.push_back(currentSession);
-		}
+		std::list<std::shared_ptr<TransportProtocolSessionBase>> retVal;
+		retVal.insert(retVal.end(), transportProtocols[canPortIndex]->get_sessions().begin(), transportProtocols[canPortIndex]->get_sessions().end());
+		retVal.insert(retVal.end(), extendedTransportProtocols[canPortIndex]->get_sessions().begin(), extendedTransportProtocols[canPortIndex]->get_sessions().end());
 		return retVal;
 	}
 
