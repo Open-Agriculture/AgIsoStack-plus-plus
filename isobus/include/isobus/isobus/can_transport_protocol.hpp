@@ -71,43 +71,8 @@ namespace isobus
 		class TransportProtocolSession : public TransportProtocolSessionBase
 		{
 		public:
-			~TransportProtocolSession() override = default; ///< Default destructor
-			TransportProtocolSession(const TransportProtocolSession &obj) = delete; ///< No copy constructor
-			TransportProtocolSession &operator=(const TransportProtocolSession &obj) = delete; ///< No copy assignment operator
-
-			/// @brief The move constructor for a session
-			/// @param[in] obj The session to move
-			TransportProtocolSession(TransportProtocolSession &&obj) noexcept;
-
-			/// @brief The move assignment operator for a session
-			/// @param[in] obj The session to move
-			/// @returns A reference to the moved session
-			TransportProtocolSession &operator=(TransportProtocolSession &&obj) noexcept;
-
-			/// @brief Get the state of the session
-			/// @return The state of the session
-			StateMachineState get_state() const;
-
-			/// @brief Get the total number of bytes that will be sent or received in this session
-			/// @return The length of the message in number of bytes
-			std::uint16_t get_message_length() const;
-
-			/// @brief Get whether or not this session is a broadcast session (BAM)
-			/// @return True if this session is a broadcast session, false if not
-			bool is_broadcast() const;
-
-			/// @brief Get the number of bytes that have been sent or received in this session
-			/// @return The number of bytes that have been sent or received
-			std::uint32_t get_total_bytes_transferred() const override;
-
-			/// @brief Get the percentage of bytes that have been sent or received in this session
-			/// @return The percentage of bytes that have been sent or received (between 0 and 1)
-			float get_percentage_bytes_transferred() const override;
-
-		protected:
-			friend class TransportProtocolManager; ///< Allows the TP manager full access
-
-			/// @brief The constructor for a session
+			/// @brief The constructor for a session, for advanced use only.
+			/// In most cases, you should use the CANNetworkManager::send_can_message() function to transmit messages.
 			/// @param[in] direction The direction of the session
 			/// @param[in] data Data buffer (will be moved into the session)
 			/// @param[in] parameterGroupNumber The PGN of the message
@@ -126,6 +91,25 @@ namespace isobus
 			                         std::shared_ptr<ControlFunction> destination,
 			                         TransmitCompleteCallback sessionCompleteCallback,
 			                         void *parentPointer);
+
+			/// @brief Get the state of the session
+			/// @return The state of the session
+			StateMachineState get_state() const;
+
+			/// @brief Get the total number of bytes that will be sent or received in this session
+			/// @return The length of the message in number of bytes
+			std::uint16_t get_message_length() const;
+
+			/// @brief Get whether or not this session is a broadcast session (BAM)
+			/// @return True if this session is a broadcast session, false if not
+			bool is_broadcast() const;
+
+			/// @brief Get the number of bytes that have been sent or received in this session
+			/// @return The number of bytes that have been sent or received
+			std::uint32_t get_total_bytes_transferred() const override;
+
+		protected:
+			friend class TransportProtocolManager; ///< Allows the TP manager full access
 
 			/// @brief Set the state of the session
 			/// @param[in] value The state to set the session to
@@ -214,7 +198,7 @@ namespace isobus
 		/// @brief Gets all the active transport protocol sessions that are currently active
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
 		/// @returns A list of all the active transport protocol sessions
-		std::vector<const TransportProtocolSession *> get_sessions() const;
+		const std::vector<std::shared_ptr<TransportProtocolSession>> &get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -240,7 +224,7 @@ namespace isobus
 		/// @param[in] session The session to abort
 		/// @param[in] reason The reason we're aborting the session
 		/// @returns true if the abort was send OK, false if not sent
-		bool abort_session(const TransportProtocolSession &session, ConnectionAbortReason reason);
+		bool abort_session(std::shared_ptr<TransportProtocolSession> &session, ConnectionAbortReason reason);
 
 		/// @brief Send an abort with no corresponding session with the specified abort reason. Sends a CAN message.
 		/// @param[in] sender The sender of the abort
@@ -256,31 +240,31 @@ namespace isobus
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
 		/// @param[in] successful Denotes if the session was successful
-		void close_session(const TransportProtocolSession &session, bool successful);
+		void close_session(std::shared_ptr<TransportProtocolSession> &session, bool successful);
 
 		/// @brief Sends the "broadcast announce" message
 		/// @param[in] session The session for which we're sending the BAM
 		/// @returns true if the BAM was sent, false if sending was not successful
-		bool send_broadcast_announce_message(const TransportProtocolSession &session) const;
+		bool send_broadcast_announce_message(std::shared_ptr<TransportProtocolSession> &session) const;
 
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
 		/// @returns true if the RTS was sent, false if sending was not successful
-		bool send_request_to_send(const TransportProtocolSession &session) const;
+		bool send_request_to_send(std::shared_ptr<TransportProtocolSession> &session) const;
 
 		/// @brief Sends the "clear to send" message
 		/// @param[in] session The session for which we're sending the CTS
 		/// @returns true if the CTS was sent, false if sending was not successful
-		bool send_clear_to_send(TransportProtocolSession &session) const;
+		bool send_clear_to_send(std::shared_ptr<TransportProtocolSession> &session) const;
 
 		/// @brief Sends the "end of message acknowledgement" message for the provided session
 		/// @param[in] session The session for which we're sending the EOM ACK
 		/// @returns true if the EOM was sent, false if sending was not successful
-		bool send_end_of_session_acknowledgement(const TransportProtocolSession &session) const;
+		bool send_end_of_session_acknowledgement(std::shared_ptr<TransportProtocolSession> &session) const;
 
 		///@brief Sends data transfer packets for the specified TransportProtocolSession.
 		/// @param[in] session The TransportProtocolSession for which to send data transfer packets.
-		void send_data_transfer_packets(TransportProtocolSession &session);
+		void send_data_transfer_packets(std::shared_ptr<TransportProtocolSession> &session);
 
 		/// @brief Processes a broadcast announce message.
 		/// @param[in] source The source control function that sent the broadcast announce message.
@@ -331,13 +315,13 @@ namespace isobus
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @returns a matching session, or nullptr if no session matched the supplied parameters
-		TransportProtocolSession *get_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		std::shared_ptr<TransportProtocolSession> get_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Update the state machine for the passed in session
 		/// @param[in] session The session to update
-		void update_state_machine(TransportProtocolSession &session);
+		void update_state_machine(std::shared_ptr<TransportProtocolSession> &session);
 
-		std::vector<TransportProtocolSession> activeSessions; ///< A list of all active TP sessions
+		std::vector<std::shared_ptr<TransportProtocolSession>> activeSessions; ///< A list of all active TP sessions
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the TP protocol
 		const CANNetworkConfiguration *configuration; ///< The configuration to use for this protocol

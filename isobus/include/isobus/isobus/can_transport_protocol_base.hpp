@@ -93,7 +93,7 @@ namespace isobus
 
 		/// @brief Get the percentage of bytes that have been sent or received in this session
 		/// @return The percentage of bytes that have been sent or received (between 0 and 1)
-		virtual float get_percentage_bytes_transferred() const = 0;
+		float get_percentage_bytes_transferred() const;
 
 		/// @brief Get the control function that is sending the message
 		/// @return The source control function
