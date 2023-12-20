@@ -6,17 +6,15 @@
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef CAN_TRANSPORT_PROTOCOL_HPP
 #define CAN_TRANSPORT_PROTOCOL_HPP
 
-#include "isobus/isobus/can_control_function.hpp"
-#include "isobus/isobus/can_message.hpp"
-#include "isobus/isobus/can_message_data.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/isobus/can_transport_protocol_base.hpp"
 
 namespace isobus
 {
@@ -70,30 +68,21 @@ namespace isobus
 		///
 		/// @brief A storage object to keep track of session information internally
 		//================================================================================================
-		class TransportProtocolSession
+		class TransportProtocolSession : public TransportProtocolSessionBase
 		{
 		public:
-			/// @brief Enumerates the possible session directions, Rx or Tx
-			enum class Direction
-			{
-				Transmit, ///< We are transmitting a message
-				Receive ///< We are receiving a message
-			};
+			~TransportProtocolSession() override = default; ///< Default destructor
+			TransportProtocolSession(const TransportProtocolSession &obj) = delete; ///< No copy constructor
+			TransportProtocolSession &operator=(const TransportProtocolSession &obj) = delete; ///< No copy assignment operator
 
-			/// @brief A useful way to compare session objects to each other for equality
-			/// @param[in] obj The object to compare to
-			/// @returns true if the objects are equal, false if not
-			bool operator==(const TransportProtocolSession &obj) const;
+			/// @brief The move constructor for a session
+			/// @param[in] obj The session to move
+			TransportProtocolSession(TransportProtocolSession &&obj) noexcept;
 
-			/// @brief Checks if the source and destination control functions match the given control functions.
-			/// @param[in] other_source The control function to compare with the source control function.
-			/// @param[in] other_destination The control function to compare with the destination control function.
-			/// @returns True if the source and destination control functions match the given control functions, false otherwise.
-			bool matches(std::shared_ptr<ControlFunction> other_source, std::shared_ptr<ControlFunction> other_destination) const;
-
-			/// @brief Get the direction of the session
-			/// @return The direction of the session
-			Direction get_direction() const;
+			/// @brief The move assignment operator for a session
+			/// @param[in] obj The session to move
+			/// @returns A reference to the moved session
+			TransportProtocolSession &operator=(TransportProtocolSession &&obj) noexcept;
 
 			/// @brief Get the state of the session
 			/// @return The state of the session
@@ -101,62 +90,42 @@ namespace isobus
 
 			/// @brief Get the total number of bytes that will be sent or received in this session
 			/// @return The length of the message in number of bytes
-			std::uint32_t get_message_length() const;
-
-			/// @brief Get the data buffer for the session
-			/// @return The data buffer for the session
-			CANMessageData &get_data() const;
-
-			/// @brief Get the control function that is sending the message
-			/// @return The source control function
-			std::shared_ptr<ControlFunction> get_source() const;
-
-			/// @brief Get the control function that is receiving the message
-			/// @return The destination control function
-			std::shared_ptr<ControlFunction> get_destination() const;
-
-			/// @brief Get the parameter group number of the message
-			/// @return The PGN of the message
-			std::uint32_t get_parameter_group_number() const;
+			std::uint16_t get_message_length() const;
 
 			/// @brief Get whether or not this session is a broadcast session (BAM)
 			/// @return True if this session is a broadcast session, false if not
 			bool is_broadcast() const;
 
+			/// @brief Get the number of bytes that have been sent or received in this session
+			/// @return The number of bytes that have been sent or received
+			std::uint32_t get_total_bytes_transferred() const override;
+
+			/// @brief Get the percentage of bytes that have been sent or received in this session
+			/// @return The percentage of bytes that have been sent or received
+			float get_percentage_bytes_transferred() const override;
+
 		protected:
 			friend class TransportProtocolManager; ///< Allows the TP manager full access
 
-			/// @brief Factory method to create a new receive session
+			/// @brief The constructor for a session
+			/// @param[in] direction The direction of the session
+			/// @param[in] data Data buffer (will be moved into the session)
 			/// @param[in] parameterGroupNumber The PGN of the message
 			/// @param[in] totalMessageSize The total size of the message in bytes
-			/// @param[in] totalNumberOfPackets The total number of packets that will be sent or received in this session
 			/// @param[in] clearToSendPacketMax The maximum number of packets that can be sent per CTS as indicated by the RTS message
 			/// @param[in] source The source control function
 			/// @param[in] destination The destination control function
-			/// @returns A new receive session
-			static TransportProtocolSession create_receive_session(std::uint32_t parameterGroupNumber,
-			                                                       std::uint16_t totalMessageSize,
-			                                                       std::uint8_t totalNumberOfPackets,
-			                                                       std::uint8_t clearToSendPacketMax,
-			                                                       std::shared_ptr<ControlFunction> source,
-			                                                       std::shared_ptr<ControlFunction> destination);
-
-			/// @brief Factory method to create a new transmit session
-			/// @param[in] parameterGroupNumber The PGN of the message
-			/// @param[in] data Data buffer (will be moved into the session)
-			/// @param[in] source The source control function
-			/// @param[in] destination The destination control function
-			/// @param[in] clearToSendPacketMax The maximum number of packets that can be sent per CTS as indicated by the RTS message
 			/// @param[in] sessionCompleteCallback A callback for when the session completes
 			/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
-			/// @returns A new transmit session
-			static TransportProtocolSession create_transmit_session(std::uint32_t parameterGroupNumber,
-			                                                        std::unique_ptr<CANMessageData> data,
-			                                                        std::shared_ptr<ControlFunction> source,
-			                                                        std::shared_ptr<ControlFunction> destination,
-			                                                        std::uint8_t clearToSendPacketMax,
-			                                                        TransmitCompleteCallback sessionCompleteCallback,
-			                                                        void *parentPointer);
+			TransportProtocolSession(TransportProtocolSessionBase::Direction direction,
+			                         std::unique_ptr<CANMessageData> data,
+			                         std::uint32_t parameterGroupNumber,
+			                         std::uint16_t totalMessageSize,
+			                         std::uint8_t clearToSendPacketMax,
+			                         std::shared_ptr<ControlFunction> source,
+			                         std::shared_ptr<ControlFunction> destination,
+			                         TransmitCompleteCallback sessionCompleteCallback,
+			                         void *parentPointer);
 
 			/// @brief Set the state of the session
 			/// @param[in] value The state to set the session to
@@ -203,47 +172,12 @@ namespace isobus
 			std::uint8_t get_total_number_of_packets() const;
 
 		private:
-			/// @brief The constructor for a session
-			/// @param[in] direction The direction of the session
-			/// @param[in] data Data buffer (will be moved into the session)
-			/// @param[in] parameterGroupNumber The PGN of the message
-			/// @param[in] totalMessageSize The total size of the message in bytes
-			/// @param[in] totalNumberOfPackets The total number of packets that will be sent or received in this session
-			/// @param[in] clearToSendPacketMax The maximum number of packets that can be sent per CTS as indicated by the RTS message
-			/// @param[in] source The source control function
-			/// @param[in] destination The destination control function
-			/// @param[in] sessionCompleteCallback A callback for when the session completes
-			/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
-			TransportProtocolSession(Direction direction,
-			                         std::unique_ptr<CANMessageData> data,
-			                         std::uint32_t parameterGroupNumber,
-			                         std::uint16_t totalMessageSize,
-			                         std::uint8_t totalNumberOfPackets,
-			                         std::uint8_t clearToSendPacketMax,
-			                         std::shared_ptr<ControlFunction> source,
-			                         std::shared_ptr<ControlFunction> destination,
-			                         TransmitCompleteCallback sessionCompleteCallback,
-			                         void *parentPointer);
-
 			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
 
-			Direction direction; ///< The direction of the session
-			std::uint32_t parameterGroupNumber; ///< The PGN of the message
-			std::unique_ptr<CANMessageData> data; ///< The data buffer for the message
-			std::uint16_t totalMessageSize; ///< The total size of the message in bytes
-			std::shared_ptr<ControlFunction> source; ///< The source control function
-			std::shared_ptr<ControlFunction> destination; ///< The destination control function
-
-			std::uint32_t timestamp_ms = 0; ///< A timestamp used to track session timeouts
 			std::uint8_t lastSequenceNumber = 0; ///< The last processed sequence number for this set of packets
 			std::uint8_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver
-
-			std::uint8_t totalNumberOfPackets; ///< The total number of packets that will be sent or received in this session
 			std::uint8_t clearToSendPacketCount = 0; ///< The number of packets to be sent in response to one CTS
 			std::uint8_t clearToSendPacketCountMax = 0xFF; ///< The max packets that can be sent per CTS as indicated by the RTS message
-
-			TransmitCompleteCallback sessionCompleteCallback = nullptr; ///< A callback that is to be called when the session is completed
-			void *parent = nullptr; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
 		};
 
 		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 16; ///< TP.CM_RTS Multiplexor
@@ -252,11 +186,11 @@ namespace isobus
 		static constexpr std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 32; ///< TP.BAM Multiplexor
 		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 255; ///< Abort multiplexor
 		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 1785; ///< The max number of bytes that this protocol can transfer
-		static constexpr std::uint32_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
-		static constexpr std::uint32_t T2_T3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard
-		static constexpr std::uint32_t T4_TIMEOUT_MS = 1050; ///< The t4 timeout as defined by the standard
+		static constexpr std::uint16_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
+		static constexpr std::uint16_t T2_T3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard
+		static constexpr std::uint16_t T4_TIMEOUT_MS = 1050; ///< The t4 timeout as defined by the standard
+		static constexpr std::uint8_t R_TIMEOUT_MS = 200; ///< The Tr Timeout as defined by the standard
 		static constexpr std::uint8_t SEQUENCE_NUMBER_DATA_INDEX = 0; ///< The index of the sequence number in a frame
-		static constexpr std::uint8_t MESSAGE_TR_TIMEOUT_MS = 200; ///< The Tr Timeout as defined by the standard
 		static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7; ///< The number of payload bytes per frame minus overhead of sequence number
 
 		/// @brief The constructor for the TransportProtocolManager, for advanced use only.

@@ -5,7 +5,7 @@
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/isobus/can_extended_transport_protocol.hpp"
@@ -22,42 +22,29 @@
 
 namespace isobus
 {
-	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::ExtendedTransportProtocolSession(Direction direction,
-	                                                                                                     std::unique_ptr<CANMessageData> data,
-	                                                                                                     std::uint32_t parameterGroupNumber,
-	                                                                                                     std::uint32_t totalMessageSize,
-	                                                                                                     std::uint32_t totalNumberOfPackets,
-	                                                                                                     std::uint8_t clearToSendPacketMax,
-	                                                                                                     std::shared_ptr<ControlFunction> source,
-	                                                                                                     std::shared_ptr<ControlFunction> destination,
-	                                                                                                     TransmitCompleteCallback sessionCompleteCallback,
-	                                                                                                     void *parentPointer) :
-	  direction(direction),
-	  parameterGroupNumber(parameterGroupNumber),
-	  data(std::move(data)),
-	  totalMessageSize(totalMessageSize),
-	  source(source),
-	  destination(destination),
-	  totalNumberOfPackets(totalNumberOfPackets),
-	  clearToSendPacketCountMax(clearToSendPacketMax),
-	  sessionCompleteCallback(sessionCompleteCallback),
-	  parent(parentPointer)
+	// Explicitly define the move constructor and assignment operator to ensure that the base class is moved correctly
+	// See https://stackoverflow.com/a/15351528 for why this is necessary
+	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::ExtendedTransportProtocolSession(ExtendedTransportProtocolManager::ExtendedTransportProtocolSession &&obj) noexcept :
+	  TransportProtocolSessionBase(std::move(obj)),
+	  state(obj.state),
+	  lastSequenceNumber(obj.lastSequenceNumber),
+	  sequenceNumberOffset(obj.sequenceNumberOffset),
+	  lastAcknowledgedPacketNumber(obj.lastAcknowledgedPacketNumber),
+	  dataPacketOffsetPacketCount(obj.dataPacketOffsetPacketCount),
+	  clearToSendPacketCountLimit(obj.clearToSendPacketCountLimit)
 	{
 	}
 
-	bool ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::operator==(const ExtendedTransportProtocolSession &obj) const
+	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession &ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::operator=(ExtendedTransportProtocolSession &&obj) noexcept
 	{
-		return ((source == obj.source) && (destination == obj.destination) && (parameterGroupNumber == obj.parameterGroupNumber));
-	}
-
-	bool ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::matches(std::shared_ptr<ControlFunction> other_source, std::shared_ptr<ControlFunction> other_destination) const
-	{
-		return ((source == other_source) && (destination == other_destination));
-	}
-
-	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::Direction ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_direction() const
-	{
-		return direction;
+		TransportProtocolSessionBase::operator=(std::move(obj));
+		state = obj.state;
+		lastSequenceNumber = obj.lastSequenceNumber;
+		sequenceNumberOffset = obj.sequenceNumberOffset;
+		lastAcknowledgedPacketNumber = obj.lastAcknowledgedPacketNumber;
+		dataPacketOffsetPacketCount = obj.dataPacketOffsetPacketCount;
+		clearToSendPacketCountLimit = obj.clearToSendPacketCountLimit;
+		return *this;
 	}
 
 	ExtendedTransportProtocolManager::StateMachineState ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_state() const
@@ -65,109 +52,48 @@ namespace isobus
 		return state;
 	}
 
-	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_message_length() const
-	{
-		return totalMessageSize;
-	}
-
-	CANMessageData &ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_data() const
-	{
-		return *data;
-	}
-
-	std::shared_ptr<ControlFunction> ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_source() const
-	{
-		return source;
-	}
-
-	std::shared_ptr<ControlFunction> ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_destination() const
-	{
-		return destination;
-	}
-
-	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_parameter_group_number() const
-	{
-		return parameterGroupNumber;
-	}
-
-	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::create_receive_session(std::uint32_t parameterGroupNumber,
-	                                                                                                                                                              std::uint32_t totalMessageSize,
-	                                                                                                                                                              std::uint32_t totalNumberOfPackets,
-	                                                                                                                                                              std::uint8_t clearToSendPacketMax,
-	                                                                                                                                                              std::shared_ptr<ControlFunction> source,
-	                                                                                                                                                              std::shared_ptr<ControlFunction> destination)
-	{
-		return ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Receive,
-		                                        std::unique_ptr<CANMessageData>(new CANMessageDataVector(totalMessageSize)),
-		                                        parameterGroupNumber,
-		                                        totalMessageSize,
-		                                        totalNumberOfPackets,
-		                                        clearToSendPacketMax,
-		                                        source,
-		                                        destination,
-		                                        nullptr,
-		                                        nullptr);
-	}
-
-	ExtendedTransportProtocolManager::ExtendedTransportProtocolSession ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::create_transmit_session(std::uint32_t parameterGroupNumber,
-	                                                                                                                                                               std::unique_ptr<CANMessageData> data,
-	                                                                                                                                                               std::shared_ptr<ControlFunction> source,
-	                                                                                                                                                               std::shared_ptr<ControlFunction> destination,
-	                                                                                                                                                               std::uint8_t clearToSendPacketMax,
-	                                                                                                                                                               TransmitCompleteCallback sessionCompleteCallback,
-	                                                                                                                                                               void *parentPointer)
-	{
-		auto totalMessageSize = static_cast<std::uint32_t>(data->size());
-		auto totalNumberOfPackets = totalMessageSize / PROTOCOL_BYTES_PER_FRAME;
-		// Because integer division rounds down, we need to add one if there is a remainder
-		if (0 != (totalMessageSize % PROTOCOL_BYTES_PER_FRAME))
-		{
-			totalNumberOfPackets++;
-		}
-		return ExtendedTransportProtocolSession(ExtendedTransportProtocolSession::Direction::Transmit,
-		                                        std::move(data),
-		                                        parameterGroupNumber,
-		                                        totalMessageSize,
-		                                        totalNumberOfPackets,
-		                                        clearToSendPacketMax,
-		                                        source,
-		                                        destination,
-		                                        sessionCompleteCallback,
-		                                        parentPointer);
-	}
-
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_state(StateMachineState value)
 	{
 		state = value;
-		timestamp_ms = SystemTiming::get_timestamp_ms();
+		update_timestamp();
+	}
+
+	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_total_bytes_transferred() const
+	{
+		return get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
+	}
+
+	float ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_percentage_bytes_transferred() const
+	{
+		return static_cast<float>(get_total_bytes_transferred()) / static_cast<float>(get_message_length());
 	}
 
 	std::uint8_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_dpo_number_of_packets_remaining() const
 	{
 		auto packetsSinceDPO = static_cast<std::uint8_t>(get_last_packet_number() - lastAcknowledgedPacketNumber);
-		return clearToSendPacketCount - packetsSinceDPO;
+		return dataPacketOffsetPacketCount - packetsSinceDPO;
 	}
 
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_dpo_number_of_packets(std::uint8_t value)
 	{
-		clearToSendPacketCount = value;
-		timestamp_ms = SystemTiming::get_timestamp_ms();
+		dataPacketOffsetPacketCount = value;
+		update_timestamp();
 	}
 
 	std::uint8_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_dpo_number_of_packets() const
 	{
-		return clearToSendPacketCount;
+		return dataPacketOffsetPacketCount;
 	}
 
 	std::uint8_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_cts_number_of_packet_limit() const
 	{
-		return clearToSendPacketCountMax;
+		return clearToSendPacketCountLimit;
 	}
 
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_cts_number_of_packet_limit(std::uint8_t value)
 	{
-		clearToSendPacketCountMax = value;
-		timestamp_ms = SystemTiming::get_timestamp_ms();
+		clearToSendPacketCountLimit = value;
+		update_timestamp();
 	}
 
 	std::uint8_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_last_sequence_number() const
@@ -183,13 +109,13 @@ namespace isobus
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_last_sequency_number(std::uint8_t value)
 	{
 		lastSequenceNumber = value;
-		timestamp_ms = SystemTiming::get_timestamp_ms();
+		update_timestamp();
 	}
 
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_acknowledged_packet_number(std::uint32_t value)
 	{
 		lastAcknowledgedPacketNumber = value;
-		timestamp_ms = SystemTiming::get_timestamp_ms();
+		update_timestamp();
 	}
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_last_acknowledged_packet_number() const
@@ -199,11 +125,16 @@ namespace isobus
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_number_of_remaining_packets() const
 	{
-		return totalNumberOfPackets - get_last_packet_number();
+		return get_total_number_of_packets() - get_last_packet_number();
 	}
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_total_number_of_packets() const
 	{
+		auto totalNumberOfPackets = get_message_length() / PROTOCOL_BYTES_PER_FRAME;
+		if ((get_message_length() % PROTOCOL_BYTES_PER_FRAME) > 0)
+		{
+			totalNumberOfPackets++;
+		}
 		return totalNumberOfPackets;
 	}
 
@@ -244,20 +175,15 @@ namespace isobus
 				}
 			}
 
-			auto data = std::unique_ptr<CANMessageData>(new CANMessageDataVector(totalMessageSize));
-			auto totalNumberOfPackets = totalMessageSize / PROTOCOL_BYTES_PER_FRAME;
-			// Because integer division rounds down, we need to add one if there is a remainder
-			if (0 != (totalMessageSize % PROTOCOL_BYTES_PER_FRAME))
-			{
-				totalNumberOfPackets++;
-			}
+			ExtendedTransportProtocolSession newSession(ExtendedTransportProtocolSession::Direction::Receive,
+			                                            std::unique_ptr<CANMessageData>(new CANMessageDataVector(totalMessageSize)),
+			                                            parameterGroupNumber,
+			                                            totalMessageSize,
+			                                            source,
+			                                            destination,
+			                                            nullptr, // No callback
+			                                            nullptr);
 
-			ExtendedTransportProtocolSession newSession = ExtendedTransportProtocolSession::create_receive_session(parameterGroupNumber,
-			                                                                                                       totalMessageSize,
-			                                                                                                       totalNumberOfPackets,
-			                                                                                                       0xFF,
-			                                                                                                       source,
-			                                                                                                       destination);
 			newSession.set_state(StateMachineState::SendClearToSend);
 			activeSessions.push_back(std::move(newSession));
 		}
@@ -362,7 +288,7 @@ namespace isobus
 	void ExtendedTransportProtocolManager::process_end_of_session_acknowledgement(const std::shared_ptr<ControlFunction> source,
 	                                                                              const std::shared_ptr<ControlFunction> destination,
 	                                                                              std::uint32_t parameterGroupNumber,
-	                                                                              std::uint32_t)
+	                                                                              std::uint32_t numberOfBytesTransferred)
 	{
 		auto session = get_session(destination, source);
 		if (nullptr != session)
@@ -371,7 +297,8 @@ namespace isobus
 			{
 				CANStackLogger::debug("[ETP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
 				session->state = StateMachineState::None;
-				close_session(*session, true);
+				bool successful = (numberOfBytesTransferred == session->get_message_length());
+				close_session(*session, successful);
 			}
 			else
 			{
@@ -612,15 +539,16 @@ namespace isobus
 		// We can handle this message! If we only have a view of the data, let's clone the data,
 		// so we don't have to worry about it being deleted.
 		data = data->copy_if_not_owned(std::move(data));
+		auto dataLength = static_cast<std::uint32_t>(data->size());
 
-		ExtendedTransportProtocolSession session = ExtendedTransportProtocolSession::create_transmit_session(parameterGroupNumber,
-		                                                                                                     std::move(data),
-		                                                                                                     source,
-		                                                                                                     destination,
-		                                                                                                     configuration->get_number_of_packets_per_cts_message(),
-		                                                                                                     sessionCompleteCallback,
-		                                                                                                     parentPointer);
-
+		ExtendedTransportProtocolSession session(ExtendedTransportProtocolSession::Direction::Transmit,
+		                                         std::move(data),
+		                                         parameterGroupNumber,
+		                                         dataLength,
+		                                         source,
+		                                         destination,
+		                                         sessionCompleteCallback,
+		                                         parentPointer);
 		session.set_state(StateMachineState::SendRequestToSend);
 		CANStackLogger::debug("[ETP]: New tx session for 0x%05X. Source: %hu, destination: %hu",
 		                      parameterGroupNumber,
@@ -725,7 +653,7 @@ namespace isobus
 
 			case StateMachineState::WaitForClearToSend:
 			{
-				if (SystemTiming::time_expired_ms(session.timestamp_ms, T2_T3_TIMEOUT_MS))
+				if (session.get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
 					CANStackLogger::error("[TP]: Timeout rx session for 0x%05X (expected CTS)", session.get_parameter_group_number());
 					if (session.get_dpo_number_of_packets() > 0)
@@ -753,7 +681,7 @@ namespace isobus
 
 			case StateMachineState::WaitForDataPacketOffset:
 			{
-				if (SystemTiming::time_expired_ms(session.timestamp_ms, T2_T3_TIMEOUT_MS))
+				if (session.get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
 					CANStackLogger::error("[TP]: Timeout tx session for 0x%05X (expected DPO)", session.get_parameter_group_number());
 					abort_session(session, ConnectionAbortReason::Timeout);
@@ -778,7 +706,7 @@ namespace isobus
 
 			case StateMachineState::WaitForDataTransferPacket:
 			{
-				if (SystemTiming::time_expired_ms(session.timestamp_ms, T1_TIMEOUT_MS))
+				if (session.get_time_since_last_update() > T1_TIMEOUT_MS)
 				{
 					CANStackLogger::error("[TP]: Timeout for destination-specific rx session (expected sequencial data frame)");
 					abort_session(session, ConnectionAbortReason::Timeout);
@@ -788,7 +716,7 @@ namespace isobus
 
 			case StateMachineState::WaitForEndOfMessageAcknowledge:
 			{
-				if (SystemTiming::time_expired_ms(session.timestamp_ms, T2_T3_TIMEOUT_MS))
+				if (session.get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
 					CANStackLogger::error("[TP]: Timeout tx session for 0x%05X (expected EOMA)", session.get_parameter_group_number());
 					abort_session(session, ConnectionAbortReason::Timeout);
@@ -846,19 +774,7 @@ namespace isobus
 
 	void ExtendedTransportProtocolManager::close_session(const ExtendedTransportProtocolSession &session, bool successful)
 	{
-		if ((nullptr != session.sessionCompleteCallback) && (ExtendedTransportProtocolSession::Direction::Transmit == session.get_direction()))
-		{
-			if (auto source = session.get_source())
-			{
-				session.sessionCompleteCallback(session.get_parameter_group_number(),
-				                                session.get_message_length(),
-				                                std::static_pointer_cast<InternalControlFunction>(source),
-				                                session.get_destination(),
-				                                successful,
-				                                session.parent);
-			}
-		}
-
+		session.complete(successful);
 		auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
 		if (activeSessions.end() != sessionLocation)
 		{
