@@ -263,7 +263,7 @@ namespace isobus
 			else if (StateMachineState::WaitForClearToSend != session->state)
 			{
 				// The session exists, but we're not in the right state to receive a CTS, so we must abort
-				CANStackLogger::warn("[TP]: Received a Clear To Send (CTS) message for 0x%05X, but not expecting one, aborting session->", parameterGroupNumber);
+				CANStackLogger::warn("[TP]: Received a Clear To Send (CTS) message for 0x%05X, but not expecting one, aborting session.", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
 			}
 			else
@@ -276,7 +276,6 @@ namespace isobus
 				if (0 != packetsToBeSent)
 				{
 					session->set_state(StateMachineState::SendDataTransferPackets);
-					update_state_machine(session);
 				}
 			}
 		}
