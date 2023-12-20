@@ -182,6 +182,12 @@ namespace isobus
 		/// @returns A list of all the control functions
 		std::list<std::shared_ptr<ControlFunction>> get_control_functions(bool includingOffline) const;
 
+		/// @brief Gets all the active transport protocol sessions that are currently active
+		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
+		/// @param[in] canPortIndex The CAN channel index to get the transport protocol sessions for
+		/// @returns A list of all the active transport protocol sessions
+		std::vector<const TransportProtocolSessionBase *> get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const;
+
 		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
 		/// Use this to register for FP multipacket messages
 		/// @returns The class instance of the NMEA2k fast packet protocol.
@@ -371,8 +377,8 @@ namespace isobus
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
 
 		CANNetworkConfiguration configuration; ///< The configuration for this network manager
-		TransportProtocolManager transportProtocol; ///< Instance of the transport protocol manager
-		ExtendedTransportProtocolManager extendedTransportProtocol; ///< Instance of the extended transport protocol manager
+		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
+		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
 		FastPacketProtocol fastPacketProtocol; ///< Instance of the fast packet protocol
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows

@@ -94,7 +94,7 @@ namespace isobus
 			std::uint32_t get_total_bytes_transferred() const override;
 
 			/// @brief Get the percentage of bytes that have been sent or received in this session
-			/// @return The percentage of bytes that have been sent or received
+		/// @return The percentage of bytes that have been sent or received (between 0 and 1)
 			float get_percentage_bytes_transferred() const override;
 
 		protected:
@@ -134,8 +134,12 @@ namespace isobus
 			/// @return The last packet number that was processed
 			std::uint32_t get_last_packet_number() const;
 
-			/// @brief Set the last sequence number that will be processed
-			/// @param[in] value The last sequence number that will be processed
+			/// @brief Set the last packet number that was processed
+			/// @param[in] value The last packet number that was processed
+			void set_sequence_number_offset(std::uint32_t value);
+
+			/// @brief Set the last sequence number that has be processed
+			/// @param[in] value The last sequence number that has be processed
 			void set_last_sequency_number(std::uint8_t value);
 
 			/// @brief Set the last acknowledged packet number by the receiver
@@ -194,6 +198,11 @@ namespace isobus
 		/// @param[in] destination The destination control function for the session
 		/// @returns true if a matching session was found, false if not
 		bool has_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Gets all the active transport protocol sessions that are currently active
+		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
+		/// @returns A list of all the active transport protocol sessions
+		std::vector<const ExtendedTransportProtocolSession *> get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
