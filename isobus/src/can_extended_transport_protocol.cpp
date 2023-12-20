@@ -208,7 +208,6 @@ namespace isobus
 				if (0 != packetsToBeSent)
 				{
 					session->set_state(StateMachineState::SendDataPacketOffset);
-					update_state_machine(session);
 				}
 			}
 		}
@@ -686,7 +685,6 @@ namespace isobus
 				if (send_data_packet_offset(session))
 				{
 					session->set_state(StateMachineState::SendDataTransferPackets);
-					update_state_machine(session); // Immediately update the state machine to send the next message
 				}
 			}
 			break;
