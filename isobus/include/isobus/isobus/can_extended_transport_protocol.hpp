@@ -6,17 +6,15 @@
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef CAN_EXTENDED_TRANSPORT_PROTOCOL_HPP
 #define CAN_EXTENDED_TRANSPORT_PROTOCOL_HPP
 
-#include "isobus/isobus/can_control_function.hpp"
-#include "isobus/isobus/can_message.hpp"
-#include "isobus/isobus/can_message_data.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/isobus/can_transport_protocol_base.hpp"
 
 namespace isobus
 {
@@ -71,89 +69,38 @@ namespace isobus
 		///
 		/// @brief A storage object to keep track of session information internally
 		//================================================================================================
-		class ExtendedTransportProtocolSession
+		class ExtendedTransportProtocolSession : public TransportProtocolSessionBase
 		{
 		public:
-			/// @brief Enumerates the possible session directions, Rx or Tx
-			enum class Direction
-			{
-				Transmit, ///< We are transmitting a message
-				Receive ///< We are receiving a message
-			};
+			~ExtendedTransportProtocolSession() override = default; ///< Default destructor
+			ExtendedTransportProtocolSession(const ExtendedTransportProtocolSession &obj) = delete; ///< No copy constructor
+			ExtendedTransportProtocolSession &operator=(const ExtendedTransportProtocolSession &obj) = delete; ///< No copy assignment operator
 
-			/// @brief A useful way to compare session objects to each other for equality
-			/// @param[in] obj The object to compare to
-			/// @returns true if the objects are equal, false if not
-			bool operator==(const ExtendedTransportProtocolSession &obj) const;
+			/// @brief The move constructor for a session
+			/// @param[in] obj The session to move
+			ExtendedTransportProtocolSession(ExtendedTransportProtocolSession &&obj) noexcept;
 
-			/// @brief Checks if the source and destination control functions match the given control functions.
-			/// @param[in] other_source The control function to compare with the source control function.
-			/// @param[in] other_destination The control function to compare with the destination control function.
-			/// @returns True if the source and destination control functions match the given control functions, false otherwise.
-			bool matches(std::shared_ptr<ControlFunction> other_source, std::shared_ptr<ControlFunction> other_destination) const;
-
-			/// @brief Get the direction of the session
-			/// @return The direction of the session
-			Direction get_direction() const;
+			/// @brief The move assignment operator for a session
+			/// @param[in] obj The session to move
+			/// @returns A reference to the moved session
+			ExtendedTransportProtocolSession &operator=(ExtendedTransportProtocolSession &&obj) noexcept;
 
 			/// @brief Get the state of the session
 			/// @return The state of the session
 			StateMachineState get_state() const;
 
-			/// @brief Get the total number of bytes that will be sent or received in this session
-			/// @return The length of the message in number of bytes
-			std::uint32_t get_message_length() const;
+			/// @brief Get the number of bytes that have been sent or received in this session
+			/// @return The number of bytes that have been sent or received
+			std::uint32_t get_total_bytes_transferred() const override;
 
-			/// @brief Get the data buffer for the session
-			/// @return The data buffer for the session
-			CANMessageData &get_data() const;
-
-			/// @brief Get the control function that is sending the message
-			/// @return The source control function
-			std::shared_ptr<ControlFunction> get_source() const;
-
-			/// @brief Get the control function that is receiving the message
-			/// @return The destination control function
-			std::shared_ptr<ControlFunction> get_destination() const;
-
-			/// @brief Get the parameter group number of the message
-			/// @return The PGN of the message
-			std::uint32_t get_parameter_group_number() const;
+			/// @brief Get the percentage of bytes that have been sent or received in this session
+			/// @return The percentage of bytes that have been sent or received
+			float get_percentage_bytes_transferred() const override;
 
 		protected:
 			friend class ExtendedTransportProtocolManager; ///< Allows the ETP manager full access
 
-			/// @brief Factory method to create a new receive session
-			/// @param[in] parameterGroupNumber The PGN of the message
-			/// @param[in] totalMessageSize The total size of the message in bytes
-			/// @param[in] totalNumberOfPackets The total number of packets that will be sent or received in this session
-			/// @param[in] clearToSendPacketMax The maximum number of packets that can be sent per CTS as indicated by the DPO message
-			/// @param[in] source The source control function
-			/// @param[in] destination The destination control function
-			/// @returns A new receive session
-			static ExtendedTransportProtocolSession create_receive_session(std::uint32_t parameterGroupNumber,
-			                                                               std::uint32_t totalMessageSize,
-			                                                               std::uint32_t totalNumberOfPackets,
-			                                                               std::uint8_t clearToSendPacketMax,
-			                                                               std::shared_ptr<ControlFunction> source,
-			                                                               std::shared_ptr<ControlFunction> destination);
-
-			/// @brief Factory method to create a new transmit session
-			/// @param[in] parameterGroupNumber The PGN of the message
-			/// @param[in] data Data buffer (will be moved into the session)
-			/// @param[in] source The source control function
-			/// @param[in] destination The destination control function
-			/// @param[in] clearToSendPacketMax The maximum number of packets that can be sent per CTS as indicated by the DPO message
-			/// @param[in] sessionCompleteCallback A callback for when the session completes
-			/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
-			/// @returns A new transmit session
-			static ExtendedTransportProtocolSession create_transmit_session(std::uint32_t parameterGroupNumber,
-			                                                                std::unique_ptr<CANMessageData> data,
-			                                                                std::shared_ptr<ControlFunction> source,
-			                                                                std::shared_ptr<ControlFunction> destination,
-			                                                                std::uint8_t clearToSendPacketMax,
-			                                                                TransmitCompleteCallback sessionCompleteCallback,
-			                                                                void *parentPointer);
+			using TransportProtocolSessionBase::TransportProtocolSessionBase; ///< Inherit the base constructor
 
 			/// @brief Set the state of the session
 			/// @param[in] value The state to set the session to
@@ -208,48 +155,13 @@ namespace isobus
 			std::uint32_t get_total_number_of_packets() const;
 
 		private:
-			/// @brief The constructor for a session
-			/// @param[in] direction The direction of the session
-			/// @param[in] data Data buffer (will be moved into the session)
-			/// @param[in] parameterGroupNumber The PGN of the message
-			/// @param[in] totalMessageSize The total size of the message in bytes
-			/// @param[in] totalNumberOfPackets The total number of packets that will be sent or received in this session
-			/// @param[in] clearToSendPacketMax The maximum number of packets that can be sent per CTS as indicated by the RTS message
-			/// @param[in] source The source control function
-			/// @param[in] destination The destination control function
-			/// @param[in] sessionCompleteCallback A callback for when the session completes
-			/// @param[in] parentPointer A generic context object for the tx complete and chunk callbacks
-			ExtendedTransportProtocolSession(Direction direction,
-			                                 std::unique_ptr<CANMessageData> data,
-			                                 std::uint32_t parameterGroupNumber,
-			                                 std::uint32_t totalMessageSize,
-			                                 std::uint32_t totalNumberOfPackets,
-			                                 std::uint8_t clearToSendPacketMax,
-			                                 std::shared_ptr<ControlFunction> source,
-			                                 std::shared_ptr<ControlFunction> destination,
-			                                 TransmitCompleteCallback sessionCompleteCallback,
-			                                 void *parentPointer);
-
 			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
 
-			Direction direction; ///< The direction of the session
-			std::uint32_t parameterGroupNumber; ///< The PGN of the message
-			std::unique_ptr<CANMessageData> data; ///< The data buffer for the message
-			std::uint32_t totalMessageSize; ///< The total size of the message in bytes
-			std::shared_ptr<ControlFunction> source; ///< The source control function
-			std::shared_ptr<ControlFunction> destination; ///< The destination control function
-
-			std::uint32_t timestamp_ms = 0; ///< A timestamp used to track session timeouts
 			std::uint8_t lastSequenceNumber = 0; ///< The last processed sequence number for this set of packets
 			std::uint32_t sequenceNumberOffset = 0; ///< The offset of the sequence number relative to the packet number
 			std::uint32_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver
-
-			std::uint32_t totalNumberOfPackets; ///< The total number of packets that will be sent or received in this session
-			std::uint8_t clearToSendPacketCount = 0; ///< The number of packets to be sent in response to one CTS
-			std::uint8_t clearToSendPacketCountMax = 0xFF; ///< The max packets that can be sent per CTS as indicated by the RTS message
-
-			TransmitCompleteCallback sessionCompleteCallback = nullptr; ///< A callback that is to be called when the session is completed
-			void *parent = nullptr; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
+			std::uint8_t dataPacketOffsetPacketCount = 0; ///< The number of packets that will be sent with the current DPO
+			std::uint8_t clearToSendPacketCountLimit = 0xFF; ///< The max packets that can be sent per DPO as indicated by the CTS message
 		};
 
 		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 20; ///< ETP.CM_RTS Multiplexor
@@ -354,8 +266,6 @@ namespace isobus
 		/// @param[in] destination The shared pointer to the destination control function.
 		/// @param[in] parameterGroupNumber The Parameter Group Number of the message.
 		/// @param[in] totalMessageSize The total size of the message in bytes.
-		/// @param[in] totalNumberOfPackets The total number of packets to be sent.
-		/// @param[in] clearToSendPacketMax The maximum number of clear to send packets that can be sent.
 		void process_request_to_send(const std::shared_ptr<ControlFunction> source, const std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber, std::uint32_t totalMessageSize);
 
 		/// @brief Processes the Clear To Send (CTS) message.
@@ -378,6 +288,7 @@ namespace isobus
 		/// @param[in] source The source control function.
 		/// @param[in] destination The destination control function.
 		/// @param[in] parameterGroupNumber The parameter group number.
+		/// @param[in] numberOfBytesTransferred The number of bytes transferred.
 		void process_end_of_session_acknowledgement(const std::shared_ptr<ControlFunction> source, const std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber, std::uint32_t numberOfBytesTransferred);
 
 		/// @brief Processes an abort message in the CAN transport protocol.
