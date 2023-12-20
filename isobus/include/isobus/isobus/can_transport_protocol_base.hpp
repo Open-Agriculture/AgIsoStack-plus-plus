@@ -92,7 +92,7 @@ namespace isobus
 		virtual std::uint32_t get_total_bytes_transferred() const = 0;
 
 		/// @brief Get the percentage of bytes that have been sent or received in this session
-		/// @return The percentage of bytes that have been sent or received
+		/// @return The percentage of bytes that have been sent or received (between 0 and 1)
 		virtual float get_percentage_bytes_transferred() const = 0;
 
 		/// @brief Get the control function that is sending the message

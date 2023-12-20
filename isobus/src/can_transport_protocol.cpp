@@ -70,7 +70,12 @@ namespace isobus
 
 	std::uint32_t TransportProtocolManager::TransportProtocolSession::get_total_bytes_transferred() const
 	{
-		return get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
+		uint32_t transferred = get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
+		if (transferred > get_message_length())
+		{
+			transferred = get_message_length();
+		}
+		return transferred;
 	}
 
 	float TransportProtocolManager::TransportProtocolSession::get_percentage_bytes_transferred() const
@@ -194,7 +199,7 @@ namespace isobus
 			{
 				newSession.set_state(StateMachineState::WaitForDataTransferPacket);
 				activeSessions.push_back(std::move(newSession));
-
+				update_state_machine(activeSessions.back());
 				CANStackLogger::debug("[TP]: New rx broadcast message session for 0x%05X. Source: %hu", parameterGroupNumber, source->get_address());
 			}
 		}
@@ -257,6 +262,8 @@ namespace isobus
 			{
 				newSession.set_state(StateMachineState::SendClearToSend);
 				activeSessions.push_back(std::move(newSession));
+				CANStackLogger::debug("[TP]: New rx session for 0x%05X. Source: %hu, destination: %hu", parameterGroupNumber, source->get_address(), destination->get_address());
+				update_state_machine(activeSessions.back());
 			}
 		}
 	}
@@ -297,6 +304,7 @@ namespace isobus
 				if (0 != packetsToBeSent)
 				{
 					session->set_state(StateMachineState::SendDataTransferPackets);
+					update_state_machine(*session);
 				}
 			}
 		}
@@ -316,9 +324,9 @@ namespace isobus
 		{
 			if (StateMachineState::WaitForEndOfMessageAcknowledge == session->state)
 			{
-				CANStackLogger::debug("[TP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
 				session->state = StateMachineState::None;
 				close_session(*session, true);
+				CANStackLogger::debug("[TP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
 			}
 			else
 			{
@@ -524,10 +532,6 @@ namespace isobus
 					{
 						send_end_of_session_acknowledgement(*session);
 					}
-					else
-					{
-						CANStackLogger::debug("[TP]: Completed broadcast rx session for 0x%05X", session->get_parameter_group_number());
-					}
 
 					// Construct the completed message
 					CANMessage completedMessage(0);
@@ -542,6 +546,7 @@ namespace isobus
 
 					canMessageReceivedCallback(completedMessage);
 					close_session(*session, true);
+					CANStackLogger::debug("[TP]: Completed rx session for 0x%05X from %hu", session->get_parameter_group_number(), source->get_address());
 				}
 				else if (session->get_cts_number_of_packets_remaining() == 0)
 				{
@@ -636,6 +641,7 @@ namespace isobus
 			                      destination->get_address());
 		}
 		activeSessions.push_back(std::move(session));
+		update_state_machine(activeSessions.back());
 		return true;
 	}
 
@@ -756,7 +762,7 @@ namespace isobus
 			{
 				if (session.get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
-					CANStackLogger::error("[TP]: Timeout rx session for 0x%05X (expected CTS)", session.get_parameter_group_number());
+					CANStackLogger::error("[TP]: Timeout tx session for 0x%05X (expected CTS)", session.get_parameter_group_number());
 					if (session.get_cts_number_of_packets() > 0)
 					{
 						// A connection is only considered established if we've received at least one CTS before
@@ -1010,5 +1016,16 @@ namespace isobus
 		});
 		// Instead of returning a pointer, we return by reference to indicate it should not be deleted or stored
 		return (activeSessions.end() != result) ? &(*result) : nullptr;
+	}
+
+	std::vector<const TransportProtocolManager::TransportProtocolSession *> TransportProtocolManager::get_sessions() const
+	{
+		std::vector<const TransportProtocolSession *> sessions;
+		sessions.reserve(activeSessions.size());
+		for (auto &session : activeSessions)
+		{
+			sessions.push_back(&session);
+		}
+		return sessions;
 	}
 }

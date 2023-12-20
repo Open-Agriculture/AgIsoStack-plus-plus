@@ -686,7 +686,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
 		EXPECT_EQ(data.size(), 8);
-		EXPECT_EQ(sourceControlFunction, receiver); // Since it's a response, the receiver should be the destination
+		EXPECT_EQ(sourceControlFunction, receiver); // Since it's a response, the receiver should be the source
 		EXPECT_EQ(destinationControlFunction, originator); // Since it's a response, the originator should be the destination
 		EXPECT_EQ(priority, CANIdentifier::CANPriority::PriorityLowest7);
 

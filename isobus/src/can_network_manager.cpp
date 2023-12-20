@@ -139,22 +139,22 @@ namespace isobus
 			{
 				messageData.reset(new CANMessageDataView(dataBuffer, dataLength));
 			}
-			if (transportProtocol.protocol_transmit_message(parameterGroupNumber,
-			                                                messageData,
-			                                                sourceControlFunction,
-			                                                destinationControlFunction,
-			                                                transmitCompleteCallback,
-			                                                parentPointer))
+			if (transportProtocols[sourceControlFunction->get_can_port()]->protocol_transmit_message(parameterGroupNumber,
+			                                                                                         messageData,
+			                                                                                         sourceControlFunction,
+			                                                                                         destinationControlFunction,
+			                                                                                         transmitCompleteCallback,
+			                                                                                         parentPointer))
 			{
 				// Successfully sent via the transport protocol
 				retVal = true;
 			}
-			else if (extendedTransportProtocol.protocol_transmit_message(parameterGroupNumber,
-			                                                             messageData,
-			                                                             sourceControlFunction,
-			                                                             destinationControlFunction,
-			                                                             transmitCompleteCallback,
-			                                                             parentPointer))
+			else if (extendedTransportProtocols[sourceControlFunction->get_can_port()]->protocol_transmit_message(parameterGroupNumber,
+			                                                                                                      messageData,
+			                                                                                                      sourceControlFunction,
+			                                                                                                      destinationControlFunction,
+			                                                                                                      transmitCompleteCallback,
+			                                                                                                      parentPointer))
 			{
 				// Successfully sent via the extended transport protocol
 				retVal = true;
@@ -242,7 +242,11 @@ namespace isobus
 		prune_inactive_control_functions();
 
 		// Update transport protocols
-		transportProtocol.update();
+		for (std::uint32_t i = 0; i < CAN_PORT_MAXIMUM; i++)
+		{
+			transportProtocols[i]->update();
+			extendedTransportProtocols[i]->update();
+		}
 
 		for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 		{
@@ -441,6 +445,21 @@ namespace isobus
 		return retVal;
 	}
 
+	std::vector<const TransportProtocolSessionBase *> isobus::CANNetworkManager::get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const
+	{
+		std::vector<const TransportProtocolSessionBase *> retVal;
+
+		for (auto currentSession : transportProtocols[canPortIndex]->get_sessions())
+		{
+			retVal.push_back(currentSession);
+		}
+		for (auto currentSession : extendedTransportProtocols[canPortIndex]->get_sessions())
+		{
+			retVal.push_back(currentSession);
+		}
+		return retVal;
+	}
+
 	FastPacketProtocol &CANNetworkManager::get_fast_packet_protocol()
 	{
 		return fastPacketProtocol;
@@ -492,25 +511,32 @@ namespace isobus
 		return retVal;
 	}
 
-	CANNetworkManager::CANNetworkManager() :
-	  transportProtocol([this](std::uint32_t parameterGroupNumber,
-	                           CANDataSpan data,
-	                           std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                           std::shared_ptr<ControlFunction> destinationControlFunction,
-	                           CANIdentifier::CANPriority priority) { return this->send_can_message(parameterGroupNumber, data.begin(), data.size(), sourceControlFunction, destinationControlFunction, priority); },
-	                    [this](const CANMessage &message) { this->protocol_message_callback(message); },
-	                    &configuration),
-	  extendedTransportProtocol([this](std::uint32_t parameterGroupNumber,
-	                                   CANDataSpan data,
-	                                   std::shared_ptr<InternalControlFunction> sourceControlFunction,
-	                                   std::shared_ptr<ControlFunction> destinationControlFunction,
-	                                   CANIdentifier::CANPriority priority) { return this->send_can_message(parameterGroupNumber, data.begin(), data.size(), sourceControlFunction, destinationControlFunction, priority); },
-	                            [this](const CANMessage &message) { this->protocol_message_callback(message); },
-	                            &configuration)
+	CANNetworkManager::CANNetworkManager()
 	{
 		currentBusloadBitAccumulator.fill(0);
 		lastAddressClaimRequestTimestamp_ms.fill(0);
 		controlFunctionTable.fill({ nullptr });
+
+		auto send_frame_callback = [this](std::uint32_t parameterGroupNumber,
+		                                  CANDataSpan data,
+		                                  std::shared_ptr<InternalControlFunction> sourceControlFunction,
+		                                  std::shared_ptr<ControlFunction> destinationControlFunction,
+		                                  CANIdentifier::CANPriority priority) { return this->send_can_message(parameterGroupNumber, data.begin(), data.size(), sourceControlFunction, destinationControlFunction, priority); };
+
+		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
+		{
+			auto receive_message_callback = [this, i](const CANMessage &message) {
+				// TODO: hack port_index for now, once network manager isn't a singleton, this can be removed
+				CANMessage tempMessage(i);
+				tempMessage.set_identifier(message.get_identifier());
+				tempMessage.set_source_control_function(message.get_source_control_function());
+				tempMessage.set_destination_control_function(message.get_destination_control_function());
+				tempMessage.set_data(message.get_data().data(), static_cast<std::uint32_t>(message.get_data_length()));
+				this->protocol_message_callback(tempMessage);
+			};
+			transportProtocols[i].reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
+			extendedTransportProtocols[i].reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
+		}
 	}
 
 	void CANNetworkManager::update_address_table(const CANMessage &message)
@@ -1038,7 +1064,8 @@ namespace isobus
 			process_can_message_for_address_violations(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
-			transportProtocol.process_message(currentMessage);
+			transportProtocols[currentMessage.get_can_port_index()]->process_message(currentMessage);
+			extendedTransportProtocols[currentMessage.get_can_port_index()]->process_message(currentMessage);
 			process_protocol_pgn_callbacks(currentMessage);
 			process_any_control_function_pgn_callbacks(currentMessage);
 

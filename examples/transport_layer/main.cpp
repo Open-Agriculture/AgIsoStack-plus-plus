@@ -1,20 +1,19 @@
-#include "isobus/hardware_integration/available_can_drivers.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
-#include "isobus/hardware_integration/socket_can_interface.hpp"
-#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
-#include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/isobus/can_transport_protocol.hpp"
 
 #include <atomic>
 #include <csignal>
+#include <future>
 #include <iostream>
-#include <iterator>
 #include <memory>
+#include <thread>
 
-static constexpr std::uint16_t MAX_TP_SIZE_BYTES = 1785;
-static constexpr std::uint32_t ETP_TEST_SIZE = 2048;
+static constexpr std::uint32_t PARAMETER_GROUP_NUMBER = 0xEF00; ///< The parameter group number we will use for testing
+static constexpr std::uint16_t MAX_TP_MESSAGE_SIZE_BYTES = 1785; ///< The max number of bytes the Transport Protocol can handle
+static constexpr std::uint32_t MAX_ETP_MESSAGE_SIZE_BYTES = 117440505; ///< The max number of bytes the Extended Transport Protocol can handle
+static constexpr std::uint32_t MAX_MESSAGE_SIZE_BYTES = 1000000; ///< The max number of bytes we will test sending
 static std::atomic_bool running = { true };
 
 void signal_handler(int)
@@ -22,33 +21,25 @@ void signal_handler(int)
 	running = false;
 }
 
+using namespace isobus;
+
+// Forward declarations
+void check_can_message(const CANMessage &message, void *);
+void print_progress_bar(const TransportProtocolSessionBase *session);
+
+// The example sends a series of CAN messages of incrementing length to itself and checks that the data is correct
 int main()
 {
 	std::signal(SIGINT, signal_handler);
 
-	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
-#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
-#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
-#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
-#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
-	canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
-#endif
-	if (nullptr == canDriver)
-	{
-		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
-		return -1;
-	}
+	std::shared_ptr<CANHardwarePlugin> originatorDriver = std::make_shared<VirtualCANPlugin>("test-channel");
+	std::shared_ptr<CANHardwarePlugin> recipientDriver = std::make_shared<VirtualCANPlugin>("test-channel");
 
-	isobus::CANHardwareInterface::set_number_of_can_channels(1);
-	isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+	CANHardwareInterface::set_number_of_can_channels(2);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, originatorDriver);
+	CANHardwareInterface::assign_can_channel_frame_handler(1, recipientDriver);
 
-	if ((!isobus::CANHardwareInterface::start()) || (!canDriver->get_is_valid()))
+	if ((!CANHardwareInterface::start()) || (!originatorDriver->get_is_valid()) || (!recipientDriver->get_is_valid()))
 	{
 		std::cout << "Failed to start hardware interface. The CAN driver might be invalid." << std::endl;
 		return -2;
@@ -56,111 +47,151 @@ int main()
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
-	isobus::NAME TestDeviceNAME(0);
+	NAME originatorNAME(0);
+	originatorNAME.set_arbitrary_address_capable(true);
+	originatorNAME.set_industry_group(1);
+	originatorNAME.set_device_class(0);
+	originatorNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::SteeringControl));
+	originatorNAME.set_identity_number(2);
+	originatorNAME.set_ecu_instance(0);
+	originatorNAME.set_function_instance(0);
+	originatorNAME.set_device_class_instance(0);
+	originatorNAME.set_manufacturer_code(1407);
 
-	//! Make sure you change these for your device!!!!
-	TestDeviceNAME.set_arbitrary_address_capable(true);
-	TestDeviceNAME.set_industry_group(1);
-	TestDeviceNAME.set_device_class(0);
-	TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::SteeringControl));
-	TestDeviceNAME.set_identity_number(2);
-	TestDeviceNAME.set_ecu_instance(0);
-	TestDeviceNAME.set_function_instance(0);
-	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(1407);
+	NAME recipientNAME(0);
+	recipientNAME.set_arbitrary_address_capable(true);
+	recipientNAME.set_industry_group(1);
+	recipientNAME.set_device_class(0);
+	recipientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
+	recipientNAME.set_identity_number(1);
+	recipientNAME.set_ecu_instance(0);
+	recipientNAME.set_function_instance(0);
+	recipientNAME.set_device_class_instance(0);
+	recipientNAME.set_manufacturer_code(1407);
 
-	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	const NAMEFilter filterOriginator(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::SteeringControl));
+	const NAMEFilter filterRecipient(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
 
-	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
-	auto TestPartner = isobus::PartneredControlFunction::create(0, { filterVirtualTerminal });
+	auto originatorECU = InternalControlFunction::create(originatorNAME, 0x1C, 0);
+	auto originatorPartner = PartneredControlFunction::create(1, { filterOriginator });
+	auto recipientECU = InternalControlFunction::create(recipientNAME, 0x1D, 1);
+	auto recipientPartner = PartneredControlFunction::create(0, { filterRecipient });
 
-	// Wait to make sure address claiming is done. The time is arbitrary.
-	//! @todo Check this instead of asuming it is done
-	std::this_thread::sleep_for(std::chrono::milliseconds(1250));
-
-	// Set up some test CAN messages
-	std::uint8_t TPTestBuffer[MAX_TP_SIZE_BYTES];
-	std::uint8_t ETPTestBuffer[ETP_TEST_SIZE];
-
-	for (uint16_t i = 0; i < MAX_TP_SIZE_BYTES; i++)
+	// We want to make sure address claiming is successful before continuing
+	auto addressClaimedFuture = std::async(std::launch::async, [&originatorECU, &recipientECU, &originatorPartner, &recipientPartner]() {
+		while ((!originatorECU->get_address_valid()) || (!recipientECU->get_address_valid()) ||
+		       (!originatorPartner->get_address_valid()) || (!recipientPartner->get_address_valid()))
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+	});
+	if (addressClaimedFuture.wait_for(std::chrono::seconds(5)) == std::future_status::timeout)
 	{
-		TPTestBuffer[i] = (i % 0xFF); // Fill buffer with junk data
+		std::cout << "Address claiming failed. Please make sure that your internal control function can claim a valid address." << std::endl;
+		return -3;
 	}
-	for (uint32_t i = 0; i < ETP_TEST_SIZE; i++)
+
+	// Set up a message buffer for testing
+	std::vector<std::uint8_t> sendBuffer;
+	sendBuffer.reserve(MAX_MESSAGE_SIZE_BYTES);
+
+	for (uint32_t i = 0; i < MAX_MESSAGE_SIZE_BYTES; i++)
 	{
-		ETPTestBuffer[i] = (i % 0xFF); // Fill buffer with junk data
+		sendBuffer.push_back(i % 0xFF); // Fill buffer with incrementing values
 	}
+
+	// Register a callback for receiving CAN messages
+	CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(PARAMETER_GROUP_NUMBER, check_can_message, nullptr);
+	originatorPartner->add_parameter_group_number_callback(PARAMETER_GROUP_NUMBER, check_can_message, nullptr, recipientECU);
 
 	// Send a classic CAN message to a specific destination(8 bytes or less)
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, TestInternalECU, TestPartner))
+	if (running && CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), CAN_DATA_LENGTH, originatorECU, recipientPartner))
 	{
 		std::cout << "Sent a normal CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
 	}
 
 	// Send a classic CAN message to global (0xFF) (8 bytes or less)
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, isobus::CAN_DATA_LENGTH, TestInternalECU))
+	if (running && CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), CAN_DATA_LENGTH, originatorECU))
 	{
 		std::cout << "Sent a broadcast CAN Message with length 8" << std::endl;
 		std::this_thread::sleep_for(std::chrono::milliseconds(4)); // Arbitrary
 	}
 
-	// CM Tx Example
-	// This loop sends all possible TP CM message sizes.
-	// This will take a long time
-	for (std::uint32_t i = 9; i <= MAX_TP_SIZE_BYTES; i++)
+	// Send (Extended) Transport Protocol destination-destination specific messages of exponentially increasing size
+	// This will take a while to complete
+	std::uint32_t message_length = 9; // Arbitrary starting point
+	while (running && (message_length <= MAX_MESSAGE_SIZE_BYTES) && (message_length <= MAX_ETP_MESSAGE_SIZE_BYTES))
 	{
-		if (!running)
+		if (CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), message_length, originatorECU, recipientPartner))
 		{
-			break;
-		}
-
-		// Send message
-		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, TestInternalECU, TestPartner))
-		{
-			std::cout << "Started TP CM Session with length " << i << std::endl;
+			std::cout << std::endl; // End the progress bar
+			std::cout << "Sending a Transport Protocol Message with length " << message_length << std::endl;
+			message_length *= 2;
 		}
 		else
 		{
-			std::cout << "Failed starting TP CM Session with length " << i << std::endl;
+			print_progress_bar(CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0).front());
 		}
-		// Wait for this session to complete before starting the next
-		// This sleep value is arbitrary
-		std::this_thread::sleep_for(std::chrono::milliseconds(i * 2));
+		std::this_thread::sleep_for(std::chrono::milliseconds(4));
 	}
 
-	// BAM Tx Exmaple
-	// This loop sends all possible BAM message sizes
-	// This will take a very long time
-	for (std::uint32_t i = 9; i <= MAX_TP_SIZE_BYTES; i++)
+	// Send Broadcast Transport Protocol messages (BAM) of exponentially increasing size
+	// This will take a while to complete
+	message_length = 11; // Arbitrary starting point
+	while (running && (message_length <= MAX_MESSAGE_SIZE_BYTES) && (message_length <= MAX_TP_MESSAGE_SIZE_BYTES))
 	{
-		if (!running)
+		if (CANNetworkManager::CANNetwork.send_can_message(PARAMETER_GROUP_NUMBER, sendBuffer.data(), message_length, originatorECU))
 		{
-			break;
-		}
-
-		// Send message
-		if (isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, TPTestBuffer, i, TestInternalECU))
-		{
-			std::cout << "Started BAM Session with length " << i << std::endl;
+			std::cout << std::endl; // End the progress bar
+			std::cout << "Sending a Broadcast Transport Protocol Message with length " << message_length << std::endl;
+			message_length *= 2;
 		}
 		else
 		{
-			std::cout << "Failed starting BAM Session with length " << i << std::endl;
+			print_progress_bar(CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0).front());
 		}
-		// Wait for this session to complete before starting the next, or it will fail as only 1 BAM session is possible at a time
-		std::this_thread::sleep_for(std::chrono::milliseconds(2 * (isobus::CANNetworkManager::CANNetwork.get_configuration().get_minimum_time_between_transport_protocol_bam_frames() * ((i + 1) / 7))));
+		std::this_thread::sleep_for(std::chrono::milliseconds(4));
 	}
 
-	// ETP Example
-	// Send one ETP message
-	if (running && isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, ETPTestBuffer, ETP_TEST_SIZE, TestInternalECU, TestPartner))
-	{
-		std::cout << "Started ETP Session with length " << ETP_TEST_SIZE << std::endl;
-		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-	}
-
-	isobus::CANHardwareInterface::stop();
-
+	CANHardwareInterface::stop();
 	return 0;
+}
+
+void check_can_message(const CANMessage &message, void *)
+{
+	for (std::uint32_t i = 0; i < message.get_data_length(); i++)
+	{
+		if (message.get_data()[i] != (i % 0xFF))
+		{
+			std::cout << std::endl // End the progress bar
+			          << "Received CAN with incorrect data!!!" << std::endl;
+			return;
+		}
+	}
+}
+
+void print_progress_bar(const TransportProtocolSessionBase *session)
+{
+	constexpr std::uint8_t width = 50;
+	float percentage = session->get_percentage_bytes_transferred();
+
+	std::cout << "[";
+	for (std::uint8_t i = 0; i < width; i++)
+	{
+		if (i < static_cast<std::uint8_t>(percentage * width))
+		{
+			std::cout << "=";
+		}
+		else if (i == static_cast<std::uint8_t>(percentage * width))
+		{
+			std::cout << ">";
+		}
+		else
+		{
+			std::cout << " ";
+		}
+	}
+	std::cout << "] " << static_cast<int>(percentage * 100.0f) << "% (" << session->get_total_bytes_transferred() << "/" << session->get_message_length() << " bytes)\r";
+	std::cout.flush();
 }
