@@ -1,32 +1,44 @@
 # Examples
 
-The examples here can all be build from top level. 
-Another approach, more akin to how most consumers would use it, is to install the ISO11783 CAN Stack library.
-Then, use a call to `find_package()` to find this package. 
+This directory contains examples of how to use the AgIsoStack library.
 
-The same process can be used for all examples, however `diagnostic_protocol` is just shown as a reference.
+## Building all examples
 
-First, build AgIsoStack-plus-plus.
+The examples here can all be build simultaneously from the top level directory of the repository:
+
+```bash
+cmake -S . -B build -DBUILD_EXAMPLES=ON
+cmake --build build
 ```
-# Build the library like normal
-cd /path/to/root/directory/of/AgIsoStack-plus-plus
+
+## Building a single example
+
+Another approach, more akin to how most consumers would use the library, is to install the AgIsoStack first.
+And then, use a call to `find_package()` to find this installation.
+
+First, from the top level directory, build AgIsoStack-plus-plus normally
+
+```bash
 cmake -S . -B build 
 cmake --build build
-# Install it locally in a directory called "install"
+```
+
+We install it to a known location, here we use `install` folder relative to the root of the repository as an example.
+
+```bash
 cmake --install build --prefix install
 ```
 
+Now, build an example of your choosing, here we use the `diagnostic protocol` as an example, but any of the examples will work. Note that we need to tell CMake where to find the installed package, which is two directories up from the example directory. Hence, the `../../install` argument to `CMAKE_PREFIX_PATH`.
 
-Now, build an example of your choosing.
-```
-# Now, go in and build the example
+```bash
 cd examples/diagnostic_protocol
-# Here, because we installed locally, you must supply the path to install
 cmake -S . -B build -DCMAKE_PREFIX_PATH=../../install
 cmake --build build
 ```
 
-Finally, run the example.
-```
-./build/DiagnosticProtocolExampleTarget
+Then, run the example. The name of the executable will be different depending on which example you built.
+
+```bash
+./build/DiagnosticProtocolExample
 ```

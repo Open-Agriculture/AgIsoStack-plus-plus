@@ -24,7 +24,7 @@ Check out the [tutorial website](https://isobus-plus-plus.readthedocs.io/en/late
 
 This library is compiled with CMake.
 
-```
+```bash
 cmake -S . -B build
 cmake --build build
 ```
@@ -51,7 +51,8 @@ If your target hardware is not listed above, you can easily integrate your own h
 
 There are build in examples. By default, examples are not built.
 The easiest way to build them is from the top level.
-```
+
+```bash
 cmake -S . -B build -DBUILD_EXAMPLES=ON
 cmake --build build
 ```
@@ -59,7 +60,8 @@ cmake --build build
 ## Tests
 
 Tests are run with GTest. They can be invoked through ctest. Once the library is compiled, navigate to the build directory to run tests.
-```
+
+```bash
 cmake -S . -B build -DBUILD_TESTING=ON
 cmake --build build
 cd build
@@ -73,12 +75,14 @@ You can integrate this library into your own project with CMake if you want. Mul
 Make sure you have CMake and Git installed:
 
 Ubuntu:
-```
+
+```bash
 sudo apt install cmake git
 ```
 
 RHEL:
-```
+
+```bash
 sudo dnf install cmake git
 ```
 
@@ -92,14 +96,15 @@ Adding this library as a submodule to your project is one of the easier ways to 
 
 Submodule the repository into your project:
 
-```
+```bash
 git submodule add https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git <destination_folder>
 git submodule update --init --recursive
 ```
+
 Then, if you're using CMake, make sure to add the submodule to your project, and link it.
 It is recommended to use the ALIAS targets exposed, which all follow the name `isobus::<target_name>`.
 
-```
+```cmake
 find_package(Threads)
 
 add_subdirectory(<path to this submodule>)
@@ -116,17 +121,17 @@ If you don't want to use Git submodules, you can also easily integrate this libr
 1. Create a folder called `cmake` in your project if you don't already have one.
 2. Inside the `cmake` folder, create a file with the following contents:
 
-```
-if(NOT TARGET isobus::Isobus)
-    include(FetchContent)
-    FetchContent_Declare(
-        AgIsoStack
-        GIT_REPOSITORY https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
-        GIT_TAG        main
-    )
-    FetchContent_MakeAvailable(AgIsoStack)
-endif()
-```
+    ```cmake
+    if(NOT TARGET isobus::Isobus)
+        include(FetchContent)
+        FetchContent_Declare(
+            AgIsoStack
+            GIT_REPOSITORY https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
+            GIT_TAG        main
+        )
+        FetchContent_MakeAvailable(AgIsoStack)
+    endif()
+    ```
 
 3. In your top-level CMakeLists.txt file, add `list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)` after your `project` command
 4. In your top-level CMakeLists.txt file, add `find_package(AgIsoStack MODULE)` after the above line.
@@ -140,17 +145,22 @@ We do not officially distribute this library in binary form (DLL files, for exam
 
 ### Installing The Library
 
-You can also install the library if you want.
+You can also install the library if you want. First, from the top level directory, build AgIsoStack-plus-plus normally
 
-For a local install:
-
+```bash
+cmake -S . -B build 
+cmake --build build
 ```
+
+For a local install, we set it to a known location
+
+```bash
 cmake --install build --prefix install
 ```
 
 For a system-wide install:
 
-```
+```bash
 sudo cmake --install build
 ```
 
@@ -158,7 +168,7 @@ Then, use a call to `find_package()` to find this package.
 
 ### Use of our SAE/ISOBUS Manufacturer Code
 
-If you are integrating with our library to create an ISO11783 or J1939 application and are not selling your software or device containing that software for-profit, then you are welcome to use our manufacturer number in your application. 
+If you are integrating with our library to create an ISO11783 or J1939 application and are not selling your software or device containing that software for-profit, then you are welcome to use our manufacturer number in your application.
 
 If you are creating such an application for sale as a for-profit company, then we ask that you please obtain your own manufacturer code from SAE instead of using ours.
 
@@ -166,26 +176,29 @@ Our manufacturer code is 1407 (decimal).
 
 ## Documentation
 
-You can view the pre-compiled doxygen here https://delgrossoengineering.com/isobus-docs
+You can view the pre-compiled doxygen here <https://delgrossoengineering.com/isobus-docs>
 
 You can also generate the doxygen documentation yourself by running the `doxygen` command inside this repo's folder.
 
 Make sure you have the prerequisites installed:
 
 Ubuntu:
-```
+
+```bash
 sudo apt install doxygen graphviz
 ```
 
 RHEL:
-```
+
+```bash
 sudo subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms
 
 sudo dnf install doxygen graphviz
 ```
 
 Then, generate the docs:
-```
+
+```bash
 doxygen doxyfile
 ```
 
