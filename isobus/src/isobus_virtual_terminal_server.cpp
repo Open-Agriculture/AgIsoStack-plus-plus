@@ -434,7 +434,6 @@ namespace isobus
 								case Function::LoadVersionCommand:
 								{
 									constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
-									std::uint8_t errorCodes = 0x01; // Version label incorrect
 									std::vector<std::uint8_t> versionLabel;
 
 									versionLabel.reserve(VERSION_LABEL_LENGTH);
@@ -448,7 +447,11 @@ namespace isobus
 									if (!loadedVersion.empty())
 									{
 										cf->add_iop_raw_data(loadedVersion);
-										errorCodes = 0;
+									}
+									else
+									{
+										parentServer->send_load_version_response(0x01, cf->get_control_function());
+										CANStackLogger::error("[VT Server]: Failed to load requested object pool version");
 									}
 
 									if (cf->get_any_object_pools())
