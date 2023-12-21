@@ -291,7 +291,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -979,7 +979,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool SoftKeyMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool SoftKeyMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1096,7 +1096,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool Key::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool Key::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1474,7 +1474,7 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool Button::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool Button::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -1814,7 +1814,6 @@ namespace isobus
 	bool InputBoolean::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
 	{
 		bool retVal = false;
-		std::uint8_t numberOfFontAttributes = 0;
 
 		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
 		{
@@ -6211,7 +6210,7 @@ namespace isobus
 		return true;
 	}
 
-	bool PictureGraphic::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool PictureGraphic::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -6549,7 +6548,7 @@ namespace isobus
 		return true;
 	}
 
-	bool FontAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool FontAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -6873,12 +6872,12 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
-	bool LineAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	bool LineAttributes::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool LineAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool LineAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 
@@ -8106,7 +8105,7 @@ namespace isobus
 		return !anyWrongChildType;
 	}
 
-	bool WindowMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool WindowMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		bool retVal = false;
 

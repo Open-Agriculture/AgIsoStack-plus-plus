@@ -90,7 +90,7 @@ if("MacCANPCAN" IN_LIST CAN_DRIVER)
 endif()
 if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
   message(
-    WARNING
+    AUTHOR_WARNING
       "
       This is not legal advice. The InnoMaker USB2CAN driver uses libusb, which is an LGPL-2.1 library. Be sure you understand the implications of this before proceeding."
   )

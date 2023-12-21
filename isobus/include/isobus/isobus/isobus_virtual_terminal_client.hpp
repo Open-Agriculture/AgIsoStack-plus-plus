@@ -1143,7 +1143,7 @@ namespace isobus
 		// You have a few options:
 		// 1. Upload in one blob of contigious memory
 		// This is good for small pools or pools where you have all the data in memory.
-		// 2. Get a callback at some inteval to provide data in chunks
+		// 2. Get a callback at some interval to provide data in chunks
 		// This is probably better for huge pools if you are RAM constrained, or if your
 		// pool is stored on some external device that you need to get data from in pages.
 		// This is also the best way to load from IOP files!
@@ -1153,12 +1153,10 @@ namespace isobus
 		/// @brief Assigns an object pool to the client using a buffer and size.
 		/// @details This is good for small pools or pools where you have all the data in memory.
 		/// @param[in] poolIndex The index of the pool you are assigning
-		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] pool A pointer to the object pool. Must remain valid until client is connected!
 		/// @param[in] size The object pool size
 		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
 		void set_object_pool(std::uint8_t poolIndex,
-		                     VTVersion poolSupportedVTVersion,
 		                     const std::uint8_t *pool,
 		                     std::uint32_t size,
 		                     std::string version = "");
@@ -1166,11 +1164,9 @@ namespace isobus
 		/// @brief Assigns an object pool to the client using a vector.
 		/// @details This is good for small pools or pools where you have all the data in memory.
 		/// @param[in] poolIndex The index of the pool you are assigning
-		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] pool A pointer to the object pool. Must remain valid until client is connected!
 		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
 		void set_object_pool(std::uint8_t poolIndex,
-		                     VTVersion poolSupportedVTVersion,
 		                     const std::vector<std::uint8_t> *pool,
 		                     std::string version = "");
 
@@ -1187,11 +1183,10 @@ namespace isobus
 		/// pool is stored on some external device that you need to get data from in pages.
 		/// This is also the best way to load from IOP files, as you can read the data in piece by piece.
 		/// @param[in] poolIndex The index of the pool you are assigning
-		/// @param[in] poolSupportedVTVersion The VT version of the object pool
 		/// @param[in] poolTotalSize The object pool size
 		/// @param[in] value The data callback that will be used to get object pool data to upload.
 		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
-		void register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version = "");
+		void register_object_pool_data_chunk_callback(std::uint8_t poolIndex, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version = "");
 
 		/// @brief Periodic Update Function (worker thread may call this)
 		/// @details This class can spawn a thread, or you can supply your own to run this function.
