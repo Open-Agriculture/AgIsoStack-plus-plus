@@ -108,7 +108,7 @@ extern "C" void app_main()
 	auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool, (object_pool_end - object_pool_start) - 1, "ais1");
+	TestVirtualTerminalClient->set_object_pool(0, testPool, (object_pool_end - object_pool_start) - 1, "ais1");
 	auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
 	auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
 	TestVirtualTerminalClient->initialize(true);

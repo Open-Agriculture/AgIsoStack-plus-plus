@@ -952,9 +952,9 @@ namespace isobus
 				{
 					if (receivedMessage.get_data_length() >= static_cast<std::uint32_t>(MINIMUM_LENGTH_BYTES + (i * 4)))
 					{
-						referenceStations.at(i) = std::move(ReferenceStationData((receivedMessage.get_uint16_at(MINIMUM_LENGTH_BYTES + (i * 4)) >> 4),
-						                                                         static_cast<TypeOfSystem>(receivedMessage.get_uint8_at(MINIMUM_LENGTH_BYTES + (i * 4)) & 0x0F),
-						                                                         receivedMessage.get_uint16_at(2 + MINIMUM_LENGTH_BYTES + (i * 4))));
+						referenceStations.at(i) = ReferenceStationData((receivedMessage.get_uint16_at(MINIMUM_LENGTH_BYTES + (i * 4)) >> 4),
+						                                               static_cast<TypeOfSystem>(receivedMessage.get_uint8_at(MINIMUM_LENGTH_BYTES + (i * 4)) & 0x0F),
+						                                               receivedMessage.get_uint16_at(2 + MINIMUM_LENGTH_BYTES + (i * 4)));
 					}
 					else
 					{

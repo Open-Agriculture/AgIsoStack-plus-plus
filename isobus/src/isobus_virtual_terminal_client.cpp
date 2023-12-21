@@ -1219,7 +1219,7 @@ namespace isobus
 		return activeWorkingSetSoftKeyMaskObjectID;
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::uint8_t *pool, std::uint32_t size, std::string version)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size, std::string version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != size))
@@ -1248,7 +1248,7 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, const std::vector<std::uint8_t> *pool, std::string version)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool, std::string version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != pool->size()))
@@ -1287,7 +1287,7 @@ namespace isobus
 		objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
 	}
 
-	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, VTVersion poolSupportedVTVersion, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version)
+	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version)
 	{
 		if ((nullptr != value) &&
 		    (0 != poolTotalSize))

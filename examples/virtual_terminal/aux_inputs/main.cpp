@@ -163,7 +163,7 @@ int main()
 	auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
+	TestVirtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
 	TestVirtualTerminalClient->set_auxiliary_input_model_identification_code(MODEL_IDENTIFICATION_CODE);
 	TestVirtualTerminalClient->add_auxiliary_input_object_id(AUXN_INPUT_SLIDER);
 	TestVirtualTerminalClient->add_auxiliary_input_object_id(AUXN_INPUT_BUTTON);

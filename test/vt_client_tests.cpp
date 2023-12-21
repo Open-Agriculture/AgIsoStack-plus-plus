@@ -216,7 +216,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 
 	EXPECT_NE(0, testPool.size());
 
-	clientUnderTest.set_object_pool(0, VirtualTerminalClient::VTVersion::Version3, &testPool);
+	clientUnderTest.set_object_pool(0, &testPool);
 
 	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
 
@@ -272,7 +272,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 
 	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
 
-	clientUnderTest.register_object_pool_data_chunk_callback(0, VirtualTerminalClient::VTVersion::Version3, DerivedTestVTClient::staticTestPool.size(), DerivedTestVTClient::testWrapperDataChunkCallback);
+	clientUnderTest.register_object_pool_data_chunk_callback(0, DerivedTestVTClient::staticTestPool.size(), DerivedTestVTClient::testWrapperDataChunkCallback);
 
 	clientUnderTest.set_object_pool_scaling(0, 240, 240);
 
@@ -321,7 +321,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 
 	EXPECT_NE(0, testPool.size());
 
-	clientUnderTest.set_object_pool(0, VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size());
+	clientUnderTest.set_object_pool(0, testPool.data(), testPool.size());
 
 	EXPECT_EQ(false, clientUnderTest.test_wrapper_get_any_pool_needs_scaling());
 

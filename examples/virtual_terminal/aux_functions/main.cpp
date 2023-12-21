@@ -100,7 +100,7 @@ int main()
 	auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-	TestVirtualTerminalClient->set_object_pool(0, isobus::VirtualTerminalClient::VTVersion::Version3, testPool.data(), testPool.size(), objectPoolHash);
+	TestVirtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
 	auto auxFunctionListener = TestVirtualTerminalClient->add_auxiliary_function_event_listener(handle_aux_function_input);
 	TestVirtualTerminalClient->initialize(true);
 
