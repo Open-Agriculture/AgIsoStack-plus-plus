@@ -11,7 +11,8 @@ project(
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-# Make CTest available which adds the option BUILD_TESTING
+# Make CTest available and the BUILD_TESTING option (OFF by default)
+option(BUILD_TESTING "Set to ON to enable building of tests from top level" OFF)
 include(CTest)
 if(BUILD_TESTING
    AND NOT MSVC

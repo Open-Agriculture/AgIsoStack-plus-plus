@@ -10,20 +10,20 @@ Our code style rules and PR reviews are based loosely on Autosar's `Guidelines f
 
 * Contributions must follow the style defined in our `.clang-format` and `.cmake-format` files. You can ensure you pass this check by running `find . -iname *.hpp -o -iname *.cpp | xargs clang-format -i` and `find . -name CMakeLists.txt | xargs cmake-format -i` at the root of the repo before submitting your PR.
 * Contributions should follow these additional style requirements, which will be checked in code reviews.
-	* Function names `snake_case`
-	* Variables `camelCase`
-	* Constant values `CAPITALIZED_SNAKE`
-	* Constants on the left in `==` and `!=` checks. Like this: `if (5 == value)` NOT `if (value == 5)`. This is to prevent accidentally omitting an `=` in the operator and creating a runtime bug.
-	* Copyright notice must be included in each file.
-	* `NULL` should not be used when `nullptr` can be used
-	* Explicit namespacing should be used for accessing namespaces outside of our namespace `isobus`, especially for the standard library `std::`
-	* No `using namespace` directives are allowed in header files
-	* Constructors with a single parameter shall be marked `explicit`
-	* Where possible, append `const` to functions that do not modify class member variables
-	* Where possible, declare variables as `constexpr` if their value can be determined at compile time
-	* Only those characters specified in the C++ Language Standard basic source character set shall be used in the source code except within the text of a wide string.
-	* In general, prefer C++ over C, though exceptions may be granted if needed
-	* This list of style items is not exhaustive, and some best practices such as include guards will also be checked in our PR reviews.
+  * Function names `snake_case`
+  * Variables `camelCase`
+  * Constant values `CAPITALIZED_SNAKE`
+  * Constants on the left in `==` and `!=` checks. Like this: `if (5 == value)` NOT `if (value == 5)`. This is to prevent accidentally omitting an `=` in the operator and creating a runtime bug.
+  * Copyright notice must be included in each file.
+  * `NULL` should not be used when `nullptr` can be used
+  * Explicit namespacing should be used for accessing namespaces outside of our namespace `isobus`, especially for the standard library `std::`
+  * No `using namespace` directives are allowed in header files
+  * Constructors with a single parameter shall be marked `explicit`
+  * Where possible, append `const` to functions that do not modify class member variables
+  * Where possible, declare variables as `constexpr` if their value can be determined at compile time
+  * Only those characters specified in the C++ Language Standard basic source character set shall be used in the source code except within the text of a wide string.
+  * In general, prefer C++ over C, though exceptions may be granted if needed
+  * This list of style items is not exhaustive, and some best practices such as include guards will also be checked in our PR reviews.
 * Doxygen should compile with no warnings when run at the root of the project with the command `doxygen doxyfile`
 * Absolutely no code shall be added that is under a more strict license than MIT or which has not had conditions met to be distributed under our license
 * Builds must pass the compilation github action
@@ -59,7 +59,7 @@ VS Code can be installed via the snap store, or by downloading it from [Microsof
 
 Clone the repo:
 
-```
+```bash
 git clone https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
 ```
 

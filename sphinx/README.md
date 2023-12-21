@@ -6,7 +6,7 @@ You can build the tutorial yourself if you wish.
 
 ## Install Prerequisites
 
-```
+```bash
 pip install sphinx
 pip install sphinx-rtd-theme
 ```
@@ -15,13 +15,13 @@ pip install sphinx-rtd-theme
 
 Windows:
 
-```
+```bash
 ./make html
 ```
 
 Linux:
 
-```
+```bash
 make html
 ```
 
