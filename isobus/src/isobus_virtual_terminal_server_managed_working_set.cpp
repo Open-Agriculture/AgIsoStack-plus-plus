@@ -182,8 +182,8 @@ namespace isobus
 		bool retVal = false;
 
 		if ((nullptr != objectToAdd) &&
-		      (!get_object_id_exists(objectToAdd->get_id())) ||
-		    (objectToAdd->get_object_type() == vtObjectTree[objectToAdd->get_id()]->get_object_type()))
+		    ((!get_object_id_exists(objectToAdd->get_id())) ||
+		     (objectToAdd->get_object_type() == vtObjectTree[objectToAdd->get_id()]->get_object_type())))
 		{
 			vtObjectTree[objectToAdd->get_id()] = objectToAdd;
 			retVal = true;
@@ -3230,119 +3230,125 @@ namespace isobus
 				break;
 			}
 
-		if (!retVal)
-		{
-			set_object_pool_faulting_object_id(decodedID);
-		}
-	}
-	return retVal;
-}
-
-std::shared_ptr<VTObject> VirtualTerminalServerManagedWorkingSet::get_object_by_id(std::uint16_t objectID)
-{
-	return vtObjectTree[objectID];
-}
-
-std::shared_ptr<VTObject> VirtualTerminalServerManagedWorkingSet::get_working_set_object()
-{
-	return get_object_by_id(workingSetID);
-}
-
-bool VirtualTerminalServerManagedWorkingSet::get_object_id_exists(std::uint16_t objectID)
-{
-	bool retVal;
-
-	if (vtObjectTree.find(objectID) == vtObjectTree.end())
-	{
-		retVal = false;
-	}
-	else
-	{
-		retVal = (nullptr != vtObjectTree[objectID]);
-	}
-	return retVal;
-}
-
-void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
-{
-	const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
-	processingState = value;
-}
-
-void VirtualTerminalServerManagedWorkingSet::set_object_pool_faulting_object_id(std::uint16_t value)
-{
-	const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
-	faultingObjectID = value;
-}
-
-EventID VirtualTerminalServerManagedWorkingSet::get_event_from_byte(std::uint8_t eventByte)
-{
-	switch (eventByte)
-	{
-		case static_cast<std::uint8_t>(EventID::OnActivate):
-		case static_cast<std::uint8_t>(EventID::OnDeactivate):
-		case static_cast<std::uint8_t>(EventID::OnShow):
-		case static_cast<std::uint8_t>(EventID::OnHide):
-		case static_cast<std::uint8_t>(EventID::OnEnable):
-		case static_cast<std::uint8_t>(EventID::OnDisable):
-		case static_cast<std::uint8_t>(EventID::OnChangeActiveMask):
-		case static_cast<std::uint8_t>(EventID::OnChangeSoftKeyMask):
-		case static_cast<std::uint8_t>(EventID::OnChangeAttribute):
-		case static_cast<std::uint8_t>(EventID::OnChangeBackgroundColour):
-		case static_cast<std::uint8_t>(EventID::ChangeFontAttributes):
-		case static_cast<std::uint8_t>(EventID::ChangeLineAttributes):
-		case static_cast<std::uint8_t>(EventID::ChangeFillAttributes):
-		case static_cast<std::uint8_t>(EventID::ChangeChildLocation):
-		case static_cast<std::uint8_t>(EventID::OnChangeSize):
-		case static_cast<std::uint8_t>(EventID::OnChangeValue):
-		case static_cast<std::uint8_t>(EventID::OnChangePriority):
-		case static_cast<std::uint8_t>(EventID::OnChangeEndpoint):
-		case static_cast<std::uint8_t>(EventID::OnInputFieldSelection):
-		case static_cast<std::uint8_t>(EventID::OnInputFieldDeselection):
-		case static_cast<std::uint8_t>(EventID::OnESC):
-		case static_cast<std::uint8_t>(EventID::OnEntryOfAValue):
-		case static_cast<std::uint8_t>(EventID::OnEntryOfANewValue):
-		case static_cast<std::uint8_t>(EventID::OnKeyPress):
-		case static_cast<std::uint8_t>(EventID::OnKeyRelease):
-		case static_cast<std::uint8_t>(EventID::OnChangeChildPosition):
-		case static_cast<std::uint8_t>(EventID::OnPointingEventPress):
-		case static_cast<std::uint8_t>(EventID::OnPointingEventRelease):
-		{
-			return static_cast<EventID>(eventByte);
-		}
-		break;
-
-		default:
-		{
-			return EventID::Reserved;
-		}
-		break;
-	}
-}
-
-void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
-{
-	if (0 != iopFilesRawData.size())
-	{
-		bool lSuccess = true;
-
-		set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
-		CANStackLogger::info("[WS]: Beginning parsing of object pool. This pool has " +
-		                     isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
-		                     " IOP components.");
-		for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
-		{
-			if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
+			if (!retVal)
 			{
-				lSuccess = false;
-				break;
+				set_object_pool_faulting_object_id(decodedID);
 			}
 		}
+		return retVal;
+	}
 
-		if (lSuccess)
+	std::shared_ptr<VTObject> VirtualTerminalServerManagedWorkingSet::get_object_by_id(std::uint16_t objectID)
+	{
+		return vtObjectTree[objectID];
+	}
+
+	std::shared_ptr<VTObject> VirtualTerminalServerManagedWorkingSet::get_working_set_object()
+	{
+		return get_object_by_id(workingSetID);
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::get_object_id_exists(std::uint16_t objectID)
+	{
+		bool retVal;
+
+		if (vtObjectTree.find(objectID) == vtObjectTree.end())
 		{
-			CANStackLogger::info("[WS]: Object pool successfully parsed.");
-			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Success);
+			retVal = false;
+		}
+		else
+		{
+			retVal = (nullptr != vtObjectTree[objectID]);
+		}
+		return retVal;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
+	{
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		processingState = value;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_pool_faulting_object_id(std::uint16_t value)
+	{
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		faultingObjectID = value;
+	}
+
+	EventID VirtualTerminalServerManagedWorkingSet::get_event_from_byte(std::uint8_t eventByte)
+	{
+		switch (eventByte)
+		{
+			case static_cast<std::uint8_t>(EventID::OnActivate):
+			case static_cast<std::uint8_t>(EventID::OnDeactivate):
+			case static_cast<std::uint8_t>(EventID::OnShow):
+			case static_cast<std::uint8_t>(EventID::OnHide):
+			case static_cast<std::uint8_t>(EventID::OnEnable):
+			case static_cast<std::uint8_t>(EventID::OnDisable):
+			case static_cast<std::uint8_t>(EventID::OnChangeActiveMask):
+			case static_cast<std::uint8_t>(EventID::OnChangeSoftKeyMask):
+			case static_cast<std::uint8_t>(EventID::OnChangeAttribute):
+			case static_cast<std::uint8_t>(EventID::OnChangeBackgroundColour):
+			case static_cast<std::uint8_t>(EventID::ChangeFontAttributes):
+			case static_cast<std::uint8_t>(EventID::ChangeLineAttributes):
+			case static_cast<std::uint8_t>(EventID::ChangeFillAttributes):
+			case static_cast<std::uint8_t>(EventID::ChangeChildLocation):
+			case static_cast<std::uint8_t>(EventID::OnChangeSize):
+			case static_cast<std::uint8_t>(EventID::OnChangeValue):
+			case static_cast<std::uint8_t>(EventID::OnChangePriority):
+			case static_cast<std::uint8_t>(EventID::OnChangeEndpoint):
+			case static_cast<std::uint8_t>(EventID::OnInputFieldSelection):
+			case static_cast<std::uint8_t>(EventID::OnInputFieldDeselection):
+			case static_cast<std::uint8_t>(EventID::OnESC):
+			case static_cast<std::uint8_t>(EventID::OnEntryOfAValue):
+			case static_cast<std::uint8_t>(EventID::OnEntryOfANewValue):
+			case static_cast<std::uint8_t>(EventID::OnKeyPress):
+			case static_cast<std::uint8_t>(EventID::OnKeyRelease):
+			case static_cast<std::uint8_t>(EventID::OnChangeChildPosition):
+			case static_cast<std::uint8_t>(EventID::OnPointingEventPress):
+			case static_cast<std::uint8_t>(EventID::OnPointingEventRelease):
+			{
+				return static_cast<EventID>(eventByte);
+			}
+			break;
+
+			default:
+			{
+				return EventID::Reserved;
+			}
+			break;
+		}
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
+	{
+		if (0 != iopFilesRawData.size())
+		{
+			bool lSuccess = true;
+
+			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
+			CANStackLogger::info("[WS]: Beginning parsing of object pool. This pool has " +
+			                     isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
+			                     " IOP components.");
+			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
+			{
+				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
+				{
+					lSuccess = false;
+					break;
+				}
+			}
+
+			if (lSuccess)
+			{
+				CANStackLogger::info("[WS]: Object pool successfully parsed.");
+				set_object_pool_processing_state(ObjectPoolProcessingThreadState::Success);
+			}
+			else
+			{
+				CANStackLogger::error("[WS]: Object pool failed to be parsed.");
+				set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
+			}
 		}
 		else
 		{
@@ -3350,11 +3356,5 @@ void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
 		}
 	}
-	else
-	{
-		CANStackLogger::error("[WS]: Object pool failed to be parsed.");
-		set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
-	}
-}
 
 } // namespace isobus
