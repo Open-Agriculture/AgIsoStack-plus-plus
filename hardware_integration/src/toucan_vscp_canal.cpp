@@ -19,27 +19,7 @@ namespace isobus
 {
 	TouCANPlugin::TouCANPlugin(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate)
 	{
-		std::string deviceConfigString;
-		std::string serialString;
-		constexpr std::uint32_t MAX_SERIAL_LENGTH = 999999999;
-		constexpr std::size_t SERIAL_NUMBER_CHARACTER_REQUIREMENT = 8;
-
-		if (serialNumber > MAX_SERIAL_LENGTH)
-		{
-			isobus::CANStackLogger::critical("[TouCAN]: Invalid serial number. Must be 8 digits max.");
-			serialNumber = 0;
-		}
-		serialString = isobus::to_string(serialNumber);
-
-		if (SERIAL_NUMBER_CHARACTER_REQUIREMENT > serialString.length())
-		{
-			serialString.insert(0, SERIAL_NUMBER_CHARACTER_REQUIREMENT - serialString.length(), '0');
-		}
-
-		deviceConfigString += isobus::to_string(deviceID) + ';';
-		deviceConfigString += serialString + ';';
-		deviceConfigString += isobus::to_string(baudRate) + ';';
-		name = deviceConfigString;
+		generate_device_name(deviceID, serialNumber, baudRate);
 	}
 
 	TouCANPlugin::TouCANPlugin(std::string deviceName) :
@@ -112,5 +92,42 @@ namespace isobus
 		result = CanalSend(handle, &msgCanMessage);
 
 		return (CANAL_ERROR_SUCCESS == result);
+	}
+
+	bool TouCANPlugin::reconfigure(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate)
+	{
+		bool retVal = false;
+
+		if (!get_is_valid())
+		{
+			generate_device_name(deviceID, serialNumber, baudRate);
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	void TouCANPlugin::generate_device_name(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate)
+	{
+		std::string deviceConfigString;
+		std::string serialString;
+		constexpr std::uint32_t MAX_SERIAL_LENGTH = 999999999;
+		constexpr std::size_t SERIAL_NUMBER_CHARACTER_REQUIREMENT = 8;
+
+		if (serialNumber > MAX_SERIAL_LENGTH)
+		{
+			isobus::CANStackLogger::critical("[TouCAN]: Invalid serial number. Must be 8 digits max.");
+			serialNumber = 0;
+		}
+		serialString = isobus::to_string(serialNumber);
+
+		if (SERIAL_NUMBER_CHARACTER_REQUIREMENT > serialString.length())
+		{
+			serialString.insert(0, SERIAL_NUMBER_CHARACTER_REQUIREMENT - serialString.length(), '0');
+		}
+
+		deviceConfigString += isobus::to_string(deviceID) + ';';
+		deviceConfigString += serialString + ';';
+		deviceConfigString += isobus::to_string(baudRate) + ';';
+		name = deviceConfigString;
 	}
 }
