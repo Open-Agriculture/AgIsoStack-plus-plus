@@ -63,7 +63,20 @@ namespace isobus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
+		/// @brief Changes previously set configuration parameters. Only works if the device is not open.
+		/// @param[in] deviceID The id to use for this device
+		/// @param[in] serialNumber The serial number of the CAN adapter to connect with
+		/// @param[in] baudRate The baud rate in thousands (250K baud would mean you need to pass in 250)
+		/// @returns True if the configuration was changed, otherwise false (if the device is open false will be returned)
+		bool reconfigure(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate = 250);
+
 	private:
+		/// @brief Generates a device name string for the TouCAN device
+		/// @param[in] deviceID The id to use for this device
+		/// @param[in] serialNumber The serial number of the CAN adapter to connect with
+		/// @param[in] baudRate The baud rate in thousands (250K baud would mean you need to pass in 250)
+		void generate_device_name(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate);
+
 		std::string name; ///< A configuration string that is used to connect to the hardware through the CANAL api
 		std::uint32_t handle = 0; ///< The handle that the driver returns to us for the open hardware
 		std::uint32_t openResult = CANAL_ERROR_NOT_OPEN; ///< Stores the result of the call to begin CAN communication. Used for is_valid check later.
