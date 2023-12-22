@@ -216,4 +216,16 @@ namespace isobus
 		}
 		return retVal;
 	}
+
+	bool SocketCANInterface::set_name(const std::string &newName)
+	{
+		bool retVal = false;
+
+		if (!get_is_valid())
+		{
+			name = newName;
+			retVal = true;
+		}
+		return retVal;
+	}
 }

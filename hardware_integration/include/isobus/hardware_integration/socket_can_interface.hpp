@@ -59,9 +59,14 @@ namespace isobus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
+		/// @brief Changes the name of the device to use, which only works if the device is not open
+		/// @param[in] newName The new name for the device (such as "can0" or "vcan0")
+		/// @returns `true` if the name was changed, otherwise `false` (if the device is open this will return false)
+		bool set_name(const std::string &newName);
+
 	private:
 		struct sockaddr_can *pCANDevice; ///< The structure for CAN sockets
-		const std::string name; ///< The device name
+		std::string name; ///< The device name
 		int fileDescriptor; ///< File descriptor for the socket
 	};
 }
