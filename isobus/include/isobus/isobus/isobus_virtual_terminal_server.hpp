@@ -114,7 +114,8 @@ namespace isobus
 		/// @param[in] object The object to check for a macro (or macros) to execute
 		/// @param[in] macroEvent The event ID of the macro(s) to execute
 		/// @param[in] targetObjectType The type of object that the macro is defined for. Used to validate the object
-		void processMacro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset);
+		/// @param[in] workingset The working set to execute the macro on
+		void process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset);
 
 		// ----------- Mandatory Functions you must implement -----------------------
 		virtual bool get_is_enough_memory(std::uint32_t requestedMemory) const = 0;
