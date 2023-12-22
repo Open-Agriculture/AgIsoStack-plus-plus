@@ -1642,6 +1642,20 @@ namespace isobus
 								}
 								break;
 
+								case Function::ButtonActivationMessage:
+								case Function::SoftKeyActivationMessage:
+								case Function::PointingEventMessage:
+								case Function::VTSelectInputObjectMessage:
+								case Function::VTESCMessage:
+								case Function::VTChangeNumericValueMessage:
+								case Function::VTChangeActiveMaskMessage:
+								case Function::VTChangeStringValueMessage:
+								case Function::VTControlAudioSignalTerminationMessage:
+								{
+									// Todo, do something with the responses
+								}
+								break;
+
 								default:
 								{
 									CANStackLogger::error("[VT Server]: Unimplemented Command %u", data[0]);
