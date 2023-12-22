@@ -171,11 +171,11 @@ namespace isobus
 				CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
 				retVal = true;
 
-				for (std::uint16_t j = 0; j < macro->get_number_of_commands(); j++)
+				for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
 				{
 					std::array<std::uint8_t, 8> commandPacket = { 0 };
 
-					if (macro->get_command_packet(static_cast<std::uint8_t>(j), commandPacket))
+					if (macro->get_command_packet(j, commandPacket))
 					{
 						message.set_data(commandPacket.data(), commandPacket.size());
 						CANStackLogger::debug("[VT Server]: Executing macro command %u", j);
@@ -698,7 +698,7 @@ namespace isobus
 										if (logSuccess)
 										{
 											CANStackLogger::debug("[VT Server]: Client %u change numeric value command: change object ID %u to be %u", cf->get_control_function()->get_address(), objectId, value);
-											parentServer->processMacro(lTargetObject, isobus::EventID::OnChangeValue, lTargetObject->get_object_type(), cf);
+											parentServer->process_macro(lTargetObject, isobus::EventID::OnChangeValue, lTargetObject->get_object_type(), cf);
 										}
 									}
 									else
@@ -723,12 +723,12 @@ namespace isobus
 										if (0 == data[3])
 										{
 											CANStackLogger::debug("[VT Server]: Client %u hide object command %u", cf->get_control_function()->get_address(), objectId);
-											parentServer->processMacro(targetObject, EventID::OnHide, targetObject->get_object_type(), cf);
+											parentServer->process_macro(targetObject, EventID::OnHide, targetObject->get_object_type(), cf);
 										}
 										else
 										{
 											CANStackLogger::debug("[VT Server]: Client %u show object command %u", cf->get_control_function()->get_address(), objectId);
-											parentServer->processMacro(targetObject, EventID::OnShow, targetObject->get_object_type(), cf);
+											parentServer->process_macro(targetObject, EventID::OnShow, targetObject->get_object_type(), cf);
 										}
 									}
 									else
@@ -831,7 +831,7 @@ namespace isobus
 											{
 												parentServer->send_change_child_location_response(parentObjectId, objectID, 0, cf->get_control_function());
 												CANStackLogger::debug("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", cf->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
-												parentServer->processMacro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), cf);
+												parentServer->process_macro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), cf);
 											}
 											else
 											{
@@ -1067,7 +1067,7 @@ namespace isobus
 														{
 															CANStackLogger::debug("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
 															parentServer->send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
-															parentServer->processMacro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), cf);
+															parentServer->process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), cf);
 														}
 														else
 														{
@@ -1120,7 +1120,7 @@ namespace isobus
 											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
 											CANStackLogger::debug("[VT Server]: Client %u changed object %u attribute %u to %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
 											parentServer->onRepaintEventDispatcher.call(cf);
-											parentServer->processMacro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), cf);
+											parentServer->process_macro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), cf);
 										}
 										else
 										{
@@ -1198,7 +1198,7 @@ namespace isobus
 										if (success)
 										{
 											parentServer->send_change_size_response(objectID, 0, message.get_source_control_function());
-											parentServer->processMacro(targetObject, EventID::OnChangeSize, targetObject->get_object_type(), cf);
+											parentServer->process_macro(targetObject, EventID::OnChangeSize, targetObject->get_object_type(), cf);
 										}
 									}
 									else
@@ -1342,7 +1342,7 @@ namespace isobus
 													{
 														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
 														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
-														parentServer->processMacro(targetObject, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, cf);
+														parentServer->process_macro(targetObject, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, cf);
 													}
 													else
 													{
@@ -1358,7 +1358,7 @@ namespace isobus
 													{
 														CANStackLogger::debug("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", cf->get_control_function()->get_address(), objectID, newObjectID);
 														parentServer->send_change_soft_key_mask_response(objectID, newObjectID, 0, message.get_source_control_function());
-														parentServer->processMacro(targetObject, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, cf);
+														parentServer->process_macro(targetObject, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, cf);
 													}
 													else
 													{
@@ -1418,7 +1418,7 @@ namespace isobus
 												targetObject->set_background_color(backgroundColour);
 												CANStackLogger::debug("[VT Server]: Client %u change background colour command: colour = %u", cf->get_control_function()->get_address(), objectID, backgroundColour);
 												parentServer->send_change_background_colour_response(objectID, 0, backgroundColour, message.get_source_control_function());
-												parentServer->processMacro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), cf);
+												parentServer->process_macro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), cf);
 											}
 											break;
 
@@ -1452,7 +1452,7 @@ namespace isobus
 											{
 												parentServer->send_change_priority_response(objectID, 0, newPriority, message.get_source_control_function());
 												CANStackLogger::debug("[VT Server]: Client %u change priority command: New Priority %u", cf->get_control_function()->get_address(), newPriority);
-												parentServer->processMacro(targetObject, EventID::OnChangePriority, VirtualTerminalObjectType::AlarmMask, cf);
+												parentServer->process_macro(targetObject, EventID::OnChangePriority, VirtualTerminalObjectType::AlarmMask, cf);
 											}
 											else
 											{
@@ -1495,7 +1495,7 @@ namespace isobus
 														CANStackLogger::debug("[VT Server]: Client %u select input object %u and open for input", cf->get_control_function()->get_address(), objectID);
 														parentServer->onFocusObjectEventDispatcher.call(cf, objectID, true);
 														parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-														parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+														parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
 													}
 													else if (0xFF == data[3])
 													{
@@ -1504,7 +1504,7 @@ namespace isobus
 														CANStackLogger::debug("[VT Server]: Client %u select input object %u", cf->get_control_function()->get_address(), objectID);
 														parentServer->onFocusObjectEventDispatcher.call(cf, objectID, false);
 														parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-														parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+														parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
 													}
 													else
 													{
@@ -1531,7 +1531,7 @@ namespace isobus
 													CANStackLogger::debug("[VT Server]: Client %u select input object %u and open for input", cf->get_control_function()->get_address(), objectID);
 													parentServer->onFocusObjectEventDispatcher.call(cf, objectID, true);
 													parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-													parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+													parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
 												}
 												else if (0xFF == data[3])
 												{
@@ -1540,7 +1540,7 @@ namespace isobus
 													CANStackLogger::debug("[VT Server]: Client %u select input object %u", cf->get_control_function()->get_address(), objectID);
 													parentServer->onFocusObjectEventDispatcher.call(cf, objectID, false);
 													parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-													parentServer->processMacro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
+													parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
 												}
 												else
 												{
@@ -2090,7 +2090,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalServer::processMacro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset)
+	void VirtualTerminalServer::process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset)
 	{
 		if (nullptr != object)
 		{
@@ -2099,30 +2099,9 @@ namespace isobus
 				for (std::uint8_t i = 0; i < object->get_number_macros(); i++)
 				{
 					auto macroMetadata = object->get_macro(i);
-					auto macro = std::static_pointer_cast<isobus::Macro>(workingset->get_object_by_id(macroMetadata.macroID));
-
-					if ((nullptr != macro) &&
-					    (macro->get_object_type() == isobus::VirtualTerminalObjectType::Macro) &&
-					    (macroMetadata.event == macroEvent) &&
-					    (macro->get_are_command_packets_valid()))
+					if (macroMetadata.event == macroEvent)
 					{
-						isobus::CANMessage message(workingset->get_control_function()->get_can_port());
-						message.set_destination_control_function(get_internal_control_function());
-						message.set_source_control_function(workingset->get_control_function());
-						message.set_identifier(isobus::CANIdentifier(0x14E70000));
-						CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
-
-						for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
-						{
-							std::array<std::uint8_t, 8> commandPacket = { 0 };
-
-							if (macro->get_command_packet(j, commandPacket))
-							{
-								message.set_data(commandPacket.data(), commandPacket.size());
-								CANStackLogger::debug("[VT Server]: Executing macro command %u", j);
-								execute_macro_as_rx_message(message);
-							}
-						}
+						execute_macro(macroMetadata.macroID, workingset);
 					}
 				}
 			}
