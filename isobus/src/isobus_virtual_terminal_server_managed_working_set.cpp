@@ -209,7 +209,9 @@ namespace isobus
 			{
 				case VirtualTerminalObjectType::WorkingSet:
 				{
-					if (NULL_OBJECT_ID == workingSetID)
+					if ((NULL_OBJECT_ID == workingSetID) ||
+					    ((nullptr != get_object_by_id(workingSetID)) &&
+					     (get_object_by_id(workingSetID)->get_id() == decodedID)))
 					{
 						workingSetID = decodedID;
 						auto tempObject = std::make_shared<WorkingSet>();
