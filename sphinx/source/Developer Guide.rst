@@ -64,6 +64,7 @@ A default CAN driver plug-in will be selected for you based on your OS, but when
 - :code:`-DCAN_DRIVER=MCP2515` for the MCP2515 CAN controller
 - :code:`-DCAN_DRIVER=WindowsInnoMakerUSB2CAN` for the InnoMaker USB2CAN adapter (Windows)
 - :code:`-DCAN_DRIVER=TouCAN` for the Rusoku TouCAN (Windows)
+- :code:`-DCAN_DRIVER=SYS_TEC` for a SYS TEC sysWORXX USB CAN adapter (Windows)
 
 Or specify multiple using a semicolon separated list: :code:`-DCAN_DRIVER="<driver1>;<driver2>"`
 

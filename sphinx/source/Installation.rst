@@ -102,7 +102,7 @@ If you don't want to use git submodules, you can use CMake's FetchContent module
    FetchContent_Declare(
       AgIsoStack
       GIT_REPOSITORY https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
-      GIT_TAG        main
+      GIT_TAG        main # Replace this with tag or commit hash for better stability
    )
    FetchContent_MakeAvailable(AgIsoStack)
    
@@ -110,6 +110,9 @@ If you don't want to use git submodules, you can use CMake's FetchContent module
    target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 Now when you configure your CMake cache, the library will be pulled from GitHub and automatically made available for your project.
+
+We recommend using a specific tag or commit hash instead of a branch, as this will provide better stability for your project.
+Plus, it provides faster configuration times, as CMake won't need to check for updates every time you configure your project.
 
 Precompiled
 ^^^^^^^^^^^
