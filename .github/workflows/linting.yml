@@ -41,6 +41,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Generate Doxygen Documentation
-        uses: mattnotmitt/doxygen-action@1.9.5
+        uses: mattnotmitt/doxygen-action@edge
         with:
           doxyfile-path: 'doxyfile'
