@@ -405,6 +405,8 @@ Here is the code we'll need to add:
 
 This will send our 8 byte message of all zeros to the global address, using the PGN for PROPA, (0xEF00). It will also wait a little bit before exiting so that we can be sure the message makes it to the bus. The wait time is arbitrary, and you will probably not need to wait in a normal program, but since ours will exit immediately without it, we want to make sure to give the CAN stack some time to process the message.
 
+.. _complete_cmakelists:
+
 Compiling The Program (Using CMake)
 ------------------------------------
 
@@ -419,7 +421,7 @@ To get everything compiling into a program using CMake, let's add a CMakeLists.t
 
 Add the following to a new file called CMakeLists.txt:
 
-.. code-block:: text
+.. code-block:: cmake
 
    cmake_minimum_required(VERSION 3.16)
 
@@ -443,13 +445,13 @@ Save and close the file.
 
 Configure the target using CMake:
 
-.. code-block:: text
+.. code-block:: bash
 
    cmake -S . -B build
 
 Then compile your program!
 
-.. code-block:: text
+.. code-block:: bash
 
    cmake --build build
 
