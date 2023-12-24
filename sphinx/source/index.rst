@@ -9,8 +9,10 @@
    :maxdepth: 2
    :hidden:
 
+   self
    Concepts
    Installation
+   Developer Guide
    Tutorials
    API Documentation
    Releases
@@ -31,12 +33,13 @@ This getting started guide will walk you through getting the CAN stack installed
 Table of Contents:
 -------------------
 
-* :doc:`Concepts <Concepts>`
-* :doc:`Installation <Installation>`
-* :doc:`Tutorials <Tutorials>`
-* :doc:`API Documentation <API Documentation>`
-* :doc:`License <License>`
-* :doc:`FAQ <FAQ>`
+* :doc:`Concepts`
+* :doc:`Installation`
+* :doc:`Developer Guide`
+* :doc:`Tutorials`
+* :doc:`API Documentation`
+* :doc:`License`
+* :doc:`FAQ`
 
 
 `Visit us on GitHub <https://github.com/Open-Agriculture/AgIsoStack-plus-plus>`_

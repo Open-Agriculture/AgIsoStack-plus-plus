@@ -3,12 +3,14 @@
 Installation
 ============
 
+This guide will walk you through the steps to get the AgIsoStack++ library integrated into your project.
+
 .. contents:: Contents
    :depth: 2
    :local:
 
 Supported Platforms
---------------------
+-------------------
 
 We officially support building AgIsoStack++ from source on the following platforms:
    * Ubuntu Linux (Non-WSL)
@@ -26,55 +28,90 @@ We officially support building AgIsoStack++ from source on the following platfor
 
 	WSL is not supported due to the WSL kernel not supporting socket CAN by default. It may be possible to recompile the WSL kernel to support socket CAN, but we do not officially support that use case.
 
-	Currently, building from source is the only supported integration method.
+Currently, building from source is the only supported integration method.
 
-Environment Setup (Linux)
---------------------------
+.. _installation-environment:
 
-First, lets prepare the dependencies we'll need to compile the CAN stack. These are pretty basic, and you may have them already.
+Environment Setup
+-----------------
+
+First, lets prepare the dependencies we'll need to download and compile the stack. These are pretty basic, and you may have them already.
+
+Linux:
 
 .. code-block:: bash
 
    sudo apt install build-essential cmake git
 
-Downloading AgIsoStack++
--------------------------
+Windows:
 
-In your project that you want to add the CAN stack to, add the CAN stack as a submodule.
+   * Install `Build Tools for Visual Studio <https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022>`_
+   * Install `CMake <https://cmake.org/download/>`_
+   * Install `Git <https://git-scm.com/download/win>`_
+
+
+Integration
+-----------
+
+There are multiple ways to integrate the library into your project. 
+The easiest way is to use git submodules in combination with CMake.
+
+Git Submodules
+^^^^^^^^^^^^^^
+
+In directory of the `CMakeLists.txt` that you want to integrate the library into, run the following commands:
 
 .. code-block:: bash
 
    git submodule add https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
    git submodule update --init --recursive
 
-This will place the CAN stack in a folder within your project called 'AgIsoStack-plus-plus'.
+This will place the stack in a folder within your project called 'AgIsoStack-plus-plus'.
 
-Building the CAN Stack
------------------------
+It is recommended to use the ALIAS targets exposed, which all follow the name `isobus::<target_name>`.
 
-There are a couple options for the next step.
+.. code-block:: cmake
 
-CMake:
-^^^^^^
+   find_package(Threads)
 
-If your project is already using CMake to build your project, or this is a new project, the suggested way to get the library compiling is to add the 'AgIsoStack-plus-plus' folder we just created to your CMake as a subdirectory.
+   add_subdirectory(<path to this submodule>)
 
-.. code-block:: text
+   target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
-   set(THREADS_PREFER_PTHREAD_FLAG ON)
-   find_package(Threads REQUIRED)
 
-   add_subdirectory("AgIsoStack-plus-plus")
+A full example CMakeLists.txt file can be found at the end of the first tutorial: :doc:`The ISOBUS Hello World <Tutorials/The ISOBUS Hello World>`.
 
-   ...
 
-   target_link_libraries(<your target> PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
+Finally, every time you want to update the stack to the latest version, run the following commands:
 
-Using CMake has a lot of advantages, such as if the library is updated with additional files, or the file names change, it will not break your compilation.
+.. code-block:: bash
+
+   git submodule update --remote --merge
+
+This will pull the latest version of the stack into your project.
+
+CMake FetchContent
+^^^^^^^^^^^^^^^^^^
+
+If you don't want to use git submodules, you can use CMake's FetchContent module to download the stack.
+
+.. code-block:: cmake
+
+   include(FetchContent)
+
+   FetchContent_Declare(
+      AgIsoStack
+      GIT_REPOSITORY https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
+      GIT_TAG        main
+   )
+   FetchContent_MakeAvailable(AgIsoStack)
    
-Non-CMake:
-^^^^^^^^^^
+   # Somewhere later in your CMakeLists.txt
+   target_link_libraries(<your executable name> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
-If you are not using CMake, just make sure to add all the files from the 'AgIsoStack-plus-plus/isobus' folder, the 'AgIsoStack-plus-plus/hardware_integration' folder, and the 'AgIsoStack-plus-plus/utility' folder to your project so they all get compiled. 
+Now when you configure your CMake cache, the library will be pulled from GitHub and automatically made available for your project.
 
-You'll want to make sure the 'AgIsoStack-plus-plus/isobus/include/isobus/isobus' folder is part of your include path as well as 'AgIsoStack-plus-plus/utility/include/isobus/utility' and 'AgIsoStack-plus-plus/hardware_integration/include/isobus/hardware_integration'.
+Precompiled
+^^^^^^^^^^^
+
+We do not officially distribute this library in binary form (DLL files, for example).
