@@ -64,6 +64,11 @@ namespace isobus
 		/// @returns `true` if the driver was removed from the channel, otherwise `false`
 		static bool unassign_can_channel_frame_handler(std::uint8_t channelIndex);
 
+		/// @brief Gets the CAN driver assigned to a channel
+		/// @param[in] channelIndex The channel to get the driver from
+		/// @returns The driver assigned to the channel, or `nullptr` if the channel is not assigned
+		static std::shared_ptr<CANHardwarePlugin> get_assigned_can_channel_frame_handler(std::uint8_t channelIndex);
+
 		/// @brief Starts the threads for managing the CAN stack and CAN drivers
 		/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
 		static bool start();
