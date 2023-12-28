@@ -70,6 +70,10 @@ namespace isobus
 		/// @returns True if the configuration was changed, otherwise false (if the device is open false will be returned)
 		bool reconfigure(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate = 250);
 
+		/// @brief Returns the currently configured serial number of the device which will be used to connect to the hardware
+		/// @returns The currently configured serial number of the device
+		std::uint32_t get_serial_number() const;
+
 	private:
 		/// @brief Generates a device name string for the TouCAN device
 		/// @param[in] deviceID The id to use for this device
@@ -80,6 +84,7 @@ namespace isobus
 		std::string name; ///< A configuration string that is used to connect to the hardware through the CANAL api
 		std::uint32_t handle = 0; ///< The handle that the driver returns to us for the open hardware
 		std::uint32_t openResult = CANAL_ERROR_NOT_OPEN; ///< Stores the result of the call to begin CAN communication. Used for is_valid check later.
+		std::uint32_t currentlyConfiguredSerialNumber = 0; ///< The serial number of the device that is being used
 	};
 }
 #endif // TOUCAN_VSCP_CANAL_PLUGIN_HPP

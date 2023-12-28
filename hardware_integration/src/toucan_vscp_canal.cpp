@@ -106,6 +106,11 @@ namespace isobus
 		return retVal;
 	}
 
+	std::uint32_t TouCANPlugin::get_serial_number() const
+	{
+		return currentlyConfiguredSerialNumber;
+	}
+
 	void TouCANPlugin::generate_device_name(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate)
 	{
 		std::string deviceConfigString;
@@ -118,6 +123,7 @@ namespace isobus
 			isobus::CANStackLogger::critical("[TouCAN]: Invalid serial number. Must be 8 digits max.");
 			serialNumber = 0;
 		}
+		currentlyConfiguredSerialNumber = serialNumber;
 		serialString = isobus::to_string(serialNumber);
 
 		if (SERIAL_NUMBER_CHARACTER_REQUIREMENT > serialString.length())
