@@ -126,6 +126,17 @@ namespace isobus
 		return true;
 	}
 
+	std::shared_ptr<CANHardwarePlugin> CANHardwareInterface::get_assigned_can_channel_frame_handler(std::uint8_t channelIndex)
+	{
+		std::shared_ptr<CANHardwarePlugin> retVal;
+
+		if (channelIndex < hardwareChannels.size())
+		{
+			retVal = hardwareChannels.at(channelIndex)->frameHandler;
+		}
+		return retVal;
+	}
+
 	bool CANHardwareInterface::start()
 	{
 		std::lock_guard<std::mutex> lock(hardwareChannelsMutex);
