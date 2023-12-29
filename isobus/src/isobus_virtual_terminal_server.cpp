@@ -173,7 +173,7 @@ namespace isobus
 
 				for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
 				{
-					std::array<std::uint8_t, 8> commandPacket = { 0 };
+					std::vector<std::uint8_t> commandPacket;
 
 					if (macro->get_command_packet(j, commandPacket))
 					{
