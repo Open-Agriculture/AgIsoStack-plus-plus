@@ -7568,7 +7568,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool Macro::add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command)
+	bool Macro::add_command_packet(const std::vector<std::uint8_t> &command)
 	{
 		bool retVal = false;
 
@@ -7585,13 +7585,13 @@ namespace isobus
 		return static_cast<std::uint8_t>(commandPackets.size());
 	}
 
-	bool Macro::get_command_packet(std::uint8_t index, std::array<std::uint8_t, CAN_DATA_LENGTH> &command)
+	bool Macro::get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command)
 	{
 		bool retVal = false;
 
 		if (index < commandPackets.size())
 		{
-			std::copy(std::begin(commandPackets.at(index)), std::end(commandPackets.at(index)), std::begin(command));
+			command = commandPackets.at(index);
 			retVal = true;
 		}
 		return retVal;
@@ -7626,7 +7626,7 @@ namespace isobus
 
 				for (const auto &allowedCommand : ALLOWED_COMMANDS_LOOKUP_TABLE)
 				{
-					if (command.at(0) == allowedCommand)
+					if (!command.empty() && (command.at(0) == allowedCommand))
 					{
 						currentCommandAllowed = true;
 						break;

@@ -4137,18 +4137,18 @@ namespace isobus
 		/// ECU to VT commands that will be executed in order by this macro.
 		/// @param[in] command The command packet (CAN message data) to add
 		/// @returns true if the command was added to the macro, otherwise false (maybe the max number of commands has been hit)
-		bool add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command);
+		bool add_command_packet(const std::vector<std::uint8_t> &command);
 
 		/// @brief Returns the number of stored command packets inside this macro (max 255)
 		/// @returns The number of stored command packets inside this macro
 		std::uint8_t get_number_of_commands() const;
 
 		/// @brief Returns a command packet by index
-		/// @param[in] index The index of the packet to retreive
+		/// @param[in] index The index of the packet to retrieve
 		/// @param[out] command The returned command packet if the return value is true, otherwise the returned
 		/// command packet content is undefined.
 		/// @returns true if a valid command packet was returned, otherwise false (index out of range)
-		bool get_command_packet(std::uint8_t index, std::array<std::uint8_t, CAN_DATA_LENGTH> &command);
+		bool get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command);
 
 		/// @brief Deletes a command packet from the macro by index
 		/// @param[in] index The index of the packet to delete
@@ -4162,7 +4162,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
 		static const std::array<std::uint8_t, 28> ALLOWED_COMMANDS_LOOKUP_TABLE; ///< The list of all allowed commands in a table for easy lookup when validating macro content
-		std::vector<std::array<std::uint8_t, CAN_DATA_LENGTH>> commandPackets; ///< Macro command list
+		std::vector<std::vector<std::uint8_t>> commandPackets; ///< Macro command list
 	};
 
 	/// @brief Defines a colour map object. The Colour Map object, optionally available in VT version 4 and 5, and mandatory in VT version 6 and

@@ -2716,13 +2716,13 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, MacroTests)
 
 	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
 
-	const std::array<std::uint8_t, CAN_DATA_LENGTH> TEST_PACKET = { static_cast<std::uint8_t>(Macro::Command::ChangeSize), 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+	const std::vector<std::uint8_t> TEST_PACKET = { static_cast<std::uint8_t>(Macro::Command::ChangeSize), 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
 	macro.add_command_packet(TEST_PACKET);
 	EXPECT_EQ(1, macro.get_number_of_commands());
 
 	EXPECT_TRUE(macro.get_is_valid(objects));
 
-	std::array<std::uint8_t, CAN_DATA_LENGTH> returnedCommand = { 0 };
+	std::vector<std::uint8_t> returnedCommand;
 	macro.get_command_packet(0, returnedCommand);
 	EXPECT_EQ(returnedCommand, TEST_PACKET);
 
@@ -2730,7 +2730,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, MacroTests)
 	EXPECT_FALSE(macro.remove_command_packet(0));
 
 	// Add an invalid nonsense packet
-	std::array<std::uint8_t, CAN_DATA_LENGTH> nonsensePacket = { 0 };
+	std::vector<std::uint8_t> nonsensePacket;
 	macro.add_command_packet(nonsensePacket);
 	EXPECT_FALSE(macro.get_is_valid(objects));
 
