@@ -2882,6 +2882,7 @@ namespace isobus
 						tempObject->set_id(decodedID);
 
 						auto numberBytesToFollow = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
+						std::uint16_t numberBytesProcessed = 0;
 						iopLength -= 5;
 						iopData += 5;
 
@@ -2889,33 +2890,46 @@ namespace isobus
 						{
 							retVal = true;
 
-							for (std::uint16_t i = 0; i < (numberBytesToFollow / CAN_DATA_LENGTH); i++)
+							while (numberBytesProcessed < numberBytesToFollow)
 							{
-								retVal = tempObject->add_command_packet({
-								  iopData[0],
-								  iopData[1],
-								  iopData[2],
-								  iopData[3],
-								  iopData[4],
-								  iopData[5],
-								  iopData[6],
-								  iopData[7],
-								});
-
 								if (180 == iopData[0]) // Special case for change child position, which is 9 bytes.
 								{
+									retVal = tempObject->add_command_packet({
+									  iopData[0],
+									  iopData[1],
+									  iopData[2],
+									  iopData[3],
+									  iopData[4],
+									  iopData[5],
+									  iopData[6],
+									  iopData[7],
+									  iopData[8],
+									});
 									iopLength -= CAN_DATA_LENGTH + 1;
 									iopData += CAN_DATA_LENGTH + 1;
+									numberBytesProcessed += CAN_DATA_LENGTH + 1;
 								}
 								else
 								{
+									retVal = tempObject->add_command_packet({
+									  iopData[0],
+									  iopData[1],
+									  iopData[2],
+									  iopData[3],
+									  iopData[4],
+									  iopData[5],
+									  iopData[6],
+									  iopData[7],
+									});
 									iopLength -= CAN_DATA_LENGTH;
 									iopData += CAN_DATA_LENGTH;
+									numberBytesProcessed += CAN_DATA_LENGTH;
 								}
 
 								if (!retVal)
 								{
-									CANStackLogger::error("[WS]: Macro object %u cannot be parsed because there is not enough IOP data left", decodedID);
+									CANStackLogger::error("[WS]: Macro object %u cannot be parsed because a command packet could not be added.", decodedID);
+									break;
 								}
 							}
 
