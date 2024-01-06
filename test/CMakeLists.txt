@@ -59,6 +59,7 @@ set(TEST_SRC
     isobus_data_dictionary_tests.cpp
     can_message_tests.cpp
     heartbeat_tests.cpp
+    tc_server_tests.cpp
     helpers/control_function_helpers.cpp
     helpers/messaging_helpers.cpp)
 
