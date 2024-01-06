@@ -1,8 +1,8 @@
 .. ISO 11783 CAN Stack documentation master file
 
 .. image:: ../../docs/images/wideLogoTransparent.png
-  :width: 400
-  :alt: Alternative text
+   :width: 400
+   :alt: Alternative text
 
 .. toctree::
    :titlesonly:
@@ -14,7 +14,7 @@
    Installation
    Developer Guide
    Tutorials
-   API Documentation
+   api/index
    Releases
    License
    FAQ
@@ -37,11 +37,8 @@ Table of Contents:
 * :doc:`Installation`
 * :doc:`Developer Guide`
 * :doc:`Tutorials`
-* :doc:`API Documentation`
+* :doc:`api/index`
 * :doc:`License`
 * :doc:`FAQ`
 
-
 `Visit us on GitHub <https://github.com/Open-Agriculture/AgIsoStack-plus-plus>`_
-
-
