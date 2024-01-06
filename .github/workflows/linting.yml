@@ -24,6 +24,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: 3.11
+          cache: "pip"
       - name: Install lint tool
         run: |
           python -m pip install --upgrade pip
@@ -43,4 +44,4 @@ jobs:
       - name: Generate Doxygen Documentation
         uses: mattnotmitt/doxygen-action@edge
         with:
-          doxyfile-path: 'doxyfile'
+          doxyfile-path: "doxyfile"

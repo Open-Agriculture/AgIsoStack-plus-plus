@@ -26,6 +26,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: 3.8
+          cache: "pip"
       - name: install gcovr 5.0
         run: |
           pip install gcovr==5.0 # 5.1 is not supported
@@ -59,17 +60,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-            ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
+          ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
       - name: Compile
         run: |
-            mkdir build
-            cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-            cmake --build build --config ${{ env.BUILD_TYPE }}
+          mkdir build
+          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          cmake --build build --config ${{ env.BUILD_TYPE }}
       - name: Test
         run: |
-            cd build
-            ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
-        
+          cd build
+          ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
 
   mac_os_build:
     name: Mac OS Build, Test
@@ -81,10 +81,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
       - name: Compile
         run: |
-            mkdir build
-            cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-            cmake --build build --config ${{ env.BUILD_TYPE }}
+          mkdir build
+          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          cmake --build build --config ${{ env.BUILD_TYPE }}
       - name: Test
         run: |
-            cd build
-            ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
+          cd build
+          ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure

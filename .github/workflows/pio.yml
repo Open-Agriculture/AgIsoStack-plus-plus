@@ -20,7 +20,8 @@ jobs:
           key: ${{ runner.os }}-pio
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: "3.9"
+          cache: "pip"
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
       - name: Install AgIsoStack library in PlatformIO
