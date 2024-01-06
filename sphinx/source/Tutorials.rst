@@ -11,7 +11,6 @@ Tutorials
    Tutorials/Transport Layer
    Tutorials/Virtual Terminal Basics
    Tutorials/PGN Requests
-   Tutorials/Hardware Interface
    Tutorials/Debug Logging
    Tutorials/ISOBUS Shortcut Button
    Tutorials/ESP32 PlatformIO

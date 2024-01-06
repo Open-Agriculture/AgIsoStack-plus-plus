@@ -1,0 +1,4 @@
+/* Make width of main content a bit larger */
+.wy-nav-content {
+    max-width: 1000px !important;
+}

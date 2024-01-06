@@ -1,28 +1,46 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+import sys
+import subprocess, os
 
 # -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Isobus-plus-plus'
-copyright = '2022-2023, The Open-Agriculture Developers'
-author = 'Adrian Del Grosso'
-release = '1.0.0'
+project = "AgIsoStack++"
+copyright = "2022-2023, The Open-Agriculture Developers"
+author = "Adrian Del Grosso, Daan Steenbergen"
+release = "1.0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["sphinx_rtd_theme"]
+extensions = [
+    "breathe",
+    "sphinx.ext.imgmath",
+    "sphinx.ext.todo",
+    "sphinx.ext.graphviz",
+    "sphinxext.opengraph",
+    "sphinx_copybutton",
+]
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
+language = "en"
 exclude_patterns = []
 
-
-
 # -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ['_static']
+html_theme_options = {
+    "style_external_links": True,
+}
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+
+primary_domain = "cpp"
+highlight_language = "c++"
+
+# -- Breathe configuration ---------------------------------------------------
+sys.path.append("../ext/breathe/")
+breathe_projects = {"AgIsoStack": "../doxyxml/"}
+breathe_default_project = "AgIsoStack"
+
+# Generate doxygen xml files if on readthedocs
+if os.environ.get("READTHEDOCS", None) == "True":
+    subprocess.call("cd ../../; doxygen", shell=True)

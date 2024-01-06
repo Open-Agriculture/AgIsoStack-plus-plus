@@ -1,17 +1,13 @@
-.. _HardwareInterface:
+.. _API HardwareInterface:
 
-Using the Hardware Interface
-==============================
+HardwareInterface API
+=====================
 
-.. toctree::
-   :hidden:
-   :glob:
+This guide covers how to connect the library to your hardware in more depth.
 
 .. contents:: Contents
    :depth: 2
    :local:
-
-This tutorial covers how to connect the library to your hardware in more depth than previously covered in the other tutorials.
 
 How the Hardware Interface Works
 ---------------------------------
@@ -32,35 +28,40 @@ The hardware interface works as follows at a high level:
 	2. The main update routine of the network manager is run. This executes all main protocol logic.
 	3. The periodic thread tries to send messages out of the transmit queue until a transmit fails.
 
-	The thread then runs a few milliseconds later and repeats the same steps.
+	The thread then repeats the same steps a few milliseconds later.
 
+.. _choosing-a-can-driver:
 
-Choosing a CAN Driver
---------------------------
+Choosing a CAN Driver with CMake
+--------------------------------
 
 The library contains built-in hardware integrations for popular CAN interfaces, such as SocketCAN and PEAK.
 
-When compiling with CMake, a default CAN driver plug-in will be selected for you based on your OS, but when compiling you can explicitly choose to use one of the natively supported CAN drivers by supplying the CAN_DRIVER variable.
+When compiling with CMake, a default CAN driver plug-in will be selected for you based on your OS, but when compiling you can explicitly choose to use one of the natively supported CAN drivers by supplying the :code:`CAN_DRIVER`` variable.
 
+- :code:`-DCAN_DRIVER=SocketCAN` for Socket CAN support (This is the default for Linux)
+- :code:`-DCAN_DRIVER=WindowsPCANBasic` for the windows PEAK PCAN drivers (This is the default for Windows)
+- :code:`-DCAN_DRIVER=MacCANPCAN` for the MacCAN PEAK PCAN driver (This is the default for Mac OS)
+- :code:`-DCAN_DRIVER=TWAI` for the ESP TWAI driver (This is the preferred ESP32 driver)
+- :code:`-DCAN_DRIVER=MCP2515` for the MCP2515 CAN controller
+- :code:`-DCAN_DRIVER=WindowsInnoMakerUSB2CAN` for the InnoMaker USB2CAN adapter (Windows)
+- :code:`-DCAN_DRIVER=TouCAN` for the Rusoku TouCAN (Windows)
+- :code:`-DCAN_DRIVER=SYS_TEC` for a SYS TEC sysWORXX USB CAN adapter (Windows)
 
-* :code:`-DCAN_DRIVER=SocketCAN` Will compile with Socket CAN support (This is the default for Linux)
-* :code:`-DCAN_DRIVER=WindowsPCANBasic` Will compile with windows support for the PEAK PCAN drivers (This is the default for Windows)
-* :code:`-DCAN_DRIVER=MacCANPCAN` Will compile with support for the MacCAN PEAK PCAN driver (This is the default for Mac OS)
-* :code:`-DCAN_DRIVER=TWAI` Will compile with support for the ESP TWAI driver
-* :code:`-DCAN_DRIVER=MCP2515` Will compile with support for the MCP2515 CAN controller
+Or specify multiple using a semicolon separated list: :code:`-DCAN_DRIVER="<driver1>;<driver2>"`
+
+If your target hardware is not listed above, you can easily integrate your own hardware by :ref:`implementing a few simple functions <writing-your-own-can-driver>`.
 
 You can include the header file :code:`isobus/hardware_integration/available_can_drivers.hpp` to get access to the CAN drivers that have been included via your CMake configuration.
 
 Using the Hardware Interface
------------------------------
+----------------------------
 
 To use the :code:`CANHardwareInterface`, simply create at least one CAN plugin, set the number of CAN channels to be at least 1, assign your driver(s) it to a CAN channel index, and call :code:`start`.
 
 .. code-block:: c++
 
-    #if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	    std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
-	#endif
+	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
 
 	isobus::CANHardwareInterface::set_number_of_can_channels(1);
 	isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
@@ -69,7 +70,9 @@ To use the :code:`CANHardwareInterface`, simply create at least one CAN plugin, 
 
 You may also want to check the return value of :code:`start` and check the return value of :code:`canDriver->get_is_valid()` to know if everything is working.
 
-You can see this within the examples `located here. <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/examples>`_
+You can see this done within our examples `located here. <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/examples>`_
+
+.. _writing-your-own-can-driver:
 
 Writing Your Own CAN Driver
 ----------------------------

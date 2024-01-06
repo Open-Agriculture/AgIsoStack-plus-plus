@@ -55,20 +55,7 @@ To build the project, follow these steps:
 Selecting CAN Driver
 --------------------
 
-A default CAN driver plug-in will be selected for you based on your OS, but when compiling you can explicitly choose to use one of the natively supported CAN drivers by supplying the `CAN_DRIVER` variable.
-
-- :code:`-DCAN_DRIVER=SocketCAN` for Socket CAN support (This is the default for Linux)
-- :code:`-DCAN_DRIVER=WindowsPCANBasic` for the windows PEAK PCAN drivers (This is the default for Windows)
-- :code:`-DCAN_DRIVER=MacCANPCAN` for the MacCAN PEAK PCAN driver (This is the default for Mac OS)
-- :code:`-DCAN_DRIVER=TWAI` for the ESP TWAI driver (This is the preferred ESP32 driver)
-- :code:`-DCAN_DRIVER=MCP2515` for the MCP2515 CAN controller
-- :code:`-DCAN_DRIVER=WindowsInnoMakerUSB2CAN` for the InnoMaker USB2CAN adapter (Windows)
-- :code:`-DCAN_DRIVER=TouCAN` for the Rusoku TouCAN (Windows)
-- :code:`-DCAN_DRIVER=SYS_TEC` for a SYS TEC sysWORXX USB CAN adapter (Windows)
-
-Or specify multiple using a semicolon separated list: :code:`-DCAN_DRIVER="<driver1>;<driver2>"`
-
-If your target hardware is not listed above, you can easily integrate your own hardware by `implementing a few simple functions <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/hardware_integration#writing-a-new-can-driver-for-the-stack>`_.
+See :ref:`Choosing a CAN Driver<choosing-a-can-driver>` in the API section for more details.
 
 Running Tests
 -------------
@@ -96,6 +83,59 @@ The easiest way to build them is from the top level:
     cmake --build build
     cd build
     ./examples/<example_name>
+
+.. _doxygen:
+
+Doxygen
+-------
+
+This project uses Doxygen to automatically generate up-to-date internal API docs.
+
+Precompiled
+^^^^^^^^^^^
+
+You can view the precompiled, latest Doxygen here: https://delgrossoengineering.com/isobus-docs/index.html
+
+Compiling locally
+^^^^^^^^^^^^^^^^^
+
+You can also generate the Doxygen yourself and browse it locally.
+
+From your project, change directory into the 'AgIsoStack-plus-plus' folder.
+
+.. code-block:: bash
+
+   cd AgIsoStack-plus-plus
+
+Make sure you have Doxygen installed.
+
+Ubuntu:
+
+.. code-block:: bash
+
+   sudo apt install doxygen graphviz
+
+RHEL:
+
+.. code-block:: bash
+
+   sudo subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms
+
+   sudo dnf install doxygen graphviz
+
+Windows:
+
+Make sure you have doxygen installed: https://www.doxygen.nl/download.html
+
+
+Then, generate the docs.
+
+.. code-block:: bash
+
+   doxygen doxyfile
+
+The documentation will appear in the docs/html folder. Open index.html in a web browser to start browsing the docs!
+
 
 Contributing
 ------------
