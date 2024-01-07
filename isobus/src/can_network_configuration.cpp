@@ -38,14 +38,14 @@ namespace isobus
 		return minimumTimeBetweenTransportProtocolBAMFrames;
 	}
 
-	void CANNetworkConfiguration::set_max_number_of_etp_frames_per_edpo(std::uint8_t numberFrames)
+	void CANNetworkConfiguration::set_number_of_packets_per_dpo_message(std::uint8_t numberFrames)
 	{
-		extendedTransportProtocolMaxNumberOfFramesPerEDPO = numberFrames;
+		numberOfPacketsPerDPOMessage = numberFrames;
 	}
 
-	std::uint8_t CANNetworkConfiguration::get_max_number_of_etp_frames_per_edpo() const
+	std::uint8_t CANNetworkConfiguration::get_number_of_packets_per_dpo_message() const
 	{
-		return extendedTransportProtocolMaxNumberOfFramesPerEDPO;
+		return numberOfPacketsPerDPOMessage;
 	}
 
 	void CANNetworkConfiguration::set_max_number_of_network_manager_protocol_frames_per_update(std::uint8_t numberFrames)

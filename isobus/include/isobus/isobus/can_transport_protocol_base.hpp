@@ -16,11 +16,7 @@
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class TransportProtocolSessionBase
-	///
 	/// @brief An object to keep track of session information internally
-	//================================================================================================
 	class TransportProtocolSessionBase
 	{
 	public:
@@ -92,7 +88,7 @@ namespace isobus
 		virtual std::uint32_t get_total_bytes_transferred() const = 0;
 
 		/// @brief Get the percentage of bytes that have been sent or received in this session
-		/// @return The percentage of bytes that have been sent or received (between 0 and 1)
+		/// @return The percentage of bytes that have been sent or received (between 0 and 100)
 		float get_percentage_bytes_transferred() const;
 
 		/// @brief Get the control function that is sending the message

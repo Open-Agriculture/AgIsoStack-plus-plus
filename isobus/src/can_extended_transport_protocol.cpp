@@ -165,6 +165,9 @@ namespace isobus
 			                                                                     nullptr, // No callback
 			                                                                     nullptr);
 
+			// Request the maximum number of packets per DPO via the CTS message
+			newSession->set_cts_number_of_packet_limit(configuration->get_number_of_packets_per_dpo_message());
+
 			newSession->set_state(StateMachineState::SendClearToSend);
 			activeSessions.push_back(newSession);
 			CANStackLogger::debug("[ETP]: New rx session for 0x%05X. Source: %hu, destination: %hu", parameterGroupNumber, source->get_address(), destination->get_address());
@@ -483,7 +486,7 @@ namespace isobus
 	void ExtendedTransportProtocolManager::process_message(const CANMessage &message)
 	{
 		// TODO: Allow sniffing of messages to all addresses, not just the ones we normally listen to (#297)
-		if (message.has_valid_source_control_function() && message.has_valid_destination_control_function())
+		if (message.has_valid_source_control_function() && message.is_destination_our_device())
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
@@ -699,7 +702,7 @@ namespace isobus
 			{
 				if (session->get_time_since_last_update() > T1_TIMEOUT_MS)
 				{
-					CANStackLogger::error("[ETP]: Timeout for destination-specific rx session (expected sequencial data frame)");
+					CANStackLogger::error("[ETP]: Timeout for destination-specific rx session (expected sequential data frame)");
 					abort_session(session, ConnectionAbortReason::Timeout);
 				}
 			}
@@ -830,10 +833,10 @@ namespace isobus
 		{
 			packetsThisSegment = session->get_cts_number_of_packet_limit();
 		}
-		else if (packetsThisSegment > 16)
+		if (packetsThisSegment > configuration->get_number_of_packets_per_dpo_message())
 		{
-			//! @todo apply CTS number of packets recommendation of 16 via a configuration option
-			packetsThisSegment = 16;
+			CANStackLogger::debug("[TP]: Received Request To Send (RTS) with a CTS packet count of %hu, which is greater than the configured maximum of %hu, using the configured maximum instead.", packetsThisSegment, configuration->get_number_of_packets_per_dpo_message());
+			packetsThisSegment = configuration->get_number_of_packets_per_dpo_message();
 		}
 
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{

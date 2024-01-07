@@ -99,9 +99,15 @@ namespace isobus
 
 	std::uint8_t CANMessageDataCallback::get_byte(std::size_t index)
 	{
-		if (index >= dataOffset + bufferSize)
+		if (index >= totalSize)
 		{
-			dataOffset += bufferSize;
+			return 0;
+		}
+
+		if ((index >= dataOffset + bufferSize) || (index < dataOffset) || (!initialized))
+		{
+			initialized = true;
+			dataOffset = index;
 			callback(0, dataOffset, std::min(totalSize - dataOffset, bufferSize), buffer.data(), parentPointer);
 		}
 		return buffer[index - dataOffset];

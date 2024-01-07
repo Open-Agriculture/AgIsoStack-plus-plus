@@ -363,7 +363,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageSending)
 {
 	constexpr std::array<std::uint8_t, 23> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
 	auto receiver = test_helpers::create_mock_control_function(0x02);
 	std::deque<CANMessage> responseQueue;
 
@@ -661,7 +661,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
 	constexpr std::array<std::uint8_t, 23> dataToReceive = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
 
 	auto originator = test_helpers::create_mock_control_function(0x01);
-	auto receiver = test_helpers::create_mock_control_function(0x02);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x02);
 
 	std::uint8_t messageCount = 0;
 	auto receiveMessageCallback = [&](const CANMessage &message) {
@@ -876,8 +876,8 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutInitiation)
 {
 	constexpr std::array<std::uint8_t, 17> dataToTransfer = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
-	auto receiver = test_helpers::create_mock_control_function(0x02);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x02);
 	std::deque<CANMessage> originatorQueue;
 	std::deque<CANMessage> receiverQueue;
 
@@ -984,8 +984,8 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
 {
 	constexpr std::array<std::uint8_t, 17> dataToTransfer = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
-	auto receiver = test_helpers::create_mock_control_function(0x02);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x02);
 	std::deque<CANMessage> originatorQueue;
 	std::deque<CANMessage> receiverQueue;
 
@@ -1119,19 +1119,19 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificConcurrentMessaging)
 	constexpr std::array<std::uint8_t, 17> dataToReceive1 = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 	constexpr std::array<std::uint8_t, 12> dataToReceive2 = { 0xAC, 0xAB, 0xAA, 0xA9, 0xA8, 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1 };
 
-	auto originator1 = test_helpers::create_mock_control_function(0x01); // Send pgn1ToReceive, dataToReceive1
-	auto originator2 = test_helpers::create_mock_control_function(0x02); // Send pgn1ToReceive, dataToReceive1
-	auto originator3 = test_helpers::create_mock_control_function(0x03); // Send pgn1ToReceive, dataToReceive2
-	auto originator4 = test_helpers::create_mock_control_function(0x04); // Send pgn2ToReceive, dataToReceive1
-	auto originator5 = test_helpers::create_mock_control_function(0x05); // Send pgn2ToReceive, dataToReceive2
-	auto convergingReceiver = test_helpers::create_mock_control_function(0x07);
+	auto originator1 = test_helpers::create_mock_internal_control_function(0x01); // Send pgn1ToReceive, dataToReceive1
+	auto originator2 = test_helpers::create_mock_internal_control_function(0x02); // Send pgn1ToReceive, dataToReceive1
+	auto originator3 = test_helpers::create_mock_internal_control_function(0x03); // Send pgn1ToReceive, dataToReceive2
+	auto originator4 = test_helpers::create_mock_internal_control_function(0x04); // Send pgn2ToReceive, dataToReceive1
+	auto originator5 = test_helpers::create_mock_internal_control_function(0x05); // Send pgn2ToReceive, dataToReceive2
+	auto convergingReceiver = test_helpers::create_mock_internal_control_function(0x07);
 
-	auto divergingOriginator = test_helpers::create_mock_control_function(0x06);
-	auto receiver1 = test_helpers::create_mock_control_function(0x08); // Receive pgn1ToReceive, dataToReceive1
-	auto receiver2 = test_helpers::create_mock_control_function(0x09); // Receive pgn1ToReceive, dataToReceive1
-	auto receiver3 = test_helpers::create_mock_control_function(0x0A); // Receive pgn1ToReceive, dataToReceive2
-	auto receiver4 = test_helpers::create_mock_control_function(0x0B); // Receive pgn2ToReceive, dataToReceive1
-	auto receiver5 = test_helpers::create_mock_control_function(0x0C); // Receive pgn2ToReceive, dataToReceive2
+	auto divergingOriginator = test_helpers::create_mock_internal_control_function(0x06);
+	auto receiver1 = test_helpers::create_mock_internal_control_function(0x08); // Receive pgn1ToReceive, dataToReceive1
+	auto receiver2 = test_helpers::create_mock_internal_control_function(0x09); // Receive pgn1ToReceive, dataToReceive1
+	auto receiver3 = test_helpers::create_mock_internal_control_function(0x0A); // Receive pgn1ToReceive, dataToReceive2
+	auto receiver4 = test_helpers::create_mock_internal_control_function(0x0B); // Receive pgn2ToReceive, dataToReceive1
+	auto receiver5 = test_helpers::create_mock_internal_control_function(0x0C); // Receive pgn2ToReceive, dataToReceive2
 	std::deque<CANMessage> originatingQueue;
 	std::deque<CANMessage> receivingQueue;
 
@@ -1375,8 +1375,8 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAndBroadcastMessageConcurrent)
 	constexpr std::array<std::uint8_t, 17> dataToReceiveBroadcast = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 	constexpr std::array<std::uint8_t, 12> dataToReceiveSpecific = { 0xAC, 0xAB, 0xAA, 0xA9, 0xA8, 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
-	auto receiver = test_helpers::create_mock_control_function(0x02);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x02);
 
 	std::deque<CANMessage> originatingQueue;
 	std::deque<CANMessage> receivingQueue;
@@ -1511,7 +1511,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAbortInitiation)
 {
 	constexpr std::array<std::uint8_t, 9> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
 	auto receiver = test_helpers::create_mock_control_function(0x02);
 	std::deque<CANMessage> responseQueue;
 
@@ -1596,7 +1596,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMultipleCTS)
 {
 	constexpr std::array<std::uint8_t, 9> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
 	auto receiver = test_helpers::create_mock_control_function(0x02);
 	std::deque<CANMessage> responseQueue;
 
@@ -1698,8 +1698,8 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRandomCTS)
 {
 	constexpr std::array<std::uint8_t, 23> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
-	auto receiver = test_helpers::create_mock_control_function(0x02);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x02);
 	auto randomControlFunction = test_helpers::create_mock_control_function(0x03);
 	std::deque<CANMessage> originatorQueue;
 	std::deque<CANMessage> receiverQueue;
@@ -1814,7 +1814,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRejectForOutOfResources)
 {
 	auto originator1 = test_helpers::create_mock_control_function(0x01);
 	auto originator2 = test_helpers::create_mock_control_function(0x02);
-	auto receiver = test_helpers::create_mock_control_function(0x0B);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x0B);
 
 	bool originator1CTSReceived = false;
 	bool originator2AbortReceived = false;
@@ -1920,7 +1920,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRejectForOutOfResources)
 TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificOverwriteSession)
 {
 	auto originator = test_helpers::create_mock_control_function(0x01);
-	auto receiver = test_helpers::create_mock_control_function(0x0B);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x0B);
 
 	std::size_t messageCount = 0;
 	auto receiveMessageCallback = [&](const CANMessage &message) {

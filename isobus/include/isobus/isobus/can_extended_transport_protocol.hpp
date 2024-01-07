@@ -18,14 +18,10 @@
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class ExtendedTransportProtocolManager
-	///
 	/// @brief A class that handles the ISO11783 extended transport protocol.
 	/// @details This class handles transmission and reception of CAN messages more than 1785 bytes.
 	/// Simply call Simply call `CANNetworkManager::send_can_message()`
 	/// with an appropriate data length, and the protocol will be automatically selected to be used.
-	//================================================================================================
 	class ExtendedTransportProtocolManager
 	{
 	public:
@@ -64,11 +60,7 @@ namespace isobus
 			AnyOtherError = 250 ///< Any reason not defined in the standard
 		};
 
-		//================================================================================================
-		/// @class ExtendedTransportProtocolSession
-		///
 		/// @brief A storage object to keep track of session information internally
-		//================================================================================================
 		class ExtendedTransportProtocolSession : public TransportProtocolSessionBase
 		{
 		public:
@@ -144,18 +136,18 @@ namespace isobus
 		private:
 			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
 
-			std::uint8_t lastSequenceNumber = 0; ///< The last processed sequence number for this set of packets
-			std::uint32_t sequenceNumberOffset = 0; ///< The offset of the sequence number relative to the packet number
 			std::uint32_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver
+			std::uint32_t sequenceNumberOffset = 0; ///< The offset of the sequence number relative to the packet number
+			std::uint8_t lastSequenceNumber = 0; ///< The last processed sequence number for this set of packets
 			std::uint8_t dataPacketOffsetPacketCount = 0; ///< The number of packets that will be sent with the current DPO
 			std::uint8_t clearToSendPacketCountLimit = 0xFF; ///< The max packets that can be sent per DPO as indicated by the CTS message
 		};
 
-		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 20; ///< ETP.CM_RTS Multiplexor
-		static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 21; ///< ETP.CM_CTS Multiplexor
-		static constexpr std::uint32_t DATA_PACKET_OFFSET_MULTIPLXOR = 22; ///< ETP.CM_DPO Multiplexor
-		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 23; ///< TP.CM_EOMA Multiplexor
-		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 255; ///< Abort multiplexor
+		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 0x14; ///< (20) ETP.CM_RTS Multiplexor
+		static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 0x15; ///< (21) ETP.CM_CTS Multiplexor
+		static constexpr std::uint32_t DATA_PACKET_OFFSET_MULTIPLXOR = 0x16; ///< (22) ETP.CM_DPO Multiplexor
+		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x17; ///< (23) TP.CM_EOMA Multiplexor
+		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF; ///< (255) Abort multiplexor
 		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 117440505; ///< The max number of bytes that this protocol can transfer
 		static constexpr std::uint16_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
 		static constexpr std::uint16_t T2_T3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard

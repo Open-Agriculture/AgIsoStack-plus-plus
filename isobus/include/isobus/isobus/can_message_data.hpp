@@ -21,11 +21,7 @@
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class CANMessageData
-	///
 	/// @brief A interface class that represents data payload of a CAN message of arbitrary length.
-	//================================================================================================
 	class CANMessageData
 	{
 	public:
@@ -47,11 +43,7 @@ namespace isobus
 		virtual std::unique_ptr<CANMessageData> copy_if_not_owned(std::unique_ptr<CANMessageData> self) const = 0;
 	};
 
-	//================================================================================================
-	/// @class CANMessageDataVector
-	///
 	/// @brief A class that represents data of a CAN message by holding a vector of bytes.
-	//================================================================================================
 	class CANMessageDataVector : public CANMessageData
 	  , public std::vector<std::uint8_t>
 	{
@@ -93,12 +85,8 @@ namespace isobus
 		std::unique_ptr<CANMessageData> copy_if_not_owned(std::unique_ptr<CANMessageData> self) const override;
 	};
 
-	//================================================================================================
-	/// @class CANMessageDataView
-	///
 	/// @brief A class that represents data of a CAN message by holding a view of an array of bytes.
 	/// The view is not owned by this class, it is simply holding a pointer to the array of bytes.
-	//================================================================================================
 	class CANMessageDataView : public CANMessageData
 	  , public CANDataSpan
 	{
@@ -127,11 +115,7 @@ namespace isobus
 		std::unique_ptr<CANMessageData> copy_if_not_owned(std::unique_ptr<CANMessageData> self) const override;
 	};
 
-	//================================================================================================
-	/// @class CANMessageDataCallback
-	///
 	/// @brief A class that represents data of a CAN message by using a callback function.
-	//================================================================================================
 	class CANMessageDataCallback : public CANMessageData
 	{
 	public:
@@ -166,6 +150,7 @@ namespace isobus
 		std::vector<std::uint8_t> buffer; ///< The buffer to store the data chunks.
 		std::size_t bufferSize; ///< The size of the buffer.
 		std::size_t dataOffset = 0; ///< The offset of the data in the buffer.
+		bool initialized = false; ///< Whether the buffer has been initialized.
 	};
 } // namespace isobus
 

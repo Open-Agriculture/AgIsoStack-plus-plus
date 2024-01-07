@@ -32,6 +32,11 @@ int main()
 {
 	std::signal(SIGINT, signal_handler);
 
+#ifndef ISOBUS_VIRTUALCAN_AVAILABLE
+	std::cout << "This example requires the VirtualCAN plugin to be available. If using CMake, set the `-DCAN_DRIVER=VirtualCAN`." << std::endl;
+	return -1;
+#endif
+
 	std::shared_ptr<CANHardwarePlugin> originatorDriver = std::make_shared<VirtualCANPlugin>("test-channel");
 	std::shared_ptr<CANHardwarePlugin> recipientDriver = std::make_shared<VirtualCANPlugin>("test-channel");
 
@@ -181,7 +186,7 @@ void check_can_message(const CANMessage &message, void *)
 	{
 		if (message.get_data()[i] != (i % 0xFF))
 		{
-			std::cout << std::endl // End the progress bar
+			std::cerr << std::endl // End the progress bar
 			          << "Received CAN with incorrect data!!!" << std::endl;
 			return;
 		}

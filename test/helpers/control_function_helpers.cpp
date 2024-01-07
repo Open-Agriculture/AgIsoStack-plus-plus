@@ -134,4 +134,20 @@ namespace test_helpers
 		return std::make_shared<WrappedControlFunction>(NAME(0), address, 0);
 	}
 
+	class WrappedInternalControlFunction : public InternalControlFunction
+	{
+	public:
+		WrappedInternalControlFunction(NAME name, std::uint8_t address, std::uint8_t canPort) :
+		  InternalControlFunction(name, address, canPort, {})
+		{
+			// We need to set the address manually, since there won't be an address claim state machine running
+			ControlFunction::address = address;
+		}
+	};
+
+	std::shared_ptr<isobus::InternalControlFunction> create_mock_internal_control_function(std::uint8_t address)
+	{
+		return std::make_shared<WrappedInternalControlFunction>(NAME(0), address, 0);
+	}
+
 }; // namespace test_helpers
