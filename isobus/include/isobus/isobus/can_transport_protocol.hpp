@@ -18,19 +18,16 @@
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class TransportProtocolManager
-	///
+
 	/// @brief A class that handles the ISO11783/J1939 transport protocol.
 	/// @details This class handles transmission and reception of CAN messages up to 1785 bytes.
 	/// Both broadcast and connection mode are supported. Simply call `CANNetworkManager::send_can_message()`
 	/// with an appropriate data length, and the protocol will be automatically selected to be used.
-	/// @note The use of broadcast messages is discouraged, as it has profound
+	/// @note The use of multi-frame broadcast messages (BAM) is discouraged, as it has profound
 	/// packet timing implications for your application, and is limited to only 1 active session at a time.
 	/// That session could be busy if you are using DM1 or any other BAM protocol, causing intermittent
 	/// transmit failures from this class. This is not a bug, rather a limitation of the protocol
 	/// definition.
-	//================================================================================================
 	class TransportProtocolManager
 	{
 	public:
@@ -63,11 +60,7 @@ namespace isobus
 			AnyOtherError = 250 ///< Any reason not defined in the standard
 		};
 
-		//================================================================================================
-		/// @class TransportProtocolSession
-		///
 		/// @brief A storage object to keep track of session information internally
-		//================================================================================================
 		class TransportProtocolSession : public TransportProtocolSessionBase
 		{
 		public:
@@ -164,11 +157,11 @@ namespace isobus
 			std::uint8_t clearToSendPacketCountMax = 0xFF; ///< The max packets that can be sent per CTS as indicated by the RTS message
 		};
 
-		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 16; ///< TP.CM_RTS Multiplexor
-		static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 17; ///< TP.CM_CTS Multiplexor
-		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 19; ///< TP.CM_EOM_ACK Multiplexor
-		static constexpr std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 32; ///< TP.BAM Multiplexor
-		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 255; ///< Abort multiplexor
+		static constexpr std::uint32_t REQUEST_TO_SEND_MULTIPLEXOR = 0x10; ///< (16) TP.CM_RTS Multiplexor
+		static constexpr std::uint32_t CLEAR_TO_SEND_MULTIPLEXOR = 0x11; ///< (17) TP.CM_CTS Multiplexor
+		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x13; ///< (19) TP.CM_EOM_ACK Multiplexor
+		static constexpr std::uint32_t BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR = 0x20; ///< (32) TP.BAM Multiplexor
+		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF; ///< (255) Abort multiplexor
 		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 1785; ///< The max number of bytes that this protocol can transfer
 		static constexpr std::uint16_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
 		static constexpr std::uint16_t T2_T3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard

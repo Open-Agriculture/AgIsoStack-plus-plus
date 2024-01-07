@@ -12,6 +12,8 @@ namespace test_helpers
 
 	std::shared_ptr<isobus::ControlFunction> create_mock_control_function(std::uint8_t address);
 
+	std::shared_ptr<isobus::InternalControlFunction> create_mock_internal_control_function(std::uint8_t address);
+
 }; // namespace test_helpers
 
 #endif // CONTROL_FUNCTION_HELPERS_HPP

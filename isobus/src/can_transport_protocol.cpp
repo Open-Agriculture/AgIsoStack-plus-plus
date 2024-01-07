@@ -539,7 +539,7 @@ namespace isobus
 	void TransportProtocolManager::process_message(const CANMessage &message)
 	{
 		// TODO: Allow sniffing of messages to all addresses, not just the ones we normally listen to (#297)
-		if (message.has_valid_source_control_function() && (message.has_valid_destination_control_function() || message.is_broadcast()))
+		if (message.has_valid_source_control_function() && (message.is_destination_our_device() || message.is_broadcast()))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
@@ -792,10 +792,10 @@ namespace isobus
 				}
 				else
 				{
-					// Waiting on sequencial data frames
+					// Waiting on sequential data frames
 					if (session->get_time_since_last_update() > T1_TIMEOUT_MS)
 					{
-						CANStackLogger::error("[TP]: Timeout for destination-specific rx session (expected sequencial data frame)");
+						CANStackLogger::error("[TP]: Timeout for destination-specific rx session (expected sequential data frame)");
 						abort_session(session, ConnectionAbortReason::Timeout);
 					}
 				}
