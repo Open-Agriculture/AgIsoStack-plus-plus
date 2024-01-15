@@ -87,9 +87,9 @@ namespace isobus
 	  totalSize(size),
 	  callback(callback),
 	  parentPointer(parentPointer),
+	  buffer(chunkSize),
 	  bufferSize(chunkSize)
 	{
-		buffer.reserve(bufferSize);
 	}
 
 	std::size_t CANMessageDataCallback::size() const
