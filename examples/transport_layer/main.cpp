@@ -201,11 +201,11 @@ void print_progress_bar(const std::shared_ptr<TransportProtocolSessionBase> sess
 	std::cout << "[";
 	for (std::uint8_t i = 0; i < width; i++)
 	{
-		if (i < static_cast<std::uint8_t>(percentage * width))
+		if (i < static_cast<std::uint8_t>(percentage / 100 * width))
 		{
 			std::cout << "=";
 		}
-		else if (i == static_cast<std::uint8_t>(percentage * width))
+		else if (i == static_cast<std::uint8_t>(percentage / 100 * width))
 		{
 			std::cout << ">";
 		}
@@ -214,6 +214,6 @@ void print_progress_bar(const std::shared_ptr<TransportProtocolSessionBase> sess
 			std::cout << " ";
 		}
 	}
-	std::cout << "] " << static_cast<int>(percentage * 100.0f) << "% (" << session->get_total_bytes_transferred() << "/" << session->get_message_length() << " bytes)\r";
+	std::cout << "] " << static_cast<int>(percentage) << "% (" << session->get_total_bytes_transferred() << "/" << session->get_message_length() << " bytes)\r";
 	std::cout.flush();
 }

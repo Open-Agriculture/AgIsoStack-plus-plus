@@ -698,7 +698,7 @@ namespace isobus
 				session->set_state(StateMachineState::WaitForEndOfMessageAcknowledge);
 			}
 		}
-		else if (session->get_cts_number_of_packets_remaining() == 0)
+		else if ((session->get_cts_number_of_packets_remaining() == 0) && !session->is_broadcast())
 		{
 			session->set_state(StateMachineState::WaitForClearToSend);
 		}
