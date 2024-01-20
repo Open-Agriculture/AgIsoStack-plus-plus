@@ -1328,6 +1328,7 @@ namespace isobus
 				{
 					sendWorkingSetMaintenance = false;
 					sendAuxiliaryMaintenance = false;
+					unsupportedFunctions.clear();
 
 					if (partnerControlFunction->get_address_valid())
 					{
@@ -3308,6 +3309,38 @@ namespace isobus
 							}
 						}
 						break;
+						case static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage):
+						{
+							std::uint8_t unsupportedFunction = message.get_uint8_at(1);
+							if (std::find(parentVT->unsupportedFunctions.begin(), parentVT->unsupportedFunctions.end(), unsupportedFunction) == parentVT->unsupportedFunctions.end())
+							{
+								parentVT->unsupportedFunctions.push_back(unsupportedFunction);
+							}
+							CANStackLogger::warn("[VT]: Server indicated VT Function '%llu' is unsupported, caching it", unsupportedFunction);
+						}
+						break;
+						default:
+						{
+							std::uint8_t unsupportedFunction = message.get_uint8_at(0);
+							CANStackLogger::warn("[VT]: Server sent function '%llu' which we do not support", unsupportedFunction);
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
+								unsupportedFunction,
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+							};
+							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+							                                               buffer.data(),
+							                                               CAN_DATA_LENGTH,
+							                                               parentVT->myControlFunction,
+							                                               parentVT->partnerControlFunction,
+							                                               CANIdentifier::CANPriority::Priority5);
+						}
+						break;
 					}
 				}
 				break;
@@ -4563,6 +4596,16 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalClient::is_function_unsupported(std::uint8_t functionCode) const
+	{
+		return std::find(unsupportedFunctions.begin(), unsupportedFunctions.end(), functionCode) != unsupportedFunctions.end();
+	}
+
+	bool VirtualTerminalClient::is_function_unsupported(Function function) const
+	{
+		return is_function_unsupported(static_cast<std::uint8_t>(function));
+	}
+
 	bool VirtualTerminalClient::send_command(const std::vector<std::uint8_t> &data)
 	{
 		if (commandAwaitingResponse)
@@ -4601,6 +4644,12 @@ namespace isobus
 
 	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace)
 	{
+		std::uint8_t functionCode = data[0];
+		if (is_function_unsupported(functionCode))
+		{
+			return false;
+		}
+
 		if (send_command(data))
 		{
 			return true;
