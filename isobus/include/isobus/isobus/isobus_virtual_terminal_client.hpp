@@ -1562,6 +1562,16 @@ namespace isobus
 		/// @returns true if the object was resized, otherwise false
 		bool resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type);
 
+		/// @brief Extract from the cache whether a VT does not support a specific function
+		/// @param[in] function The function to check
+		/// @returns true if the VT doesn't support the function
+		bool is_function_unsupported(Function function) const;
+
+		/// @brief Extract from the cache whether a VT does not support a specific function
+		/// @param[in] functionCode The code of the function to check
+		/// @returns true if the VT doesn't support the function
+		bool is_function_unsupported(std::uint8_t functionCode) const;
+
 		/// @brief Sends a command to the VT server
 		/// @param[in] data The data to send, including the function-code
 		/// @returns true if the message was sent successfully
@@ -1628,6 +1638,7 @@ namespace isobus
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::uint32_t lastAuxiliaryMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
+		std::vector<std::uint8_t> unsupportedFunctions; ///< Holds the functions unsupported by the server.
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
