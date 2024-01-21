@@ -263,6 +263,12 @@ void isNack(const CANMessageFrame &frame)
 	EXPECT_EQ(0x00, frame.data[7]);
 }
 
+void isPDNack(const CANMessageFrame &frame)
+{
+	EXPECT_EQ(frame.identifier, 0x10CB8887); // Priority 4
+	EXPECT_EQ(static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), (frame.data[0] & 0x0F));
+}
+
 bool readFrameFilterStatus(VirtualCANPlugin &plugin, CANMessageFrame &frame)
 {
 	bool retVal = plugin.read_frame(frame);
@@ -301,6 +307,34 @@ void testNackWrapper(VirtualCANPlugin &plugin,
 	server.update();
 	EXPECT_TRUE(readFrameFilterStatus(plugin, frame));
 	isNack(frame);
+}
+
+void testPDNackWrapper(VirtualCANPlugin &plugin,
+                       DerivedTcServer &server,
+                       CANMessageFrame &frame,
+                       std::uint8_t mux,
+                       std::shared_ptr<InternalControlFunction> icf,
+                       std::shared_ptr<PartneredControlFunction> partner)
+{
+	CANNetworkManager::CANNetwork.receive_can_message(test_helpers::create_message(5,
+	                                                                               0xCB00,
+	                                                                               icf,
+	                                                                               partner,
+	                                                                               {
+	                                                                                 mux,
+	                                                                                 0xFF,
+	                                                                                 0xFF,
+	                                                                                 0xFF,
+	                                                                                 0xFF,
+	                                                                                 0xFF,
+	                                                                                 0xFF,
+	                                                                                 0xFF,
+
+	                                                                               }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_TRUE(readFrameFilterStatus(plugin, frame));
+	isPDNack(frame);
 }
 
 TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
@@ -353,18 +387,31 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	EXPECT_EQ(0xFF, testFrame.data[6]); // sections
 	EXPECT_EQ(0x10, testFrame.data[7]); // channels
 
+	// Test that the server also sent a version request to the client
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
+	EXPECT_EQ(0x00, testFrame.data[0]);
+	EXPECT_EQ(0xFF, testFrame.data[1]);
+	EXPECT_EQ(0xFF, testFrame.data[2]);
+	EXPECT_EQ(0xFF, testFrame.data[3]);
+	EXPECT_EQ(0xFF, testFrame.data[4]);
+	EXPECT_EQ(0xFF, testFrame.data[5]);
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
+
 	// Try to test all messages that the server should respond to with a NACK at this stage of connection
 	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // request structure label
 	testNackWrapper(testPlugin, server, testFrame, 0x20 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // request localization label
 	testNackWrapper(testPlugin, server, testFrame, 0x80 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // activate pool
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::RequestValue), internalECU, partnerClient);
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementTimeInterval), internalECU, partnerClient);
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementDistanceInterval), internalECU, partnerClient);
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMinimumWithinThreshold), internalECU, partnerClient);
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMaximumWithinThreshold), internalECU, partnerClient);
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementChangeThreshold), internalECU, partnerClient);
 	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), internalECU, partnerClient);
 	testNackWrapper(testPlugin, server, testFrame, 0x0A, internalECU, partnerClient); // set and ack
+
+	// Test PDNACKs
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementTimeInterval), internalECU, partnerClient);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementDistanceInterval), internalECU, partnerClient);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMinimumWithinThreshold), internalECU, partnerClient);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMaximumWithinThreshold), internalECU, partnerClient);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementChangeThreshold), internalECU, partnerClient);
 
 	// Send working set master
 	CANNetworkManager::CANNetwork.receive_can_message(test_helpers::create_message_broadcast(6,
