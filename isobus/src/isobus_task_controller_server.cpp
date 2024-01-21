@@ -33,6 +33,21 @@ namespace isobus
 	{
 	}
 
+	TaskControllerServer::~TaskControllerServer()
+	{
+		terminate();
+	}
+
+	void TaskControllerServer::terminate()
+	{
+		if (initialized)
+		{
+			initialized = false;
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), store_rx_message, this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster), store_rx_message, this);
+		}
+	}
+
 	bool TaskControllerServer::send_request_value(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> payload = { 0 };
@@ -104,6 +119,7 @@ namespace isobus
 		if (!initialized)
 		{
 			assert(nullptr != serverControlFunction); // You can't have a server without a control function to send messages from! That wouldn't make any sense.
+			languageCommandInterface.initialize();
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), store_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster), store_rx_message, this);
 			initialized = true;
@@ -128,6 +144,20 @@ namespace isobus
 		{
 			lastStatusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
 		}
+
+		// Remove any clients that have timed out.
+		activeClients.erase(std::remove_if(activeClients.begin(),
+		                                   activeClients.end(),
+		                                   [](std::shared_ptr<ActiveClient> clientInfo) {
+			                                   constexpr std::uint32_t CLIENT_TASK_TIMEOUT_MS = 6000;
+			                                   if (SystemTiming::time_expired_ms(clientInfo->lastStatusMessageTimestamp_ms, CLIENT_TASK_TIMEOUT_MS))
+			                                   {
+				                                   CANStackLogger::warn("[TC Server]: Client 0x%02X has timed out. Removing from active client list.", clientInfo->clientControlFunction->get_address());
+				                                   return true;
+			                                   }
+			                                   return false;
+		                                   }),
+		                    activeClients.end());
 	}
 
 	TaskControllerServer::ActiveClient::ActiveClient(std::shared_ptr<ControlFunction> clientControlFunction) :
@@ -359,6 +389,7 @@ namespace isobus
 													if (activate_object_pool(rxMessage.get_source_control_function(), activationError, errorCode, faultingParentObject, faultingObject))
 													{
 														CANStackLogger::info("[TC Server]: Object pool activated for client 0x%02X", rxMessage.get_source_control_function()->get_address());
+														client->isDDOPActive = true;
 														send_object_pool_activate_deactivate_response(rxMessage.get_source_control_function(), static_cast<std::uint8_t>(activationError), static_cast<std::uint8_t>(errorCode), faultingParentObject, faultingObject);
 													}
 													else
@@ -374,6 +405,7 @@ namespace isobus
 													if (deactivate_object_pool(rxMessage.get_source_control_function()))
 													{
 														CANStackLogger::info("[TC Server]: Object pool deactivated for client 0x%02X", rxMessage.get_source_control_function()->get_address());
+														get_active_client(rxMessage.get_source_control_function())->isDDOPActive = false;
 														send_object_pool_activate_deactivate_response(rxMessage.get_source_control_function(), 0, 0, 0xFFFF, 0xFFFF);
 													}
 													else
@@ -422,6 +454,31 @@ namespace isobus
 										{
 											if (nullptr != get_active_client(rxMessage.get_source_control_function()))
 											{
+												if (get_active_client(rxMessage.get_source_control_function())->isDDOPActive)
+												{
+													std::uint16_t objectID = static_cast<std::uint16_t>(rxData[1]) | (static_cast<std::uint16_t>(rxData[2]) << 8);
+													std::vector<std::uint8_t> newDesignatorUTF8Bytes;
+
+													for (std::size_t i = 0; i < rxData.size() - 3; i++)
+													{
+														newDesignatorUTF8Bytes.push_back(rxData[3 + i]);
+													}
+
+													if (change_designator(rxMessage.get_source_control_function(), objectID, newDesignatorUTF8Bytes))
+													{
+														CANStackLogger::info("[TC Server]: Changed designator for client 0x%02X. Object ID: %u", rxMessage.get_source_control_function()->get_address(), objectID);
+														send_change_designator_response(rxMessage.get_source_control_function(), objectID, 0);
+													}
+													else
+													{
+														CANStackLogger::error("[TC Server]: Failed to change designator for client 0x%02X. Object ID: %u", rxMessage.get_source_control_function()->get_address(), objectID);
+														send_change_designator_response(rxMessage.get_source_control_function(), objectID, 1);
+													}
+												}
+												else
+												{
+													CANStackLogger::error("[TC Server]: Client 0x%02X requests change to change a designator but the object pool is not active.", rxMessage.get_source_control_function()->get_address());
+												}
 											}
 											else
 											{
@@ -438,7 +495,8 @@ namespace isobus
 										case DeviceDescriptorCommandParameters::DeleteObjectPoolResponse:
 										case DeviceDescriptorCommandParameters::ChangeDesignatorResponse:
 										{
-											// Ignore server side messages
+											// Nack server side messages
+											nack_process_data_command(rxMessage.get_source_control_function());
 										}
 										break;
 									}
@@ -460,6 +518,42 @@ namespace isobus
 						{
 							if (nullptr != get_active_client(rxMessage.get_source_control_function()))
 							{
+								if (get_active_client(rxMessage.get_source_control_function())->isDDOPActive)
+								{
+									std::uint16_t DDI = static_cast<std::uint16_t>(rxData[2]) | (static_cast<std::uint16_t>(rxData[3]) << 8);
+									std::uint16_t elementNumber = static_cast<std::uint16_t>(rxData[0] >> 4) | (static_cast<std::uint16_t>(rxData[1]) << 4);
+									std::int32_t processVariableValue = static_cast<std::int32_t>(static_cast<std::uint32_t>(rxData[4]) |
+									                                                              (static_cast<std::uint32_t>(rxData[5]) << 8) |
+									                                                              (static_cast<std::uint32_t>(rxData[6]) << 16) |
+									                                                              (static_cast<std::uint32_t>(rxData[7]) << 24));
+									std::uint8_t errorCodes = 0;
+
+									if (on_value_command(rxMessage.get_source_control_function(), DDI, elementNumber, processVariableValue, errorCodes))
+									{
+										CANStackLogger::debug("[TC Server]: Client 0x%02X value command for element %u DDI %u and value %d OK.", rxMessage.get_source_control_function()->get_address(), elementNumber, DDI, processVariableValue);
+
+										if (ProcessDataCommands::SetValueAndAcknowledge == static_cast<ProcessDataCommands>(rxData[0] & 0x0F))
+										{
+											send_process_data_acknowledge(rxMessage.get_source_control_function(), DDI, elementNumber, 0, static_cast<ProcessDataCommands>(rxData[0] & 0x0F));
+										}
+									}
+									else
+									{
+										CANStackLogger::error("[TC Server]: Client 0x%02X value command for element %u DDI %u and value %d failed.", rxMessage.get_source_control_function()->get_address(), elementNumber, DDI, processVariableValue);
+
+										if (0 == errorCodes)
+										{
+											CANStackLogger::error("[TC Server]: Your derived TC server class must set errorCodes to a non-zero value if a value command fails.");
+											errorCodes = static_cast<std::uint8_t>(ProcessDataAcknowledgeErrorCodes::DDINotSupportedByElement); // Like this!
+											assert(false); // See above error message.
+										}
+										send_process_data_acknowledge(rxMessage.get_source_control_function(), DDI, elementNumber, errorCodes, static_cast<ProcessDataCommands>(rxData[0] & 0x0F));
+									}
+								}
+								else
+								{
+									CANStackLogger::error("[TC Server]: Client 0x%02X sent a value command but the object pool is not active.", rxMessage.get_source_control_function()->get_address());
+								}
 							}
 							else
 							{
@@ -468,27 +562,54 @@ namespace isobus
 						}
 						break;
 
-						case ProcessDataCommands::RequestValue:
+						case ProcessDataCommands::Acknowledge:
+						{
+							if (nullptr != get_active_client(rxMessage.get_source_control_function()))
+							{
+								std::uint16_t DDI = static_cast<std::uint16_t>(rxData[2]) | (static_cast<std::uint16_t>(rxData[3]) << 8);
+								std::uint16_t elementNumber = static_cast<std::uint16_t>(rxData[0] >> 4) | (static_cast<std::uint16_t>(rxData[1]) << 4);
+
+								if (get_active_client(rxMessage.get_source_control_function())->isDDOPActive)
+								{
+									on_process_data_acknowledge(rxMessage.get_source_control_function(), DDI, elementNumber, rxData[4], static_cast<ProcessDataCommands>(rxData[0] & 0x0F));
+								}
+								else
+								{
+									CANStackLogger::error("[TC Server]: Client 0x%02X sent an acknowledge command but the object pool is not active.", rxMessage.get_source_control_function()->get_address());
+									send_process_data_acknowledge(rxMessage.get_source_control_function(), DDI, elementNumber, static_cast<std::uint8_t>(ProcessDataAcknowledgeErrorCodes::ProcessDataNotSettable), static_cast<ProcessDataCommands>(rxData[0] & 0x0F));
+								}
+							}
+							else
+							{
+								nack_process_data_command(rxMessage.get_source_control_function());
+							}
+						}
+						break;
+
 						case ProcessDataCommands::MeasurementTimeInterval:
 						case ProcessDataCommands::MeasurementDistanceInterval:
 						case ProcessDataCommands::MeasurementMinimumWithinThreshold:
 						case ProcessDataCommands::MeasurementMaximumWithinThreshold:
 						case ProcessDataCommands::MeasurementChangeThreshold:
-						case ProcessDataCommands::Acknowledge:
 						{
-							if (nullptr != get_active_client(rxMessage.get_source_control_function()))
+							if (CAN_DATA_LENGTH == rxMessage.get_data_length())
 							{
+								std::uint16_t DDI = static_cast<std::uint16_t>(rxData[2]) | (static_cast<std::uint16_t>(rxData[3]) << 8);
+								std::uint16_t elementNumber = static_cast<std::uint16_t>(rxData[0] >> 4) | (static_cast<std::uint16_t>(rxData[1]) << 4);
+								CANStackLogger::error("[TC Server]: Client 0x%02X is sending measurement commands?", rxMessage.get_source_control_function()->get_address());
+								send_process_data_acknowledge(rxMessage.get_source_control_function(), DDI, elementNumber, static_cast<std::uint8_t>(ProcessDataAcknowledgeErrorCodes::ProcessDataCommandNotSupported), static_cast<ProcessDataCommands>(rxData[0] & 0x0F));
 							}
 							else
 							{
-								nack_process_data_command(rxMessage.get_source_control_function());
+								CANStackLogger::error("[TC Server]: Client 0x%02X is sending measurement commands with invalid lengths, which is very unusual.", rxMessage.get_source_control_function()->get_address());
 							}
 						}
 						break;
 
 						case ProcessDataCommands::Status:
+						case ProcessDataCommands::RequestValue:
 						{
-							// Ignore server side status message
+							// Ignore server side messages
 						}
 						break;
 
@@ -578,19 +699,18 @@ namespace isobus
 		std::array<std::uint8_t, CAN_DATA_LENGTH> payload = { multiplexer, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 		CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::Priority5;
 
-		// Priority Should be 3 for for commands 3,a,e, and f. 4 for D, and 5 for all others.
 		switch (multiplexer & 0x0F)
 		{
-			case 0x03:
-			case 0x0A:
-			case 0x0E:
-			case 0x0F:
+			case static_cast<std::uint8_t>(ProcessDataCommands::Value):
+			case static_cast<std::uint8_t>(ProcessDataCommands::SetValueAndAcknowledge):
+			case static_cast<std::uint8_t>(ProcessDataCommands::Status):
+			case static_cast<std::uint8_t>(ProcessDataCommands::ClientTask):
 			{
 				priority = CANIdentifier::CANPriority::Priority3;
 			}
 			break;
 
-			case 0x0D:
+			case static_cast<std::uint8_t>(ProcessDataCommands::Acknowledge):
 			{
 				priority = CANIdentifier::CANPriority::Priority4;
 			}
@@ -863,7 +983,7 @@ namespace isobus
 		if (nullptr != clientControlFunction)
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
-				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::DeleteObjectPool) << 4,
+				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::DeleteObjectPoolResponse) << 4,
 				static_cast<std::uint8_t>(deletionResult),
 				errorCode,
 				0xFF,
@@ -878,6 +998,58 @@ namespace isobus
 			                                                        serverControlFunction,
 			                                                        clientControlFunction,
 			                                                        CANIdentifier::CANPriority::Priority5);
+		}
+		return retVal;
+	}
+
+	bool TaskControllerServer::send_change_designator_response(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t objectID, std::uint8_t errorCode) const
+	{
+		bool retVal = false;
+
+		if (nullptr != clientControlFunction)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
+				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::ChangeDesignatorResponse) << 4,
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>((objectID >> 8) & 0xFF),
+				errorCode,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+			                                                        payload.data(),
+			                                                        payload.size(),
+			                                                        serverControlFunction,
+			                                                        clientControlFunction,
+			                                                        CANIdentifier::CANPriority::Priority5);
+		}
+		return retVal;
+	}
+
+	bool TaskControllerServer::send_process_data_acknowledge(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint8_t errorBitfield, ProcessDataCommands processDataCommand) const
+	{
+		bool retVal = false;
+
+		if (nullptr != clientControlFunction)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
+				static_cast<std::uint8_t>(static_cast<std::uint8_t>(ProcessDataCommands::Acknowledge) | (static_cast<std::uint8_t>(elementNumber & 0x0F) << 4)),
+				static_cast<std::uint8_t>(elementNumber >> 4),
+				static_cast<std::uint8_t>(dataDescriptionIndex & 0xFF),
+				static_cast<std::uint8_t>((dataDescriptionIndex >> 8) & 0xFF),
+				errorBitfield,
+				static_cast<std::uint8_t>(0xF0 | static_cast<std::uint8_t>(processDataCommand)),
+				0xFF,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
+			                                                        payload.data(),
+			                                                        payload.size(),
+			                                                        serverControlFunction,
+			                                                        clientControlFunction,
+			                                                        CANIdentifier::CANPriority::Priority4);
 		}
 		return retVal;
 	}
