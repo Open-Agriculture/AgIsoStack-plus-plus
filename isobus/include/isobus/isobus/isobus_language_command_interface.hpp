@@ -182,7 +182,7 @@ namespace isobus
 		/// @brief Sends a language command based on the current content of this class as a broadcast.
 		/// @note This is only meant to be used by a VT server or TC/DL server
 		/// @return `true` if the message was sent, otherwise `false`
-		bool send_language_command() const;
+		bool send_language_command();
 
 		/// @brief Returns the commanded country code parsed from the last language command specifying the operator's desired language dialect.
 		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.

@@ -103,7 +103,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool LanguageCommandInterface::send_language_command() const
+	bool LanguageCommandInterface::send_language_command()
 	{
 		if ((languageCode.length() < 2) || (countryCode.length() < 2))
 		{
