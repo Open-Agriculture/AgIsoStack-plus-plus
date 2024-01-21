@@ -1739,6 +1739,16 @@ namespace isobus
 		}
 	}
 
+	bool VirtualTerminalClient::send_message_to_vt(const std::uint8_t *dataBuffer, std::uint32_t dataLength, CANIdentifier::CANPriority priority) const
+	{
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+		                                                      dataBuffer,
+		                                                      dataLength,
+		                                                      myControlFunction,
+		                                                      partnerControlFunction,
+		                                                      priority);
+	}
+
 	bool VirtualTerminalClient::send_delete_object_pool() const
 	{
 		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand),
@@ -1749,12 +1759,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_working_set_maintenance(bool initializing) const
@@ -1771,12 +1776,7 @@ namespace isobus
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_memory(std::uint32_t requiredMemory) const
@@ -1789,12 +1789,7 @@ namespace isobus
 			                                                         static_cast<std::uint8_t>((requiredMemory >> 24) & 0xFF),
 			                                                         0xFF,
 			                                                         0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_number_of_softkeys() const
@@ -1807,12 +1802,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_text_font_data() const
@@ -1825,12 +1815,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_hardware() const
@@ -1843,12 +1828,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_supported_widechars() const
@@ -1861,12 +1841,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_window_mask_data() const
@@ -1879,12 +1854,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_supported_objects() const
@@ -1897,12 +1867,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_get_versions() const
@@ -1915,12 +1880,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_store_version(std::array<std::uint8_t, 7> versionLabel) const
@@ -1933,12 +1893,7 @@ namespace isobus
 			                                                         versionLabel[4],
 			                                                         versionLabel[5],
 			                                                         versionLabel[6] };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_load_version(std::array<std::uint8_t, 7> versionLabel) const
@@ -1951,12 +1906,7 @@ namespace isobus
 			                                                         versionLabel[4],
 			                                                         versionLabel[5],
 			                                                         versionLabel[6] };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_delete_version(std::array<std::uint8_t, 7> versionLabel) const
@@ -1969,12 +1919,7 @@ namespace isobus
 			                                                         versionLabel[4],
 			                                                         versionLabel[5],
 			                                                         versionLabel[6] };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_extended_get_versions() const
@@ -1987,12 +1932,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_extended_store_version(std::array<std::uint8_t, 32> versionLabel) const
@@ -2000,12 +1940,7 @@ namespace isobus
 		std::array<std::uint8_t, 33> buffer;
 		buffer[0] = static_cast<std::uint8_t>(Function::ExtendedStoreVersionCommand);
 		memcpy(&buffer[1], versionLabel.data(), 32);
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_extended_load_version(std::array<std::uint8_t, 32> versionLabel) const
@@ -2013,12 +1948,7 @@ namespace isobus
 		std::array<std::uint8_t, 33> buffer;
 		buffer[0] = static_cast<std::uint8_t>(Function::ExtendedLoadVersionCommand);
 		memcpy(&buffer[1], versionLabel.data(), 32);
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_extended_delete_version(std::array<std::uint8_t, 32> versionLabel) const
@@ -2026,12 +1956,7 @@ namespace isobus
 		std::array<std::uint8_t, 33> buffer;
 		buffer[0] = static_cast<std::uint8_t>(Function::ExtendedDeleteVersionCommand);
 		memcpy(&buffer[1], versionLabel.data(), 32);
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_end_of_object_pool() const
@@ -2044,12 +1969,7 @@ namespace isobus
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_working_set_master() const
@@ -2078,12 +1998,7 @@ namespace isobus
 		{
 			buffer.resize(CAN_DATA_LENGTH);
 		}
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned) const
@@ -2105,12 +2020,7 @@ namespace isobus
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	bool VirtualTerminalClient::send_auxiliary_input_maintenance() const
@@ -2141,12 +2051,7 @@ namespace isobus
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
 	void VirtualTerminalClient::update_auxiliary_input_status()
@@ -2199,12 +2104,7 @@ namespace isobus
 				                                                         operatingState };
 			if (get_auxiliary_input_learn_mode_enabled())
 			{
-				retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-				                                                        buffer.data(),
-				                                                        CAN_DATA_LENGTH,
-				                                                        myControlFunction,
-				                                                        partnerControlFunction,
-				                                                        CANIdentifier::CANPriority::Priority3);
+				retVal = send_message_to_vt(buffer.data(), buffer.size(), CANIdentifier::CANPriority::Priority3);
 			}
 			else
 			{
@@ -2349,12 +2249,7 @@ namespace isobus
 								{
 									buffer[7] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
 								}
-								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-								                                               buffer.data(),
-								                                               CAN_DATA_LENGTH,
-								                                               parentVT->myControlFunction,
-								                                               parentVT->partnerControlFunction,
-								                                               CANIdentifier::CANPriority::Priority5);
+								parentVT->send_message_to_vt(buffer.data(), buffer.size());
 							}
 						}
 						break;
@@ -2390,12 +2285,7 @@ namespace isobus
 								{
 									buffer[7] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
 								}
-								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-								                                               buffer.data(),
-								                                               CAN_DATA_LENGTH,
-								                                               parentVT->myControlFunction,
-								                                               parentVT->partnerControlFunction,
-								                                               CANIdentifier::CANPriority::Priority5);
+								parentVT->send_message_to_vt(buffer.data(), buffer.size());
 							}
 						}
 						break;
@@ -2447,12 +2337,7 @@ namespace isobus
 								// VT version is either 4 or 5
 								buffer[5] = touchState;
 							}
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2496,12 +2381,7 @@ namespace isobus
 								buffer[7] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
 							}
 
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2532,12 +2412,7 @@ namespace isobus
 									0xFF,
 									static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
 								};
-								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-								                                               buffer.data(),
-								                                               CAN_DATA_LENGTH,
-								                                               parentVT->myControlFunction,
-								                                               parentVT->partnerControlFunction,
-								                                               CANIdentifier::CANPriority::Priority5);
+								parentVT->send_message_to_vt(buffer.data(), buffer.size());
 							}
 						}
 						break;
@@ -2570,12 +2445,7 @@ namespace isobus
 							{
 								buffer[3] = static_cast<std::uint8_t>(transactionNumber << 4 | 0x0F);
 							}
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2611,12 +2481,7 @@ namespace isobus
 								0xFF,
 								0xFF
 							};
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2649,12 +2514,7 @@ namespace isobus
 								0xFF,
 								0xFF
 							};
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2677,12 +2537,7 @@ namespace isobus
 								0xFF,
 								0xFF
 							};
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2715,12 +2570,7 @@ namespace isobus
 								// VT version is 5 or prior
 								buffer[7] = 0xFF;
 							}
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2745,12 +2595,7 @@ namespace isobus
 									0xFF,
 									0xFF,
 								};
-								CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-								                                               buffer.data(),
-								                                               CAN_DATA_LENGTH,
-								                                               parentVT->myControlFunction,
-								                                               parentVT->partnerControlFunction,
-								                                               CANIdentifier::CANPriority::Priority5);
+								parentVT->send_message_to_vt(buffer.data(), buffer.size());
 							}
 						}
 						break;
@@ -3333,12 +3178,7 @@ namespace isobus
 								0xFF,
 								0xFF,
 							};
-							CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-							                                               buffer.data(),
-							                                               CAN_DATA_LENGTH,
-							                                               parentVT->myControlFunction,
-							                                               parentVT->partnerControlFunction,
-							                                               CANIdentifier::CANPriority::Priority5);
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 					}
@@ -4628,12 +4468,8 @@ namespace isobus
 			return false;
 		}
 
-		bool success = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-		                                                              data.data(),
-		                                                              data.size(),
-		                                                              myControlFunction,
-		                                                              partnerControlFunction,
-		                                                              CANIdentifier::CANPriority::Priority5);
+		bool success = send_message_to_vt(data.data(), data.size());
+
 		if (success)
 		{
 			commandAwaitingResponse = true;
