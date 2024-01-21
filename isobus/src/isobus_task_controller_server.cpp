@@ -198,6 +198,7 @@ namespace isobus
 										if (serverControlFunction == rxMessage.get_destination_control_function())
 										{
 											send_version(rxMessage.get_source_control_function());
+											send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion), rxMessage.get_source_control_function());
 										}
 									}
 									break;
