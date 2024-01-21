@@ -90,6 +90,19 @@ namespace isobus
 			ReservedOption3 = 0x80
 		};
 
+		/// @brief Enumerates all PDACK error codes that can be sent to or from the client.
+		enum class ProcessDataAcknowledgeErrorCodes : std::uint8_t
+		{
+			ProcessDataCommandNotSupported = 0x01,
+			InvalidElementNumber = 0x02,
+			DDINotSupportedByElement = 0x04,
+			TriggerMethodNotSupported = 0x08,
+			ProcessDataNotSettable = 0x10,
+			InvalidOrUnsupportedIntervalOrThreshold = 0x20,
+			ProcessDataValueDoesNotConformToDDIDefinition = 0x40,
+			ProcessDataValueIsOutOfOperationalRangeOfThisDevice = 0x80
+		};
+
 		/// @brief Constructor for a TC server.
 		/// @param internalControlFunction The control function to use to communicate with the clients.
 		/// @param numberBoomsSupported The number of booms to report as supported by the TC.
@@ -102,11 +115,17 @@ namespace isobus
 		                     std::uint8_t numberChannelsSupportedForPositionBasedControl,
 		                     std::uint8_t optionsBitfield);
 
+		/// @brief Destructor for a TC server.
+		virtual ~TaskControllerServer();
+
 		/// @brief Deleted copy constructor
 		TaskControllerServer(TaskControllerServer &) = delete;
 
 		/// @brief Deleted assignment operator
 		TaskControllerServer &operator=(const TaskControllerServer &) = delete;
+
+		/// @brief Shuts down the TC server, unregisters PGN callbacks
+		void terminate();
 
 		// **** Functions to be implemented by the consumer of the library ****
 
@@ -188,7 +207,7 @@ namespace isobus
 		/// @param clientControlFunction The control function which sent the acknowledgement.
 		/// @param dataDescriptionIndex The data description index of the data element that was acknowledged.
 		/// @param elementNumber The element number of the data element that was acknowledged.
-		/// @param errorCodesFromClient The error codes that the client sent in the acknowledgement.
+		/// @param errorCodesFromClient The error codes that the client sent in the acknowledgement. This will be a bitfield defined by the ProcessDataAcknowledgeErrorCodes enum.
 		/// @param processDataCommand The process data command that was acknowledged.
 		virtual void on_process_data_acknowledge(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint8_t errorCodesFromClient, ProcessDataCommands processDataCommand) = 0;
 
@@ -202,7 +221,8 @@ namespace isobus
 		/// @param dataDescriptionIndex The data description index of the data element that was sent.
 		/// @param elementNumber The element number of the data element that was sent.
 		/// @param processDataValue The process data value that was sent.
-		/// @param errorCodes The error codes that the client sent in the value command.
+		/// @param errorCodes You should return any errors that occurred while processing the value command in this variable as defined by the ProcessDataAcknowledgeErrorCodes enum.
+		/// This will be sent back to the client if an acknowledgement is requested.
 		/// @returns Whether or not the value command was processed successfully.
 		virtual bool on_value_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::int32_t processDataValue, std::uint8_t &errorCodes) = 0;
 
@@ -382,6 +402,7 @@ namespace isobus
 			std::uint32_t clientDDOPsize_bytes = 0; ///< The size of the client's DDOP in bytes.
 			std::uint32_t statusBitfield = 0; ///< The status bitfield that the client is reporting to us.
 			std::uint16_t numberOfObjectPoolSegments = 0; ///< The number of object pool segments that have been sent to the client.
+			bool isDDOPActive = false; ///< Whether or not the client's DDOP is active.
 		};
 
 		/// @brief Stores messages received from task controller clients for processing later.
@@ -474,6 +495,21 @@ namespace isobus
 		/// @param errorCode The error code to send
 		/// @returns true if the message was sent, otherwise false
 		bool send_delete_object_pool_response(std::shared_ptr<ControlFunction> clientControlFunction, bool deletionResult, std::uint8_t errorCode) const;
+
+		/// @brief Sends a response to a change designator command
+		/// @param clientControlFunction The control function to send the message to
+		/// @param errorCode The error code to send
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_designator_response(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t objectID, std::uint8_t errorCode) const;
+
+		/// @brief Sends a process data acknowledge message to the client
+		/// @param clientControlFunction The control function to send the message to
+		/// @param dataDescriptionIndex The data description index of the data element that was acknowledged.
+		/// @param elementNumber The element number of the data element that was acknowledged.
+		/// @param errorBitfield The error bitfield to send (see ProcessDataAcknowledgeErrorCodes enum)
+		/// @param processDataCommand The process data command that was acknowledged. (or 0x0F if N/A)
+		/// @returns true if the message was sent, otherwise false
+		bool send_process_data_acknowledge(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint8_t errorBitfield, ProcessDataCommands processDataCommand) const;
 
 		static constexpr std::uint32_t STATUS_MESSAGE_RATE_MS = 2000; ///< The rate at which status messages are sent to the clients in milliseconds.
 

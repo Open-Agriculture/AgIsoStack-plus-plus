@@ -203,7 +203,7 @@ public:
 		return true;
 	}
 
-	bool get_is_stored_device_descriptor_object_pool_by_structure_label(std::shared_ptr<ControlFunction>, const std::vector<std::uint8_t> &structureLabelToReturn, const std::vector<std::uint8_t> &)
+	bool get_is_stored_device_descriptor_object_pool_by_structure_label(std::shared_ptr<ControlFunction>, const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &)
 	{
 		return !testStructureLabel.empty();
 	}
