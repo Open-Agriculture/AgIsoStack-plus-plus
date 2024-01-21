@@ -498,6 +498,7 @@ namespace isobus
 
 		/// @brief Sends a response to a change designator command
 		/// @param clientControlFunction The control function to send the message to
+		/// @param objectID The object ID that was changed
 		/// @param errorCode The error code to send
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_designator_response(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t objectID, std::uint8_t errorCode) const;
