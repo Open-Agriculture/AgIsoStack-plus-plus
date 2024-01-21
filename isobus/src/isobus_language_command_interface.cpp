@@ -98,8 +98,19 @@ namespace isobus
 		return retVal;
 	}
 
-	bool LanguageCommandInterface::send_language_command() const
+	bool LanguageCommandInterface::send_language_command()
 	{
+		if (languageCode.size() < 2)
+		{
+			CANStackLogger::warn("[VT/TC]: Language command interface is being used without a valid language code! Setting \"en\" as default. You should really set this in your app.");
+			languageCode = "en";
+		}
+		if (countryCode.size() < 2)
+		{
+			CANStackLogger::warn("[VT/TC]: Language command interface is being used without a valid country code! Setting \"XX\" as default. You should really set this in your app.");
+			countryCode = "XX";
+		}
+
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			static_cast<std::uint8_t>(languageCode[0]),
 			static_cast<std::uint8_t>(languageCode[1]),
