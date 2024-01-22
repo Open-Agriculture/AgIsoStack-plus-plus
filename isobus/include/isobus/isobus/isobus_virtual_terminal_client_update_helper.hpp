@@ -41,8 +41,22 @@ namespace isobus
 		/// @return True if the value was decreased successfully, false otherwise.
 		bool decrease_numeric_value(std::uint16_t objectId, std::uint32_t step = 1);
 
+		/// @brief Register a callback function to validate a numeric value change of a tracked object.
+		/// If the callback function returns true, the numeric value change will be acknowledged.
+		/// Otherwise, if the callback function returns false, the numeric value change will
+		/// be rejected by sending the current value back to the VT.
+		/// @param[in] callback The callback function to register, or nullptr to unregister.
+		void set_callback_validate_numeric_value(const std::function<bool(std::uint16_t, std::uint32_t)> &callback);
+
 	private:
+		/// @brief Processes a numeric value change event
+		/// @param[in] event The numeric value change event to process.
+		void process_numeric_value_change_event(const VirtualTerminalClient::VTChangeNumericValueEvent &event);
+
 		std::shared_ptr<VirtualTerminalClient> client; ///< Holds the vt client.
+
+		std::function<bool(std::uint16_t, std::uint32_t)> callbackValidateNumericValue; ///< Holds the callback function to validate a numeric value change.
+		std::shared_ptr<void> numericValueChangeEventHandle; ///< Holds the handle to the numeric value change event listener
 	};
 }; // namespace isobus
 

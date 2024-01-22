@@ -17,6 +17,8 @@ namespace isobus
 	  VirtualTerminalClientStateTracker(client->get_internal_control_function()),
 	  client(client)
 	{
+		numericValueChangeEventHandle = client->add_vt_change_numeric_value_event_listener(
+		  std::bind(&VirtualTerminalClientUpdateHelper::process_numeric_value_change_event, this, std::placeholders::_1));
 	}
 
 	bool VirtualTerminalClientUpdateHelper::set_numeric_value(std::uint16_t object_id, std::uint32_t value)
@@ -49,4 +51,32 @@ namespace isobus
 		return set_numeric_value(object_id, get_numeric_value(object_id) - step);
 	}
 
-}; // namespace isobus
+	void VirtualTerminalClientUpdateHelper::set_callback_validate_numeric_value(const std::function<bool(std::uint16_t, std::uint32_t)> &callback)
+	{
+		callbackValidateNumericValue = callback;
+	}
+
+	void VirtualTerminalClientUpdateHelper::process_numeric_value_change_event(const VirtualTerminalClient::VTChangeNumericValueEvent &event)
+	{
+		if (numericValueStates.find(event.objectID) == numericValueStates.end())
+		{
+			// Only proccess numeric value changes for tracked objects.
+			return;
+		}
+
+		if (numericValueStates.at(event.objectID) == event.value)
+		{
+			// Do not process the event if the value has not changed.
+			return;
+		}
+
+		std::uint32_t targetValue = event.value; // Default to the value received in the event.
+		if ((callbackValidateNumericValue != nullptr) && callbackValidateNumericValue(event.objectID, event.value))
+		{
+			// If the callback function returns false, reject the change by sending the previous value.
+			targetValue = numericValueStates.at(event.objectID);
+		}
+		client->send_change_numeric_value(event.objectID, targetValue);
+	}
+
+} // namespace isobus
