@@ -41,7 +41,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) != numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] add_tracked_numeric_value: objectId %lu already tracked", objectId);
+			CANStackLogger::warn("[VTStateHelper] add_tracked_numeric_value: objectId '%lu' already tracked", objectId);
 			return;
 		}
 
@@ -52,7 +52,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) == numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] remove_tracked_numeric_value: objectId %lu was not tracked", objectId);
+			CANStackLogger::warn("[VTStateHelper] remove_tracked_numeric_value: objectId '%lu' was not tracked", objectId);
 			return;
 		}
 
@@ -63,11 +63,65 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) == numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] get_numeric_value: objectId %lu not tracked", objectId);
+			CANStackLogger::warn("[VTStateHelper] get_numeric_value: objectId '%lu' not tracked", objectId);
 			return 0;
 		}
 
 		return numericValueStates.at(objectId);
+	}
+
+	std::uint16_t VirtualTerminalClientStateTracker::get_active_mask() const
+	{
+		return activeDataOrAlarmMask;
+	}
+
+	void VirtualTerminalClientStateTracker::add_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId, std::uint16_t initialSoftKeyMaskId)
+	{
+		if (softKeyMasks.find(dataOrAlarmMaskId) != softKeyMasks.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] add_tracked_soft_key_mask: data/alarm mask '%lu' already tracked", dataOrAlarmMaskId);
+			return;
+		}
+
+		softKeyMasks[dataOrAlarmMaskId] = initialSoftKeyMaskId;
+	}
+
+	void VirtualTerminalClientStateTracker::remove_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId)
+	{
+		if (softKeyMasks.find(dataOrAlarmMaskId) == softKeyMasks.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] remove_tracked_soft_key_mask: data/alarm mask '%lu' was not tracked", dataOrAlarmMaskId);
+			return;
+		}
+
+		softKeyMasks.erase(dataOrAlarmMaskId);
+	}
+
+	std::uint16_t VirtualTerminalClientStateTracker::get_active_soft_key_mask() const
+	{
+		if (softKeyMasks.find(activeDataOrAlarmMask) == softKeyMasks.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] get_active_soft_key_mask: the currently active data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
+			return NULL_OBJECT_ID;
+		}
+
+		return softKeyMasks.at(activeDataOrAlarmMask);
+	}
+
+	std::uint16_t VirtualTerminalClientStateTracker::get_soft_key_mask(std::uint16_t dataOrAlarmMaskId) const
+	{
+		if (softKeyMasks.find(dataOrAlarmMaskId) == softKeyMasks.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] get_soft_key_mask: data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
+			return NULL_OBJECT_ID;
+		}
+
+		return softKeyMasks.at(dataOrAlarmMaskId);
+	}
+
+	bool VirtualTerminalClientStateTracker::is_working_set_active() const
+	{
+		return (client != nullptr) && client->get_address_valid() && (client->get_address() == activeWorkingSetAddress);
 	}
 
 	void VirtualTerminalClientStateTracker::process_rx_message(const CANMessage &message, void *parentPointer)
@@ -86,6 +140,46 @@ namespace isobus
 			std::uint8_t function = message.get_uint8_at(0);
 			switch (function)
 			{
+				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::VTStatusMessage):
+				{
+					activeWorkingSetAddress = message.get_uint8_at(1);
+					if (is_working_set_active())
+					{
+						activeDataOrAlarmMask = message.get_uint16_at(2);
+						if (softKeyMasks.find(activeDataOrAlarmMask) != softKeyMasks.end())
+						{
+							std::uint16_t softKeyMask = message.get_uint16_at(4);
+							softKeyMasks[activeDataOrAlarmMask] = softKeyMask;
+						}
+					}
+				}
+				break;
+
+				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeActiveMaskCommand):
+				{
+					auto errorCode = message.get_uint8_at(3);
+					if (errorCode == 0)
+					{
+						activeDataOrAlarmMask = message.get_uint16_at(1);
+					}
+				}
+				break;
+
+				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeSoftKeyMaskCommand):
+				{
+					auto errorCode = message.get_uint8_at(3);
+					if (errorCode == 0)
+					{
+						std::uint16_t associatedMask = message.get_uint16_at(1);
+						std::uint16_t softKeyMask = message.get_uint16_at(4);
+						if (softKeyMasks.find(associatedMask) != softKeyMasks.end())
+						{
+							softKeyMasks[associatedMask] = softKeyMask;
+						}
+					}
+				}
+				break;
+
 				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeNumericValueCommand):
 				{
 					if (CAN_DATA_LENGTH == message.get_data_length())

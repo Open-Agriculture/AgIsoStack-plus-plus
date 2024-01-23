@@ -48,6 +48,19 @@ namespace isobus
 		/// @param[in] callback The callback function to register, or nullptr to unregister.
 		void set_callback_validate_numeric_value(const std::function<bool(std::uint16_t, std::uint32_t)> &callback);
 
+		/// @brief Sets the active data/alarm mask.
+		/// @param[in] workingSetId The working set to set the active data/alarm mask for.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to set active.
+		/// @return True if the data/alarm mask was set active successfully, false otherwise.
+		bool set_active_data_or_alarm_mask(std::uint16_t workingSetId, std::uint16_t dataOrAlarmMaskId);
+
+		/// @brief Sets the active soft key mask.
+		/// @param[in] maskType The type of mask to set the active soft key mask for.
+		/// @param[in] maskId The mask to set the active soft key mask for.
+		/// @param[in] softKeyMaskId The soft key mask to set active.
+		/// @return True if the soft key mask was set active successfully, false otherwise.
+		bool set_active_soft_key_mask(VirtualTerminalClient::MaskType maskType, std::uint16_t maskId, std::uint16_t softKeyMaskId);
+
 	private:
 		/// @brief Processes a numeric value change event
 		/// @param[in] event The numeric value change event to process.

@@ -89,4 +89,49 @@ namespace isobus
 		vtClient->send_change_numeric_value(event.objectID, targetValue);
 	}
 
+	bool VirtualTerminalClientUpdateHelper::set_active_data_or_alarm_mask(std::uint16_t workingSetId, std::uint16_t dataOrAlarmMaskId)
+	{
+		if (nullptr == client)
+		{
+			CANStackLogger::error("[VTStateHelper] set_active_data_or_alarm_mask: client is nullptr");
+			return false;
+		}
+		if (activeDataOrAlarmMask == dataOrAlarmMaskId)
+		{
+			return false;
+		}
+
+		bool success = vtClient->send_change_active_mask(workingSetId, dataOrAlarmMaskId);
+		if (success)
+		{
+			activeDataOrAlarmMask = dataOrAlarmMaskId;
+		}
+		return success;
+	}
+
+	bool VirtualTerminalClientUpdateHelper::set_active_soft_key_mask(VirtualTerminalClient::MaskType maskType, std::uint16_t maskId, std::uint16_t softKeyMaskId)
+	{
+		if (nullptr == client)
+		{
+			CANStackLogger::error("[VTStateHelper] set_active_soft_key_mask: client is nullptr");
+			return false;
+		}
+		if (softKeyMasks.find(maskId) == softKeyMasks.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%lu' not tracked", maskId);
+			return false;
+		}
+		if (softKeyMasks.at(maskId) == softKeyMaskId)
+		{
+			return false;
+		}
+
+		bool success = vtClient->send_change_softkey_mask(maskType, maskId, softKeyMaskId);
+		if (success)
+		{
+			softKeyMasks[maskId] = softKeyMaskId;
+		}
+		return success;
+	}
+
 } // namespace isobus

@@ -53,6 +53,32 @@ namespace isobus
 		/// @return The current numeric value of the tracked object.
 		std::uint32_t get_numeric_value(std::uint16_t objectId) const;
 
+		/// @brief Get the data/alarm mask currently active on the server for this client. It may not be displayed if the working set is not active.
+		/// @return The data/alarm mask currently active on the server for this client.
+		std::uint16_t get_active_mask() const;
+
+		/// @brief Adds a data/alarm mask to track the soft key mask for.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to track the soft key mask for.
+		/// @param[in] initialSoftKeyMaskId The initial soft key mask to associate with the data/alarm mask.
+		void add_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId, std::uint16_t initialSoftKeyMaskId);
+
+		/// @brief Removes a data/alarm mask from tracking the soft key mask for.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to remove the soft key mask from tracking for.
+		void remove_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId);
+
+		/// @brief Get the soft key mask currently active on thse server for this client. It may not be displayed if the working set is not active.
+		/// @return The soft key mask currently active on the server for this client.
+		std::uint16_t get_active_soft_key_mask() const;
+
+		/// @brief Get the soft key mask currently associated with a data/alarm mask.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to get the currently associated soft key mask for.
+		/// @return The soft key mask currently associated with the supplied mask.
+		std::uint16_t get_soft_key_mask(std::uint16_t dataOrAlarmMaskId) const;
+
+		/// @brief Get whether the working set of the client is active on the server.
+		/// @return True if the working set is active, false otherwise.
+		bool is_working_set_active() const;
+
 	protected:
 		std::shared_ptr<ControlFunction> client; ///< The control function of the virtual terminal client to track.
 
@@ -70,9 +96,9 @@ namespace isobus
 		//! TODO: add font attribute state
 		//! TODO: add line attribute state
 		//! TODO: add fill attribute state
-		std::uint16_t currentActiveMask; ///< Holds the currently active mask.
-		//! TODO: std::uint16_t currentWorkingSet; ///< Holds the working set of the current active mask.
-		//! TODO: std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
+		std::uint16_t activeDataOrAlarmMask; ///< Holds the data/alarm mask currently visible on the server for this client.
+		std::uint8_t activeWorkingSetAddress; ///< Holds the address of the control function that currently has it's working set active on the server.
+		std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
 		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint32_t>> attributeStates; ///< Holds the 'attribute' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::uint8_t> alarmMaskPrioritiesStates; ///< Holds the 'alarm mask priority' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint16_t>> listItemStates; ///< Holds the 'list item' state of tracked objects.
