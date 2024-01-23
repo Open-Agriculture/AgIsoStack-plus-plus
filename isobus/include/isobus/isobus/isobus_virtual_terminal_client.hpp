@@ -1356,6 +1356,13 @@ namespace isobus
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY = 1000; ///< The delay between the auxiliary input status messages, in milliseconds
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY_INTERACTION = 50; ///< The delay between the auxiliary input status messages when the input is interacted with, in milliseconds
 
+		/// @brief Sends a message to the VT server
+		/// @param[in] dataBuffer A pointer to the data buffer to send
+		/// @param[in] dataLength The length of the data buffer
+		/// @param[in] priority The priority of the message (default is Priority5)
+		/// @returns true if the message was sent successfully, false otherwise
+		bool send_message_to_vt(const std::uint8_t *dataBuffer, std::uint32_t dataLength, CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::Priority5) const;
+
 		// Object Pool Managment
 		/// @brief Sends the delete object pool message
 		/// @returns true if the message was sent
