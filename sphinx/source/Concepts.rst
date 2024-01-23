@@ -21,13 +21,6 @@ It's OK if you haven't heard of those before, but this concepts overview assumes
 
 Lets discuss some of the basics you'll need to know to use this library.
 
-.. image:: ../images/concepts_1.png
-   :width: 126px
-   :align: left
-   :alt: Minimal Block Diagram
-
-The above block diagram shows the basic components of an ISOBUS module, a **Hardware API** that handles the CAN transceiver driver and raw CAN frames, a **Networking API** that handles Control Functions for listening to data and sending to other modules, also transport handling of messages. The **Application** is where you will write your code to handle the data you receive and send.
-
 An ISOBUS network is a 250000 baud CAN bus that follows the AEF's ISO 11783 standard of communication, which itself is based on SAE's J1939. The ISOBUS standards are designed for agricultural vehicles and forestry.
 
 As far as this library is concerned, CAN frames contain at most 8 bytes of data, along with a 32 bit identifier.
@@ -132,27 +125,13 @@ The library will handle this for you completely, but it's important to know it e
 
 Review
 ^^^^^^^
+
 So, to review, a control function is permanently identified by its NAME.
 This NAME is used during *address claiming* to assign the control function an *address*.
 This address is not permanent, and may change at any time if address claiming occurs again for some reason.
 
 Now that you understand these concepts, you can create your first control function and send some basic messages!
 Check out the :doc:`basic tutorial <Tutorials/The ISOBUS Hello World>` now if you'd like to practice this, or keep reading to learn more.
-
-.. image:: ../images/concepts_2.png
-   :width: 241px
-   :align: right
-   :alt: Minimal Block Diagram of an example ECU
-
-An example use of **AgIsoStack++** might be to create an ISOBUS ECU that controls an implement, like a seed drill or sprayer. This ECU would implement a Hardware Interface with CAN, then set up a number of Control Functions: internal Control Function's to receive commands and some external Control Function's for commanding with other modules. 
-
-The ECU would implement the Virtual Terminal(VT) client to send an Object Pool (IOP) file to a VT to display controls and information from the "screen in the tractor cab", and a Task Controller (TC) client to receive a tasking job. The rest of the Application would be the logic to control the implement based on the TC job and commands from the VT.
-
-.. image:: ../images/spacer.png
-   :width: 100%
-   :height: 1px
-   :class: no-scaled-link
-
 
 Transport Layer
 ----------------
