@@ -22,9 +22,19 @@ namespace isobus
 	{
 	}
 
+	VirtualTerminalClientStateTracker::~VirtualTerminalClientStateTracker()
+	{
+		terminate();
+	}
+
 	void VirtualTerminalClientStateTracker::initialize()
 	{
 		CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
+	}
+
+	void VirtualTerminalClientStateTracker::terminate()
+	{
+		CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 	}
 
 	void VirtualTerminalClientStateTracker::add_tracked_numeric_value(std::uint16_t objectId, std::uint32_t initialValue)
@@ -70,15 +80,33 @@ namespace isobus
 	{
 		if (message.has_valid_source_control_function() &&
 		    message.is_destination(client) &&
-		    message.is_parameter_group_number(CANLibParameterGroupNumber::VirtualTerminalToECU))
+		    message.is_parameter_group_number(CANLibParameterGroupNumber::VirtualTerminalToECU) &&
+		    (message.get_data_length() >= 1))
 		{
 			std::uint8_t function = message.get_uint8_at(0);
 			switch (function)
 			{
 				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeNumericValueCommand):
 				{
-					auto errorCode = message.get_uint8_at(3);
-					if (errorCode == 0)
+					if (CAN_DATA_LENGTH == message.get_data_length())
+					{
+						auto errorCode = message.get_uint8_at(3);
+						if (errorCode == 0)
+						{
+							std::uint16_t objectId = message.get_uint16_at(1);
+							if (numericValueStates.find(objectId) != numericValueStates.end())
+							{
+								std::uint32_t value = message.get_uint32_at(4);
+								numericValueStates[objectId] = value;
+							}
+						}
+					}
+				}
+				break;
+
+				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::VTChangeNumericValueMessage):
+				{
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						std::uint16_t objectId = message.get_uint16_at(1);
 						if (numericValueStates.find(objectId) != numericValueStates.end())
@@ -87,18 +115,9 @@ namespace isobus
 							numericValueStates[objectId] = value;
 						}
 					}
-					break;
 				}
-				case static_cast<std::uint8_t>(VirtualTerminalClient::Function::VTChangeNumericValueMessage):
-				{
-					std::uint16_t objectId = message.get_uint16_at(1);
-					if (numericValueStates.find(objectId) != numericValueStates.end())
-					{
-						std::uint32_t value = message.get_uint32_at(4);
-						numericValueStates[objectId] = value;
-					}
-					break;
-				}
+				break;
+
 				default:
 					break;
 			}

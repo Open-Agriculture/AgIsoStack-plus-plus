@@ -28,8 +28,14 @@ namespace isobus
 		/// @param[in] client The control function of the client. May be external.
 		explicit VirtualTerminalClientStateTracker(std::shared_ptr<ControlFunction> client);
 
+		/// @brief The destructor.
+		~VirtualTerminalClientStateTracker();
+
 		/// @brief Initializes the state tracker.
 		void initialize();
+
+		/// @brief Terminate the state tracker.
+		void terminate();
 
 		//! TODO: void initialize_with_defaults(ObjectPool &objectPool);
 

@@ -14,15 +14,25 @@
 namespace isobus
 {
 	VirtualTerminalClientUpdateHelper::VirtualTerminalClientUpdateHelper(std::shared_ptr<VirtualTerminalClient> client) :
-	  VirtualTerminalClientStateTracker(client->get_internal_control_function()),
+	  VirtualTerminalClientStateTracker(nullptr == client ? nullptr : client->get_internal_control_function()),
 	  client(client)
 	{
+		if (nullptr == client)
+		{
+			CANStackLogger::error("[VTStateHelper] constructor: client is nullptr");
+			return;
+		}
 		numericValueChangeEventHandle = client->add_vt_change_numeric_value_event_listener(
 		  std::bind(&VirtualTerminalClientUpdateHelper::process_numeric_value_change_event, this, std::placeholders::_1));
 	}
 
 	bool VirtualTerminalClientUpdateHelper::set_numeric_value(std::uint16_t object_id, std::uint32_t value)
 	{
+		if (nullptr == client)
+		{
+			CANStackLogger::error("[VTStateHelper] set_numeric_value: client is nullptr");
+			return false;
+		}
 		if (numericValueStates.find(object_id) == numericValueStates.end())
 		{
 			CANStackLogger::warn("[VTStateHelper] set_numeric_value: objectId %lu not tracked", object_id);
