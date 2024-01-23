@@ -12,6 +12,7 @@
 #define CAN_MESSAGE_HPP
 
 #include "isobus/isobus/can_control_function.hpp"
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/utility/data_span.hpp"
 
@@ -102,6 +103,11 @@ namespace isobus
 		/// @brief Returns the identifier of the message
 		/// @returns The identifier of the message
 		CANIdentifier get_identifier() const;
+
+		/// @brief Compares the identifier of the message to the parameter group number (PGN) supplied
+		/// @param[in] parameterGroupNumber The parameter group number to compare to
+		/// @returns True if the message identifier matches the parameter group number, false otherwise
+		bool is_parameter_group_number(CANLibParameterGroupNumber parameterGroupNumber) const;
 
 		/// @brief Returns the CAN channel index associated with the message
 		/// @returns The CAN channel index associated with the message
