@@ -31,4 +31,4 @@ Linux:
 sphinx-build -M html source build
 ```
 
-Then, you can view the documentation at `sphinx_root\build\html\index.html` in your web browser.
+Then, you can view the documentation at `sphinx\build\html\index.html` in your web browser.
