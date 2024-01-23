@@ -144,7 +144,7 @@ Check out the :doc:`basic tutorial <Tutorials/The ISOBUS Hello World>` now if yo
    :align: right
    :alt: Minimal Block Diagram of an example ECU
 
-An example use of **ArIsoStack++** might be to create an ISOBUS ECU that controls an implement, like a seed drill or sprayer. This ECU would implement a Hardware Interface with CAN, then set up a number of Control Functions: internal Control Function's to receive commands and some external Control Function's for commanding with other modules. 
+An example use of **AgIsoStack++** might be to create an ISOBUS ECU that controls an implement, like a seed drill or sprayer. This ECU would implement a Hardware Interface with CAN, then set up a number of Control Functions: internal Control Function's to receive commands and some external Control Function's for commanding with other modules. 
 
 The ECU would implement the Virtual Terminal(VT) client to send an Object Pool (IOP) file to a VT to display controls and information from the "screen in the tractor cab", and a Task Controller (TC) client to receive a tasking job. The rest of the Application would be the logic to control the implement based on the TC job and commands from the VT.
 
