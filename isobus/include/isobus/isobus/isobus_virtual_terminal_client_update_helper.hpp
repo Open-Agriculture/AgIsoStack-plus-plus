@@ -53,7 +53,7 @@ namespace isobus
 		/// @param[in] event The numeric value change event to process.
 		void process_numeric_value_change_event(const VirtualTerminalClient::VTChangeNumericValueEvent &event);
 
-		std::shared_ptr<VirtualTerminalClient> client; ///< Holds the vt client.
+		std::shared_ptr<VirtualTerminalClient> vtClient; ///< Holds the vt client.
 
 		std::function<bool(std::uint16_t, std::uint32_t)> callbackValidateNumericValue; ///< Holds the callback function to validate a numeric value change.
 		std::shared_ptr<void> numericValueChangeEventHandle; ///< Holds the handle to the numeric value change event listener

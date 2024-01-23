@@ -15,7 +15,7 @@ namespace isobus
 {
 	VirtualTerminalClientUpdateHelper::VirtualTerminalClientUpdateHelper(std::shared_ptr<VirtualTerminalClient> client) :
 	  VirtualTerminalClientStateTracker(nullptr == client ? nullptr : client->get_internal_control_function()),
-	  client(client)
+	  vtClient(client)
 	{
 		if (nullptr == client)
 		{
@@ -43,7 +43,7 @@ namespace isobus
 			return false;
 		}
 
-		bool success = client->send_change_numeric_value(object_id, value);
+		bool success = vtClient->send_change_numeric_value(object_id, value);
 		if (success)
 		{
 			numericValueStates[object_id] = value;
@@ -86,7 +86,7 @@ namespace isobus
 			// If the callback function returns false, reject the change by sending the previous value.
 			targetValue = numericValueStates.at(event.objectID);
 		}
-		client->send_change_numeric_value(event.objectID, targetValue);
+		vtClient->send_change_numeric_value(event.objectID, targetValue);
 	}
 
 } // namespace isobus
