@@ -56,6 +56,7 @@ set(TEST_SRC
     maintain_power_tests.cpp
     vt_object_tests.cpp
     nmea2000_message_tests.cpp
+    isobus_data_dictionary_tests.cpp
     helpers/control_function_helpers.cpp
     helpers/messaging_helpers.cpp)
 
