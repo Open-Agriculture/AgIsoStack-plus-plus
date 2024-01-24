@@ -90,6 +90,7 @@ set(ISOBUS_INCLUDE
     "isobus_virtual_terminal_client_update_helper.hpp"
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp"
+    "isobus_preferred_addresses.hpp"
     "can_message_data.hpp")
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
