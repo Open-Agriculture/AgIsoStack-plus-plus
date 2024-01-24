@@ -19,6 +19,11 @@ We'll assume you followed the instructions in the :doc:`installation section <..
 
 We'll also assume you've reviewed the :doc:`concepts section <../Concepts>`, and are familiar with things like a NAME, and the idea of a control function.
 
+.. image:: ../../images/concepts_1.png
+   :alt: Minimal Block Diagram
+
+This block diagram shows the basic components of an ISOBUS module. **Hardware API** handles the CAN transceiver driver and raw CAN frames. **Networking API** handles Control Functions for listening to data and sending to other modules, also transport protocols for handling of messages. The **Application** is where you will write your code to handle the data you receive and send.
+
 First Steps
 ------------
 

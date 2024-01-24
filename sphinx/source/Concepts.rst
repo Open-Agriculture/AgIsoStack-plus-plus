@@ -17,7 +17,7 @@ The Basics
 -----------
 
 If you've found this project, you probably already know a few things about ISO 11783 (ISOBUS) or J1939.
-It's OK if you haven't heard of those before, but this concepts overview assumes you know a bit about CAN already.
+It's OK if you haven't heard of those before, but this concepts overview assumes you know a bit about `CAN bus <https://en.wikipedia.org/wiki/CAN_bus>`_ already.
 
 Lets discuss some of the basics you'll need to know to use this library.
 
@@ -125,6 +125,7 @@ The library will handle this for you completely, but it's important to know it e
 
 Review
 ^^^^^^^
+
 So, to review, a control function is permanently identified by its NAME.
 This NAME is used during *address claiming* to assign the control function an *address*.
 This address is not permanent, and may change at any time if address claiming occurs again for some reason.

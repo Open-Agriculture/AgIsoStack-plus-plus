@@ -128,6 +128,6 @@ namespace isobus
 		TransmitCompleteCallback sessionCompleteCallback = nullptr; ///< A callback that is to be called when the session is completed
 		void *parent = nullptr; ///< A generic context variable that helps identify what object callbacks are destined for. Can be nullptr
 	};
-}; // namespace isobus
+} // namespace isobus
 
 #endif // CAN_TRANSPORT_PROTOCOL_BASE_HPP
