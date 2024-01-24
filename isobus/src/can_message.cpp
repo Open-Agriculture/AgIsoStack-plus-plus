@@ -74,6 +74,11 @@ namespace isobus
 		return identifier;
 	}
 
+	bool CANMessage::is_parameter_group_number(CANLibParameterGroupNumber parameterGroupNumber) const
+	{
+		return identifier.get_parameter_group_number() == static_cast<std::uint32_t>(parameterGroupNumber);
+	}
+
 	std::uint8_t CANMessage::get_can_port_index() const
 	{
 		return CANPortIndex;
