@@ -3,7 +3,7 @@
 ///
 /// @brief This file contains the definition of an auto-generated lookup of all ISOBUS DDIs
 /// as defined in ISO11783-11, exported from isobus.net.
-/// This file was generated January 23, 2024.
+/// This file was generated January 25, 2024.
 ///
 /// @author Adrian Del Grosso
 /// @copyright 2024 The Open-Agriculture Developers
