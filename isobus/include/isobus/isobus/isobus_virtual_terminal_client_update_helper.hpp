@@ -58,6 +58,6 @@ namespace isobus
 		std::function<bool(std::uint16_t, std::uint32_t)> callbackValidateNumericValue; ///< Holds the callback function to validate a numeric value change.
 		std::shared_ptr<void> numericValueChangeEventHandle; ///< Holds the handle to the numeric value change event listener
 	};
-}; // namespace isobus
+} // namespace isobus
 
 #endif // ISOBUS_VIRTUAL_TERMINAL_CLIENT_UPDATE_HELPER_HPP

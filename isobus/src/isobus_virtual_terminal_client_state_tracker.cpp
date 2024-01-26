@@ -123,4 +123,4 @@ namespace isobus
 			}
 		}
 	}
-}; // namespace isobus
+} // namespace isobus

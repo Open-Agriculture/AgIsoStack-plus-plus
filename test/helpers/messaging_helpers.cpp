@@ -168,4 +168,4 @@ namespace test_helpers
 		  });
 	}
 
-}; // namespace test_helpers
+} // namespace test_helpers
