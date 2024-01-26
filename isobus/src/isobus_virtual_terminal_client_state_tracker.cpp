@@ -45,7 +45,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) != numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] add_tracked_numeric_value: objectId '%lu' already tracked", objectId);
+			LOG_WARNING("[VTStateHelper] add_tracked_numeric_value: objectId '%lu' already tracked", objectId);
 			return;
 		}
 
@@ -56,7 +56,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) == numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] remove_tracked_numeric_value: objectId '%lu' was not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_numeric_value: objectId '%lu' was not tracked", objectId);
 			return;
 		}
 
@@ -67,7 +67,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) == numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] get_numeric_value: objectId '%lu' not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] get_numeric_value: objectId '%lu' not tracked", objectId);
 			return 0;
 		}
 
@@ -98,7 +98,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(dataOrAlarmMaskId) != softKeyMasks.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] add_tracked_soft_key_mask: data/alarm mask '%lu' already tracked", dataOrAlarmMaskId);
+			LOG_WARNING("[VTStateHelper] add_tracked_soft_key_mask: data/alarm mask '%lu' already tracked", dataOrAlarmMaskId);
 			return;
 		}
 
@@ -109,7 +109,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(dataOrAlarmMaskId) == softKeyMasks.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] remove_tracked_soft_key_mask: data/alarm mask '%lu' was not tracked", dataOrAlarmMaskId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_soft_key_mask: data/alarm mask '%lu' was not tracked", dataOrAlarmMaskId);
 			return;
 		}
 
@@ -120,7 +120,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(activeDataOrAlarmMask) == softKeyMasks.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] get_active_soft_key_mask: the currently active data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
+			LOG_WARNING("[VTStateHelper] get_active_soft_key_mask: the currently active data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
 			return NULL_OBJECT_ID;
 		}
 
@@ -131,7 +131,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(dataOrAlarmMaskId) == softKeyMasks.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] get_soft_key_mask: data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
+			LOG_WARNING("[VTStateHelper] get_soft_key_mask: data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
 			return NULL_OBJECT_ID;
 		}
 
@@ -153,7 +153,7 @@ namespace isobus
 		auto &attributeMap = attributeStates.at(objectId);
 		if (attributeMap.find(attribute) != attributeMap.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] add_tracked_attribute: attribute '%lu' of objectId '%lu' already tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] add_tracked_attribute: attribute '%lu' of objectId '%lu' already tracked", attribute, objectId);
 			return;
 		}
 
@@ -164,14 +164,14 @@ namespace isobus
 	{
 		if (attributeStates.find(objectId) == attributeStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] remove_tracked_attribute: objectId '%lu' was not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_attribute: objectId '%lu' was not tracked", objectId);
 			return;
 		}
 
 		auto &attributeMap = attributeStates.at(objectId);
 		if (attributeMap.find(attribute) == attributeMap.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] remove_tracked_attribute: attribute '%lu' of objectId '%lu' was not tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_attribute: attribute '%lu' of objectId '%lu' was not tracked", attribute, objectId);
 			return;
 		}
 
@@ -182,14 +182,14 @@ namespace isobus
 	{
 		if (attributeStates.find(objectId) == attributeStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] get_attribute: objectId '%lu' not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] get_attribute: objectId '%lu' not tracked", objectId);
 			return 0;
 		}
 
 		const auto &attributeMap = attributeStates.at(objectId);
 		if (attributeMap.find(attribute) == attributeMap.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] get_attribute: attribute '%lu' of objectId '%lu' not tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] get_attribute: attribute '%lu' of objectId '%lu' not tracked", attribute, objectId);
 			return 0;
 		}
 

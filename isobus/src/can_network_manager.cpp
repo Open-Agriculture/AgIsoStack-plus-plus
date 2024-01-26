@@ -372,7 +372,10 @@ namespace isobus
 			{
 				if (i != controlFunction->get_address())
 				{
-					CANStackLogger::warn("[NM]: %s control function with address '%d' was at incorrect address '%d' in the lookup table prior to deletion.", controlFunction->get_type_string().c_str(), controlFunction->get_address(), i);
+					LOG_WARNING("[NM]: %s control function with address '%d' was at incorrect address '%d' in the lookup table prior to deletion.",
+					            controlFunction->get_type_string().c_str(),
+					            controlFunction->get_address(),
+					            i);
 				}
 
 				if (controlFunction->get_address() < NULL_CAN_ADDRESS)
@@ -390,7 +393,9 @@ namespace isobus
 				}
 			}
 		}
-		CANStackLogger::info("[NM]: %s control function with address '%d' is deleted.", controlFunction->get_type_string().c_str(), controlFunction->get_address());
+		LOG_INFO("[NM]: %s control function with address '%d' is deleted.",
+		         controlFunction->get_type_string().c_str(),
+		         controlFunction->get_address());
 	}
 
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
@@ -573,11 +578,11 @@ namespace isobus
 				// Need to evict them from the table and move them to the inactive list
 				targetControlFunction->address = NULL_CAN_ADDRESS;
 				inactiveControlFunctions.push_back(targetControlFunction);
-				CANStackLogger::info("[NM]: %s CF '%016llx' is evicted from address '%d' on channel '%d', as their address is probably stolen.",
-				                     targetControlFunction->get_type_string().c_str(),
-				                     targetControlFunction->get_NAME().get_full_name(),
-				                     claimedAddress,
-				                     channelIndex);
+				LOG_INFO("[NM]: %s CF '%016llx' is evicted from address '%d' on channel '%d', as their address is probably stolen.",
+				         targetControlFunction->get_type_string().c_str(),
+				         targetControlFunction->get_NAME().get_full_name(),
+				         claimedAddress,
+				         channelIndex);
 				targetControlFunction = nullptr;
 			}
 
@@ -594,11 +599,11 @@ namespace isobus
 					    (currentControlFunction->get_can_port() == channelIndex))
 					{
 						controlFunctionTable[channelIndex][claimedAddress] = currentControlFunction;
-						CANStackLogger::debug("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
-						                      currentControlFunction->get_type_string().c_str(),
-						                      currentControlFunction->get_NAME().get_full_name(),
-						                      claimedAddress,
-						                      channelIndex);
+						LOG_DEBUG("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
+						          currentControlFunction->get_type_string().c_str(),
+						          currentControlFunction->get_NAME().get_full_name(),
+						          claimedAddress,
+						          channelIndex);
 						process_control_function_state_change_callback(currentControlFunction, ControlFunctionState::Online);
 						break;
 					}
@@ -773,7 +778,7 @@ namespace isobus
 				// New device, need to start keeping track of it
 				foundControlFunction = ControlFunction::create(NAME(claimedNAME), claimedAddress, rxFrame.channel);
 				controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = foundControlFunction;
-				CANStackLogger::debug("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
+				LOG_DEBUG("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
 			}
 			else if (foundControlFunction->address != claimedAddress)
 			{
@@ -781,19 +786,19 @@ namespace isobus
 				{
 					controlFunctionTable[rxFrame.channel][claimedAddress] = foundControlFunction;
 					controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = nullptr;
-					CANStackLogger::info("[NM]: The %s control function at address %d changed it's address to %d on channel %u.",
-					                     foundControlFunction->get_type_string().c_str(),
-					                     foundControlFunction->get_address(),
-					                     claimedAddress,
-					                     foundControlFunction->get_can_port());
+					LOG_INFO("[NM]: The %s control function at address %d changed it's address to %d on channel %u.",
+					         foundControlFunction->get_type_string().c_str(),
+					         foundControlFunction->get_address(),
+					         claimedAddress,
+					         foundControlFunction->get_can_port());
 				}
 				else
 				{
-					CANStackLogger::info("[NM]: %s control function with name %016llx has claimed address %u on channel %u.",
-					                     foundControlFunction->get_type_string().c_str(),
-					                     foundControlFunction->get_NAME().get_full_name(),
-					                     claimedAddress,
-					                     foundControlFunction->get_can_port());
+					LOG_INFO("[NM]: %s control function with name %016llx has claimed address %u on channel %u.",
+					         foundControlFunction->get_type_string().c_str(),
+					         foundControlFunction->get_NAME().get_full_name(),
+					         claimedAddress,
+					         foundControlFunction->get_can_port());
 					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 				}
 				foundControlFunction->address = claimedAddress;
@@ -826,10 +831,10 @@ namespace isobus
 					    (ControlFunction::Type::External == currentActiveControlFunction->get_type()))
 					{
 						// This CF matches the filter and is not an internal or already partnered CF
-						CANStackLogger::info("[NM]: A partner with name %016llx has claimed address %u on channel %u.",
-						                     partner->get_NAME().get_full_name(),
-						                     partner->get_address(),
-						                     partner->get_can_port());
+						LOG_INFO("[NM]: A partner with name %016llx has claimed address %u on channel %u.",
+						         partner->get_NAME().get_full_name(),
+						         partner->get_address(),
+						         partner->get_can_port());
 
 						// Populate the partner's data
 						partner->address = currentActiveControlFunction->get_address();
@@ -885,10 +890,10 @@ namespace isobus
 				}
 				else
 				{
-					CANStackLogger::warn("[NM]: Cannot send a message with PGN " +
-					                     isobus::to_string(static_cast<int>(parameterGroupNumber)) +
-					                     " as a destination specific message. " +
-					                     "Try resending it using nullptr as your destination control function.");
+					LOG_WARNING("[NM]: Cannot send a message with PGN " +
+					            isobus::to_string(static_cast<int>(parameterGroupNumber)) +
+					            " as a destination specific message. " +
+					            "Try resending it using nullptr as your destination control function.");
 					identifier = DEFAULT_IDENTIFIER;
 				}
 			}
@@ -1129,7 +1134,7 @@ namespace isobus
 					    (ControlFunction::Type::Internal != controlFunction->get_type()))
 					{
 						inactiveControlFunctions.push_back(controlFunction);
-						CANStackLogger::info("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
+						LOG_INFO("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
 						controlFunctionTable[channelIndex][i] = nullptr;
 						controlFunction->address = NULL_CAN_ADDRESS;
 						process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);

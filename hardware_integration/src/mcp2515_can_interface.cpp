@@ -308,14 +308,14 @@ namespace isobus
 				// Check if last message was sent successfully
 				if (0 != (ctrl & (0x40 | 0x10)))
 				{
-					isobus::CANStackLogger::error("[MCP2515] Failed to send last message, please verify your connection/setup:");
+					LOG_ERROR("[MCP2515] Failed to send last message, please verify your connection/setup:");
 					if (0 != (ctrl & 0x40))
 					{
-						isobus::CANStackLogger::error("\t- Message was aborted.");
+						LOG_ERROR("\t- Message was aborted.");
 					}
 					if (0 != (ctrl & 0x10))
 					{
-						isobus::CANStackLogger::error("\t- A bus error occurred while the message was being transmitted.");
+						LOG_ERROR("\t- A bus error occurred while the message was being transmitted.");
 					}
 				}
 
@@ -349,7 +349,7 @@ namespace isobus
 			}
 			else
 			{
-				isobus::CANStackLogger::warn("[MCP2515] Failed to send message, buffer is not empty.");
+				LOG_WARNING("[MCP2515] Failed to send message, buffer is not empty.");
 			}
 		}
 
@@ -407,7 +407,7 @@ namespace isobus
 
 		if (!retVal)
 		{
-			isobus::CANStackLogger::error("[MCP2515] Failed to send message, buffer has been full for too long.");
+			LOG_ERROR("[MCP2515] Failed to send message, buffer has been full for too long.");
 		}
 		return retVal;
 	}

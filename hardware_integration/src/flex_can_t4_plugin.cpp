@@ -62,7 +62,7 @@ namespace isobus
 #endif
 		else
 		{
-			isobus::CANStackLogger::critical("[FlexCAN]: Invalid Channel Selected");
+			LOG_CRITICAL("[FlexCAN]: Invalid Channel Selected");
 		}
 	}
 

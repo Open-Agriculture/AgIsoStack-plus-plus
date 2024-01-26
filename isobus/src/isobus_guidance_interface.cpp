@@ -251,7 +251,7 @@ namespace isobus
 			if ((nullptr != guidanceSystemCommandTransmitData.get_sender_control_function()) || (nullptr != guidanceMachineInfoTransmitData.get_sender_control_function()))
 			{
 				// Make sure you know what you are doing... consider reviewing the guidance messaging in ISO 11783-7 if you haven't already.
-				CANStackLogger::warn("[Guidance]: Use extreme caution! You have configured the ISOBUS guidance interface with the ability to steer a machine.");
+				LOG_WARNING("[Guidance]: Use extreme caution! You have configured the ISOBUS guidance interface with the ability to steer a machine.");
 			}
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceMachineInfo), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AgriculturalGuidanceSystemCommand), process_rx_message, this);
@@ -318,12 +318,12 @@ namespace isobus
 			if (guidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
-				CANStackLogger::warn("[Guidance]: Transmitting a commanded curvature clamped to maximum value. Verify guidance calculations are accurate!");
+				LOG_WARNING("[Guidance]: Transmitting a commanded curvature clamped to maximum value. Verify guidance calculations are accurate!");
 			}
 			else if (scaledCurvature < 0) // 0 In this case is -8032 km-1 due to the addition of the offset earlier
 			{
 				encodedCurvature = 0; // Clamp to minimum value
-				CANStackLogger::warn("[Guidance]: Transmitting a commanded curvature clamped to minimum value. Verify guidance calculations are accurate!");
+				LOG_WARNING("[Guidance]: Transmitting a commanded curvature clamped to minimum value. Verify guidance calculations are accurate!");
 			}
 			else
 			{
@@ -361,12 +361,12 @@ namespace isobus
 			if (guidanceMachineInfoTransmitData.get_estimated_curvature() > CURVATURE_COMMAND_MAX_INVERSE_KM)
 			{
 				encodedCurvature = 32127 + ZERO_CURVATURE_INVERSE_KM; // Clamp to maximum value
-				CANStackLogger::warn("[Guidance]: Transmitting an estimated curvature clamped to maximum value. Verify guidance calculations are accurate!");
+				LOG_WARNING("[Guidance]: Transmitting an estimated curvature clamped to maximum value. Verify guidance calculations are accurate!");
 			}
 			else if (scaledCurvature < 0) // 0 In this case is -8032 km-1 due to the addition of the offset earlier
 			{
 				encodedCurvature = 0; // Clamp to minimum value
-				CANStackLogger::warn("[Guidance]: Transmitting an estimated curvature clamped to minimum value. Verify guidance calculations are accurate!");
+				LOG_WARNING("[Guidance]: Transmitting an estimated curvature clamped to minimum value. Verify guidance calculations are accurate!");
 			}
 			else
 			{
@@ -431,7 +431,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[Guidance]: Guidance interface has not been initialized yet.");
+			LOG_ERROR("[Guidance]: Guidance interface has not been initialized yet.");
 		}
 	}
 
@@ -505,7 +505,7 @@ namespace isobus
 				}
 				else
 				{
-					CANStackLogger::warn("[Guidance]: Received a malformed guidance system command message. DLC must be 8.");
+					LOG_WARNING("[Guidance]: Received a malformed guidance system command message. DLC must be 8.");
 				}
 			}
 			break;
@@ -547,7 +547,7 @@ namespace isobus
 				}
 				else
 				{
-					CANStackLogger::warn("[Guidance]: Received a malformed guidance machine info message. DLC must be 8.");
+					LOG_WARNING("[Guidance]: Received a malformed guidance machine info message. DLC must be 8.");
 				}
 			}
 			break;

@@ -19,6 +19,7 @@ namespace isobus
 	std::mutex CANStackLogger::loggerMutex;
 #endif
 
+#ifndef DISABLE_CAN_STACK_LOGGER
 	void CANStackLogger::CAN_stack_log(LoggingLevel level, const std::string &logText)
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
@@ -57,6 +58,8 @@ namespace isobus
 	{
 		CAN_stack_log(LoggingLevel::Critical, logText);
 	}
+
+#endif
 
 	void CANStackLogger::set_can_stack_logger_sink(CANStackLogger *logSink)
 	{

@@ -119,7 +119,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::warn("[DP] DiagnosticProtocol's initialize() called when already initialized");
+			LOG_WARNING("[DP] DiagnosticProtocol's initialize() called when already initialized");
 		}
 		return retVal;
 	}

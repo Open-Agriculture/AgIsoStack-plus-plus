@@ -357,7 +357,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[NMEA2K]: Interface not initialized!");
+			LOG_ERROR("[NMEA2K]: Interface not initialized!");
 		}
 	}
 
@@ -672,7 +672,7 @@ namespace isobus
 			                                            [](std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> message) {
 				                                            if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout()))
 				                                            {
-					                                            CANStackLogger::warn("[NMEA2K]: COG & SOG message Rx timeout.");
+					                                            LOG_WARNING("[NMEA2K]: COG & SOG message Rx timeout.");
 					                                            return true;
 				                                            }
 				                                            return false;
@@ -683,7 +683,7 @@ namespace isobus
 			                                           [](std::shared_ptr<Datum> message) {
 				                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * Datum::get_timeout()))
 				                                           {
-					                                           CANStackLogger::warn("[NMEA2K]: Datum message Rx timeout.");
+					                                           LOG_WARNING("[NMEA2K]: Datum message Rx timeout.");
 					                                           return true;
 				                                           }
 				                                           return false;
@@ -694,7 +694,7 @@ namespace isobus
 			                                                      [](std::shared_ptr<GNSSPositionData> message) {
 				                                                      if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * GNSSPositionData::get_timeout()))
 				                                                      {
-					                                                      CANStackLogger::warn("[NMEA2K]: GNSS position data message Rx timeout.");
+					                                                      LOG_WARNING("[NMEA2K]: GNSS position data message Rx timeout.");
 					                                                      return true;
 				                                                      }
 				                                                      return false;
@@ -705,7 +705,7 @@ namespace isobus
 			                                                                           [](std::shared_ptr<PositionDeltaHighPrecisionRapidUpdate> message) {
 				                                                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionDeltaHighPrecisionRapidUpdate::get_timeout()))
 				                                                                           {
-					                                                                           CANStackLogger::warn("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
+					                                                                           LOG_WARNING("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
 					                                                                           return true;
 				                                                                           }
 				                                                                           return false;
@@ -716,7 +716,7 @@ namespace isobus
 			                                                         [](std::shared_ptr<PositionRapidUpdate> message) {
 				                                                         if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionRapidUpdate::get_timeout()))
 				                                                         {
-					                                                         CANStackLogger::warn("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
+					                                                         LOG_WARNING("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
 					                                                         return true;
 				                                                         }
 				                                                         return false;
@@ -727,7 +727,7 @@ namespace isobus
 			                                                [](std::shared_ptr<RateOfTurn> message) {
 				                                                if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * RateOfTurn::get_timeout()))
 				                                                {
-					                                                CANStackLogger::warn("[NMEA2K]: Rate of turn message Rx timeout.");
+					                                                LOG_WARNING("[NMEA2K]: Rate of turn message Rx timeout.");
 					                                                return true;
 				                                                }
 				                                                return false;
@@ -738,7 +738,7 @@ namespace isobus
 			                                                   [](std::shared_ptr<VesselHeading> message) {
 				                                                   if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * VesselHeading::get_timeout()))
 				                                                   {
-					                                                   CANStackLogger::warn("[NMEA2K]: Vessel heading message Rx timeout.");
+					                                                   LOG_WARNING("[NMEA2K]: Vessel heading message Rx timeout.");
 					                                                   return true;
 				                                                   }
 				                                                   return false;

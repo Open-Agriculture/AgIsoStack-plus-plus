@@ -51,71 +51,71 @@ namespace isobus
 			if ((taskControllerCompatibilityLevel < MAX_TC_VERSION_SUPPORTED) &&
 			    (deviceDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device designator " +
-				                     deviceDesignator +
-				                     " is greater than the max byte length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device designator " +
+				            deviceDesignator +
+				            " is greater than the max byte length of 32. Value will be truncated.");
 				deviceDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (deviceDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device designator " +
-				                     deviceDesignator +
-				                     " is greater than the max byte length of 128. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device designator " +
+				            deviceDesignator +
+				            " is greater than the max byte length of 128. Value will be truncated.");
 				deviceDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (deviceDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::info("[DDOP]: Device designator " +
-				                     deviceDesignator +
-				                     " byte length is greater than the max character count of 32. " +
-				                     "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
-				                     " Please verify your DDOP configuration meets this requirement.");
+				LOG_INFO("[DDOP]: Device designator " +
+				         deviceDesignator +
+				         " byte length is greater than the max character count of 32. " +
+				         "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
+				         " Please verify your DDOP configuration meets this requirement.");
 			}
 
 			if ((taskControllerCompatibilityLevel < MAX_TC_VERSION_SUPPORTED) &&
 			    (deviceSerialNumber.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device serial number " +
-				                     deviceSerialNumber +
-				                     " is greater than the max byte length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device serial number " +
+				            deviceSerialNumber +
+				            " is greater than the max byte length of 32. Value will be truncated.");
 				deviceSerialNumber.resize(task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (deviceSerialNumber.size() > task_controller_object::Object::MAX_DESIGNATOR_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device serial number " +
-				                     deviceSerialNumber +
-				                     " is greater than the max byte length of 128. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device serial number " +
+				            deviceSerialNumber +
+				            " is greater than the max byte length of 128. Value will be truncated.");
 				deviceSerialNumber.resize(task_controller_object::Object::MAX_DESIGNATOR_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (deviceSerialNumber.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::info("[DDOP]: Device serial number " +
-				                     deviceSerialNumber +
-				                     " byte length is greater than the max character count of 32. " +
-				                     "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
-				                     " Please verify your DDOP configuration meets this requirement.");
+				LOG_INFO("[DDOP]: Device serial number " +
+				         deviceSerialNumber +
+				         " byte length is greater than the max character count of 32. " +
+				         "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
+				         " Please verify your DDOP configuration meets this requirement.");
 			}
 
 			if (deviceStructureLabel.size() > task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH)
 			{
-				CANStackLogger::warn("[DDOP]: Device structure label " +
-				                     deviceStructureLabel +
-				                     " is greater than the max length of 7. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device structure label " +
+				            deviceStructureLabel +
+				            " is greater than the max length of 7. Value will be truncated.");
 				deviceStructureLabel.resize(task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH);
 			}
 			if (deviceExtendedStructureLabel.size() > task_controller_object::DeviceObject::MAX_EXTENDED_STRUCTURE_LABEL_LENGTH)
 			{
-				CANStackLogger::warn("[DDOP]: Device extended structure label is greater than the max length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device extended structure label is greater than the max length of 32. Value will be truncated.");
 				deviceExtendedStructureLabel.resize(task_controller_object::DeviceObject::MAX_EXTENDED_STRUCTURE_LABEL_LENGTH);
 			}
 
 			if (deviceLocalizationLabel[6] != 0xFF)
 			{
-				CANStackLogger::warn("[DDOP]: Device localization label byte 7 must be the reserved value 0xFF. This value will be enforced when DDOP binary is generated.");
+				LOG_WARNING("[DDOP]: Device localization label byte 7 must be the reserved value 0xFF. This value will be enforced when DDOP binary is generated.");
 			}
 			objectList.emplace_back(new task_controller_object::DeviceObject(deviceDesignator,
 			                                                                 deviceSoftwareVersion,
@@ -128,7 +128,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Cannot add more than 1 Device object to a DDOP.");
+			LOG_ERROR("[DDOP]: Cannot add more than 1 Device object to a DDOP.");
 		}
 		return retVal;
 	}
@@ -148,17 +148,17 @@ namespace isobus
 			if ((taskControllerCompatibilityLevel < MAX_TC_VERSION_SUPPORTED) &&
 			    (deviceElementDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device element designator " +
-				                     deviceElementDesignator +
-				                     " is greater than the max length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device element designator " +
+				            deviceElementDesignator +
+				            " is greater than the max length of 32. Value will be truncated.");
 				deviceElementDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH);
 			}
 			if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			    (deviceElementDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device element designator " +
-				                     deviceElementDesignator +
-				                     " is greater than the max length of 128. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device element designator " +
+				            deviceElementDesignator +
+				            " is greater than the max length of 128. Value will be truncated.");
 				deviceElementDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LENGTH);
 			}
 
@@ -170,9 +170,9 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Device element ID " +
-			                      isobus::to_string(static_cast<int>(uniqueID)) +
-			                      " is not unique. Object will not be added to the DDOP.");
+			LOG_ERROR("[DDOP]: Device element ID " +
+			          isobus::to_string(static_cast<int>(uniqueID)) +
+			          " is not unique. Object will not be added to the DDOP.");
 		}
 		return retVal;
 	}
@@ -192,35 +192,35 @@ namespace isobus
 			// Check for warnings
 			if ((processDataProperties & 0x02) && (processDataProperties & 0x04))
 			{
-				CANStackLogger::warn("[DDOP]: Process data object " +
-				                     isobus::to_string(static_cast<int>(uniqueID)) +
-				                     " has mutually exclusive options 'settable' and 'control source' set.");
+				LOG_WARNING("[DDOP]: Process data object " +
+				            isobus::to_string(static_cast<int>(uniqueID)) +
+				            " has mutually exclusive options 'settable' and 'control source' set.");
 			}
 
 			if ((taskControllerCompatibilityLevel < MAX_TC_VERSION_SUPPORTED) &&
 			    (processDataDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device process data designator " +
-				                     processDataDesignator +
-				                     " is greater than the max byte length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device process data designator " +
+				            processDataDesignator +
+				            " is greater than the max byte length of 32. Value will be truncated.");
 				processDataDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (processDataDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device process data designator " +
-				                     processDataDesignator +
-				                     " is greater than the max byte length of 128. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device process data designator " +
+				            processDataDesignator +
+				            " is greater than the max byte length of 128. Value will be truncated.");
 				processDataDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (processDataDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::info("[DDOP]: Device process data designator " +
-				                     processDataDesignator +
-				                     " byte length is greater than the max character count of 32. " +
-				                     "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
-				                     " Please verify your DDOP configuration meets this requirement.");
+				LOG_INFO("[DDOP]: Device process data designator " +
+				         processDataDesignator +
+				         " byte length is greater than the max character count of 32. " +
+				         "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
+				         " Please verify your DDOP configuration meets this requirement.");
 			}
 
 			objectList.emplace_back(new task_controller_object::DeviceProcessDataObject(processDataDesignator,
@@ -232,9 +232,9 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Device process data ID " +
-			                      isobus::to_string(static_cast<int>(uniqueID)) +
-			                      " is not unique. Object will not be added to the DDOP.");
+			LOG_ERROR("[DDOP]: Device process data ID " +
+			          isobus::to_string(static_cast<int>(uniqueID)) +
+			          " is not unique. Object will not be added to the DDOP.");
 		}
 		return retVal;
 	}
@@ -254,27 +254,27 @@ namespace isobus
 			if ((taskControllerCompatibilityLevel < MAX_TC_VERSION_SUPPORTED) &&
 			    (propertyDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device property designator " +
-				                     propertyDesignator +
-				                     " is greater than the max byte length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device property designator " +
+				            propertyDesignator +
+				            " is greater than the max byte length of 32. Value will be truncated.");
 				propertyDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (propertyDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device property designator " +
-				                     propertyDesignator +
-				                     " is greater than the max byte length of 128. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device property designator " +
+				            propertyDesignator +
+				            " is greater than the max byte length of 128. Value will be truncated.");
 				propertyDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (propertyDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::info("[DDOP]: Device property designator " +
-				                     propertyDesignator +
-				                     " byte length is greater than the max character count of 32. " +
-				                     "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
-				                     " Please verify your DDOP configuration meets this requirement.");
+				LOG_INFO("[DDOP]: Device property designator " +
+				         propertyDesignator +
+				         " byte length is greater than the max character count of 32. " +
+				         "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
+				         " Please verify your DDOP configuration meets this requirement.");
 			}
 
 			objectList.emplace_back(new task_controller_object::DevicePropertyObject(propertyDesignator,
@@ -285,9 +285,9 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Device property ID " +
-			                      isobus::to_string(static_cast<int>(uniqueID)) +
-			                      " is not unique. Object will not be added to the DDOP.");
+			LOG_ERROR("[DDOP]: Device property ID " +
+			          isobus::to_string(static_cast<int>(uniqueID)) +
+			          " is not unique. Object will not be added to the DDOP.");
 		}
 		return retVal;
 	}
@@ -307,27 +307,27 @@ namespace isobus
 			if ((taskControllerCompatibilityLevel < MAX_TC_VERSION_SUPPORTED) &&
 			    (unitDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device value presentation unit designator " +
-				                     unitDesignator +
-				                     " is greater than the max byte length of 32. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device value presentation unit designator " +
+				            unitDesignator +
+				            " is greater than the max byte length of 32. Value will be truncated.");
 				unitDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (unitDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LENGTH))
 			{
-				CANStackLogger::warn("[DDOP]: Device value presentation unit designator " +
-				                     unitDesignator +
-				                     " is greater than the max byte length of 128. Value will be truncated.");
+				LOG_WARNING("[DDOP]: Device value presentation unit designator " +
+				            unitDesignator +
+				            " is greater than the max byte length of 128. Value will be truncated.");
 				unitDesignator.resize(task_controller_object::Object::MAX_DESIGNATOR_LENGTH);
 			}
 			else if ((taskControllerCompatibilityLevel == MAX_TC_VERSION_SUPPORTED) &&
 			         (unitDesignator.size() > task_controller_object::Object::MAX_DESIGNATOR_LEGACY_LENGTH))
 			{
-				CANStackLogger::info("[DDOP]: Device value presentation unit designator " +
-				                     unitDesignator +
-				                     " byte length is greater than the max character count of 32. " +
-				                     "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
-				                     " Please verify your DDOP configuration meets this requirement.");
+				LOG_INFO("[DDOP]: Device value presentation unit designator " +
+				         unitDesignator +
+				         " byte length is greater than the max character count of 32. " +
+				         "This is only acceptable if you have 32 or fewer UTF-8 characters!" +
+				         " Please verify your DDOP configuration meets this requirement.");
 			}
 
 			objectList.emplace_back(new task_controller_object::DeviceValuePresentationObject(unitDesignator,
@@ -338,9 +338,9 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Device value presentation object ID " +
-			                      isobus::to_string(static_cast<int>(uniqueID)) +
-			                      " is not unique. Object will not be added to the DDOP.");
+			LOG_ERROR("[DDOP]: Device value presentation object ID " +
+			          isobus::to_string(static_cast<int>(uniqueID)) +
+			          " is not unique. Object will not be added to the DDOP.");
 		}
 		return retVal;
 	}
@@ -356,7 +356,7 @@ namespace isobus
 
 		if ((nullptr != binaryPool) && (0 != binaryPoolSizeBytes))
 		{
-			CANStackLogger::debug("[DDOP]: Attempting to deserialize a binary object pool with size %u.", binaryPoolSizeBytes);
+			LOG_DEBUG("[DDOP]: Attempting to deserialize a binary object pool with size %u.", binaryPoolSizeBytes);
 			clear();
 
 			// Iterate over the DDOP and convert to objects.
@@ -386,7 +386,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device object designator has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device object designator has invalid length.");
 							retVal = false;
 						}
 
@@ -397,7 +397,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device object software version has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device object software version has invalid length.");
 							retVal = false;
 						}
 
@@ -408,7 +408,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device object serial number has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device object serial number has invalid length.");
 							retVal = false;
 						}
 
@@ -421,7 +421,7 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[DDOP]: Binary device object with version 4 contains invalid extended structure label length.");
+								LOG_ERROR("[DDOP]: Binary device object with version 4 contains invalid extended structure label length.");
 								retVal = false;
 							}
 						}
@@ -461,7 +461,7 @@ namespace isobus
 
 							if ((0 != clientNAME.get_full_name()) && (ddopClientNAME != clientNAME.get_full_name()))
 							{
-								CANStackLogger::error("[DDOP]: Failed adding deserialized device object. DDOP NAME doesn't match client's actual NAME.");
+								LOG_ERROR("[DDOP]: Failed adding deserialized device object. DDOP NAME doesn't match client's actual NAME.");
 								retVal = false;
 							}
 							else if (0 == clientNAME.get_full_name())
@@ -496,13 +496,13 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[DDOP]: Failed adding deserialized device object. DDOP schema is not valid.");
+								LOG_ERROR("[DDOP]: Failed adding deserialized device object. DDOP schema is not valid.");
 								retVal = false;
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Not enough binary DDOP data left to parse device object. DDOP schema is not valid");
+							LOG_ERROR("[DDOP]: Not enough binary DDOP data left to parse device object. DDOP schema is not valid");
 							retVal = false;
 						}
 					}
@@ -518,7 +518,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device element object has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device element object has invalid length.");
 							retVal = false;
 						}
 
@@ -528,13 +528,13 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device element object has invalid length to process referenced object IDs.");
+							LOG_ERROR("[DDOP]: Binary device element object has invalid length to process referenced object IDs.");
 							retVal = false;
 						}
 
 						if (binaryPool[5] > static_cast<std::uint8_t>(task_controller_object::DeviceElementObject::Type::NavigationReference))
 						{
-							CANStackLogger::error("[DDOP]: Binary device element object has invalid element type.");
+							LOG_ERROR("[DDOP]: Binary device element object has invalid element type.");
 							retVal = false;
 						}
 
@@ -571,13 +571,13 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[DDOP]: Failed adding deserialized device element object. DDOP schema is not valid.");
+								LOG_ERROR("[DDOP]: Failed adding deserialized device element object. DDOP schema is not valid.");
 								retVal = false;
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Not enough binary DDOP data left to parse device element object. DDOP schema is not valid");
+							LOG_ERROR("[DDOP]: Not enough binary DDOP data left to parse device element object. DDOP schema is not valid");
 							retVal = false;
 						}
 					}
@@ -593,7 +593,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device process data object has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device process data object has invalid length.");
 							retVal = false;
 						}
 
@@ -618,13 +618,13 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[DDOP]: Failed adding deserialized device process data object. DDOP schema is not valid.");
+								LOG_ERROR("[DDOP]: Failed adding deserialized device process data object. DDOP schema is not valid.");
 								retVal = false;
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Not enough binary DDOP data left to parse device process data object. DDOP schema is not valid");
+							LOG_ERROR("[DDOP]: Not enough binary DDOP data left to parse device process data object. DDOP schema is not valid");
 							retVal = false;
 						}
 					}
@@ -639,7 +639,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device property object has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device property object has invalid length.");
 							retVal = false;
 						}
 
@@ -668,13 +668,13 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[DDOP]: Failed adding deserialized device property object. DDOP schema is not valid.");
+								LOG_ERROR("[DDOP]: Failed adding deserialized device property object. DDOP schema is not valid.");
 								retVal = false;
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Not enough binary DDOP data left to parse device property object. DDOP schema is not valid");
+							LOG_ERROR("[DDOP]: Not enough binary DDOP data left to parse device property object. DDOP schema is not valid");
 							retVal = false;
 						}
 					}
@@ -689,7 +689,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Binary device value presentation object has invalid length.");
+							LOG_ERROR("[DDOP]: Binary device value presentation object has invalid length.");
 							retVal = false;
 						}
 
@@ -730,19 +730,19 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[DDOP]: Failed adding deserialized device value presentation object. DDOP schema is not valid.");
+								LOG_ERROR("[DDOP]: Failed adding deserialized device value presentation object. DDOP schema is not valid.");
 								retVal = false;
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Not enough binary DDOP data left to parse device value presentation object. DDOP schema is not valid");
+							LOG_ERROR("[DDOP]: Not enough binary DDOP data left to parse device value presentation object. DDOP schema is not valid");
 							retVal = false;
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[DDOP]: Cannot process an unknown XML namespace from binary DDOP. DDOP schema is invalid.");
+						LOG_ERROR("[DDOP]: Cannot process an unknown XML namespace from binary DDOP. DDOP schema is invalid.");
 						retVal = false;
 					}
 				}
@@ -753,7 +753,7 @@ namespace isobus
 
 				if (!retVal)
 				{
-					CANStackLogger::error("[DDOP]: Binary DDOP deserialization aborted.");
+					LOG_ERROR("[DDOP]: Binary DDOP deserialization aborted.");
 					break;
 				}
 			}
@@ -761,7 +761,7 @@ namespace isobus
 		else
 		{
 			retVal = false;
-			CANStackLogger::error("[DDOP]: Cannot deserialize a DDOP with zero length.");
+			LOG_ERROR("[DDOP]: Cannot deserialize a DDOP with zero length.");
 		}
 		return retVal;
 	}
@@ -774,7 +774,7 @@ namespace isobus
 
 		if (taskControllerCompatibilityLevel > MAX_TC_VERSION_SUPPORTED)
 		{
-			CANStackLogger::warn("[DDOP]: A DDOP is being generated for a TC version that is unsupported. This may cause issues.");
+			LOG_WARNING("[DDOP]: A DDOP is being generated for a TC version that is unsupported. This may cause issues.");
 		}
 
 		if (resolve_parent_ids_to_objects())
@@ -790,7 +790,7 @@ namespace isobus
 				}
 				else
 				{
-					CANStackLogger::error("[DDOP]: Failed to create all object binaries. Your DDOP is invalid.");
+					LOG_ERROR("[DDOP]: Failed to create all object binaries. Your DDOP is invalid.");
 					retVal = false;
 					break;
 				}
@@ -798,7 +798,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Failed to resolve all object IDs in DDOP. Your DDOP contains invalid object references.");
+			LOG_ERROR("[DDOP]: Failed to resolve all object IDs in DDOP. Your DDOP contains invalid object references.");
 			retVal = false;
 		}
 		return retVal;
@@ -812,7 +812,7 @@ namespace isobus
 
 		if (taskControllerCompatibilityLevel > MAX_TC_VERSION_SUPPORTED)
 		{
-			CANStackLogger::warn("[DDOP]: An XML DDOP is being generated for a TC version that is unsupported. This may cause issues.");
+			LOG_WARNING("[DDOP]: An XML DDOP is being generated for a TC version that is unsupported. This may cause issues.");
 		}
 
 		if (resolve_parent_ids_to_objects())
@@ -969,14 +969,14 @@ namespace isobus
 					xmlOutput << "</DVC>" << std::endl;
 					xmlOutput << "</ISO11783_TaskData>" << std::endl;
 					resultantString = xmlOutput.str();
-					CANStackLogger::debug("[DDOP]: Generated ISO XML DDOP data OK");
+					LOG_DEBUG("[DDOP]: Generated ISO XML DDOP data OK");
 					break;
 				}
 			}
 		}
 		else
 		{
-			CANStackLogger::error("[DDOP]: Failed to resolve all object IDs in DDOP. Your DDOP contains invalid object references.");
+			LOG_ERROR("[DDOP]: Failed to resolve all object IDs in DDOP. Your DDOP contains invalid object references.");
 			retVal = false;
 		}
 		return retVal;
@@ -1087,9 +1087,9 @@ namespace isobus
 
 								default:
 								{
-									CANStackLogger::error("[DDOP]: Object " +
-									                      isobus::to_string(static_cast<int>(currentObject->get_object_id())) +
-									                      " has an invalid parent object type. Only device element objects or device objects may be its parent.");
+									LOG_ERROR("[DDOP]: Object " +
+									          isobus::to_string(static_cast<int>(currentObject->get_object_id())) +
+									          " has an invalid parent object type. Only device element objects or device objects may be its parent.");
 									retVal = false;
 								}
 								break;
@@ -1097,17 +1097,17 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[DDOP]: Object " +
-							                      isobus::to_string(static_cast<int>(currentDeviceElement->get_parent_object())) +
-							                      " is not found.");
+							LOG_ERROR("[DDOP]: Object " +
+							          isobus::to_string(static_cast<int>(currentDeviceElement->get_parent_object())) +
+							          " is not found.");
 							retVal = false;
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[DDOP]: Object " +
-						                      isobus::to_string(static_cast<int>(currentObject->get_object_id())) +
-						                      " is an orphan. It's parent is 0xFFFF!");
+						LOG_ERROR("[DDOP]: Object " +
+						          isobus::to_string(static_cast<int>(currentObject->get_object_id())) +
+						          " is an orphan. It's parent is 0xFFFF!");
 						retVal = false;
 					}
 
@@ -1119,19 +1119,19 @@ namespace isobus
 							auto child = get_object_by_id(currentDeviceElement->get_child_object_id(i));
 							if (nullptr == child.get())
 							{
-								CANStackLogger::error("[DDOP]: Object " +
-								                      isobus::to_string(static_cast<int>(currentDeviceElement->get_child_object_id(i))) +
-								                      " is not found.");
+								LOG_ERROR("[DDOP]: Object " +
+								          isobus::to_string(static_cast<int>(currentDeviceElement->get_child_object_id(i))) +
+								          " is not found.");
 								retVal = false;
 								break;
 							}
 							else if ((task_controller_object::ObjectTypes::DeviceProcessData != child->get_object_type()) &&
 							         (task_controller_object::ObjectTypes::DeviceProperty != child->get_object_type()))
 							{
-								CANStackLogger::error("[DDOP]: Object %u has child %u which is an object type that is not allowed.",
-								                      currentDeviceElement->get_child_object_id(i),
-								                      child->get_object_id());
-								CANStackLogger::error("[DDOP]: A DET object may only have DPD and DPT children.");
+								LOG_ERROR("[DDOP]: Object %u has child %u which is an object type that is not allowed.",
+								          currentDeviceElement->get_child_object_id(i),
+								          child->get_object_id());
+								LOG_ERROR("[DDOP]: A DET object may only have DPD and DPT children.");
 								retVal = false;
 								break;
 							}
@@ -1149,18 +1149,18 @@ namespace isobus
 						auto child = get_object_by_id(currentProcessData->get_device_value_presentation_object_id());
 						if (nullptr == child.get())
 						{
-							CANStackLogger::error("[DDOP]: Object " +
-							                      isobus::to_string(static_cast<int>(currentProcessData->get_device_value_presentation_object_id())) +
-							                      " is not found.");
+							LOG_ERROR("[DDOP]: Object " +
+							          isobus::to_string(static_cast<int>(currentProcessData->get_device_value_presentation_object_id())) +
+							          " is not found.");
 							retVal = false;
 							break;
 						}
 						else if (task_controller_object::ObjectTypes::DeviceValuePresentation != child->get_object_type())
 						{
-							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed.",
-							                      currentProcessData->get_device_value_presentation_object_id(),
-							                      child->get_object_id());
-							CANStackLogger::error("[DDOP]: A DPD object may only have DVP children.");
+							LOG_ERROR("[DDOP]: Object %u has a child %u with an object type that is not allowed.",
+							          currentProcessData->get_device_value_presentation_object_id(),
+							          child->get_object_id());
+							LOG_ERROR("[DDOP]: A DPD object may only have DVP children.");
 							retVal = false;
 							break;
 						}
@@ -1177,18 +1177,18 @@ namespace isobus
 						auto child = get_object_by_id(currentProperty->get_device_value_presentation_object_id());
 						if (nullptr == child.get())
 						{
-							CANStackLogger::error("[DDOP]: Object " +
-							                      isobus::to_string(static_cast<int>(currentProperty->get_device_value_presentation_object_id())) +
-							                      " is not found.");
+							LOG_ERROR("[DDOP]: Object " +
+							          isobus::to_string(static_cast<int>(currentProperty->get_device_value_presentation_object_id())) +
+							          " is not found.");
 							retVal = false;
 							break;
 						}
 						else if (task_controller_object::ObjectTypes::DeviceValuePresentation != child->get_object_type())
 						{
-							CANStackLogger::error("[DDOP]: Object %u has a child %u with an object type that is not allowed.",
-							                      currentProperty->get_device_value_presentation_object_id(),
-							                      child->get_object_id());
-							CANStackLogger::error("[DDOP]: A DPT object may only have DVP children.");
+							LOG_ERROR("[DDOP]: Object %u has a child %u with an object type that is not allowed.",
+							          currentProperty->get_device_value_presentation_object_id(),
+							          child->get_object_id());
+							LOG_ERROR("[DDOP]: A DPT object may only have DVP children.");
 							retVal = false;
 							break;
 						}

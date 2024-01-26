@@ -136,7 +136,8 @@ namespace isobus
 		if (activeSessions.size() >= configuration->get_max_number_transport_protocol_sessions())
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
-			CANStackLogger::warn("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.", parameterGroupNumber);
+			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.",
+			            parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
 		}
 		else
@@ -146,12 +147,14 @@ namespace isobus
 			{
 				if (oldSession->get_parameter_group_number() != parameterGroupNumber)
 				{
-					CANStackLogger::error("[ETP]: Received Request To Send (RTS) while a session already existed for this source and destination, aborting for 0x%05X...", parameterGroupNumber);
+					LOG_ERROR("[ETP]: Received Request To Send (RTS) while a session already existed for this source and destination, aborting for 0x%05X...",
+					          parameterGroupNumber);
 					abort_session(oldSession, ConnectionAbortReason::AlreadyInCMSession);
 				}
 				else
 				{
-					CANStackLogger::warn("[ETP]: Received Request To Send (RTS) while a session already existed for this source and destination and parameterGroupNumber, overwriting for 0x%05X...", parameterGroupNumber);
+					LOG_WARNING("[ETP]: Received Request To Send (RTS) while a session already existed for this source and destination and parameterGroupNumber, overwriting for 0x%05X...",
+					            parameterGroupNumber);
 					close_session(oldSession, false);
 				}
 			}
@@ -170,7 +173,7 @@ namespace isobus
 
 			newSession->set_state(StateMachineState::SendClearToSend);
 			activeSessions.push_back(newSession);
-			CANStackLogger::debug("[ETP]: New rx session for 0x%05X. Source: %hu, destination: %hu", parameterGroupNumber, source->get_address(), destination->get_address());
+			LOG_DEBUG("[ETP]: New rx session for 0x%05X. Source: %hu, destination: %hu", parameterGroupNumber, source->get_address(), destination->get_address());
 			update_state_machine(newSession);
 		}
 	}
@@ -186,19 +189,19 @@ namespace isobus
 		{
 			if (session->get_parameter_group_number() != parameterGroupNumber)
 			{
-				CANStackLogger::error("[ETP]: Received a Clear To Send (CTS) message for 0x%05X while a session already existed for this source and destination, sending abort for both...", parameterGroupNumber);
+				LOG_ERROR("[ETP]: Received a Clear To Send (CTS) message for 0x%05X while a session already existed for this source and destination, sending abort for both...", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
 				send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
 			}
 			else if (nextPacketNumber > session->get_total_number_of_packets())
 			{
-				CANStackLogger::error("[ETP]: Received a Clear To Send (CTS) message for 0x%05X with a bad sequence number, aborting...", parameterGroupNumber);
+				LOG_ERROR("[ETP]: Received a Clear To Send (CTS) message for 0x%05X with a bad sequence number, aborting...", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::NumberOfClearToSendPacketsExceedsMessage);
 			}
 			else if (StateMachineState::WaitForClearToSend != session->state)
 			{
 				// The session exists, but we're not in the right state to receive a CTS, so we must abort
-				CANStackLogger::warn("[ETP]: Received a Clear To Send (CTS) message for 0x%05X, but not expecting one, aborting session->", parameterGroupNumber);
+				LOG_WARNING("[ETP]: Received a Clear To Send (CTS) message for 0x%05X, but not expecting one, aborting session->", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
 			}
 			else
@@ -217,7 +220,7 @@ namespace isobus
 		else
 		{
 			// We got a CTS but no session exists, by the standard we must ignore it
-			CANStackLogger::warn("[ETP]: Received Clear To Send (CTS) for 0x%05X while no session existed for this source and destination, ignoring...", parameterGroupNumber);
+			LOG_WARNING("[ETP]: Received Clear To Send (CTS) for 0x%05X while no session existed for this source and destination, ignoring...", parameterGroupNumber);
 		}
 	}
 
@@ -232,24 +235,24 @@ namespace isobus
 		{
 			if (session->get_parameter_group_number() != parameterGroupNumber)
 			{
-				CANStackLogger::error("[ETP]: Received a Data Packet Offset message for 0x%05X while a session already existed for this source and destination with a different PGN, sending abort for both...", parameterGroupNumber);
+				LOG_ERROR("[ETP]: Received a Data Packet Offset message for 0x%05X while a session already existed for this source and destination with a different PGN, sending abort for both...", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::UnexpectedDataPacketOffsetPGN);
 				send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::UnexpectedDataPacketOffsetPGN);
 			}
 			else if (StateMachineState::WaitForDataPacketOffset != session->state)
 			{
 				// The session exists, but we're not in the right state to receive a DPO, so we must abort
-				CANStackLogger::warn("[ETP]: Received a Data Packet Offset message for 0x%05X, but not expecting one, aborting session->", parameterGroupNumber);
+				LOG_WARNING("[ETP]: Received a Data Packet Offset message for 0x%05X, but not expecting one, aborting session->", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::UnexpectedDataPacketOffsetReceived);
 			}
 			else if (numberOfPackets > session->get_cts_number_of_packet_limit())
 			{
-				CANStackLogger::error("[ETP]: Received a Data Packet Offset message for 0x%05X with an higher number of packets than our CTS, aborting...", parameterGroupNumber);
+				LOG_ERROR("[ETP]: Received a Data Packet Offset message for 0x%05X with an higher number of packets than our CTS, aborting...", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::DataPacketOffsetExceedsClearToSend);
 			}
 			else if (packetOffset != session->get_last_acknowledged_packet_number())
 			{
-				CANStackLogger::error("[ETP]: Received a Data Packet Offset message for 0x%05X with a bad sequence number, aborting...", parameterGroupNumber);
+				LOG_ERROR("[ETP]: Received a Data Packet Offset message for 0x%05X with a bad sequence number, aborting...", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::BadDataPacketOffset);
 			}
 			else
@@ -269,7 +272,7 @@ namespace isobus
 		else
 		{
 			// We got a CTS but no session exists, by the standard we must ignore it
-			CANStackLogger::warn("[ETP]: Received Data Packet Offset for 0x%05X while no session existed for this source and destination, ignoring...", parameterGroupNumber);
+			LOG_WARNING("[ETP]: Received Data Packet Offset for 0x%05X while no session existed for this source and destination, ignoring...", parameterGroupNumber);
 		}
 	}
 
@@ -286,17 +289,17 @@ namespace isobus
 				session->state = StateMachineState::None;
 				bool successful = (numberOfBytesTransferred == session->get_message_length());
 				close_session(session, successful);
-				CANStackLogger::debug("[ETP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
+				LOG_DEBUG("[ETP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
 			}
 			else
 			{
 				// The session exists, but we're not in the right state to receive an EOM, by the standard we must ignore it
-				CANStackLogger::warn("[ETP]: Received an End Of Message Acknowledgement message for 0x%05X, but not expecting one, ignoring.", parameterGroupNumber);
+				LOG_WARNING("[ETP]: Received an End Of Message Acknowledgement message for 0x%05X, but not expecting one, ignoring.", parameterGroupNumber);
 			}
 		}
 		else
 		{
-			CANStackLogger::warn("[ETP]: Received End Of Message Acknowledgement for 0x%05X while no session existed for this source and destination, ignoring.", parameterGroupNumber);
+			LOG_WARNING("[ETP]: Received End Of Message Acknowledgement for 0x%05X while no session existed for this source and destination, ignoring.", parameterGroupNumber);
 		}
 	}
 
@@ -311,20 +314,20 @@ namespace isobus
 		if ((nullptr != session) && (session->get_parameter_group_number() == parameterGroupNumber))
 		{
 			foundSession = true;
-			CANStackLogger::error("[ETP]: Received an abort (reason=%hu) for an rx session for parameterGroupNumber 0x%05X", static_cast<std::uint8_t>(reason), parameterGroupNumber);
+			LOG_ERROR("[ETP]: Received an abort (reason=%hu) for an rx session for parameterGroupNumber 0x%05X", static_cast<std::uint8_t>(reason), parameterGroupNumber);
 			close_session(session, false);
 		}
 		session = get_session(destination, source);
 		if ((nullptr != session) && (session->get_parameter_group_number() == parameterGroupNumber))
 		{
 			foundSession = true;
-			CANStackLogger::error("[ETP]: Received an abort (reason=%hu) for a tx session for parameterGroupNumber 0x%05X", static_cast<std::uint8_t>(reason), parameterGroupNumber);
+			LOG_ERROR("[ETP]: Received an abort (reason=%hu) for a tx session for parameterGroupNumber 0x%05X", static_cast<std::uint8_t>(reason), parameterGroupNumber);
 			close_session(session, false);
 		}
 
 		if (!foundSession)
 		{
-			CANStackLogger::warn("[ETP]: Received an abort (reason=%hu) with no matching session for parameterGroupNumber 0x%05X", static_cast<std::uint8_t>(reason), parameterGroupNumber);
+			LOG_WARNING("[ETP]: Received an abort (reason=%hu) with no matching session for parameterGroupNumber 0x%05X", static_cast<std::uint8_t>(reason), parameterGroupNumber);
 		}
 	}
 
@@ -332,7 +335,7 @@ namespace isobus
 	{
 		if (CAN_DATA_LENGTH != message.get_data_length())
 		{
-			CANStackLogger::warn("[ETP]: Received a Connection Management message of invalid length %hu", message.get_data_length());
+			LOG_WARNING("[ETP]: Received a Connection Management message of invalid length %hu", message.get_data_length());
 			return;
 		}
 
@@ -396,7 +399,7 @@ namespace isobus
 
 			default:
 			{
-				CANStackLogger::warn("[ETP]: Bad Mux in Transport Protocol Connection Management message");
+				LOG_WARNING("[ETP]: Bad Mux in Transport Protocol Connection Management message");
 			}
 			break;
 		}
@@ -406,7 +409,7 @@ namespace isobus
 	{
 		if (CAN_DATA_LENGTH != message.get_data_length())
 		{
-			CANStackLogger::warn("[ETP]: Received a Data Transfer message of invalid length %hu", message.get_data_length());
+			LOG_WARNING("[ETP]: Received a Data Transfer message of invalid length %hu", message.get_data_length());
 			return;
 		}
 
@@ -420,12 +423,12 @@ namespace isobus
 		{
 			if (StateMachineState::WaitForDataTransferPacket != session->state)
 			{
-				CANStackLogger::warn("[ETP]: Received a Data Transfer message from %hu while not expecting one, sending abort", source->get_address());
+				LOG_WARNING("[ETP]: Received a Data Transfer message from %hu while not expecting one, sending abort", source->get_address());
 				abort_session(session, ConnectionAbortReason::UnexpectedDataTransferPacketReceived);
 			}
 			else if (sequenceNumber == session->get_last_sequence_number())
 			{
-				CANStackLogger::error("[ETP]: Aborting rx session for 0x%05X due to duplicate sequence number", session->get_parameter_group_number());
+				LOG_ERROR("[ETP]: Aborting rx session for 0x%05X due to duplicate sequence number", session->get_parameter_group_number());
 				abort_session(session, ConnectionAbortReason::DuplicateSequenceNumber);
 			}
 			else if (sequenceNumber == (session->get_last_sequence_number() + 1))
@@ -469,7 +472,7 @@ namespace isobus
 
 					canMessageReceivedCallback(completedMessage);
 					close_session(session, true);
-					CANStackLogger::debug("[ETP]: Completed rx session for 0x%05X from %hu", session->get_parameter_group_number(), source->get_address());
+					LOG_DEBUG("[ETP]: Completed rx session for 0x%05X from %hu", session->get_parameter_group_number(), source->get_address());
 				}
 				else if (session->get_dpo_number_of_packets_remaining() == 0)
 				{
@@ -479,7 +482,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::error("[ETP]: Aborting rx session for 0x%05X due to bad sequence number", session->get_parameter_group_number());
+				LOG_ERROR("[ETP]: Aborting rx session for 0x%05X due to bad sequence number", session->get_parameter_group_number());
 				abort_session(session, ConnectionAbortReason::BadSequenceNumber);
 			}
 		}
@@ -545,10 +548,10 @@ namespace isobus
 		                                                                  sessionCompleteCallback,
 		                                                                  parentPointer);
 		session->set_state(StateMachineState::SendRequestToSend);
-		CANStackLogger::debug("[ETP]: New tx session for 0x%05X. Source: %hu, destination: %hu",
-		                      parameterGroupNumber,
-		                      source->get_address(),
-		                      destination->get_address());
+		LOG_DEBUG("[ETP]: New tx session for 0x%05X. Source: %hu, destination: %hu",
+		          parameterGroupNumber,
+		          source->get_address(),
+		          destination->get_address());
 
 		activeSessions.push_back(session);
 		update_state_machine(session);
@@ -563,12 +566,12 @@ namespace isobus
 			auto session = activeSessions.at(i - 1);
 			if (!session->get_source()->get_address_valid())
 			{
-				CANStackLogger::warn("[ETP]: Closing active session as the source control function is no longer valid");
+				LOG_WARNING("[ETP]: Closing active session as the source control function is no longer valid");
 				close_session(session, false);
 			}
 			else if (!session->get_destination()->get_address_valid())
 			{
-				CANStackLogger::warn("[ETP]: Closing active session as the destination control function is no longer valid");
+				LOG_WARNING("[ETP]: Closing active session as the destination control function is no longer valid");
 				close_session(session, false);
 			}
 			else if (StateMachineState::None != session->state)
@@ -651,7 +654,7 @@ namespace isobus
 			{
 				if (session->get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
-					CANStackLogger::error("[ETP]: Timeout tx session for 0x%05X (expected CTS)", session->get_parameter_group_number());
+					LOG_ERROR("[ETP]: Timeout tx session for 0x%05X (expected CTS)", session->get_parameter_group_number());
 					if (session->get_cts_number_of_packet_limit() > 0)
 					{
 						// A connection is only considered established if we've received at least one CTS before
@@ -679,7 +682,7 @@ namespace isobus
 			{
 				if (session->get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
-					CANStackLogger::error("[ETP]: Timeout rx session for 0x%05X (expected DPO)", session->get_parameter_group_number());
+					LOG_ERROR("[ETP]: Timeout rx session for 0x%05X (expected DPO)", session->get_parameter_group_number());
 					abort_session(session, ConnectionAbortReason::Timeout);
 				}
 			}
@@ -704,7 +707,7 @@ namespace isobus
 			{
 				if (session->get_time_since_last_update() > T1_TIMEOUT_MS)
 				{
-					CANStackLogger::error("[ETP]: Timeout for destination-specific rx session (expected sequential data frame)");
+					LOG_ERROR("[ETP]: Timeout for destination-specific rx session (expected sequential data frame)");
 					abort_session(session, ConnectionAbortReason::Timeout);
 				}
 			}
@@ -714,7 +717,7 @@ namespace isobus
 			{
 				if (session->get_time_since_last_update() > T2_T3_TIMEOUT_MS)
 				{
-					CANStackLogger::error("[ETP]: Timeout tx session for 0x%05X (expected EOMA)", session->get_parameter_group_number());
+					LOG_ERROR("[ETP]: Timeout tx session for 0x%05X (expected EOMA)", session->get_parameter_group_number());
 					abort_session(session, ConnectionAbortReason::Timeout);
 				}
 			}
@@ -775,7 +778,7 @@ namespace isobus
 		if (activeSessions.end() != sessionLocation)
 		{
 			activeSessions.erase(sessionLocation);
-			CANStackLogger::debug("[ETP]: Session Closed");
+			LOG_DEBUG("[ETP]: Session Closed");
 		}
 	}
 
@@ -844,7 +847,9 @@ namespace isobus
 		}
 		if (packetsThisSegment > configuration->get_number_of_packets_per_dpo_message())
 		{
-			CANStackLogger::debug("[TP]: Received Request To Send (RTS) with a CTS packet count of %hu, which is greater than the configured maximum of %hu, using the configured maximum instead.", packetsThisSegment, configuration->get_number_of_packets_per_dpo_message());
+			LOG_DEBUG("[TP]: Received Request To Send (RTS) with a CTS packet count of %hu, which is greater than the configured maximum of %hu, using the configured maximum instead.",
+			          packetsThisSegment,
+			          configuration->get_number_of_packets_per_dpo_message());
 			packetsThisSegment = configuration->get_number_of_packets_per_dpo_message();
 		}
 

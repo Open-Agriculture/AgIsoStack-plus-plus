@@ -28,7 +28,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[DP]: Failed to register PGN request callback for ControlFunctionFunctionalities due to the protocol being expired");
+			LOG_ERROR("[DP]: Failed to register PGN request callback for ControlFunctionFunctionalities due to the protocol being expired");
 		}
 	}
 
@@ -59,7 +59,7 @@ namespace isobus
 		{
 			if (Functionalities::MinimumControlFunction == functionality)
 			{
-				CANStackLogger::warn("[DP]: You are disabling minimum control function functionality reporting! This is not recommended.");
+				LOG_WARNING("[DP]: You are disabling minimum control function functionality reporting! This is not recommended.");
 			}
 			supportedFunctionalities.erase(existingFunctionality);
 		}
@@ -436,7 +436,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::debug("[DP]: Can't set the No Options TIM option, disable the other ones instead.");
+				LOG_DEBUG("[DP]: Can't set the No Options TIM option, disable the other ones instead.");
 			}
 		}
 	}
@@ -666,7 +666,7 @@ namespace isobus
 			case Functionalities::TractorImplementManagementServer:
 			case Functionalities::TractorImplementManagementClient:
 			{
-				CANStackLogger::warn("[DP]: You have configured TIM as a CF functionality, but the library doesn't support TIM at this time. Do you have an external TIM implementation?");
+				LOG_WARNING("[DP]: You have configured TIM as a CF functionality, but the library doesn't support TIM at this time. Do you have an external TIM implementation?");
 				serializedValue.resize(15); // TIM has a lot of options. https://www.isobus.net/isobus/option
 				std::fill(serializedValue.begin(), serializedValue.end(), 0x00); // Support nothing by default
 			}
@@ -674,7 +674,7 @@ namespace isobus
 
 			default:
 			{
-				CANStackLogger::error("[DP]: An invalid control function functionality was added. It's values will be ignored.");
+				LOG_ERROR("[DP]: An invalid control function functionality was added. It's values will be ignored.");
 			}
 			break;
 		}
