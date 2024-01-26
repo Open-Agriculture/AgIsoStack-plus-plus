@@ -150,4 +150,4 @@ namespace test_helpers
 		return std::make_shared<WrappedInternalControlFunction>(NAME(0), address, 0);
 	}
 
-}; // namespace test_helpers
+} // namespace test_helpers

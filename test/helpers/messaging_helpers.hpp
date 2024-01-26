@@ -44,5 +44,5 @@ namespace test_helpers
 	                                                         std::shared_ptr<isobus::ControlFunction> source,
 	                                                         std::shared_ptr<isobus::ControlFunction> destination);
 
-}; // namespace test_helpers
+} // namespace test_helpers
 #endif // MESSAGING_HELPERS_HPP
