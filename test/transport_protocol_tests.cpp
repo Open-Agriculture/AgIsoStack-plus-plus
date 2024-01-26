@@ -306,13 +306,11 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastConcurrentMessaging)
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
 		EXPECT_EQ(destinationControlFunction, nullptr);
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		std::uint32_t identifier = test_helpers::create_ext_can_id_broadcast(static_cast<std::uint8_t>(priority),
-		                                                                     parameterGroupNumber,
-		                                                                     sourceControlFunction);
-		message.set_identifier(CANIdentifier(identifier));
-		message.set_source_control_function(sourceControlFunction);
-		message.set_data(data.begin(), data.size());
+		CANMessage message = test_helpers::create_message_broadcast(static_cast<std::uint8_t>(priority),
+		                                                            parameterGroupNumber,
+		                                                            sourceControlFunction,
+		                                                            data.begin(),
+		                                                            data.size());
 		rxManager.process_message(message);
 		return true;
 	};
@@ -891,15 +889,12 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutInitiation)
 	                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		std::uint32_t identifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(priority),
-		                                                           parameterGroupNumber,
-		                                                           sourceControlFunction,
-		                                                           destinationControlFunction);
-		message.set_identifier(CANIdentifier(identifier));
-		message.set_source_control_function(sourceControlFunction);
-		message.set_destination_control_function(destinationControlFunction);
-		message.set_data(data.begin(), data.size());
+		CANMessage message = test_helpers::create_message(static_cast<std::uint8_t>(priority),
+		                                                  parameterGroupNumber,
+		                                                  destinationControlFunction,
+		                                                  sourceControlFunction,
+		                                                  data.begin(),
+		                                                  data.size());
 
 		if (sourceControlFunction == originator)
 		{
@@ -999,15 +994,12 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
 	                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		std::uint32_t identifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(priority),
-		                                                           parameterGroupNumber,
-		                                                           sourceControlFunction,
-		                                                           destinationControlFunction);
-		message.set_identifier(CANIdentifier(identifier));
-		message.set_source_control_function(sourceControlFunction);
-		message.set_destination_control_function(destinationControlFunction);
-		message.set_data(data.begin(), data.size());
+		CANMessage message = test_helpers::create_message(static_cast<std::uint8_t>(priority),
+		                                                  parameterGroupNumber,
+		                                                  destinationControlFunction,
+		                                                  sourceControlFunction,
+		                                                  data.begin(),
+		                                                  data.size());
 
 		if (sourceControlFunction == originator)
 		{
@@ -1245,15 +1237,12 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificConcurrentMessaging)
 	                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		std::uint32_t identifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(priority),
-		                                                           parameterGroupNumber,
-		                                                           sourceControlFunction,
-		                                                           destinationControlFunction);
-		message.set_identifier(CANIdentifier(identifier));
-		message.set_source_control_function(sourceControlFunction);
-		message.set_destination_control_function(destinationControlFunction);
-		message.set_data(data.begin(), data.size());
+		CANMessage message = test_helpers::create_message(static_cast<std::uint8_t>(priority),
+		                                                  parameterGroupNumber,
+		                                                  destinationControlFunction,
+		                                                  sourceControlFunction,
+		                                                  data.begin(),
+		                                                  data.size());
 
 		if ((sourceControlFunction == originator1) ||
 		    (sourceControlFunction == originator2) ||
@@ -1415,16 +1404,14 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAndBroadcastMessageConcurrent)
 	                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		message.set_source_control_function(sourceControlFunction);
-		message.set_data(data.begin(), data.size());
 		if (destinationControlFunction == nullptr)
 		{
 			// Broadcast message
-			message.set_identifier(CANIdentifier(
-			  test_helpers::create_ext_can_id_broadcast(static_cast<std::uint8_t>(priority),
-			                                            parameterGroupNumber,
-			                                            sourceControlFunction)));
+			CANMessage message = test_helpers::create_message_broadcast(static_cast<std::uint8_t>(priority),
+			                                                            parameterGroupNumber,
+			                                                            sourceControlFunction,
+			                                                            data.begin(),
+			                                                            data.size());
 			if (sourceControlFunction == originator)
 			{
 				originatingQueue.push_back(message);
@@ -1438,12 +1425,12 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAndBroadcastMessageConcurrent)
 		else
 		{
 			// Destination specific message
-			message.set_identifier(CANIdentifier(
-			  test_helpers::create_ext_can_id(static_cast<std::uint8_t>(priority),
-			                                  parameterGroupNumber,
-			                                  sourceControlFunction,
-			                                  destinationControlFunction)));
-			message.set_destination_control_function(destinationControlFunction);
+			CANMessage message = test_helpers::create_message(static_cast<std::uint8_t>(priority),
+			                                                  parameterGroupNumber,
+			                                                  destinationControlFunction,
+			                                                  sourceControlFunction,
+			                                                  data.begin(),
+			                                                  data.size());
 			if (sourceControlFunction == originator)
 			{
 				originatingQueue.push_back(message);
@@ -1715,15 +1702,12 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRandomCTS)
 	                             std::shared_ptr<InternalControlFunction> sourceControlFunction,
 	                             std::shared_ptr<ControlFunction> destinationControlFunction,
 	                             CANIdentifier::CANPriority priority) {
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		std::uint32_t identifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(priority),
-		                                                           parameterGroupNumber,
-		                                                           sourceControlFunction,
-		                                                           destinationControlFunction);
-		message.set_identifier(CANIdentifier(identifier));
-		message.set_source_control_function(sourceControlFunction);
-		message.set_destination_control_function(destinationControlFunction);
-		message.set_data(data.begin(), data.size());
+		CANMessage message = test_helpers::create_message(static_cast<std::uint8_t>(priority),
+		                                                  parameterGroupNumber,
+		                                                  destinationControlFunction,
+		                                                  sourceControlFunction,
+		                                                  data.begin(),
+		                                                  data.size());
 
 		if (sourceControlFunction == originator)
 		{

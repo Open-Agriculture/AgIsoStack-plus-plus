@@ -36,7 +36,6 @@ namespace isobus
 		{
 			Transmit, ///< Message is to be transmitted from the stack
 			Receive, ///< Message is being received
-			Internal ///< Message is being used internally as data storage for a protocol
 		};
 
 		/// @brief The different byte formats that can be used when reading bytes from the buffer.
@@ -52,12 +51,39 @@ namespace isobus
 		/// @returns The maximum length of any CAN message as defined by ETP in ISO11783
 		static const std::uint32_t ABSOLUTE_MAX_MESSAGE_LENGTH = 117440505;
 
-		/// @brief Constructor for a CAN message
-		/// @param[in] CANPort The can channel index the message uses
-		explicit CANMessage(std::uint8_t CANPort);
+		/// @brief Construct a CAN message from the parameters supplied
+		/// @param[in] type The type of the CAN message
+		/// @param[in] identifier The CAN ID of the message
+		/// @param[in] dataBuffer The start of the data payload
+		/// @param[in] length The length of the data payload in bytes
+		/// @param[in] source The source control function of the message
+		/// @param[in] destination The destination control function of the message
+		/// @param[in] CANPort The CAN channel index associated with the message
+		CANMessage(Type type,
+		           CANIdentifier identifier,
+		           const std::uint8_t *dataBuffer,
+		           std::uint32_t length,
+		           std::shared_ptr<ControlFunction> source,
+		           std::shared_ptr<ControlFunction> destination,
+		           std::uint8_t CANPort);
 
-		/// @brief Destructor for a CAN message
-		virtual ~CANMessage() = default;
+		/// @brief Construct a CAN message from the parameters supplied
+		/// @param[in] type The type of the CAN message
+		/// @param[in] identifier The CAN ID of the message
+		/// @param[in] data The data payload
+		/// @param[in] source The source control function of the message
+		/// @param[in] destination The destination control function of the message
+		/// @param[in] CANPort The CAN channel index associated with the message
+		CANMessage(Type type,
+		           CANIdentifier identifier,
+		           std::vector<std::uint8_t> data,
+		           std::shared_ptr<ControlFunction> source,
+		           std::shared_ptr<ControlFunction> destination,
+		           std::uint8_t CANPort);
+
+		/// @brief Factory method to construct an intentionally invalid CANMessage
+		/// @returns An invalid CANMessage
+		static CANMessage create_invalid_message();
 
 		/// @brief Returns the CAN message type
 		/// @returns The type of the CAN message
@@ -69,7 +95,7 @@ namespace isobus
 
 		/// @brief Returns the length of the data in the CAN message
 		/// @returns The message data payload length
-		virtual std::uint32_t get_data_length() const;
+		std::uint32_t get_data_length() const;
 
 		/// @brief Gets the source control function that the message is from
 		/// @returns The source control function that the message is from
@@ -126,14 +152,6 @@ namespace isobus
 		/// @brief Sets the size of the data payload
 		/// @param[in] length The desired length of the data payload
 		void set_data_size(std::uint32_t length);
-
-		/// @brief Sets the source control function for the message
-		/// @param[in] value The source control function
-		void set_source_control_function(std::shared_ptr<ControlFunction> value);
-
-		/// @brief Sets the destination control function for the message
-		/// @param[in] value The destination control function
-		void set_destination_control_function(std::shared_ptr<ControlFunction> value);
 
 		/// @brief Sets the CAN ID of the message
 		/// @param[in] value The CAN ID for the message
@@ -226,12 +244,12 @@ namespace isobus
 		bool get_bool_at(const std::uint32_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1) const;
 
 	private:
-		Type messageType = Type::Receive; ///< The internal message type associated with the message
-		CANIdentifier identifier = CANIdentifier(0); ///< The CAN ID of the message
+		Type messageType; ///< The internal message type associated with the message
+		CANIdentifier identifier; ///< The CAN ID of the message
 		std::vector<std::uint8_t> data; ///< A data buffer for the message, used when not using data chunk callbacks
-		std::shared_ptr<ControlFunction> source = nullptr; ///< The source control function of the message
-		std::shared_ptr<ControlFunction> destination = nullptr; ///< The destination control function of the message
-		const std::uint8_t CANPortIndex; ///< The CAN channel index associated with the message
+		std::shared_ptr<ControlFunction> source; ///< The source control function of the message
+		std::shared_ptr<ControlFunction> destination; ///< The destination control function of the message
+		std::uint8_t CANPortIndex; ///< The CAN channel index associated with the message
 	};
 
 } // namespace isobus

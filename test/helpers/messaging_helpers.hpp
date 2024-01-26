@@ -21,10 +21,23 @@ namespace test_helpers
 	                                  std::shared_ptr<isobus::ControlFunction> source,
 	                                  std::initializer_list<std::uint8_t> data);
 
+	isobus::CANMessage create_message(std::uint8_t priority,
+	                                  std::uint32_t parameterGroupNumber,
+	                                  std::shared_ptr<isobus::ControlFunction> destination,
+	                                  std::shared_ptr<isobus::ControlFunction> source,
+	                                  const std::uint8_t *dataBuffer,
+	                                  std::uint32_t dataLength);
+
 	isobus::CANMessage create_message_broadcast(std::uint8_t priority,
 	                                            std::uint32_t parameterGroupNumber,
 	                                            std::shared_ptr<isobus::ControlFunction> source,
 	                                            std::initializer_list<std::uint8_t> data);
+
+	isobus::CANMessage create_message_broadcast(std::uint8_t priority,
+	                                            std::uint32_t parameterGroupNumber,
+	                                            std::shared_ptr<isobus::ControlFunction> source,
+	                                            const std::uint8_t *dataBuffer,
+	                                            std::uint32_t dataLength);
 
 	isobus::CANMessageFrame create_message_frame_raw(std::uint32_t identifier,
 	                                                 std::initializer_list<std::uint8_t> data);

@@ -62,37 +62,56 @@ namespace test_helpers
 		return identifier;
 	}
 
+	isobus::CANMessage create_message(std::uint8_t priority, std::uint32_t parameterGroupNumber, std::shared_ptr<isobus::ControlFunction> destination, std::shared_ptr<isobus::ControlFunction> source, std::initializer_list<std::uint8_t> data)
+	{
+		return create_message(priority, parameterGroupNumber, destination, source, data.begin(), data.size());
+	}
+
 	CANMessage create_message(std::uint8_t priority,
 	                          std::uint32_t parameterGroupNumber,
 	                          std::shared_ptr<ControlFunction> destination,
 	                          std::shared_ptr<ControlFunction> source,
-	                          std::initializer_list<std::uint8_t> data)
+	                          const std::uint8_t *dataBuffer,
+	                          std::uint32_t dataLength)
 	{
 		EXPECT_NE(source, nullptr);
 		EXPECT_TRUE(source->get_address_valid());
 		EXPECT_NE(destination, nullptr);
 		EXPECT_TRUE(destination->get_address_valid());
 
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		message.set_identifier(CANIdentifier(create_ext_can_id(priority, parameterGroupNumber, destination, source)));
-		message.set_source_control_function(source);
-		message.set_destination_control_function(destination);
-		message.set_data(data.begin(), data.size());
+		CANIdentifier identifier(create_ext_can_id(priority, parameterGroupNumber, destination, source));
+		CANMessage message(CANMessage::Type::Receive,
+		                   identifier,
+		                   dataBuffer,
+		                   dataLength,
+		                   source,
+		                   destination,
+		                   0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
 		return message;
+	}
+
+	isobus::CANMessage create_message_broadcast(std::uint8_t priority, std::uint32_t parameterGroupNumber, std::shared_ptr<isobus::ControlFunction> source, std::initializer_list<std::uint8_t> data)
+	{
+		return create_message_broadcast(priority, parameterGroupNumber, source, data.begin(), data.size());
 	}
 
 	CANMessage create_message_broadcast(std::uint8_t priority,
 	                                    std::uint32_t parameterGroupNumber,
 	                                    std::shared_ptr<ControlFunction> source,
-	                                    std::initializer_list<std::uint8_t> data)
+	                                    const std::uint8_t *dataBuffer,
+	                                    std::uint32_t dataLength)
 	{
 		EXPECT_NE(source, nullptr);
 		EXPECT_TRUE(source->get_address_valid());
 
-		CANMessage message(0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
-		message.set_identifier(CANIdentifier(create_ext_can_id_broadcast(priority, parameterGroupNumber, source)));
-		message.set_source_control_function(source);
-		message.set_data(data.begin(), data.size());
+		CANIdentifier identifier(create_ext_can_id_broadcast(priority, parameterGroupNumber, source));
+		CANMessage message(CANMessage::Type::Receive,
+		                   identifier,
+		                   dataBuffer,
+		                   dataLength,
+		                   source,
+		                   nullptr,
+		                   0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
 		return message;
 	}
 

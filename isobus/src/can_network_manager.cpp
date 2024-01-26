@@ -31,7 +31,11 @@ namespace isobus
 
 	void CANNetworkManager::initialize()
 	{
-		receiveMessageList.clear();
+		// Clear queues
+		while (!receivedMessageQueue.empty())
+		{
+			get_next_can_message_from_rx_queue();
+		}
 		initialized = true;
 	}
 
@@ -210,18 +214,6 @@ namespace isobus
 		return retVal;
 	}
 
-	void CANNetworkManager::receive_can_message(const CANMessage &message)
-	{
-		if (initialized)
-		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			std::lock_guard<std::mutex> lock(receiveMessageMutex);
-#endif
-
-			receiveMessageList.push_back(message);
-		}
-	}
-
 	void CANNetworkManager::update()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
@@ -290,12 +282,12 @@ namespace isobus
 
 	void receive_can_message_frame_from_hardware(const CANMessageFrame &rxFrame)
 	{
-		CANNetworkManager::process_receive_can_message_frame(rxFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(rxFrame);
 	}
 
 	void on_transmit_can_message_frame_from_hardware(const CANMessageFrame &txFrame)
 	{
-		CANNetworkManager::process_transmitted_can_message_frame(txFrame);
+		CANNetworkManager::CANNetwork.process_transmitted_can_message_frame(txFrame);
 	}
 
 	void periodic_update_from_hardware()
@@ -305,24 +297,31 @@ namespace isobus
 
 	void CANNetworkManager::process_receive_can_message_frame(const CANMessageFrame &rxFrame)
 	{
-		CANMessage tempCANMessage(rxFrame.channel);
+		update_control_functions(rxFrame);
 
-		CANNetworkManager::CANNetwork.update_control_functions(rxFrame);
+		CANIdentifier identifier(rxFrame.identifier);
+		CANMessage message(CANMessage::Type::Receive,
+		                   identifier,
+		                   rxFrame.data,
+		                   rxFrame.dataLength,
+		                   get_control_function(rxFrame.channel, identifier.get_source_address()),
+		                   get_control_function(rxFrame.channel, identifier.get_destination_address()),
+		                   rxFrame.channel);
 
-		tempCANMessage.set_identifier(CANIdentifier(rxFrame.identifier));
+		update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
 
-		tempCANMessage.set_source_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_source_address()));
-		tempCANMessage.set_destination_control_function(CANNetworkManager::CANNetwork.get_control_function(rxFrame.channel, tempCANMessage.get_identifier().get_destination_address()));
-		tempCANMessage.set_data(rxFrame.data, rxFrame.dataLength);
-
-		CANNetworkManager::CANNetwork.update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
-
-		CANNetworkManager::CANNetwork.receive_can_message(tempCANMessage);
+		if (initialized)
+		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+			std::lock_guard<std::mutex> lock(receivedMessageQueueMutex);
+#endif
+			receivedMessageQueue.push(std::move(message));
+		}
 	}
 
 	void CANNetworkManager::process_transmitted_can_message_frame(const CANMessageFrame &txFrame)
 	{
-		CANNetworkManager::CANNetwork.update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
+		update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
 	}
 
 	void CANNetworkManager::on_control_function_destroyed(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
@@ -520,12 +519,13 @@ namespace isobus
 		{
 			auto receive_message_callback = [this, i](const CANMessage &message) {
 				// TODO: hack port_index for now, once network manager isn't a singleton, this can be removed
-				CANMessage tempMessage(i);
-				tempMessage.set_identifier(message.get_identifier());
-				tempMessage.set_source_control_function(message.get_source_control_function());
-				tempMessage.set_destination_control_function(message.get_destination_control_function());
-				tempMessage.set_data(message.get_data().data(), static_cast<std::uint32_t>(message.get_data_length()));
-				this->protocol_message_callback(tempMessage);
+				CANMessage tempMessage(CANMessage::Type::Receive,
+				                       message.get_identifier(),
+				                       message.get_data(),
+				                       message.get_source_control_function(),
+				                       message.get_destination_control_function(),
+				                       i);
+				this->protocol_message_callback(message);
 			};
 			transportProtocols[i].reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols[i].reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
@@ -894,19 +894,15 @@ namespace isobus
 	CANMessage CANNetworkManager::get_next_can_message_from_rx_queue()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(receiveMessageMutex);
+		std::lock_guard<std::mutex> lock(receivedMessageQueueMutex);
 #endif
-		CANMessage retVal = receiveMessageList.front();
-		receiveMessageList.pop_front();
-		return retVal;
-	}
-
-	std::size_t CANNetworkManager::get_number_can_messages_in_rx_queue()
-	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(receiveMessageMutex);
-#endif
-		return receiveMessageList.size();
+		if (!receivedMessageQueue.empty())
+		{
+			CANMessage retVal = std::move(receivedMessageQueue.front());
+			receivedMessageQueue.pop();
+			return retVal;
+		}
+		return CANMessage::create_invalid_message();
 	}
 
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction)
@@ -1049,7 +1045,8 @@ namespace isobus
 
 	void CANNetworkManager::process_rx_messages()
 	{
-		while (0 != get_number_can_messages_in_rx_queue())
+		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
+		while (!receivedMessageQueue.empty())
 		{
 			CANMessage currentMessage = get_next_can_message_from_rx_queue();
 

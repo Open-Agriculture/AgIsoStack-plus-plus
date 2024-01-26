@@ -113,7 +113,7 @@ namespace test_helpers
 		testFrame.data[5] = static_cast<std::uint8_t>(name.get_full_name() >> 40);
 		testFrame.data[6] = static_cast<std::uint8_t>(name.get_full_name() >> 48);
 		testFrame.data[7] = static_cast<std::uint8_t>(name.get_full_name() >> 56);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		EXPECT_TRUE(partnerECU->get_address_valid());
 

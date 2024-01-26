@@ -152,21 +152,23 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 	EXPECT_EQ(NULL_OBJECT_ID, clientUnderTest.get_visible_data_mask());
 	EXPECT_EQ(NULL_OBJECT_ID, clientUnderTest.get_visible_soft_key_mask());
 
-	CANMessage testMessage(0);
-	testMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0));
+	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+	CANMessage testMessage(CANMessage::Type::Receive,
+	                       identifier,
+	                       {
+	                         0xFE, // VT Status message function code
+	                         0x26, // Working set master address
+	                         1234 & 0xFF, // Data mask active
+	                         1234 >> 8, // Data mask active
+	                         4567 & 0xFF, // Soft key mask active
+	                         4567 >> 8, // Soft key mask active
+	                         0xFF, // Busy codes
+	                         1, // VT Function code that is being executed
+	                       },
+	                       nullptr,
+	                       nullptr,
+	                       0);
 
-	std::uint8_t testContent[] = {
-		0xFE, // VT Status message function code
-		0x26, // Working set master address
-		1234 & 0xFF, // Data mask active
-		1234 >> 8, // Data mask active
-		4567 & 0xFF, // Soft key mask active
-		4567 >> 8, // Soft key mask active
-		0xFF, // Busy codes
-		1, // VT Function code that is being executed
-	};
-
-	testMessage.set_data(testContent, 8);
 	clientUnderTest.test_wrapper_process_rx_message(testMessage, &clientUnderTest);
 
 	EXPECT_EQ(1234, clientUnderTest.get_visible_data_mask());
@@ -899,7 +901,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	testFrame.data[5] = 0xFF; // Reserved
 	testFrame.data[6] = 0xFF; // Reserved
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	interfaceUnderTest.test_wrapper_process_command_queue();
@@ -929,7 +931,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	testFrame.data[5] = 0xFF; // Reserved
 	testFrame.data[6] = 0xFF; // Reserved
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	ASSERT_TRUE(serverVT.get_queue_empty());
@@ -954,7 +956,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	testFrame.data[5] = 0xFF; // Reserved
 	testFrame.data[6] = 0xFF; // Reserved
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	// Test draw text

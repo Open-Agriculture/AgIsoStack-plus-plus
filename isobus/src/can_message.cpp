@@ -14,9 +14,40 @@
 
 namespace isobus
 {
-	CANMessage::CANMessage(std::uint8_t CANPort) :
+	CANMessage::CANMessage(Type type,
+	                       CANIdentifier identifier,
+	                       const std::uint8_t *dataBuffer,
+	                       std::uint32_t length,
+	                       std::shared_ptr<ControlFunction> source,
+	                       std::shared_ptr<ControlFunction> destination,
+	                       std::uint8_t CANPort) :
+	  messageType(type),
+	  identifier(identifier),
+	  data(dataBuffer, dataBuffer + length),
+	  source(source),
+	  destination(destination),
 	  CANPortIndex(CANPort)
 	{
+	}
+
+	CANMessage::CANMessage(Type type,
+	                       CANIdentifier identifier,
+	                       std::vector<std::uint8_t> data,
+	                       std::shared_ptr<ControlFunction> source,
+	                       std::shared_ptr<ControlFunction> destination,
+	                       std::uint8_t CANPort) :
+	  messageType(type),
+	  identifier(identifier),
+	  data(std::move(data)),
+	  source(source),
+	  destination(destination),
+	  CANPortIndex(CANPort)
+	{
+	}
+
+	CANMessage CANMessage::create_invalid_message()
+	{
+		return CANMessage(CANMessage::Type::Receive, CANIdentifier(CANIdentifier::UNDEFINED_PARAMETER_GROUP_NUMBER), {}, nullptr, nullptr, 0);
 	}
 
 	CANMessage::Type CANMessage::get_type() const
@@ -102,16 +133,6 @@ namespace isobus
 	void CANMessage::set_data_size(std::uint32_t length)
 	{
 		data.resize(length);
-	}
-
-	void CANMessage::set_source_control_function(std::shared_ptr<ControlFunction> value)
-	{
-		source = value;
-	}
-
-	void CANMessage::set_destination_control_function(std::shared_ptr<ControlFunction> value)
-	{
-		destination = value;
 	}
 
 	void CANMessage::set_identifier(const CANIdentifier &value)
