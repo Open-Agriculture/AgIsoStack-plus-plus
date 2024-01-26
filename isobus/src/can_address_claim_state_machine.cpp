@@ -48,8 +48,8 @@ namespace isobus
 	{
 		if (State::AddressClaimingComplete == get_current_state())
 		{
-			CANStackLogger::warn("[AC]: Address violation for address %u",
-			                     get_claimed_address());
+			LOG_WARNING("[AC]: Address violation for address %u",
+			            get_claimed_address());
 
 			set_current_state(State::SendReclaimAddressOnRequest);
 		}
@@ -61,7 +61,7 @@ namespace isobus
 		{
 			if (!m_isoname.get_arbitrary_address_capable())
 			{
-				CANStackLogger::error("[AC]: Our address was commanded to a new value, but our ISO NAME doesn't support changing our address.");
+				LOG_ERROR("[AC]: Our address was commanded to a new value, but our ISO NAME doesn't support changing our address.");
 			}
 			else
 			{
@@ -72,17 +72,17 @@ namespace isobus
 				{
 					// Commanded address is free. We'll claim it.
 					set_current_state(State::SendPreferredAddressClaim);
-					CANStackLogger::info("[AC]: Our address was commanded to a new value of %u", commandedAddress);
+					LOG_INFO("[AC]: Our address was commanded to a new value of %u", commandedAddress);
 				}
 				else if (deviceAtOurPreferredAddress->get_NAME().get_full_name() < m_isoname.get_full_name())
 				{
 					// We can steal the address of the device at our commanded address and force it to move
 					set_current_state(State::SendArbitraryAddressClaim);
-					CANStackLogger::info("[AC]: Our address was commanded to a new value of %u, and an ECU at the target address is being evicted.", commandedAddress);
+					LOG_INFO("[AC]: Our address was commanded to a new value of %u, and an ECU at the target address is being evicted.", commandedAddress);
 				}
 				else
 				{
-					CANStackLogger::error("[AC]: Our address was commanded to a new value of %u, but we cannot move to the target address.", commandedAddress);
+					LOG_ERROR("[AC]: Our address was commanded to a new value of %u, but we cannot move to the target address.", commandedAddress);
 				}
 			}
 		}
@@ -181,10 +181,10 @@ namespace isobus
 				{
 					if (send_address_claim(m_preferredAddress))
 					{
-						CANStackLogger::debug("[AC]: Internal control function %016llx has claimed address %u on channel %u",
-						                      m_isoname.get_full_name(),
-						                      m_preferredAddress,
-						                      m_portIndex);
+						LOG_DEBUG("[AC]: Internal control function %016llx has claimed address %u on channel %u",
+						          m_isoname.get_full_name(),
+						          m_preferredAddress,
+						          m_portIndex);
 						set_current_state(State::AddressClaimingComplete);
 					}
 					else
@@ -204,10 +204,10 @@ namespace isobus
 						if ((nullptr == CANNetworkManager::CANNetwork.get_control_function(m_portIndex, i, {})) && (send_address_claim(i)))
 						{
 							addressFound = true;
-							CANStackLogger::debug("[AC]: Internal control function %016llx could not use the preferred address, but has claimed address %u on channel %u",
-							                      m_isoname.get_full_name(),
-							                      i,
-							                      m_portIndex);
+							LOG_DEBUG("[AC]: Internal control function %016llx could not use the preferred address, but has claimed address %u on channel %u",
+							          m_isoname.get_full_name(),
+							          i,
+							          m_portIndex);
 							set_current_state(State::AddressClaimingComplete);
 							break;
 						}
@@ -215,9 +215,9 @@ namespace isobus
 
 					if (!addressFound)
 					{
-						CANStackLogger::critical("[AC]: Internal control function %016llx failed to claim an address on channel %u",
-						                         m_isoname.get_full_name(),
-						                         m_portIndex);
+						LOG_CRITICAL("[AC]: Internal control function %016llx failed to claim an address on channel %u",
+						             m_isoname.get_full_name(),
+						             m_portIndex);
 						set_current_state(State::UnableToClaim);
 					}
 				}
@@ -300,10 +300,10 @@ namespace isobus
 								// Wait for things to shake out a bit, then claim a new address.
 								parent->set_current_state(State::WaitForRequestContentionPeriod);
 								parent->m_claimedAddress = NULL_CAN_ADDRESS;
-								CANStackLogger::warn("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
-								                     parent->m_isoname.get_full_name(),
-								                     parent->m_portIndex,
-								                     NAMEClaimed);
+								LOG_WARNING("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
+								            parent->m_isoname.get_full_name(),
+								            parent->m_portIndex,
+								            NAMEClaimed);
 							}
 						}
 					}

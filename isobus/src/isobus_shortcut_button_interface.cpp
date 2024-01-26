@@ -66,18 +66,18 @@ namespace isobus
 
 				if (StopAllImplementOperationsState::StopImplementOperations == newState)
 				{
-					CANStackLogger::error("[ISB]: All implement operations must stop. (Triggered internally)");
+					LOG_ERROR("[ISB]: All implement operations must stop. (Triggered internally)");
 				}
 				else
 				{
-					CANStackLogger::info("[ISB]: Internal ISB state is now permitted.");
+					LOG_INFO("[ISB]: Internal ISB state is now permitted.");
 				}
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
 			}
 		}
 		else
 		{
-			CANStackLogger::error("[ISB]: You are attempting to set the internal ISB state but the ISB interface is not configured as a server!");
+			LOG_ERROR("[ISB]: You are attempting to set the internal ISB state but the ISB interface is not configured as a server!");
 		}
 	}
 
@@ -164,7 +164,7 @@ namespace isobus
 				{
 					ISBServerData newISB;
 
-					CANStackLogger::debug("[ISB]: New ISB detected at address %u", message.get_identifier().get_source_address());
+					LOG_DEBUG("[ISB]: New ISB detected at address %u", message.get_identifier().get_source_address());
 					newISB.ISONAME = messageNAME;
 					isobusShorcutButtonList.emplace_back(newISB);
 					ISB = std::prev(isobusShorcutButtonList.end());
@@ -182,7 +182,7 @@ namespace isobus
 						// A Working Set shall consider an increase in the transitions without detecting a corresponding
 						// transition of the Stop all implement operations state as an error and react accordingly.
 						ISB->commandedState = StopAllImplementOperationsState::StopImplementOperations;
-						CANStackLogger::error("[ISB]: Missed an ISB transition from ISB at address %u", message.get_identifier().get_source_address());
+						LOG_ERROR("[ISB]: Missed an ISB transition from ISB at address %u", message.get_identifier().get_source_address());
 					}
 					else
 					{
@@ -196,11 +196,11 @@ namespace isobus
 					{
 						if (StopAllImplementOperationsState::StopImplementOperations == newState)
 						{
-							CANStackLogger::error("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message.get_identifier().get_source_address());
+							LOG_ERROR("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message.get_identifier().get_source_address());
 						}
 						else
 						{
-							CANStackLogger::info("[ISB]: Implement operations now permitted.");
+							LOG_INFO("[ISB]: Implement operations now permitted.");
 						}
 						ISBEventDispatcher.call(newState);
 					}
@@ -208,7 +208,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[ISB]: Received malformed All Implements Stop Operations Switch State. DLC must be 8.");
+				LOG_WARNING("[ISB]: Received malformed All Implements Stop Operations Switch State. DLC must be 8.");
 			}
 		}
 	}

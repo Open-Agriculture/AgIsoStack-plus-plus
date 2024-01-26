@@ -19,7 +19,7 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] constructor: client is nullptr");
+			LOG_ERROR("[VTStateHelper] constructor: client is nullptr");
 			return;
 		}
 		numericValueChangeEventHandle = client->get_vt_change_numeric_value_event_dispatcher().add_listener(
@@ -38,12 +38,12 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_numeric_value: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_numeric_value: client is nullptr");
 			return false;
 		}
 		if (numericValueStates.find(object_id) == numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] set_numeric_value: objectId %lu not tracked", object_id);
+			LOG_WARNING("[VTStateHelper] set_numeric_value: objectId %lu not tracked", object_id);
 			return false;
 		}
 		if (numericValueStates.at(object_id) == value)
@@ -101,7 +101,7 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_active_data_or_alarm_mask: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_active_data_or_alarm_mask: client is nullptr");
 			return false;
 		}
 		if (activeDataOrAlarmMask == dataOrAlarmMaskId)
@@ -121,12 +121,12 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_active_soft_key_mask: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_active_soft_key_mask: client is nullptr");
 			return false;
 		}
 		if (softKeyMasks.find(maskId) == softKeyMasks.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%lu' not tracked", maskId);
+			LOG_WARNING("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%lu' not tracked", maskId);
 			return false;
 		}
 		if (softKeyMasks.at(maskId) == softKeyMaskId)
@@ -146,17 +146,17 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_attribute: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_attribute: client is nullptr");
 			return false;
 		}
 		if (attributeStates.find(objectId) == attributeStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] set_attribute: objectId %lu not tracked", objectId);
+			LOG_ERROR("[VTStateHelper] set_attribute: objectId %lu not tracked", objectId);
 			return false;
 		}
 		if (attributeStates.at(objectId).find(attribute) == attributeStates.at(objectId).end())
 		{
-			CANStackLogger::warn("[VTStateHelper] set_attribute: attribute %lu of objectId %lu not tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] set_attribute: attribute %lu of objectId %lu not tracked", attribute, objectId);
 			return false;
 		}
 		if (attributeStates.at(objectId).at(attribute) == value)

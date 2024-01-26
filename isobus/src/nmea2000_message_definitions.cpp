@@ -147,7 +147,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Can't deserialize vessel heading. DLC must be 8.");
+				LOG_WARNING("[NMEA2K]: Can't deserialize vessel heading. DLC must be 8.");
 			}
 			return retVal;
 		}
@@ -238,7 +238,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Can't deserialize rate of turn. DLC must be 8.");
+				LOG_WARNING("[NMEA2K]: Can't deserialize rate of turn. DLC must be 8.");
 			}
 			return retVal;
 		}
@@ -338,7 +338,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Can't deserialize position rapid update. DLC must be 8.");
+				LOG_WARNING("[NMEA2K]: Can't deserialize position rapid update. DLC must be 8.");
 			}
 			return retVal;
 		}
@@ -456,7 +456,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Can't deserialize COG/SOG rapid update. DLC must be 8.");
+				LOG_WARNING("[NMEA2K]: Can't deserialize COG/SOG rapid update. DLC must be 8.");
 			}
 			return retVal;
 		}
@@ -579,7 +579,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Cannot deserialize position delta high precision rapid update. DLC must be 8 bytes.");
+				LOG_WARNING("[NMEA2K]: Cannot deserialize position delta high precision rapid update. DLC must be 8 bytes.");
 			}
 			return retVal;
 		}
@@ -958,14 +958,14 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::warn("[NMEA2K]: Can't fully parse GNSS position data reference station info because message length is not long enough.");
+						LOG_WARNING("[NMEA2K]: Can't fully parse GNSS position data reference station info because message length is not long enough.");
 						break;
 					}
 				}
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Cannot deserialize GNSS position data. DLC must be >= 43 bytes.");
+				LOG_WARNING("[NMEA2K]: Cannot deserialize GNSS position data. DLC must be >= 43 bytes.");
 			}
 			return retVal;
 		}
@@ -1141,7 +1141,7 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::warn("[NMEA2K]: Can't deserialize Datum message. Message length must be at least 20 bytes.");
+				LOG_WARNING("[NMEA2K]: Can't deserialize Datum message. Message length must be at least 20 bytes.");
 			}
 			return retVal;
 		}

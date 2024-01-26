@@ -66,7 +66,7 @@ namespace isobus
 			}
 			if (allChannelsClosed)
 			{
-				isobus::CANStackLogger::info("[InnoMaker-Windows] All channels closed, closing driver instance");
+				LOG_INFO("[InnoMaker-Windows] All channels closed, closing driver instance");
 				driverInstance->setdown();
 				driverInstance = nullptr;
 			}
@@ -238,7 +238,7 @@ namespace isobus
 
 				default:
 				{
-					isobus::CANStackLogger::error("[InnoMaker-Windows] Unsupported baudrate with index " + isobus::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
+					LOG_ERROR("[InnoMaker-Windows] Unsupported baudrate with index " + isobus::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
 					return;
 				}
 				break;
@@ -248,7 +248,7 @@ namespace isobus
 		}
 		else
 		{
-			isobus::CANStackLogger::error("[InnoMaker-Windows] No device found on channel " + isobus::to_string(channel));
+			LOG_ERROR("[InnoMaker-Windows] No device found on channel " + isobus::to_string(channel));
 		}
 	}
 
@@ -275,7 +275,7 @@ namespace isobus
 			InnoMakerUsb2CanLib::innomaker_tx_context *txc = driverInstance->innomaker_get_tx_context(txContexts.get(), frame.echo_id);
 			if (nullptr == txc)
 			{
-				isobus::CANStackLogger::warn("[InnoMaker-Windows] Received frame with bad echo ID: " + isobus::to_string(static_cast<int>(frame.echo_id)));
+				LOG_WARNING("[InnoMaker-Windows] Received frame with bad echo ID: " + isobus::to_string(static_cast<int>(frame.echo_id)));
 				return false;
 			}
 			driverInstance->innomaker_free_tx_context(txc);
@@ -310,7 +310,7 @@ namespace isobus
 		InnoMakerUsb2CanLib::innomaker_tx_context *txc = driverInstance->innomaker_alloc_tx_context(txContexts.get());
 		if (0xFF == txc->echo_id)
 		{
-			isobus::CANStackLogger::debug("[InnoMaker-Windows] No free transmission context");
+			LOG_DEBUG("[InnoMaker-Windows] No free transmission context");
 			return false;
 		}
 
@@ -333,7 +333,7 @@ namespace isobus
 		bool success = driverInstance->sendInnoMakerDeviceBuf(device, sendBuffer, sizeof(InnoMakerUsb2CanLib::innomaker_host_frame), 10);
 		if (!success)
 		{
-			isobus::CANStackLogger::warn("[InnoMaker-Windows] Failed to send frame");
+			LOG_WARNING("[InnoMaker-Windows] Failed to send frame");
 			driverInstance->innomaker_free_tx_context(txc);
 		}
 		return success;

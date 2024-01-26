@@ -41,7 +41,7 @@ namespace isobus
 	{
 		if (value > 0x07)
 		{
-			CANStackLogger::error("[NAME]: Industry group out of range, must be between 0 and 7");
+			LOG_ERROR("[NAME]: Industry group out of range, must be between 0 and 7");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0x7000000000000000);
 		rawName |= (static_cast<std::uint64_t>(value & 0x07) << 60);
@@ -56,7 +56,7 @@ namespace isobus
 	{
 		if (value > 0x0F)
 		{
-			CANStackLogger::error("[NAME]: Device class instance out of range, must be between 0 and 15");
+			LOG_ERROR("[NAME]: Device class instance out of range, must be between 0 and 15");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0xF00000000000000);
 		rawName |= (static_cast<std::uint64_t>(value & 0x0F) << 56);
@@ -71,7 +71,7 @@ namespace isobus
 	{
 		if (value > 0x7F)
 		{
-			CANStackLogger::error("[NAME]: Device class out of range, must be between 0 and 127");
+			LOG_ERROR("[NAME]: Device class out of range, must be between 0 and 127");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0xFE000000000000);
 		rawName |= (static_cast<std::uint64_t>(value & 0x7F) << 49);
@@ -97,7 +97,7 @@ namespace isobus
 	{
 		if (value > 0x1F)
 		{
-			CANStackLogger::error("[NAME]: Function instance out of range, must be between 0 and 31");
+			LOG_ERROR("[NAME]: Function instance out of range, must be between 0 and 31");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0xF800000000);
 		rawName |= (static_cast<std::uint64_t>(value & 0x1F) << 35);
@@ -112,7 +112,7 @@ namespace isobus
 	{
 		if (value > 0x07)
 		{
-			CANStackLogger::error("[NAME]: ECU instance out of range, must be between 0 and 7");
+			LOG_ERROR("[NAME]: ECU instance out of range, must be between 0 and 7");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0x700000000);
 		rawName |= (static_cast<std::uint64_t>(value & 0x07) << 32);
@@ -127,7 +127,7 @@ namespace isobus
 	{
 		if (value > 0x07FF)
 		{
-			CANStackLogger::error("[NAME]: Manufacturer code out of range, must be between 0 and 2047");
+			LOG_ERROR("[NAME]: Manufacturer code out of range, must be between 0 and 2047");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0xFFE00000);
 		rawName |= (static_cast<std::uint64_t>(value & 0x07FF) << 21);
@@ -142,7 +142,7 @@ namespace isobus
 	{
 		if (value > 0x001FFFFF)
 		{
-			CANStackLogger::error("[NAME]: Identity number out of range, must be between 0 and 2097151");
+			LOG_ERROR("[NAME]: Identity number out of range, must be between 0 and 2097151");
 		}
 		rawName &= ~static_cast<std::uint64_t>(0x1FFFFF);
 		rawName |= static_cast<std::uint64_t>(value & 0x1FFFFF);

@@ -207,7 +207,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::warn("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
+						LOG_WARNING("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
 					}
 				}
 				break;
@@ -253,12 +253,14 @@ namespace isobus
 							send_acknowledgement(AcknowledgementType::Negative,
 							                     requestedPGN,
 							                     message.get_source_control_function());
-							CANStackLogger::warn("[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
+							LOG_WARNING("[PR]: NACK-ing PGN request for PGN " +
+							            isobus::to_string(requestedPGN) +
+							            " because no callback could handle it.");
 						}
 					}
 					else
 					{
-						CANStackLogger::warn("[PR]: Received a malformed PGN request message. The message will not be processed.");
+						LOG_WARNING("[PR]: Received a malformed PGN request message. The message will not be processed.");
 					}
 				}
 				break;
