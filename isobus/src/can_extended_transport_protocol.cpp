@@ -799,9 +799,16 @@ namespace isobus
 	bool ExtendedTransportProtocolManager::send_clear_to_send(std::shared_ptr<ExtendedTransportProtocolSession> &session) const
 	{
 		std::uint32_t nextPacketNumber = session->get_last_packet_number() + 1;
+		std::uint8_t packetLimit = session->get_cts_number_of_packet_limit();
+
+		if (packetLimit > session->get_number_of_remaining_packets())
+		{
+			packetLimit = static_cast<std::uint8_t>(session->get_number_of_remaining_packets());
+		}
+
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			CLEAR_TO_SEND_MULTIPLEXOR,
-			session->get_cts_number_of_packet_limit(),
+			packetLimit,
 			static_cast<std::uint8_t>(nextPacketNumber & 0xFF),
 			static_cast<std::uint8_t>((nextPacketNumber >> 8) & 0xFF),
 			static_cast<std::uint8_t>((nextPacketNumber >> 16) & 0xFF),
