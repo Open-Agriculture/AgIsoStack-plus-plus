@@ -237,7 +237,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceMachineInfoCallbackHit);
@@ -265,7 +265,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceMachineInfoCallbackHit);
@@ -296,7 +296,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
@@ -316,7 +316,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());

@@ -77,7 +77,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xC5;
 		testFrame.data[1] = 0xFD;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -223,7 +223,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xC5;
 		testFrame.data[1] = 0xFD;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
@@ -388,7 +388,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xDA;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
@@ -502,7 +502,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0x32;
 		testFrame.data[1] = 0xFD;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
@@ -532,7 +532,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0x8D;
 		testFrame.data[1] = 0xFC;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
@@ -668,7 +668,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCA;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
@@ -696,7 +696,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCA;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -724,7 +724,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCA;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -784,7 +784,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCB;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -839,7 +839,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCB;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -867,7 +867,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCB;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -926,7 +926,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0x00;
 		testFrame.data[6] = 0xFF;
 		testFrame.data[7] = 0xFF;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 		EXPECT_FALSE(protocolUnderTest.get_broadcast_state());
@@ -941,7 +941,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xFF;
 		testFrame.data[6] = 0xFF;
 		testFrame.data[7] = 0xFF;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 		EXPECT_TRUE(protocolUnderTest.get_broadcast_state());
@@ -956,7 +956,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0x00;
 		testFrame.data[6] = 0xFF;
 		testFrame.data[7] = 0xFF;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 		EXPECT_FALSE(protocolUnderTest.get_broadcast_state());
@@ -971,7 +971,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xFF;
 		testFrame.data[6] = 0xFF;
 		testFrame.data[7] = 0xFF;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 		EXPECT_TRUE(protocolUnderTest.get_broadcast_state());
@@ -995,7 +995,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xD2; // SPN
 		testFrame.data[6] = 0x04; // SPN
 		testFrame.data[7] = 31; // FMI (5 bits)
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1023,7 +1023,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xD2; // SPN
 		testFrame.data[6] = 0x04; // SPN
 		testFrame.data[7] = 31; // FMI (5 bits)
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1051,7 +1051,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xD2; // SPN
 		testFrame.data[6] = 0x04; // SPN
 		testFrame.data[7] = 31; // FMI (5 bits)
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1079,7 +1079,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xD2; // SPN
 		testFrame.data[6] = 0x04; // SPN
 		testFrame.data[7] = 31; // FMI (5 bits)
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1109,7 +1109,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[5] = 0xD2; // SPN
 		testFrame.data[6] = 0x04; // SPN
 		testFrame.data[7] = 31; // FMI (5 bits)
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1142,7 +1142,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xD3;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1151,7 +1151,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCA;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
@@ -1206,7 +1206,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCC;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1236,7 +1236,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.data[0] = 0xCB;
 		testFrame.data[1] = 0xFE;
 		testFrame.data[2] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
@@ -1305,7 +1305,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		// Construct a random message from our address of 0xAA
 		testFrame.identifier = 0x18EFFFAA;
 		memset(testFrame.data, 0, sizeof(testFrame.data));
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 

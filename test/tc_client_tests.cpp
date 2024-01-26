@@ -572,7 +572,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0x00; // Command address
 	testFrame.data[6] = 0x00; // Command
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendWorkingSetMaster);
@@ -598,7 +598,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0x04;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::ProcessDDOP);
@@ -620,7 +620,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0x01; // Number of booms for section control (1)
 	testFrame.data[6] = 0x20; // Number of sections for section control (32)
 	testFrame.data[7] = 0x10; // Number channels for position based control (16)
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 	CANNetworkManager::CANNetwork.update();
 
@@ -657,7 +657,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0x00; // PGN
 	testFrame.data[6] = 0xCB; // PGN
 	testFrame.data[7] = 0x00; // PGN
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
@@ -688,7 +688,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF; // Reserved
 	testFrame.data[6] = 0xFF; // Reserved
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestTransferObjectPool);
 
@@ -726,7 +726,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF; // Reserved
 	testFrame.data[6] = 0xFF; // Reserved
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestVersionResponse);
 	// Test strange technical command doesn't change the state
@@ -742,7 +742,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF; // Reserved
 	testFrame.data[6] = 0xFF; // Reserved
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForRequestVersionFromServer);
 
@@ -759,7 +759,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF; // No Label
 	testFrame.data[6] = 0xFF; // No Label
 	testFrame.data[7] = 0xFF; // No Label
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestTransferObjectPool);
 
@@ -791,7 +791,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendDeleteObjectPool);
 
@@ -809,7 +809,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = '.';
 	testFrame.data[6] = '0';
 	testFrame.data[7] = ' ';
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLocalizationLabel);
 
@@ -831,7 +831,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = '.';
 	testFrame.data[6] = '0';
 	testFrame.data[7] = ' ';
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLocalizationLabel);
 
@@ -888,7 +888,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = '.';
 	testFrame.data[6] = '0';
 	testFrame.data[7] = ' ';
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLocalizationLabel);
 	// Cleanup
@@ -911,7 +911,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendRequestTransferObjectPool);
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForLocalizationLabelResponse);
@@ -928,7 +928,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendDeleteObjectPool);
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForLocalizationLabelResponse);
@@ -946,7 +946,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
 
@@ -981,7 +981,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
 
@@ -991,7 +991,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.identifier = 0x18CB83F7;
 	testFrame.data[0] = 0x71; // Mux
 	testFrame.data[1] = 0x01; // Ran out of memory!
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendObjectPoolActivate);
 	interfaceUnderTest.initialize(false); // Fix the interface after terminate was called
@@ -1003,7 +1003,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.identifier = 0x18CB83F7;
 	testFrame.data[0] = 0x51; // Mux
 	testFrame.data[1] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginTransferDDOP);
 
@@ -1013,7 +1013,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.identifier = 0x18CB83F7;
 	testFrame.data[0] = 0x51; // Mux
 	testFrame.data[1] = 0x01; // Not enough memory!
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::BeginTransferDDOP);
 	interfaceUnderTest.initialize(false); // Fix the interface after terminate was called
@@ -1072,7 +1072,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForObjectPoolActivateResponse);
@@ -1088,7 +1088,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_NE(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Connected);
 
@@ -1438,7 +1438,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00; // Command address
 	testFrame.data[6] = 0x00; // Command
 	testFrame.data[7] = 0xFF; // Reserved
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 	// Create a request for a value.
 	testFrame.identifier = 0x18CB86F7;
@@ -1450,7 +1450,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1472,7 +1472,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x02;
 	testFrame.data[6] = 0x03;
 	testFrame.data[7] = 0x04;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1495,7 +1495,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x07;
 	testFrame.data[6] = 0x06;
 	testFrame.data[7] = 0x05;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1522,7 +1522,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 	// This time the callback should be gone.
@@ -1550,7 +1550,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x02;
 	testFrame.data[6] = 0x03;
 	testFrame.data[7] = 0x04;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1573,7 +1573,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1601,7 +1601,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1625,7 +1625,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
@@ -1649,7 +1649,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	testFrame.data[5] = 0x00;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 

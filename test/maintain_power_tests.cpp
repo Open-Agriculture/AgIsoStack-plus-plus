@@ -93,7 +93,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_maintain_power_sources());
@@ -120,7 +120,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0xFF;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_maintain_power_sources());
@@ -150,13 +150,13 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	testFrame.data[6] = 200; // Max time of tractor power
 	testFrame.data[7] = 0x55; // All parameters set to 1
 
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_FALSE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
 
 	testFrame.data[7] = 0x00; // Turn all parameters off
 
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_TRUE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
 	TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit = false;
@@ -194,7 +194,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	testFrame.data[5] = static_cast<std::uint8_t>((encodedDistance >> 24) & 0xFF);
 	testFrame.data[6] = 200;
 	testFrame.data[7] = 0xAA; // All parameters set to 0
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_FALSE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
@@ -202,7 +202,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	// Test that transition from any state that isn't "not off" to off doesn't cause a callback
 	// Send all errors, and ensure we don't get a callback for a transition
 	testFrame.data[7] = 0x55; // All parameters set to 1
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_FALSE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);

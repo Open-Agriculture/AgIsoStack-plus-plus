@@ -50,7 +50,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
@@ -65,7 +65,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x01;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -79,7 +79,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x08;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 
@@ -93,7 +93,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x09;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -107,7 +107,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -121,7 +121,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x01;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -135,7 +135,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFE;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 	// Go to 255
@@ -148,7 +148,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xFF;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -162,7 +162,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0x01;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 
@@ -179,7 +179,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[5] = 0xFF;
 	testFrame.data[6] = 0xF0;
 	testFrame.data[7] = 0x00;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());

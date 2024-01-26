@@ -112,8 +112,7 @@ namespace isobus
 
 			/// @brief The constructor for a TP session
 			/// @param[in] sessionDirection Tx or Rx
-			/// @param[in] canPortIndex The CAN channel index for the session
-			FastPacketProtocolSession(Direction sessionDirection, std::uint8_t canPortIndex);
+			explicit FastPacketProtocolSession(Direction sessionDirection);
 
 			/// @brief The destructor for a TP session
 			~FastPacketProtocolSession();
