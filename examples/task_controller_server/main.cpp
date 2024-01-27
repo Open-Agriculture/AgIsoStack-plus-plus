@@ -4,6 +4,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 
 #include "console_logger.cpp"
@@ -13,6 +14,7 @@
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::atomic_bool running = { true };
+static std::shared_ptr<isobus::ControlFunction> clientTC = nullptr;
 
 using namespace std;
 
@@ -40,8 +42,9 @@ public:
 	{
 	}
 
-	bool activate_object_pool(std::shared_ptr<isobus::ControlFunction>, ObjectPoolActivationError &, ObjectPoolErrorCodes &, std::uint16_t &, std::uint16_t &) override
+	bool activate_object_pool(std::shared_ptr<isobus::ControlFunction> client, ObjectPoolActivationError &, ObjectPoolErrorCodes &, std::uint16_t &, std::uint16_t &) override
 	{
+		clientTC = client;
 		return true;
 	}
 
@@ -109,7 +112,7 @@ int main()
 
 	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
 #if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+	canDriver = std::make_shared<isobus::SocketCANInterface>("vcan0");
 #elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
 	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
@@ -159,8 +162,30 @@ int main()
 	languageInterface.set_country_code("US"); // This is the default, but you can change it if you want
 	server.initialize();
 
+	std::uint64_t lastTime = 0;
+	std::array<bool, 6> sectionWorkStates{ false, false, false, false, false, false };
+	std::uint8_t sectionIndex = 0;
+
 	while (running)
 	{
+		// Toggle sections from increasingly from 1 to 6 on/off every 5 seconds
+		std::uint64_t currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		if (currentTime - lastTime > 5000)
+		{
+			lastTime = currentTime;
+			sectionWorkStates[sectionIndex] = !sectionWorkStates[sectionIndex];
+			sectionIndex++;
+			sectionIndex %= 6;
+
+			// Send the new section work states to the client
+			std::uint32_t value = 0;
+			for (std::uint8_t i = 0; i < 6; i++)
+			{
+				value |= (sectionWorkStates[i] ? static_cast<std::uint32_t>(0x01) : static_cast<std::uint32_t>(0x00)) << (2 * i);
+			}
+			server.send_set_value_and_acknowledge(clientTC, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16), 2, value);
+		}
+
 		server.update();
 
 		// Update again in a little bit
