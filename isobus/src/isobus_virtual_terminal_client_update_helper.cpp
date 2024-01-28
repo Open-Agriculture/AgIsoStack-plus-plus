@@ -40,7 +40,7 @@ namespace isobus
 		}
 		if (numericValueStates.at(object_id) == value)
 		{
-			return false;
+			return true;
 		}
 
 		bool success = vtClient->send_change_numeric_value(object_id, value);
@@ -98,7 +98,7 @@ namespace isobus
 		}
 		if (activeDataOrAlarmMask == dataOrAlarmMaskId)
 		{
-			return false;
+			return true;
 		}
 
 		bool success = vtClient->send_change_active_mask(workingSetId, dataOrAlarmMaskId);
@@ -123,7 +123,7 @@ namespace isobus
 		}
 		if (softKeyMasks.at(maskId) == softKeyMaskId)
 		{
-			return false;
+			return true;
 		}
 
 		bool success = vtClient->send_change_softkey_mask(maskType, maskId, softKeyMaskId);
