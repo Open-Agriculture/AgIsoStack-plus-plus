@@ -178,8 +178,6 @@ namespace isobus
 		std::array<VTColourVector, VT_COLOUR_TABLE_SIZE> colourTable; ///< Colour table data. Associates VT colour index with RGB value.
 	};
 
-	static constexpr std::uint16_t NULL_OBJECT_ID = 0xFFFF; ///< The NULL Object ID, usually drawn as blank space
-
 	/// @brief Generic VT object base class
 	class VTObject
 	{

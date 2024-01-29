@@ -10,9 +10,11 @@
 #ifndef ISOBUS_VIRTUAL_TERMINAL_CLIENT_STATE_TRACKER_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_CLIENT_STATE_TRACKER_HPP
 
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 
+#include <deque>
 #include <map>
 #include <vector>
 
@@ -53,8 +55,47 @@ namespace isobus
 		/// @return The current numeric value of the tracked object.
 		std::uint32_t get_numeric_value(std::uint16_t objectId) const;
 
+		/// @brief Get the data/alarm mask currently active on the server for this client. It may not be displayed if the working set is not active.
+		/// @return The data/alarm mask currently active on the server for this client.
+		std::uint16_t get_active_mask() const;
+
+		/// @brief Get the history of data/alarm masks that were active on the server for this client.
+		/// @return The history of data/alarm masks that were active on the server for this client.
+		const std::deque<std::uint16_t> &get_mask_history() const;
+
+		/// @brief Get the maximum size of the data/alarm mask history.
+		/// @return The maximum size of the data/alarm mask history.
+		std::size_t get_max_mask_history_size() const;
+
+		/// @brief Sets the maximum size of the data/alarm mask history (default: 100)
+		/// @param[in] size The maximum size of the data/alarm mask history.
+		void set_max_mask_history_size(std::size_t size);
+
+		/// @brief Adds a data/alarm mask to track the soft key mask for.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to track the soft key mask for.
+		/// @param[in] initialSoftKeyMaskId The initial soft key mask to associate with the data/alarm mask.
+		void add_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId, std::uint16_t initialSoftKeyMaskId);
+
+		/// @brief Removes a data/alarm mask from tracking the soft key mask for.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to remove the soft key mask from tracking for.
+		void remove_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId);
+
+		/// @brief Get the soft key mask currently active on thse server for this client. It may not be displayed if the working set is not active.
+		/// @return The soft key mask currently active on the server for this client.
+		std::uint16_t get_active_soft_key_mask() const;
+
+		/// @brief Get the soft key mask currently associated with a data/alarm mask.
+		/// @param[in] dataOrAlarmMaskId The data/alarm mask to get the currently associated soft key mask for.
+		/// @return The soft key mask currently associated with the supplied mask.
+		std::uint16_t get_soft_key_mask(std::uint16_t dataOrAlarmMaskId) const;
+
+		/// @brief Get whether the working set of the client is active on the server.
+		/// @return True if the working set is active, false otherwise.
+		bool is_working_set_active() const;
+
 	protected:
 		std::shared_ptr<ControlFunction> client; ///< The control function of the virtual terminal client to track.
+		std::shared_ptr<ControlFunction> server; ///< The control function of the server the client is connected to.
 
 		//! TODO: std::map<std::uint16_t, bool> shownStates; ///< Holds the 'hide/show' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, bool> enabledStates; ///< Holds the 'enable/disable' state of tracked objects.
@@ -70,9 +111,11 @@ namespace isobus
 		//! TODO: add font attribute state
 		//! TODO: add line attribute state
 		//! TODO: add fill attribute state
-		std::uint16_t currentActiveMask; ///< Holds the currently active mask.
-		//! TODO: std::uint16_t currentWorkingSet; ///< Holds the working set of the current active mask.
-		//! TODO: std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
+		std::uint16_t activeDataOrAlarmMask = NULL_OBJECT_ID; ///< Holds the data/alarm mask currently visible on the server for this client.
+		std::deque<std::uint16_t> dataAndAlarmMaskHistory; ///< Holds the history of data/alarm masks that were active on the server for this client.
+		std::size_t maxDataAndAlarmMaskHistorySize = 100; ///< Holds the maximum size of the data/alarm mask history.
+		std::uint8_t activeWorkingSetAddress = NULL_CAN_ADDRESS; ///< Holds the address of the control function that currently has
+		std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
 		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint32_t>> attributeStates; ///< Holds the 'attribute' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::uint8_t> alarmMaskPrioritiesStates; ///< Holds the 'alarm mask priority' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint16_t>> listItemStates; ///< Holds the 'list item' state of tracked objects.
@@ -84,14 +127,26 @@ namespace isobus
 		//! TODO: std::uint16_t currentColourMap; ///< Holds the current colour map/palette object.
 
 	private:
-		/// @brief Processes a received message.
-		/// @param[in] message The received message.
-		/// @param[in] parentPointer The pointer to the parent object, which should be the VirtualTerminalClientStateTracker.
-		static void process_rx_message(const CANMessage &message, void *parentPointer);
+		/// @brief Cache a mask as the active mask on the server.
+		/// @param[in] maskId The mask to cache as the active mask on the server.
+		void cache_active_mask(std::uint16_t maskId);
 
-		/// @brief Processes a received message.
-		/// @param[in] message The received message.
-		void process_rx_message(const CANMessage &message);
+		/// @brief Processes a received or transmitted message.
+		/// @param[in] message The message to process.
+		/// @param[in] parentPointer The pointer to the parent object, which should be the VirtualTerminalClientStateTracker.
+		static void process_rx_or_tx_message(const CANMessage &message, void *parentPointer);
+
+		/// @brief Processes a status message from a VT server.
+		/// @param[in] message The message to process.
+		void process_status_message(const CANMessage &message);
+
+		/// @brief Processes a VT->ECU message received by any client, sent from the connected server.
+		/// @param[in] message The message to process.
+		void process_message_from_connected_server(const CANMessage &message);
+
+		/// @brief Processes a ECU->VT message received by the connected server, sent from any control function.
+		/// @param[in] message The message to process.
+		void process_message_to_connected_server(const CANMessage &message);
 	};
 } // namespace isobus
 

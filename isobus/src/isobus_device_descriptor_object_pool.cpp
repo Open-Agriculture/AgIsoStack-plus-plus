@@ -8,6 +8,7 @@
 //================================================================================================
 #include "isobus/isobus/isobus_device_descriptor_object_pool.hpp"
 
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/platform_endianness.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -1070,7 +1071,7 @@ namespace isobus
 				{
 					// Process parent object
 					auto currentDeviceElement = reinterpret_cast<task_controller_object::DeviceElementObject *>(currentObject.get());
-					if (task_controller_object::Object::NULL_OBJECT_ID != currentDeviceElement->get_parent_object())
+					if (NULL_OBJECT_ID != currentDeviceElement->get_parent_object())
 					{
 						auto parent = get_object_by_id(currentDeviceElement->get_parent_object());
 						if (nullptr != parent.get())
@@ -1143,7 +1144,7 @@ namespace isobus
 				{
 					auto currentProcessData = reinterpret_cast<task_controller_object::DeviceProcessDataObject *>(currentObject.get());
 
-					if (task_controller_object::Object::NULL_OBJECT_ID != currentProcessData->get_device_value_presentation_object_id())
+					if (NULL_OBJECT_ID != currentProcessData->get_device_value_presentation_object_id())
 					{
 						auto child = get_object_by_id(currentProcessData->get_device_value_presentation_object_id());
 						if (nullptr == child.get())
@@ -1171,7 +1172,7 @@ namespace isobus
 				{
 					auto currentProperty = reinterpret_cast<task_controller_object::DevicePropertyObject *>(currentObject.get());
 
-					if (task_controller_object::Object::NULL_OBJECT_ID != currentProperty->get_device_value_presentation_object_id())
+					if (NULL_OBJECT_ID != currentProperty->get_device_value_presentation_object_id())
 					{
 						auto child = get_object_by_id(currentProperty->get_device_value_presentation_object_id());
 						if (nullptr == child.get())
@@ -1214,7 +1215,7 @@ namespace isobus
 	{
 		bool retVal = true;
 
-		if ((0 != uniqueID) && (task_controller_object::Object::NULL_OBJECT_ID != uniqueID))
+		if ((0 != uniqueID) && (NULL_OBJECT_ID != uniqueID))
 		{
 			for (auto &currentObject : objectList)
 			{

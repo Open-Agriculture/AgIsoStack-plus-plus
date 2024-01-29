@@ -100,6 +100,11 @@ namespace isobus
 		return has_valid_destination_control_function() && destination == controlFunction;
 	}
 
+	bool CANMessage::is_source(std::shared_ptr<ControlFunction> controlFunction) const
+	{
+		return has_valid_source_control_function() && source == controlFunction;
+	}
+
 	CANIdentifier CANMessage::get_identifier() const
 	{
 		return identifier;

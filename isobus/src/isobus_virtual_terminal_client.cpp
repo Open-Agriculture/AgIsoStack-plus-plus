@@ -4464,7 +4464,7 @@ namespace isobus
 
 		if (!get_is_connected())
 		{
-			CANStackLogger::error("[VT]: Cannot send command, not connected");
+			CANStackLogger::warn("[VT]: Cannot send command, not connected");
 			return false;
 		}
 
@@ -4486,7 +4486,7 @@ namespace isobus
 			return false;
 		}
 
-		if (send_command(data))
+		if (get_is_connected() && send_command(data))
 		{
 			return true;
 		}
@@ -4528,6 +4528,10 @@ namespace isobus
 
 	void VirtualTerminalClient::process_command_queue()
 	{
+		if (!get_is_connected())
+		{
+			return;
+		}
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::lock_guard<std::mutex> lock(commandQueueMutex);
 #endif

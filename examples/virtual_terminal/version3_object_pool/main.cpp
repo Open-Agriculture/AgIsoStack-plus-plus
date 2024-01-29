@@ -50,13 +50,13 @@ void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 
 				case alarm_SoftKey:
 				{
-					virtualTerminalClient->send_change_active_mask(example_WorkingSet, example_AlarmMask);
+					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, example_AlarmMask);
 				}
 				break;
 
 				case acknowledgeAlarm_SoftKey:
 				{
-					virtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
+					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
 				}
 				break;
 

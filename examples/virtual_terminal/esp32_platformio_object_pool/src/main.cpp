@@ -5,6 +5,7 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_client_update_helper.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 
 #include "console_logger.cpp"
@@ -17,40 +18,40 @@
 #include <memory>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
-static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
+static std::shared_ptr<isobus::VirtualTerminalClient> virtualTerminalClient = nullptr;
+static std::shared_ptr<isobus::VirtualTerminalClientUpdateHelper> virtualTerminalUpdateHelper = nullptr;
 
 // This callback will provide us with event driven notifications of button presses from the stack
 void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {
-	static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
-
 	switch (event.keyEvent)
 	{
 		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonStillHeld:
 		{
 			switch (event.objectID)
 			{
 				case Plus_Button:
 				{
-					TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, ++exampleNumberOutput);
+					virtualTerminalUpdateHelper->increase_numeric_value(ButtonExampleNumber_VarNum);
 				}
 				break;
 
 				case Minus_Button:
 				{
-					TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, --exampleNumberOutput);
+					virtualTerminalUpdateHelper->decrease_numeric_value(ButtonExampleNumber_VarNum);
 				}
 				break;
 
 				case alarm_SoftKey:
 				{
-					TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, example_AlarmMask);
+					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, example_AlarmMask);
 				}
 				break;
 
 				case acknowledgeAlarm_SoftKey:
 				{
-					TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
+					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
 				}
 				break;
 
@@ -107,11 +108,15 @@ extern "C" void app_main()
 	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 	auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 
-	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-	TestVirtualTerminalClient->set_object_pool(0, testPool, (object_pool_end - object_pool_start) - 1, "ais1");
-	auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
-	auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
-	TestVirtualTerminalClient->initialize(true);
+	virtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
+	virtualTerminalClient->set_object_pool(0, testPool, (object_pool_end - object_pool_start) - 1, "ais1");
+	auto softKeyListener = virtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
+	auto buttonListener = virtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
+	virtualTerminalClient->initialize(true);
+
+	virtualTerminalUpdateHelper = std::make_shared<isobus::VirtualTerminalClientUpdateHelper>(virtualTerminalClient);
+	virtualTerminalUpdateHelper->add_tracked_numeric_value(ButtonExampleNumber_VarNum, 214748364); // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
+	virtualTerminalUpdateHelper->initialize();
 
 	while (true)
 	{
@@ -119,6 +124,6 @@ extern "C" void app_main()
 		vTaskDelay(10);
 	}
 
-	TestVirtualTerminalClient->terminate();
+	virtualTerminalClient->terminate();
 	isobus::CANHardwareInterface::stop();
 }

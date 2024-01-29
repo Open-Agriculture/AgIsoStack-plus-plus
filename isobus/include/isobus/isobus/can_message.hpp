@@ -126,6 +126,11 @@ namespace isobus
 		/// @returns True if the message is destined for the control function, false otherwise
 		bool is_destination(std::shared_ptr<ControlFunction> controlFunction) const;
 
+		/// @brief Returns whether the message is originated from the control function.
+		/// @param[in] controlFunction The control function to check
+		/// @returns True if the message is originated from the control function, false otherwise
+		bool is_source(std::shared_ptr<ControlFunction> controlFunction) const;
+
 		/// @brief Returns the identifier of the message
 		/// @returns The identifier of the message
 		CANIdentifier get_identifier() const;
