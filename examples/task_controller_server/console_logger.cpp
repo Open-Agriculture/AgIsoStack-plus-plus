@@ -6,6 +6,9 @@
 class CustomLogger : public isobus::CANStackLogger
 {
 public:
+	/// @brief Destructor for the custom logger.
+	virtual ~CustomLogger() = default;
+
 	void sink_CAN_stack_log(CANStackLogger::LoggingLevel level, const std::string &text) override
 	{
 		switch (level)

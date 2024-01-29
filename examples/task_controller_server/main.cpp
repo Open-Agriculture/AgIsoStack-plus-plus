@@ -4,6 +4,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_preferred_addresses.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 
 #include "console_logger.cpp"
@@ -31,12 +32,12 @@ public:
 	           std::uint8_t numberBoomsSupported,
 	           std::uint8_t numberSectionsSupported,
 	           std::uint8_t numberChannelsSupportedForPositionBasedControl,
-	           std::uint8_t optionsBitfield) :
+	           const isobus::TaskControllerOptions &options) :
 	  TaskControllerServer(internalControlFunction,
 	                       numberBoomsSupported,
 	                       numberSectionsSupported,
 	                       numberChannelsSupportedForPositionBasedControl,
-	                       optionsBitfield)
+	                       options)
 	{
 	}
 
@@ -45,59 +46,58 @@ public:
 		return true;
 	}
 
-	bool change_designator(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, const std::vector<std::uint8_t> &)
+	bool change_designator(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, const std::vector<std::uint8_t> &) override
 	{
 		return true;
 	}
 
-	bool deactivate_object_pool(std::shared_ptr<isobus::ControlFunction>)
+	bool deactivate_object_pool(std::shared_ptr<isobus::ControlFunction>) override
 	{
 		return true;
 	}
 
-	bool delete_device_descriptor_object_pool(std::shared_ptr<isobus::ControlFunction>, ObjectPoolDeletionErrors &)
+	bool delete_device_descriptor_object_pool(std::shared_ptr<isobus::ControlFunction>, ObjectPoolDeletionErrors &) override
 	{
 		return true;
 	}
 
-	bool get_is_stored_device_descriptor_object_pool_by_structure_label(std::shared_ptr<isobus::ControlFunction>, const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &)
+	bool get_is_stored_device_descriptor_object_pool_by_structure_label(std::shared_ptr<isobus::ControlFunction>, const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &) override
 	{
 		return false;
 	}
 
-	bool get_is_stored_device_descriptor_object_pool_by_localization_label(std::shared_ptr<isobus::ControlFunction>, const std::array<std::uint8_t, 7> &)
+	bool get_is_stored_device_descriptor_object_pool_by_localization_label(std::shared_ptr<isobus::ControlFunction>, const std::array<std::uint8_t, 7> &) override
 	{
 		return false;
 	}
 
-	bool get_is_enough_memory_available(std::uint32_t)
+	bool get_is_enough_memory_available(std::uint32_t) override
 	{
 		return true;
 	}
 
-	std::uint32_t get_number_of_complete_object_pools_stored_for_client(std::shared_ptr<isobus::ControlFunction>)
+	void identify_task_controller(std::uint8_t) override
 	{
-		return 0;
+		// When this is called, the TC is supposed to display its TC number for 3 seconds if possible (which is passed into this function).
+		// Your TC's number is your function code + 1, in the range of 1-32.
 	}
 
-	void identify_task_controller(std::uint8_t)
+	void on_client_timeout(std::shared_ptr<isobus::ControlFunction>) override
 	{
+		// You can use this function to handle when a client times out (6 Seconds)
 	}
 
-	void on_client_timeout(std::shared_ptr<isobus::ControlFunction>)
+	void on_process_data_acknowledge(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, std::uint16_t, std::uint8_t, ProcessDataCommands) override
 	{
+		// This callback lets you know when a client sends a process data acknowledge (PDACK) message to you
 	}
 
-	void on_process_data_acknowledge(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, std::uint16_t, std::uint8_t, ProcessDataCommands)
-	{
-	}
-
-	bool on_value_command(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &)
+	bool on_value_command(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &) override
 	{
 		return true;
 	}
 
-	bool store_device_descriptor_object_pool(std::shared_ptr<isobus::ControlFunction>, const std::vector<std::uint8_t> &, bool)
+	bool store_device_descriptor_object_pool(std::shared_ptr<isobus::ControlFunction>, const std::vector<std::uint8_t> &, bool) override
 	{
 		return true;
 	}
@@ -152,8 +152,15 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 247, 0); // The preferred address for a TC is defined in ISO 11783
-	MyTCServer server(TestInternalECU, 4, 255, 16, 0x17); // 4 booms, 255 sections, 16 channels, some options configured using isobus::TaskControllerServer::ServerOptions, such as "Supports Documentation"
+	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, isobus::preferred_addresses::IndustryGroup2::TaskController_MappingComputer, 0);
+	MyTCServer server(TestInternalECU,
+	                  4, // Booms
+	                  255, // Sections
+	                  16, // Channels
+	                  isobus::TaskControllerOptions()
+	                    .with_documentation()
+	                    .with_implement_section_control()
+	                    .with_tc_geo_with_position_based_control());
 	auto &languageInterface = server.get_language_command_interface();
 	languageInterface.set_language_code("en"); // This is the default, but you can change it if you want
 	languageInterface.set_country_code("US"); // This is the default, but you can change it if you want
