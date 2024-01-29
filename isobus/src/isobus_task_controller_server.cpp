@@ -6,7 +6,7 @@
 /// task controller or data logger server.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 
@@ -23,13 +23,15 @@ namespace isobus
 	                                           std::uint8_t numberBoomsSupported,
 	                                           std::uint8_t numberSectionsSupported,
 	                                           std::uint8_t numberChannelsSupportedForPositionBasedControl,
-	                                           std::uint8_t optionsBitfield) :
+	                                           const TaskControllerOptions &options,
+	                                           TaskControllerVersion versionToReport) :
 	  languageCommandInterface(internalControlFunction, true),
 	  serverControlFunction(internalControlFunction),
+	  reportedVersion(versionToReport),
 	  numberBoomsSupportedToReport(numberBoomsSupported),
 	  numberSectionsSupportedToReport(numberSectionsSupported),
 	  numberChannelsSupportedForPositionBasedControlToReport(numberChannelsSupportedForPositionBasedControl),
-	  optionsBitfieldToReport(optionsBitfield)
+	  optionsBitfieldToReport(options.get_bitfield())
 	{
 	}
 
@@ -38,35 +40,22 @@ namespace isobus
 		terminate();
 	}
 
-	void TaskControllerServer::terminate()
-	{
-		if (initialized)
-		{
-			initialized = false;
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), store_rx_message, this);
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster), store_rx_message, this);
-		}
-	}
-
 	bool TaskControllerServer::send_request_value(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> payload = { 0 };
 
 		payload[0] = (static_cast<std::uint8_t>(ProcessDataCommands::RequestValue) & 0x0F);
-		payload[0] |= (elementNumber && 0x0F) << 4;
-		payload[1] = static_cast<std::uint8_t>((elementNumber >> 4) & 0xFF);
-		payload[2] = static_cast<std::uint8_t>(dataDescriptionIndex & 0xFF);
-		payload[3] = static_cast<std::uint8_t>((dataDescriptionIndex >> 8) & 0xFF);
+		payload[0] |= (elementNumber & 0x0F) << 4;
+		payload[1] = static_cast<std::uint8_t>(elementNumber >> 4);
+		payload[2] = static_cast<std::uint8_t>(dataDescriptionIndex);
+		payload[3] = static_cast<std::uint8_t>(dataDescriptionIndex >> 8);
 		payload[4] = 0xFF;
 		payload[5] = 0xFF;
 		payload[6] = 0xFF;
 		payload[7] = 0xFF;
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-		                                                      payload.data(),
-		                                                      payload.size(),
-		                                                      serverControlFunction,
-		                                                      clientControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_process_data_to_client(clientControlFunction,
+		                                   payload.data(),
+		                                   payload.size());
 	}
 
 	bool TaskControllerServer::send_time_interval_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t timeInterval) const
@@ -97,6 +86,11 @@ namespace isobus
 	bool TaskControllerServer::send_set_value_and_acknowledge(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t processDataValue) const
 	{
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::SetValueAndAcknowledge), dataDescriptionIndex, elementNumber, processDataValue);
+	}
+
+	bool TaskControllerServer::send_set_value(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t processDataValue) const
+	{
+		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::Value), dataDescriptionIndex, elementNumber, processDataValue);
 	}
 
 	void TaskControllerServer::set_task_totals_active(bool isTaskActive)
@@ -131,10 +125,27 @@ namespace isobus
 		return initialized;
 	}
 
+	void TaskControllerServer::terminate()
+	{
+		if (initialized)
+		{
+			initialized = false;
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), store_rx_message, this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster), store_rx_message, this);
+		}
+	}
+
 	LanguageCommandInterface &TaskControllerServer::get_language_command_interface()
 	{
 		return languageCommandInterface;
 	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	std::condition_variable &TaskControllerServer::get_condition_variable()
+	{
+		return updateWakeupCondition;
+	}
+#endif
 
 	void TaskControllerServer::update()
 	{
@@ -170,15 +181,25 @@ namespace isobus
 	{
 		if (nullptr != parentPointer)
 		{
-			static_cast<TaskControllerServer *>(parentPointer)->rxMessageQueue.push_back(message);
+			auto server = static_cast<TaskControllerServer *>(parentPointer);
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+			const std::lock_guard<std::mutex> lock(server->messagesMutex);
+			server->rxMessageQueue.push_back(message);
+			server->updateWakeupCondition.notify_all();
+#else
+			server->rxMessageQueue.push_back(message);
+#endif
 		}
 	}
 
 	void TaskControllerServer::process_rx_messages()
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(messagesMutex);
+#endif
 		while (!rxMessageQueue.empty())
 		{
-			auto &rxMessage = rxMessageQueue.front();
+			const auto &rxMessage = rxMessageQueue.front();
 			auto &rxData = rxMessage.get_data();
 
 			switch (rxMessage.get_identifier().get_parameter_group_number())
@@ -315,10 +336,7 @@ namespace isobus
 										{
 											if (nullptr != get_active_client(rxMessage.get_source_control_function()))
 											{
-												std::uint32_t requestedSize = static_cast<std::uint32_t>(rxData[1]) |
-												  (static_cast<std::uint32_t>(rxData[2]) << 8) |
-												  (static_cast<std::uint32_t>(rxData[3]) << 16) |
-												  (static_cast<std::uint32_t>(rxData[4]) << 24);
+												std::uint32_t requestedSize = rxMessage.get_uint32_at(1);
 
 												if ((requestedSize <= CANMessage::ABSOLUTE_MAX_MESSAGE_LENGTH) &&
 												    (get_is_enough_memory_available(requestedSize)))
@@ -356,12 +374,12 @@ namespace isobus
 												if (store_device_descriptor_object_pool(rxMessage.get_source_control_function(), objectPool, 0 != get_active_client(rxMessage.get_source_control_function())->numberOfObjectPoolSegments))
 												{
 													CANStackLogger::info("[TC Server]: Stored DDOP segment for client 0x%02X", rxMessage.get_source_control_function()->get_address());
-													send_object_pool_transfer_response(rxMessage.get_source_control_function(), 0, objectPool.size()); // No error, transfer OK
+													send_object_pool_transfer_response(rxMessage.get_source_control_function(), 0, static_cast<std::uint32_t>(objectPool.size())); // No error, transfer OK
 												}
 												else
 												{
 													CANStackLogger::error("[TC Server]: Failed to store DDOP segment for client 0x%02X. Reporting to the client as \"Any other error\"", rxMessage.get_source_control_function()->get_address());
-													send_object_pool_transfer_response(rxMessage.get_source_control_function(), 2, objectPool.size());
+													send_object_pool_transfer_response(rxMessage.get_source_control_function(), 2, static_cast<std::uint32_t>(objectPool.size()));
 												}
 											}
 											else
@@ -391,7 +409,7 @@ namespace isobus
 													{
 														CANStackLogger::info("[TC Server]: Object pool activated for client 0x%02X", rxMessage.get_source_control_function()->get_address());
 														client->isDDOPActive = true;
-														send_object_pool_activate_deactivate_response(rxMessage.get_source_control_function(), static_cast<std::uint8_t>(activationError), static_cast<std::uint8_t>(errorCode), faultingParentObject, faultingObject);
+														send_object_pool_activate_deactivate_response(rxMessage.get_source_control_function(), 0, 0, 0xFFFF, 0xFFFF);
 													}
 													else
 													{
@@ -457,7 +475,7 @@ namespace isobus
 											{
 												if (get_active_client(rxMessage.get_source_control_function())->isDDOPActive)
 												{
-													std::uint16_t objectID = static_cast<std::uint16_t>(rxData[1]) | (static_cast<std::uint16_t>(rxData[2]) << 8);
+													std::uint16_t objectID = rxMessage.get_uint16_at(1);
 													std::vector<std::uint8_t> newDesignatorUTF8Bytes;
 
 													for (std::size_t i = 0; i < rxData.size() - 3; i++)
@@ -521,12 +539,9 @@ namespace isobus
 							{
 								if (get_active_client(rxMessage.get_source_control_function())->isDDOPActive)
 								{
-									std::uint16_t DDI = static_cast<std::uint16_t>(rxData[2]) | (static_cast<std::uint16_t>(rxData[3]) << 8);
+									std::uint16_t DDI = rxMessage.get_uint16_at(2);
 									std::uint16_t elementNumber = static_cast<std::uint16_t>(rxData[0] >> 4) | (static_cast<std::uint16_t>(rxData[1]) << 4);
-									std::int32_t processVariableValue = static_cast<std::int32_t>(static_cast<std::uint32_t>(rxData[4]) |
-									                                                              (static_cast<std::uint32_t>(rxData[5]) << 8) |
-									                                                              (static_cast<std::uint32_t>(rxData[6]) << 16) |
-									                                                              (static_cast<std::uint32_t>(rxData[7]) << 24));
+									std::int32_t processVariableValue = rxMessage.get_int32_at(4);
 									std::uint8_t errorCodes = 0;
 
 									if (on_value_command(rxMessage.get_source_control_function(), DDI, elementNumber, processVariableValue, errorCodes))
@@ -567,7 +582,7 @@ namespace isobus
 						{
 							if (nullptr != get_active_client(rxMessage.get_source_control_function()))
 							{
-								std::uint16_t DDI = static_cast<std::uint16_t>(rxData[2]) | (static_cast<std::uint16_t>(rxData[3]) << 8);
+								std::uint16_t DDI = rxMessage.get_uint16_at(2);
 								std::uint16_t elementNumber = static_cast<std::uint16_t>(rxData[0] >> 4) | (static_cast<std::uint16_t>(rxData[1]) << 4);
 
 								if (get_active_client(rxMessage.get_source_control_function())->isDDOPActive)
@@ -618,7 +633,7 @@ namespace isobus
 						{
 							if (CAN_DATA_LENGTH == rxMessage.get_data_length())
 							{
-								for (auto &activeClient : activeClients)
+								for (const auto &activeClient : activeClients)
 								{
 									if ((nullptr != activeClient) &&
 									    (activeClient->clientControlFunction == rxMessage.get_source_control_function()))
@@ -720,7 +735,10 @@ namespace isobus
 			default:
 				break;
 		}
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), payload.data(), payload.size(), serverControlFunction, destination, priority);
+		return send_process_data_to_client(destination,
+		                                   payload.data(),
+		                                   payload.size(),
+		                                   priority);
 	}
 
 	bool TaskControllerServer::send_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint8_t commandValue, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t processDataValue) const
@@ -731,21 +749,19 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> payload = { 0 };
 			payload[0] = (commandValue & 0x0F);
-			payload[0] |= (elementNumber && 0x0F) << 4;
-			payload[1] = static_cast<std::uint8_t>((elementNumber >> 4) & 0xFF);
-			payload[2] = static_cast<std::uint8_t>(dataDescriptionIndex & 0xFF);
-			payload[3] = static_cast<std::uint8_t>((dataDescriptionIndex >> 8) & 0xFF);
-			payload[4] = static_cast<std::uint8_t>(processDataValue & 0xFF);
-			payload[5] = static_cast<std::uint8_t>((processDataValue >> 8) & 0xFF);
-			payload[6] = static_cast<std::uint8_t>((processDataValue >> 16) & 0xFF);
-			payload[7] = static_cast<std::uint8_t>((processDataValue >> 24) & 0xFF);
+			payload[0] |= (elementNumber & 0x0F) << 4;
+			payload[1] = static_cast<std::uint8_t>(elementNumber >> 4);
+			payload[2] = static_cast<std::uint8_t>(dataDescriptionIndex);
+			payload[3] = static_cast<std::uint8_t>(dataDescriptionIndex >> 8);
+			payload[4] = static_cast<std::uint8_t>(processDataValue);
+			payload[5] = static_cast<std::uint8_t>(processDataValue >> 8);
+			payload[6] = static_cast<std::uint8_t>(processDataValue >> 16);
+			payload[7] = static_cast<std::uint8_t>(processDataValue >> 24);
 
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        static_cast<std::uint8_t>(ProcessDataCommands::SetValueAndAcknowledge) == commandValue ? CANIdentifier::CANPriority::Priority3 : CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size(),
+			                                     static_cast<std::uint8_t>(ProcessDataCommands::SetValueAndAcknowledge) == commandValue ? CANIdentifier::CANPriority::Priority3 : CANIdentifier::CANPriority::Priority5);
 		}
 		return retVal;
 	}
@@ -763,19 +779,17 @@ namespace isobus
 			0xFF
 		};
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-		                                                      payload.data(),
-		                                                      payload.size(),
-		                                                      serverControlFunction,
-		                                                      nullptr,
-		                                                      CANIdentifier::CANPriority::Priority3);
+		return send_process_data_to_client(nullptr,
+		                                   payload.data(),
+		                                   payload.size(),
+		                                   CANIdentifier::CANPriority::Priority3);
 	}
 
 	bool TaskControllerServer::send_version(std::shared_ptr<ControlFunction> clientControlFunction) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
 			static_cast<std::uint8_t>(TechnicalDataCommandParameters::ParameterVersion) << 4,
-			static_cast<std::uint8_t>(TaskControllerVersion::SecondPublishedEdition),
+			static_cast<std::uint8_t>(reportedVersion),
 			0xFF,
 			optionsBitfieldToReport,
 			0x00,
@@ -783,12 +797,9 @@ namespace isobus
 			numberSectionsSupportedToReport,
 			numberChannelsSupportedForPositionBasedControlToReport
 		};
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-		                                                      payload.data(),
-		                                                      payload.size(),
-		                                                      serverControlFunction,
-		                                                      clientControlFunction,
-		                                                      CANIdentifier::CANPriority::Priority5);
+		return send_process_data_to_client(clientControlFunction,
+		                                   payload.data(),
+		                                   payload.size());
 	}
 
 	std::shared_ptr<TaskControllerServer::ActiveClient> TaskControllerServer::get_active_client(std::shared_ptr<ControlFunction> clientControlFunction) const
@@ -834,7 +845,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TaskControllerServer::send_structure_label(std::shared_ptr<ControlFunction> clientControlFunction, std::vector<std::uint8_t> &structureLabel, std::vector<std::uint8_t> &extendedStructureLabel)
+	bool TaskControllerServer::send_structure_label(std::shared_ptr<ControlFunction> clientControlFunction, std::vector<std::uint8_t> &structureLabel, const std::vector<std::uint8_t> &extendedStructureLabel) const
 	{
 		bool retVal = false;
 
@@ -856,17 +867,14 @@ namespace isobus
 			{
 				payload.push_back(extendedLabelByte);
 			}
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
 
-	bool TaskControllerServer::send_localization_label(std::shared_ptr<ControlFunction> clientControlFunction, std::array<std::uint8_t, 7> localizationLabel)
+	bool TaskControllerServer::send_localization_label(std::shared_ptr<ControlFunction> clientControlFunction, const std::array<std::uint8_t, 7> &localizationLabel) const
 	{
 		bool retVal = false;
 
@@ -883,17 +891,14 @@ namespace isobus
 				localizationLabel[6]
 			};
 
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
 
-	bool TaskControllerServer::send_request_object_pool_transfer_response(std::shared_ptr<ControlFunction> clientControlFunction, bool isEnoughMemory)
+	bool TaskControllerServer::send_request_object_pool_transfer_response(std::shared_ptr<ControlFunction> clientControlFunction, bool isEnoughMemory) const
 	{
 		bool retVal = false;
 
@@ -910,12 +915,9 @@ namespace isobus
 				0xFF
 			};
 
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
@@ -929,20 +931,17 @@ namespace isobus
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
 				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::ObjectPoolTransferResponse) << 4,
 				errorBitfield,
-				static_cast<std::uint8_t>(sizeBytes & 0xFF),
-				static_cast<std::uint8_t>((sizeBytes >> 8) & 0xFF),
-				static_cast<std::uint8_t>((sizeBytes >> 16) & 0xFF),
-				static_cast<std::uint8_t>((sizeBytes >> 24) & 0xFF),
+				static_cast<std::uint8_t>(sizeBytes),
+				static_cast<std::uint8_t>(sizeBytes >> 8),
+				static_cast<std::uint8_t>(sizeBytes >> 16),
+				static_cast<std::uint8_t>(sizeBytes >> 24),
 				0xFF,
 				0xFF
 			};
 
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
@@ -960,19 +959,16 @@ namespace isobus
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
 				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::ObjectPoolActivateDeactivateResponse) << 4,
 				activationErrorBitfield,
-				static_cast<std::uint8_t>(parentOfFaultingObject & 0xFF),
-				static_cast<std::uint8_t>((parentOfFaultingObject >> 8) & 0xFF),
-				static_cast<std::uint8_t>(faultingObject & 0xFF),
-				static_cast<std::uint8_t>((faultingObject >> 8) & 0xFF),
+				static_cast<std::uint8_t>(parentOfFaultingObject),
+				static_cast<std::uint8_t>(parentOfFaultingObject >> 8),
+				static_cast<std::uint8_t>(faultingObject),
+				static_cast<std::uint8_t>(faultingObject >> 8),
 				objectPoolErrorBitfield,
 				0xFF
 			};
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
@@ -985,7 +981,7 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
 				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::DeleteObjectPoolResponse) << 4,
-				static_cast<std::uint8_t>(deletionResult),
+				static_cast<std::uint8_t>(!deletionResult), // 0 = No errors, 1 = Error
 				errorCode,
 				0xFF,
 				0xFF,
@@ -993,12 +989,9 @@ namespace isobus
 				0xFF,
 				0xFF
 			};
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
@@ -1011,20 +1004,17 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
 				static_cast<std::uint8_t>(ProcessDataCommands::DeviceDescriptor) | static_cast<std::uint8_t>(DeviceDescriptorCommandParameters::ChangeDesignatorResponse) << 4,
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>((objectID >> 8) & 0xFF),
+				static_cast<std::uint8_t>(objectID),
+				static_cast<std::uint8_t>(objectID >> 8),
 				errorCode,
 				0xFF,
 				0xFF,
 				0xFF,
 				0xFF
 			};
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
-			                                                        serverControlFunction,
-			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority5);
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size());
 		}
 		return retVal;
 	}
@@ -1038,19 +1028,36 @@ namespace isobus
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> payload = {
 				static_cast<std::uint8_t>(static_cast<std::uint8_t>(ProcessDataCommands::Acknowledge) | (static_cast<std::uint8_t>(elementNumber & 0x0F) << 4)),
 				static_cast<std::uint8_t>(elementNumber >> 4),
-				static_cast<std::uint8_t>(dataDescriptionIndex & 0xFF),
-				static_cast<std::uint8_t>((dataDescriptionIndex >> 8) & 0xFF),
+				static_cast<std::uint8_t>(dataDescriptionIndex),
+				static_cast<std::uint8_t>(dataDescriptionIndex >> 8),
 				errorBitfield,
 				static_cast<std::uint8_t>(0xF0 | static_cast<std::uint8_t>(processDataCommand)),
 				0xFF,
 				0xFF
 			};
+			retVal = send_process_data_to_client(clientControlFunction,
+			                                     payload.data(),
+			                                     payload.size(),
+			                                     CANIdentifier::CANPriority::Priority4);
+		}
+		return retVal;
+	}
+
+	bool TaskControllerServer::send_process_data_to_client(std::shared_ptr<ControlFunction> clientControlFunction,
+	                                                       const std::uint8_t *dataBuffer,
+	                                                       std::uint32_t dataLength,
+	                                                       CANIdentifier::CANPriority priority) const
+	{
+		bool retVal = false;
+
+		if ((nullptr != dataBuffer) && (dataLength > 0))
+		{
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData),
-			                                                        payload.data(),
-			                                                        payload.size(),
+			                                                        dataBuffer,
+			                                                        dataLength,
 			                                                        serverControlFunction,
 			                                                        clientControlFunction,
-			                                                        CANIdentifier::CANPriority::Priority4);
+			                                                        priority);
 		}
 		return retVal;
 	}
