@@ -44,6 +44,7 @@ set(ISOBUS_SRC
     "isobus_virtual_terminal_client_update_helper.cpp"
     "isobus_heartbeat.cpp"
     "isobus_task_controller_server.cpp"
+    "isobus_task_controller_server_options.cpp"
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp"
     "can_message_data.cpp")
@@ -91,6 +92,7 @@ set(ISOBUS_INCLUDE
     "isobus_virtual_terminal_client_update_helper.hpp"
     "isobus_heartbeat.hpp"
     "isobus_task_controller_server.hpp"
+    "isobus_task_controller_server_options.hpp"
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp"
     "isobus_preferred_addresses.hpp"
