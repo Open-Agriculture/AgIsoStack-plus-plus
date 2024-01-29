@@ -399,7 +399,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		testFrame.data[6] = 30; // exit code
 		testFrame.data[7] = 0x25; // All remaining properties set to 1
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		EXPECT_EQ(false, TestSpeedInterface::wasGBSCallbackHit);
@@ -440,7 +440,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		testFrame.data[6] = 200; // Max time of tractor power
 		testFrame.data[7] = 0x55; // All parameters set to 1
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		EXPECT_EQ(false, TestSpeedInterface::wasGBSCallbackHit);
@@ -482,7 +482,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		testFrame.data[6] = 0xFF;
 		testFrame.data[7] = 0x01; // Reversed
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		EXPECT_EQ(true, TestSpeedInterface::wasGBSCallbackHit);
@@ -519,7 +519,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		testFrame.data[6] = 0xFF;
 		testFrame.data[7] = 0xFC; // Direction
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		EXPECT_EQ(false, TestSpeedInterface::wasGBSCallbackHit);

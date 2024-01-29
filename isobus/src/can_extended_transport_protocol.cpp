@@ -455,15 +455,17 @@ namespace isobus
 					send_end_of_session_acknowledgement(session);
 
 					// Construct the completed message
-					CANMessage completedMessage(0);
-					completedMessage.set_identifier(CANIdentifier(CANIdentifier::Type::Extended,
-					                                              session->get_parameter_group_number(),
-					                                              CANIdentifier::CANPriority::PriorityDefault6,
-					                                              destination->get_address(),
-					                                              source->get_address()));
-					completedMessage.set_source_control_function(source);
-					completedMessage.set_destination_control_function(destination);
-					completedMessage.set_data(data.data().begin(), static_cast<std::uint32_t>(data.size()));
+					CANIdentifier identifier(CANIdentifier::Type::Extended,
+					                         session->get_parameter_group_number(),
+					                         CANIdentifier::CANPriority::PriorityDefault6,
+					                         destination->get_address(),
+					                         source->get_address());
+					CANMessage completedMessage(CANMessage::Type::Receive,
+					                            identifier,
+					                            std::move(data),
+					                            source,
+					                            destination,
+					                            0);
 
 					canMessageReceivedCallback(completedMessage);
 					close_session(session, true);

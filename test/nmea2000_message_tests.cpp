@@ -512,7 +512,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 
 		// Pass the frame back in but as an RX message
 		testFrame.identifier = 0x19F80252;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_course_speed_over_ground_message_sources());
@@ -520,7 +520,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 
 		EXPECT_TRUE(wasCourseOverGroundSpeedOverGroundRapidUpdateCallbackHit);
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		// Make sure duplicate messages don't make more instances of the message's class
@@ -609,20 +609,20 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		testFrame.data[0] = 0x00;
 		testFrame.data[1] = 0x14;
 		memcpy(&testFrame.data[2], lastFastPacketPayload.data(), 6);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x01;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 6, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x02;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 13, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasDatumCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_datum_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_datum_message(0));
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		// Make sure duplicate messages don't make more instances of the message's class
@@ -710,38 +710,38 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		testFrame.data[0] = 0x00;
 		testFrame.data[1] = 0x2F;
 		memcpy(&testFrame.data[2], lastFastPacketPayload.data(), 6);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x01;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 6, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x02;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 13, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x03;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 20, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x04;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 27, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x05;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 34, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 
 		testFrame.data[0] = 0x06;
 		testFrame.data[7] = 0xFF;
 		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 41, 7);
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasGNSSPositionDataCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_gnss_position_data_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_gnss_position_data_message(0));
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
 		// Make sure duplicate messages don't make more instances of the message's class
@@ -792,7 +792,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		// Pass the message back in
 		testFrame.identifier = 0x19F80352;
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasPositionDeltaHighSpeedRapidUpdateCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_position_delta_high_precision_rapid_update_message_sources());
@@ -807,7 +807,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		testFrame.data[5] = 0x17;
 		testFrame.data[6] = 0x00;
 		testFrame.data[7] = 0x00;
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		auto delta = interfaceUnderTest.get_received_position_delta_high_precision_rapid_update_message(0);
 
@@ -857,14 +857,14 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		// Pass the message back in
 		testFrame.identifier = 0x19F80152;
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasPositionRapidUpdateCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_position_rapid_update_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_position_rapid_update_message(0));
 
 		// Validate duplicates don't make more instances
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasPositionRapidUpdateCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_position_rapid_update_message_sources());
@@ -912,13 +912,13 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 
 		auto listenerHandle = interfaceUnderTest.get_rate_of_turn_event_publisher().add_listener(test_rate_of_turn_callback);
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasRateOfTurnCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_rate_of_turn_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_rate_of_turn_message(0));
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasRateOfTurnCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_rate_of_turn_message_sources());
@@ -969,13 +969,13 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 
 		auto listenerHandle = interfaceUnderTest.get_vessel_heading_event_publisher().add_listener(test_vessel_heading_callback);
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasVesselHeadingCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_vessel_heading_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_vessel_heading_message(0));
 
-		CANNetworkManager::process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasVesselHeadingCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_vessel_heading_message_sources());

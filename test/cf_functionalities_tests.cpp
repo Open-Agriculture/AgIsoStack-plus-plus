@@ -512,7 +512,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	testFrame.data[1] = 0xFC;
 	testFrame.data[2] = 0x00;
 	testFrame.dataLength = 3;
-	CANNetworkManager::process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
 	cfFunctionalitiesUnderTest.update(); // Updating manually since we're not integrated with the diagnostic protocol inside this test

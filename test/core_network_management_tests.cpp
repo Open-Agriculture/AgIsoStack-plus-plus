@@ -81,13 +81,13 @@ TEST(CORE_TESTS, BusloadTest)
 	CANNetworkManager::CANNetwork.update(); // Make sure the network manager is initialized
 	for (std::uint_fast8_t i = 0; i < 25; i++)
 	{
-		CANNetworkManager::process_receive_can_message_frame(testFrame); // Send a bunch of junk messages
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame); // Send a bunch of junk messages
 	}
 	testFrame.isExtendedFrame = false;
 	testFrame.identifier = 0x7F;
 	for (std::uint_fast8_t i = 0; i < 25; i++)
 	{
-		CANNetworkManager::process_receive_can_message_frame(testFrame); // Send a bunch of junk messages
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame); // Send a bunch of junk messages
 	}
 	std::this_thread::sleep_for(std::chrono::milliseconds(101));
 	CANNetworkManager::CANNetwork.update();
@@ -110,7 +110,7 @@ TEST(CORE_TESTS, CommandedAddress)
 	// We'll ignore the 50ms timing for the unit test
 
 	// Broadcast Announce Message
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
 	  7,
 	  0xEC00, // Transport Protocol Connection Management
 	  externalECU,
@@ -128,7 +128,7 @@ TEST(CORE_TESTS, CommandedAddress)
 	std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
 
 	// data packet 1
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
 	  7,
 	  0xEB00, // Transport Protocol Data Transfer
 	  externalECU,
@@ -144,7 +144,7 @@ TEST(CORE_TESTS, CommandedAddress)
 	  }));
 
 	// data packet 2
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
 	  7,
 	  0xEB00, // Transport Protocol Data Transfer
 	  externalECU,
@@ -175,7 +175,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANHardwareInterface::start();
 
 	// Request the address claim PGN to simulate a control function starting to claim an address
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
 	  0xEE00, // Address Claim PGN
 	  nullptr,
 	  nullptr));
@@ -198,7 +198,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	wasTestStateCallbackHit = false;
 
 	// Request the address claim PGN again
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
 	  0xEE00, // Address Claim PGN
 	  nullptr,
 	  nullptr));
@@ -230,7 +230,7 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	auto TestPartner = isobus::PartneredControlFunction::create(0, nameFilters);
 
 	// Request the address claim PGN
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
 	  0xEE00, // Address Claim PGN
 	  nullptr,
 	  nullptr));
@@ -245,7 +245,7 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 
 	// Force claim some kind of TC
 	auto firstTC = test_helpers::create_mock_control_function(0x7A);
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
 	  6,
 	  0xEE00, // Address Claim PGN
 	  firstTC,
@@ -270,7 +270,7 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	secondTCNAME.set_function_instance(1);
 	rawNAME = secondTCNAME.get_full_name();
 	auto secondTC = test_helpers::create_mock_control_function(0x7B);
-	CANNetworkManager::process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
 	  6,
 	  0xEE00, // Address Claim PGN
 	  secondTC,
