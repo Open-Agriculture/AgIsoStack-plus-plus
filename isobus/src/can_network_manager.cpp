@@ -36,6 +36,10 @@ namespace isobus
 		{
 			get_next_can_message_from_rx_queue();
 		}
+		while (!transmittedMessageQueue.empty())
+		{
+			get_next_can_message_from_tx_queue();
+		}
 		initialized = true;
 	}
 
@@ -82,6 +86,27 @@ namespace isobus
 		if (anyControlFunctionParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
 			anyControlFunctionParameterGroupNumberCallbacks.erase(callbackLocation);
+		}
+	}
+
+	void CANNetworkManager::add_any_control_function_transmit_callback(CANLibCallback callback, void *parent)
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(anyTransmittedMessageCallbacksMutex);
+#endif
+		anyControlFunctionTransmitCallbacks.emplace_back(callback, parent);
+	}
+
+	void CANNetworkManager::remove_any_control_function_transmit_callback(CANLibCallback callback, void *parent)
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(anyTransmittedMessageCallbacksMutex);
+#endif
+		std::pair<CANLibCallback, void *> tempObject(callback, parent);
+		auto callbackLocation = std::find(anyControlFunctionTransmitCallbacks.begin(), anyControlFunctionTransmitCallbacks.end(), tempObject);
+		if (anyControlFunctionTransmitCallbacks.end() != callbackLocation)
+		{
+			anyControlFunctionTransmitCallbacks.erase(callbackLocation);
 		}
 	}
 
@@ -228,6 +253,7 @@ namespace isobus
 		update_new_partners();
 
 		process_rx_messages();
+		process_tx_messages();
 
 		update_internal_cfs();
 
@@ -322,6 +348,23 @@ namespace isobus
 	void CANNetworkManager::process_transmitted_can_message_frame(const CANMessageFrame &txFrame)
 	{
 		update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
+
+		CANIdentifier identifier(txFrame.identifier);
+		CANMessage message(CANMessage::Type::Transmit,
+		                   identifier,
+		                   txFrame.data,
+		                   txFrame.dataLength,
+		                   get_control_function(txFrame.channel, identifier.get_source_address()),
+		                   get_control_function(txFrame.channel, identifier.get_destination_address()),
+		                   txFrame.channel);
+
+		if (initialized)
+		{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+			const std::lock_guard<std::mutex> lock(transmittedMessageQueueMutex);
+#endif
+			transmittedMessageQueue.push(std::move(message));
+		}
 	}
 
 	void CANNetworkManager::on_control_function_destroyed(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
@@ -905,6 +948,20 @@ namespace isobus
 		return CANMessage::create_invalid_message();
 	}
 
+	CANMessage CANNetworkManager::get_next_can_message_from_tx_queue()
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(transmittedMessageQueueMutex);
+#endif
+		if (!transmittedMessageQueue.empty())
+		{
+			CANMessage retVal = std::move(transmittedMessageQueue.front());
+			transmittedMessageQueue.pop();
+			return retVal;
+		}
+		return CANMessage::create_invalid_message();
+	}
+
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction)
 	{
 		if (ControlFunction::Type::Internal == controlFunction->get_type())
@@ -930,6 +987,17 @@ namespace isobus
 			{
 				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
 			}
+		}
+	}
+
+	void CANNetworkManager::process_any_control_function_transmit_callbacks(const CANMessage &currentMessage)
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		const std::lock_guard<std::mutex> lock(anyTransmittedMessageCallbacksMutex);
+#endif
+		for (const auto &callback : anyControlFunctionTransmitCallbacks)
+		{
+			callback.first(currentMessage, callback.second);
 		}
 	}
 
@@ -1061,6 +1129,18 @@ namespace isobus
 
 			// Update Others
 			process_can_message_for_global_and_partner_callbacks(currentMessage);
+		}
+	}
+
+	void CANNetworkManager::process_tx_messages()
+	{
+		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
+		while (!transmittedMessageQueue.empty())
+		{
+			CANMessage currentMessage = get_next_can_message_from_tx_queue();
+
+			// Update listen-only callbacks
+			process_any_control_function_transmit_callbacks(currentMessage);
 		}
 	}
 

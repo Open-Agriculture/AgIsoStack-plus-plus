@@ -134,4 +134,34 @@ namespace isobus
 		return success;
 	}
 
+	bool VirtualTerminalClientUpdateHelper::set_attribute(std::uint16_t objectId, std::uint8_t attribute, std::uint32_t value)
+	{
+		if (nullptr == client)
+		{
+			CANStackLogger::error("[VTStateHelper] set_attribute: client is nullptr");
+			return false;
+		}
+		if (attributeStates.find(objectId) == attributeStates.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] set_attribute: objectId %lu not tracked", objectId);
+			return false;
+		}
+		if (attributeStates.at(objectId).find(attribute) == attributeStates.at(objectId).end())
+		{
+			CANStackLogger::warn("[VTStateHelper] set_attribute: attribute %lu of objectId %lu not tracked", attribute, objectId);
+			return false;
+		}
+		if (attributeStates.at(objectId).at(attribute) == value)
+		{
+			return true;
+		}
+
+		bool success = vtClient->send_change_attribute(objectId, attribute, value);
+		if (success)
+		{
+			attributeStates[objectId][attribute] = value;
+		}
+		return success;
+	}
+
 } // namespace isobus

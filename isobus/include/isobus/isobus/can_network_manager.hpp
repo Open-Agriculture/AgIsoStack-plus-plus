@@ -89,6 +89,16 @@ namespace isobus
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
 		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
+		/// @brief Registers a callback for when any message is put on the bus by us by any control function
+		/// @param[in] callback The callback that will be called when any control function transmits a message
+		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for
+		void add_any_control_function_transmit_callback(CANLibCallback callback, void *parent);
+
+		/// @brief This is how you remove a callback added with add_any_control_function_transmit_callback
+		/// @param[in] callback The callback that will be removed
+		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		void remove_any_control_function_transmit_callback(CANLibCallback callback, void *parent);
+
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
 		/// @param[in] controlFunction The control function to get the internal control function from
 		/// @returns An internal control function casted from the passed in control function
@@ -299,6 +309,11 @@ namespace isobus
 		/// @returns The message that was at the front of the queue, or an invalid message if the queue is empty
 		CANMessage get_next_can_message_from_rx_queue();
 
+		/// @brief Get the next CAN message from the received message queue, and remove it from the queue
+		/// @note This will only ever get an 8 byte message because they are directly translated from CAN frames.
+		/// @returns The message that was at the front of the queue, or an invalid message if the queue is empty
+		CANMessage get_next_can_message_from_tx_queue();
+
 		/// @brief Informs the network manager that a control function object has been created
 		/// @param[in] controlFunction The control function that was created
 		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction);
@@ -306,6 +321,10 @@ namespace isobus
 		/// @brief Processes a can message for callbacks added with add_any_control_function_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
 		void process_any_control_function_pgn_callbacks(const CANMessage &currentMessage);
+
+		/// @brief Processes a can message for callbacks added with add_any_control_function_transmit_callback
+		/// @param[in] currentMessage The message to process
+		void process_any_control_function_transmit_callbacks(const CANMessage &currentMessage);
 
 		/// @brief Validates that a CAN message has not caused an address violation.
 		/// If a violation is found, the network manager will notify the affected address claim state machine
@@ -337,6 +356,9 @@ namespace isobus
 
 		/// @brief Processes the internal received message queue
 		void process_rx_messages();
+
+		/// @brief Processes the internal transmitted message queue
+		void process_tx_messages();
 
 		/// @brief Checks to see if any control function didn't claim during a round of
 		/// address claiming and removes it if needed.
@@ -383,14 +405,18 @@ namespace isobus
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::queue<CANMessage> receivedMessageQueue; ///< A queue of received messages to process
+		std::queue<CANMessage> transmittedMessageQueue; ///< A queue of transmitted messages to process (already sent, so changes to the message won't affect the bus)
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+		std::vector<std::pair<CANLibCallback, void *>> anyControlFunctionTransmitCallbacks; ///< A list of all transmitted message callbacks
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety
+		std::mutex transmittedMessageQueueMutex; ///< A mutex for protecting the transmitted message queue
 		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
 		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
+		std::mutex anyTransmittedMessageCallbacksMutex; ///< Mutex to protect the transmitted message callbacks
 		std::mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
 		std::mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
 #endif

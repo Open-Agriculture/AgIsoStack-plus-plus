@@ -143,6 +143,59 @@ namespace isobus
 		return (client != nullptr) && client->get_address_valid() && (client->get_address() == activeWorkingSetAddress);
 	}
 
+	void VirtualTerminalClientStateTracker::add_tracked_attribute(std::uint16_t objectId, std::uint8_t attribute, std::uint32_t initialValue)
+	{
+		if (attributeStates.find(objectId) == attributeStates.end())
+		{
+			attributeStates[objectId] = {};
+		}
+
+		auto &attributeMap = attributeStates.at(objectId);
+		if (attributeMap.find(attribute) != attributeMap.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] add_tracked_attribute: attribute '%lu' of objectId '%lu' already tracked", attribute, objectId);
+			return;
+		}
+
+		attributeMap[attribute] = initialValue;
+	}
+
+	void VirtualTerminalClientStateTracker::remove_tracked_attribute(std::uint16_t objectId, std::uint8_t attribute)
+	{
+		if (attributeStates.find(objectId) == attributeStates.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] remove_tracked_attribute: objectId '%lu' was not tracked", objectId);
+			return;
+		}
+
+		auto &attributeMap = attributeStates.at(objectId);
+		if (attributeMap.find(attribute) == attributeMap.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] remove_tracked_attribute: attribute '%lu' of objectId '%lu' was not tracked", attribute, objectId);
+			return;
+		}
+
+		attributeMap.erase(attribute);
+	}
+
+	std::uint32_t VirtualTerminalClientStateTracker::get_attribute(std::uint16_t objectId, std::uint8_t attribute) const
+	{
+		if (attributeStates.find(objectId) == attributeStates.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] get_attribute: objectId '%lu' not tracked", objectId);
+			return 0;
+		}
+
+		const auto &attributeMap = attributeStates.at(objectId);
+		if (attributeMap.find(attribute) == attributeMap.end())
+		{
+			CANStackLogger::warn("[VTStateHelper] get_attribute: attribute '%lu' of objectId '%lu' not tracked", attribute, objectId);
+			return 0;
+		}
+
+		return attributeMap.at(attribute);
+	}
+
 	void VirtualTerminalClientStateTracker::cache_active_mask(std::uint16_t maskId)
 	{
 		if (activeDataOrAlarmMask != maskId)
@@ -282,6 +335,32 @@ namespace isobus
 			}
 			break;
 
+			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeAttributeCommand):
+			{
+				if (CAN_DATA_LENGTH == message.get_data_length())
+				{
+					auto errorCode = message.get_uint8_at(4);
+					if (errorCode == 0)
+					{
+						std::uint16_t objectId = message.get_uint16_at(1);
+						std::uint8_t attribute = message.get_uint8_at(3);
+						std::uint8_t error = message.get_uint8_at(4);
+
+						if (pendingChangeAttributeCommands.find(message.get_destination_control_function()) != pendingChangeAttributeCommands.end())
+						{
+							const auto &pendingCommand = pendingChangeAttributeCommands.at(message.get_source_control_function());
+							if ((pendingCommand.objectId == objectId) && (pendingCommand.attribute == attribute) && (0 == error))
+							{
+								std::uint32_t value = message.get_uint32_at(5);
+								attributeStates[objectId][attribute] = value;
+							}
+							pendingChangeAttributeCommands.erase(message.get_destination_control_function());
+						}
+					}
+				}
+			}
+			break;
+
 			default:
 				break;
 		}
@@ -289,6 +368,29 @@ namespace isobus
 
 	void VirtualTerminalClientStateTracker::process_message_to_connected_server(const CANMessage &message)
 	{
-		//! TODO: will be used for change attribute command
+		std::uint8_t function = message.get_uint8_at(0);
+		switch (function)
+		{
+			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeAttributeCommand):
+			{
+				if (CAN_DATA_LENGTH == message.get_data_length())
+				{
+					std::uint16_t objectId = message.get_uint16_at(1);
+					std::uint8_t attribute = message.get_uint8_at(3);
+
+					// Only track the change if the attribute should be tracked
+					if ((attributeStates.find(objectId) != attributeStates.end()) &&
+					    (attributeStates.at(objectId).find(attribute) != attributeStates.at(objectId).end()))
+					{
+						std::uint32_t value = message.get_uint32_at(4);
+						pendingChangeAttributeCommands[message.get_source_control_function()] = { objectId, attribute, value };
+					}
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
 	}
 } // namespace isobus

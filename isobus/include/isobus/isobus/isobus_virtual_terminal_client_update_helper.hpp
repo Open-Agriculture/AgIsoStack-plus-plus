@@ -61,6 +61,16 @@ namespace isobus
 		/// @return True if the soft key mask was set active successfully, false otherwise.
 		bool set_active_soft_key_mask(VirtualTerminalClient::MaskType maskType, std::uint16_t maskId, std::uint16_t softKeyMaskId);
 
+		/// @brief Sets the value of an attribute of a tracked object.
+		/// @note If the to be tracked working set consists of more than the master,
+		/// this function is incompatible with a VT prior to version 4. For working sets consisting
+		/// of only the master, this function is compatible with any VT version.
+		/// @param[in] objectId The object id of the attribute to set.
+		/// @param[in] attribute The attribute to set.
+		/// @param[in] value The value to set the attribute to.
+		/// @return True if the attribute was set successfully, false otherwise.
+		bool set_attribute(std::uint16_t objectId, std::uint8_t attribute, std::uint32_t value);
+
 	private:
 		/// @brief Processes a numeric value change event
 		/// @param[in] event The numeric value change event to process.
