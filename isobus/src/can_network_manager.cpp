@@ -50,11 +50,13 @@ namespace isobus
 
 	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		globalParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, nullptr);
 	}
 
 	void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
+		READ_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, nullptr);
 		auto callbackLocation = std::find(globalParameterGroupNumberCallbacks.begin(), globalParameterGroupNumberCallbacks.end(), tempObject);
 		if (globalParameterGroupNumberCallbacks.end() != callbackLocation)
@@ -70,18 +72,14 @@ namespace isobus
 
 	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		anyControlFunctionParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, nullptr);
 	}
 
 	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, nullptr);
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		auto callbackLocation = std::find(anyControlFunctionParameterGroupNumberCallbacks.begin(), anyControlFunctionParameterGroupNumberCallbacks.end(), tempObject);
 		if (anyControlFunctionParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -91,17 +89,13 @@ namespace isobus
 
 	void CANNetworkManager::add_any_control_function_transmit_callback(CANLibCallback callback, void *parent)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(anyTransmittedMessageCallbacksMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		anyControlFunctionTransmitCallbacks.emplace_back(callback, parent);
 	}
 
 	void CANNetworkManager::remove_any_control_function_transmit_callback(CANLibCallback callback, void *parent)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(anyTransmittedMessageCallbacksMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		std::pair<CANLibCallback, void *> tempObject(callback, parent);
 		auto callbackLocation = std::find(anyControlFunctionTransmitCallbacks.begin(), anyControlFunctionTransmitCallbacks.end(), tempObject);
 		if (anyControlFunctionTransmitCallbacks.end() != callbackLocation)
@@ -124,9 +118,7 @@ namespace isobus
 
 	float CANNetworkManager::get_estimated_busload(std::uint8_t canChannel)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
-#endif
+		READ_GUARD(ConcurrentReadingMonitor, busloadMonitor);
 		constexpr float ISOBUS_BAUD_RATE_BPS = 250000.0f;
 		float retVal = 0.0f;
 
@@ -430,9 +422,7 @@ namespace isobus
 	{
 		if (nullptr != callback)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-#endif
+			WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 			controlFunctionStateCallbacks.emplace_back(callback);
 		}
 	}
@@ -441,9 +431,7 @@ namespace isobus
 	{
 		if (nullptr != callback)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-#endif
+			WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 			ControlFunctionStateCallback targetCallback(callback);
 			auto callbackLocation = std::find(controlFunctionStateCallbacks.begin(), controlFunctionStateCallbacks.end(), targetCallback);
 
@@ -514,9 +502,7 @@ namespace isobus
 	{
 		bool retVal = false;
 		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer, nullptr);
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		if ((nullptr != callback) && (protocolPGNCallbacks.end() == find(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end(), callbackInfo)))
 		{
 			protocolPGNCallbacks.push_back(callbackInfo);
@@ -529,9 +515,7 @@ namespace isobus
 	{
 		bool retVal = false;
 		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer, nullptr);
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		if (nullptr != callback)
 		{
 			std::list<ParameterGroupNumberCallbackData>::iterator callbackLocation;
@@ -685,17 +669,13 @@ namespace isobus
 
 	void CANNetworkManager::update_busload(std::uint8_t channelIndex, std::uint32_t numberOfBitsProcessed)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(CANNetworkManager::CANNetwork.busloadUpdateMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, busloadMonitor);
 		currentBusloadBitAccumulator.at(channelIndex) += numberOfBitsProcessed;
 	}
 
 	void CANNetworkManager::update_busload_history()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
-#endif
+		WRITE_GUARD(ConcurrentReadingMonitor, busloadMonitor);
 		if (SystemTiming::time_expired_ms(busloadUpdateTimestamp_ms, BUSLOAD_UPDATE_FREQUENCY_MS))
 		{
 			for (std::size_t i = 0; i < busloadMessageBitsHistory.size(); i++)
@@ -976,9 +956,7 @@ namespace isobus
 
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-#endif
+		READ_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		for (const auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
 		{
 			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
@@ -992,9 +970,7 @@ namespace isobus
 
 	void CANNetworkManager::process_any_control_function_transmit_callbacks(const CANMessage &currentMessage)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(anyTransmittedMessageCallbacksMutex);
-#endif
+		READ_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		for (const auto &callback : anyControlFunctionTransmitCallbacks)
 		{
 			callback.first(currentMessage, callback.second);
@@ -1023,9 +999,7 @@ namespace isobus
 
 	void CANNetworkManager::process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-#endif
+		READ_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		for (const auto &callback : controlFunctionStateCallbacks)
 		{
 			callback(controlFunction, state);
@@ -1034,9 +1008,7 @@ namespace isobus
 
 	void CANNetworkManager::process_protocol_pgn_callbacks(const CANMessage &currentMessage)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
-#endif
+		READ_GUARD(ConcurrentReadingMonitor, callbacksMonitor);
 		for (const auto &currentCallback : protocolPGNCallbacks)
 		{
 			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())

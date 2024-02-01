@@ -5,16 +5,22 @@ set(UTILITY_SRC_DIR "src")
 set(UTILITY_INCLUDE_DIR "include/isobus/utility")
 
 # Set source files
-set(UTILITY_SRC "system_timing.cpp" "processing_flags.cpp"
-                "iop_file_interface.cpp" "platform_endianness.cpp")
+set(UTILITY_SRC
+    "system_timing.cpp" "processing_flags.cpp" "iop_file_interface.cpp"
+    "platform_endianness.cpp" "data_monitor.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(UTILITY_SRC ${UTILITY_SRC_DIR} ${UTILITY_SRC})
 
 # Set the include files
 set(UTILITY_INCLUDE
-    "system_timing.hpp" "processing_flags.hpp" "iop_file_interface.hpp"
-    "to_string.hpp" "platform_endianness.hpp" "event_dispatcher.hpp")
+    "system_timing.hpp"
+    "processing_flags.hpp"
+    "iop_file_interface.hpp"
+    "to_string.hpp"
+    "platform_endianness.hpp"
+    "event_dispatcher.hpp"
+    "data_monitor.hpp")
 
 # Prepend the include directory path to all the include files
 prepend(UTILITY_INCLUDE ${UTILITY_INCLUDE_DIR} ${UTILITY_INCLUDE})

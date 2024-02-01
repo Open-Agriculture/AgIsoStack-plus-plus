@@ -24,6 +24,7 @@
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
+#include "isobus/utility/data_monitor.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 
 #include <array>
@@ -414,12 +415,10 @@ namespace isobus
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety
 		std::mutex transmittedMessageQueueMutex; ///< A mutex for protecting the transmitted message queue
-		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
-		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
-		std::mutex anyTransmittedMessageCallbacksMutex; ///< Mutex to protect the transmitted message callbacks
-		std::mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
-		std::mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
 #endif
+		ConcurrentReadingMonitor controlFunctionTableMonitor; ///< A monitor for the control function table
+		ConcurrentReadingMonitor busloadMonitor; ///< A monitor for the busload metrics
+		ConcurrentReadingMonitor callbacksMonitor; ///< A common monitor for all the callbacks, since the list will be rarely updated
 		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
 		std::uint32_t updateTimestamp_ms = 0; ///< Keeps track of the last time the CAN stack was update in milliseconds
 		bool initialized = false; ///< True if the network manager has been initialized by the update function

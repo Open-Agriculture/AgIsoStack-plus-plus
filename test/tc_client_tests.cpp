@@ -1107,10 +1107,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	interfaceUnderTest.test_wrapper_set_state(static_cast<TaskControllerClient::StateMachineState>(241));
 	EXPECT_DEATH(interfaceUnderTest.update(), "");
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	interfaceUnderTest.terminate();
 	CANHardwareInterface::stop();
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(tcPartner->destroy(4));
 	ASSERT_TRUE(internalECU->destroy(5));
