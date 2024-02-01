@@ -472,11 +472,10 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(tcPartner->destroy(3));
 	ASSERT_TRUE(internalECU->destroy(3));
-
-	CANNetworkManager::CANNetwork.update();
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
@@ -1111,6 +1110,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	interfaceUnderTest.terminate();
 	CANHardwareInterface::stop();
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(tcPartner->destroy(4));
 	ASSERT_TRUE(internalECU->destroy(5));
@@ -1672,6 +1672,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 
 	CANHardwareInterface::stop();
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(TestPartnerTC->destroy(3));
 	ASSERT_TRUE(internalECU->destroy(3));

@@ -192,6 +192,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 		testPlugin.close();
 	}
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	ASSERT_TRUE(testECU->destroy());
 }
 
