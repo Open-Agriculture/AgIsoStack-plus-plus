@@ -272,9 +272,11 @@ namespace isobus
 			/// @returns true if the child object ID was found and removed, otherwise false
 			bool remove_reference_to_child_object(std::uint16_t childID);
 
-			/// @brief Returns the number of child objects added with `add_reference_to_child_object`
+			/// @brief Returns the number of child objects added with `add_reference_to_child_object`.
+			/// @note The maximum number of child objects is technically 65535 because the serialized
+			/// form of the value uses a 16-bit integer to store the count.
 			/// @returns The number of child objects added with `add_reference_to_child_object`
-			std::size_t get_number_child_objects() const;
+			std::uint16_t get_number_child_objects() const;
 
 			/// @brief Returns a child object ID by index
 			/// @param[in] index The index of the child object ID to return

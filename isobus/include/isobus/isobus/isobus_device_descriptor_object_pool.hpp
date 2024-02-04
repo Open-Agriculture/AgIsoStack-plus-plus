@@ -174,9 +174,10 @@ namespace isobus
 		/// @brief Clears the DDOP back to an empty state
 		void clear();
 
-		/// @brief Returns the number of objects in the DDOP
+		/// @brief Returns the number of objects in the DDOP.
+		/// @note The number of objects in the DDOP is limited to 65535.
 		/// @returns The number of objects in the DDOP
-		std::size_t size() const;
+		std::uint16_t size() const;
 
 	private:
 		/// @brief Checks to see that all parent object IDs correspond to an object in this DDOP
