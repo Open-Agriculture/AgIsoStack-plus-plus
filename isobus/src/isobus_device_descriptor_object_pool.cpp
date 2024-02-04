@@ -885,7 +885,7 @@ namespace isobus
 								xmlOutput << "\">" << std::endl;
 
 								// Process a list of all device object references
-								for (std::size_t k = 0; k < deviceElement->get_number_child_objects(); k++)
+								for (std::uint16_t k = 0; k < deviceElement->get_number_child_objects(); k++)
 								{
 									xmlOutput << "\t\t<DOR A=\"" << static_cast<int>(deviceElement->get_child_object_id(k)) << "\"/>" << std::endl;
 								}
@@ -1053,9 +1053,9 @@ namespace isobus
 		objectList.clear();
 	}
 
-	std::size_t DeviceDescriptorObjectPool::size() const
+	std::uint16_t DeviceDescriptorObjectPool::size() const
 	{
-		return objectList.size();
+		return static_cast<std::uint16_t>(objectList.size());
 	}
 
 	bool DeviceDescriptorObjectPool::resolve_parent_ids_to_objects()
@@ -1114,7 +1114,7 @@ namespace isobus
 					if (retVal)
 					{
 						// Process children now that parent has been validated
-						for (std::size_t i = 0; i < currentDeviceElement->get_number_child_objects(); i++)
+						for (std::uint16_t i = 0; i < currentDeviceElement->get_number_child_objects(); i++)
 						{
 							auto child = get_object_by_id(currentDeviceElement->get_child_object_id(i));
 							if (nullptr == child.get())

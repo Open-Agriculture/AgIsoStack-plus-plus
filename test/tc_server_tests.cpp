@@ -11,6 +11,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/isobus_device_descriptor_object_pool_helpers.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -1174,4 +1175,170 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
 	}
 	CANHardwareInterface::stop();
+}
+
+TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SeederExample)
+{
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.deserialize_binary_object_pool(testDDOP, sizeof(testDDOP));
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(16, implement.booms.at(0).sections.size());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.empty());
+
+	EXPECT_TRUE(implement.booms.at(0).xOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).yOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).zOffset_mm);
+
+	for (std::size_t i = 0; i < 16; i++)
+	{
+		EXPECT_TRUE(implement.booms.at(0).sections.at(i).width_mm);
+		EXPECT_TRUE(implement.booms.at(0).sections.at(i).xOffset_mm);
+		EXPECT_TRUE(implement.booms.at(0).sections.at(i).yOffset_mm);
+		EXPECT_FALSE(implement.booms.at(0).sections.at(i).zOffset_mm);
+
+		EXPECT_EQ(2286, implement.booms.at(0).sections.at(i).width_mm.get());
+		EXPECT_EQ((2286 * i) - ((8 * 2286) - 1143), implement.booms.at(0).sections.at(i).yOffset_mm.get());
+		EXPECT_EQ(-20, implement.booms.at(0).sections.at(i).xOffset_mm.get());
+	}
+}
+
+TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
+{
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("SubBoom1", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 2);
+	ddop.add_device_element("SubBoom2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 3);
+	ddop.add_device_element("Section1", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
+	ddop.add_device_element("Section2", 0, 3, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
+	ddop.add_device_property("Xoffset", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 6);
+	ddop.add_device_property("yoffset", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetY), 0xFFFF, 7);
+	ddop.add_device_property("zoffset", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 8);
+	ddop.add_device_property("width1", 5000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 9);
+	ddop.add_device_property("width2", 6000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 10);
+	ddop.add_device_property("SBzoffset", 7000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 12);
+	ddop.add_device_process_data("SBxoffset", static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 0, 0, 13);
+	ddop.add_device_process_data("secTestDPD", static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 0, 0, 14);
+
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(5));
+	auto subBoom1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	ASSERT_NE(nullptr, section1);
+	ASSERT_NE(nullptr, section2);
+
+	section1->add_reference_to_child_object(6);
+	section1->add_reference_to_child_object(7);
+	section1->add_reference_to_child_object(8);
+	section1->add_reference_to_child_object(9);
+	section2->add_reference_to_child_object(14);
+	section2->add_reference_to_child_object(7);
+	section2->add_reference_to_child_object(8);
+	section2->add_reference_to_child_object(10);
+	subBoom1->add_reference_to_child_object(12);
+	subBoom1->add_reference_to_child_object(13);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(0, implement.booms.at(0).sections.size());
+	ASSERT_EQ(2, implement.booms.at(0).subBooms.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(0).sections.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(1).sections.size());
+
+	EXPECT_FALSE(implement.booms.at(0).xOffset_mm);
+	EXPECT_FALSE(implement.booms.at(0).yOffset_mm);
+	EXPECT_FALSE(implement.booms.at(0).zOffset_mm);
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).xOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).xOffset_mm.editable());
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).yOffset_mm);
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).yOffset_mm.editable());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).zOffset_mm);
+	EXPECT_EQ(7000, implement.booms.at(0).subBooms.at(0).zOffset_mm.get());
+
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).width_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).xOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).yOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).zOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).width_mm);
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(1).sections.at(0).xOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).xOffset_mm.editable());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).yOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).zOffset_mm);
+
+	EXPECT_EQ(5000, implement.booms.at(0).subBooms.at(0).sections.at(0).width_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).subBooms.at(0).sections.at(0).xOffset_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).subBooms.at(0).sections.at(0).yOffset_mm.get());
+	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(0).sections.at(0).zOffset_mm.get());
+	EXPECT_EQ(6000, implement.booms.at(0).subBooms.at(1).sections.at(0).width_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).subBooms.at(1).sections.at(0).yOffset_mm.get());
+	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(1).sections.at(0).zOffset_mm.get());
+}
+
+TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
+{
+	DeviceDescriptorObjectPool ddop(3);
+
+	// validate that an empty DDOP returns an empty implement
+	auto emptyImplement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+	EXPECT_EQ(0, emptyImplement.booms.size());
+
+	// Test that a DDOP with no device elements returns an empty implement
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	auto emptyImplement2 = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+	EXPECT_EQ(0, emptyImplement2.booms.size());
+
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Section1", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
+	ddop.add_device_element("Section2", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
+	ddop.add_device_property("Xoffset", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 6);
+	ddop.add_device_property("yoffset", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetY), 0xFFFF, 7);
+	ddop.add_device_property("zoffset", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 8);
+	ddop.add_device_property("width1", 5000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 9);
+	ddop.add_device_property("width2", 6000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 10);
+
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(5));
+	ASSERT_NE(nullptr, section1);
+	ASSERT_NE(nullptr, section2);
+
+	section1->add_reference_to_child_object(6);
+	section1->add_reference_to_child_object(7);
+	section1->add_reference_to_child_object(8);
+	section1->add_reference_to_child_object(9);
+	section2->add_reference_to_child_object(6);
+	section2->add_reference_to_child_object(7);
+	section2->add_reference_to_child_object(8);
+	section2->add_reference_to_child_object(10);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(2, implement.booms.at(0).sections.size());
+	ASSERT_EQ(0, implement.booms.at(0).subBooms.size());
+
+	EXPECT_FALSE(implement.booms.at(0).xOffset_mm);
+	EXPECT_FALSE(implement.booms.at(0).yOffset_mm);
+	EXPECT_FALSE(implement.booms.at(0).zOffset_mm);
+
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).width_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).xOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).yOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).zOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).width_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).xOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).yOffset_mm);
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).zOffset_mm);
+
+	EXPECT_EQ(5000, implement.booms.at(0).sections.at(0).width_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).sections.at(0).xOffset_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
+	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
+	EXPECT_EQ(6000, implement.booms.at(0).sections.at(1).width_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).sections.at(0).xOffset_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
+	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
 }
