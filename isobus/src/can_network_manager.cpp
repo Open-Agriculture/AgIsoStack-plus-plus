@@ -36,6 +36,10 @@ namespace isobus
 		{
 			get_next_can_message_from_rx_queue();
 		}
+		while (!transmittedMessageQueue.empty())
+		{
+			get_next_can_message_from_tx_queue();
+		}
 		initialized = true;
 	}
 
@@ -83,6 +87,11 @@ namespace isobus
 		{
 			anyControlFunctionParameterGroupNumberCallbacks.erase(callbackLocation);
 		}
+	}
+
+	EventDispatcher<CANMessage> &CANNetworkManager::get_transmitted_message_event_dispatcher()
+	{
+		return messageTransmittedEventDispatcher;
 	}
 
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction)
@@ -228,6 +237,7 @@ namespace isobus
 		update_new_partners();
 
 		process_rx_messages();
+		process_tx_messages();
 
 		update_internal_cfs();
 
@@ -322,6 +332,21 @@ namespace isobus
 	void CANNetworkManager::process_transmitted_can_message_frame(const CANMessageFrame &txFrame)
 	{
 		update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
+
+		CANIdentifier identifier(txFrame.identifier);
+		CANMessage message(CANMessage::Type::Transmit,
+		                   identifier,
+		                   txFrame.data,
+		                   txFrame.dataLength,
+		                   get_control_function(txFrame.channel, identifier.get_source_address()),
+		                   get_control_function(txFrame.channel, identifier.get_destination_address()),
+		                   txFrame.channel);
+
+		if (initialized)
+		{
+			LOCK_GUARD(Mutex, transmittedMessageQueueMutex);
+			transmittedMessageQueue.push(std::move(message));
+		}
 	}
 
 	void CANNetworkManager::on_control_function_destroyed(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
@@ -905,6 +930,18 @@ namespace isobus
 		return CANMessage::create_invalid_message();
 	}
 
+	CANMessage CANNetworkManager::get_next_can_message_from_tx_queue()
+	{
+		LOCK_GUARD(Mutex, transmittedMessageQueueMutex);
+		if (!transmittedMessageQueue.empty())
+		{
+			CANMessage retVal = std::move(transmittedMessageQueue.front());
+			transmittedMessageQueue.pop();
+			return retVal;
+		}
+		return CANMessage::create_invalid_message();
+	}
+
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction)
 	{
 		if (ControlFunction::Type::Internal == controlFunction->get_type())
@@ -1061,6 +1098,18 @@ namespace isobus
 
 			// Update Others
 			process_can_message_for_global_and_partner_callbacks(currentMessage);
+		}
+	}
+
+	void CANNetworkManager::process_tx_messages()
+	{
+		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
+		while (!transmittedMessageQueue.empty())
+		{
+			CANMessage currentMessage = get_next_can_message_from_tx_queue();
+
+			// Update listen-only callbacks
+			messageTransmittedEventDispatcher.call(currentMessage);
 		}
 	}
 

@@ -126,7 +126,7 @@ int main()
 		return -2;
 	}
 
-	auto updateListener = isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(on_periodic_update);
+	isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(on_periodic_update);
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	isobus::NAME TestDeviceNAME(0);

@@ -360,6 +360,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 
 	testPlugin.close();
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	EXPECT_TRUE(testECU->destroy(2));
 	CANHardwareInterface::stop();

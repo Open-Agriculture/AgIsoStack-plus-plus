@@ -491,7 +491,7 @@ namespace isobus
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
-		std::shared_ptr<void> addressViolationEventHandle; ///< Stores the handle from registering for address violation events
+		EventCallbackHandle addressViolationEventHandle; ///< Stores the handle from registering for address violation events
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs

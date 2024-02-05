@@ -84,7 +84,7 @@ int main()
 
 	// Important: we need to update the diagnostic protocol using the hardware interface periodic update event,
 	// otherwise the diagnostic protocol will not be able to update its internal state.
-	auto listenerHandle = isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener([&diagnosticProtocol]() {
+	isobus::CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener([&diagnosticProtocol]() {
 		diagnosticProtocol.update();
 	});
 

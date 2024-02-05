@@ -156,14 +156,13 @@ int main()
 	isobus::NMEA2000MessageInterface n2kInterface(TestInternalECU, false, false, false, false, false, false, false);
 	n2kInterface.initialize();
 
-	// Listen to incoming NMEA2K messages. Note how need to keep the returned listener object alive for as long as we want to receive messages.
-	// If we don't, the listener will be removed and we will simply not receive messages.
-	auto cog_sog_listener = n2kInterface.get_course_speed_over_ground_rapid_update_event_publisher().add_listener(on_cog_sog_update);
-	auto datum_listener = n2kInterface.get_datum_event_publisher().add_listener(on_datum_update);
-	auto position_listener = n2kInterface.get_gnss_position_data_event_publisher().add_listener(on_position_update);
-	auto position_rapid_listener = n2kInterface.get_position_rapid_update_event_publisher().add_listener(on_position_rapid_update);
-	auto turn_rate_listener = n2kInterface.get_rate_of_turn_event_publisher().add_listener(on_turn_rate_update);
-	auto vessel_heading_listener = n2kInterface.get_vessel_heading_event_publisher().add_listener(on_vessel_heading_update);
+	// Listen to incoming NMEA2K messages
+	n2kInterface.get_course_speed_over_ground_rapid_update_event_publisher().add_listener(on_cog_sog_update);
+	n2kInterface.get_datum_event_publisher().add_listener(on_datum_update);
+	n2kInterface.get_gnss_position_data_event_publisher().add_listener(on_position_update);
+	n2kInterface.get_position_rapid_update_event_publisher().add_listener(on_position_rapid_update);
+	n2kInterface.get_rate_of_turn_event_publisher().add_listener(on_turn_rate_update);
+	n2kInterface.get_vessel_heading_event_publisher().add_listener(on_vessel_heading_update);
 
 	std::cout << "Starting to parse NMEA2K messages. Press Ctrl+C to stop." << std::endl;
 	while (running)

@@ -67,7 +67,7 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 		EXPECT_EQ(frame.data[0], 0x01);
 	};
 
-	auto listener = CANHardwareInterface::get_can_frame_received_event_dispatcher().add_listener(receivedCallback);
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().add_listener(receivedCallback);
 
 	device->write_frame_as_if_received(fakeFrame);
 
@@ -106,7 +106,7 @@ TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
 		EXPECT_EQ(frame.data[0], 0x01);
 	};
 
-	auto listener = CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().add_listener(sendCallback);
+	CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().add_listener(sendCallback);
 
 	isobus::send_can_message_frame_to_hardware(fakeFrame);
 
@@ -125,7 +125,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateEventListener)
 		updateCount += 1;
 	};
 
-	auto listener = CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
+	CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
 
 	auto future = std::async(std::launch::async, [&updateCount] { while (updateCount == 0 && CANHardwareInterface::is_running()); });
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
@@ -151,7 +151,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 		lastUpdateTime = isobus::SystemTiming::get_timestamp_ms();
 	};
 
-	auto listener = CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
+	CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
 
 	CANHardwareInterface::set_periodic_update_interval(10);
 	EXPECT_EQ(CANHardwareInterface::get_periodic_update_interval(), 10);
