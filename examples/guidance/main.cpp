@@ -106,9 +106,8 @@ int main()
 	isobus::AgriculturalGuidanceInterface TestGuidanceInterface(nullptr, nullptr);
 
 	// Register listeners for the (guidance) events we want to receive
-	//! @note That the listeners are removed automatically when the returned `shared_ptr` goes out of scope!!!
-	auto guidanceMachineInfoListener = TestGuidanceInterface.get_guidance_machine_info_event_publisher().add_listener(on_guidance_machine_info_message);
-	auto guidanceSystemCommandListener = TestGuidanceInterface.get_guidance_system_command_event_publisher().add_listener(on_guidance_system_command_message);
+	TestGuidanceInterface.get_guidance_machine_info_event_publisher().add_listener(on_guidance_machine_info_message);
+	TestGuidanceInterface.get_guidance_system_command_event_publisher().add_listener(on_guidance_system_command_message);
 
 	// Finally we can initialize the guidance interface to start sending and receiving messages
 	TestGuidanceInterface.initialize();

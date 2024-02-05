@@ -176,6 +176,9 @@ namespace isobus
 			return false;
 		}
 		stop_threads();
+		frameReceivedEventDispatcher.clear_listeners();
+		frameTransmittedEventDispatcher.clear_listeners();
+		periodicUpdateEventDispatcher.clear_listeners();
 
 		std::lock_guard<std::mutex> channelsLock(hardwareChannelsMutex);
 		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {

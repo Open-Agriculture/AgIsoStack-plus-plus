@@ -145,64 +145,64 @@ namespace isobus
 		return retVal;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_soft_key_event_listener(std::function<void(const VTKeyEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTKeyEvent> &VirtualTerminalClient::get_vt_soft_key_event_dispatcher()
 	{
-		return softKeyEventDispatcher.add_listener(callback);
+		return softKeyEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_button_event_listener(std::function<void(const VTKeyEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTKeyEvent> &VirtualTerminalClient::get_vt_button_event_dispatcher()
 	{
-		return buttonEventDispatcher.add_listener(callback);
+		return buttonEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_pointing_event_listener(std::function<void(const VTPointingEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTPointingEvent> &VirtualTerminalClient::get_vt_pointing_event_dispatcher()
 	{
-		return pointingEventDispatcher.add_listener(callback);
+		return pointingEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_select_input_object_event_listener(std::function<void(const VTSelectInputObjectEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTSelectInputObjectEvent> &VirtualTerminalClient::get_vt_select_input_object_event_dispatcher()
 	{
-		return selectInputObjectEventDispatcher.add_listener(callback);
+		return selectInputObjectEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_esc_message_event_listener(std::function<void(const VTESCMessageEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTESCMessageEvent> &VirtualTerminalClient::get_vt_esc_message_event_dispatcher()
 	{
-		return escMessageEventDispatcher.add_listener(callback);
+		return escMessageEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_numeric_value_event_listener(std::function<void(const VTChangeNumericValueEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTChangeNumericValueEvent> &VirtualTerminalClient::get_vt_change_numeric_value_event_dispatcher()
 	{
-		return changeNumericValueEventDispatcher.add_listener(callback);
+		return changeNumericValueEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_active_mask_event_listener(std::function<void(const VTChangeActiveMaskEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTChangeActiveMaskEvent> &VirtualTerminalClient::get_vt_change_active_mask_event_dispatcher()
 	{
-		return changeActiveMaskEventDispatcher.add_listener(callback);
+		return changeActiveMaskEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_soft_key_mask_event_listener(std::function<void(const VTChangeSoftKeyMaskEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTChangeSoftKeyMaskEvent> &VirtualTerminalClient::get_vt_change_soft_key_mask_event_dispatcher()
 	{
-		return changeSoftKeyMaskEventDispatcher.add_listener(callback);
+		return changeSoftKeyMaskEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_change_string_value_event_listener(std::function<void(const VTChangeStringValueEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTChangeStringValueEvent> &VirtualTerminalClient::get_vt_change_string_value_event_dispatcher()
 	{
-		return changeStringValueEventDispatcher.add_listener(callback);
+		return changeStringValueEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_user_layout_hide_show_event_listener(std::function<void(const VTUserLayoutHideShowEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTUserLayoutHideShowEvent> &VirtualTerminalClient::get_vt_user_layout_hide_show_event_dispatcher()
 	{
-		return userLayoutHideShowEventDispatcher.add_listener(callback);
+		return userLayoutHideShowEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_vt_control_audio_signal_termination_event_listener(std::function<void(const VTAudioSignalTerminationEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::VTAudioSignalTerminationEvent> &VirtualTerminalClient::get_vt_control_audio_signal_termination_event_dispatcher()
 	{
-		return audioSignalTerminationEventDispatcher.add_listener(callback);
+		return audioSignalTerminationEventDispatcher;
 	}
 
-	std::shared_ptr<void> VirtualTerminalClient::add_auxiliary_function_event_listener(std::function<void(const AuxiliaryFunctionEvent &)> callback)
+	EventDispatcher<VirtualTerminalClient::AuxiliaryFunctionEvent> &VirtualTerminalClient::get_auxiliary_function_event_dispatcher()
 	{
-		return auxiliaryFunctionEventDispatcher.add_listener(callback);
+		return auxiliaryFunctionEventDispatcher;
 	}
 
 	void VirtualTerminalClient::set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode)

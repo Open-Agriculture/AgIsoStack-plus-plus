@@ -192,6 +192,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 		testPlugin.close();
 	}
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	ASSERT_TRUE(testECU->destroy());
 }
 
@@ -218,8 +219,8 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	test_helpers::force_claim_partnered_control_function(0x46, 0);
 
 	// Register callbacks to test
-	auto guidanceCommandListener = interfaceUnderTest.get_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
-	auto guidanceInfoListener = interfaceUnderTest.get_guidance_machine_info_event_publisher().add_listener(TestGuidanceInterface::test_guidance_machine_info_callback);
+	interfaceUnderTest.get_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
+	interfaceUnderTest.get_guidance_machine_info_event_publisher().add_listener(TestGuidanceInterface::test_guidance_machine_info_callback);
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceMachineInfoCallbackHit);
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
 

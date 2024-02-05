@@ -517,68 +517,56 @@ namespace isobus
 			std::uint16_t value2; ///< The second value
 		};
 
-		/// @brief Add a listener for when a soft key is pressed or released
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_soft_key_event_listener(std::function<void(const VTKeyEvent &)> callback);
+		/// @brief The event dispatcher for when a soft key is pressed or released
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTKeyEvent> &get_vt_soft_key_event_dispatcher();
 
-		/// @brief Add a listener for when a button is pressed or released
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_button_event_listener(std::function<void(const VTKeyEvent &)> callback);
+		/// @brief The event dispatcher for when a button is pressed or released
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTKeyEvent> &get_vt_button_event_dispatcher();
 
-		/// @brief Add a listener for when a pointing event is "pressed or released"
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_pointing_event_listener(std::function<void(const VTPointingEvent &)> callback);
+		/// @brief The event dispatcher for when a pointing event is "pressed or released"
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTPointingEvent> &get_vt_pointing_event_dispatcher();
 
-		/// @brief Add a listener for when an input object event is triggered
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_select_input_object_event_listener(std::function<void(const VTSelectInputObjectEvent &)> callback);
+		/// @brief The event dispatcher for when an input object event is triggered
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTSelectInputObjectEvent> &get_vt_select_input_object_event_dispatcher();
 
-		/// @brief Add a listener for when an ESC message is received, e.g. an open object input is closed
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_esc_message_event_listener(std::function<void(const VTESCMessageEvent &)> callback);
+		/// @brief The event dispatcher for when an ESC message is received, e.g. an open object input is closed
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTESCMessageEvent> &get_vt_esc_message_event_dispatcher();
 
-		/// @brief Add a listener for when a numeric value is changed in an input object
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_change_numeric_value_event_listener(std::function<void(const VTChangeNumericValueEvent &)> callback);
+		/// @brief The event dispatcher for when a numeric value is changed in an input object
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTChangeNumericValueEvent> &get_vt_change_numeric_value_event_dispatcher();
 
-		/// @brief Add a listener for when the active mask is changed
+		/// @brief The event dispatcher for when the active mask is changed
 		/// @details The VT sends this whenever there are missing object references or errors in the mask.
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_change_active_mask_event_listener(std::function<void(const VTChangeActiveMaskEvent &)> callback);
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTChangeActiveMaskEvent> &get_vt_change_active_mask_event_dispatcher();
 
-		/// @brief Add a listener for when the soft key mask is changed
+		/// @brief The event dispatcher for when the soft key mask is changed
 		/// @details The VT sends this whenever there are missing object references or errors in the mask.
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_change_soft_key_mask_event_listener(std::function<void(const VTChangeSoftKeyMaskEvent &)> callback);
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTChangeSoftKeyMaskEvent> &get_vt_change_soft_key_mask_event_dispatcher();
 
-		/// @brief Add a listener for when a string value is changed
+		/// @brief The event dispatcher for when a string value is changed
 		/// @details The object could be either the input string object or the referenced string variable object.
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_change_string_value_event_listener(std::function<void(const VTChangeStringValueEvent &)> callback);
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTChangeStringValueEvent> &get_vt_change_string_value_event_dispatcher();
 
-		/// @brief Add a listener for when a user-layout object is hidden or shown
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_user_layout_hide_show_event_listener(std::function<void(const VTUserLayoutHideShowEvent &)> callback);
+		/// @brief The event dispatcher for when a user-layout object is hidden or shown
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTUserLayoutHideShowEvent> &get_vt_user_layout_hide_show_event_dispatcher();
 
-		/// @brief Add a listener for when an audio signal is terminated
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_vt_control_audio_signal_termination_event_listener(std::function<void(const VTAudioSignalTerminationEvent &)> callback);
+		/// @brief The event dispatcher for when an audio signal is terminated
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<VTAudioSignalTerminationEvent> &get_vt_control_audio_signal_termination_event_dispatcher();
 
-		/// @brief Add a listener for for when a change in auxiliary input for a function is received
-		/// @param[in] callback The callback to be invoked
-		/// @returns A shared pointer to the callback, which must be kept alive for as long as the callback is needed
-		std::shared_ptr<void> add_auxiliary_function_event_listener(std::function<void(const AuxiliaryFunctionEvent &)> callback);
+		/// @brief The event dispatcher for for when a change in auxiliary input for a function is received
+		/// @returns A reference to the event dispatcher, used to add listeners
+		EventDispatcher<AuxiliaryFunctionEvent> &get_auxiliary_function_event_dispatcher();
 
 		/// @brief Set the model identification code of our auxiliary input device.
 		/// @details The model identification code is used to allow other devices identify

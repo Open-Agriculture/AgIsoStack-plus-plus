@@ -4,52 +4,58 @@
 /// @brief An object to represent a dispatcher that can invoke callbacks in a thread-safe manner.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
 #ifndef EVENT_DISPATCHER_HPP
 #define EVENT_DISPATCHER_HPP
 
+#include "isobus/utility/thread_synchronization.hpp"
+
 #include <algorithm>
 #include <functional>
 #include <memory>
-#include <vector>
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <mutex>
-#endif
+#include <queue>
+#include <unordered_map>
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class EventDispatcher
-	///
+	using EventCallbackHandle = std::size_t;
+
 	/// @brief A dispatcher that notifies listeners when an event is invoked.
-	//================================================================================================
 	template<typename... E>
 	class EventDispatcher
 	{
 	public:
+		using Callback = std::function<void(const E &...)>;
+
 		/// @brief Register a callback to be invoked when the event is invoked.
 		/// @param callback The callback to register.
-		/// @return A shared pointer to the callback.
-		std::shared_ptr<std::function<void(const E &...)>> add_listener(const std::function<void(const E &...)> &callback)
+		/// @return A unique identifier for the callback, which can be used to remove the listener.
+		EventCallbackHandle add_listener(const Callback &callback)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			std::lock_guard<std::mutex> lock(callbacksMutex);
-#endif
-			auto shared = std::make_shared<std::function<void(const E &...)>>(callback);
-			callbacks.push_back(shared);
-			return shared;
+			EventCallbackHandle id = nextId;
+			nextId += 1;
+
+			LOCK_GUARD(Mutex, callbacksMutex);
+			if (isExecuting)
+			{
+				modifications.push([this, id, callback]() { callbacks[id] = callback; });
+			}
+			else
+			{
+				callbacks[id] = callback;
+			}
+			return id;
 		}
 
 		/// @brief Register a callback to be invoked when the event is invoked.
 		/// @param callback The callback to register.
 		/// @param context The context object to pass through to the callback.
-		/// @return A shared pointer to the contextless callback.
+		/// @return A unique identifier for the callback, which can be used to remove the listener.
 		template<typename C>
-		std::shared_ptr<std::function<void(const E &...)>> add_listener(const std::function<void(const E &..., std::shared_ptr<C>)> &callback, std::weak_ptr<C> context)
+		EventCallbackHandle add_listener(const std::function<void(const E &..., std::shared_ptr<C>)> &callback, std::weak_ptr<C> context)
 		{
-			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
+			Callback callbackWrapper = [callback, context](const E &...args) {
 				if (auto contextPtr = context.lock())
 				{
 					callback(args..., contextPtr);
@@ -61,51 +67,59 @@ namespace isobus
 		/// @brief Register an unsafe callback to be invoked when the event is invoked.
 		/// @param callback The callback to register.
 		/// @param context The context object to pass through to the callback.
-		/// @return A shared pointer to the contextless callback.
+		/// @return A unique identifier for the callback, which can be used to remove the listener.
 		template<typename C>
-		std::shared_ptr<std::function<void(const E &...)>> add_unsafe_listener(const std::function<void(const E &..., std::weak_ptr<C>)> &callback, std::weak_ptr<C> context)
+		EventCallbackHandle add_unsafe_listener(const std::function<void(const E &..., C *)> &callback, C *context)
 		{
-			std::function<void(const E &...)> callbackWrapper = [callback, context](const E &...args) {
+			Callback callbackWrapper = [callback, context](const E &...args) {
 				callback(args..., context);
 			};
 			return add_listener(callbackWrapper);
+		}
+
+		/// @brief Remove a callback from the list of listeners.
+		/// @param id The unique identifier of the callback to remove.
+		void remove_listener(EventCallbackHandle id) noexcept
+		{
+			LOCK_GUARD(Mutex, callbacksMutex);
+			if (isExecuting)
+			{
+				modifications.push([this, id]() { callbacks.erase(id); });
+			}
+			else
+			{
+				callbacks.erase(id);
+			}
+		}
+
+		/// @brief Remove all listeners from the event.
+		void clear_listeners() noexcept
+		{
+			LOCK_GUARD(Mutex, callbacksMutex);
+			if (isExecuting)
+			{
+				modifications.push([this]() { callbacks.clear(); });
+			}
+			else
+			{
+				callbacks.clear();
+			}
 		}
 
 		/// @brief Get the number of listeners registered to this event.
 		/// @return The number of listeners
 		std::size_t get_listener_count()
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			std::lock_guard<std::mutex> lock(callbacksMutex);
-#endif
+			LOCK_GUARD(Mutex, callbacksMutex);
 			return callbacks.size();
 		}
 
-		/// @brief Remove expired listeners from the dispatcher
-		void remove_expired_listeners()
-		{
-			auto removeResult = std::remove_if(callbacks.begin(), callbacks.end(), [](std::weak_ptr<std::function<void(const E &...)>> &callback) {
-				return callback.expired();
-			});
-			callbacks.erase(removeResult, callbacks.end());
-		}
-
-		/// @brief Call and event with context that is moved using move semantics to notify all listeners.
+		/// @brief Call and event with context that is forwarded to all listeners.
 		/// @param args The event context to notify listeners with.
 		/// @return True if the event was successfully invoked, false otherwise.
 		void invoke(E &&...args)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			std::lock_guard<std::mutex> lock(callbacksMutex);
-#endif
-			remove_expired_listeners();
-
-			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
-				if (auto callbackPtr = callback.lock())
-				{
-					(*callbackPtr)(std::forward<E>(args)...);
-				}
-			});
+			call(args...);
 		}
 
 		/// @brief Call an event with existing context to notify all listeners.
@@ -113,24 +127,38 @@ namespace isobus
 		/// @return True if the event was successfully invoked, false otherwise.
 		void call(const E &...args)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			std::lock_guard<std::mutex> lock(callbacksMutex);
-#endif
-			remove_expired_listeners();
+			{
+				// Set flag to indicate we will be reading the list of callbacks, and
+				// prevent other threads from modifying the list directly during this time
+				LOCK_GUARD(Mutex, callbacksMutex);
+				isExecuting = true;
+			}
 
-			std::for_each(callbacks.begin(), callbacks.end(), [&args...](std::weak_ptr<std::function<void(const E &...)>> &callback) {
-				if (auto callbackPtr = callback.lock())
+			// Execute the callbacks
+			for (const auto &callback : callbacks)
+			{
+				callback.second(args...);
+			}
+
+			{
+				LOCK_GUARD(Mutex, callbacksMutex);
+				isExecuting = false;
+
+				// Apply pending modifications to the callbacks list
+				while (!modifications.empty())
 				{
-					(*callbackPtr)(args...);
+					modifications.front()();
+					modifications.pop();
 				}
-			});
+			}
 		}
 
 	private:
-		std::vector<std::weak_ptr<std::function<void(const E &...)>>> callbacks; ///< The callbacks to invoke
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::mutex callbacksMutex; ///< The mutex to protect the callbacks
-#endif
+		std::unordered_map<EventCallbackHandle, Callback> callbacks; ///< The list of callbacks
+		bool isExecuting = false; ///< Whether the dispatcher is currently executing an event
+		std::queue<std::function<void()>> modifications; ///< The modifications to the callbacks list
+		Mutex callbacksMutex; ///< The mutex to protect the object from (unwanted) concurrent access
+		EventCallbackHandle nextId = 0; // Counter for generating unique IDs
 	};
 } // namespace isobus
 
