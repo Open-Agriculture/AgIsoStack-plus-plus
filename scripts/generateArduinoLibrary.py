@@ -62,7 +62,7 @@ def fixup_header_paths(fileName):
     f.write(newdata)
     f.close()
 
-arduinoLibPath = "arduino_library/"
+arduinoLibPath = "../arduino_library/"
 sourceDir = "src"
 sourcePath = arduinoLibPath + sourceDir
 
@@ -78,9 +78,9 @@ print("Created directory ", sourcePath)
 
 print("Copying source files to library")
 
-copyfiles(".", sourcePath, "*.cpp")
-copyfiles(".", sourcePath, "*.hpp")
-copyfiles(".", sourcePath, "*.tpp")
+copyfiles("../", sourcePath, "*.cpp")
+copyfiles("../", sourcePath, "*.hpp")
+copyfiles("../", sourcePath, "*.tpp")
 
 print("Pruning unneeded files for Arduino platform")
 
@@ -119,6 +119,8 @@ filePruneList = [
 "can_hardware_interface.cpp",
 "socketcand_windows_network_client.hpp",
 "socketcand_windows_network_client.cpp",
+"sys_tec_windows_plugin.hpp",
+"sys_tec_windows_plugin.cpp",
 "CMakeCXXCompilerId.cpp"]
 
 for punableFile in filePruneList:
@@ -128,7 +130,7 @@ for punableFile in filePruneList:
 
 print("Generating isobus.hpp from files in " + "./" + sourcePath + "/*.hpp")
 headers = [os.path.normpath(i) for i in glob.glob("./" + sourcePath + "/*.hpp")]
-strippedHeaders = list(map(lambda x: x.replace('arduino_library\\src\\','').replace('arduino_library/src/',''),headers))
+strippedHeaders = list(map(lambda x: x.replace('..\\arduino_library\\src\\','').replace('../arduino_library/src/',''),headers))
 print("Headers ", strippedHeaders)
 f = open(os.path.join(sourcePath, "AgIsoStack.hpp"), "w")
 write_isobus_hpp(strippedHeaders, f)
