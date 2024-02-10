@@ -46,7 +46,7 @@ namespace isobus
 
 		if (0 == ddop.size())
 		{
-			CANStackLogger::error("[DDOP Helper]: No objects in the pool.");
+			LOG_ERROR("[DDOP Helper]: No objects in the pool.");
 			return retVal; // Return empty object
 		}
 
@@ -100,7 +100,7 @@ namespace isobus
 				return retVal;
 			}
 		}
-		CANStackLogger::error("[DDOP Helper]: No device object in the pool.");
+		LOG_ERROR("[DDOP Helper]: No device object in the pool.");
 		return retVal; // If we got here, we didn't find a device object? Return empty object
 	}
 
