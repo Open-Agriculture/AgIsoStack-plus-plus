@@ -12,8 +12,9 @@
 #ifndef ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HELPERS_HPP
 #define ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HELPERS_HPP
 
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/isobus_device_descriptor_object_pool.hpp"
-#include "isobus_standard_data_description_indices.hpp"
+#include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 
 namespace isobus
 {
@@ -52,12 +53,40 @@ namespace isobus
 			/// @returns The value if it exists, otherwise 0.
 			std::int32_t get() const;
 
-		private:
+		protected:
 			friend class DeviceDescriptorObjectPoolHelper; ///< Allow our helper to change the values
 
 			std::int32_t value = 0; ///< The value being wrapped by this object
 			bool isValuePresent = false; ///< Stores if the value has ever been set
 			bool isSettable = false; ///< Stores if the value can be set, such as on a DPD's value
+		};
+
+		/// @brief A helper class that groups a DDI with an object id
+		class RateMetadata : public ObjectPoolValue
+		{
+		public:
+			std::uint16_t dataDictionaryIdentifier = static_cast<std::uint16_t>(DataDescriptionIndex::Reserved); ///< The data dictionary index of the product control rate
+			std::uint16_t objectID = NULL_OBJECT_ID; ///< The object ID of the rate
+
+		protected:
+			friend class DeviceDescriptorObjectPoolHelper; ///< Allow our helper to change the values
+		};
+
+		/// @brief A helper class that groups product rate infomation together.
+		/// A TC server could use this to know quickly what rates are available and how to interact with them.
+		/// Use the associated element number and DDI to perform value commands and requests with a client.
+		class ProductControlInformation
+		{
+		public:
+			/// @brief Returns true if any rate information is populated.
+			/// @returns true if any rate information is populated, otherwise false
+			bool is_valid() const;
+
+			RateMetadata rateSetpoint; ///< The info needed to interact with the rate setpoint
+			RateMetadata rateActual; ///< The info needed to get the actual rate
+			RateMetadata rateDefault; ///< The info needed to interact with the default rate
+			RateMetadata rateMinimum; ///< The info needed to interact with the minimum rate
+			RateMetadata rateMaximum; ///< The info needed to interact with the maximum rate
 		};
 
 		/// @brief A helper class that describes an individual section of a boom.
@@ -67,23 +96,20 @@ namespace isobus
 		class Section
 		{
 		public:
-			/// @brief Default constructor for a helper class that describes an individual section of a boom
-			Section();
-
 			ObjectPoolValue xOffset_mm; ///< The x offset of the section in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the section in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the section in mm. Z offsets are up+/down-.
 			ObjectPoolValue width_mm; ///< The width of the section in mm.
+			std::vector<ProductControlInformation> rates; ///< If the section has rates, this will contain the associated data needed to control the product.
+			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the section, which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 
 		/// @brief A helper class that describes a sub boom (not all devices support this)
 		class SubBoom
 		{
 		public:
-			/// @brief Default constructor for a helper class that describes a sub boom
-			SubBoom();
-
 			std::vector<Section> sections; ///< The sections of the sub boom
+			std::vector<ProductControlInformation> rates; ///< If the sub-boom has rates, this will contain the associated data needed to control the product.
 			ObjectPoolValue xOffset_mm; ///< The x offset of the sub boom in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the sub boom in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the sub boom in mm. Z offsets are up+/down-.
@@ -97,6 +123,7 @@ namespace isobus
 		public:
 			std::vector<Section> sections; ///< The sections of the boom
 			std::vector<SubBoom> subBooms; ///< The sub booms of the boom
+			std::vector<ProductControlInformation> rates; ///< If the boom has rates, this will contain the associated data needed to control the product.
 			ObjectPoolValue xOffset_mm; ///< The x offset of the sub boom in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the sub boom in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the sub boom in mm. Z offsets are up+/down-.
@@ -137,21 +164,73 @@ namespace isobus
 		static SubBoom parse_sub_boom(DeviceDescriptorObjectPool &ddop,
 		                              std::shared_ptr<task_controller_object::DeviceElementObject> elementObject);
 
+		/// @brief Parses a bin element of the DDOP
+		/// @param[in] ddop The DDOP to get the implement product control info from
+		/// @param[in] elementObject The element to parse
+		/// @returns The parsed product control information, or a default product control information if the elementObject is invalid or has no relevant data
+		static ProductControlInformation parse_bin(DeviceDescriptorObjectPool &ddop,
+		                                           std::shared_ptr<task_controller_object::DeviceElementObject> elementObject);
+
 		/// @brief Sets the value and presence based on a DDI match.
 		/// @param[in,out] objectPoolValue The object pool value to set.
 		/// @param[in] property The device property object.
 		/// @param[in] ddi The DDI to check against.
-		static void setValueFromProperty(ObjectPoolValue &objectPoolValue,
-		                                 const std::shared_ptr<task_controller_object::DevicePropertyObject> &property,
-		                                 DataDescriptionIndex ddi);
+		static void set_value_from_property(ObjectPoolValue &objectPoolValue,
+		                                    const std::shared_ptr<task_controller_object::DevicePropertyObject> &property,
+		                                    DataDescriptionIndex ddi);
 
 		/// @brief Sets the settable flag based on a DDI match for process data.
 		/// @param[in,out] objectPoolValue The object pool value to update.
 		/// @param[in] processData The device process data object.
 		/// @param[in] ddi The DDI to check against.
-		static void setEditableFromProcessData(ObjectPoolValue &objectPoolValue,
-		                                       const std::shared_ptr<task_controller_object::DeviceProcessDataObject> &processData,
-		                                       DataDescriptionIndex ddi);
+		static void set_editable_from_process_data(ObjectPoolValue &objectPoolValue,
+		                                           const std::shared_ptr<task_controller_object::DeviceProcessDataObject> &processData,
+		                                           DataDescriptionIndex ddi);
+
+		/// @brief Sets the max rate field of the product control information based on the supplied object
+		/// if the DDI is known to be a max rate DDI.
+		/// @param[in,out] productControlInformation The product control information to update.
+		/// @param[in] object The object to use to update the product control information.
+		/// @param[in] ddi The DDI to check against.
+		static void set_product_control_information_max_rate(ProductControlInformation &productControlInformation,
+		                                                     const std::shared_ptr<task_controller_object::Object> &object,
+		                                                     std::uint16_t ddi);
+
+		/// @brief Sets the minimum rate field of the product control information based on the supplied object
+		/// if the DDI is known to be a minimum rate DDI.
+		/// @param[in,out] productControlInformation The product control information to update.
+		/// @param[in] object The object to use to update the product control information.
+		/// @param[in] ddi The DDI to check against.
+		static void set_product_control_information_min_rate(ProductControlInformation &productControlInformation,
+		                                                     const std::shared_ptr<task_controller_object::Object> &object,
+		                                                     std::uint16_t ddi);
+
+		/// @brief Sets the default rate field of the product control information based on the supplied object
+		/// if the DDI is known to be a default rate DDI.
+		/// @param[in,out] productControlInformation The product control information to update.
+		/// @param[in] object The object to use to update the product control information.
+		/// @param[in] ddi The DDI to check against.
+		static void set_product_control_information_default_rate(ProductControlInformation &productControlInformation,
+		                                                         const std::shared_ptr<task_controller_object::Object> &object,
+		                                                         std::uint16_t ddi);
+
+		/// @brief Sets the setpoint rate field of the product control information based on the supplied object
+		/// if the DDI is known to be a setpoint rate DDI.
+		/// @param[in,out] productControlInformation The product control information to update.
+		/// @param[in] object The object to use to update the product control information.
+		/// @param[in] ddi The DDI to check against.
+		static void set_product_control_information_setpoint_rate(ProductControlInformation &productControlInformation,
+		                                                          const std::shared_ptr<task_controller_object::Object> &object,
+		                                                          std::uint16_t ddi);
+
+		/// @brief Sets the actual rate field of the product control information based on the supplied object
+		/// if the DDI is known to be a actual rate DDI.
+		/// @param[in,out] productControlInformation The product control information to update.
+		/// @param[in] object The object to use to update the product control information.
+		/// @param[in] ddi The DDI to check against.
+		static void set_product_control_information_actual_rate(ProductControlInformation &productControlInformation,
+		                                                        const std::shared_ptr<task_controller_object::Object> &object,
+		                                                        std::uint16_t ddi);
 	};
 } // namespace isobus
 

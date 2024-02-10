@@ -1186,11 +1186,16 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SeederExample)
 
 	ASSERT_EQ(1, implement.booms.size());
 	ASSERT_EQ(16, implement.booms.at(0).sections.size());
+	ASSERT_EQ(1, implement.booms.at(0).rates.size());
 	EXPECT_TRUE(implement.booms.at(0).subBooms.empty());
 
 	EXPECT_TRUE(implement.booms.at(0).xOffset_mm);
 	EXPECT_TRUE(implement.booms.at(0).yOffset_mm);
 	EXPECT_TRUE(implement.booms.at(0).zOffset_mm);
+
+	EXPECT_EQ(1, implement.booms.at(0).rates.at(0).rateSetpoint.dataDictionaryIdentifier); // Setpoint Application Rate specified as volume per area
+	EXPECT_EQ(2, implement.booms.at(0).rates.at(0).rateActual.dataDictionaryIdentifier); // Actual Application Rate specified as volume per area
+	EXPECT_TRUE(implement.booms.at(0).rates.at(0).rateSetpoint.editable());
 
 	for (std::size_t i = 0; i < 16; i++)
 	{
@@ -1215,6 +1220,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
 	ddop.add_device_element("SubBoom2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 3);
 	ddop.add_device_element("Section1", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
 	ddop.add_device_element("Section2", 0, 3, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
+	ddop.add_device_element("SubBoomProduct", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Bin, 40);
 	ddop.add_device_property("Xoffset", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 6);
 	ddop.add_device_property("yoffset", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetY), 0xFFFF, 7);
 	ddop.add_device_property("zoffset", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 8);
@@ -1223,10 +1229,12 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
 	ddop.add_device_property("SBzoffset", 7000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 12);
 	ddop.add_device_process_data("SBxoffset", static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 0, 0, 13);
 	ddop.add_device_process_data("secTestDPD", static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 0, 0, 14);
+	ddop.add_device_process_data("SBRate", static_cast<std::uint16_t>(DataDescriptionIndex::ActualApplicationRateOfPhosphor), 0xFFFF, 0, 0, 41);
 
 	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
 	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(5));
 	auto subBoom1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	auto bin1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(40));
 	ASSERT_NE(nullptr, section1);
 	ASSERT_NE(nullptr, section2);
 
@@ -1240,6 +1248,8 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
 	section2->add_reference_to_child_object(10);
 	subBoom1->add_reference_to_child_object(12);
 	subBoom1->add_reference_to_child_object(13);
+	subBoom1->add_reference_to_child_object(40);
+	bin1->add_reference_to_child_object(41);
 
 	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
 
@@ -1248,12 +1258,13 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
 	ASSERT_EQ(2, implement.booms.at(0).subBooms.size());
 	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(0).sections.size());
 	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(1).sections.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(0).rates.size());
 
 	EXPECT_FALSE(implement.booms.at(0).xOffset_mm);
 	EXPECT_FALSE(implement.booms.at(0).yOffset_mm);
 	EXPECT_FALSE(implement.booms.at(0).zOffset_mm);
 	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).xOffset_mm);
-	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).xOffset_mm.editable());
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).xOffset_mm.editable()); // Settable bit is unset
 	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).yOffset_mm);
 	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).yOffset_mm.editable());
 	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).zOffset_mm);
@@ -1265,7 +1276,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
 	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).zOffset_mm);
 	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).width_mm);
 	EXPECT_FALSE(implement.booms.at(0).subBooms.at(1).sections.at(0).xOffset_mm);
-	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).xOffset_mm.editable());
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(1).sections.at(0).xOffset_mm.editable()); // Settable bit is unset
 	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).yOffset_mm);
 	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).sections.at(0).zOffset_mm);
 
@@ -1294,16 +1305,23 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
 	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
 	ddop.add_device_element("Section1", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
 	ddop.add_device_element("Section2", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
+	ddop.add_device_element("Product", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Bin, 45);
 	ddop.add_device_property("Xoffset", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 6);
 	ddop.add_device_property("yoffset", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetY), 0xFFFF, 7);
 	ddop.add_device_property("zoffset", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 8);
 	ddop.add_device_property("width1", 5000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 9);
 	ddop.add_device_property("width2", 6000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 10);
+	ddop.add_device_property("Rate Setpoint", 7000, static_cast<std::uint16_t>(DataDescriptionIndex::SetpointMassPerAreaApplicationRate), 0xFFFF, 46);
+	ddop.add_device_property("Rate Default", 8000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultMassPerAreaApplicationRate), 0xFFFF, 47);
+	ddop.add_device_property("Rate Max", 9000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumVolumePerMassApplicationRate), 0xFFFF, 48);
+	ddop.add_device_property("Rate Min", 0, static_cast<std::uint16_t>(DataDescriptionIndex::MinimumVolumePerMassApplicationRate), 0xFFFF, 49);
 
 	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
 	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(5));
+	auto product = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(45));
 	ASSERT_NE(nullptr, section1);
 	ASSERT_NE(nullptr, section2);
+	ASSERT_NE(nullptr, product);
 
 	section1->add_reference_to_child_object(6);
 	section1->add_reference_to_child_object(7);
@@ -1313,12 +1331,24 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
 	section2->add_reference_to_child_object(7);
 	section2->add_reference_to_child_object(8);
 	section2->add_reference_to_child_object(10);
+	product->add_reference_to_child_object(46);
+	product->add_reference_to_child_object(47);
+	product->add_reference_to_child_object(48);
+	product->add_reference_to_child_object(49);
 
 	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
 
 	ASSERT_EQ(1, implement.booms.size());
 	ASSERT_EQ(2, implement.booms.at(0).sections.size());
 	ASSERT_EQ(0, implement.booms.at(0).subBooms.size());
+	ASSERT_EQ(1, implement.booms.at(0).rates.size());
+
+	EXPECT_EQ(7000, implement.booms.at(0).rates.at(0).rateSetpoint.get());
+	EXPECT_EQ(8000, implement.booms.at(0).rates.at(0).rateDefault.get());
+	EXPECT_EQ(6, implement.booms.at(0).rates.at(0).rateSetpoint.dataDictionaryIdentifier);
+	EXPECT_EQ(8, implement.booms.at(0).rates.at(0).rateDefault.dataDictionaryIdentifier);
+	EXPECT_FALSE(implement.booms.at(0).rates.at(0).rateSetpoint.editable());
+	EXPECT_FALSE(implement.booms.at(0).rates.at(0).rateDefault.editable());
 
 	EXPECT_FALSE(implement.booms.at(0).xOffset_mm);
 	EXPECT_FALSE(implement.booms.at(0).yOffset_mm);
