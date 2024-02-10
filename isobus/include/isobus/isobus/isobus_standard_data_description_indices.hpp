@@ -541,7 +541,8 @@ namespace isobus
 		ActualCoolingFluidTemperature = 0x020E, ///< The actual temperature of the cooling fluid for the machine.
 		LastBaleCapacity = 0x0210, ///< The capacity of the bale that leaves the machine.
 		PGNBasedData = 0xDFFE, ///< This DDI is used in the XML files to identify PGN based data.
-		RequestDefaultProcessData = 0xDFFF ///< Request Default Process Data. This DDE is the highest ISO assigned entity.  The range above this number is reserved for manufacture specific DDE's.
+		RequestDefaultProcessData = 0xDFFF, ///< Request Default Process Data. This DDE is the highest ISO assigned entity.  The range above this number is reserved for manufacture specific DDE's.
+		Reserved = 0xFFFF
 	};
 }
 
