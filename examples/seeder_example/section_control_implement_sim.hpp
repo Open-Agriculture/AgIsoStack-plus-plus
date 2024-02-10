@@ -106,29 +106,20 @@ public:
 	};
 
 	/// @brief Constructor for the simulator
-	SectionControlImplementSimulator() = default;
-
-	/// @brief Sets the number of section states to track
 	/// @param[in] value The number of sections to track for section control
-	void set_number_of_sections(std::uint8_t value);
+	explicit SectionControlImplementSimulator(std::uint8_t value);
 
 	/// @brief Returns the number of sections that the sim is configured for
 	/// @returns The number of sections the sim is configured for
 	std::uint8_t get_number_of_sections() const;
 
-	/// @brief Sets the current section state by index
-	/// @param[in] index The index of the section state to set
-	/// @param[in] value The new state for the section
-	void set_section_state(std::uint8_t index, bool value);
-
 	/// @brief Returns the current section state by index
 	/// @param[in] index The index of the section to get the state for
-	bool get_section_state(std::uint8_t index) const;
+	bool get_section_actual_state(std::uint8_t index) const;
 
-	/// @brief Sets the current commanded section state by index
-	/// @param[in] index The index of the section state to set
-	/// @param[in] value The new state for the section
-	void set_section_setpoint_state(std::uint8_t index, bool value);
+	/// @brief Returns the number of sections that are currently on
+	/// @returns The number of sections that are currently on
+	std::uint8_t get_actual_number_of_sections_on() const;
 
 	/// @brief Returns the current section setpoint state by index
 	/// @param[in] index The index of the section to get the setpoint state for
@@ -137,30 +128,22 @@ public:
 	/// @brief Sets the current section's switch state by index
 	/// @param[in] index The index of the switch to set
 	/// @param[in] value The new state for the switch
-	void set_switch_state(std::uint8_t index, bool value);
+	void set_section_switch_state(std::uint8_t index, bool value);
 
 	/// @brief Returns the current section's switch state by index
 	/// @param[in] index The index of the switch to get the state for
-	bool get_switch_state(std::uint8_t index) const;
+	bool get_section_switch_state(std::uint8_t index) const;
 
-	/// @brief Returns the target rate as the actual rate
-	/// @returns The "actual" rate which is just the target rate
+	/// @brief Returns the actual prescription rate currently being applied
+	/// @returns The actual rate in seeds per hectare
 	std::uint32_t get_actual_rate() const;
 
-	/// @brief Sets the target rate
-	/// @param[in] value The rate to set
-	void set_target_rate(std::uint32_t value);
-
-	/// @brief Returns the current target rate
+	/// @brief Returns the target prescription rate to be applied
 	/// @returns Current target rate in seeds per hectare
 	std::uint32_t get_target_rate() const;
 
-	/// @brief Returns the actual work state of the device
-	bool get_actual_work_state() const;
-
-	/// @brief Sets the target work state for the device
-	/// @param[in] value The new works state to set
-	void set_target_work_state(bool value);
+	/// @brief Returns the work state desired
+	bool get_setpoint_work_state() const;
 
 	/// @brief Sets the current auto/manual control mode
 	/// @param[in] isAuto Pass in true for auto mode, false for manual mode
@@ -209,11 +192,10 @@ private:
 	static constexpr std::uint8_t NUMBER_SECTIONS_PER_CONDENSED_MESSAGE = 16; ///< Number of section states in a condensed working state message
 	static constexpr std::int32_t BOOM_WIDTH = 9144; // 30ft expressed in mm
 
-	std::vector<bool> sectionStates; ///< Stores the actual section states as a set of boolean values
-	std::vector<bool> sectionSetpoints; ///< Stores the commanded section states as a set of boolean values
-	std::vector<bool> switchStates; ///< Stores the UT section switch states as a set of boolean values
+	std::vector<bool> sectionSetpointStates; ///< Stores the on/off state desired for each section (left to right)
+	std::vector<bool> sectionSwitchStates; ///< Stores the UT section switches (false = disabled, true = enabled) (left to right)
 	std::uint32_t targetRate = 12000; ///< The target rate, default of 12k seeds per hectare
-	bool setpointWorkState = true; ///< The overall work state
+	bool setpointWorkState = true; ///< The overall work state desired
 	bool isAutoMode = true; ///< Stores auto vs manual mode setting
 };
 
