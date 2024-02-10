@@ -6,78 +6,63 @@
 
 #include <cassert>
 
-void SectionControlImplementSimulator::set_number_of_sections(std::uint8_t value)
+SectionControlImplementSimulator::SectionControlImplementSimulator(std::uint8_t value) :
+  sectionSetpointStates(value, false),
+  sectionSwitchStates(value, false)
 {
-	sectionStates.resize(value);
-	sectionSetpoints.resize(value);
-	switchStates.resize(value);
 }
 
 std::uint8_t SectionControlImplementSimulator::get_number_of_sections() const
 {
-	return static_cast<std::uint8_t>(sectionStates.size());
+	assert(sectionSwitchStates.size() == sectionSetpointStates.size());
+	return static_cast<std::uint8_t>(sectionSwitchStates.size());
 }
 
-void SectionControlImplementSimulator::set_section_state(std::uint8_t index, bool value)
+bool SectionControlImplementSimulator::get_section_actual_state(std::uint8_t index) const
 {
-	if (index < sectionStates.size())
+	// We currently are just simulating here. In a real implement, you would want to read the actual state from the implement.
+	if (isAutoMode)
 	{
-		sectionStates.at(index) = value;
+		return sectionSetpointStates.at(index);
+	}
+	else
+	{
+		return sectionSwitchStates.at(index);
 	}
 }
 
-bool SectionControlImplementSimulator::get_section_state(std::uint8_t index) const
+std::uint8_t SectionControlImplementSimulator::get_actual_number_of_sections_on() const
 {
-	assert(index < sectionStates.size());
-	return sectionStates.at(index);
-}
-
-void SectionControlImplementSimulator::set_section_setpoint_state(std::uint8_t index, bool value)
-{
-	if (index < sectionSetpoints.size())
+	std::uint8_t retVal = 0;
+	for (std::uint8_t i = 0; i < get_number_of_sections(); i++)
 	{
-		sectionSetpoints.at(index) = value;
+		if (true == get_section_actual_state(i))
+		{
+			retVal++;
+		}
 	}
+	return retVal;
 }
 
 bool SectionControlImplementSimulator::get_section_setpoint_state(std::uint8_t index) const
 {
-	assert(index < sectionSetpoints.size());
-	return sectionSetpoints.at(index);
+	return sectionSetpointStates.at(index);
 }
 
-void SectionControlImplementSimulator::set_switch_state(std::uint8_t index, bool value)
+void SectionControlImplementSimulator::set_section_switch_state(std::uint8_t index, bool value)
 {
-	if ((index < switchStates.size()) && (switchStates.at(index) != value))
-	{
-		switchStates.at(index) = value;
-	}
+	sectionSwitchStates.at(index) = value;
 }
 
-bool SectionControlImplementSimulator::get_switch_state(std::uint8_t index) const
+bool SectionControlImplementSimulator::get_section_switch_state(std::uint8_t index) const
 {
-	assert(index < switchStates.size());
-	return switchStates.at(index);
+	return sectionSwitchStates.at(index);
 }
 
 std::uint32_t SectionControlImplementSimulator::get_actual_rate() const
 {
-	bool anySectionOn = false;
-
-	for (std::uint8_t i = 0; i < get_number_of_sections(); i++)
-	{
-		if (true == get_section_state(i))
-		{
-			anySectionOn = true;
-			break;
-		}
-	}
+	bool anySectionOn = get_actual_number_of_sections_on() > 0;
 	return targetRate * (anySectionOn ? 1 : 0);
-}
-
-void SectionControlImplementSimulator::set_target_rate(std::uint32_t value)
-{
-	targetRate = value;
 }
 
 std::uint32_t SectionControlImplementSimulator::get_target_rate() const
@@ -85,14 +70,9 @@ std::uint32_t SectionControlImplementSimulator::get_target_rate() const
 	return targetRate;
 }
 
-bool SectionControlImplementSimulator::get_actual_work_state() const
+bool SectionControlImplementSimulator::get_setpoint_work_state() const
 {
 	return setpointWorkState;
-}
-
-void SectionControlImplementSimulator::set_target_work_state(bool value)
-{
-	setpointWorkState = value;
 }
 
 void SectionControlImplementSimulator::set_is_mode_auto(bool isAuto)
@@ -130,8 +110,8 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	// Set up device and device element
 	retVal &= poolToPopulate->add_device("Isobus Seeder", "1.0.0", "123", "IS1.1", localizationData, std::vector<std::uint8_t>(), clientName.get_full_name());
 	retVal &= poolToPopulate->add_device_element("Seeder", elementCounter, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement));
-	retVal &= poolToPopulate->add_device_process_data("Actual Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
-	retVal &= poolToPopulate->add_device_process_data("Request Default PD", static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData), isobus::task_controller_object::Object::NULL_OBJECT_ID, 0, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData));
+	retVal &= poolToPopulate->add_device_process_data("Actual Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkState), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
+	retVal &= poolToPopulate->add_device_process_data("Request Default PD", static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData), isobus::NULL_OBJECT_ID, 0, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData));
 	retVal &= poolToPopulate->add_device_process_data("Total Time", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::EffectiveTotalTime), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::TimePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceTotalTime));
 	elementCounter++; // Increment element number. Needs to be unique for each element.
 
@@ -139,7 +119,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	retVal &= poolToPopulate->add_device_element("Connector", elementCounter, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement), isobus::task_controller_object::DeviceElementObject::Type::Connector, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Connector));
 	retVal &= poolToPopulate->add_device_process_data("Connector X", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetX), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ConnectorXOffset));
 	retVal &= poolToPopulate->add_device_process_data("Connector Y", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ConnectorYOffset));
-	retVal &= poolToPopulate->add_device_property("Type", 9, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ConnectorType), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ConnectorType));
+	retVal &= poolToPopulate->add_device_property("Type", 9, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ConnectorType), isobus::NULL_OBJECT_ID, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ConnectorType));
 	elementCounter++; // Increment element number. Needs to be unique for each element.
 
 	// Set up Boom element
@@ -148,9 +128,9 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	retVal &= poolToPopulate->add_device_property("Offset Y", 0, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BoomYOffset));
 	retVal &= poolToPopulate->add_device_property("Offset Z", 0, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetZ), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ShortWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BoomZOffset));
 	retVal &= poolToPopulate->add_device_process_data("Actual Working Width", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualWorkingWidth));
-	retVal &= poolToPopulate->add_device_process_data("Setpoint Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointWorkState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointWorkState));
+	retVal &= poolToPopulate->add_device_process_data("Setpoint Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointWorkState), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointWorkState));
 	retVal &= poolToPopulate->add_device_process_data("Area Total", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::TotalArea), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::AreaPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::AreaTotal));
-	retVal &= poolToPopulate->add_device_process_data("Section Control State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SectionControlState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SectionControlState));
+	retVal &= poolToPopulate->add_device_process_data("Section Control State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SectionControlState), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SectionControlState));
 	elementCounter++; // Increment element number. Needs to be unique for each element.
 
 	// Set up bin/tank element
@@ -158,10 +138,10 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	retVal &= poolToPopulate->add_device_process_data("Bin Capacity", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::MaximumCountContent), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::CountPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BinCapacity));
 	retVal &= poolToPopulate->add_device_process_data("Bin Level", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCountContent), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::CountPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BinLevel));
 	retVal &= poolToPopulate->add_device_process_data("Lifetime Total Count", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::LifetimeApplicationTotalCount), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::CountPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LifetimeApplicationCountTotal));
-	retVal &= poolToPopulate->add_device_process_data("Rx Control State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::PrescriptionControlState), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::PrescriptionControlState));
+	retVal &= poolToPopulate->add_device_process_data("Rx Control State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::PrescriptionControlState), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::PrescriptionControlState));
 	retVal &= poolToPopulate->add_device_process_data("Target Rate", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCountPerAreaApplicationRate), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::CountPerAreaPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::TargetRate));
 	retVal &= poolToPopulate->add_device_process_data("Actual Rate", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCountPerAreaApplicationRate), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::CountPerAreaPresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::TimeInterval), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualRate));
-	retVal &= poolToPopulate->add_device_property("Operation Type", 2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCulturalPractice), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCulturalPractice));
+	retVal &= poolToPopulate->add_device_property("Operation Type", 2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCulturalPractice), isobus::NULL_OBJECT_ID, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCulturalPractice));
 	elementCounter++; // Increment element number. Needs to be unique for each element.
 
 	// Set up sections for section control
@@ -169,7 +149,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	for (std::uint_fast8_t i = 0; i < get_number_of_sections(); i++)
 	{
 		std::int32_t individualSectionWidth = BOOM_WIDTH / get_number_of_sections();
-		retVal &= poolToPopulate->add_device_element("Section " + isobus::to_string(static_cast<int>(i)), elementCounter, 9, isobus::task_controller_object::DeviceElementObject::Type::Section, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
+		retVal &= poolToPopulate->add_device_element("Section " + isobus::to_string(static_cast<int>(i)), elementCounter, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainBoom), isobus::task_controller_object::DeviceElementObject::Type::Section, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1) + i);
 		retVal &= poolToPopulate->add_device_property("Offset X", -20, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetX), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1XOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Offset Y", ((-BOOM_WIDTH) / 2) + (i * SECTION_WIDTH) + (SECTION_WIDTH / 2), static_cast<std::uint16_t>(isobus::DataDescriptionIndex::DeviceElementOffsetY), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1YOffset) + i);
 		retVal &= poolToPopulate->add_device_property("Width", individualSectionWidth, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::LongWidthPresentation), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Section1Width) + i);
@@ -183,8 +163,8 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	std::uint16_t sectionCounter = 0;
 	while (sectionCounter < get_number_of_sections())
 	{
-		retVal &= poolToPopulate->add_device_process_data("Actual Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
-		retVal &= poolToPopulate->add_device_process_data("Setpoint Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE), isobus::task_controller_object::Object::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
+		retVal &= poolToPopulate->add_device_process_data("Actual Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
+		retVal &= poolToPopulate->add_device_process_data("Setpoint Work State 1-16", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointCondensedWorkingState1To16) + (sectionCounter / NUMBER_SECTIONS_PER_CONDENSED_MESSAGE));
 		sectionCounter += NUMBER_SECTIONS_PER_CONDENSED_MESSAGE;
 	}
 
@@ -287,16 +267,15 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState225_240):
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState241_256):
 			{
-				std::uint8_t sectionIndexOffset = NUMBER_SECTIONS_PER_CONDENSED_MESSAGE * (DDI - static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
+				std::uint8_t sectionIndexOffset = NUMBER_SECTIONS_PER_CONDENSED_MESSAGE * static_cast<std::uint8_t>(DDI - static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16));
 				value = 0;
 
 				for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS_PER_CONDENSED_MESSAGE; i++)
 				{
 					if ((i + sectionIndexOffset) < sim->get_number_of_sections())
 					{
-						bool sectionState = sim->get_section_state(i + sectionIndexOffset);
-						bool switchState = sim->get_switch_state(i + sectionIndexOffset);
-						value |= static_cast<std::uint8_t>(sectionState && switchState) << (2 * i);
+						bool sectionState = sim->get_section_actual_state(i + sectionIndexOffset);
+						value |= static_cast<std::uint8_t>(sectionState) << (2 * i);
 					}
 					else
 					{
@@ -314,7 +293,7 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkState):
 			{
-				value = sim->get_actual_work_state();
+				value = sim->get_actual_number_of_sections_on() > 0 ? 1 : 0;
 			}
 			break;
 
@@ -349,14 +328,15 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState225_240):
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState241_256):
 			{
-				std::uint8_t sectionIndexOffset = NUMBER_SECTIONS_PER_CONDENSED_MESSAGE * (DDI - static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16));
-				value = 0;
+				auto sectionIndexOffset = static_cast<std::uint8_t>(NUMBER_SECTIONS_PER_CONDENSED_MESSAGE * (DDI - static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16)));
 
+				value = 0;
 				for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS_PER_CONDENSED_MESSAGE; i++)
 				{
 					if ((i + sectionIndexOffset) < sim->get_number_of_sections())
 					{
-						value |= sim->get_section_setpoint_state(i + sectionIndexOffset) << (2 * i);
+						std::uint8_t sectionState = sim->get_section_setpoint_state(i + sectionIndexOffset);
+						value |= sectionState << (2 * i);
 					}
 					else
 					{
@@ -416,28 +396,35 @@ bool SectionControlImplementSimulator::value_command_callback(std::uint16_t,
 
 				for (std::uint_fast8_t i = 0; i < NUMBER_SECTIONS_PER_CONDENSED_MESSAGE; i++)
 				{
-					sim->set_section_state(sectionIndexOffset + i, (0x01 == (processVariableValue >> (2 * i) & 0x03)));
-					sim->set_section_setpoint_state(sectionIndexOffset + i, (0x01 == (processVariableValue >> (2 * i) & 0x03)));
+					if ((i + sectionIndexOffset) < sim->get_number_of_sections())
+					{
+						bool sectionState = (0x01 == (processVariableValue >> (2 * i) & 0x03));
+						sim->sectionSetpointStates.at(sectionIndexOffset + i) = sectionState;
+					}
+					else
+					{
+						break;
+					}
 				}
 			}
 			break;
 
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCountPerAreaApplicationRate):
 			{
-				sim->set_target_rate(processVariableValue);
+				sim->targetRate = processVariableValue;
 			}
 			break;
 
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointWorkState):
 			{
-				sim->set_target_work_state(processVariableValue);
+				sim->setpointWorkState = (0x01 == processVariableValue);
 			}
 			break;
 
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::PrescriptionControlState):
 			case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SectionControlState):
 			{
-				// Technically the TC can set this, but we're just managing it with our auto state
+				sim->set_is_mode_auto(processVariableValue);
 			}
 			break;
 
