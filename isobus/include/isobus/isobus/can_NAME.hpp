@@ -37,6 +37,21 @@ namespace isobus
 			ArbitraryAddressCapable ///< Defines if this ECU supports address arbitration
 		};
 
+		/// @brief The industry group is part of the ISO NAME.
+		/// It allocates devices and their functions by a specific industry.
+		/// Function codes' meanings are defined in relation to industry group and device class.
+		enum class IndustryGroup : std::uint8_t
+		{
+			Global = 0, ///< Global applies to all industries
+			OnHighwayEquipment = 1,
+			AgriculturalAndForestryEquipment = 2,
+			ConstructionEquipment = 3,
+			Marine = 4,
+			IndustrialOrProcessControl = 5,
+			Reserved1 = 6, ///< Reserved for future assignment by SAE. Should not be used.
+			Reserved2 = 7 ///< Reserved for future assignment by SAE. Should not be used.
+		};
+
 		/// @brief See ISO11783-1 and www.isobus.net For complete descriptions of the ISO NAME function codes
 		/// @note Functions are defined in relation to industry group and device class. See www.isobus.net for more info.
 		enum class Function : std::uint8_t
@@ -339,6 +354,72 @@ namespace isobus
 			WellStimulationPump = 132, ///< Device which communicates operating parameters of a well stimulation pump used in oil and gas drilling applications.
 
 			MaxFunctionCode = 255 ///< Max allocated function code
+		};
+
+		/// @brief The device class is part of the ISO NAME and is known in J1939 as the "vehicle system".
+		/// This is a 7-bit field defined and assigned by SAE.
+		/// Device class provides a common name for a group of functions
+		/// within a connected network.
+		enum class DeviceClass
+		{
+			NonSpecific = 0,
+			Tractor = 1, ///< Industry Group 1 and 2
+			SkidSteerLoader = 1, ///< Industry Group 3
+			Trailer = 2, ///< Industry group 1 and 2
+			ArticulatedDumpTruck = 2, ///< Industry group 3
+			SecondaryTillage = 3, ///< Industry group 2
+			Backhoe = 3, ///< Industry group 3
+			PlanterSeeder = 4, ///< Industry group 2
+			Crawler = 4, ///< Industry group 3
+			Fertilizer = 5, ///< Industry group 2
+			Excavator = 5, ///< Industry group 3
+			Sprayer = 6, ///< Industry group 2
+			Forklift = 6, ///< Industry group 3
+			Harvester = 7, ///< Industry group 2
+			FourWheelDriveLoader = 7, ///< Industry group 3
+			RootHarvester = 8, ///< Industry group 2
+			Grader = 8, ///< Industry group 3
+			Forage = 9, ///< Industry group 2
+			MillingMachine = 9, ///< Industry group 3
+			Irrigation = 10, ///< Industry group 2
+			RecyclerAndSoilStabilizer = 10, ///< Industry group 3
+			SystemTools = 10, ///< Industry group 4
+			TransportTrailer = 11, ///< Industry group 2
+			BindingAgentSpreader = 11, ///< Industry group 3
+			FarmYardOperations = 12, ///< Industry group 2
+			Paver = 12, ///< Industry group 3
+			PoweredAuxiliaryDevices = 13, ///< Industry group 2
+			Feeder = 13, ///< Industry group 3
+			SpecialCrops = 14, ///< Industry group 2
+			ScreeningPlant = 14, ///< Industry group 3
+			Earthwork = 15, ///< Industry group 2
+			Stacker = 15, ///< Industry group 3
+			Skidder = 16, ///< Industry group 2
+			Roller = 16, ///< Industry group 3
+			SensorSystems = 17, ///< Industry group 2
+			Crusher = 17, ///< Industry group 3
+			TimberHarvester = 19, ///< Industry group 2
+			Forwarder = 20, ///< Industry group 2
+			SafetySystems = 20, ///< Industry group 4
+			TimberLoader = 21, ///< Industry group 2
+			TimberProcessor = 22, ///< Industry group 2
+			Mulcher = 23, ///< Industry group 2
+			UtilityVehicle = 24, ///< Industry group 2
+			SlurryManureApplicator = 25, ///< Industry group 2
+			Gateway = 25, ///< Industry group 4
+			FeederMixer = 26, ///< Industry group 2
+			WeederNonChemical = 27, ///< Industry group 2
+			TurfOrLawnCareMower = 28, ///< Industry group 2
+			ProductMaterialHandling = 29, ///< Industry group 2
+			PowerManagementAndLightingSystem = 30, ///< Industry group 4
+			SteeringSystems = 40, ///< Industry group 4
+			PropulsionSystems = 50, ///< Industry group 4
+			NavigationSystems = 60, ///< Industry group 4
+			CommunicationsSystems = 70, ///< Industry group 4
+			InstrumentationOrGeneral = 80, ///< Industry group 4
+			EnvironmentalHVACSystem = 90, ///< Industry group 4
+			DeckCargoOrFishingEquipment = 100, ///< Industry group 4
+			NotAvailable = 127 //< Applicable to all IGs
 		};
 
 		/// @brief A useful way to compare session objects to each other for equality
