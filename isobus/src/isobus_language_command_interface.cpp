@@ -102,12 +102,12 @@ namespace isobus
 	{
 		if (languageCode.size() < 2)
 		{
-			CANStackLogger::warn("[VT/TC]: Language command interface is being used without a valid language code! Setting \"en\" as default. You should really set this in your app.");
+			LOG_WARNING("[VT/TC]: Language command interface is being used without a valid language code! Setting \"en\" as default. You should really set this in your app.");
 			languageCode = "en";
 		}
 		if (countryCode.size() < 2)
 		{
-			CANStackLogger::warn("[VT/TC]: Language command interface is being used without a valid country code! Setting \"XX\" as default. You should really set this in your app.");
+			LOG_WARNING("[VT/TC]: Language command interface is being used without a valid country code! Setting \"XX\" as default. You should really set this in your app.");
 			countryCode = "XX";
 		}
 
