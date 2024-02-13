@@ -70,18 +70,14 @@ namespace isobus
 
 	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
 		anyControlFunctionParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, nullptr);
 	}
 
 	void CANNetworkManager::remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, nullptr);
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
 		auto callbackLocation = std::find(anyControlFunctionParameterGroupNumberCallbacks.begin(), anyControlFunctionParameterGroupNumberCallbacks.end(), tempObject);
 		if (anyControlFunctionParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -108,9 +104,7 @@ namespace isobus
 
 	float CANNetworkManager::get_estimated_busload(std::uint8_t canChannel)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
-#endif
+		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		constexpr float ISOBUS_BAUD_RATE_BPS = 250000.0f;
 		float retVal = 0.0f;
 
@@ -225,9 +219,8 @@ namespace isobus
 
 	void CANNetworkManager::update()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(ControlFunction::controlFunctionProcessingMutex);
-#endif
+		auto &processingMutex = ControlFunction::controlFunctionProcessingMutex;
+		LOCK_GUARD(Mutex, processingMutex);
 
 		if (!initialized)
 		{
@@ -322,9 +315,7 @@ namespace isobus
 
 		if (initialized)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			std::lock_guard<std::mutex> lock(receivedMessageQueueMutex);
-#endif
+			LOCK_GUARD(Mutex, receivedMessageQueueMutex);
 			receivedMessageQueue.push(std::move(message));
 		}
 	}
@@ -417,9 +408,7 @@ namespace isobus
 	{
 		if (nullptr != callback)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-#endif
+			LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
 			controlFunctionStateCallbacks.emplace_back(callback);
 		}
 	}
@@ -428,9 +417,7 @@ namespace isobus
 	{
 		if (nullptr != callback)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-#endif
+			LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
 			ControlFunctionStateCallback targetCallback(callback);
 			auto callbackLocation = std::find(controlFunctionStateCallbacks.begin(), controlFunctionStateCallbacks.end(), targetCallback);
 
@@ -501,9 +488,7 @@ namespace isobus
 	{
 		bool retVal = false;
 		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer, nullptr);
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
 		if ((nullptr != callback) && (protocolPGNCallbacks.end() == find(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end(), callbackInfo)))
 		{
 			protocolPGNCallbacks.push_back(callbackInfo);
@@ -516,9 +501,7 @@ namespace isobus
 	{
 		bool retVal = false;
 		ParameterGroupNumberCallbackData callbackInfo(parameterGroupNumber, callback, parentPointer, nullptr);
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
 		if (nullptr != callback)
 		{
 			std::list<ParameterGroupNumberCallbackData>::iterator callbackLocation;
@@ -672,17 +655,13 @@ namespace isobus
 
 	void CANNetworkManager::update_busload(std::uint8_t channelIndex, std::uint32_t numberOfBitsProcessed)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(CANNetworkManager::CANNetwork.busloadUpdateMutex);
-#endif
+		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		currentBusloadBitAccumulator.at(channelIndex) += numberOfBitsProcessed;
 	}
 
 	void CANNetworkManager::update_busload_history()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(busloadUpdateMutex);
-#endif
+		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		if (SystemTiming::time_expired_ms(busloadUpdateTimestamp_ms, BUSLOAD_UPDATE_FREQUENCY_MS))
 		{
 			for (std::size_t i = 0; i < busloadMessageBitsHistory.size(); i++)
@@ -923,9 +902,7 @@ namespace isobus
 
 	CANMessage CANNetworkManager::get_next_can_message_from_rx_queue()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(receivedMessageQueueMutex);
-#endif
+		LOCK_GUARD(Mutex, receivedMessageQueueMutex);
 		if (!receivedMessageQueue.empty())
 		{
 			CANMessage retVal = std::move(receivedMessageQueue.front());
@@ -961,9 +938,7 @@ namespace isobus
 
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(anyControlFunctionCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
 		for (const auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
 		{
 			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
@@ -997,9 +972,7 @@ namespace isobus
 
 	void CANNetworkManager::process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(controlFunctionStatusCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
 		for (const auto &callback : controlFunctionStateCallbacks)
 		{
 			callback(controlFunction, state);
@@ -1008,9 +981,7 @@ namespace isobus
 
 	void CANNetworkManager::process_protocol_pgn_callbacks(const CANMessage &currentMessage)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(protocolPGNCallbacksMutex);
-#endif
+		LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
 		for (const auto &currentCallback : protocolPGNCallbacks)
 		{
 			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())

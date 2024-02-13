@@ -17,9 +17,7 @@
 
 namespace isobus
 {
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-	std::mutex ControlFunction::controlFunctionProcessingMutex;
-#endif
+	Mutex ControlFunction::controlFunctionProcessingMutex;
 
 	isobus::ControlFunction::ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type) :
 	  controlFunctionType(type),
@@ -39,9 +37,7 @@ namespace isobus
 
 	bool ControlFunction::destroy(std::uint32_t expectedRefCount)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(controlFunctionProcessingMutex);
-#endif
+		LOCK_GUARD(Mutex, controlFunctionProcessingMutex);
 
 		CANNetworkManager::CANNetwork.on_control_function_destroyed(shared_from_this(), {});
 

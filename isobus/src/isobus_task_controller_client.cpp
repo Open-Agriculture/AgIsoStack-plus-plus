@@ -19,7 +19,9 @@
 #include <array>
 #include <cassert>
 #include <cstring>
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include <thread>
+#endif
 
 namespace isobus
 {
@@ -71,9 +73,7 @@ namespace isobus
 
 	void TaskControllerClient::add_request_value_callback(RequestValueCommandCallback callback, void *parentPointer)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		RequestValueCommandCallbackInfo callbackData = { callback, parentPointer };
 		requestValueCallbacks.push_back(callbackData);
@@ -81,9 +81,7 @@ namespace isobus
 
 	void TaskControllerClient::add_value_command_callback(ValueCommandCallback callback, void *parentPointer)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		ValueCommandCallbackInfo callbackData = { callback, parentPointer };
 		valueCommandsCallbacks.push_back(callbackData);
@@ -91,9 +89,7 @@ namespace isobus
 
 	void TaskControllerClient::remove_request_value_callback(RequestValueCommandCallback callback, void *parentPointer)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		RequestValueCommandCallbackInfo callbackData = { callback, parentPointer };
 		auto callbackLocation = std::find(requestValueCallbacks.begin(), requestValueCallbacks.end(), callbackData);
@@ -106,9 +102,7 @@ namespace isobus
 
 	void TaskControllerClient::remove_value_command_callback(ValueCommandCallback callback, void *parentPointer)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		ValueCommandCallbackInfo callbackData = { callback, parentPointer };
 		auto callbackLocation = std::find(valueCommandsCallbacks.begin(), valueCommandsCallbacks.end(), callbackData);
@@ -234,9 +228,7 @@ namespace isobus
 	{
 		if (initialized)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+			LOCK_GUARD(Mutex, clientMutex);
 			set_state(StateMachineState::Disconnected);
 		}
 	}
@@ -333,9 +325,7 @@ namespace isobus
 	bool TaskControllerClient::reupload_device_descriptor_object_pool(std::shared_ptr<std::vector<std::uint8_t>> binaryDDOP)
 	{
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		if (StateMachineState::Connected == get_state())
 		{
@@ -360,9 +350,7 @@ namespace isobus
 	bool TaskControllerClient::reupload_device_descriptor_object_pool(std::uint8_t const *binaryDDOP, std::uint32_t DDOPSize)
 	{
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		if (StateMachineState::Connected == get_state())
 		{
@@ -387,9 +375,7 @@ namespace isobus
 	bool TaskControllerClient::reupload_device_descriptor_object_pool(std::shared_ptr<DeviceDescriptorObjectPool> DDOP)
 	{
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		if (StateMachineState::Connected == get_state())
 		{
@@ -1031,9 +1017,7 @@ namespace isobus
 
 	void TaskControllerClient::process_queued_commands()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 		bool transmitSuccessful = true;
 
 		while (!queuedValueRequests.empty() && transmitSuccessful)
@@ -1191,6 +1175,7 @@ namespace isobus
 		    (nullptr != message.get_source_control_function()))
 		{
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
+			auto &clientMutex = parentTC->clientMutex;
 			const auto &messageData = message.get_data();
 
 			switch (message.get_identifier().get_parameter_group_number())
@@ -1561,9 +1546,7 @@ namespace isobus
 						case ProcessDataCommands::RequestValue:
 						{
 							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							requestData.ackRequested = false;
 							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
@@ -1580,9 +1563,7 @@ namespace isobus
 						case ProcessDataCommands::Value:
 						{
 							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							requestData.ackRequested = false;
 							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
@@ -1599,9 +1580,7 @@ namespace isobus
 						case ProcessDataCommands::SetValueAndAcknowledge:
 						{
 							ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							requestData.ackRequested = true;
 							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
@@ -1618,9 +1597,7 @@ namespace isobus
 						case ProcessDataCommands::MeasurementTimeInterval:
 						{
 							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
@@ -1661,9 +1638,7 @@ namespace isobus
 						case ProcessDataCommands::MeasurementMaximumWithinThreshold:
 						{
 							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
@@ -1696,9 +1671,7 @@ namespace isobus
 						case ProcessDataCommands::MeasurementMinimumWithinThreshold:
 						{
 							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
@@ -1731,9 +1704,7 @@ namespace isobus
 						case ProcessDataCommands::MeasurementChangeThreshold:
 						{
 							ProcessDataCallbackInfo commandData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-							const std::lock_guard<std::mutex> lock(parentTC->clientMutex);
-#endif
+							LOCK_GUARD(Mutex, clientMutex);
 
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
@@ -2149,9 +2120,7 @@ namespace isobus
 	void TaskControllerClient::on_value_changed_trigger(std::uint16_t elementNumber, std::uint16_t DDI)
 	{
 		ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(clientMutex);
-#endif
+		LOCK_GUARD(Mutex, clientMutex);
 
 		requestData.ackRequested = false;
 		requestData.elementNumber = elementNumber;

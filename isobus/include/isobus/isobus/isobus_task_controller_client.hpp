@@ -16,7 +16,9 @@
 #include "isobus/utility/processing_flags.hpp"
 
 #include <list>
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include <thread>
+#endif
 
 namespace isobus
 {
@@ -625,8 +627,8 @@ namespace isobus
 		std::list<ProcessDataCallbackInfo> measurementMinimumThresholdCommands; ///< A list of measurement commands that will be processed when the value drops below a threshold
 		std::list<ProcessDataCallbackInfo> measurementMaximumThresholdCommands; ///< A list of measurement commands that will be processed when the value above a threshold
 		std::list<ProcessDataCallbackInfo> measurementOnChangeThresholdCommands; ///< A list of measurement commands that will be processed when the value changes by the specified amount
+		Mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 #endif
 		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback

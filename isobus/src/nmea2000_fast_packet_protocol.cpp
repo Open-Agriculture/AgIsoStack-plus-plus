@@ -124,9 +124,7 @@ namespace isobus
 				{
 					tempSession->packetCount++;
 				}
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-				std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
+				LOCK_GUARD(Mutex, sessionMutex);
 
 				activeSessions.push_back(tempSession);
 				retVal = true;
@@ -146,9 +144,7 @@ namespace isobus
 
 	void FastPacketProtocol::update(CANLibBadge<CANNetworkManager>)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
+		LOCK_GUARD(Mutex, sessionMutex);
 
 		for (auto i : activeSessions)
 		{
@@ -225,9 +221,7 @@ namespace isobus
 	bool FastPacketProtocol::get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		returnedSession = nullptr;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
+		LOCK_GUARD(Mutex, sessionMutex);
 
 		for (auto session : activeSessions)
 		{
@@ -359,9 +353,7 @@ namespace isobus
 								{
 									currentSession->sessionMessage.set_data(messageData[2 + i], i);
 								}
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-								std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
+								LOCK_GUARD(Mutex, sessionMutex);
 
 								activeSessions.push_back(currentSession);
 							}

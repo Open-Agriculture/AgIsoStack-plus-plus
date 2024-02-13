@@ -42,9 +42,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(functionality);
 
@@ -68,9 +66,7 @@ namespace isobus
 	bool ControlFunctionFunctionalities::get_functionality_is_supported(Functionalities functionality)
 	{
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(functionality);
 
@@ -96,9 +92,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_minimum_control_function_option_state(MinimumControlFunctionOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::MinimumControlFunction);
 
@@ -116,9 +110,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_aux_O_inputs_option_state(AuxOOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::AuxOInputs);
 
@@ -136,9 +128,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_aux_O_functions_option_state(AuxOOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::AuxOFunctions);
 
@@ -156,9 +146,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_aux_N_inputs_option_state(AuxNOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::AuxNInputs);
 
@@ -178,9 +166,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_aux_N_functions_option_state(AuxNOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::AuxNFunctions);
 
@@ -200,9 +186,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_task_controller_geo_server_option_state(TaskControllerGeoServerOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerGeoServer);
 
@@ -220,9 +204,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_task_controller_geo_client_option(std::uint8_t numberOfControlChannels)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerGeoClient);
 
@@ -235,9 +217,7 @@ namespace isobus
 
 	std::uint8_t ControlFunctionFunctionalities::get_task_controller_geo_client_option()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerGeoClient);
 		std::uint8_t retVal = 0;
 
@@ -250,9 +230,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_task_controller_section_control_server_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlServer);
 
@@ -267,9 +245,7 @@ namespace isobus
 
 	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_server_number_supported_booms()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlServer);
 		std::uint8_t retVal = 0;
 
@@ -282,9 +258,7 @@ namespace isobus
 
 	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_server_number_supported_sections()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlServer);
 		std::uint8_t retVal = 0;
 
@@ -297,9 +271,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_task_controller_section_control_client_option_state(std::uint8_t numberOfSupportedBooms, std::uint8_t numberOfSupportedSections)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlClient);
 
@@ -314,9 +286,7 @@ namespace isobus
 
 	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_client_number_supported_booms()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlClient);
 		std::uint8_t retVal = 0;
 
@@ -329,9 +299,7 @@ namespace isobus
 
 	std::uint8_t ControlFunctionFunctionalities::get_task_controller_section_control_client_number_supported_sections()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		auto existingFunctionality = get_functionality(Functionalities::TaskControllerSectionControlClient);
 		std::uint8_t retVal = 0;
 
@@ -344,9 +312,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::BasicTractorECUServer);
 
@@ -364,9 +330,7 @@ namespace isobus
 		// This one is handled differently to handle the 0 value
 		if (BasicTractorECUOptions::TECUNotMeetingCompleteClass1Requirements == option)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+			LOCK_GUARD(Mutex, functionalitiesMutex);
 			auto existingFunctionality = get_functionality(Functionalities::BasicTractorECUServer);
 
 			if (supportedFunctionalities.end() != existingFunctionality)
@@ -383,9 +347,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_implement_client_option_state(BasicTractorECUOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::BasicTractorECUImplementClient);
 
@@ -403,9 +365,7 @@ namespace isobus
 		// This one is handled differently to handle the 0 value
 		if (BasicTractorECUOptions::TECUNotMeetingCompleteClass1Requirements == option)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+			LOCK_GUARD(Mutex, functionalitiesMutex);
 			auto existingFunctionality = get_functionality(Functionalities::BasicTractorECUImplementClient);
 
 			if (supportedFunctionalities.end() != existingFunctionality)
@@ -422,9 +382,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_server_option_state(TractorImplementManagementOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
 
@@ -447,9 +405,7 @@ namespace isobus
 
 		if (TractorImplementManagementOptions::NoOptions == option)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+			LOCK_GUARD(Mutex, functionalitiesMutex);
 			auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
 
 			if (supportedFunctionalities.end() != existingFunctionality)
@@ -469,9 +425,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_server_aux_valve_option(std::uint8_t auxValveIndex, bool stateSupported, bool flowSupported)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
 
@@ -484,9 +438,7 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_tractor_implement_management_server_aux_valve_state_supported(std::uint8_t auxValveIndex)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		bool retVal = false;
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
@@ -500,9 +452,7 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_tractor_implement_management_server_aux_valve_flow_supported(std::uint8_t auxValveIndex)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		bool retVal = false;
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementServer);
@@ -516,9 +466,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_client_option_state(TractorImplementManagementOptions option, bool optionState)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
 
@@ -534,9 +482,7 @@ namespace isobus
 
 		if (TractorImplementManagementOptions::NoOptions == option)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+			LOCK_GUARD(Mutex, functionalitiesMutex);
 			auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
 
 			if (supportedFunctionalities.end() != existingFunctionality)
@@ -568,9 +514,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::set_tractor_implement_management_client_aux_valve_option(std::uint8_t auxValveIndex, bool stateSupported, bool flowSupported)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
 
 		if ((supportedFunctionalities.end() != existingFunctionality) && (auxValveIndex < NUMBER_TIM_AUX_VALVES))
@@ -582,9 +526,7 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_tractor_implement_management_client_aux_valve_state_supported(std::uint8_t auxValveIndex)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		bool retVal = false;
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
@@ -598,9 +540,7 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_tractor_implement_management_client_aux_valve_flow_supported(std::uint8_t auxValveIndex)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		bool retVal = false;
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
@@ -713,9 +653,7 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_functionality_byte_option(Functionalities functionality, std::uint8_t byteIndex, std::uint8_t option)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		bool retVal = false;
 
 		auto existingFunctionality = get_functionality(functionality);
@@ -729,9 +667,7 @@ namespace isobus
 
 	void ControlFunctionFunctionalities::get_message_content(std::vector<std::uint8_t> &messageData)
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(functionalitiesMutex);
-#endif
+		LOCK_GUARD(Mutex, functionalitiesMutex);
 		messageData.clear();
 		messageData.reserve(supportedFunctionalities.size() * 4); // Approximate, but pretty close unless you have TIM.
 		messageData.push_back(0xFF); // Each control function shall respond with byte 1 set to FF
