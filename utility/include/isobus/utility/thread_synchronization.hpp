@@ -9,8 +9,6 @@
 #ifndef THREAD_SYNCHRONIZATION_HPP
 #define THREAD_SYNCHRONIZATION_HPP
 
-#include "isobus/utility/event_dispatcher.hpp"
-
 #if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
 
 namespace isobus

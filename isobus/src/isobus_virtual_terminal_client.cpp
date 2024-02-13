@@ -4507,10 +4507,7 @@ namespace isobus
 		{
 			return true;
 		}
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(commandQueueMutex);
-#endif
+		LOCK_GUARD(Mutex, commandQueueMutex);
 		commandQueue.emplace_back(data);
 		return true;
 	}
@@ -4544,9 +4541,7 @@ namespace isobus
 		{
 			return;
 		}
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::lock_guard<std::mutex> lock(commandQueueMutex);
-#endif
+		LOCK_GUARD(Mutex, commandQueueMutex);
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
 			if (send_command(*it))

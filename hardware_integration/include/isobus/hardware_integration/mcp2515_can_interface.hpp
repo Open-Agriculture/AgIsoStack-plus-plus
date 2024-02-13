@@ -11,7 +11,6 @@
 
 #include <cstring>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
