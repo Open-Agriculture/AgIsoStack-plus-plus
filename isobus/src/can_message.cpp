@@ -326,4 +326,31 @@ namespace isobus
 		return (get_uint8_at(byteIndex) & mask) == mask;
 	}
 
+	std::uint64_t CANMessage::get_data_custom_length(const std::uint32_t startBitIndex, const std::uint32_t length, const isobus::CANMessage::ByteFormat format) const
+	{
+		std::uint64_t retVal = 0;
+		std::uint32_t endBitIndex = startBitIndex + length - 1;
+		std::uint32_t bitCounter = 0;
+
+		for (auto i = startBitIndex; i <= endBitIndex; i++)
+		{
+			auto byteIndex = i / 8;
+			auto bitIndexWithinByte = i % 8;
+			auto bit = (data[byteIndex] >> (7 - bitIndexWithinByte)) & 1;
+
+			if (ByteFormat::LittleEndian == format)
+			{
+				retVal |= (static_cast<uint64_t>(bit) << bitCounter);
+			}
+			else
+			{
+				retVal |= (static_cast<uint64_t>(bit) << ((length - 1) - bitCounter));
+			}
+
+			bitCounter++;
+		}
+
+		return retVal;
+	}
+
 } // namespace isobus
