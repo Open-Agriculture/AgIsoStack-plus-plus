@@ -68,8 +68,14 @@ bool Seeder::initialize()
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	const isobus::NAMEFilter filterTaskControllerInstance(isobus::NAME::NAMEParameters::FunctionInstance, 0);
+	const isobus::NAMEFilter filterTaskControllerIndustryGroup(isobus::NAME::NAMEParameters::IndustryGroup, static_cast<std::uint8_t>(isobus::NAME::IndustryGroup::AgriculturalAndForestryEquipment));
+	const isobus::NAMEFilter filterTaskControllerDeviceClass(isobus::NAME::NAMEParameters::DeviceClass, static_cast<std::uint8_t>(isobus::NAME::DeviceClass::NonSpecific));
+	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController,
+		                                                      filterTaskControllerInstance,
+		                                                      filterTaskControllerIndustryGroup,
+		                                                      filterTaskControllerDeviceClass };
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	const std::vector<isobus::NAMEFilter> tcNameFilters = { filterTaskController };
 	auto InternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
 	auto PartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 	auto PartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
