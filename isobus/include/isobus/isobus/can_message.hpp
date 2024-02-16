@@ -253,7 +253,7 @@ namespace isobus
 		/// @details This function will return 8 bytes at a specified index in the buffer but custom bit length
 		/// We are iterating by full bytes (assembling a full byte) and shifting it into the final 64-bit value to return
 		/// @param[in] index The index to get the 64-bit unsigned integer from
-		/// @param[in] length The length of bits to exctract from the buffer
+		/// @param[in] length The length of bits to extract from the buffer
 		/// @param[in] format The byte format to use when reading the integer
 		/// @return The 64-bit unsigned integer
 		std::uint64_t get_data_custom_length(const std::uint32_t startBitIndex, const std::uint32_t length, const ByteFormat format = ByteFormat::LittleEndian) const;

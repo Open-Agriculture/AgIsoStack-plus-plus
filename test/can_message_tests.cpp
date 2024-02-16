@@ -51,7 +51,8 @@ TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
 	CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xE100, callback, nullptr);
 
 	CANMessageFrame testFrame = {};
-	testFrame.identifier = 0x18EEFFAA; /// So it could be added to the ControlFunction list
+	// First we are sending with EE00 PGN so manager could add to its control function list
+	testFrame.identifier = 0x18EEFFAA;
 	testFrame.isExtendedFrame = true;
 	testFrame.dataLength = 8;
 	testFrame.data[0] = 0x01;
