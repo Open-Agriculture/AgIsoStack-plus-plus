@@ -59,7 +59,8 @@ Check out the :doc:`concepts section <../Concepts>`, if you need to brush up on 
 
 Let's create a `NAME <https://delgrossoengineering.com/isobus-docs/classisobus_1_1NAME.html>`_ in our program.
 
-NOTE: Everything that is part of the stack is in the namespace `"isobus" <https://delgrossoengineering.com/isobus-docs/namespaceisobus.html>`_!
+.. note::
+   Everything that is part of the stack is in the namespace `"isobus" <https://delgrossoengineering.com/isobus-docs/namespaceisobus.html>`_!
 
 .. code-block:: c++
 
@@ -148,7 +149,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     return 0;
    }
 
-In this example, I created my control function with a default address of 0x1C, and assigned it to CAN channel 0.
+In this example, I created my control function with a preferred address of 0x1C, and assigned it to CAN channel 0.
 
 Now, we've got a little problem... What is CAN channel 0?
 
@@ -444,7 +445,7 @@ Add the following to a new file called CMakeLists.txt:
    
    add_executable(isobus_hello_world main.cpp)
    
-   target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
+   target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 Save and close the file.
 
