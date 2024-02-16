@@ -248,7 +248,6 @@ namespace isobus
 		/// @return True if (all) the bit(s) are set, false otherwise
 		bool get_bool_at(const std::uint32_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1) const;
 
-
 		/// @brief Get a 64-bit unsinged integer from the buffer at a specific index but custom length
 		/// Why 64 bit? Because we do not know the length and it could be 10 bits or 54 so better to convert everything into 64 bit
 		/// @details This function will return 8 bytes at a specified index in the buffer but custom bit length
