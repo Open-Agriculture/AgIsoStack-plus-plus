@@ -3,12 +3,12 @@
 //
 
 #include <gtest/gtest.h>
-#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
-#include "isobus/hardware_integration/virtual_can_plugin.hpp"
-#include "isobus/hardware_integration/socket_can_interface.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 
 using namespace isobus;
 
@@ -24,31 +24,29 @@ TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
 	std::shared_ptr<InternalControlFunction> testEcu = InternalControlFunction::create(testName, 0x1C, 0);
 	std::shared_ptr<InternalControlFunction> testEcu2 = InternalControlFunction::create(testName, 0x1A, 0);
 	CANNetworkManager::CANNetwork.update();
-	CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xE100,
-	                                                                         [](const CANMessage& message, void* parent)
-	                                                                         {
-		                                                                         value16 = message.get_int16_at(0);
-		                                                                         EXPECT_EQ(value16, 513);
-		                                                                         value16 = message.get_int16_at(0, CANMessage::ByteFormat::BigEndian);
-		                                                                         EXPECT_EQ(value16, 258);
-		                                                                         value64 = message.get_int64_at(0);
-		                                                                         EXPECT_EQ(value64, 578437695752307201);
-		                                                                         value64 = message.get_int64_at(0, CANMessage::ByteFormat::BigEndian);
-		                                                                         EXPECT_EQ(value64, 72623859790382856);
-		                                                                         value64 = message.get_data_custom_length(8, 16);
-		                                                                         EXPECT_EQ(value64, 770);
-		                                                                         value64 = message.get_data_custom_length(8, 16, CANMessage::ByteFormat::BigEndian);
-		                                                                         EXPECT_EQ(value64, 515);
-		                                                                         value64 = message.get_data_custom_length(8, 15);
-		                                                                         EXPECT_EQ(value64, 258);
-		                                                                         value64 = message.get_data_custom_length(8, 15, CANMessage::ByteFormat::BigEndian);
-		                                                                         EXPECT_EQ(value64, 513);
-		                                                                         value64 = message.get_data_custom_length(14, 3);
-		                                                                         EXPECT_EQ(value64, 4);
-		                                                                         value64 = message.get_data_custom_length(14, 3, CANMessage::ByteFormat::BigEndian);
-		                                                                         EXPECT_EQ(value64, 4);
-
-	                                                                         }, nullptr);
+	CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xE100, [](const CANMessage &message, void *parent) {
+		value16 = message.get_int16_at(0);
+		EXPECT_EQ(value16, 513);
+		value16 = message.get_int16_at(0, CANMessage::ByteFormat::BigEndian);
+		EXPECT_EQ(value16, 258);
+		value64 = message.get_int64_at(0);
+		EXPECT_EQ(value64, 578437695752307201);
+		value64 = message.get_int64_at(0, CANMessage::ByteFormat::BigEndian);
+		EXPECT_EQ(value64, 72623859790382856);
+		value64 = message.get_data_custom_length(8, 16);
+		EXPECT_EQ(value64, 770);
+		value64 = message.get_data_custom_length(8, 16, CANMessage::ByteFormat::BigEndian);
+		EXPECT_EQ(value64, 515);
+		value64 = message.get_data_custom_length(8, 15);
+		EXPECT_EQ(value64, 258);
+		value64 = message.get_data_custom_length(8, 15, CANMessage::ByteFormat::BigEndian);
+		EXPECT_EQ(value64, 513);
+		value64 = message.get_data_custom_length(14, 3);
+		EXPECT_EQ(value64, 4);
+		value64 = message.get_data_custom_length(14, 3, CANMessage::ByteFormat::BigEndian);
+		EXPECT_EQ(value64, 4);
+	},
+	                                                                         nullptr);
 
 	CANMessageFrame testFrame = {};
 	testFrame.identifier = 0x18EEFFAA; /// So it could be added to the ControlFunction list
