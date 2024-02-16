@@ -329,22 +329,39 @@ namespace isobus
 	std::uint64_t CANMessage::get_data_custom_length(const std::uint32_t startBitIndex, const std::uint32_t length, const isobus::CANMessage::ByteFormat format) const
 	{
 		std::uint64_t retVal = 0;
+		std::uint8_t currentByte = 0;
 		std::uint32_t endBitIndex = startBitIndex + length - 1;
 		std::uint32_t bitCounter = 0;
+		std::uint32_t amountOfBytesLeft = (length + 8 - 1) / 8;
+		std::uint32_t startAmountOfBytes = amountOfBytesLeft;
+		std::uint8_t indexOfFinalByteBit = 7;
 
 		for (auto i = startBitIndex; i <= endBitIndex; i++)
 		{
 			auto byteIndex = i / 8;
 			auto bitIndexWithinByte = i % 8;
-			auto bit = (data[byteIndex] >> (7 - bitIndexWithinByte)) & 1;
-
-			if (ByteFormat::LittleEndian == format)
+			auto bit = (data[byteIndex] >> (indexOfFinalByteBit - bitIndexWithinByte)) & 1;
+			if (length - bitCounter < 8)
 			{
-				retVal |= (static_cast<uint64_t>(bit) << bitCounter);
+				currentByte |= static_cast<uint8_t>(bit) << (length - 1 - bitCounter);
 			}
 			else
 			{
-				retVal |= (static_cast<uint64_t>(bit) << ((length - 1) - bitCounter));
+				currentByte |= static_cast<uint8_t>(bit) << (indexOfFinalByteBit - bitIndexWithinByte);
+			}
+
+			if ((bitCounter + 1) % 8 == 0 || i == endBitIndex)
+			{
+				if (ByteFormat::LittleEndian == format)
+				{
+					retVal |= (static_cast<uint64_t>(currentByte) << (startAmountOfBytes - amountOfBytesLeft) * 8);
+				}
+				else
+				{
+					retVal |= (static_cast<uint64_t>(currentByte) << ((amountOfBytesLeft * 8) - 8));
+				}
+				currentByte = 0;
+				amountOfBytesLeft--;
 			}
 
 			bitCounter++;
