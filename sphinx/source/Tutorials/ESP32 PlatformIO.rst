@@ -16,36 +16,16 @@ This tutorial covers how to get started using the library with an ESP32 and Plat
 Installation
 --------------
 
-1. Install `Visual Studio Code. <https://code.visualstudio.com/download>`_
-2. Install `Git <https://git-scm.com/downloads>`_
-3. Install the ESP-IDF extension in VS Code
+#.  Install `Visual Studio Code. <https://code.visualstudio.com/download>`_
+#.  Install `Git <https://git-scm.com/downloads>`_
+#.  Install the PlatformIO Extension in VS Code
 
-- Search for ESP-IDF in the extension marketplace and click install
+    .. image:: ../../images/install_platformio.png
+        :width: 360
+        :alt: Installing the PlatformIO extension
 
-	.. image:: ../../images/install_espidf.png
-			:width: 360
-			:alt: Installing ESP-IDF with VS Code Marketplace
-
-- Select the newly installed extension, select "Express"
-
-	.. image:: ../../images/install_espidf_2.png
-			:width: 360
-			:alt: Selecting the Express installation method
-
-- Select the most recent version of ESP-IDF and click "install". This might take several minutes to complete.
-
-	.. image:: ../../images/install_espidf_3.png
-			:width: 360
-			:alt: Choosing the version of ESP-IDF to install
-
-4. Install the PlatformIO Extension in VS Code
-
-.. image:: ../../images/install_platformio.png
-		:width: 360
-		:alt: Installing the PlatformIO extension
-
-5. Select the PlatformIO Extension and wait for it's installation to finish. This might take several minutes.
-6. Once PlatformIO is done installing, it might ask you to restart VS Code, or to reload it. Do this if it asks.
+#.  Select the PlatformIO Extension and wait for it's installation to finish. This might take several minutes.
+#.  Once PlatformIO is done installing, it might ask you to restart VS Code, or to reload it. Do this if it asks.
 
 Everything you need should now be installed!
 
@@ -54,205 +34,208 @@ Getting Started With a Blank Project
 
 To create a blank PlatformIO project that uses AgIsoStack, here are the basic steps.
 
-1. Open VS Code, select the PlatformIO extension, click "Create New Project", and/or "New Project"
+#.  Open VS Code, select the PlatformIO extension, click "Create New Project", and/or "New Project"
 
-.. image:: ../../images/new_platformio_project.png
-		:width: 420
-		:alt: Creating a new Platform IO project
+    .. image:: ../../images/new_platformio_project.png
+        :width: 420
+        :alt: Creating a new Platform IO project
 
-2. Give your project a name, select your target ESP32 board, and make sure to select `Espidf` as your framework.
+#.  Give your project a name, select your target ESP32 board, and make sure to select :code:`Espidf` as your framework.
 
-.. image:: ../../images/project_settings.png
-		:width: 360
-		:alt: Setting Platform IO project settings
+    .. image:: ../../images/project_settings.png
+        :width: 360
+        :alt: Setting Platform IO project settings
+      
+#.  Wait while PlatformIO creates the project. This can take several minutes depending on how much data PlatformIO has to fetch from the internet.
+#.  VS Code may ask you to trust your workspace once the project is created. Click "yes", and optionally consider checking the box to always trust your projects folder.
 
-3. Wait while PlatformIO creates the project. This can take several minutes depending on how much data PlatformIO has to fetch from the internet.
-4. VS Code may ask you to trust your workspace once the project is created. Click "yes", and optionally consider checking the box to always trust your projects folder.
+    .. image:: ../../images/vs_code_trust.png
+        :width: 360
+        :alt: Setting Platform IO project settings
 
-.. image:: ../../images/vs_code_trust.png
-		:width: 360
-		:alt: Setting Platform IO project settings
+#.  Now you've got a blank project. Try to build it as followed, you should be able to build it successfully at this point.
 
-Now you've got a blank project, but we need to do a few more things to actually bring in the library and ensure it compiles.
-
-5. Rename your :code:`main.c` file to :code:`main.cpp`.
-
+Now that you have a blank project, you can start adding the AgIsoStack library to it.
 The AgIsoStack++ library is a C++ library, so we need to compile our main file as a C++ file instead of a C file.
+Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have changed to a C++ file, we need to add :code:`extern "C"` decoration, otherwise you will get a linker error when you build the project.
 
-6. Change the definition for :code:`app_main` to be :code:`extern "C" void app_main()`. 
+#.  Rename your :code:`main.c` file to :code:`main.cpp`.
+#.  Change the definition for :code:`app_main` to be :code:`extern "C" void app_main()`.
+#.  Add the following line to your :code:`platformio.ini` file: ::code:`lib_deps = https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git`
+   
+    This will tell PlatformIO to reach out to GitHub, download the library, and automatically integrate it via CMake.
 
-Because we are changing to a :code:`.cpp` file, but the ESP-IDF framework expects app_main to have C-linkage, we need to add this decoration, or you may get a linker error when you build the project.
+    .. warning::
+		
+        PlatformIO will not automatically update AgIsoStack. You can run :code:`pio pkg update` to update it manually from the PlatformIO core CLI.
+        It is important that you do this from time to time to ensure you have the latest features and bug fixes.
 
-7. Add the following line to your :code:`platformio.ini` file: :code:`lib_deps = https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git`
+#.  Optionally, add lines to your :code:`platformio.ini` file to allow the CAN stack to send logged errors and warning messages through the serial monitor, and to have backtraces parsed for you if your application crashes.
 
-This will tell PlatformIO to reach out to GitHub, download the library, and automatically integrate it via CMake.
+    .. code-block:: ini
 
-.. warning::
+        build_type = debug
+        upload_protocol = esptool
+        monitor_speed = 115200
+        monitor_rts = 0
+        monitor_dtr = 0
+        monitor_filters = esp32_exception_decoder
 
-	PlatformIO will never automatically update AgIsoStack. You must run :code:`pio pkg update` to update it periodically from the PlatformIO core CLI.
-	It is important that you do this from time to time to ensure you have the latest features and bug fixes.
+    Your :code:`platformio.ini` file should end up looking something like this, though your board and environment may be different:
 
-8. Optionally, add lines to your :code:`platformio.ini` file to allow the CAN stack to send logged errors and warning messages through the serial monitor, and to have backtraces parsed for you if your application crashes.
+    .. code-block:: ini
 
-.. code-block:: text
-	
-	build_type = debug
-	upload_protocol = esptool
-	monitor_speed = 115200
-	monitor_rts = 0
-	monitor_dtr = 0
-	monitor_filters = esp32_exception_decoder
+        ; PlatformIO Project Configuration File
+        ;
+        ;   Build options: build flags, source filter
+        ;   Upload options: custom upload port, speed and extra flags
+        ;   Library options: dependencies, extra library storages
+        ;   Advanced options: extra scripting
+        ;
+        ; Please visit documentation for the other options and examples
+        ; https://docs.platformio.org/page/projectconf.html
 
-Your :code:`platformio.ini` file should end up looking something like this, though your board and environment may be different:
+        [env:denky32]
+        platform = espressif32
+        board = denky32
+        framework = espidf
 
-.. code-block:: text
+        lib_deps = https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
 
-	; PlatformIO Project Configuration File
-	;
-	;   Build options: build flags, source filter
-	;   Upload options: custom upload port, speed and extra flags
-	;   Library options: dependencies, extra library storages
-	;   Advanced options: extra scripting
-	;
-	; Please visit documentation for the other options and examples
-	; https://docs.platformio.org/page/projectconf.html
+        build_type = debug
+        upload_protocol = esptool
+        monitor_speed = 115200
+        monitor_rts = 0
+        monitor_dtr = 0
+        monitor_filters = esp32_exception_decoder
 
-	[env:denky32]
-	platform = espressif32
-	board = denky32
-	framework = espidf
+    Specifically, this configuration was created for the ESP-WROOM-32 (denky32), so if you have a different board, make sure to edit this appropriately.
 
-	lib_deps = https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git
+#.  Include the header files you might need in :code:`main.cpp`.
 
-	build_type = debug
-	upload_protocol = esptool
-	monitor_speed = 115200
-	monitor_rts = 0
-	monitor_dtr = 0
-	monitor_filters = esp32_exception_decoder
+    AgIsoStack++ is a somewhat large library. There are a lot of files, each separated by specific CAN or ISOBUS functionality. Check out the other tutorials, or the VT example below for what you might want to include.
 
-Specifically, this configuration was created for the ESP-WROOM-32 (denky32), so if you have a different board, make sure to edit this appropriately.
+    At an absolute minimum, you'll need these files to send or receive anything.
 
-9. Include the header files you might need in :code:`main.cpp`.
+    .. code-block:: c++
 
-AgIsoStack++ is a somewhat large library. There are a lot of files, each separated by specific CAN or ISOBUS functionality. Check out the other tutorials, or the VT example below for what you might want to include.
+        #include "isobus/hardware_integration/twai_plugin.hpp"
+        #include "isobus/hardware_integration/can_hardware_interface.hpp"
+        #include "isobus/isobus/can_network_manager.hpp"
+        #include "isobus/isobus/can_partnered_control_function.hpp"
 
-At an absolute minimum, you'll need these files to send or receive anything.
+#.  Set up the ESP32's TWAI
 
-.. code-block:: c++
+    he ESP32 has what is essentially a built-in classic CAN 2.0 controller. Because of this, you can use the TWAI interface on your ESP32 instead of having to add a serial CAN controller like the MCP2515.
 
-	#include "isobus/hardware_integration/twai_plugin.hpp"
-	#include "isobus/hardware_integration/can_hardware_interface.hpp"
-	#include "isobus/isobus/can_network_manager.hpp"
-	#include "isobus/isobus/can_partnered_control_function.hpp"
+    .. note::
+		
+        You will still require a CAN transceiver `like this one <https://www.amazon.com/SN65HVD230-CAN-Board-Communication-Development/dp/B00KM6XMXO>`_ to convert the low voltage outputs of the TWAI controller to actual CAN signaling voltages.
+        You cannot hook a CAN bus directly to the TWAI pins.
 
-10. Set up the ESP32's TWAI
+    Adding the following code will configure the TWAI.
 
-The ESP32 has what is essentially a built-in classic CAN 2.0 controller. Because of this, you can use the TWAI interface on your ESP32 instead of having to add a serial CAN controller like the MCP2515.
+    .. code-block:: c++
+		
+        extern "C" void app_main()
+        {
+            twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
+            twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
+            twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+            std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
+        }
 
-.. note::
+    This code sets GPIO 21 and GPIO 22 to the be the TWAI transmit and receive pins respectively, and configures the default ISO11783/J1939 baud rate of 250k bits.
+    It also ensures that all messages on the bus are passed through to the stack, and none are filtered out by the hardware.
+    Lastly, it creates an instance of the AgIsoStack TWAI driver class, which will manage the TWAI for you.
 
-	You will still require a CAN transceiver `like this one <https://www.amazon.com/SN65HVD230-CAN-Board-Communication-Development/dp/B00KM6XMXO>`_ to convert the low voltage outputs of the TWAI controller to actual CAN signaling voltages.
-	You cannot hook a CAN bus directly to the TWAI pins.
+    You do not need to choose these same GPIO pins, but these are known to work well.
 
-Adding the following code will configure the TWAI.
+#.  Set up our device's NAME, and start the CAN stack.
 
-.. code-block:: c++
-	
-	extern "C" void app_main()
-	{
-		twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
-		twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
-		twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-		std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
-	}
+    This is boilerplate code that can be found in nearly every AgIsoStack project that sets up your device and starts the CAN stack, with slight modifications for ESP32.
 
-This code sets GPIO 21 and GPIO 22 to the be the TWAI transmit and receive pins respectively, and configures the default ISO11783/J1939 baud rate of 250k bits.
-It also ensures that all messages on the bus are passed through to the stack, and none are filtered out by the hardware.
-Lastly, it creates an instance of the AgIsoStack TWAI driver class, which will manage the TWAI for you.
+    .. code-block:: c++
 
-You do not need to choose these same GPIO pins, but these are known to work well.
+        #include "esp_log.h"
+        #include "freertos/task.h"
 
-11. Set up our device's NAME, and start the CAN stack.
+        extern "C" void app_main()
+        {
+            twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
+            twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
+            twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+            std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
 
-This is boilerplate code that can be found in nearly every AgIsoStack project that sets up your device and starts the CAN stack, with slight modifications for ESP32.
+            isobus::CANHardwareInterface::set_number_of_can_channels(1);
+            isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+            isobus::CANHardwareInterface::set_periodic_update_interval(10); // Default is 4ms, but we need to adjust this for default ESP32 tick rate of 100Hz
 
-.. code-block:: c++
+            if (!isobus::CANHardwareInterface::start() || !canDriver->get_is_valid())
+            {
+                ESP_LOGE("AgIsoStack", "Failed to start hardware interface, the CAN driver might be invalid");
+            }
 
-	extern "C" void app_main()
-	{
-		twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
-		twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
-		twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-		std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
+            isobus::NAME TestDeviceNAME(0);
 
-		isobus::CANHardwareInterface::set_number_of_can_channels(1);
-		isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
-		isobus::CANHardwareInterface::set_periodic_update_interval(1);
+            //! Make sure you change these for your device!!!!
+            TestDeviceNAME.set_arbitrary_address_capable(true);
+            TestDeviceNAME.set_industry_group(1);
+            TestDeviceNAME.set_device_class(0);
+            TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::RateControl));
+            TestDeviceNAME.set_identity_number(2);
+            TestDeviceNAME.set_ecu_instance(0);
+            TestDeviceNAME.set_function_instance(0);
+            TestDeviceNAME.set_device_class_instance(0);
+            TestDeviceNAME.set_manufacturer_code(1407);
+            auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
 
-		if (!isobus::CANHardwareInterface::start() || !canDriver->get_is_valid())
-		{
-			ESP_LOGE("AgIsoStack", "Failed to start hardware interface, the CAN driver might be invalid");
-		}
+            while (true)
+            {
+                // CAN stack runs in other threads. Do nothing forever.
+                vTaskDelay(10);
+            }
 
-		isobus::NAME TestDeviceNAME(0);
+            isobus::CANHardwareInterface::stop();
+        }
 
-		//! Make sure you change these for your device!!!!
-		TestDeviceNAME.set_arbitrary_address_capable(true);
-		TestDeviceNAME.set_industry_group(1);
-		TestDeviceNAME.set_device_class(0);
-		TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::RateControl));
-		TestDeviceNAME.set_identity_number(2);
-		TestDeviceNAME.set_ecu_instance(0);
-		TestDeviceNAME.set_function_instance(0);
-		TestDeviceNAME.set_device_class_instance(0);
-		TestDeviceNAME.set_manufacturer_code(1407);
-		auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
+	This is the absolute minimum for the stack to address claim for you, and for it to be ready to accept your messages.
 
-		while (true)
-		{
-			// CAN stack runs in other threads. Do nothing forever.
-			vTaskDelay(10);
-		}
+#.  Set up your ESP32's OS and PThread options
 
-		isobus::CANHardwareInterface::stop();
-	}
+    As mentioned before, AgIsoStack is a fairly large multi-threaded library, so we need to adjust some platform settings to allow the library to run smoothly. Not doing this will probably cause your device to repeatedly crash at runtime!
+    More specifically, we need to adjust the default stack size, and the amount of stack allocated to the pthreads task.
 
-This is the absolute minimum for the stack to address claim for you, and for it to be ready to accept your messages.
+    In PlatformIO, run `menuconfig` by either running :code:`pio run -t menuconfig` or by selecting the option from the PlatformIO extension.
 
-11. Set up your ESP32's OS and PThread options
+    .. image:: ../../images/menuconfig.png
+        :width: 400
+        :alt: Running menuconfig
 
-As mentioned before, AgIsoStack is a fairly large multi-threaded library, so we need to adjust some platform settings to allow the library to run smoothly. Not doing this will probably cause your device to repeatedly crash at runtime!
-More specifically, we need to adjust the default stack size, and the amount of stack allocated to the pthreads task.
+    .. warning::
 
-In PlatformIO, run `menuconfig` by either running :code:`pio run -t menuconfig` or by selecting the option from the PlatformIO extension.
+        If you are experiencing an error running :code:`menuconfig`, you may need to comment out the following line(s) in your :code:`CMakeLists.txt` file inside the :code:`src/` folder if present. Make sure you un-comment the line once you are done with the menuconfig.
+        
+        :code:`target_add_binary_data(${COMPONENT_TARGET} "object_pool/object_pool.iop" BINARY)`
 
-.. image:: ../../images/menuconfig.png
-		:width: 400
-		:alt: Running menuconfig
+    Once menuconfig is running, navigate to :code:`Component config -> PThreads` and change the stack size of pthreads to 8192 bytes, this should prevent the stack from running out of memory. 
+    If you still experience crashes, you may need to increase this value further.
 
-.. warning::
+    .. image:: ../../images/pthreads_settings.png
+        :width: 500
+        :alt: Running menuconfig
 
-	If you are experiencing an error running :code:`menuconfig`, you may need to comment out the following line(s) in your :code:`CMakeLists.txt` file inside the :code:`src/` folder if present. Make sure you un-comment the line once you are done with :code:`menuconfig`.
-	
-	
-	:code:`target_add_binary_data(${COMPONENT_TARGET} "object_pool/object_pool.iop" BINARY)`
+    Last, but not least, we have to increase the FreeRTOS tick rate **or** decrease the tick rate of the stack for them both to match. 
+    For increasing tick rate of FreeRTOS, navigate to :code:`Component config -> FreeRTOS -> Kernel` and configure the :code:`configTICK_RATE_HZ`. We suggest to match the update period of the stack, which by default is 4ms. So a good value for :code:`configTICK_RATE_HZ` is 250Hz.
 
-Once menuconfig is running, navigate to :code:`Component config -> PThreads` and change the settings to match the following:
+    .. image:: ../../images/tick_rate.png
+        :width: 500
+        :alt: Running menuconfig
 
-.. image:: ../../images/pthreads_settings.png
-		:width: 500
-		:alt: Running menuconfig
+    For decreasing the update rate of the stack, set the update period to your desired value in your init/main function: :code:`isobus::CANHardwareInterface::set_can_driver_update_period(10)` for 10ms update period. This matches the default FreeRTOS tick rate of 100Hz.
 
-Last, but not least, we have to increase the FreeRTOS tick rate **or** decrease the tick rate of the stack for them both to match. For increasing tick rate of FreeRTOS, navigate to :code:`Component config -> FreeRTOS -> Kernel` and configure the :code:`configTICK_RATE_HZ`. A good value is to match the update period of the stack, which by default is 4ms. So a good value for :code:`configTICK_RATE_HZ` is 250Hz.
-
-.. image:: ../../images/tick_rate.png
-		:width: 500
-		:alt: Running menuconfig
-
-For decreasing the update rate of the stack, set the update period to your desired value in your init/main function: :code:`isobus::CANHardwareInterface::set_can_driver_update_period(10)` for 10ms update period. This matches the default FreeRTOS tick rate of 100Hz.
-
-12. Add your application code and build your project! Using the PlatformIO extension, click "build" to compile your project.
+#.  Close the menuconfig by pressing :code:`Q` on your keyboard, followed by :code:`Y` to save your changes.
+#.  Add your application code and build your project using the PlatformIO extension. That's it! You should now have a working AgIsoStack project on your ESP32.
 
 If you made it this far, but you're not sure how to use the library to make a functional application yet, or you are having trouble compiling, check out the VT Client example in the next section, and be sure to read the other tutorials.
 
@@ -263,11 +246,11 @@ To build and run a minimal, but interactive project that will load an ISOBUS obj
 
 .. note::
 
-	This example sets up the TWAI interface to run on GPIO 21 and 22. It does not require any external CAN controller, but does require a CAN transceiver `like this one <https://www.amazon.com/SN65HVD230-CAN-Board-Communication-Development/dp/B00KM6XMXO>`_.
+    This example sets up the TWAI interface to run on GPIO 21 and 22. It does not require any external CAN controller, but does require a CAN transceiver `like this one <https://www.amazon.com/SN65HVD230-CAN-Board-Communication-Development/dp/B00KM6XMXO>`_.
 
 .. note::
 	
-	The example's :code:`platformio.ini` file is configured for a WROOM/Denky-32 board, so you may need to edit it to match your board type.
+    The example's :code:`platformio.ini` file is configured for a WROOM/Denky-32 board, so you may need to edit it to match your board type.
 
 
 The Wiring

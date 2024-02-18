@@ -12,9 +12,7 @@
 
 #include <atomic>
 #include <csignal>
-#include <functional>
 #include <iostream>
-#include <memory>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> virtualTerminalClient = nullptr;
@@ -26,8 +24,46 @@ void signal_handler(int)
 	running = false;
 }
 
+// This callback will provide us with event driven notifications of softkey presses from the stack
+void handle_softkey_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
+{
+	if (event.keyNumber == 0)
+	{
+		// We have the alarm ACK code, so if we have an active alarm, acknowledge it by going back to the main runscreen
+		virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
+	}
+
+	switch (event.keyEvent)
+	{
+		case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+		{
+			switch (event.objectID)
+			{
+				case alarm_SoftKey:
+				{
+					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, example_AlarmMask);
+				}
+				break;
+
+				case acknowledgeAlarm_SoftKey:
+				{
+					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
+				}
+				break;
+
+				default:
+					break;
+			}
+		}
+		break;
+
+		default:
+			break;
+	}
+}
+
 // This callback will provide us with event driven notifications of button presses from the stack
-void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
+void handle_button_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 {
 	switch (event.keyEvent)
 	{
@@ -45,18 +81,6 @@ void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 				case Minus_Button:
 				{
 					virtualTerminalUpdateHelper->decrease_numeric_value(ButtonExampleNumber_VarNum);
-				}
-				break;
-
-				case alarm_SoftKey:
-				{
-					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, example_AlarmMask);
-				}
-				break;
-
-				case acknowledgeAlarm_SoftKey:
-				{
-					virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
 				}
 				break;
 
@@ -140,8 +164,8 @@ int main()
 
 	virtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	virtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
-	virtualTerminalClient->get_vt_soft_key_event_dispatcher().add_listener(handleVTKeyEvents);
-	virtualTerminalClient->get_vt_button_event_dispatcher().add_listener(handleVTKeyEvents);
+	virtualTerminalClient->get_vt_soft_key_event_dispatcher().add_listener(handle_softkey_event);
+	virtualTerminalClient->get_vt_button_event_dispatcher().add_listener(handle_button_event);
 	virtualTerminalClient->initialize(true);
 
 	virtualTerminalUpdateHelper = std::make_shared<isobus::VirtualTerminalClientUpdateHelper>(virtualTerminalClient);

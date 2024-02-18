@@ -20,7 +20,7 @@ The Virtual Terminal Client
 
 The first step in communicating with a VT is creating an object called :code:`VirtualTerminalClient`. 
 This object will act as your interface for all VT communication. 
-The client requires two things to instantiate, a :code:`PartneredControlFunction` and a :code:`InternalControlFunction`. 
+The client requires two things to instantiate: a :code:`PartneredControlFunction` and an :code:`InternalControlFunction`. 
 This is so that it can send messages on your behalf needed to maintain the connection and simplify the API over sending raw CAN messages to the VT.
 
 Let's start our program fresh, with a folder containing only the CAN stack.
@@ -37,15 +37,12 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
-	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
 	#include "isobus/isobus/can_partnered_control_function.hpp"
-	#include "isobus/isobus/can_stack_logger.hpp"
 
 	#include <atomic>
 	#include <csignal>
 	#include <iostream>
-	#include <memory>
 
 	//! It is discouraged to use global variables, but it is done here for simplicity.
 	static std::atomic_bool running = { true };
@@ -53,11 +50,6 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 	void signal_handler(int)
 	{
 		running = false;
-	}
-
-	void update_CAN_network(void *)
-	{
-		isobus::CANNetworkManager::CANNetwork.update();
 	}
 
 	int main()
@@ -129,20 +121,23 @@ It's the same boilerplate we've done before, but note the following key things:
 
 * Our partner has been defined to be any device on the bus with a function code that identifies it as a VT (see `isobus::NAME::NAMEParameters::FunctionCode <https://delgrossoengineering.com/isobus-docs/classisobus_1_1NAME.html#a5f22513106207fd1a1e0c72b17a77f77>`_ if you want to see some other function code that exist.)
 
-With those notes in mind, let's create our VT client:
+With those notes in mind, let's create our VT client. We also introduce a helper class here to make updating the VT easier, but we'll go over that in a bit.
 
 .. code-block:: c++
 
 	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
+	#include "isobus/isobus/isobus_virtual_terminal_client_update_helper.hpp"
 
 	//! It is discouraged to use global variables, but we have done it here for simplicity.
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
+	static std::shared_ptr<isobus::VirtualTerminalClientUpdateHelper> virtualTerminalUpdateHelper = nullptr;
 
 	int main()
 	{
 		...
 
 		TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
+		virtualTerminalUpdateHelper = std::make_shared<isobus::VirtualTerminalClientUpdateHelper>(virtualTerminalClient);
 
 		...
 	}
@@ -152,8 +147,9 @@ Now, we've got our client created, and we need to configure it. More specificall
 Object Pools
 -------------
 
-An ISOBUS object pool is a serialized blob of objects defined in ISO 11783-6. Basically it's the data the comprises the GUIs you see on a VT when you connect an ISOBUS ECU. 
-In other words, it's a way for a "headless" device to explain to a VT how to draw it's UI in a very consistent way that will be portable across machines and platforms.
+Imagine an ISOBUS object pool as a container filled with different visual components (objects). Each object has a specific role, defined by the ISO 11783-6 standard.
+Combining these objects creates the user interface you see on a VT.
+In more technical terms, it's a way for a "headless" device to explain to a VT how to draw its UI in a very consistent way that will be portable across machines and platforms.
 
 This data is essentially a long list of objects that represent things to a VT, such as:
 
@@ -213,7 +209,7 @@ Now, let's add some code to our example to read in this IOP file, and give it to
 	}
 
 
-Note how :code:`testPool` is not static here. It is required that whatever pointer you pass into the VT client via :code:`set_object_pool` MUST remain valid (IE, not deleted or out of scope) during the object pool upload or your application may crash.
+Note how :code:`testPool` is not static here. It is required that whatever pointer you pass into the VT client via :code:`set_object_pool` MUST remain valid (i.e., not deleted or out of scope) during the object pool upload, or your application may crash.
 
 Furthermore, a hash is generated for the object pool. This is a unique string that represents the object pool. It is used to tell the VT if the object pool has changed since the last time it was uploaded. If it has, the VT will request the new object pool from the ECU. If it hasn't, the VT will assume the object pool is the same as the last time it was uploaded and will not request it again but instead load it from their cache.
 
@@ -222,7 +218,7 @@ This can be used to read from some external device if needed in segments or just
 
 You can also have the CAN stack automatically scale your object pool to match the dimensions of whatever VT it ends up loading to. 
 This can be helpful if you designed your object pool for a certain data mask size, but need the pool to load on VTs with different resolutions or VTs that support different fonts than you designed your pool with.
-To do this, just tell the client what sizes you used when creating your object pool with the :code:`set_object_pool_scaling` function. The documentation for that function can be found `in our api docs <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a677ff706f3ebe65e1ea9972e0a7304da>`_.
+To do this, just tell the client what sizes you used when creating your object pool with the :code:`set_object_pool_scaling` function. The documentation for that function can be found `in our API docs <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a677ff706f3ebe65e1ea9972e0a7304da>`_.
 
 
 .. note::
@@ -250,37 +246,24 @@ To do this, let's create a callback that accepts :code:`VirtualTerminalClient::V
 .. code-block:: c++
 
 	// This callback will provide us with event driven notifications of button presses from the stack
-	void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
+	void handle_button_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 	{
-		static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
-
 		switch (event.keyEvent)
 		{
 			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonStillHeld:
 			{
 				switch (event.objectID)
 				{
 					case Plus_Button:
 					{
-						TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, ++exampleNumberOutput);
+						virtualTerminalUpdateHelper->increase_numeric_value(ButtonExampleNumber_VarNum);
 					}
 					break;
 
 					case Minus_Button:
 					{
-						TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, --exampleNumberOutput);
-					}
-					break;
-
-					case alarm_SoftKey:
-					{
-						TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, example_AlarmMask);
-					}
-					break;
-
-					case acknowledgeAlarm_SoftKey:
-					{
-						TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
+						virtualTerminalUpdateHelper->decrease_numeric_value(ButtonExampleNumber_VarNum);
 					}
 					break;
 
@@ -295,17 +278,55 @@ To do this, let's create a callback that accepts :code:`VirtualTerminalClient::V
 		}
 	}
 
-We'll use this function as our callback. This function will first look at the `key event <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a5d002c96e4343f2aac9abecb03cc7873>`_ the VT is reporting to decide what to do. In this example, we're doing all actions based on when a button or softkey is `released`.
-Next, we switch on the object ID of the button, and from there we can decide what to do about the event.
+We'll use this function as our callback. This function will first look at the `key event <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html#a5d002c96e4343f2aac9abecb03cc7873>`_ the VT is reporting to decide what to do. 
+In this example, we're doing actions based on the :code:`ButtonUnlatchedOrReleased` and :code:`ButtonStillHeld` events. Meaning we're doing something when the button is released, and we're doing something when the button is held down. 
+The :code:`ButtonStillHeld` event is useful for things like incrementing a value when a button is held down, or for scrolling through a list when a button is held down, as it will be called every so often while the button is held down.
+Next, we're looking at the :code:`objectID` to decide what to do. In this example, we're incrementing and decrementing the counter on the screen.
 
-As an example, if someone presses the softkey :code:`alarm_SoftKey`, this function will be called with the :code:`KeyActivationCode::ButtonPressedOrLatched` event, which we will ignore.
-Then, when the user releases the softkey, this function will be called with the :code:`KeyActivationCode::ButtonUnlatchedOrReleased`. If the user hold down the button, the function will be called many times with the :code:`KeyActivationCode::ButtonStillHeld` event.
-The :code:`objectID` tells us which button or key was pressed, so putting it all together, when we get the :code:`KeyActivationCode::ButtonUnlatchedOrReleased` event with the object ID of :code:`alarm_SoftKey`, we will take some action.
-In this example, the action we're taking is to change the active mask from the main runscreen data mask :code:`mainRunscreen_DataMask` to an alarm mask called :code:`example_AlarmMask`. This will cause a pop-up on the VT (and possibly some beeping if your VT has a speaker).
+We'll also want to add a listener for softkey events, as they are a common way to interact with the VT. Let's add a callback for that too.
 
-Note, when we added handling for the :code:`Minus_Button` and :code:`Plus_Button` in the object pool, we are incrementing and decrementing a variable in the program so that we can keep track of the displayed value on the screen.
-This variable starts out with a value of 214748364 because the output number in the object pool has an offset applied to it of -214748364. This essentially means that if we send the VT a value of 214748364, it will be shown as 0. If we subtract 1, it will be shown as -1, or if we add 1 it will be shown as 1.
-This is how a VT handles negative numbers.
+.. code-block:: c++
+
+	// This callback will provide us with event driven notifications of softkey presses from the stack
+	void handle_softkey_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
+	{
+		if (event.keyNumber == 0)
+		{
+			// We have the alarm ACK code, so if we have an active alarm, acknowledge it by going back to the main runscreen
+			virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
+		}
+
+		switch (event.keyEvent)
+		{
+			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+			{
+				switch (event.objectID)
+				{
+					case alarm_SoftKey:
+					{
+						virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, example_AlarmMask);
+					}
+					break;
+
+					case acknowledgeAlarm_SoftKey:
+					{
+						virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
+					}
+					break;
+
+					default:
+						break;
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
+	}
+
+Here we're doing something similar to the button event callback, but we're also checking the :code:`keyNumber` to see if it's 0. That is the special softkey event that is sent when the user presses a proprietary button to acknowledge an alarm on the VT.
+Furthermore, the actions we're taking is to change the active masks, more specifically, switching between the main runscreen data mask :code:`mainRunscreen_DataMask` and an alarm mask called :code:`example_AlarmMask`. This will cause a pop-up on the VT (and possibly some beeping if your VT has a speaker).
 
 Other Events
 ^^^^^^^^^^^^^
@@ -323,42 +344,58 @@ In this example, we're only using the button and softkey events, but be sure to 
 
 With all those different events, you can get all kinds of context from the VT about what the user is doing.
 
-Registering our Callbacks
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Configuring the VT client
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now that we have our callback, we have to tell the VT client about it so that it knows to call it when appropriate.
 
 .. code-block:: c++
 	
-	auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
-	auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
+	virtualTerminalClient->get_vt_soft_key_event_dispatcher().add_listener(handle_softkey_event);
+	virtualTerminalClient->get_vt_button_event_dispatcher().add_listener(handle_button_event);
 
-You could in theory have separate callbacks for softkeys and buttons, but in this example we're just re-using the same callback for both.
+This is how you add a listener to the VT client. You can add as many listeners as you want, and they will all be called when the appropriate event occurs.
 
-Note, the :code:`add_vt_soft_key_event_listener` and :code:`add_vt_button_event_listener` functions return a shared pointer to the listener. This is so that the listener doesn't get destroyed until you're done with it. If you don't store the listener in a variable, it will be destroyed as soon as the function returns, and your callback will never be called. So make sure to keep it alive as long as you want to receive events.
+Furthermore, we need to initialize the VT client. This is done by calling the :code:`initialize` function on the VT client. This will start the process of uploading the object pool to the VT, and will also start the process of the VT sending us the current active mask and other information about the VT.
+
+And lastly, we need to configure our VT update helper. It's not strictly necessary to use it, but it makes it easier to update the VT, and it also provides some nice features like tracking numeric values and soft key masks.
+We need to tell it which objects to track, and then call the :code:`initialize` function on it.
+
+.. code-block:: c++
+
+	virtualTerminalUpdateHelper->add_tracked_numeric_value(ButtonExampleNumber_VarNum, 214748364); // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
+	virtualTerminalUpdateHelper->initialize();
+
+.. note::
+	when we added handling for the :code:`Minus_Button` and :code:`Plus_Button` in the object pool, we are incrementing and decrementing a variable in the program so that we can keep track of the displayed value on the screen.
+	This variable starts out with a value of 214748364 because the output number in the object pool has an offset applied to it of -214748364. This essentially means that if we send the VT a value of 214748364, it will be shown as 0. If we subtract 1, it will be shown as -1, or if we add 1 it will be shown as 1.
+	This is how a VT handles negative numbers.
 
 Other Actions
 ^^^^^^^^^^^^^^
 
-Of course, you have the ability to do a lot more than just react to events. The VT client exposes many functions that you can call to make the VT do things with your object pool. We've already used a few of them in our callback, such as:
+Of course, you have the ability to do a lot more than just react to events. The VT client exposes many functions that you can call to make the VT directly do things with your object pool.
+
+Check out the `API documentation <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html>`_ (or the header file :code:`isobus_virtual_terminal_client.hpp`) for the full list of functionality available, but the most commonly used ones are listed below along with the name of the function to use on the API.
 
 * Changing the active mask
+	* :code:`virtualTerminalClient->send_change_active_mask`
+	* :code:`virtualTerminalUpdateHelper->set_active_data_or_alarm_mask`
 * Changing a numeric value
-
-Check out the `API documentation <https://delgrossoengineering.com/isobus-docs/classisobus_1_1VirtualTerminalClient.html>`_ (or the header file isobus_virtual_terminal_client.hpp) for the full list of functionality available, but the most commonly used ones are listed below along with the name of the function to use on the API.
-
-* Changing the active mask
-	* :code:`send_change_active_mask`
-* Changing a numeric value
-	* :code:`send_change_numeric_value`
+	* :code:`virtualTerminalClient->send_change_numeric_value`
+	* :code:`virtualTerminalUpdateHelper->set_numeric_value`
+	* :code:`virtualTerminalUpdateHelper->increase_numeric_value`
+	* :code:`virtualTerminalUpdateHelper->decrease_numeric_value`
 * Changing a string value
-	* :code:`send_change_string_value`
+	* :code:`virtualTerminalClient->send_change_string_value`
 * Changing a soft key mask
-	* :code:`send_change_softkey_mask`
+	* :code:`virtualTerminalClient->send_change_softkey_mask`
+	* :code:`virtualTerminalUpdateHelper->set_active_soft_key_mask`
 * Changing a list item
-	* :code:`send_change_list_item`
+	* :code:`virtualTerminalClient->send_change_list_item`
 * Changing an attribute, such as hiding a container
-	* :code:`send_change_attribute`
+	* :code:`virtualTerminalClient->send_change_attribute`
+	* :code:`virtualTerminalUpdateHelper->set_attribute`
 
 Final Result
 --------------
@@ -369,23 +406,21 @@ Here's the final code for this example:
 
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
-	#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
 	#include "isobus/isobus/can_partnered_control_function.hpp"
-	#include "isobus/isobus/can_stack_logger.hpp"
 	#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
+	#include "isobus/isobus/isobus_virtual_terminal_client_update_helper.hpp"
 	#include "isobus/utility/iop_file_interface.hpp"
 
 	#include "objectPoolObjects.h"
 
 	#include <atomic>
 	#include <csignal>
-	#include <functional>
 	#include <iostream>
-	#include <memory>
 
 	//! It is discouraged to use global variables, but it is done here for simplicity.
-	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
+	static std::shared_ptr<isobus::VirtualTerminalClient> virtualTerminalClient = nullptr;
+	static std::shared_ptr<isobus::VirtualTerminalClientUpdateHelper> virtualTerminalUpdateHelper = nullptr;
 	static std::atomic_bool running = { true };
 
 	void signal_handler(int)
@@ -393,20 +428,14 @@ Here's the final code for this example:
 		running = false;
 	}
 
-	void update_CAN_network(void *)
+	// This callback will provide us with event driven notifications of softkey presses from the stack
+	void handle_softkey_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 	{
-		isobus::CANNetworkManager::CANNetwork.update();
-	}
-
-	void raw_can_glue(isobus::CANMessageFrame &rawFrame, void *parentPointer)
-	{
-		isobus::CANNetworkManager::CANNetwork.can_lib_process_rx_message(rawFrame, parentPointer);
-	}
-
-	// This callback will provide us with event driven notifications of button presses from the stack
-	void handleVTKeyEvents(const isobus::VirtualTerminalClient::VTKeyEvent &event)
-	{
-		static std::uint32_t exampleNumberOutput = 214748364; // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
+		if (event.keyNumber == 0)
+		{
+			// We have the alarm ACK code, so if we have an active alarm, acknowledge it by going back to the main runscreen
+			virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
+		}
 
 		switch (event.keyEvent)
 		{
@@ -414,27 +443,48 @@ Here's the final code for this example:
 			{
 				switch (event.objectID)
 				{
-					case Plus_Button:
-					{
-						TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, ++exampleNumberOutput);
-					}
-					break;
-
-					case Minus_Button:
-					{
-						TestVirtualTerminalClient->send_change_numeric_value(ButtonExampleNumber_VarNum, --exampleNumberOutput);
-					}
-					break;
-
 					case alarm_SoftKey:
 					{
-						TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, example_AlarmMask);
+						virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, example_AlarmMask);
 					}
 					break;
 
 					case acknowledgeAlarm_SoftKey:
 					{
-						TestVirtualTerminalClient->send_change_active_mask(example_WorkingSet, mainRunscreen_DataMask);
+						virtualTerminalUpdateHelper->set_active_data_or_alarm_mask(example_WorkingSet, mainRunscreen_DataMask);
+					}
+					break;
+
+					default:
+						break;
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
+	}
+
+	// This callback will provide us with event driven notifications of button presses from the stack
+	void handle_button_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
+	{
+		switch (event.keyEvent)
+		{
+			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonUnlatchedOrReleased:
+			case isobus::VirtualTerminalClient::KeyActivationCode::ButtonStillHeld:
+			{
+				switch (event.objectID)
+				{
+					case Plus_Button:
+					{
+						virtualTerminalUpdateHelper->increase_numeric_value(ButtonExampleNumber_VarNum);
+					}
+					break;
+
+					case Minus_Button:
+					{
+						virtualTerminalUpdateHelper->decrease_numeric_value(ButtonExampleNumber_VarNum);
 					}
 					break;
 
@@ -482,9 +532,6 @@ Here's the final code for this example:
 			return -2;
 		}
 
-		isobus::CANHardwareInterface::add_can_lib_update_callback(update_CAN_network, nullptr);
-		isobus::CANHardwareInterface::add_raw_can_message_rx_callback(raw_can_glue, nullptr);
-
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 		isobus::NAME TestDeviceNAME(0);
@@ -517,11 +564,15 @@ Here's the final code for this example:
 		auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 		auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
 
-		TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-		TestVirtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
-		auto softKeyListener = TestVirtualTerminalClient->add_vt_soft_key_event_listener(handleVTKeyEvents);
-		auto buttonListener = TestVirtualTerminalClient->add_vt_button_event_listener(handleVTKeyEvents);
-		TestVirtualTerminalClient->initialize(true);
+		virtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
+		virtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
+		virtualTerminalClient->get_vt_soft_key_event_dispatcher().add_listener(handle_softkey_event);
+		virtualTerminalClient->get_vt_button_event_dispatcher().add_listener(handle_button_event);
+		virtualTerminalClient->initialize(true);
+
+		virtualTerminalUpdateHelper = std::make_shared<isobus::VirtualTerminalClientUpdateHelper>(virtualTerminalClient);
+		virtualTerminalUpdateHelper->add_tracked_numeric_value(ButtonExampleNumber_VarNum, 214748364); // In the object pool the output number has an offset of -214748364 so we use this to represent 0.
+		virtualTerminalUpdateHelper->initialize();
 
 		while (running)
 		{
@@ -529,7 +580,7 @@ Here's the final code for this example:
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		}
 
-		TestVirtualTerminalClient->terminate();
+		virtualTerminalClient->terminate();
 		isobus::CANHardwareInterface::stop();
 		return 0;
 	}
@@ -542,7 +593,7 @@ The CMake for this program is a bit more complex than the other examples.
 
 We'll start off like we did in "ISOBUS Hello World".
 
-.. code-block:: text
+.. code-block:: cmake
 
 	cmake_minimum_required(VERSION 3.16)
 
@@ -560,22 +611,22 @@ We'll start off like we did in "ISOBUS Hello World".
 
 	add_executable(vt_example main.cpp)
 
-Looking "ISOBUS Hello World" we had this next:
+Looking at "ISOBUS Hello World", we had this next:
 
-.. code-block:: c++
+.. code-block:: cmake
 
 	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
 
 But like we mentioned earlier, we're now using a function (the IOP file reader) in the isobus utility library called "Utility", so we need to link that too:
 
-.. code-block:: c++
+.. code-block:: cmake
 
 	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 We also want to move our IOP file to be in the same folder as the executable after it's built, so that it can locate it.
 We can do that with this little handy bit of CMake:
 
-.. code-block:: text
+.. code-block:: cmake
 
 	add_custom_command(
 		TARGET vt_example
@@ -585,7 +636,7 @@ We can do that with this little handy bit of CMake:
 
 Now you should be able to build and run the program!
 
-.. code-block:: text
+.. code-block:: bash
 
 	cmake -S . -B build
 	cmake --build build
