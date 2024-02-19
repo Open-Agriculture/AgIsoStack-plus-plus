@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
-#include "isobus/hardware_integration/socket_can_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
@@ -37,6 +36,8 @@ void callback(const CANMessage &message, void *parent)
 	EXPECT_EQ(value64, 4);
 	value64 = message.get_data_custom_length(14, 3, CANMessage::ByteFormat::BigEndian);
 	EXPECT_EQ(value64, 4);
+	EXPECT_THROW({ value64 = message.get_data_custom_length(63, 999999); }, std::out_of_range);
+	EXPECT_THROW({ value64 = message.get_data_custom_length(65748321, 1); }, std::out_of_range);
 }
 
 TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
@@ -44,9 +45,6 @@ TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
-	NAME testName;
-	std::shared_ptr<InternalControlFunction> testEcu = InternalControlFunction::create(testName, 0x1C, 0);
-	std::shared_ptr<InternalControlFunction> testEcu2 = InternalControlFunction::create(testName, 0x1A, 0);
 	CANNetworkManager::CANNetwork.update();
 	CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xE100, callback, nullptr);
 

@@ -340,7 +340,7 @@ namespace isobus
 		{
 			auto byteIndex = i / 8;
 			auto bitIndexWithinByte = i % 8;
-			auto bit = (data[byteIndex] >> (indexOfFinalByteBit - bitIndexWithinByte)) & 1;
+			auto bit = (data.at(byteIndex) >> (indexOfFinalByteBit - bitIndexWithinByte)) & 1;
 			if (length - bitCounter < 8)
 			{
 				currentByte |= static_cast<uint8_t>(bit) << (length - 1 - bitCounter);
