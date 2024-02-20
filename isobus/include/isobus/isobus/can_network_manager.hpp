@@ -187,8 +187,9 @@ namespace isobus
 
 		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
 		/// Use this to register for FP multipacket messages
+		/// @param[in] canPortIndex The CAN channel index to get the fast packet protocol for
 		/// @returns The class instance of the NMEA2k fast packet protocol.
-		FastPacketProtocol &get_fast_packet_protocol();
+		std::unique_ptr<FastPacketProtocol> &get_fast_packet_protocol(std::uint8_t canPortIndex);
 
 		/// @brief Returns the configuration of this network manager
 		/// @returns The configuration class for this network manager
@@ -207,7 +208,6 @@ namespace isobus
 		friend class DiagnosticProtocol; ///< Allows the diagnostic protocol to access the protected functions on the network manager
 		friend class ParameterGroupNumberRequestProtocol; ///< Allows the PGN request protocol to access the network manager protected functions
 		friend class FastPacketProtocol; ///< Allows the FP protocol to access the network manager protected functions
-		friend class CANLibProtocol; ///< Allows the CANLib protocol base class functions to access the network manager protected functions
 
 		/// @brief Adds a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for
@@ -244,8 +244,6 @@ namespace isobus
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
 		/// @param[in] message The completed protocol message
 		void protocol_message_callback(const CANMessage &message);
-
-		std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
 
 	private:
 		/// @brief Constructor for the network manager. Sets default values for members
@@ -380,7 +378,7 @@ namespace isobus
 		CANNetworkConfiguration configuration; ///< The configuration for this network manager
 		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
 		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
-		FastPacketProtocol fastPacketProtocol; ///< Instance of the fast packet protocol
+		std::array<std::unique_ptr<FastPacketProtocol>, CAN_PORT_MAXIMUM> fastPacketProtocol; ///< One instance of the fast packet protocol for each channel
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window

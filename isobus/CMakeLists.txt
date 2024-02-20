@@ -10,7 +10,6 @@ set(ISOBUS_INCLUDE_DIR "include/isobus/isobus")
 # Set source files
 set(ISOBUS_SRC
     "can_NAME.cpp"
-    "can_protocol.cpp"
     "can_identifier.cpp"
     "can_control_function.cpp"
     "can_message.cpp"
@@ -53,7 +52,6 @@ prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
 # Set the include files
 set(ISOBUS_INCLUDE
     "can_NAME.hpp"
-    "can_protocol.hpp"
     "can_badge.hpp"
     "can_identifier.hpp"
     "can_control_function.hpp"

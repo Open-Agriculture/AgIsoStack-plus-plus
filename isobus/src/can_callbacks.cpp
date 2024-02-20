@@ -11,55 +11,38 @@
 namespace isobus
 {
 	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, std::shared_ptr<InternalControlFunction> internalControlFunction) :
-	  mCallback(callback),
-	  mParameterGroupNumber(parameterGroupNumber),
-	  mParent(parentPointer),
-	  mInternalControlFunctionFilter(internalControlFunction)
-	{
-	}
-
-	ParameterGroupNumberCallbackData::ParameterGroupNumberCallbackData(const ParameterGroupNumberCallbackData &oldObj) :
-	  mCallback(oldObj.mCallback),
-	  mParameterGroupNumber(oldObj.mParameterGroupNumber),
-	  mParent(oldObj.mParent),
-	  mInternalControlFunctionFilter(oldObj.mInternalControlFunctionFilter)
+	  callback(callback),
+	  parameterGroupNumber(parameterGroupNumber),
+	  parent(parentPointer),
+	  internalControlFunctionFilter(internalControlFunction)
 	{
 	}
 
 	bool ParameterGroupNumberCallbackData::operator==(const ParameterGroupNumberCallbackData &obj) const
 	{
-		return ((obj.mCallback == this->mCallback) &&
-		        (obj.mParameterGroupNumber == this->mParameterGroupNumber) &&
-		        (obj.mParent == this->mParent) &&
-		        (obj.mInternalControlFunctionFilter == this->mInternalControlFunctionFilter));
-	}
-
-	ParameterGroupNumberCallbackData &ParameterGroupNumberCallbackData::operator=(const ParameterGroupNumberCallbackData &obj)
-	{
-		mCallback = obj.mCallback;
-		mParameterGroupNumber = obj.mParameterGroupNumber;
-		mParent = obj.mParent;
-		mInternalControlFunctionFilter = obj.mInternalControlFunctionFilter;
-		return *this;
+		return ((obj.callback == this->callback) &&
+		        (obj.parameterGroupNumber == this->parameterGroupNumber) &&
+		        (obj.parent == this->parent) &&
+		        (obj.internalControlFunctionFilter == this->internalControlFunctionFilter));
 	}
 
 	std::uint32_t ParameterGroupNumberCallbackData::get_parameter_group_number() const
 	{
-		return mParameterGroupNumber;
+		return parameterGroupNumber;
 	}
 
 	CANLibCallback ParameterGroupNumberCallbackData::get_callback() const
 	{
-		return mCallback;
+		return callback;
 	}
 
 	void *ParameterGroupNumberCallbackData::get_parent() const
 	{
-		return mParent;
+		return parent;
 	}
 
 	std::shared_ptr<InternalControlFunction> ParameterGroupNumberCallbackData::get_internal_control_function() const
 	{
-		return mInternalControlFunctionFilter;
+		return internalControlFunctionFilter;
 	}
 } // namespace isobus
