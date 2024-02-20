@@ -15,7 +15,6 @@
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -166,31 +165,6 @@ namespace isobus
 				// Successfully sent via the extended transport protocol
 				retVal = true;
 			}
-			else
-			{
-				//! @todo convert the other protocols to stop using the abstract protocollib class
-				CANLibProtocol *currentProtocol;
-				// See if any transport layer protocol can handle this message
-				for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
-				{
-					if (CANLibProtocol::get_protocol(i, currentProtocol))
-					{
-						retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
-						                                                    dataBuffer,
-						                                                    dataLength,
-						                                                    sourceControlFunction,
-						                                                    destinationControlFunction,
-						                                                    transmitCompleteCallback,
-						                                                    parentPointer,
-						                                                    frameChunkCallback);
-
-						if (retVal)
-						{
-							break;
-						}
-					}
-				}
-			}
 
 			//! @todo Allow sending 8 byte message with the frameChunkCallback
 			if ((!retVal) &&
@@ -241,20 +215,7 @@ namespace isobus
 		{
 			transportProtocols[i]->update();
 			extendedTransportProtocols[i]->update();
-		}
-
-		for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
-		{
-			CANLibProtocol *currentProtocol = nullptr;
-
-			if (CANLibProtocol::get_protocol(i, currentProtocol))
-			{
-				if (!currentProtocol->get_is_initialized())
-				{
-					currentProtocol->initialize({});
-				}
-				currentProtocol->update({});
-			}
+			fastPacketProtocol[i]->update();
 		}
 		update_busload_history();
 		updateTimestamp_ms = SystemTiming::get_timestamp_ms();
@@ -469,9 +430,9 @@ namespace isobus
 		return retVal;
 	}
 
-	FastPacketProtocol &CANNetworkManager::get_fast_packet_protocol()
+	std::unique_ptr<FastPacketProtocol> &CANNetworkManager::get_fast_packet_protocol(std::uint8_t canPortIndex)
 	{
-		return fastPacketProtocol;
+		return fastPacketProtocol[canPortIndex];
 	}
 
 	CANNetworkConfiguration &CANNetworkManager::get_configuration()
@@ -542,6 +503,7 @@ namespace isobus
 			};
 			transportProtocols[i].reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols[i].reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
+			fastPacketProtocol[i].reset(new FastPacketProtocol(send_frame_callback));
 		}
 	}
 
@@ -1069,6 +1031,7 @@ namespace isobus
 			// Update Special Callbacks, like protocols and non-cf specific ones
 			transportProtocols[currentMessage.get_can_port_index()]->process_message(currentMessage);
 			extendedTransportProtocols[currentMessage.get_can_port_index()]->process_message(currentMessage);
+			fastPacketProtocol[currentMessage.get_can_port_index()]->process_message(currentMessage);
 			process_protocol_pgn_callbacks(currentMessage);
 			process_any_control_function_pgn_callbacks(currentMessage);
 

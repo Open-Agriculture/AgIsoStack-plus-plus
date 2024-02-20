@@ -88,7 +88,7 @@ int main()
 
 	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
 
-	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
+	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 
 	// Wait to make sure address claiming is done. The time is arbitrary.
 	//! @todo Check this instead of assuming it is done
@@ -106,13 +106,13 @@ int main()
 	while (running)
 	{
 		// Send a fast packet message
-		isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, TestInternalECU, nullptr, isobus::CANIdentifier::CANPriority::PriorityLowest7, nmea2k_transmit_complete_callback);
+		isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->send_multipacket_message(0x1F001, testMessageData, TEST_MESSAGE_LENGTH, TestInternalECU, nullptr, isobus::CANIdentifier::CANPriority::PriorityLowest7, nmea2k_transmit_complete_callback);
 
 		// Sleep for a while
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 	}
 
 	isobus::CANHardwareInterface::stop();
-	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol().remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
+	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->remove_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 	return 0;
 }

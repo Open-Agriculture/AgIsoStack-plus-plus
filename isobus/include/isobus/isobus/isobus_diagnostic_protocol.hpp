@@ -37,7 +37,6 @@
 #define ISOBUS_DIAGNOSTIC_PROTOCOL_HPP
 
 #include "isobus/isobus/can_internal_control_function.hpp"
-#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/processing_flags.hpp"
 

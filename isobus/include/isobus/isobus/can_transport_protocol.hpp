@@ -304,7 +304,7 @@ namespace isobus
 		/// @param[in] message The CAN message to be processed.
 		void process_data_transfer_message(const CANMessage &message);
 
-		/// @brief Gets a TP session from the passed in source and destination and PGN combination
+		/// @brief Gets a TP session from the passed in source and destination combination
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @returns a matching session, or nullptr if no session matched the supplied parameters

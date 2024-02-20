@@ -15,7 +15,6 @@
 
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
-#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/utility/processing_flags.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 

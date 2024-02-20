@@ -1003,7 +1003,6 @@ namespace isobus
 		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
-		// Instead of returning a pointer, we return by reference to indicate it should not be deleted or stored
 		return (activeSessions.end() != result) ? (*result) : nullptr;
 	}
 
