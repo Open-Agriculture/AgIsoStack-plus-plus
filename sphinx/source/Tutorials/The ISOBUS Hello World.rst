@@ -43,7 +43,7 @@ Let's set up a standard, empty C++ program in a file called "main.cpp", and incl
 
 The file `"can_network_manager.hpp" <https://delgrossoengineering.com/isobus-docs/can__network__manager_8hpp.html>`_ is the header file for the main interface for the CAN stack.
 
-The file `"socket_can_interface.hpp" <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/socket_can/include/socket_can_interface.hpp>`_ is a hardware tie-in for socket CAN.
+The file `"socket_can_interface.hpp" <https://delgrossoengineering.com/isobus-docs/socket__can__interface_8hpp>`_ is a hardware tie-in for socket CAN.
 
 The file `"can_partnered_control_function.hpp" <https://delgrossoengineering.com/isobus-docs/can__partnered__control__function_8hpp.html>`_ Defines the interface for a *partnered control function*, which is another device you want to communicate with.
 
