@@ -58,6 +58,7 @@ set(TEST_SRC
     nmea2000_message_tests.cpp
     isobus_data_dictionary_tests.cpp
     can_message_tests.cpp
+    heartbeat_tests.cpp
     helpers/control_function_helpers.cpp
     helpers/messaging_helpers.cpp)
 

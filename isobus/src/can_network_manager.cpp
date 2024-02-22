@@ -204,6 +204,14 @@ namespace isobus
 		update_new_partners();
 
 		process_rx_messages();
+
+		// Update ISOBUS heartbeats (should be done before process_tx_messages
+		// to minimize latency in safety critical paths)
+		for (std::uint32_t i = 0; i < CAN_PORT_MAXIMUM; i++)
+		{
+			heartBeatInterfaces.at(i)->update();
+		}
+
 		process_tx_messages();
 
 		update_internal_cfs();
@@ -305,6 +313,7 @@ namespace isobus
 	{
 		if (ControlFunction::Type::Internal == controlFunction->get_type())
 		{
+			heartBeatInterfaces.at(controlFunction->canPortIndex)->on_destroyed_internal_control_function(std::static_pointer_cast<InternalControlFunction>(controlFunction));
 			internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
 		}
 		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
@@ -358,6 +367,7 @@ namespace isobus
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<InternalControlFunction>)
 	{
 		on_control_function_created(controlFunction);
+		heartBeatInterfaces.at(controlFunction->canPortIndex)->on_new_internal_control_function(std::static_pointer_cast<InternalControlFunction>(controlFunction));
 	}
 
 	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<PartneredControlFunction>)
@@ -435,6 +445,12 @@ namespace isobus
 		return fastPacketProtocol[canPortIndex];
 	}
 
+	HeartbeatInterface &CANNetworkManager::get_heartbeat_interface(std::uint8_t canPortIndex)
+	{
+		assert(canPortIndex < CAN_PORT_MAXIMUM); // You passed in an out of range index!
+		return *heartBeatInterfaces.at(canPortIndex);
+	}
+
 	CANNetworkConfiguration &CANNetworkManager::get_configuration()
 	{
 		return configuration;
@@ -501,9 +517,10 @@ namespace isobus
 				                       i);
 				this->protocol_message_callback(message);
 			};
-			transportProtocols[i].reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
-			extendedTransportProtocols[i].reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
-			fastPacketProtocol[i].reset(new FastPacketProtocol(send_frame_callback));
+			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
+			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
+			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
+			heartBeatInterfaces.at(i).reset(new HeartbeatInterface(send_frame_callback));
 		}
 	}
 
@@ -1029,9 +1046,10 @@ namespace isobus
 			process_can_message_for_address_violations(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
-			transportProtocols[currentMessage.get_can_port_index()]->process_message(currentMessage);
-			extendedTransportProtocols[currentMessage.get_can_port_index()]->process_message(currentMessage);
-			fastPacketProtocol[currentMessage.get_can_port_index()]->process_message(currentMessage);
+			transportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
+			extendedTransportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
+			fastPacketProtocol.at(currentMessage.get_can_port_index())->process_message(currentMessage);
+			heartBeatInterfaces.at(currentMessage.get_can_port_index())->process_rx_message(currentMessage);
 			process_protocol_pgn_callbacks(currentMessage);
 			process_any_control_function_pgn_callbacks(currentMessage);
 

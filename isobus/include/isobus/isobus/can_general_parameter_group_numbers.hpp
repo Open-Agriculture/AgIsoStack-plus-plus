@@ -33,6 +33,7 @@ namespace isobus
 		AddressClaim = 0xEE00,
 		ProprietaryA = 0xEF00,
 		MachineSelectedSpeed = 0xF022,
+		HeartbeatMessage = 0xF0E4,
 		ProductIdentification = 0xFC8D,
 		ControlFunctionFunctionalities = 0xFC8E,
 		DiagnosticProtocolIdentification = 0xFD32,

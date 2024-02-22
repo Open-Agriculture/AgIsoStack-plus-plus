@@ -23,6 +23,7 @@
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
+#include "isobus/isobus/isobus_heartbeat.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
@@ -190,6 +191,11 @@ namespace isobus
 		/// @param[in] canPortIndex The CAN channel index to get the fast packet protocol for
 		/// @returns The class instance of the NMEA2k fast packet protocol.
 		std::unique_ptr<FastPacketProtocol> &get_fast_packet_protocol(std::uint8_t canPortIndex);
+
+		/// @brief Returns an interface which can be used to manage ISO11783-7 heartbeat messages.
+		/// @param[in] canPortIndex The index of the CAN channel associated to the interface you're requesting
+		/// @returns ISO11783-7 heartbeat interface
+		HeartbeatInterface &get_heartbeat_interface(std::uint8_t canPortIndex);
 
 		/// @brief Returns the configuration of this network manager
 		/// @returns The configuration class for this network manager
@@ -379,6 +385,7 @@ namespace isobus
 		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
 		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
 		std::array<std::unique_ptr<FastPacketProtocol>, CAN_PORT_MAXIMUM> fastPacketProtocol; ///< One instance of the fast packet protocol for each channel
+		std::array<std::unique_ptr<HeartbeatInterface>, CAN_PORT_MAXIMUM> heartBeatInterfaces; ///< Manages ISOBUS heartbeat requests, one per channel
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
