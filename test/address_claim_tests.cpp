@@ -46,7 +46,7 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	secondName.set_function_instance(0);
 	secondName.set_device_class_instance(0);
 	secondName.set_manufacturer_code(69);
-	auto secondInternalECU2 = InternalControlFunction::create(secondName, 0x1D, 1);
+	auto secondInternalECU2 = InternalControlFunction::create(secondName, 1);
 
 	const NAMEFilter filterSecond(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::SeatControl));
 	auto firstPartneredSecondECU = PartneredControlFunction::create(0, { filterSecond });

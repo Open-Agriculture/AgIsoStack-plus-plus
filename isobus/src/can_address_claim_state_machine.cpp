@@ -24,8 +24,13 @@ namespace isobus
 	  m_preferredAddress(preferredAddressValue)
 	{
 		assert(m_preferredAddress != BROADCAST_CAN_ADDRESS);
-		assert(m_preferredAddress != NULL_CAN_ADDRESS);
 		assert(portIndex < CAN_PORT_MAXIMUM);
+
+		if (NULL_CAN_ADDRESS == m_preferredAddress)
+		{
+			// If we don't have a preferred address, your NAME must be arbitrary address capable!
+			assert(m_isoname.get_arbitrary_address_capable());
+		}
 		std::default_random_engine generator;
 		std::uniform_int_distribution<unsigned int> distribution(0, 255);
 		m_randomClaimDelay_ms = distribution(generator) * 0.6f; // Defined by ISO part 5
@@ -143,9 +148,16 @@ namespace isobus
 
 					if (SystemTiming::time_expired_ms(m_timestamp_ms, addressContentionTime_ms + m_randomClaimDelay_ms))
 					{
-						std::shared_ptr<ControlFunction> deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, m_preferredAddress, {});
+						std::shared_ptr<ControlFunction> deviceAtOurPreferredAddress;
+
+						if (NULL_CAN_ADDRESS != m_preferredAddress)
+						{
+							deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(m_portIndex, m_preferredAddress, {});
+						}
+
 						// Time to find a free address
-						if (nullptr == deviceAtOurPreferredAddress)
+						if ((nullptr == deviceAtOurPreferredAddress) &&
+						    (NULL_CAN_ADDRESS != m_preferredAddress))
 						{
 							// Our address is free. This is the best outcome. Claim it.
 							set_current_state(State::SendPreferredAddressClaim);
@@ -164,7 +176,8 @@ namespace isobus
 						else
 						{
 							// We will move to another address if whoever is in our spot has a lower NAME
-							if (deviceAtOurPreferredAddress->get_NAME().get_full_name() < m_isoname.get_full_name())
+							if ((nullptr == deviceAtOurPreferredAddress) ||
+							    (deviceAtOurPreferredAddress->get_NAME().get_full_name() < m_isoname.get_full_name()))
 							{
 								set_current_state(State::SendArbitraryAddressClaim);
 							}
@@ -199,11 +212,16 @@ namespace isobus
 					// Search the range of generally available addresses
 					bool addressFound = false;
 
-					for (std::uint8_t i = 128; i <= 247; i++)
+					for (std::uint8_t i = 128; i <= 235; i++)
 					{
 						if ((nullptr == CANNetworkManager::CANNetwork.get_control_function(m_portIndex, i, {})) && (send_address_claim(i)))
 						{
 							addressFound = true;
+
+							if (NULL_CAN_ADDRESS == m_preferredAddress)
+							{
+								m_preferredAddress = i;
+							}
 							LOG_DEBUG("[AC]: Internal control function %016llx could not use the preferred address, but has claimed address %u on channel %u",
 							          m_isoname.get_full_name(),
 							          i,

@@ -34,6 +34,11 @@ namespace isobus
 		return controlFunction;
 	}
 
+	std::shared_ptr<InternalControlFunction> InternalControlFunction::create(NAME desiredName, std::uint8_t CANPort)
+	{
+		return create(desiredName, NULL_CAN_ADDRESS, CANPort);
+	}
+
 	bool InternalControlFunction::destroy(std::uint32_t expectedRefCount)
 	{
 		// We need to destroy the PGN request protocol before we destroy the control function
