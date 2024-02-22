@@ -64,7 +64,7 @@ bool Seeder::initialize()
 	TestDeviceNAME.set_ecu_instance(0);
 	TestDeviceNAME.set_function_instance(0);
 	TestDeviceNAME.set_device_class_instance(0);
-	TestDeviceNAME.set_manufacturer_code(64);
+	TestDeviceNAME.set_manufacturer_code(1407);
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	const isobus::NAMEFilter filterTaskController(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));

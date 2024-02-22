@@ -27,7 +27,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 	diagnosticProtocol.reset();
 
 	EXPECT_EQ(pgnRequestProtocol->get_number_registered_pgn_request_callbacks(), 0);
-	EXPECT_EQ(pgnRequestProtocol->get_number_registered_request_for_repetition_rate_callbacks(), 0);
+	EXPECT_EQ(pgnRequestProtocol->get_number_registered_request_for_repetition_rate_callbacks(), 1); // The heartbeat is registered by default
 
 	pgnRequestProtocol.reset();
 
