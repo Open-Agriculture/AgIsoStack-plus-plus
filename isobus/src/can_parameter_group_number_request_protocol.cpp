@@ -182,7 +182,7 @@ namespace isobus
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
-							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), requestedRate, repetitionRateCallback.parent)))
+							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), requestedRate, repetitionRateCallback.parent)))
 							{
 								// If the callback was able to process the PGN request, stop processing more.
 								break;

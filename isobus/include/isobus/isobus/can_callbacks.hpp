@@ -69,6 +69,7 @@ namespace isobus
 	/// @brief A callback for handling a request for repetition rate for a specific PGN
 	using PGNRequestForRepetitionRateCallback = bool (*)(std::uint32_t parameterGroupNumber,
 	                                                     std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                     std::shared_ptr<ControlFunction> targetControlFunction,
 	                                                     std::uint32_t repetitionRate,
 	                                                     void *parentPointer);
 
