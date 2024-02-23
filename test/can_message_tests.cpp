@@ -66,5 +66,6 @@ TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
 	testFrame.identifier = 0x18E1FFAA;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(0xE100, callback, nullptr);
 	CANHardwareInterface::stop();
 }
