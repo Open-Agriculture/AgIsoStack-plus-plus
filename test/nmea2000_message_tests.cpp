@@ -508,7 +508,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_course_speed_over_ground_message_sources());
 		EXPECT_EQ(nullptr, interfaceUnderTest.get_received_course_speed_over_ground_message(0));
 
-		auto listenerHandle = interfaceUnderTest.get_course_speed_over_ground_rapid_update_event_publisher().add_listener(test_cog_sog_callback);
+		interfaceUnderTest.get_course_speed_over_ground_rapid_update_event_publisher().add_listener(test_cog_sog_callback);
 
 		// Pass the frame back in but as an RX message
 		testFrame.identifier = 0x19F80252;
@@ -602,7 +602,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_datum_message_sources());
 		EXPECT_EQ(nullptr, interfaceUnderTest.get_received_datum_message(0));
 
-		auto listenerHandle = interfaceUnderTest.get_datum_event_publisher().add_listener(test_datum_callback);
+		interfaceUnderTest.get_datum_event_publisher().add_listener(test_datum_callback);
 
 		// Pass the fast packet back in to simulate receiving
 		testFrame.identifier = 0x19F81452;
@@ -703,7 +703,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 			EXPECT_EQ(comparisonBuffer.at(i), lastFastPacketPayload.at(i));
 		}
 
-		auto listenerHandle = interfaceUnderTest.get_gnss_position_data_event_publisher().add_listener(test_gnss_position_data_callback);
+		interfaceUnderTest.get_gnss_position_data_event_publisher().add_listener(test_gnss_position_data_callback);
 
 		// Pass the fast packet back in to simulate receiving
 		testFrame.identifier = 0x19F80552;
@@ -787,7 +787,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_position_delta_high_precision_rapid_update_message_sources());
 		EXPECT_EQ(nullptr, interfaceUnderTest.get_received_position_delta_high_precision_rapid_update_message(0));
 
-		auto listenerHandle = interfaceUnderTest.get_position_delta_high_precision_rapid_update_event_publisher().add_listener(test_position_delta_high_speed_rapid_update_callback);
+		interfaceUnderTest.get_position_delta_high_precision_rapid_update_event_publisher().add_listener(test_position_delta_high_speed_rapid_update_callback);
 
 		// Pass the message back in
 		testFrame.identifier = 0x19F80352;
@@ -852,7 +852,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_datum_message_sources());
 		EXPECT_EQ(nullptr, interfaceUnderTest.get_received_datum_message(0));
 
-		auto listenerHandle = interfaceUnderTest.get_position_rapid_update_event_publisher().add_listener(test_position_rapid_update_callback);
+		interfaceUnderTest.get_position_rapid_update_event_publisher().add_listener(test_position_rapid_update_callback);
 
 		// Pass the message back in
 		testFrame.identifier = 0x19F80152;
@@ -910,7 +910,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		// Pass the message back in
 		testFrame.identifier = 0x19F11352;
 
-		auto listenerHandle = interfaceUnderTest.get_rate_of_turn_event_publisher().add_listener(test_rate_of_turn_callback);
+		interfaceUnderTest.get_rate_of_turn_event_publisher().add_listener(test_rate_of_turn_callback);
 
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
@@ -967,7 +967,7 @@ TEST(NMEA2000_Tests, NMEA2KInterface)
 		// Pass the message back in
 		testFrame.identifier = 0x19F11252;
 
-		auto listenerHandle = interfaceUnderTest.get_vessel_heading_event_publisher().add_listener(test_vessel_heading_callback);
+		interfaceUnderTest.get_vessel_heading_event_publisher().add_listener(test_vessel_heading_callback);
 
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();

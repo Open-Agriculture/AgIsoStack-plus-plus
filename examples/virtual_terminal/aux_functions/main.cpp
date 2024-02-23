@@ -101,7 +101,7 @@ int main()
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
-	auto auxFunctionListener = TestVirtualTerminalClient->add_auxiliary_function_event_listener(handle_aux_function_input);
+	TestVirtualTerminalClient->get_auxiliary_function_event_dispatcher().add_listener(handle_aux_function_input);
 	TestVirtualTerminalClient->initialize(true);
 
 	while (running)

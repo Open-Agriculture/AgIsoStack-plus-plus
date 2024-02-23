@@ -41,6 +41,14 @@ namespace isobus
 		/// @returns A shared pointer to an InternalControlFunction object created with the parameters passed in
 		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
 
+		/// @brief The factory function to construct an internal control function.
+		/// This version of the factory function will automatically assign the preferred address somewhere in the arbitrary address
+		/// range, which means your NAME must have the arbitrary address bit set.
+		/// @param[in] desiredName The NAME for this control function to claim as
+		/// @param[in] CANPort The CAN channel index for this control function to use
+		/// @returns A shared pointer to an InternalControlFunction object created with the parameters passed in
+		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t CANPort);
+
 		/// @brief Destroys this control function, by removing it from the network manager
 		/// @param[in] expectedRefCount The expected number of shared pointers to this control function after removal
 		/// @returns true if the control function was successfully removed from everywhere in the stack, otherwise false

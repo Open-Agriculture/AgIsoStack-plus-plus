@@ -20,7 +20,7 @@ namespace isobus
 	{
 		if (channel > USBCAN_CHANNEL_CH1)
 		{
-			isobus::CANStackLogger::critical("[SYSTEC]: Invalid channel");
+			LOG_CRITICAL("[SYSTEC]: Invalid channel");
 		}
 	}
 
@@ -85,17 +85,17 @@ namespace isobus
 
 				if (!openResult)
 				{
-					isobus::CANStackLogger::critical("[SYSTEC]: Error trying to configure a SYS TEC probe channel");
+					LOG_CRITICAL("[SYSTEC]: Error trying to configure a SYS TEC probe channel");
 				}
 			}
 			else
 			{
-				isobus::CANStackLogger::critical("[SYSTEC]: Error trying to connect to SYS TEC probe");
+				LOG_CRITICAL("[SYSTEC]: Error trying to connect to SYS TEC probe");
 			}
 		}
 		else
 		{
-			isobus::CANStackLogger::warn("[SYSTEC]: CAN Adapter already initialized.");
+			LOG_WARNING("[SYSTEC]: CAN Adapter already initialized.");
 		}
 	}
 

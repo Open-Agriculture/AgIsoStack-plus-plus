@@ -316,8 +316,9 @@ namespace isobus
 	{
 		if (!initialized)
 		{
-			CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
-			CANNetworkManager::CANNetwork.get_fast_packet_protocol().register_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
+			const auto &fastPacketProtocol = CANNetworkManager::CANNetwork.get_fast_packet_protocol(0); // TODO: This should be a configurable can index (will be solved with the new CAN network manager)
+			fastPacketProtocol->register_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
+			fastPacketProtocol->register_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::CourseOverGroundSpeedOverGroundRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionDeltaHighPrecisionRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionRapidUpdate), process_rx_message, this);
@@ -336,8 +337,9 @@ namespace isobus
 	{
 		if (initialized)
 		{
-			CANNetworkManager::CANNetwork.get_fast_packet_protocol().remove_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
-			CANNetworkManager::CANNetwork.get_fast_packet_protocol().remove_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
+			const auto &fastPacketProtocol = CANNetworkManager::CANNetwork.get_fast_packet_protocol(0); // TODO: This should be a configurable can index (will be solved with the new CAN network manager)
+			fastPacketProtocol->remove_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum), process_rx_message, this);
+			fastPacketProtocol->remove_multipacket_message_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::CourseOverGroundSpeedOverGroundRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionDeltaHighPrecisionRapidUpdate), process_rx_message, this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::PositionRapidUpdate), process_rx_message, this);
@@ -357,7 +359,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[NMEA2K]: Interface not initialized!");
+			LOG_ERROR("[NMEA2K]: Interface not initialized!");
 		}
 	}
 
@@ -392,12 +394,12 @@ namespace isobus
 					if (nullptr != targetInterface->datumTransmitMessage.get_control_function())
 					{
 						targetInterface->datumTransmitMessage.serialize(messageBuffer);
-						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum),
-						                                                                                                       messageBuffer.data(),
-						                                                                                                       messageBuffer.size(),
-						                                                                                                       std::static_pointer_cast<InternalControlFunction>(targetInterface->datumTransmitMessage.get_control_function()),
-						                                                                                                       nullptr,
-						                                                                                                       CANIdentifier::CANPriority::PriorityDefault6);
+						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Datum),
+						                                                                                                         messageBuffer.data(),
+						                                                                                                         messageBuffer.size(),
+						                                                                                                         std::static_pointer_cast<InternalControlFunction>(targetInterface->datumTransmitMessage.get_control_function()),
+						                                                                                                         nullptr,
+						                                                                                                         CANIdentifier::CANPriority::PriorityDefault6);
 					}
 				}
 				break;
@@ -407,12 +409,12 @@ namespace isobus
 					if (nullptr != targetInterface->gnssPositionDataTransmitMessage.get_control_function())
 					{
 						targetInterface->gnssPositionDataTransmitMessage.serialize(messageBuffer);
-						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol().send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData),
-						                                                                                                       messageBuffer.data(),
-						                                                                                                       messageBuffer.size(),
-						                                                                                                       std::static_pointer_cast<InternalControlFunction>(targetInterface->gnssPositionDataTransmitMessage.get_control_function()),
-						                                                                                                       nullptr,
-						                                                                                                       CANIdentifier::CANPriority::Priority3);
+						transmitSuccessful = CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->send_multipacket_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GNSSPositionData),
+						                                                                                                         messageBuffer.data(),
+						                                                                                                         messageBuffer.size(),
+						                                                                                                         std::static_pointer_cast<InternalControlFunction>(targetInterface->gnssPositionDataTransmitMessage.get_control_function()),
+						                                                                                                         nullptr,
+						                                                                                                         CANIdentifier::CANPriority::Priority3);
 					}
 				}
 				break;
@@ -672,7 +674,7 @@ namespace isobus
 			                                            [](std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> message) {
 				                                            if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout()))
 				                                            {
-					                                            CANStackLogger::warn("[NMEA2K]: COG & SOG message Rx timeout.");
+					                                            LOG_WARNING("[NMEA2K]: COG & SOG message Rx timeout.");
 					                                            return true;
 				                                            }
 				                                            return false;
@@ -683,7 +685,7 @@ namespace isobus
 			                                           [](std::shared_ptr<Datum> message) {
 				                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * Datum::get_timeout()))
 				                                           {
-					                                           CANStackLogger::warn("[NMEA2K]: Datum message Rx timeout.");
+					                                           LOG_WARNING("[NMEA2K]: Datum message Rx timeout.");
 					                                           return true;
 				                                           }
 				                                           return false;
@@ -694,7 +696,7 @@ namespace isobus
 			                                                      [](std::shared_ptr<GNSSPositionData> message) {
 				                                                      if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * GNSSPositionData::get_timeout()))
 				                                                      {
-					                                                      CANStackLogger::warn("[NMEA2K]: GNSS position data message Rx timeout.");
+					                                                      LOG_WARNING("[NMEA2K]: GNSS position data message Rx timeout.");
 					                                                      return true;
 				                                                      }
 				                                                      return false;
@@ -705,7 +707,7 @@ namespace isobus
 			                                                                           [](std::shared_ptr<PositionDeltaHighPrecisionRapidUpdate> message) {
 				                                                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionDeltaHighPrecisionRapidUpdate::get_timeout()))
 				                                                                           {
-					                                                                           CANStackLogger::warn("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
+					                                                                           LOG_WARNING("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
 					                                                                           return true;
 				                                                                           }
 				                                                                           return false;
@@ -716,7 +718,7 @@ namespace isobus
 			                                                         [](std::shared_ptr<PositionRapidUpdate> message) {
 				                                                         if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionRapidUpdate::get_timeout()))
 				                                                         {
-					                                                         CANStackLogger::warn("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
+					                                                         LOG_WARNING("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
 					                                                         return true;
 				                                                         }
 				                                                         return false;
@@ -727,7 +729,7 @@ namespace isobus
 			                                                [](std::shared_ptr<RateOfTurn> message) {
 				                                                if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * RateOfTurn::get_timeout()))
 				                                                {
-					                                                CANStackLogger::warn("[NMEA2K]: Rate of turn message Rx timeout.");
+					                                                LOG_WARNING("[NMEA2K]: Rate of turn message Rx timeout.");
 					                                                return true;
 				                                                }
 				                                                return false;
@@ -738,7 +740,7 @@ namespace isobus
 			                                                   [](std::shared_ptr<VesselHeading> message) {
 				                                                   if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * VesselHeading::get_timeout()))
 				                                                   {
-					                                                   CANStackLogger::warn("[NMEA2K]: Vessel heading message Rx timeout.");
+					                                                   LOG_WARNING("[NMEA2K]: Vessel heading message Rx timeout.");
 					                                                   return true;
 				                                                   }
 				                                                   return false;

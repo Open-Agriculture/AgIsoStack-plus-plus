@@ -119,7 +119,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::warn("[DP] DiagnosticProtocol's initialize() called when already initialized");
+			LOG_WARNING("[DP] DiagnosticProtocol's initialize() called when already initialized");
 		}
 		return retVal;
 	}
@@ -149,7 +149,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
 			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
-			addressViolationEventHandle.reset();
+			CANNetworkManager::CANNetwork.get_address_violation_event_dispatcher().remove_listener(addressViolationEventHandle);
 		}
 	}
 

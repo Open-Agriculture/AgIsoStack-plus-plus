@@ -44,7 +44,7 @@ namespace isobus
 		std::size_t seed = iopData.size();
 		std::stringstream stream;
 
-		for (auto x : iopData)
+		for (std::uint32_t x : iopData)
 		{
 			x = ((x >> 16) ^ x) * 0x45d9f3b;
 			x = ((x >> 16) ^ x) * 0x45d9f3b;

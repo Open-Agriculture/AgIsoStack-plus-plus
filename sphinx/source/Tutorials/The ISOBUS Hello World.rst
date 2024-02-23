@@ -43,7 +43,7 @@ Let's set up a standard, empty C++ program in a file called "main.cpp", and incl
 
 The file `"can_network_manager.hpp" <https://delgrossoengineering.com/isobus-docs/can__network__manager_8hpp.html>`_ is the header file for the main interface for the CAN stack.
 
-The file `"socket_can_interface.hpp" <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/socket_can/include/socket_can_interface.hpp>`_ is a hardware tie-in for socket CAN.
+The file `"socket_can_interface.hpp" <https://delgrossoengineering.com/isobus-docs/socket__can__interface_8hpp>`_ is a hardware tie-in for socket CAN.
 
 The file `"can_partnered_control_function.hpp" <https://delgrossoengineering.com/isobus-docs/can__partnered__control__function_8hpp.html>`_ Defines the interface for a *partnered control function*, which is another device you want to communicate with.
 
@@ -59,7 +59,8 @@ Check out the :doc:`concepts section <../Concepts>`, if you need to brush up on 
 
 Let's create a `NAME <https://delgrossoengineering.com/isobus-docs/classisobus_1_1NAME.html>`_ in our program.
 
-NOTE: Everything that is part of the stack is in the namespace `"isobus" <https://delgrossoengineering.com/isobus-docs/namespaceisobus.html>`_!
+.. note::
+   Everything that is part of the stack is in the namespace `"isobus" <https://delgrossoengineering.com/isobus-docs/namespaceisobus.html>`_!
 
 .. code-block:: c++
 
@@ -148,7 +149,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     return 0;
    }
 
-In this example, I created my control function with a default address of 0x1C, and assigned it to CAN channel 0.
+In this example, I created my control function with a preferred address of 0x1C, and assigned it to CAN channel 0.
 
 Now, we've got a little problem... What is CAN channel 0?
 
@@ -444,7 +445,7 @@ Add the following to a new file called CMakeLists.txt:
    
    add_executable(isobus_hello_world main.cpp)
    
-   target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
+   target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 Save and close the file.
 

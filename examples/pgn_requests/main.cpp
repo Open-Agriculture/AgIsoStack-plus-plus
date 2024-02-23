@@ -52,6 +52,7 @@ bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumbe
 
 bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t parameterGroupNumber,
                                                                std::shared_ptr<isobus::ControlFunction> requestingControlFunction,
+                                                               std::shared_ptr<isobus::ControlFunction>,
                                                                std::uint32_t repetitionRate,
                                                                void *)
 {

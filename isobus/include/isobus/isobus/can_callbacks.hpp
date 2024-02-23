@@ -69,14 +69,11 @@ namespace isobus
 	/// @brief A callback for handling a request for repetition rate for a specific PGN
 	using PGNRequestForRepetitionRateCallback = bool (*)(std::uint32_t parameterGroupNumber,
 	                                                     std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                     std::shared_ptr<ControlFunction> targetControlFunction,
 	                                                     std::uint32_t repetitionRate,
 	                                                     void *parentPointer);
 
-	//================================================================================================
-	/// @class ParameterGroupNumberCallbackData
-	///
-	/// @brief A storage class to hold data about PGN callbacks.
-	//================================================================================================
+	/// @brief A storage class to hold data about callbacks for a specific PGN
 	class ParameterGroupNumberCallbackData
 	{
 	public:
@@ -87,19 +84,10 @@ namespace isobus
 		/// @param[in] internalControlFunction An internal control function to use as an additional filter for the callback
 		ParameterGroupNumberCallbackData(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer, std::shared_ptr<InternalControlFunction> internalControlFunction);
 
-		/// @brief A copy constructor for holding callback data
-		/// @param[in] oldObj The object to copy from
-		ParameterGroupNumberCallbackData(const ParameterGroupNumberCallbackData &oldObj);
-
 		/// @brief Equality operator for this class
 		/// @param[in] obj The object to check equality against
 		/// @returns true if the objects have equivalent data
 		bool operator==(const ParameterGroupNumberCallbackData &obj) const;
-
-		/// @brief Assignment operator for this class
-		/// @param[in] obj The object to assign data from
-		/// @returns The lhs of the operator
-		ParameterGroupNumberCallbackData &operator=(const ParameterGroupNumberCallbackData &obj);
 
 		/// @brief Returns the PGN associated with this callback data
 		/// @returns The PGN associated with this callback data
@@ -118,10 +106,10 @@ namespace isobus
 		std::shared_ptr<InternalControlFunction> get_internal_control_function() const;
 
 	private:
-		CANLibCallback mCallback; ///< The callback that will get called when a matching PGN is received
-		std::uint32_t mParameterGroupNumber; ///< The PGN assocuiated with this callback
-		void *mParent; ///< A generic variable that can provide context to which object the callback was meant for
-		std::shared_ptr<InternalControlFunction> mInternalControlFunctionFilter; ///< An optional way to filter callbacks based on the destination of messages from the partner
+		CANLibCallback callback; ///< The callback that will get called when a matching PGN is received
+		std::uint32_t parameterGroupNumber; ///< The PGN assocuiated with this callback
+		void *parent; ///< A generic variable that can provide context to which object the callback was meant for
+		std::shared_ptr<InternalControlFunction> internalControlFunctionFilter; ///< An optional way to filter callbacks based on the destination of messages from the partner
 	};
 } // namespace isobus
 

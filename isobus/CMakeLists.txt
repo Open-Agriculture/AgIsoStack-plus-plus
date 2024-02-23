@@ -10,7 +10,6 @@ set(ISOBUS_INCLUDE_DIR "include/isobus/isobus")
 # Set source files
 set(ISOBUS_SRC
     "can_NAME.cpp"
-    "can_protocol.cpp"
     "can_identifier.cpp"
     "can_control_function.cpp"
     "can_message.cpp"
@@ -53,7 +52,6 @@ prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
 # Set the include files
 set(ISOBUS_INCLUDE
     "can_NAME.hpp"
-    "can_protocol.hpp"
     "can_badge.hpp"
     "can_identifier.hpp"
     "can_control_function.hpp"
@@ -97,12 +95,20 @@ set(ISOBUS_INCLUDE
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 
+option(DISABLE_CAN_STACK_LOGGER
+       "Compiles out all logging to minimize binary size" OFF)
+
 # Create the library from the source and include files
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
 add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
 
 target_compile_features(Isobus PUBLIC cxx_std_11)
 set_target_properties(Isobus PROPERTIES CXX_EXTENSIONS OFF)
+
+if(DISABLE_CAN_STACK_LOGGER)
+  message(STATUS "CAN Stack logger is disabled.")
+  target_compile_definitions(Isobus PUBLIC DISABLE_CAN_STACK_LOGGER)
+endif()
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

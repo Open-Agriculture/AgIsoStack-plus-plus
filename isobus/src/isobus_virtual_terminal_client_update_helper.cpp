@@ -19,23 +19,31 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] constructor: client is nullptr");
+			LOG_ERROR("[VTStateHelper] constructor: client is nullptr");
 			return;
 		}
-		numericValueChangeEventHandle = client->add_vt_change_numeric_value_event_listener(
+		numericValueChangeEventHandle = client->get_vt_change_numeric_value_event_dispatcher().add_listener(
 		  std::bind(&VirtualTerminalClientUpdateHelper::process_numeric_value_change_event, this, std::placeholders::_1));
+	}
+
+	VirtualTerminalClientUpdateHelper::~VirtualTerminalClientUpdateHelper()
+	{
+		if (nullptr != vtClient)
+		{
+			vtClient->get_vt_change_numeric_value_event_dispatcher().remove_listener(numericValueChangeEventHandle);
+		}
 	}
 
 	bool VirtualTerminalClientUpdateHelper::set_numeric_value(std::uint16_t object_id, std::uint32_t value)
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_numeric_value: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_numeric_value: client is nullptr");
 			return false;
 		}
 		if (numericValueStates.find(object_id) == numericValueStates.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] set_numeric_value: objectId %lu not tracked", object_id);
+			LOG_WARNING("[VTStateHelper] set_numeric_value: objectId %lu not tracked", object_id);
 			return false;
 		}
 		if (numericValueStates.at(object_id) == value)
@@ -93,7 +101,7 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_active_data_or_alarm_mask: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_active_data_or_alarm_mask: client is nullptr");
 			return false;
 		}
 		if (activeDataOrAlarmMask == dataOrAlarmMaskId)
@@ -113,12 +121,12 @@ namespace isobus
 	{
 		if (nullptr == client)
 		{
-			CANStackLogger::error("[VTStateHelper] set_active_soft_key_mask: client is nullptr");
+			LOG_ERROR("[VTStateHelper] set_active_soft_key_mask: client is nullptr");
 			return false;
 		}
 		if (softKeyMasks.find(maskId) == softKeyMasks.end())
 		{
-			CANStackLogger::warn("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%lu' not tracked", maskId);
+			LOG_WARNING("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%lu' not tracked", maskId);
 			return false;
 		}
 		if (softKeyMasks.at(maskId) == softKeyMaskId)
@@ -130,6 +138,36 @@ namespace isobus
 		if (success)
 		{
 			softKeyMasks[maskId] = softKeyMaskId;
+		}
+		return success;
+	}
+
+	bool VirtualTerminalClientUpdateHelper::set_attribute(std::uint16_t objectId, std::uint8_t attribute, std::uint32_t value)
+	{
+		if (nullptr == client)
+		{
+			LOG_ERROR("[VTStateHelper] set_attribute: client is nullptr");
+			return false;
+		}
+		if (attributeStates.find(objectId) == attributeStates.end())
+		{
+			LOG_ERROR("[VTStateHelper] set_attribute: objectId %lu not tracked", objectId);
+			return false;
+		}
+		if (attributeStates.at(objectId).find(attribute) == attributeStates.at(objectId).end())
+		{
+			LOG_WARNING("[VTStateHelper] set_attribute: attribute %lu of objectId %lu not tracked", attribute, objectId);
+			return false;
+		}
+		if (attributeStates.at(objectId).at(attribute) == value)
+		{
+			return true;
+		}
+
+		bool success = vtClient->send_change_attribute(objectId, attribute, value);
+		if (success)
+		{
+			attributeStates[objectId][attribute] = value;
 		}
 		return success;
 	}

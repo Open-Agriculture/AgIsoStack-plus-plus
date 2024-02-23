@@ -72,9 +72,7 @@ namespace isobus
 	{
 		PGNRequestCallbackInfo pgnCallback(callback, pgn, parentPointer);
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(pgnRequestMutex);
-#endif
+		LOCK_GUARD(Mutex, pgnRequestMutex);
 
 		if ((nullptr != callback) && (pgnRequestCallbacks.end() == std::find(pgnRequestCallbacks.begin(), pgnRequestCallbacks.end(), pgnCallback)))
 		{
@@ -88,9 +86,7 @@ namespace isobus
 	{
 		PGNRequestForRepetitionRateCallbackInfo repetitionRateCallback(callback, pgn, parentPointer);
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(pgnRequestMutex);
-#endif
+		LOCK_GUARD(Mutex, pgnRequestMutex);
 
 		if ((nullptr != callback) && (repetitionRateCallbacks.end() == std::find(repetitionRateCallbacks.begin(), repetitionRateCallbacks.end(), repetitionRateCallback)))
 		{
@@ -104,9 +100,7 @@ namespace isobus
 	{
 		PGNRequestCallbackInfo repetitionRateCallback(callback, pgn, parentPointer);
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(pgnRequestMutex);
-#endif
+		LOCK_GUARD(Mutex, pgnRequestMutex);
 
 		auto callbackLocation = find(pgnRequestCallbacks.begin(), pgnRequestCallbacks.end(), repetitionRateCallback);
 
@@ -122,9 +116,7 @@ namespace isobus
 	{
 		PGNRequestForRepetitionRateCallbackInfo repetitionRateCallback(callback, pgn, parentPointer);
 		bool retVal = false;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(pgnRequestMutex);
-#endif
+		LOCK_GUARD(Mutex, pgnRequestMutex);
 
 		auto callbackLocation = find(repetitionRateCallbacks.begin(), repetitionRateCallbacks.end(), repetitionRateCallback);
 
@@ -185,15 +177,12 @@ namespace isobus
 					{
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 						std::uint16_t requestedRate = message.get_uint16_at(3);
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-						const std::lock_guard<std::mutex> lock(pgnRequestMutex);
-#endif
+						LOCK_GUARD(Mutex, pgnRequestMutex);
 						for (const auto &repetitionRateCallback : repetitionRateCallbacks)
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
-							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), requestedRate, repetitionRateCallback.parent)))
+							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), requestedRate, repetitionRateCallback.parent)))
 							{
 								// If the callback was able to process the PGN request, stop processing more.
 								break;
@@ -207,7 +196,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::warn("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
+						LOG_WARNING("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
 					}
 				}
 				break;
@@ -222,9 +211,7 @@ namespace isobus
 
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-						const std::lock_guard<std::mutex> lock(pgnRequestMutex);
-#endif
+						LOCK_GUARD(Mutex, pgnRequestMutex);
 						for (const auto &pgnRequestCallback : pgnRequestCallbacks)
 						{
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
@@ -253,12 +240,14 @@ namespace isobus
 							send_acknowledgement(AcknowledgementType::Negative,
 							                     requestedPGN,
 							                     message.get_source_control_function());
-							CANStackLogger::warn("[PR]: NACK-ing PGN request for PGN " + isobus::to_string(requestedPGN) + " because no callback could handle it.");
+							LOG_WARNING("[PR]: NACK-ing PGN request for PGN " +
+							            isobus::to_string(requestedPGN) +
+							            " because no callback could handle it.");
 						}
 					}
 					else
 					{
-						CANStackLogger::warn("[PR]: Received a malformed PGN request message. The message will not be processed.");
+						LOG_WARNING("[PR]: Received a malformed PGN request message. The message will not be processed.");
 					}
 				}
 				break;

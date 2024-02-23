@@ -79,8 +79,8 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_maintain_power_sources());
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_maintain_power(0));
 
-	auto maintainPowerEventHandle = interfaceUnderTest.get_maintain_power_data_event_publisher().add_listener(TestMaintainPowerInterface::test_maintain_power_callback);
-	auto keyEventHandle = interfaceUnderTest.get_key_switch_transition_off_event_publisher().add_listener(TestMaintainPowerInterface::test_key_switch_callback);
+	interfaceUnderTest.get_maintain_power_data_event_publisher().add_listener(TestMaintainPowerInterface::test_maintain_power_callback);
+	interfaceUnderTest.get_key_switch_transition_off_event_publisher().add_listener(TestMaintainPowerInterface::test_key_switch_callback);
 	EXPECT_FALSE(TestMaintainPowerInterface::wasCallbackHit);
 
 	// Construct a maintain power message
@@ -300,6 +300,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 
 	testPlugin.close();
 
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	EXPECT_TRUE(testECU->destroy(2));
 	CANHardwareInterface::stop();

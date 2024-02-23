@@ -13,8 +13,13 @@ prepend(UTILITY_SRC ${UTILITY_SRC_DIR} ${UTILITY_SRC})
 
 # Set the include files
 set(UTILITY_INCLUDE
-    "system_timing.hpp" "processing_flags.hpp" "iop_file_interface.hpp"
-    "to_string.hpp" "platform_endianness.hpp" "event_dispatcher.hpp")
+    "system_timing.hpp"
+    "processing_flags.hpp"
+    "iop_file_interface.hpp"
+    "to_string.hpp"
+    "platform_endianness.hpp"
+    "event_dispatcher.hpp"
+    "thread_synchronization.hpp")
 
 # Prepend the include directory path to all the include files
 prepend(UTILITY_INCLUDE ${UTILITY_INCLUDE_DIR} ${UTILITY_INCLUDE})

@@ -3,9 +3,13 @@
 ///
 /// @brief A protocol that handles the NMEA 2000 fast packet protocol.
 ///
-/// @author Adrian Del Grosso
+/// @note This library and its authors are not affiliated with the National Marine
+/// Electronics Association in any way.
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @author Adrian Del Grosso
+/// @author Daan Steenbergen
+///
+/// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
@@ -19,52 +23,93 @@
 
 namespace isobus
 {
-	FastPacketProtocol::FastPacketProtocolSession::FastPacketProtocolSession(Direction sessionDirection) :
-	  sessionMessage(CANMessage::create_invalid_message()),
-	  sessionCompleteCallback(nullptr),
-	  frameChunkCallback(nullptr),
-	  parent(nullptr),
-	  timestamp_ms(0),
-	  lastPacketNumber(0),
-	  packetCount(0),
-	  processedPacketsThisSession(0),
-	  sequenceNumber(0),
-	  sessionDirection(sessionDirection)
+	FastPacketProtocol::FastPacketProtocolSession::FastPacketProtocolSession(TransportProtocolSessionBase::Direction direction,
+	                                                                         std::unique_ptr<CANMessageData> data,
+	                                                                         std::uint32_t parameterGroupNumber,
+	                                                                         std::uint16_t totalMessageSize,
+	                                                                         std::uint8_t sequenceNumber,
+	                                                                         CANIdentifier::CANPriority priority,
+	                                                                         std::shared_ptr<ControlFunction> source,
+	                                                                         std::shared_ptr<ControlFunction> destination,
+	                                                                         TransmitCompleteCallback sessionCompleteCallback,
+	                                                                         void *parentPointer) :
+	  TransportProtocolSessionBase(direction, std::move(data), parameterGroupNumber, totalMessageSize, source, destination, sessionCompleteCallback, parentPointer),
+	  sequenceNumber(sequenceNumber),
+	  priority(priority)
 	{
 	}
 
-	bool FastPacketProtocol::FastPacketProtocolSession::operator==(const FastPacketProtocolSession &obj)
+	std::uint8_t FastPacketProtocol::FastPacketProtocolSession::get_message_length() const
 	{
-		return ((sessionMessage.get_source_control_function() == obj.sessionMessage.get_source_control_function()) &&
-		        (sessionMessage.get_destination_control_function() == obj.sessionMessage.get_destination_control_function()) &&
-		        (sessionMessage.get_identifier().get_parameter_group_number() == obj.sessionMessage.get_identifier().get_parameter_group_number()));
+		// We know that this session can only be used to transfer 223 bytes of data, so we can safely cast to a uint8_t
+		return static_cast<std::uint8_t>(TransportProtocolSessionBase::get_message_length());
 	}
 
-	std::uint32_t FastPacketProtocol::FastPacketProtocolSession::get_message_data_length() const
+	bool FastPacketProtocol::FastPacketProtocolSession::is_broadcast() const
 	{
-		if (nullptr != frameChunkCallback)
+		return (nullptr == get_destination());
+	}
+
+	std::uint32_t FastPacketProtocol::FastPacketProtocolSession::get_total_bytes_transferred() const
+	{
+		return numberOfBytesTransferred;
+	}
+
+	std::uint8_t FastPacketProtocol::FastPacketProtocolSession::get_last_packet_number() const
+	{
+		// We know that this session can only be used to transfer 223 bytes of data, so we can safely cast to a uint8_t
+		std::uint8_t numberOfFrames = calculate_number_of_frames(static_cast<std::uint8_t>(get_total_bytes_transferred()));
+		if (numberOfFrames > 0)
 		{
-			return frameChunkCallbackMessageLength;
+			return numberOfFrames;
 		}
-		return sessionMessage.get_data_length();
-	}
-
-	FastPacketProtocol::FastPacketProtocolSession::~FastPacketProtocolSession()
-	{
-	}
-
-	void FastPacketProtocol::initialize(CANLibBadge<CANNetworkManager>)
-	{
-		if (!initialized)
+		else
 		{
-			initialized = true;
+			return 0;
 		}
+	}
+
+	std::uint8_t FastPacketProtocol::FastPacketProtocolSession::get_number_of_remaining_packets() const
+	{
+		return get_total_number_of_packets() - get_last_packet_number();
+	}
+
+	std::uint8_t FastPacketProtocol::FastPacketProtocolSession::get_total_number_of_packets() const
+	{
+		return calculate_number_of_frames(get_message_length());
+	}
+
+	void FastPacketProtocol::FastPacketProtocolSession::add_number_of_bytes_transferred(std::uint8_t bytes)
+	{
+		numberOfBytesTransferred += bytes;
+		update_timestamp();
+	}
+
+	std::uint8_t FastPacketProtocol::calculate_number_of_frames(std::uint8_t messageLength)
+	{
+		std::uint8_t numberOfFrames = 0;
+		// Account for the 6 bytes of data in the first frame
+		if (messageLength > 6)
+		{
+			messageLength -= 6;
+			numberOfFrames++;
+		}
+		numberOfFrames += (messageLength / PROTOCOL_BYTES_PER_FRAME);
+		if (0 != (messageLength % PROTOCOL_BYTES_PER_FRAME))
+		{
+			numberOfFrames++;
+		}
+		return numberOfFrames;
+	}
+
+	FastPacketProtocol::FastPacketProtocol(const CANMessageFrameCallback &sendCANFrameCallback) :
+	  sendCANFrameCallback(sendCANFrameCallback)
+	{
 	}
 
 	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
-		parameterGroupNumberCallbacks.push_back(ParameterGroupNumberCallbackData(parameterGroupNumber, callback, parent, internalControlFunction));
-		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
+		parameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, internalControlFunction);
 	}
 
 	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
@@ -75,11 +120,15 @@ namespace isobus
 		{
 			parameterGroupNumberCallbacks.erase(callbackLocation);
 		}
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(parameterGroupNumber, process_message, this);
+	}
+
+	void FastPacketProtocol::allow_any_control_function(bool allow)
+	{
+		allowAnyControlFunction = allow;
 	}
 
 	bool FastPacketProtocol::send_multipacket_message(std::uint32_t parameterGroupNumber,
-	                                                  const std::uint8_t *data,
+	                                                  const std::uint8_t *messageData,
 	                                                  std::uint8_t messageLength,
 	                                                  std::shared_ptr<InternalControlFunction> source,
 	                                                  std::shared_ptr<ControlFunction> destination,
@@ -88,86 +137,89 @@ namespace isobus
 	                                                  void *parentPointer,
 	                                                  DataChunkCallback frameChunkCallback)
 	{
-		bool retVal = false;
-
-		if ((nullptr != source) &&
-		    (source->get_address_valid()) &&
-		    (parameterGroupNumber >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
-		    (parameterGroupNumber <= FP_MAX_PARAMETER_GROUP_NUMBER) &&
-		    (messageLength <= MAX_PROTOCOL_MESSAGE_LENGTH) &&
-		    ((nullptr != data) ||
-		     (nullptr != frameChunkCallback)))
+		std::unique_ptr<CANMessageData> data;
+		if (nullptr != frameChunkCallback)
 		{
-			FastPacketProtocolSession *tempSession = nullptr;
-
-			if (!get_session(tempSession, parameterGroupNumber, source, destination))
-			{
-				tempSession = new FastPacketProtocolSession(FastPacketProtocolSession::Direction::Transmit);
-				CANIdentifier identifier(CANIdentifier::Type::Extended, parameterGroupNumber, priority, (destination == nullptr ? 0xFF : destination->get_address()), source->get_address());
-				tempSession->sessionMessage = CANMessage(CANMessage::Type::Transmit,
-				                                         identifier,
-				                                         data,
-				                                         messageLength,
-				                                         source,
-				                                         destination,
-				                                         source->get_can_port());
-
-				tempSession->parent = parentPointer;
-				tempSession->packetCount = ((messageLength - 6) / PROTOCOL_BYTES_PER_FRAME);
-				tempSession->timestamp_ms = SystemTiming::get_timestamp_ms();
-				tempSession->processedPacketsThisSession = 0;
-				tempSession->sessionCompleteCallback = txCompleteCallback;
-				tempSession->sequenceNumber = get_new_sequence_number(tempSession);
-
-				if ((messageLength > 6) &&
-				    (0 != ((messageLength - 6) % PROTOCOL_BYTES_PER_FRAME)))
-				{
-					tempSession->packetCount++;
-				}
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-				std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
-
-				activeSessions.push_back(tempSession);
-				retVal = true;
-			}
-			else
-			{
-				// Already in a matching session, can't start another.
-				CANStackLogger::warn("[FP]: Can't send fast packet message, already in matching session.");
-			}
+			data.reset(new CANMessageDataCallback(messageLength, frameChunkCallback, parentPointer));
 		}
-		else
+		else if (nullptr != messageData)
 		{
-			CANStackLogger::error("[FP]: Can't send fast packet message, bad parameters or ICF is invalid");
+			// Make a copy of the data as it could go out of scope
+			data.reset(new CANMessageDataVector(messageData, messageLength));
 		}
-		return retVal;
+
+		// Return false early if we can't send the message
+		if ((nullptr == data) || (data->size() <= CAN_DATA_LENGTH) || (data->size() > MAX_PROTOCOL_MESSAGE_LENGTH))
+		{
+			LOG_ERROR("[FP]: Unable to send multipacket message, data is invalid or has invalid length.");
+			return false;
+		}
+		else if ((nullptr == source) || (!source->get_address_valid()) || has_session(parameterGroupNumber, source, destination))
+		{
+			LOG_ERROR("[FP]: Unable to send multipacket message, source is invalid or already in a session for the PGN.");
+			return false;
+		}
+		else if ((parameterGroupNumber < FP_MIN_PARAMETER_GROUP_NUMBER) || (parameterGroupNumber > FP_MAX_PARAMETER_GROUP_NUMBER))
+		{
+			LOG_ERROR("[FP]: Unable to send multipacket message, PGN is unsupported by this protocol.");
+			return false;
+		}
+		else if ((nullptr != destination) && (!destination->get_address_valid()))
+		{
+			LOG_ERROR("[FP]: Unable to send multipacket message, destination is invalid.");
+			return false;
+		}
+
+		std::uint8_t sequenceNumber = get_new_sequence_number(source->get_NAME(), parameterGroupNumber);
+		auto session = std::make_shared<FastPacketProtocolSession>(FastPacketProtocolSession::Direction::Transmit,
+		                                                           std::move(data),
+		                                                           parameterGroupNumber,
+		                                                           messageLength,
+		                                                           sequenceNumber,
+		                                                           priority,
+		                                                           source,
+		                                                           destination,
+		                                                           txCompleteCallback,
+		                                                           parentPointer);
+
+		LOCK_GUARD(Mutex, sessionMutex);
+		activeSessions.push_back(session);
+		return true;
 	}
 
-	void FastPacketProtocol::update(CANLibBadge<CANNetworkManager>)
+	void FastPacketProtocol::update()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
-
-		for (auto i : activeSessions)
+		LOCK_GUARD(Mutex, sessionMutex);
+		// We use a fancy for loop here to allow us to remove sessions from the list while iterating
+		for (std::size_t i = activeSessions.size(); i > 0; i--)
 		{
-			update_state_machine(i);
+			auto session = activeSessions.at(i - 1);
+			if (!session->get_source()->get_address_valid())
+			{
+				LOG_WARNING("[FP]: Closing active session as the source control function is no longer valid");
+				close_session(session, false);
+			}
+			else if (!session->is_broadcast() && !session->get_destination()->get_address_valid())
+			{
+				LOG_WARNING("[FP]: Closing active session as the destination control function is no longer valid");
+				close_session(session, false);
+			}
+			update_session(session);
 		}
 	}
 
-	void FastPacketProtocol::add_session_history(FastPacketProtocolSession *session)
+	void FastPacketProtocol::add_session_history(const std::shared_ptr<FastPacketProtocolSession> &session)
 	{
 		if (nullptr != session)
 		{
 			bool formerSessionMatched = false;
 
-			for (std::size_t i = 0; i < sessionHistory.size(); i++)
+			for (auto &formerSessions : sessionHistory)
 			{
-				if ((sessionHistory[i].isoName == session->sessionMessage.get_source_control_function()->get_NAME()) &&
-				    (sessionHistory[i].parameterGroupNumber == session->sessionMessage.get_identifier().get_parameter_group_number()))
+				if ((formerSessions.isoName == session->get_source()->get_NAME()) &&
+				    (formerSessions.parameterGroupNumber == session->get_parameter_group_number()))
 				{
-					sessionHistory[i].sequenceNumber++;
+					formerSessions.sequenceNumber = session->sequenceNumber;
 					formerSessionMatched = true;
 					break;
 				}
@@ -176,367 +228,286 @@ namespace isobus
 			if (!formerSessionMatched)
 			{
 				FastPacketHistory history{
-					session->sessionMessage.get_source_control_function()->get_NAME(),
-					session->sessionMessage.get_identifier().get_parameter_group_number(),
+					session->get_source()->get_NAME(),
+					session->get_parameter_group_number(),
 					session->sequenceNumber
 				};
-				history.sequenceNumber++;
 				sessionHistory.push_back(history);
 			}
 		}
 	}
 
-	void FastPacketProtocol::close_session(FastPacketProtocolSession *session, bool successful)
+	void FastPacketProtocol::close_session(std::shared_ptr<FastPacketProtocolSession> session, bool successful)
 	{
 		if (nullptr != session)
 		{
-			process_session_complete_callback(session, successful);
-			for (auto currentSession = activeSessions.begin(); currentSession != activeSessions.end(); currentSession++)
+			session->complete(successful);
+			add_session_history(session);
+
+			auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
+			if (activeSessions.end() != sessionLocation)
 			{
-				if (session == *currentSession)
-				{
-					activeSessions.erase(currentSession);
-					delete session;
-					break;
-				}
+				activeSessions.erase(sessionLocation);
 			}
 		}
 	}
 
-	std::uint8_t FastPacketProtocol::get_new_sequence_number(FastPacketProtocolSession *session)
+	std::uint8_t FastPacketProtocol::get_new_sequence_number(NAME name, std::uint32_t parameterGroupNumber) const
 	{
-		std::uint8_t retVal = 0;
-
-		if (nullptr != session)
+		std::uint8_t sequenceNumber = 0;
+		for (const auto &formerSessions : sessionHistory)
 		{
-			for (auto &formerSessions : sessionHistory)
+			if ((formerSessions.isoName == name) && (formerSessions.parameterGroupNumber == parameterGroupNumber))
 			{
-				if ((formerSessions.isoName == session->sessionMessage.get_source_control_function()->get_NAME()) &&
-				    (formerSessions.parameterGroupNumber == session->sessionMessage.get_identifier().get_parameter_group_number()))
-				{
-					retVal = formerSessions.sequenceNumber;
-					break;
-				}
-			}
-		}
-		return retVal;
-	}
-
-	bool FastPacketProtocol::get_session(FastPacketProtocolSession *&returnedSession, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
-	{
-		returnedSession = nullptr;
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
-
-		for (auto session : activeSessions)
-		{
-			if ((session->sessionMessage.get_identifier().get_parameter_group_number() == parameterGroupNumber) &&
-			    (session->sessionMessage.get_source_control_function() == source) &&
-			    (session->sessionMessage.get_destination_control_function() == destination))
-			{
-				returnedSession = session;
+				sequenceNumber = formerSessions.sequenceNumber + 1;
 				break;
 			}
 		}
-		return (nullptr != returnedSession);
-	}
-
-	void FastPacketProtocol::process_message(const CANMessage &message, void *parent)
-	{
-		if (nullptr != parent)
-		{
-			static_cast<FastPacketProtocol *>(parent)->process_message(message);
-		}
+		return sequenceNumber;
 	}
 
 	void FastPacketProtocol::process_message(const CANMessage &message)
 	{
-		if ((CAN_DATA_LENGTH == message.get_data_length()) &&
-		    (message.get_identifier().get_parameter_group_number() >= FP_MIN_PARAMETER_GROUP_NUMBER) &&
-		    (message.get_identifier().get_parameter_group_number() <= FP_MAX_PARAMETER_GROUP_NUMBER))
+		if ((CAN_DATA_LENGTH != message.get_data_length()) ||
+		    (message.get_source_control_function() == nullptr) ||
+		    (message.get_identifier().get_parameter_group_number() < FP_MIN_PARAMETER_GROUP_NUMBER) ||
+		    (message.get_identifier().get_parameter_group_number() > FP_MAX_PARAMETER_GROUP_NUMBER))
 		{
-			// See if we care about parsing this message
-			if (parameterGroupNumberCallbacks.size() > 0)
-			{
-				bool pgnNeedsParsing = false;
+			// Not a valid message for this protocol
+			return;
+		}
 
-				for (auto &callback : parameterGroupNumberCallbacks)
+		if (parameterGroupNumberCallbacks.empty())
+		{
+			// No listeners, no need to process the message
+			return;
+		}
+
+		if ((!message.is_destination_our_device()) && (!allowAnyControlFunction) && (!message.is_broadcast()))
+		{
+			// Destined for someone else, no need to process the message
+			return;
+		}
+
+		// Check if we have any callbacks for this PGN
+		bool pgnNeedsParsing = false;
+		for (const auto &callback : parameterGroupNumberCallbacks)
+		{
+			if ((callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
+			    ((nullptr == callback.get_internal_control_function()) ||
+			     (callback.get_internal_control_function() == message.get_destination_control_function())))
+			{
+				pgnNeedsParsing = true;
+				break;
+			}
+		}
+
+		if (!pgnNeedsParsing)
+		{
+			// No callbacks for this PGN, no need to process the message
+			return;
+		}
+
+		std::shared_ptr<FastPacketProtocolSession> session = get_session(message.get_identifier().get_parameter_group_number(),
+		                                                                 message.get_source_control_function(),
+		                                                                 message.get_destination_control_function());
+		std::uint8_t actualFrameCount = (message.get_uint8_at(0) & FRAME_COUNTER_BIT_MASK);
+
+		if (nullptr != session)
+		{
+			// We have a matching active session
+			if (0 == actualFrameCount)
+			{
+				// This is the beginning of a new message, but we already have a session
+				LOG_ERROR("[FP]: Existing session matched new frame counter, aborting the matching session.");
+				close_session(session, false);
+			}
+			else
+			{
+				// Correct sequence number, copy the data
+				// Convert data type to a vector to allow for manipulation
+				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
+				for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
 				{
-					if ((callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
-					    ((nullptr == callback.get_internal_control_function()) ||
-					     (callback.get_internal_control_function()->get_address() == message.get_destination_control_function()->get_address())))
+					if (session->numberOfBytesTransferred < session->get_message_length())
 					{
-						pgnNeedsParsing = true;
+						data.set_byte(session->numberOfBytesTransferred, message.get_uint8_at(1 + i));
+						session->add_number_of_bytes_transferred(1);
+					}
+					else
+					{
+						// Reached the end of the message, no need to copy any more data
 						break;
 					}
 				}
 
-				if (pgnNeedsParsing)
+				if (session->numberOfBytesTransferred >= session->get_message_length())
 				{
-					FastPacketProtocolSession *currentSession = nullptr;
-					std::vector<std::uint8_t> messageData = message.get_data();
-					std::uint8_t frameCount = (messageData[0] & FRAME_COUNTER_BIT_MASK);
+					// Complete
+					CANMessage completedMessage(CANMessage::Type::Receive,
+					                            message.get_identifier(),
+					                            std::move(data),
+					                            message.get_source_control_function(),
+					                            message.get_destination_control_function(),
+					                            message.get_can_port_index());
 
-					// Check for a valid session
-					if (get_session(currentSession, message.get_identifier().get_parameter_group_number(), message.get_source_control_function(), message.get_destination_control_function()))
+					// Find the appropriate callback and let them know
+					for (const auto &callback : parameterGroupNumberCallbacks)
 					{
-						// Matched a session
-						if (0 != frameCount)
+						if ((callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
+						    ((nullptr == callback.get_internal_control_function()) ||
+						     (callback.get_internal_control_function() == message.get_destination_control_function())))
 						{
-							// Continue processing the message
-							for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
-							{
-								if (static_cast<std::uint32_t>(i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1) < currentSession->sessionMessage.get_data_length())
-								{
-									currentSession->sessionMessage.set_data(messageData[1 + i], i + (currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1);
-								}
-								else
-								{
-									break;
-								}
-							}
-							currentSession->processedPacketsThisSession++;
+							callback.get_callback()(completedMessage, callback.get_parent());
+						}
+					}
+					close_session(session, true);
+				}
+			}
+		}
+		else
+		{
+			// No matching session. See if we need to start a new session
+			if (0 != actualFrameCount)
+			{
+				// This is the middle of some message that we have no context for.
+				// Ignore the message for now until we receive it with a fresh packet counter.
+				LOG_WARNING("[FP]: Ignoring FP message with PGN %u, no context available. The message may be processed when packet count returns to zero.",
+				            message.get_identifier().get_parameter_group_number());
+			}
+			else
+			{
+				// This is the beginning of a new message
+				std::uint8_t messageLength = message.get_uint8_at(1);
+				if (messageLength > MAX_PROTOCOL_MESSAGE_LENGTH)
+				{
+					LOG_WARNING("[FP]: Ignoring possible new FP session with advertised length > 233.");
+					return;
+				}
+				else if (messageLength <= CAN_DATA_LENGTH)
+				{
+					LOG_WARNING("[FP]: Ignoring possible new FP session with advertised length <= 8.");
+					return;
+				}
 
-							if (static_cast<std::uint32_t>((currentSession->processedPacketsThisSession * PROTOCOL_BYTES_PER_FRAME) - 1) >= currentSession->sessionMessage.get_data_length())
-							{
-								// Complete
-								// Find the appropriate callback and let them know
-								for (auto &callback : parameterGroupNumberCallbacks)
-								{
-									if (callback.get_parameter_group_number() == currentSession->sessionMessage.get_identifier().get_parameter_group_number())
-									{
-										callback.get_callback()(currentSession->sessionMessage, callback.get_parent());
-									}
-								}
-								close_session(currentSession, true); // All done
-							}
-						}
-						else
-						{
-							CANStackLogger::error("[FP]: Existing session matched new frame counter, aborting the matching session.");
-							close_session(currentSession, false);
-						}
+				// Create a new session
+				session = std::make_shared<FastPacketProtocolSession>(FastPacketProtocolSession::Direction::Receive,
+				                                                      std::unique_ptr<CANMessageData>(new CANMessageDataVector(messageLength)),
+				                                                      message.get_identifier().get_parameter_group_number(),
+				                                                      messageLength,
+				                                                      (message.get_uint8_at(0) & SEQUENCE_NUMBER_BIT_MASK),
+				                                                      message.get_identifier().get_priority(),
+				                                                      message.get_source_control_function(),
+				                                                      message.get_destination_control_function(),
+				                                                      nullptr, // No callback
+				                                                      nullptr);
+
+				// Save the 6 bytes of payload in this first message
+				// Convert data type to a vector to allow for manipulation
+				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
+				for (std::uint8_t i = 0; i < (PROTOCOL_BYTES_PER_FRAME - 1); i++)
+				{
+					data.set_byte(session->numberOfBytesTransferred, message.get_uint8_at(2 + i));
+					session->add_number_of_bytes_transferred(1);
+				}
+
+				LOCK_GUARD(Mutex, sessionMutex);
+				activeSessions.push_back(session);
+			}
+		}
+	}
+
+	void FastPacketProtocol::update_session(const std::shared_ptr<FastPacketProtocolSession> &session)
+	{
+		if (nullptr == session)
+		{
+			return;
+		}
+
+		if (session->get_direction() == FastPacketProtocolSession::Direction::Receive)
+		{
+			// We are receiving a message, only need to check for timeouts
+			if (session->get_time_since_last_update() > FP_TIMEOUT_MS)
+			{
+				LOG_ERROR("[FP]: Rx session timed out.");
+				close_session(session, false);
+			}
+		}
+		else
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+			// We are transmitting a message, let's try and send remaining packets
+			for (std::uint8_t i = 0; i < session->get_number_of_remaining_packets(); i++)
+			{
+				buffer[0] = session->get_last_packet_number();
+				buffer[0] |= (session->sequenceNumber << SEQUENCE_NUMBER_BIT_OFFSET);
+
+				std::uint8_t startIndex = 1;
+				std::uint8_t bytesThisFrame = PROTOCOL_BYTES_PER_FRAME;
+				if (0 == session->get_total_bytes_transferred())
+				{
+					// This is the first frame, so we need to send the message length
+					buffer[1] = session->get_message_length();
+					startIndex++;
+					bytesThisFrame--;
+				}
+
+				for (std::uint8_t j = 0; j < bytesThisFrame; j++)
+				{
+					std::uint8_t index = static_cast<std::uint8_t>(session->get_total_bytes_transferred()) + j;
+					if (index < session->get_message_length())
+					{
+						buffer[startIndex + j] = session->get_data().get_byte(index);
 					}
 					else
 					{
-						// No matching session. See if we need to start a new session
-						if (0 == frameCount)
-						{
-							if (messageData[1] <= MAX_PROTOCOL_MESSAGE_LENGTH)
-							{
-								// This is the beginning of a new message
-								currentSession = new FastPacketProtocolSession(FastPacketProtocolSession::Direction::Receive);
-								currentSession->frameChunkCallback = nullptr;
-								if (messageData[1] >= PROTOCOL_BYTES_PER_FRAME - 1)
-								{
-									currentSession->packetCount = ((messageData[1] - 6) / PROTOCOL_BYTES_PER_FRAME);
-								}
-								else
-								{
-									currentSession->packetCount = 1;
-								}
-								currentSession->lastPacketNumber = ((messageData[0] >> SEQUENCE_NUMBER_BIT_OFFSET) & SEQUENCE_NUMBER_BIT_MASK);
-								currentSession->processedPacketsThisSession = 1;
-
-								currentSession->sessionMessage = CANMessage(CANMessage::Type::Receive,
-								                                            message.get_identifier(),
-								                                            nullptr,
-								                                            0,
-								                                            message.get_source_control_function(),
-								                                            message.get_destination_control_function(),
-								                                            message.get_can_port_index());
-								currentSession->sessionMessage.set_data_size(messageData[1]);
-								currentSession->timestamp_ms = SystemTiming::get_timestamp_ms();
-
-								if (0 != (messageData[1] % PROTOCOL_BYTES_PER_FRAME))
-								{
-									currentSession->packetCount++;
-								}
-
-								// Save the 6 bytes of payload in this first message
-								for (std::uint8_t i = 0; i < (PROTOCOL_BYTES_PER_FRAME - 1); i++)
-								{
-									currentSession->sessionMessage.set_data(messageData[2 + i], i);
-								}
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-								std::unique_lock<std::mutex> lock(sessionMutex);
-#endif
-
-								activeSessions.push_back(currentSession);
-							}
-							else
-							{
-								CANStackLogger::warn("[FP]: Ignoring possible new FP session with advertised length > 233.");
-							}
-						}
-						else
-						{
-							// This is the middle of some message that we have no context for.
-							// Ignore the message for now until we receive it with a fresh packet counter.
-							CANStackLogger::warn("[FP]: Ignoring FP message with PGN %u, no context available. The message may be processed when packet count returns to zero.", message.get_identifier().get_parameter_group_number());
-						}
+						buffer[startIndex + j] = 0xFF;
 					}
 				}
-			}
-		}
-	}
 
-	void FastPacketProtocol::process_session_complete_callback(FastPacketProtocolSession *session, bool success)
-	{
-		if ((nullptr != session) &&
-		    (nullptr != session->sessionCompleteCallback) &&
-		    (nullptr != session->sessionMessage.get_source_control_function()) &&
-		    (ControlFunction::Type::Internal == session->sessionMessage.get_source_control_function()->get_type()))
-		{
-			session->sessionCompleteCallback(session->sessionMessage.get_identifier().get_parameter_group_number(),
-			                                 session->get_message_data_length(),
-			                                 std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
-			                                 session->sessionMessage.get_destination_control_function(),
-			                                 success,
-			                                 session->parent);
-		}
-	}
-
-	bool FastPacketProtocol::protocol_transmit_message(std::uint32_t,
-	                                                   const std::uint8_t *,
-	                                                   std::uint32_t,
-	                                                   std::shared_ptr<ControlFunction>,
-	                                                   std::shared_ptr<ControlFunction>,
-	                                                   TransmitCompleteCallback,
-	                                                   void *,
-	                                                   DataChunkCallback)
-	{
-		return false;
-	}
-
-	void FastPacketProtocol::update_state_machine(FastPacketProtocolSession *session)
-	{
-		if (nullptr != session)
-		{
-			switch (session->sessionDirection)
-			{
-				case FastPacketProtocolSession::Direction::Receive:
+				if (sendCANFrameCallback(session->get_parameter_group_number(),
+				                         CANDataSpan(buffer.data(), buffer.size()),
+				                         std::static_pointer_cast<InternalControlFunction>(session->get_source()),
+				                         session->get_destination(),
+				                         session->priority))
 				{
-					if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
+					session->add_number_of_bytes_transferred(bytesThisFrame);
+				}
+				else
+				{
+					if (session->get_time_since_last_update() > FP_TIMEOUT_MS)
 					{
-						CANStackLogger::error("[FP]: Rx session timed out.");
+						LOG_ERROR("[FP]: Tx session timed out.");
 						close_session(session, false);
 					}
+					break;
 				}
-				break;
+			}
 
-				case FastPacketProtocolSession::Direction::Transmit:
-				{
-					std::array<std::uint8_t, CAN_DATA_LENGTH> dataBuffer;
-					std::vector<std::uint8_t> messageData;
-					bool txSessionCancelled = false;
-
-					for (std::uint8_t i = session->processedPacketsThisSession; i <= session->packetCount; i++)
-					{
-						std::uint8_t bytesProcessedSoFar = (session->processedPacketsThisSession > 0 ? 6 : 0);
-
-						if (0 != bytesProcessedSoFar)
-						{
-							bytesProcessedSoFar += (PROTOCOL_BYTES_PER_FRAME * (session->processedPacketsThisSession - 1));
-						}
-
-						std::uint16_t numberBytesLeft = (session->get_message_data_length() - bytesProcessedSoFar);
-
-						if (numberBytesLeft > PROTOCOL_BYTES_PER_FRAME)
-						{
-							numberBytesLeft = PROTOCOL_BYTES_PER_FRAME;
-						}
-
-						if (nullptr != session->frameChunkCallback)
-						{
-							std::uint8_t callbackBuffer[CAN_DATA_LENGTH] = { 0 }; // Only need 7 but give them 8 in case they make a mistake
-							bool callbackSuccessful = session->frameChunkCallback(dataBuffer[0], (PROTOCOL_BYTES_PER_FRAME * session->processedPacketsThisSession), numberBytesLeft, callbackBuffer, session->parent);
-
-							if (callbackSuccessful)
-							{
-								for (std::uint8_t j = 0; j < PROTOCOL_BYTES_PER_FRAME; j++)
-								{
-									dataBuffer[1 + j] = callbackBuffer[j];
-								}
-							}
-							else
-							{
-								close_session(session, false);
-								break;
-							}
-						}
-						else
-						{
-							messageData = session->sessionMessage.get_data();
-							if (0 == session->processedPacketsThisSession)
-							{
-								dataBuffer[0] = session->processedPacketsThisSession;
-								dataBuffer[0] |= (session->sequenceNumber << SEQUENCE_NUMBER_BIT_OFFSET);
-								dataBuffer[1] = session->get_message_data_length();
-								dataBuffer[2] = messageData[0];
-								dataBuffer[3] = messageData[1];
-								dataBuffer[4] = messageData[2];
-								dataBuffer[5] = messageData[3];
-								dataBuffer[6] = messageData[4];
-								dataBuffer[7] = messageData[5];
-							}
-							else
-							{
-								dataBuffer[0] = session->processedPacketsThisSession;
-								dataBuffer[0] |= (session->sequenceNumber << SEQUENCE_NUMBER_BIT_OFFSET);
-
-								if (numberBytesLeft < PROTOCOL_BYTES_PER_FRAME)
-								{
-									dataBuffer[1] = 0xFF;
-									dataBuffer[2] = 0xFF;
-									dataBuffer[3] = 0xFF;
-									dataBuffer[4] = 0xFF;
-									dataBuffer[5] = 0xFF;
-									dataBuffer[6] = 0xFF;
-									dataBuffer[7] = 0xFF;
-								}
-
-								for (std::uint8_t j = 0; j < numberBytesLeft; j++)
-								{
-									dataBuffer[1 + j] = messageData[6 + ((i - 1) * PROTOCOL_BYTES_PER_FRAME) + j];
-								}
-							}
-						}
-						if (CANNetworkManager::CANNetwork.send_can_message(session->sessionMessage.get_identifier().get_parameter_group_number(),
-						                                                   dataBuffer.data(),
-						                                                   CAN_DATA_LENGTH,
-						                                                   std::static_pointer_cast<InternalControlFunction>(session->sessionMessage.get_source_control_function()),
-						                                                   session->sessionMessage.get_destination_control_function(),
-						                                                   session->sessionMessage.get_identifier().get_priority(),
-						                                                   nullptr,
-						                                                   nullptr))
-						{
-							session->processedPacketsThisSession++;
-							session->timestamp_ms = SystemTiming::get_timestamp_ms();
-						}
-						else
-						{
-							if (SystemTiming::time_expired_ms(session->timestamp_ms, FP_TIMEOUT_MS))
-							{
-								CANStackLogger::error("[FP]: Tx session timed out.");
-								close_session(session, false);
-								txSessionCancelled = true;
-							}
-							break;
-						}
-					}
-
-					if ((!txSessionCancelled) &&
-					    (session->processedPacketsThisSession >= session->packetCount))
-					{
-						add_session_history(session);
-						close_session(session, true); // Session is done!
-					}
-				}
-				break;
+			if (session->get_number_of_remaining_packets() == 0)
+			{
+				close_session(session, true);
 			}
 		}
+	}
+
+	bool FastPacketProtocol::has_session(std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
+	{
+		LOCK_GUARD(Mutex, sessionMutex);
+		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<FastPacketProtocolSession> &session) {
+			return session->matches(source, destination) && (session->get_parameter_group_number() == parameterGroupNumber);
+		});
+	}
+
+	std::shared_ptr<FastPacketProtocol::FastPacketProtocolSession> FastPacketProtocol::get_session(std::uint32_t parameterGroupNumber,
+	                                                                                               std::shared_ptr<ControlFunction> source,
+	                                                                                               std::shared_ptr<ControlFunction> destination)
+	{
+		LOCK_GUARD(Mutex, sessionMutex);
+		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<FastPacketProtocolSession> &session) {
+			return session->matches(source, destination) && (session->get_parameter_group_number() == parameterGroupNumber);
+		});
+		return (activeSessions.end() != result) ? (*result) : nullptr;
 	}
 
 } // namespace isobus

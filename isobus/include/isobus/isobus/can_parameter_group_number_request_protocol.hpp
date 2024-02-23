@@ -159,9 +159,7 @@ namespace isobus
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
 		std::vector<PGNRequestCallbackInfo> pgnRequestCallbacks; ///< A list of all registered PGN callbacks and the PGN associated with each callback
 		std::vector<PGNRequestForRepetitionRateCallbackInfo> repetitionRateCallbacks; ///< A list of all registered request for repetition rate callbacks and the PGN associated with the callback
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::mutex pgnRequestMutex; ///< A mutex to protect the callback lists
-#endif
+		Mutex pgnRequestMutex; ///< A mutex to protect the callback lists
 	};
 }
 

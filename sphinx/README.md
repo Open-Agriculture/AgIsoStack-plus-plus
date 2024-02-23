@@ -13,6 +13,7 @@ doxygen doxyfile
 ```
 
 Install required python modules:
+
 ```bash
 pip install -r requirements.txt
 ```

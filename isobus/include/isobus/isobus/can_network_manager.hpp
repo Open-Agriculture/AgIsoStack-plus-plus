@@ -25,16 +25,13 @@
 #include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <array>
 #include <deque>
 #include <list>
 #include <memory>
 #include <queue>
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <mutex>
-#endif
 
 /// @brief This namespace encompasses all of the ISO11783 stack's functionality to reduce global namespace pollution
 namespace isobus
@@ -88,6 +85,11 @@ namespace isobus
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
 		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+
+		/// @brief Returns the network manager's event dispatcher for notifying consumers whenever a
+		/// message is transmitted by our application
+		/// @returns An event dispatcher which can be used to get notified about transmitted messages
+		EventDispatcher<CANMessage> &get_transmitted_message_event_dispatcher();
 
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
 		/// @param[in] controlFunction The control function to get the internal control function from
@@ -185,8 +187,9 @@ namespace isobus
 
 		/// @brief Returns the class instance of the NMEA2k fast packet protocol.
 		/// Use this to register for FP multipacket messages
+		/// @param[in] canPortIndex The CAN channel index to get the fast packet protocol for
 		/// @returns The class instance of the NMEA2k fast packet protocol.
-		FastPacketProtocol &get_fast_packet_protocol();
+		std::unique_ptr<FastPacketProtocol> &get_fast_packet_protocol(std::uint8_t canPortIndex);
 
 		/// @brief Returns the configuration of this network manager
 		/// @returns The configuration class for this network manager
@@ -205,7 +208,6 @@ namespace isobus
 		friend class DiagnosticProtocol; ///< Allows the diagnostic protocol to access the protected functions on the network manager
 		friend class ParameterGroupNumberRequestProtocol; ///< Allows the PGN request protocol to access the network manager protected functions
 		friend class FastPacketProtocol; ///< Allows the FP protocol to access the network manager protected functions
-		friend class CANLibProtocol; ///< Allows the CANLib protocol base class functions to access the network manager protected functions
 
 		/// @brief Adds a PGN callback for a protocol class
 		/// @param[in] parameterGroupNumber The PGN to register for
@@ -242,8 +244,6 @@ namespace isobus
 		/// @brief Processes completed protocol messages. Causes PGN callbacks to trigger.
 		/// @param[in] message The completed protocol message
 		void protocol_message_callback(const CANMessage &message);
-
-		std::vector<CANLibProtocol *> protocolList; ///< A list of all created protocol classes
 
 	private:
 		/// @brief Constructor for the network manager. Sets default values for members
@@ -299,6 +299,11 @@ namespace isobus
 		/// @returns The message that was at the front of the queue, or an invalid message if the queue is empty
 		CANMessage get_next_can_message_from_rx_queue();
 
+		/// @brief Get the next CAN message from the received message queue, and remove it from the queue
+		/// @note This will only ever get an 8 byte message because they are directly translated from CAN frames.
+		/// @returns The message that was at the front of the queue, or an invalid message if the queue is empty
+		CANMessage get_next_can_message_from_tx_queue();
+
 		/// @brief Informs the network manager that a control function object has been created
 		/// @param[in] controlFunction The control function that was created
 		void on_control_function_created(std::shared_ptr<ControlFunction> controlFunction);
@@ -338,6 +343,9 @@ namespace isobus
 		/// @brief Processes the internal received message queue
 		void process_rx_messages();
 
+		/// @brief Processes the internal transmitted message queue
+		void process_tx_messages();
+
 		/// @brief Checks to see if any control function didn't claim during a round of
 		/// address claiming and removes it if needed.
 		void prune_inactive_control_functions();
@@ -370,7 +378,7 @@ namespace isobus
 		CANNetworkConfiguration configuration; ///< The configuration for this network manager
 		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
 		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
-		FastPacketProtocol fastPacketProtocol; ///< Instance of the fast packet protocol
+		std::array<std::unique_ptr<FastPacketProtocol>, CAN_PORT_MAXIMUM> fastPacketProtocol; ///< One instance of the fast packet protocol for each channel
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
@@ -383,17 +391,18 @@ namespace isobus
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		std::queue<CANMessage> receivedMessageQueue; ///< A queue of received messages to process
+		std::queue<CANMessage> transmittedMessageQueue; ///< A queue of transmitted messages to process (already sent, so changes to the message won't affect the bus)
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+		EventDispatcher<CANMessage> messageTransmittedEventDispatcher; ///< An event dispatcher for notifying consumers about transmitted messages by our application
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety
-		std::mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
-		std::mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
-		std::mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
-		std::mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
-#endif
+		Mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety
+		Mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
+		Mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
+		Mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
+		Mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
+		Mutex transmittedMessageQueueMutex; ///< A mutex for protecting the transmitted message queue
 		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
 		std::uint32_t updateTimestamp_ms = 0; ///< Keeps track of the last time the CAN stack was update in milliseconds
 		bool initialized = false; ///< True if the network manager has been initialized by the update function

@@ -74,7 +74,7 @@ namespace isobus
 		/// @brief Adds a data/alarm mask to track the soft key mask for.
 		/// @param[in] dataOrAlarmMaskId The data/alarm mask to track the soft key mask for.
 		/// @param[in] initialSoftKeyMaskId The initial soft key mask to associate with the data/alarm mask.
-		void add_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId, std::uint16_t initialSoftKeyMaskId);
+		void add_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId, std::uint16_t initialSoftKeyMaskId = 0);
 
 		/// @brief Removes a data/alarm mask from tracking the soft key mask for.
 		/// @param[in] dataOrAlarmMaskId The data/alarm mask to remove the soft key mask from tracking for.
@@ -92,6 +92,23 @@ namespace isobus
 		/// @brief Get whether the working set of the client is active on the server.
 		/// @return True if the working set is active, false otherwise.
 		bool is_working_set_active() const;
+
+		/// @brief Adds an attribute to track.
+		/// @param[in] objectId The object id of the attribute to track.
+		/// @param[in] attribute The attribute to track.
+		/// @param[in] initialValue The initial value of the attribute to track.
+		void add_tracked_attribute(std::uint16_t objectId, std::uint8_t attribute, std::uint32_t initialValue = 0);
+
+		/// @brief Removes an attribute from tracking.
+		/// @param[in] objectId The object id of the attribute to remove from tracking.
+		/// @param[in] attribute The attribute to remove from tracking.
+		void remove_tracked_attribute(std::uint16_t objectId, std::uint8_t attribute);
+
+		/// @brief Get the value of an attribute of a tracked object.
+		/// @param[in] objectId The object id of the attribute to get.
+		/// @param[in] attribute The attribute to get.
+		/// @return The value of the attribute of the tracked object.
+		std::uint32_t get_attribute(std::uint16_t objectId, std::uint8_t attribute) const;
 
 	protected:
 		std::shared_ptr<ControlFunction> client; ///< The control function of the virtual terminal client to track.
@@ -116,7 +133,7 @@ namespace isobus
 		std::size_t maxDataAndAlarmMaskHistorySize = 100; ///< Holds the maximum size of the data/alarm mask history.
 		std::uint8_t activeWorkingSetAddress = NULL_CAN_ADDRESS; ///< Holds the address of the control function that currently has
 		std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
-		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint32_t>> attributeStates; ///< Holds the 'attribute' state of tracked objects.
+		std::map<std::uint16_t, std::map<std::uint8_t, std::uint32_t>> attributeStates; ///< Holds the 'attribute' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::uint8_t> alarmMaskPrioritiesStates; ///< Holds the 'alarm mask priority' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint16_t>> listItemStates; ///< Holds the 'list item' state of tracked objects.
 		//! TODO: add lock/unlock mask state
@@ -147,6 +164,16 @@ namespace isobus
 		/// @brief Processes a ECU->VT message received by the connected server, sent from any control function.
 		/// @param[in] message The message to process.
 		void process_message_to_connected_server(const CANMessage &message);
+
+		/// @brief Data structure to hold the properties of a change attribute command
+		struct ChangeAttributeCommand
+		{
+			std::uint32_t value; ///< Holds the value to change the attribute to.
+			std::uint16_t objectId; ///< Holds the id of to be changed object.
+			std::uint8_t attribute; ///< Holds the id of the attribute to be changed of the specified object.
+		};
+
+		std::map<std::shared_ptr<ControlFunction>, ChangeAttributeCommand> pendingChangeAttributeCommands; ///< Holds the pending change attribute command for a control function.
 	};
 } // namespace isobus
 

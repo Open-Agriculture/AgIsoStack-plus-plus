@@ -33,7 +33,7 @@ namespace isobus
 	{
 		if (started)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot set number of channels after interface is started.");
+			LOG_ERROR("[HardwareInterface] Cannot set number of channels after interface is started.");
 			return false;
 		}
 
@@ -53,21 +53,21 @@ namespace isobus
 	{
 		if (started)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot assign frame handlers after interface is started.");
+			LOG_ERROR("[HardwareInterface] Cannot assign frame handlers after interface is started.");
 			return false;
 		}
 
 		if (channelIndex >= hardwareChannels.size())
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Unable to set frame handler at channel " + isobus::to_string(channelIndex) +
-			                              ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set. " +
-			                              "Use set_number_of_can_channels() to increase the number of channels before assigning frame handlers.");
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + isobus::to_string(channelIndex) +
+			          ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set. " +
+			          "Use set_number_of_can_channels() to increase the number of channels before assigning frame handlers.");
 			return false;
 		}
 
 		if (nullptr != hardwareChannels[channelIndex]->frameHandler)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Unable to set frame handler at channel " + isobus::to_string(channelIndex) + ", because it is already assigned.");
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + isobus::to_string(channelIndex) + ", because it is already assigned.");
 			return false;
 		}
 
@@ -84,20 +84,20 @@ namespace isobus
 	{
 		if (started)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot remove frame handlers after interface is started.");
+			LOG_ERROR("[HardwareInterface] Cannot remove frame handlers after interface is started.");
 			return false;
 		}
 
 		if (channelIndex >= hardwareChannels.size())
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Unable to remove frame handler at channel " + isobus::to_string(channelIndex) +
-			                              ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set.");
+			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + isobus::to_string(channelIndex) +
+			          ", because there are only " + isobus::to_string(hardwareChannels.size()) + " channels set.");
 			return false;
 		}
 
 		if (nullptr == hardwareChannels[channelIndex]->frameHandler)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Unable to remove frame handler at channel " + isobus::to_string(channelIndex) + ", because it is not assigned.");
+			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + isobus::to_string(channelIndex) + ", because it is not assigned.");
 			return false;
 		}
 
@@ -109,7 +109,7 @@ namespace isobus
 	{
 		if (started)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot start interface more than once.");
+			LOG_ERROR("[HardwareInterface] Cannot start interface more than once.");
 			return false;
 		}
 
@@ -130,7 +130,7 @@ namespace isobus
 	{
 		if (!started)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot stop interface before it is started.");
+			LOG_ERROR("[HardwareInterface] Cannot stop interface before it is started.");
 			return false;
 		}
 
@@ -153,20 +153,20 @@ namespace isobus
 	{
 		if (!started)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message before interface is started.");
+			LOG_ERROR("[HardwareInterface] Cannot transmit message before interface is started.");
 			return false;
 		}
 
 		if (frame.channel >= hardwareChannels.size())
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel %u, because there are only %u channels set.", frame.channel, hardwareChannels.size());
+			LOG_ERROR("[HardwareInterface] Cannot transmit message on channel %u, because there are only %u channels set.", frame.channel, hardwareChannels.size());
 			return false;
 		}
 
 		const std::unique_ptr<CANHardware> &channel = hardwareChannels[frame.channel];
 		if (nullptr == channel->frameHandler)
 		{
-			isobus::CANStackLogger::error("[HardwareInterface] Cannot transmit message on channel %u, because it is not assigned.", frame.channel);
+			LOG_ERROR("[HardwareInterface] Cannot transmit message on channel %u, because it is not assigned.", frame.channel);
 			return false;
 		}
 
@@ -248,7 +248,7 @@ namespace isobus
 			}
 			else
 			{
-				isobus::CANStackLogger::critical("[CAN Rx Thread]: CAN Channel " + isobus::to_string(channelIndex) + " appears to be invalid.");
+				LOG_CRITICAL("[CAN Rx Thread]: CAN Channel " + isobus::to_string(channelIndex) + " appears to be invalid.");
 			}
 		}
 	}

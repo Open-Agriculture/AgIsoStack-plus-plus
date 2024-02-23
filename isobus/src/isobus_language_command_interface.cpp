@@ -63,12 +63,12 @@ namespace isobus
 			}
 			else
 			{
-				CANStackLogger::error("[VT/TC]: Language command interface is missing an internal control function, and will not be functional.");
+				LOG_ERROR("[VT/TC]: Language command interface is missing an internal control function, and will not be functional.");
 			}
 		}
 		else
 		{
-			CANStackLogger::warn("[VT/TC]: Language command interface has been initialized, but is being initialized again.");
+			LOG_WARNING("[VT/TC]: Language command interface has been initialized, but is being initialized again.");
 		}
 	}
 
@@ -93,7 +93,7 @@ namespace isobus
 		else
 		{
 			// Make sure you call initialize first!
-			CANStackLogger::error("[VT/TC]: Language command interface is being used without being initialized!");
+			LOG_ERROR("[VT/TC]: Language command interface is being used without being initialized!");
 		}
 		return retVal;
 	}
@@ -133,11 +133,11 @@ namespace isobus
 	{
 		if (country.length() > 2)
 		{
-			CANStackLogger::warn("[VT/TC]: Language command country code should not be more than 2 characters! It will be truncated.");
+			LOG_WARNING("[VT/TC]: Language command country code should not be more than 2 characters! It will be truncated.");
 		}
 		else if (country.length() < 2)
 		{
-			CANStackLogger::warn("[VT/TC]: Language command country code should not be less than 2 characters! It will be padded.");
+			LOG_WARNING("[VT/TC]: Language command country code should not be less than 2 characters! It will be padded.");
 		}
 
 		while (country.length() < 2)
@@ -156,11 +156,11 @@ namespace isobus
 	{
 		if (language.length() > 2)
 		{
-			CANStackLogger::warn("[VT/TC]: Language command language code should not be more than 2 characters! It will be truncated.");
+			LOG_WARNING("[VT/TC]: Language command language code should not be more than 2 characters! It will be truncated.");
 		}
 		else if (language.length() < 2)
 		{
-			CANStackLogger::warn("[VT/TC]: Language command language code should not be less than 2 characters! It will be padded.");
+			LOG_WARNING("[VT/TC]: Language command language code should not be less than 2 characters! It will be padded.");
 		}
 
 		while (language.length() < 2)
@@ -348,12 +348,12 @@ namespace isobus
 				parentInterface->countryCode.push_back(static_cast<char>(data.at(7)));
 			}
 
-			CANStackLogger::debug("[VT/TC]: Language and unit data received from control function " +
-			                        isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
-			                        " language is: " +
-			                        parentInterface->languageCode.c_str(),
-			                      " and country code is ",
-			                      parentInterface->countryCode.empty() ? "unknown." : parentInterface->countryCode.c_str());
+			LOG_DEBUG("[VT/TC]: Language and unit data received from control function " +
+			            isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
+			            " language is: " +
+			            parentInterface->languageCode.c_str(),
+			          " and country code is ",
+			          parentInterface->countryCode.empty() ? "unknown." : parentInterface->countryCode.c_str());
 		}
 	}
 

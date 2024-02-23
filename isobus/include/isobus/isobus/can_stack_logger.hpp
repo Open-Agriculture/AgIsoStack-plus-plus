@@ -10,12 +10,10 @@
 #ifndef CAN_STACK_LOGGER_HPP
 #define CAN_STACK_LOGGER_HPP
 
+#include "isobus/utility/thread_synchronization.hpp"
+
 #include <memory>
 #include <string>
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <mutex>
-#endif
 
 namespace isobus
 {
@@ -45,6 +43,8 @@ namespace isobus
 
 		/// @brief The destructor for a CANStackLogger
 		~CANStackLogger() = default;
+
+#ifndef DISABLE_CAN_STACK_LOGGER
 
 		/// @brief Gets called from the CAN stack to log information. Wraps sink_CAN_stack_log.
 		/// @param[in] level The log level for this text
@@ -137,6 +137,8 @@ namespace isobus
 			CAN_stack_log(LoggingLevel::Critical, format, args...);
 		}
 
+#endif
+
 		/// @brief Assigns a derived logger class to be used as the log sink
 		/// @param[in] logSink A pointer to a derived CANStackLogger class
 		static void set_can_stack_logger_sink(CANStackLogger *logSink);
@@ -166,10 +168,49 @@ namespace isobus
 
 		static CANStackLogger *logger; ///< A static pointer to an instance of a logger
 		static LoggingLevel currentLogLevel; ///< The current log level. Logs for levels below the current one will be dropped.
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		static std::mutex loggerMutex; ///< A mutex that protects the logger so it can be used from multiple threads
-#endif
+		static Mutex loggerMutex; ///< A mutex that protects the logger so it can be used from multiple threads
 	};
 } // namespace isobus
+
+//! @cond Doxygen_Suppress
+#ifdef DISABLE_CAN_STACK_LOGGER
+/// @brief A macro which removes a "critical" log statement depending on the state of DISABLE_CAN_STACK_LOGGER
+/// @param logString A log statement
+#define LOG_CRITICAL(...)
+/// @brief A macro which removes a "error" log statement depending on the state of DISABLE_CAN_STACK_LOGGER
+/// @param logString A log statement
+#define LOG_ERROR(...)
+/// @brief A macro which removes a "warning" log statement depending on the state of DISABLE_CAN_STACK_LOGGER
+/// @param logString A log statement
+#define LOG_WARNING(...)
+/// @brief A macro which removes a "info" log statement depending on the state of DISABLE_CAN_STACK_LOGGER
+/// @param logString A log statement
+#define LOG_INFO(...)
+/// @brief A macro which removes a "debug" log statement depending on the state of DISABLE_CAN_STACK_LOGGER
+/// @param logString A log statement
+#define LOG_DEBUG(...)
+#else
+/// @brief A macro which logs a string at "critical" logging level
+/// @param[in] logString A log statement
+/// @param[in] args (optional) A list of printf style arguments to format the logString with
+#define LOG_CRITICAL(...) isobus::CANStackLogger::critical(__VA_ARGS__)
+/// @brief A macro which logs a string at "error" logging level
+/// @param[in] logString A log statement
+/// @param[in] args (optional) A list of printf style arguments to format the logString with
+#define LOG_ERROR(...) isobus::CANStackLogger::error(__VA_ARGS__)
+/// @brief A macro which logs a string at "warning" logging level
+/// @param[in] logString A log statement
+/// @param[in] args (optional) A list of printf style arguments to format the logString with
+#define LOG_WARNING(...) isobus::CANStackLogger::warn(__VA_ARGS__)
+/// @brief A macro which logs a string at "info" logging level
+/// @param[in] logString A log statement
+/// @param[in] args (optional) A list of printf style arguments to format the logString with
+#define LOG_INFO(...) isobus::CANStackLogger::info(__VA_ARGS__)
+/// @brief A macro which logs a string at "debug" logging level
+/// @param[in] logString A log statement
+/// @param[in] args (optional) A list of printf style arguments to format the logString with
+#define LOG_DEBUG(...) isobus::CANStackLogger::debug(__VA_ARGS__)
+#endif
+//! @endcond
 
 #endif // CAN_STACK_LOGGER_HPP

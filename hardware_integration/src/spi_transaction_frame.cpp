@@ -38,12 +38,12 @@ namespace isobus
 			}
 			else
 			{
-				isobus::CANStackLogger::error("[SPIFrame] Tried to read byte at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
+				LOG_ERROR("[SPIFrame] Tried to read byte at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
 			}
 		}
 		else
 		{
-			isobus::CANStackLogger::error("[SPIFrame] The transaction was not configured to read, but tried to read byte at index: " + isobus::to_string(index));
+			LOG_ERROR("[SPIFrame] The transaction was not configured to read, but tried to read byte at index: " + isobus::to_string(index));
 		}
 		return retVal;
 	}
@@ -60,12 +60,12 @@ namespace isobus
 			}
 			else
 			{
-				isobus::CANStackLogger::error("[SPIFrame] Tried to read " + isobus::to_string(length) + " bytes at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
+				LOG_ERROR("[SPIFrame] Tried to read " + isobus::to_string(length) + " bytes at index " + isobus::to_string(index) + ", but the buffer only contains " + isobus::to_string(rxBuffer.size()) + " bytes");
 			}
 		}
 		else
 		{
-			isobus::CANStackLogger::error("[SPIFrame] The transaction was not configured to read, but tried to read " + isobus::to_string(length) + " bytes at index: " + isobus::to_string(index));
+			LOG_ERROR("[SPIFrame] The transaction was not configured to read, but tried to read " + isobus::to_string(length) + " bytes at index: " + isobus::to_string(index));
 		}
 		return retVal;
 	}
