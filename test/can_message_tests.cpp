@@ -36,7 +36,7 @@ void callback(const CANMessage &message, void *parent)
 	EXPECT_EQ(value64, 4);
 	value64 = message.get_data_custom_length(14, 3, CANMessage::ByteFormat::BigEndian);
 	EXPECT_EQ(value64, 4);
-  value64 = message.get_data_custom_length(63, 999999);
+	value64 = message.get_data_custom_length(63, 999999);
 	EXPECT_EQ(value64, 0);
 	value64 = message.get_data_custom_length(65748321, 1);
 	EXPECT_EQ(value64, 0);
