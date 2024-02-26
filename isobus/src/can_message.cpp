@@ -336,6 +336,12 @@ namespace isobus
 		std::uint32_t startAmountOfBytes = amountOfBytesLeft;
 		std::uint8_t indexOfFinalByteBit = 7;
 
+		if (endBitIndex > 8 * data.size() || length < 1 || startBitIndex >= 8 * data.size())
+		{
+			LOG_ERROR("End bit index is greater than length or startBitIndex is wrong or startBitIndex is greater than endBitIndex");
+			return retVal;
+		}
+
 		for (auto i = startBitIndex; i <= endBitIndex; i++)
 		{
 			auto byteIndex = i / 8;
