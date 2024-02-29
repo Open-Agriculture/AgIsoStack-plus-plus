@@ -248,6 +248,16 @@ namespace isobus
 		/// @return True if (all) the bit(s) are set, false otherwise
 		bool get_bool_at(const std::uint32_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length = 1) const;
 
+		/// @brief Get a 64-bit unsinged integer from the buffer at a specific index but custom length
+		/// Why 64 bit? Because we do not know the length and it could be 10 bits or 54 so better to convert everything into 64 bit
+		/// @details This function will return 8 bytes at a specified index in the buffer but custom bit length
+		/// We are iterating by full bytes (assembling a full byte) and shifting it into the final 64-bit value to return
+		/// @param[in] startBitIndex The index to get the 64-bit unsigned integer from
+		/// @param[in] length The length of bits to extract from the buffer
+		/// @param[in] format The byte format to use when reading the integer
+		/// @return The 64-bit unsigned integer
+		std::uint64_t get_data_custom_length(const std::uint32_t startBitIndex, const std::uint32_t length, const ByteFormat format = ByteFormat::LittleEndian) const;
+
 	private:
 		Type messageType; ///< The internal message type associated with the message
 		CANIdentifier identifier; ///< The CAN ID of the message
