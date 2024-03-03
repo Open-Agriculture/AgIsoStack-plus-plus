@@ -1304,8 +1304,8 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
 
 	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
 	ddop.add_device_element("Section1", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
-	ddop.add_device_element("Section2", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
-	ddop.add_device_element("Product", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Bin, 45);
+	ddop.add_device_element("Section2", 1, 1, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
+	ddop.add_device_element("Product", 2, 1, isobus::task_controller_object::DeviceElementObject::Type::Bin, 45);
 	ddop.add_device_property("Xoffset", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetX), 0xFFFF, 6);
 	ddop.add_device_property("yoffset", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetY), 0xFFFF, 7);
 	ddop.add_device_property("zoffset", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::DeviceElementOffsetZ), 0xFFFF, 8);
@@ -1342,6 +1342,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
 	ASSERT_EQ(2, implement.booms.at(0).sections.size());
 	ASSERT_EQ(0, implement.booms.at(0).subBooms.size());
 	ASSERT_EQ(1, implement.booms.at(0).rates.size());
+	ASSERT_EQ(2, implement.booms.at(0).rates.at(0).elementNumber);
 
 	EXPECT_EQ(7000, implement.booms.at(0).rates.at(0).rateSetpoint.get());
 	EXPECT_EQ(8000, implement.booms.at(0).rates.at(0).rateDefault.get());
