@@ -34,7 +34,7 @@
 - Platform independent C++ library
 - Virtual Terminal Client (Universal Terminal)
 - Auxiliary control (AUX-N)
-- Task Controller Client
+- Task Controller Client and Server
 - ISOBUS shortcut button (ISB)
 - The complete backbone of the ISO11783 standard
 - NMEA 2000 Fast Packet Protocol
