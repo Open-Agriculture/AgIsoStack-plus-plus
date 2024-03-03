@@ -130,6 +130,7 @@ namespace isobus
 	                                                     Implement &implementToPopulate)
 	{
 		Boom boomToPopulate;
+		boomToPopulate.elementNumber = elementObject->get_element_number();
 
 		if (task_controller_object::DeviceElementObject::Type::Function == elementObject->get_type())
 		{
@@ -264,6 +265,7 @@ namespace isobus
 	                                                                                           std::shared_ptr<task_controller_object::DeviceElementObject> elementObject)
 	{
 		SubBoom retVal;
+		retVal.elementNumber = elementObject->get_element_number();
 
 		// Find all sections in this sub boom
 		// We again have to search the whole pool because elements have parent links, not child links
@@ -327,6 +329,7 @@ namespace isobus
 
 		if (task_controller_object::DeviceElementObject::Type::Bin == elementObject->get_type())
 		{
+			retVal.elementNumber = elementObject->get_element_number();
 			for (std::uint16_t i = 0; i < elementObject->get_number_child_objects(); i++)
 			{
 				auto object = ddop.get_object_by_id(elementObject->get_child_object_id(i));

@@ -87,6 +87,7 @@ namespace isobus
 			RateMetadata rateDefault; ///< The info needed to interact with the default rate
 			RateMetadata rateMinimum; ///< The info needed to interact with the minimum rate
 			RateMetadata rateMaximum; ///< The info needed to interact with the maximum rate
+			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the bin, which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 
 		/// @brief A helper class that describes an individual section of a boom.
@@ -114,6 +115,7 @@ namespace isobus
 			ObjectPoolValue yOffset_mm; ///< The y offset of the sub boom in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the sub boom in mm. Z offsets are up+/down-.
 			ObjectPoolValue width_mm; ///< The width of the sub boom in mm
+			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the sub boom , which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 
 		/// @brief A helper class that describes a boom
@@ -127,6 +129,7 @@ namespace isobus
 			ObjectPoolValue xOffset_mm; ///< The x offset of the sub boom in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the sub boom in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the sub boom in mm. Z offsets are up+/down-.
+			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the boom, which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 
 		/// @brief A helper class that describes an implement based on its DDOP.
