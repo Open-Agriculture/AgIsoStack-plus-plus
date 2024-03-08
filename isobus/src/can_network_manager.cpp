@@ -789,17 +789,17 @@ namespace isobus
 					    (ControlFunction::Type::External == currentActiveControlFunction->get_type()))
 					{
 						// This CF matches the filter and is not an internal or already partnered CF
-						LOG_INFO("[NM]: A partner with name %016llx has claimed address %u on channel %u.",
-						         partner->get_NAME().get_full_name(),
-						         partner->get_address(),
-						         partner->get_can_port());
-
 						// Populate the partner's data
 						partner->address = currentActiveControlFunction->get_address();
 						partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
 						partner->initialized = true;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
 						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
+
+						LOG_INFO("[NM]: A partner with name %016llx has claimed address %u on channel %u.",
+						         partner->get_NAME().get_full_name(),
+						         partner->get_address(),
+						         partner->get_can_port());
 						break;
 					}
 				}
