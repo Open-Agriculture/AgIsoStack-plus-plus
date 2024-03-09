@@ -25,11 +25,17 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find packages required for Socket CAN
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-# ESP-IDF doesn't implement find_package(Threads) correctly (dec 2022)
-if(NOT ESP_PLATFORM)
-  find_package(Threads REQUIRED)
+option(
+  CAN_STACK_DISABLE_THREADS
+  "Set to ON to disable multi-threading, which removes the need for std::thread, std::mutex, and related libraries."
+  OFF)
+if(NOT CAN_STACK_DISABLE_THREADS AND NOT ARDUINO)
+  # Find packages required for Threading
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  # ESP-IDF doesn't implement find_package(Threads) correctly (dec 2022)
+  if(NOT ESP_PLATFORM)
+    find_package(Threads REQUIRED)
+  endif()
 endif()
 
 # A handy function to prepend text to all elements in a list (useful for
