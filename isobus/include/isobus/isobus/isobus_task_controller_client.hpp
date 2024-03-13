@@ -640,6 +640,7 @@ namespace isobus
 		std::uint32_t statusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we sent a status message to the TC
 		std::uint32_t serverStatusMessageTimestamp_ms = 0; ///< Timestamp corresponding to the last time we received a status message from the TC
 		std::uint32_t userSuppliedBinaryDDOPSize_bytes = 0; ///< The number of bytes in the user provided binary DDOP (if one was provided)
+		std::uint32_t languageCommandWaitingTimestamp_ms = 0; ///< Timestamp used to determine when to give up on waiting for a language command response
 		std::uint8_t numberOfWorkingSetMembers = 1; ///< The number of working set members that will be reported in the working set master message
 		std::uint8_t tcStatusBitfield = 0; ///< The last received TC/DL status from the status message
 		std::uint8_t sourceAddressOfCommandBeingExecuted = 0; ///< Source address of client for which the current command is being executed

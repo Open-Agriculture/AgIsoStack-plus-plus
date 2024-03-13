@@ -77,6 +77,11 @@ namespace isobus
 		myPartner = filteredControlFunction;
 	}
 
+	std::shared_ptr<PartneredControlFunction> LanguageCommandInterface::get_partner() const
+	{
+		return myPartner;
+	}
+
 	bool LanguageCommandInterface::get_initialized() const
 	{
 		return initialized;
@@ -100,6 +105,11 @@ namespace isobus
 
 	bool LanguageCommandInterface::send_language_command() const
 	{
+		if ((languageCode.length() < 2) || (countryCode.length() < 2))
+		{
+			LOG_ERROR("[VT/TC]: Language command interface is missing language or country code, and will not send a language command.");
+			return false;
+		}
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			static_cast<std::uint8_t>(languageCode[0]),
 			static_cast<std::uint8_t>(languageCode[1]),

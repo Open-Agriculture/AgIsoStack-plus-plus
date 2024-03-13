@@ -4,6 +4,7 @@
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_task_controller_client.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
@@ -13,8 +14,8 @@ using namespace isobus;
 class DerivedTestTCClient : public TaskControllerClient
 {
 public:
-	DerivedTestTCClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
-	  TaskControllerClient(partner, clientSource, nullptr){};
+	DerivedTestTCClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<VirtualTerminalClient> primaryVT = nullptr) :
+	  TaskControllerClient(partner, clientSource, primaryVT){};
 
 	bool test_wrapper_send_working_set_master() const
 	{
@@ -1309,11 +1310,11 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLanguage);
 
-	// Test lack of timeout waiting for language (hold state)
+	// Test that we can't get stuck in the request language state
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForLanguageResponse);
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForLanguageResponse);
 	interfaceUnderTest.update();
-	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::WaitForLanguageResponse);
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::ProcessDDOP);
 
 	// Test timeout waiting for object pool transfer response
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::WaitForObjectPoolTransferResponse, 0);
@@ -1676,4 +1677,80 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
 	ASSERT_TRUE(TestPartnerTC->destroy(3));
 	ASSERT_TRUE(internalECU->destroy(3));
+}
+
+TEST(TASK_CONTROLLER_CLIENT_TESTS, LanguageCommandFallback)
+{
+	VirtualCANPlugin serverTC;
+	serverTC.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xFC, 0);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xFB, 0);
+	auto TestPartnerVT = test_helpers::force_claim_partnered_control_function(0xFA, 0);
+
+	auto vtClient = std::make_shared<VirtualTerminalClient>(TestPartnerVT, internalECU);
+
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU, vtClient);
+	interfaceUnderTest.initialize(false);
+	vtClient->initialize(false);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	// Get the virtual CAN plugin back to a known state
+	CANMessageFrame testFrame = {};
+	while (!serverTC.get_queue_empty())
+	{
+		serverTC.read_frame(testFrame);
+	}
+	ASSERT_TRUE(serverTC.get_queue_empty());
+
+	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
+	interfaceUnderTest.configure(blankDDOP, 1, 32, 32, true, false, true, false, true);
+
+	// Force a status message out of the TC which states it's version 4
+	testFrame.identifier = 0x18CBFFFB;
+	testFrame.data[0] = 0x10; // Mux
+	testFrame.data[1] = 0x04; // Version number (Version 4)
+	testFrame.data[2] = 0xFF; // Max boot time (Not available)
+	testFrame.data[3] = 0x1F; // Supports all options
+	testFrame.data[4] = 0x00; // Reserved options = 0
+	testFrame.data[5] = 0x01; // Number of booms for section control (1)
+	testFrame.data[6] = 0x20; // Number of sections for section control (32)
+	testFrame.data[7] = 0x10; // Number channels for position based control (16)
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestLanguage);
+	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLanguage);
+	interfaceUnderTest.update();
+
+	serverTC.read_frame(testFrame);
+
+	EXPECT_EQ(testFrame.identifier, 0x18EAFBFC); // Make sure we got the request for language, target the TC
+
+	// Now just sit here and wait for the timeout to occur, 2s
+	std::this_thread::sleep_for(std::chrono::milliseconds(2001));
+	interfaceUnderTest.update();
+	interfaceUnderTest.update();
+
+	// Now we should see another request, this time to the VT
+	serverTC.read_frame(testFrame);
+	EXPECT_EQ(testFrame.identifier, 0x18EAFAFC); // Make sure we got the request for language, target the VT
+
+	// Now get really crazy and don't respond to that
+	std::this_thread::sleep_for(std::chrono::milliseconds(6001));
+	interfaceUnderTest.update();
+
+	// Test that we didn't get stuck in the request language state
+	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::ProcessDDOP);
+	TestPartnerTC->destroy();
+	TestPartnerVT->destroy();
+	internalECU->destroy();
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.update();
 }

@@ -511,15 +511,13 @@ namespace isobus
 					LOG_WARNING("[TC]: The TC is < version 4 but no VT was provided. Language data will be requested globally, which might not be ideal.");
 				}
 
-				if ((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
-				    (nullptr != primaryVirtualTerminal) &&
-				    (primaryVirtualTerminal->languageCommandInterface.send_request_language_command()))
+				if (((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
+				     (nullptr != primaryVirtualTerminal) &&
+				     (primaryVirtualTerminal->languageCommandInterface.send_request_language_command())) ||
+				    (languageCommandInterface.send_request_language_command()))
 				{
 					set_state(StateMachineState::WaitForLanguageResponse);
-				}
-				else if (languageCommandInterface.send_request_language_command())
-				{
-					set_state(StateMachineState::WaitForLanguageResponse);
+					languageCommandWaitingTimestamp_ms = SystemTiming::get_timestamp_ms();
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
 				{
@@ -531,10 +529,34 @@ namespace isobus
 
 			case StateMachineState::WaitForLanguageResponse:
 			{
-				if ((SystemTiming::get_time_elapsed_ms(languageCommandInterface.get_language_command_timestamp()) < SIX_SECOND_TIMEOUT_MS) &&
+				if ((SystemTiming::get_time_elapsed_ms(languageCommandInterface.get_language_command_timestamp()) < TWO_SECOND_TIMEOUT_MS) &&
 				    ("" != languageCommandInterface.get_language_code()))
 				{
 					set_state(StateMachineState::ProcessDDOP);
+				}
+				else if (SystemTiming::time_expired_ms(languageCommandWaitingTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
+				{
+					LOG_WARNING("[TC]: Timeout waiting for language response. Moving on to processing the DDOP anyways.");
+					set_state(StateMachineState::ProcessDDOP);
+				}
+				else if ((SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS)) &&
+				         (nullptr != languageCommandInterface.get_partner()))
+				{
+					LOG_WARNING("[TC]: No response to our request for the language command data, which is unusual.");
+
+					if (nullptr != primaryVirtualTerminal)
+					{
+						LOG_WARNING("[TC]: Falling back to VT for language data.");
+						primaryVirtualTerminal->languageCommandInterface.send_request_language_command();
+						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+					else
+					{
+						LOG_WARNING("[TC]: Since no VT was specified, falling back to a global request for language data.");
+						languageCommandInterface.set_partner(nullptr);
+						languageCommandInterface.send_request_language_command();
+						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
+					}
 				}
 			}
 			break;

@@ -211,6 +211,9 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 
 	interfaceUnderTest.initialize();
 
+	// Sending a request without setting the various string parameters should not emit a message
+	EXPECT_FALSE(interfaceUnderTest.send_language_command());
+
 	interfaceUnderTest.set_language_code("en");
 	interfaceUnderTest.set_commanded_decimal_symbol(LanguageCommandInterface::DecimalSymbols::Comma);
 	interfaceUnderTest.set_commanded_time_format(LanguageCommandInterface::TimeFormats::TwentyFourHour);
