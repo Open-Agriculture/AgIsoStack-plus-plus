@@ -4503,11 +4503,11 @@ namespace isobus
 			return true;
 		}
 
+		LOCK_GUARD(Mutex, commandQueueMutex);
 		if (replace && replace_command(data))
 		{
 			return true;
 		}
-		LOCK_GUARD(Mutex, commandQueueMutex);
 		commandQueue.emplace_back(data);
 		return true;
 	}
@@ -4530,6 +4530,10 @@ namespace isobus
 				{
 					it = commandQueue.erase(it);
 				}
+			}
+			else
+			{
+				it++;
 			}
 		}
 		return alreadyReplaced;
