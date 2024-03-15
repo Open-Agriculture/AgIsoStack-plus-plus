@@ -3,38 +3,36 @@
 ///
 /// @brief The hardware abstraction layer that separates the stack from the underlying CAN driver
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
 #ifndef CAN_HARDWARE_INTERFACE_HPP
 #define CAN_HARDWARE_INTERFACE_HPP
-
-#include <atomic>
-#include <condition_variable>
-#include <cstdint>
-#include <cstring>
-#include <deque>
-#include <mutex>
-#include <thread>
-#include <vector>
 
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 
+#include <atomic>
+#include <cstdint>
+#include <cstring>
+#include <deque>
+#include <vector>
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <condition_variable>
+#include <thread>
+#endif
+
 namespace isobus
 {
-	//================================================================================================
-	/// @class CANHardwareInterface
-	///
 	/// @brief Provides a common queuing and thread layer for running the CAN stack and all CAN drivers
-	///
 	/// @details The `CANHardwareInterface` class was created to provide a common queuing and thread
 	/// layer for running the CAN stack and all CAN drivers to simplify integration and crucially to
 	/// provide a consistent, safe order of operations for all the function calls needed to properly
 	/// drive the stack.
-	//================================================================================================
 	class CANHardwareInterface
 	{
 	public:
@@ -48,8 +46,9 @@ namespace isobus
 		/// already configured, it will delete the unneeded `CanHardware` objects.
 		/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
 		/// @param value The number of CAN channels to manage
+		/// @param queueCapacity The capacity of the transmit and receive queues
 		/// @returns `true` if the channel count was set, otherwise `false`.
-		static bool set_number_of_can_channels(std::uint8_t value);
+		static bool set_number_of_can_channels(std::uint8_t value, std::size_t queueCapacity = 40);
 
 		/// @brief Assigns a CAN driver to a channel
 		/// @param[in] channelIndex The channel to assign to
@@ -84,88 +83,114 @@ namespace isobus
 		/// @brief Called externally, adds a message to a CAN channel's Tx queue
 		/// @param[in] frame The frame to add to the Tx queue
 		/// @returns `true` if the frame was accepted, otherwise `false` (maybe wrong channel assigned)
-		static bool transmit_can_frame(const isobus::CANMessageFrame &frame);
+		static bool transmit_can_frame(const CANMessageFrame &frame);
 
 		/// @brief Get the event dispatcher for when a CAN message frame is received from hardware event
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
-		static isobus::EventDispatcher<const isobus::CANMessageFrame &> &get_can_frame_received_event_dispatcher();
+		static EventDispatcher<const CANMessageFrame &> &get_can_frame_received_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a CAN message frame will be send to hardware event
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
-		static isobus::EventDispatcher<const isobus::CANMessageFrame &> &get_can_frame_transmitted_event_dispatcher();
+		static EventDispatcher<const CANMessageFrame &> &get_can_frame_transmitted_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a periodic update is called
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
-		static isobus::EventDispatcher<> &get_periodic_update_event_dispatcher();
+		static EventDispatcher<> &get_periodic_update_event_dispatcher();
 
-		/// @brief Set the interval between periodic updates
+		/// @brief Call this periodically if you have threads disabled.
+		/// @note Try to call this very often, say at least every millisecond to ensure CAN messages are retrieved from the hardware
+		static void update();
+
+		/// @brief Set the interval between periodic updates to the network manager
 		/// @param[in] value The interval between update calls in milliseconds
 		static void set_periodic_update_interval(std::uint32_t value);
 
-		/// @brief Get the interval between periodic updates
+		/// @brief Get the interval between periodic updates to the network manager
 		/// @returns The interval between update calls in milliseconds
 		static std::uint32_t get_periodic_update_interval();
 
 	private:
-		/// @brief Stores the Tx/Rx queues, mutexes, and driver needed to run a single CAN channel
-		struct CANHardware
+		/// @brief Stores the data for a single CAN channel
+		class CANHardware
 		{
-			std::mutex messagesToBeTransmittedMutex; ///< Mutex to protect the Tx queue
-			std::deque<isobus::CANMessageFrame> messagesToBeTransmitted; ///< Tx message queue for a CAN channel
+		public:
+			/// @brief Constructor for the CANHardware
+			/// @param[in] queueCapacity The capacity of the transmit and receive queues
+			explicit CANHardware(std::size_t queueCapacity);
 
-			std::mutex receivedMessagesMutex; ///< Mutex to protect the Rx queue
-			std::deque<isobus::CANMessageFrame> receivedMessages; ///< Rx message queue for a CAN channel
+			/// @brief Destructor for the CANHardware
+			virtual ~CANHardware();
+
+			/// @brief Starts this hardware channel
+			/// @returns `true` if the channel was started, otherwise `false`
+			bool start();
+
+			/// @brief Stops this hardware channel
+			/// @returns `true` if the channel was stopped, otherwise `false`
+			bool stop();
+
+			/// @brief Try to transmit the frame to the hardware
+			/// @param[in] frame The frame to transmit
+			/// @returns `true` if the frame was transmitted, otherwise `false`
+			bool transmit_can_frame(const CANMessageFrame &frame) const;
+
+			/// @brief Receives a frame from the hardware and adds it to the receive queue
+			/// @returns `true` if a frame was received, otherwise `false`
+			bool receive_can_frame();
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+			/// @brief Starts the receiving thread for this CAN channel
+			void start_threads();
+
+			/// @brief Stops the receiving thread for this CAN channel
+			void stop_threads();
+
+			/// @brief The receiving thread loop for this CAN channel
+			void receive_thread_function();
 
 			std::unique_ptr<std::thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
+			bool receiveThreadRunning; ///< Flag to indicate if the receive thread is running
+#endif
 
 			std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel
+
+			LockFreeQueue<CANMessageFrame> messagesToBeTransmittedQueue; ///< Transmit message queue for a CAN channel
+			LockFreeQueue<CANMessageFrame> receivedMessagesQueue; ///< Receive message queue for a CAN channel
 		};
 
 		/// @brief Singleton instance of the CANHardwareInterface class
 		/// @details This is a little hack that allows to have the destructor called
 		static CANHardwareInterface SINGLETON;
 
-		/// @brief Constructor for the CANHardwareInterface class
-		CANHardwareInterface() = default;
-
-		/// @brief Deconstructor for the CANHardwareInterface class
-		virtual ~CANHardwareInterface();
-
 		/// @brief The default update interval for the CAN stack. Mostly arbitrary
 		static constexpr std::uint32_t PERIODIC_UPDATE_INTERVAL = 4;
 
-		/// @brief The main CAN thread executes this function. Does most of the work of this class
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		/// @brief Deconstructor for the CANHardwareInterface class for stopping threads
+		virtual ~CANHardwareInterface();
+
+		/// @brief The main thread loop for updating the stack
 		static void update_thread_function();
 
-		/// @brief The receive thread(s) execute this function
-		/// @param[in] channelIndex The associated CAN channel for the thread
-		static void receive_can_frame_thread_function(std::uint8_t channelIndex);
-
-		/// @brief Attempts to write a frame using the driver assigned to a frame's channel
-		/// @param[in] frame The frame to try and write to the bus
-		/// @returns `true` if the frame was sent from the buffer, otherwise `false`
-		static bool transmit_can_frame_from_buffer(const isobus::CANMessageFrame &frame);
-
-		/// @brief The periodic update thread executes this function
-		static void periodic_update_function();
+		/// @brief Starts all threads related to the hardware interface
+		static void start_threads();
 
 		/// @brief Stops all threads related to the hardware interface
 		static void stop_threads();
 
 		static std::unique_ptr<std::thread> updateThread; ///< The main thread
-		static std::unique_ptr<std::thread> wakeupThread; ///< A thread that periodically wakes up the `updateThread`
 		static std::condition_variable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
-		static std::atomic_bool stackNeedsUpdate; ///< Stores if the CAN thread needs to update the stack this iteration
-		static std::uint32_t periodicUpdateInterval; ///< The period between calls to the CAN stack update function in milliseconds
-
-		static isobus::EventDispatcher<const isobus::CANMessageFrame &> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
-		static isobus::EventDispatcher<const isobus::CANMessageFrame &> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
-		static isobus::EventDispatcher<> periodicUpdateEventDispatcher; ///< The event dispatcher for when a periodic update is called
+#endif
+		static std::uint32_t lastUpdateTimestamp; ///< The last time the network manager was updated
+		static std::uint32_t periodicUpdateInterval; ///< The period between calls to the network manager update function in milliseconds
+		static EventDispatcher<const CANMessageFrame &> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
+		static EventDispatcher<const CANMessageFrame &> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
+		static EventDispatcher<> periodicUpdateEventDispatcher; ///< The event dispatcher for when a periodic update is called
 
 		static std::vector<std::unique_ptr<CANHardware>> hardwareChannels; ///< A list of all CAN channel's metadata
-		static std::mutex hardwareChannelsMutex; ///< Mutex to protect `hardwareChannels`
-		static std::mutex updateMutex; ///< A mutex for the main thread
-		static std::atomic_bool threadsStarted; ///< Stores if the threads have been started
+		static Mutex hardwareChannelsMutex; ///< Mutex to protect `hardwareChannels`
+		static Mutex updateMutex; ///< A mutex for the main thread
+		static bool started; ///< Stores if the threads have been started
 	};
 }
 #endif // CAN_HARDWARE_INTERFACE_HPP
