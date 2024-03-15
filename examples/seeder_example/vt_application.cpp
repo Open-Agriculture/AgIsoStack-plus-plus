@@ -278,28 +278,19 @@ void SeederVtApplication::handle_numeric_value_events(const isobus::VirtualTermi
 	}
 }
 
-void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed)
+void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool)
 {
-	if (changed)
-	{
-		process_new_speed(SpeedSources::MachineSelected, mssData->get_machine_speed());
-	}
+	process_new_speed(SpeedSources::MachineSelected, mssData->get_machine_speed());
 }
 
-void SeederVtApplication::handle_ground_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool changed)
+void SeederVtApplication::handle_ground_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool)
 {
-	if (changed)
-	{
-		process_new_speed(SpeedSources::GroundBased, gbsData->get_machine_speed());
-	}
+	process_new_speed(SpeedSources::GroundBased, gbsData->get_machine_speed());
 }
 
-void SeederVtApplication::handle_wheel_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool changed)
+void SeederVtApplication::handle_wheel_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool)
 {
-	if (changed)
-	{
-		process_new_speed(SpeedSources::WheelBased, wbsData->get_machine_speed());
-	}
+	process_new_speed(SpeedSources::WheelBased, wbsData->get_machine_speed());
 }
 
 void SeederVtApplication::process_new_speed(SpeedSources source, std::uint32_t speed)
