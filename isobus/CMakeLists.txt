@@ -43,8 +43,11 @@ set(ISOBUS_SRC
     "isobus_virtual_terminal_client_state_tracker.cpp"
     "isobus_virtual_terminal_client_update_helper.cpp"
     "isobus_heartbeat.cpp"
+    "isobus_task_controller_server.cpp"
+    "isobus_task_controller_server_options.cpp"
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp"
+    "isobus_device_descriptor_object_pool_helpers.cpp"
     "can_message_data.cpp")
 
 # Prepend the source directory path to all the source files
@@ -86,13 +89,15 @@ set(ISOBUS_INCLUDE
     "isobus_functionalities.hpp"
     "isobus_speed_distance_messages.hpp"
     "isobus_maintain_power_interface.hpp"
-    "isobus_virtual_terminal_objects.hpp"
     "isobus_virtual_terminal_client_state_tracker.hpp"
     "isobus_virtual_terminal_client_update_helper.hpp"
     "isobus_heartbeat.hpp"
+    "isobus_task_controller_server.hpp"
+    "isobus_task_controller_server_options.hpp"
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp"
     "isobus_preferred_addresses.hpp"
+    "isobus_device_descriptor_object_pool_helpers.hpp"
     "can_message_data.hpp")
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
