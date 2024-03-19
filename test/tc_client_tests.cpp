@@ -14,7 +14,7 @@ using namespace isobus;
 class DerivedTestTCClient : public TaskControllerClient
 {
 public:
-	DerivedTestTCClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<VirtualTerminalClient> primaryVT = nullptr) :
+	DerivedTestTCClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<PartneredControlFunction> primaryVT = nullptr) :
 	  TaskControllerClient(partner, clientSource, primaryVT){};
 
 	bool test_wrapper_send_working_set_master() const
@@ -1113,7 +1113,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 
 	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(tcPartner->destroy(4));
+	ASSERT_TRUE(tcPartner->destroy(5));
 	ASSERT_TRUE(internalECU->destroy(5));
 }
 
@@ -1339,7 +1339,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(tcPartner->destroy(3));
+	tcPartner->destroy(5);
 	ASSERT_TRUE(internalECU->destroy(3));
 }
 
@@ -1692,11 +1692,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, LanguageCommandFallback)
 	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xFB, 0);
 	auto TestPartnerVT = test_helpers::force_claim_partnered_control_function(0xFA, 0);
 
-	auto vtClient = std::make_shared<VirtualTerminalClient>(TestPartnerVT, internalECU);
-
-	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU, vtClient);
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU, TestPartnerVT);
 	interfaceUnderTest.initialize(false);
-	vtClient->initialize(false);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
