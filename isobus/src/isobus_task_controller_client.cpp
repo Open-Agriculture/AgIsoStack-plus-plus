@@ -11,7 +11,6 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
-#include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -25,7 +24,7 @@
 
 namespace isobus
 {
-	TaskControllerClient::TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<VirtualTerminalClient> primaryVT) :
+	TaskControllerClient::TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<PartneredControlFunction> primaryVT) :
 	  languageCommandInterface(clientSource, partner),
 	  partnerControlFunction(partner),
 	  myControlFunction(clientSource),
@@ -483,6 +482,7 @@ namespace isobus
 				if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, SIX_SECOND_TIMEOUT_MS))
 				{
 					LOG_WARNING("[TC]: Timeout waiting for version request from TC. This is not required, so proceeding anways.");
+					select_language_command_partner();
 					set_state(StateMachineState::RequestLanguage);
 				}
 			}
@@ -492,6 +492,7 @@ namespace isobus
 			{
 				if (send_request_version_response())
 				{
+					select_language_command_partner();
 					set_state(StateMachineState::RequestLanguage);
 				}
 				else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, TWO_SECOND_TIMEOUT_MS))
@@ -504,17 +505,7 @@ namespace isobus
 
 			case StateMachineState::RequestLanguage:
 			{
-				if ((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
-				    (nullptr == primaryVirtualTerminal))
-				{
-					languageCommandInterface.set_partner(nullptr); // TC might not reply and no VT specified, so just see if anyone knows.
-					LOG_WARNING("[TC]: The TC is < version 4 but no VT was provided. Language data will be requested globally, which might not be ideal.");
-				}
-
-				if (((serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition)) &&
-				     (nullptr != primaryVirtualTerminal) &&
-				     (primaryVirtualTerminal->languageCommandInterface.send_request_language_command())) ||
-				    (languageCommandInterface.send_request_language_command()))
+				if (languageCommandInterface.send_request_language_command())
 				{
 					set_state(StateMachineState::WaitForLanguageResponse);
 					languageCommandWaitingTimestamp_ms = SystemTiming::get_timestamp_ms();
@@ -547,7 +538,8 @@ namespace isobus
 					if (nullptr != primaryVirtualTerminal)
 					{
 						LOG_WARNING("[TC]: Falling back to VT for language data.");
-						primaryVirtualTerminal->languageCommandInterface.send_request_language_command();
+						languageCommandInterface.set_partner(primaryVirtualTerminal);
+						languageCommandInterface.send_request_language_command();
 						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 					}
 					else
@@ -2081,6 +2073,23 @@ namespace isobus
 	{
 		stateMachineTimestamp_ms = timestamp;
 		currentState = newState;
+	}
+
+	void TaskControllerClient::select_language_command_partner()
+	{
+		if (serverVersion < static_cast<std::uint8_t>(Version::SecondPublishedEdition))
+		{
+			if (nullptr == primaryVirtualTerminal)
+			{
+				languageCommandInterface.set_partner(nullptr); // TC might not reply and no VT specified, so just see if anyone knows.
+				LOG_WARNING("[TC]: The TC is < version 4 but no VT was provided. Language data will be requested globally, which might not be ideal.");
+			}
+			else
+			{
+				languageCommandInterface.set_partner(primaryVirtualTerminal);
+				LOG_DEBUG("[TC]: Using VT as the partner for language data, because the TC's version is less than 4.");
+			}
+		}
 	}
 
 	void TaskControllerClient::worker_thread_function()
