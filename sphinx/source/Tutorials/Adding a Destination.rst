@@ -72,7 +72,7 @@ In this step, we will construct and send a proprietary A message to our partner.
 
    std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0}; // Data is just all zeros
 
-   isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get(), myPartner.get());
+   isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU, myPartner);
 
 As you can see, the call to the network manager to send the message is nearly identical to the one to send it to the broadcast address, but with the addition of our partner :code:`myPartner`.
 
@@ -98,13 +98,17 @@ The final program for this tutorial (including the code from the previous Hello 
    #include "isobus/hardware_integration/can_hardware_interface.hpp"
    #include "isobus/isobus/can_partnered_control_function.hpp"
 
-   #include <memory>
+   #include <atomic>
    #include <csignal>
-
+   #include <iostream>
+   #include <memory>
+   
+   // This helps us handle control+c and other requests to terminate the program
+   static std::atomic_bool running = { true };
+   
    void signal_handler(int)
    {
-      isobus::CANHardwareInterface::stop(); // Clean up the threads
-		_exit(EXIT_FAILURE);
+   	running = false;
    }
 
    int main()
@@ -127,7 +131,7 @@ The final program for this tutorial (including the code from the previous Hello 
       // Handle control+c
       std::signal(SIGINT, signal_handler);
 
-      //! Make sure you change these for your device!!!!
+      //! Consider customizing some of these fields, like the function code, to be representative of your device
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -154,10 +158,10 @@ The final program for this tutorial (including the code from the previous Hello 
       std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0}; // Data is just all zeros
 
       // Send a message to the broadcast address
-      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get());
+      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU);
 
       // Send a message to our partner (if it is present)
-      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get(), myPartner.get());
+      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU, myPartner);
 
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
 

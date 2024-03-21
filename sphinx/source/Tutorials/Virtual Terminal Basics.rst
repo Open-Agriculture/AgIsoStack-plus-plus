@@ -88,7 +88,7 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 		isobus::NAME TestDeviceNAME(0);
 
-		//! Make sure you change these for your device!!!!
+		//! Consider customizing some of these fields, like the function code, to be representative of your device
 		TestDeviceNAME.set_arbitrary_address_capable(true);
 		TestDeviceNAME.set_industry_group(1);
 		TestDeviceNAME.set_device_class(0);
@@ -536,7 +536,7 @@ Here's the final code for this example:
 
 		isobus::NAME TestDeviceNAME(0);
 
-		//! Make sure you change these for your device!!!!
+		//! Consider customizing some of these fields, like the function code, to be representative of your device
 		TestDeviceNAME.set_arbitrary_address_capable(true);
 		TestDeviceNAME.set_industry_group(1);
 		TestDeviceNAME.set_device_class(0);

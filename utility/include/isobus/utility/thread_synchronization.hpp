@@ -32,7 +32,7 @@ namespace isobus
 {
 	using Mutex = std::mutex;
 	using RecursiveMutex = std::recursive_mutex;
-};
+}
 /// @brief A macro to automatically lock a mutex and unlock it when the scope ends.
 /// @param type The type of the mutex.
 /// @param x The mutex to lock.
