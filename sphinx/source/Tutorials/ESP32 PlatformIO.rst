@@ -178,7 +178,7 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
 
             isobus::NAME TestDeviceNAME(0);
 
-            //! Make sure you change these for your device!!!!
+            //! Consider customizing some of these fields, like the function code, to be representative of your device
             TestDeviceNAME.set_arbitrary_address_capable(true);
             TestDeviceNAME.set_industry_group(1);
             TestDeviceNAME.set_device_class(0);

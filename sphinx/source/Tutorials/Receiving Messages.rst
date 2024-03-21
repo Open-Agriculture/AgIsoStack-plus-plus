@@ -26,12 +26,9 @@ In this example, we'll define a function that will process all received propriet
 
 .. code-block:: c++
 
-   void propa_callback(isobus::CANMessage *CANMessage, void *parent)
+   void propa_callback(const isobus::CANMessage &CANMessage, void *)
    {
-      if (nullptr != CANMessage)
-      {
-         std::cout << CANMessage->get_data_length() << std::endl;
-      }
+     std::cout << CANMessage.get_data_length() << std::endl;
    }
 
 This callback isn't particularly useful, but it does illustrate how to use the callback system.
@@ -54,13 +51,14 @@ Feel free to review the API docs for this function `here <https://delgrossoengin
 How Do We Test It?
 ^^^^^^^^^^^^^^^^^^^^
 
-Our example program has to stay running for us to receive messages, so if we want to test our latest changes, we'll want to add an infinite sleep into the program, so that it runs until we press control+c.
+Our example program has to stay running for us to receive messages, so if we want to test our latest changes, we'll want to keep the program running until we specifically want to exit.
+To do this we'll put our main thread to sleep on a timed interval, and wake it up from time to time to see if the program should exit or keep running.
 
 .. code-block:: c++
 
-   while (true)
+   while (running)
    {
-      // CAN stack runs in other threads. Do nothing forever.
+      // CAN stack runs in other threads. Do nothing for a while.
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
    }
 
@@ -73,22 +71,22 @@ So, our updated tutorial program now should look like this:
    #include "isobus/hardware_integration/can_hardware_interface.hpp"
    #include "isobus/isobus/can_partnered_control_function.hpp"
 
-   #include <memory>
+   #include <atomic>
    #include <csignal>
    #include <iostream>
-
+   #include <memory>
+   
+   // This helps us handle control+c and other requests to terminate the program
+   static std::atomic_bool running = { true };
+   
    void signal_handler(int)
    {
-      isobus::CANHardwareInterface::stop(); // Clean up the threads
-		_exit(EXIT_FAILURE);
+   	running = false;
    }
 
-   void propa_callback(isobus::CANMessage *CANMessage, void *parent)
+   void propa_callback(const isobus::CANMessage &CANMessage, void *)
    {
-      if (nullptr != CANMessage)
-      {
-         std::cout << CANMessage->get_data_length() << std::endl;
-      }
+     std::cout << CANMessage.get_data_length() << std::endl;
    }
 
    int main()
@@ -112,7 +110,7 @@ So, our updated tutorial program now should look like this:
       // Handle control+c
       std::signal(SIGINT, signal_handler);
 
-      //! Make sure you change these for your device!!!!
+      //! Consider customizing some of these fields, like the function code, to be representative of your device
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -142,14 +140,14 @@ So, our updated tutorial program now should look like this:
       std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0}; // Data is just all zeros
 
       // Send a message to the broadcast address
-      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get());
+      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU);
 
       // Send a message to our partner (if it is present)
-      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get(), myPartner.get());
+      isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU, myPartner);
 
-      while (true)
+      while (running)
       {
-         // CAN stack runs in other threads. Do nothing forever.
+         // CAN stack runs in other threads. Do nothing for a while.
          std::this_thread::sleep_for(std::chrono::milliseconds(1000));
       }
 

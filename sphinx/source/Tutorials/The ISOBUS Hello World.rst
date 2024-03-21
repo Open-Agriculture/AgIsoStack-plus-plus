@@ -132,7 +132,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     isobus::NAME myNAME(0); // Create an empty NAME
     std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
-    //! Make sure you change these for your device!!!!
+    //! Consider customizing some of these fields, like the function code, to be representative of your device
     myNAME.set_arbitrary_address_capable(true);
     myNAME.set_industry_group(1);
     myNAME.set_device_class(0);
@@ -232,7 +232,7 @@ Let's see what we've got so far:
          return -2;
       }
 
-      //! Make sure you change these for your device!!!!
+      //! Consider customizing some of these fields, like the function code, to be representative of your device
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -256,9 +256,9 @@ Cleaning up
 
 Whenever the program ends, we want to call :code:`isobus::CANHardwareInterface::stop();` to clean up the hardware layer and stop the threads we started with :code:`isobus::CANHardwareInterface::start();`.
 
-Additionally, we want to call :code:`isobus::CANHardwareInterface::stop();` if the user presses control+c (user sends a SIGINT signal to our program). So let's add a little signal handler that'll gracefully clean up if that happens.
+Additionally, we want to exit if the user presses control+c (user sends a SIGINT signal to our program). So let's add a little signal handler that'll gracefully clean up if that happens.
 
-Make sure to include `csignal`.
+Make sure to include the `csignal` and `atomic` headers. `csignal` is for handling signals, like control+c, and `atomic` is for handling the `running` flag, which we'll use to safely know when to exit.
 
 .. code-block:: c++
 
@@ -267,14 +267,17 @@ Make sure to include `csignal`.
    #include "isobus/hardware_integration/can_hardware_interface.hpp"
    #include "isobus/isobus/can_partnered_control_function.hpp"
 
+   #include <atomic>
    #include <memory>
    #include <csignal>
    #include <iostream>
 
+   // This helps us handle control+c and other requests to terminate the program
+   static std::atomic_bool running = { true };
+   
    void signal_handler(int)
    {
-      isobus::CANHardwareInterface::stop(); // Clean up the threads
-		_exit(EXIT_FAILURE);
+   	running = false;
    }
 
    int main()
@@ -296,7 +299,7 @@ Make sure to include `csignal`.
       // Handle control+c
       std::signal(SIGINT, signal_handler);
 
-      //! Make sure you change these for your device!!!!
+      //! Consider customizing some of these fields, like the function code, to be representative of your device
       myNAME.set_arbitrary_address_capable(true);
       myNAME.set_industry_group(1);
       myNAME.set_device_class(0);
@@ -334,14 +337,17 @@ The total result:
    #include "isobus/hardware_integration/can_hardware_interface.hpp"
    #include "isobus/isobus/can_partnered_control_function.hpp"
 
+   #include <atomic>
    #include <memory>
    #include <csignal>
    #include <iostream>
 
+   // This helps us handle control+c and other requests to terminate the program
+   static std::atomic_bool running = { true };
+   
    void signal_handler(int)
    {
-   	isobus::CANHardwareInterface::stop(); // Clean up the threads
-		_exit(EXIT_FAILURE);
+   	running = false;
    }
    
    int main()
@@ -363,7 +369,7 @@ The total result:
     // Handle control+c
     std::signal(SIGINT, signal_handler);
 
-    //! Make sure you change these for your device!!!!
+    //! Consider customizing some of these fields, like the function code, to be representative of your device
     myNAME.set_arbitrary_address_capable(true);
     myNAME.set_industry_group(1);
     myNAME.set_device_class(0);
@@ -404,7 +410,7 @@ Here is the code we'll need to add:
 
     std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0}; // Data is just all zeros
 
-   isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU.get());
+   isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU);
 
    // Give the CAN stack some time to send the message
    std::this_thread::sleep_for(std::chrono::milliseconds(10));
