@@ -168,11 +168,11 @@ namespace isobus
 			return false;
 		}
 
-		while (value > hardwareChannels.size())
+		while (value > static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
 			hardwareChannels.emplace_back(new CANHardware(queueCapacity));
 		}
-		while (value < hardwareChannels.size())
+		while (value < static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
 			hardwareChannels.pop_back();
 		}
@@ -189,7 +189,7 @@ namespace isobus
 			return false;
 		}
 
-		if (channelIndex >= hardwareChannels.size())
+		if (channelIndex >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
 			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(channelIndex) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set. " +
@@ -222,7 +222,7 @@ namespace isobus
 			return false;
 		}
 
-		if (channelIndex >= hardwareChannels.size())
+		if (channelIndex >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
 			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(channelIndex) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set.");
@@ -243,7 +243,7 @@ namespace isobus
 	{
 		std::shared_ptr<CANHardwarePlugin> retVal;
 
-		if (channelIndex < hardwareChannels.size())
+		if (channelIndex < static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
 			retVal = hardwareChannels.at(channelIndex)->frameHandler;
 		}
@@ -300,7 +300,7 @@ namespace isobus
 			return false;
 		}
 
-		if (frame.channel >= hardwareChannels.size())
+		if (frame.channel >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
 			LOG_ERROR("[HardwareInterface] Cannot transmit message on channel " + to_string(frame.channel) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set.");
@@ -357,7 +357,7 @@ namespace isobus
 			{
 				// Stage 1 - Receiving messages from hardware
 				LOCK_GUARD(Mutex, hardwareChannelsMutex);
-				for (uint8_t i = 0; i < hardwareChannels.size(); i++)
+				for (std::uint8_t i = 0; i < hardwareChannels.size(); i++)
 				{
 #if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
 					// If we don't have threads, we need to poll the hardware for messages here

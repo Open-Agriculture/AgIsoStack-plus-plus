@@ -149,7 +149,7 @@ namespace isobus
 			void receive_thread_function();
 
 			std::unique_ptr<std::thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
-			bool receiveThreadRunning; ///< Flag to indicate if the receive thread is running
+			bool receiveThreadRunning = false; ///< Flag to indicate if the receive thread is running
 #endif
 
 			std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel

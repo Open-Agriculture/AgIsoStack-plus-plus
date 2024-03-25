@@ -81,10 +81,7 @@ public:
 	/// @brief Clear the queue.
 	void clear()
 	{
-		while (!queue.empty())
-		{
-			queue.pop();
-		}
+		queue = {};
 	}
 
 private:
@@ -94,6 +91,7 @@ private:
 #else
 
 #include <atomic>
+#include <cassert>
 #include <mutex>
 #include <vector>
 namespace isobus
@@ -114,7 +112,15 @@ class LockFreeQueue
 public:
 	/// @brief Constructor for the lock free queue.
 	explicit LockFreeQueue(std::size_t size) :
-	  buffer(size), capacity(size) {}
+	  buffer(size), capacity(size)
+	{
+		// Validate the size of the queue, if assertion is disabled, set the size to 1.
+		assert(size > 0 && "The size of the queue must be greater than 0.");
+		if (size == 0)
+		{
+			size = 1;
+		}
+	}
 
 	/// @brief Push an item to the queue.
 	/// @param item The item to push to the queue.
@@ -182,14 +188,14 @@ public:
 
 private:
 	std::vector<T> buffer; ///< The buffer for the circular buffer.
-	std::atomic<size_t> readIndex = { 0 }; ///< The read index for the circular buffer.
-	std::atomic<size_t> writeIndex = { 0 }; ///< The write index for the circular buffer.
-	const size_t capacity; ///< The capacity of the circular buffer.
+	std::atomic<std::size_t> readIndex = { 0 }; ///< The read index for the circular buffer.
+	std::atomic<std::size_t> writeIndex = { 0 }; ///< The write index for the circular buffer.
+	const std::size_t capacity; ///< The capacity of the circular buffer.
 
 	/// @brief Get the next index in the circular buffer.
 	/// @param current The current index.
 	/// @return The next index in the circular buffer.
-	size_t nextIndex(size_t current) const
+	std::size_t nextIndex(std::size_t current) const
 	{
 		return (current + 1) % capacity;
 	}
