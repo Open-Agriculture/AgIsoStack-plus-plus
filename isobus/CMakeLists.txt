@@ -112,6 +112,11 @@ if(DISABLE_CAN_STACK_LOGGER)
   target_compile_definitions(Isobus PUBLIC DISABLE_CAN_STACK_LOGGER)
 endif()
 
+if(CAN_STACK_DISABLE_THREADS OR ARDUINO)
+  message(STATUS "Disabled built-in multi-threading for CAN stack.")
+  target_compile_definitions(Isobus PUBLIC CAN_STACK_DISABLE_THREADS)
+endif()
+
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this
 # library and use its functionality.
