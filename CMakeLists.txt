@@ -38,6 +38,17 @@ if(NOT CAN_STACK_DISABLE_THREADS AND NOT ARDUINO)
   endif()
 endif()
 
+option(
+  USE_CMSIS_RTOS2_THREADING
+  "Set to ON to use ARM CMSIS RTOS2 thread syncronization. Replaces std::mutex and implements a CMSIS lock_guard."
+  OFF)
+if(USE_CMSIS_RTOS2_THREADING)
+  message(
+    AUTHOR_WARNING
+      "Using CMSIS RTOS2 threading requires you to implement a hardware timebase (_gettimeofday) for the stack. Make sure you do this using a hardware timer!"
+  )
+endif()
+
 # A handy function to prepend text to all elements in a list (useful for
 # subdirectories)
 function(prepend var prefix)
