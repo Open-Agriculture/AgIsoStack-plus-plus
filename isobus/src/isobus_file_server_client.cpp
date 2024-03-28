@@ -239,9 +239,9 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
 		                                                      buffer.data(),
 		                                                      buffer.size(),
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get(),
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      myControlFunction,
+		                                                      partnerControlFunction,
+		                                                      CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
 	bool FileServerClient::initialize(bool spawnThread)
@@ -464,21 +464,20 @@ namespace isobus
 		}
 	}
 
-	void FileServerClient::process_message(CANMessage *const message)
+	void FileServerClient::process_message(const CANMessage &message)
 	{
-		if ((nullptr != message) &&
-		    (nullptr != partnerControlFunction) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::FileServerToClient) == message->get_identifier().get_parameter_group_number()) &&
-		    ((message->get_source_control_function()->get_address() == partnerControlFunction->get_address()) ||
-		     (nullptr == message->get_destination_control_function())))
+		if ((nullptr != partnerControlFunction) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::FileServerToClient) == message.get_identifier().get_parameter_group_number()) &&
+		    ((message.get_source_control_function()->get_address() == partnerControlFunction->get_address()) ||
+		     (nullptr == message.get_destination_control_function())))
 		{
-			auto &messageData = message->get_data();
+			auto &messageData = message.get_data();
 
 			switch (messageData[0])
 			{
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::FileServerStatus):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						if (0 == lastServerStatusTimestamp_ms)
 						{
@@ -504,7 +503,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::GetFileServerPropertiesResponse):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						if (StateMachineState::WaitForGetFileServerPropertiesResponse == get_state())
 						{
@@ -532,7 +531,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::ChangeCurrentDirectoryResponse):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						if (StateMachineState::WaitForChangeToManufacturerDirectoryResponse == get_state())
 						{
@@ -574,7 +573,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::OpenFileResponse):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						bool foundMatchingFileInList = false;
 
@@ -615,7 +614,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::CloseFileResponse):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						bool foundMatchingFileInList = false;
 
@@ -655,7 +654,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::WriteFileResponse):
 				{
-					if (CAN_DATA_LENGTH == message->get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						bool foundMatchingFileInList = false;
 
@@ -726,11 +725,11 @@ namespace isobus
 		}
 	}
 
-	void FileServerClient::process_message(CANMessage *const message, void *parent)
+	void FileServerClient::process_message(const CANMessage &message, void *parent)
 	{
 		if (nullptr != parent)
 		{
-			reinterpret_cast<FileServerClient *>(parent)->process_message(message);
+			static_cast<FileServerClient *>(parent)->process_message(message);
 		}
 	}
 
@@ -805,9 +804,9 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        myControlFunction.get(),
-			                                                        partnerControlFunction.get(),
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        myControlFunction,
+			                                                        partnerControlFunction,
+			                                                        CANIdentifier::CANPriority::PriorityLowest7);
 		}
 		return retVal;
 	}
@@ -826,9 +825,9 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get(),
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      myControlFunction,
+		                                                      partnerControlFunction,
+		                                                      CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
 	bool FileServerClient::send_close_file(std::shared_ptr<FileInfo> fileMetadata) const
@@ -844,9 +843,9 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get(),
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      myControlFunction,
+		                                                      partnerControlFunction,
+		                                                      CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
 	bool FileServerClient::send_get_file_server_properties() const
@@ -863,9 +862,9 @@ namespace isobus
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction.get(),
-		                                                      partnerControlFunction.get(),
-		                                                      CANIdentifier::PriorityLowest7);
+		                                                      myControlFunction,
+		                                                      partnerControlFunction,
+		                                                      CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
 	bool FileServerClient::send_open_file(std::shared_ptr<FileInfo> fileMetadata) const
@@ -896,19 +895,16 @@ namespace isobus
 				buffer[5 + i] = fileMetadata->fileName[i];
 			}
 
-			if (buffer.size() < CAN_DATA_LENGTH)
+			while (buffer.size() < CAN_DATA_LENGTH)
 			{
-				for (std::size_t i = buffer.size(); i < CAN_DATA_LENGTH; i++)
-				{
-					buffer[i] = 0xFF;
-				}
+				buffer.push_back(0xFF);
 			}
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
 			                                                        buffer.data(),
 			                                                        buffer.size(),
-			                                                        myControlFunction.get(),
-			                                                        partnerControlFunction.get(),
-			                                                        CANIdentifier::PriorityLowest7);
+			                                                        myControlFunction,
+			                                                        partnerControlFunction,
+			                                                        CANIdentifier::CANPriority::PriorityLowest7);
 		}
 		return retVal;
 	}
@@ -930,7 +926,7 @@ namespace isobus
 		if (nullptr != fileMetadata)
 		{
 			fileMetadata->state = state;
-			fileMetadata->timstamp_ms = SystemTiming::get_timestamp_ms();
+			fileMetadata->timestamp_ms = SystemTiming::get_timestamp_ms();
 		}
 	}
 
@@ -956,7 +952,7 @@ namespace isobus
 					{
 						set_file_state(file, FileState::WaitForOpenFileResponse);
 					}
-					else if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
+					else if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
 						CANStackLogger::error("[FS]: Timeout trying to send an open file message.");
 						set_file_state(file, FileState::FileOpenFailed);
@@ -966,7 +962,7 @@ namespace isobus
 
 				case FileState::WaitForOpenFileResponse:
 				{
-					if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
+					if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
 						CANStackLogger::error("[FS]: Timeout waiting to an open file response message.");
 						set_file_state(file, FileState::FileOpenFailed);
@@ -980,7 +976,7 @@ namespace isobus
 					{
 						set_file_state(file, FileState::WaitForCloseFileResponse);
 					}
-					else if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
+					else if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
 						CANStackLogger::error("[FS]: Timeout trying to send a close file message.");
 					}
@@ -989,7 +985,7 @@ namespace isobus
 
 				case FileState::WaitForCloseFileResponse:
 				{
-					if (SystemTiming::time_expired_ms(file->timstamp_ms, GENERAL_OPERATION_TIMEOUT))
+					if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
 						// todo
 					}

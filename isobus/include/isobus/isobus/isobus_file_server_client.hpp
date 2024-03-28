@@ -11,7 +11,6 @@
 
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/isobus/can_protocol.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
 #include <map>
@@ -289,7 +288,7 @@ namespace isobus
 			InitializeVolumeRequest = 0x40 ///< Prepare the volume to accept files and directories. All data is lost upon completion
 		};
 
-		/// @brief Enuerates the transmit flags (CAN messages that support non-state-machine-driven retries)
+		/// @brief Enumerates the transmit flags (CAN messages that support non-state-machine-driven retries)
 		enum class TransmitFlags
 		{
 			ClientToServerStatus = 0, ///< Flag to send the maintenance message to the file server
@@ -308,7 +307,7 @@ namespace isobus
 			FileState state = FileState::Uninitialized; ///< A sub-state-machine state for the file
 			FileOpenMode openMode = FileOpenMode::OpenFileForReadingOnly; ///< The file open mode (read only, write only, etc)
 			FilePointerMode pointerMode = FilePointerMode::AppendMode; ///< Where the file pointer should be set for this file
-			std::uint32_t timstamp_ms = 0; ///< A timestamp to track when file operations take too long
+			std::uint32_t timestamp_ms = 0; ///< A timestamp to track when file operations take too long
 			std::uint8_t attributesBitField = 0; ///< The reported file attributes
 			std::uint8_t transactionNumberForRequest = 0; ///< The TAN for the latest request corresponding to this file
 			std::uint8_t handle = INVALID_FILE_HANDLE; ///< The file handle associated with this file
@@ -331,12 +330,12 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(CANMessage *const message);
+		void process_message(const CANMessage &message);
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
 		/// @param[in] parent Provides the context to the actual TP manager object
-		static void process_message(CANMessage *const message, void *parent);
+		static void process_message(const CANMessage &message, void *parent);
 
 		/// @brief The data callback passed to the network manger's send function for the transport layer messages
 		/// @details We upload the data with callbacks to avoid making a complete copy of the data to

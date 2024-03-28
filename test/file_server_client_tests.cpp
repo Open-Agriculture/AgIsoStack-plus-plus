@@ -5,6 +5,8 @@
 #include "isobus/isobus/isobus_file_server_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include "helpers/control_function_helpers.hpp"
+
 using namespace isobus;
 
 class DerivedTestFileServerClient : public FileServerClient
@@ -61,30 +63,15 @@ TEST(FILE_SERVER_CLIENT_TESTS, StateMachineTests)
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::add_can_lib_update_callback(
-	  [](void *) {
-		  CANNetworkManager::CANNetwork.update();
-	  },
-	  nullptr);
 	CANHardwareInterface::start();
 
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(4);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::DriveAxleControlBrakes));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x93, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x93, 0);
 
-	HardwareInterfaceCANFrame testFrame;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(internalECU->get_address_valid());
+	CANMessageFrame testFrame = {};
 
 	std::vector<isobus::NAMEFilter> fsNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::FileServer));
@@ -105,12 +92,17 @@ TEST(FILE_SERVER_CLIENT_TESTS, StateMachineTests)
 	testFrame.data[5] = 0x52;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0xA0;
-	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
 
 	DerivedTestFileServerClient interfaceUnderTest(tcPartner, internalECU);
 
 	// Test initial state
 	EXPECT_EQ(FileServerClient::StateMachineState::Disconnected, interfaceUnderTest.get_state());
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(FILE_SERVER_CLIENT_TESTS, MessageEncoding)
@@ -120,35 +112,17 @@ TEST(FILE_SERVER_CLIENT_TESTS, MessageEncoding)
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::add_can_lib_update_callback(
-	  [](void *) {
-		  CANNetworkManager::CANNetwork.update();
-	  },
-	  nullptr);
 	CANHardwareInterface::start();
 
-	NAME clientNAME(0);
-	clientNAME.set_industry_group(2);
-	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::AlarmDevice));
-	auto internalECU = std::make_shared<InternalControlFunction>(clientNAME, 0x90, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x90, 0);
 
-	HardwareInterfaceCANFrame testFrame;
-
-	std::uint32_t waitingTimestamp_ms = SystemTiming::get_timestamp_ms();
-
-	while ((!internalECU->get_address_valid()) &&
-	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	ASSERT_TRUE(internalECU->get_address_valid());
+	CANMessageFrame testFrame = {};
 
 	std::vector<isobus::NAMEFilter> fsNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::FileServer));
 	fsNameFilters.push_back(testFilter);
 
-	auto fileServerPartner = std::make_shared<PartneredControlFunction>(0, fsNameFilters);
+	auto fileServerPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, fsNameFilters);
 
 	// Force claim a partner
 	testFrame.dataLength = 8;
@@ -163,7 +137,8 @@ TEST(FILE_SERVER_CLIENT_TESTS, MessageEncoding)
 	testFrame.data[5] = 0x52;
 	testFrame.data[6] = 0x00;
 	testFrame.data[7] = 0xA0;
-	CANNetworkManager::CANNetwork.can_lib_process_rx_message(testFrame, nullptr);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
 
 	DerivedTestFileServerClient interfaceUnderTest(fileServerPartner, internalECU);
 
@@ -218,4 +193,8 @@ TEST(FILE_SERVER_CLIENT_TESTS, MessageEncoding)
 	EXPECT_EQ('/', testFrame.data[5]); // Path
 	EXPECT_EQ(0xFF, testFrame.data[6]); // Reserved (due to length of 2)
 	EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved (due to length of 2)
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
