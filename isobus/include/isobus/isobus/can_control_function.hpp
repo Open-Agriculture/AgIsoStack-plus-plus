@@ -15,6 +15,7 @@
 #include "isobus/utility/thread_synchronization.hpp"
 
 #include <memory>
+#include <string>
 
 namespace isobus
 {
