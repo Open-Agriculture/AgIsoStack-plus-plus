@@ -127,7 +127,7 @@ namespace isobus
 		workingSetMaintenanceMessageTimestamp_ms = value;
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::save_callback_handle(std::shared_ptr<void> callbackHandle)
+	void VirtualTerminalServerManagedWorkingSet::save_callback_handle(isobus::EventCallbackHandle callbackHandle)
 	{
 		callbackHandles.push_back(callbackHandle);
 	}
