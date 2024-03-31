@@ -100,6 +100,9 @@ prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
 option(DISABLE_CAN_STACK_LOGGER
        "Compiles out all logging to minimize binary size" OFF)
 
+option(DISABLE_ISOBUS_DATA_DICTIONARY
+       "Disables the ISOBUS data dictionary to minimize binary size" OFF)
+
 # Create the library from the source and include files
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
 add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
@@ -115,6 +118,10 @@ endif()
 if(CAN_STACK_DISABLE_THREADS OR ARDUINO)
   message(STATUS "Disabled built-in multi-threading for CAN stack.")
   target_compile_definitions(Isobus PUBLIC CAN_STACK_DISABLE_THREADS)
+endif()
+if(DISABLE_ISOBUS_DATA_DICTIONARY)
+  message(STATUS "ISOBUS data dictionary is disabled.")
+  target_compile_definitions(Isobus PUBLIC DISABLE_ISOBUS_DATA_DICTIONARY)
 endif()
 
 # Specify the include directory to be exported for other moduels to use. The
