@@ -164,10 +164,6 @@ namespace isobus
 
 			if (macro->get_are_command_packets_valid())
 			{
-				isobus::CANMessage message(workingSet->get_control_function()->get_can_port());
-				message.set_destination_control_function(get_internal_control_function());
-				message.set_source_control_function(workingSet->get_control_function());
-				message.set_identifier(isobus::CANIdentifier(0x14E70000));
 				CANStackLogger::debug("[VT Server]: Executing macro %u", macro->get_id());
 				retVal = true;
 
@@ -177,7 +173,12 @@ namespace isobus
 
 					if (macro->get_command_packet(j, commandPacket))
 					{
-						message.set_data(commandPacket.data(), commandPacket.size());
+						isobus::CANMessage message(isobus::CANMessage::Type::Receive,
+						                           isobus::CANIdentifier(0x14E70000),
+						                           commandPacket,
+						                           workingSet->get_control_function(),
+						                           get_internal_control_function(),
+						                           workingSet->get_control_function()->get_can_port());
 						CANStackLogger::debug("[VT Server]: Executing macro command %u", j);
 						execute_macro_as_rx_message(message);
 					}
