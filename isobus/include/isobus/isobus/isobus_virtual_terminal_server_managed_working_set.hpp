@@ -17,6 +17,7 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
+#include "isobus/utility/event_dispatcher.hpp"
 
 namespace isobus
 {
@@ -78,7 +79,7 @@ namespace isobus
 
 		/// @brief Saves an event callback handle for the lifetime of this object
 		/// which is useful for keeping track of callback lifetimes in a VT server
-		void save_callback_handle(std::shared_ptr<void> callbackHandle);
+		void save_callback_handle(isobus::EventCallbackHandle callbackHandle);
 
 		/// @brief Clears all event callback handles for the this working set
 		/// which is useful if you want to stop drawing this working set
@@ -159,7 +160,7 @@ namespace isobus
 		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
 		std::mutex managedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
-		std::vector<std::shared_ptr<void>> callbackHandles; ///< A convenient way to associate callback handles to a working set
+		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
