@@ -13,6 +13,7 @@ namespace isobus
 {
 	const DataDictionary::Entry &DataDictionary::get_entry(std::uint16_t dataDictionaryIdentifier)
 	{
+#ifndef DISABLE_ISOBUS_DATA_DICTIONARY
 		for (std::uint_fast16_t i = 0; i < sizeof(DDI_ENTRIES) / sizeof(DataDictionary::Entry); i++)
 		{
 			if (DDI_ENTRIES[i].ddi == dataDictionaryIdentifier)
@@ -20,11 +21,13 @@ namespace isobus
 				return DDI_ENTRIES[i];
 			}
 		}
+#endif
 		return DEFAULT_ENTRY;
 	}
 
 	const DataDictionary::Entry DataDictionary::DEFAULT_ENTRY = { 65535, "Unknown", "Unknown", 0.0f };
 
+#ifndef DISABLE_ISOBUS_DATA_DICTIONARY
 	// The table below is auto-generated, and is not to be edited manually.
 	const DataDictionary::Entry DataDictionary::DDI_ENTRIES[] = {
 		{ 0, "Internal Data Base DDI", "None", 1.0f },
@@ -743,5 +746,6 @@ namespace isobus
 		{ 57344, "65534 Proprietary DDI Range", "None", 0.0f },
 		{ 65535, "Reserved", "None", 0.0f },
 	};
+#endif
 
 } // namespace isobus

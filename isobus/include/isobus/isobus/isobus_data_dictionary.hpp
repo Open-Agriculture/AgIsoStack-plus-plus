@@ -37,7 +37,9 @@ namespace isobus
 		static const Entry &get_entry(std::uint16_t dataDictionaryIdentifier);
 
 	private:
+#ifndef DISABLE_ISOBUS_DATA_DICTIONARY
 		static const Entry DDI_ENTRIES[715]; ///< A lookup table of all DDI entries in ISO11783-11
+#endif
 		static const Entry DEFAULT_ENTRY; ///< A default "unknown" DDI to return if a DDI is not in the database
 	};
 } // namespace isobus
