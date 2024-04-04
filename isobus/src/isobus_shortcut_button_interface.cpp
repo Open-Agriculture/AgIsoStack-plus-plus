@@ -10,7 +10,6 @@
 
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
-#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -25,30 +24,6 @@ namespace isobus
 	  actAsISBServer(serverEnabled)
 	{
 		assert(nullptr != sourceControlFunction); // You need an internal control function for the interface to function
-	}
-
-	ShortcutButtonInterface::~ShortcutButtonInterface()
-	{
-		if (initialized)
-		{
-			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState), process_rx_message, this);
-		}
-	}
-
-	void ShortcutButtonInterface::initialize()
-	{
-		if (!initialized)
-		{
-			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState),
-			                                                                         process_rx_message,
-			                                                                         this);
-			initialized = true;
-		}
-	}
-
-	bool ShortcutButtonInterface::get_is_initialized() const
-	{
-		return initialized;
 	}
 
 	EventDispatcher<ShortcutButtonInterface::StopAllImplementOperationsState> &ShortcutButtonInterface::get_stop_all_implement_operations_state_event_dispatcher()
@@ -118,13 +93,6 @@ namespace isobus
 		txFlags.process_all_flags();
 	}
 
-	void ShortcutButtonInterface::process_rx_message(const CANMessage &message, void *parentPointer)
-	{
-		assert(nullptr != parentPointer);
-
-		static_cast<ShortcutButtonInterface *>(parentPointer)->process_message(message);
-	}
-
 	void ShortcutButtonInterface::process_flags(std::uint32_t flag, void *parent)
 	{
 		auto myInterface = static_cast<ShortcutButtonInterface *>(parent);
@@ -147,7 +115,7 @@ namespace isobus
 		}
 	}
 
-	void ShortcutButtonInterface::process_message(const CANMessage &message)
+	void ShortcutButtonInterface::process_rx_message(const CANMessage &message)
 	{
 		if ((message.get_can_port_index() == sourceControlFunction->get_can_port()) &&
 		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState) == message.get_identifier().get_parameter_group_number()))
@@ -226,11 +194,11 @@ namespace isobus
 			static_cast<std::uint8_t>(0xFC | static_cast<std::uint8_t>(commandedState))
 		};
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      sourceControlFunction,
-		                                                      nullptr,
-		                                                      CANIdentifier::CANPriority::Priority3);
+		return send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState),
+		                        buffer.data(),
+		                        buffer.size(),
+		                        sourceControlFunction,
+		                        nullptr,
+		                        CANIdentifier::CANPriority::Priority3);
 	}
 }

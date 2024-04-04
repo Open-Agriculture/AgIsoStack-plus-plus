@@ -25,7 +25,7 @@
 
 #include "isobus/isobus/can_NAME.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
-#include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_message_handling.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
@@ -60,7 +60,7 @@ namespace isobus
 	/// The Working Set shall monitor the number of transitions for each ISB server upon receiving first
 	/// the message from a given ISB server. A Working Set shall consider an increase in the transitions
 	/// without detecting a corresponding transition of the Stop all implement operations state as an error and react accordingly.
-	class ShortcutButtonInterface
+	class ShortcutButtonInterface : public CANMessagingConsumer
 	{
 	public:
 		/// @brief Enumerates the states that can be sent in the main ISB message (pgn 64770, 0xFD02)
@@ -76,16 +76,6 @@ namespace isobus
 		/// @param[in] internalControlFunction The InternalControlFunction that the interface will use to send messages (not nullptr)
 		/// @param[in] serverEnabled Enables the interface's transmission of the "Stop all implement operations" message.
 		ShortcutButtonInterface(std::shared_ptr<InternalControlFunction> internalControlFunction, bool serverEnabled = false);
-
-		/// @brief Destructor for a ShortcutButtonInterface
-		virtual ~ShortcutButtonInterface();
-
-		/// @brief Used to initialize the interface. Registers for PGNs with the network manager.
-		void initialize();
-
-		/// @brief Returns if the interface has been initialized
-		/// @returns true if the interface has been initialized
-		bool get_is_initialized() const;
 
 		/// @brief Gets the event dispatcher for when the assigned bus' ISB state changes.
 		/// The assigned bus is determined by which internal control function you pass into the constructor.
@@ -128,19 +118,14 @@ namespace isobus
 			NumberOfFlags ///< The number of flags defined in this enumeration
 		};
 
-		/// @brief Parses incoming CAN messages for the interface
-		/// @param message The CAN message to parse
-		/// @param parentPointer A generic context variable, usually the `this` pointer for this interface instance
-		static void process_rx_message(const CANMessage &message, void *parentPointer);
-
 		/// @brief Processes the internal Tx flags
 		/// @param[in] flag The flag to process
 		/// @param[in] parent A context variable to find the relevant interface class
 		static void process_flags(std::uint32_t flag, void *parent);
 
-		/// @brief A generic way for a protocol to process a received message
-		/// @param[in] message A received CAN message
-		void process_message(const CANMessage &message);
+		/// @brief Processes incoming CAN messages
+		/// @param message The incoming CAN message to process
+		void process_rx_message(const CANMessage &message) override;
 
 		/// @brief Sends the Stop all implement operations switch state message
 		/// @returns true if the message was sent, otherwise false
@@ -157,7 +142,6 @@ namespace isobus
 		std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< A counter used to track our transitions from "stop" to "permit" when acting as a server
 		StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state set by the user to transmit if we're acting as a server
 		bool actAsISBServer = false; ///< A setting that enables sending the ISB messages rather than just receiving them
-		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 } // namespace isobus
 #endif // ISOBUS_SHORTCUT_BUTTON_INTERFACE_HPP

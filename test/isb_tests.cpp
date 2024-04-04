@@ -27,15 +27,13 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	test_helpers::force_claim_partnered_control_function(0x74, 0);
 	// End boilerplate **********************************
 
-	ShortcutButtonInterface interfaceUnderTest(internalECU, false);
-	EXPECT_EQ(false, interfaceUnderTest.get_is_initialized());
-	interfaceUnderTest.initialize();
-	EXPECT_EQ(true, interfaceUnderTest.get_is_initialized());
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	auto interfaceUnderTest = std::make_shared<ShortcutButtonInterface>(internalECU, false);
+	CANNetworkManager::CANNetwork.get_can_message_handler().add_consumer(interfaceUnderTest);
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Since we're not acting as a server, make sure the public setter doesn't do anything
-	interfaceUnderTest.set_stop_all_implement_operations_state(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations);
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	interfaceUnderTest->set_stop_all_implement_operations_state(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations);
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Send a valid message to stop
 	CANMessageFrame testFrame = {};
@@ -53,7 +51,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest->get_state());
 
 	// Set back to permit state
 	testFrame.identifier = 0x18FD0274;
@@ -67,7 +65,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Send increased, incorrect transition count
 	testFrame.identifier = 0x18FD0274;
@@ -81,7 +79,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest->get_state());
 
 	// Test reset of state as counter is back to normal
 	testFrame.identifier = 0x18FD0274;
@@ -95,7 +93,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Test reset to zero counter, which should be fine
 	testFrame.identifier = 0x18FD0274;
@@ -109,7 +107,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Test state as counter is back to normal
 	testFrame.identifier = 0x18FD0274;
@@ -123,7 +121,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Set up to test roll over at 255
 	testFrame.identifier = 0x18FD0274;
@@ -137,7 +135,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest->get_state());
 	// Go to 255
 	testFrame.identifier = 0x18FD0274;
 	testFrame.data[0] = 0xFF;
@@ -150,7 +148,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
 	// Rollover should stay at "permit"
 	testFrame.identifier = 0x18FD0274;
@@ -164,9 +162,9 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x01;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
-	interfaceUnderTest.get_stop_all_implement_operations_state_event_dispatcher().add_listener(testCallback);
+	interfaceUnderTest->get_stop_all_implement_operations_state_event_dispatcher().add_listener(testCallback);
 
 	// Test callback
 	// Set up to test roll over at 255
@@ -181,13 +179,13 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	testFrame.data[7] = 0x00;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
-	interfaceUnderTest.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+	interfaceUnderTest->update();
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest->get_state());
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, lastCallbackValue);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(3100));
-	interfaceUnderTest.update();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	interfaceUnderTest->update();
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 	CANHardwareInterface::stop();
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
@@ -217,13 +215,13 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	ASSERT_TRUE(internalECU->get_address_valid());
 	// End boilerplate **********************************
 
-	ShortcutButtonInterface interfaceUnderTest(internalECU, true);
+	auto interfaceUnderTest = std::make_shared<ShortcutButtonInterface>(internalECU, true);
+	CANNetworkManager::CANNetwork.get_can_message_handler().add_consumer(interfaceUnderTest);
 	CANNetworkManager::CANNetwork.update();
-	interfaceUnderTest.initialize();
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest->get_state());
 
-	interfaceUnderTest.set_stop_all_implement_operations_state(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations);
-	interfaceUnderTest.update();
+	interfaceUnderTest->set_stop_all_implement_operations_state(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations);
+	interfaceUnderTest->update();
 	EXPECT_TRUE(serverPlugin.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
@@ -238,7 +236,7 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	EXPECT_EQ(testFrame.data[6], 0x00);
 	EXPECT_EQ(testFrame.data[7], 0xFC);
 
-	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest->get_state());
 
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
