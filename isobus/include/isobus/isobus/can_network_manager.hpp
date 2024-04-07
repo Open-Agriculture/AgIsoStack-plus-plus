@@ -395,7 +395,7 @@ namespace isobus
 		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
 		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
 		std::array<std::unique_ptr<FastPacketProtocol>, CAN_PORT_MAXIMUM> fastPacketProtocol; ///< One instance of the fast packet protocol for each channel
-		std::array<std::unique_ptr<HeartbeatInterface>, CAN_PORT_MAXIMUM> heartBeatInterfaces; ///< Manages ISOBUS heartbeat requests, one per channel
+		std::array<std::shared_ptr<HeartbeatInterface>, CAN_PORT_MAXIMUM> heartBeatInterfaces; ///< Manages ISOBUS heartbeat requests, one per channel
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
@@ -413,6 +413,7 @@ namespace isobus
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		CANMessageHandler messageHandler; ///< The message handler driven by the network manager
+		std::shared_ptr<CANMessagingProvider> messagingProvider; ///< The messaging provider for the network manager, currently set to itself
 		EventDispatcher<CANMessage> messageTransmittedEventDispatcher; ///< An event dispatcher for notifying consumers about transmitted messages by our application
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
 		Mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety

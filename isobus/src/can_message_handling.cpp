@@ -22,17 +22,17 @@ namespace isobus
 	                                            void *parentPointer,
 	                                            DataChunkCallback frameChunkCallback) const
 	{
-		if (nullptr != messagingProvider)
+		if (!messagingProvider.expired())
 		{
-			return messagingProvider->send_can_message(parameterGroupNumber,
-			                                           dataBuffer,
-			                                           dataLength,
-			                                           sourceControlFunction,
-			                                           destinationControlFunction,
-			                                           priority,
-			                                           txCompleteCallback,
-			                                           parentPointer,
-			                                           frameChunkCallback);
+			return messagingProvider.lock()->send_can_message(parameterGroupNumber,
+			                                                  dataBuffer,
+			                                                  dataLength,
+			                                                  sourceControlFunction,
+			                                                  destinationControlFunction,
+			                                                  priority,
+			                                                  txCompleteCallback,
+			                                                  parentPointer,
+			                                                  frameChunkCallback);
 		}
 		return false;
 	}
@@ -73,10 +73,13 @@ namespace isobus
 
 	void CANMessageHandler::add_consumer(std::shared_ptr<CANMessagingConsumer> consumer)
 	{
-		// Ensure the consumer is not already in the list
-		remove_consumer(consumer);
-		consumer->messagingProvider = messagingProvider;
-		consumers.push_back(consumer);
+		if (nullptr != consumer)
+		{
+			// Ensure the consumer is not already in the list
+			remove_consumer(consumer);
+			consumer->messagingProvider = messagingProvider;
+			consumers.push_back(consumer);
+		}
 	}
 
 	void CANMessageHandler::remove_consumer(std::shared_ptr<CANMessagingConsumer> consumer)

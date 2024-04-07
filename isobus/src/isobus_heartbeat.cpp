@@ -23,11 +23,6 @@
 
 namespace isobus
 {
-	HeartbeatInterface::HeartbeatInterface(const CANMessageFrameCallback &sendCANFrameCallback) :
-	  sendCANFrameCallback(sendCANFrameCallback)
-	{
-	}
-
 	void HeartbeatInterface::set_enabled(bool enable)
 	{
 		if ((!enable) && (enable != enabled))
@@ -139,11 +134,12 @@ namespace isobus
 		bool retVal = false;
 		const std::array<std::uint8_t, 1> buffer = { sequenceCounter };
 
-		retVal = parent.sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
-		                                     CANDataSpan(buffer.data(), buffer.size()),
-		                                     CANNetworkManager::CANNetwork.get_internal_control_function(controlFunction),
-		                                     nullptr,
-		                                     CANIdentifier::CANPriority::Priority3);
+		retVal = parent.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
+		                                 buffer.data(),
+		                                 buffer.size(),
+		                                 std::static_pointer_cast<InternalControlFunction>(controlFunction),
+		                                 nullptr,
+		                                 CANIdentifier::CANPriority::Priority3);
 		if (retVal)
 		{
 			timestamp_ms = SystemTiming::get_timestamp_ms(); // Sent OK

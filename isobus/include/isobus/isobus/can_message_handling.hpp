@@ -108,7 +108,7 @@ namespace isobus
 		                      DataChunkCallback frameChunkCallback = nullptr) const;
 
 		friend class CANMessageHandler; ///< Allow the CANMessageHandler to modify the messaging provider
-		std::shared_ptr<CANMessagingProvider> messagingProvider; ///< The messaging provider to use for sending messages
+		std::weak_ptr<CANMessagingProvider> messagingProvider; ///< The messaging provider to use for sending messages
 	};
 
 	/// @brief A class for managing the routing of incoming and outgoing CAN messages

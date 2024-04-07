@@ -41,8 +41,14 @@ namespace isobus
 			get_next_can_message_from_tx_queue();
 		}
 
-		//! @todo: Remove this unsafe way of making a shared pointer to the network manager once the network manager is no longer a singleton
-		messageHandler.set_messaging_provider(std::shared_ptr<CANNetworkManager>(this));
+		//! @todo: Remove this unsafe way of making a shared pointer to the network manager once the network manager is no longer a singleton,
+		//! it's the cause of a double-free right now, but since it must be at the end of an application since the CANNetwork is a sngleton, it shouldn't harm too much for now
+		messagingProvider = std::shared_ptr<CANNetworkManager>(this);
+		messageHandler.set_messaging_provider(messagingProvider);
+		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
+		{
+			messageHandler.add_consumer(heartBeatInterfaces.at(i));
+		}
 		initialized = true;
 	}
 
@@ -501,6 +507,7 @@ namespace isobus
 		currentBusloadBitAccumulator.fill(0);
 		lastAddressClaimRequestTimestamp_ms.fill(0);
 		controlFunctionTable.fill({ nullptr });
+		heartBeatInterfaces.fill({ std::make_shared<HeartbeatInterface>() });
 
 		auto send_frame_callback = [this](std::uint32_t parameterGroupNumber,
 		                                  CANDataSpan data,
@@ -523,7 +530,6 @@ namespace isobus
 			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
-			heartBeatInterfaces.at(i).reset(new HeartbeatInterface(send_frame_callback));
 		}
 	}
 
@@ -1029,7 +1035,6 @@ namespace isobus
 			transportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
 			extendedTransportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
 			fastPacketProtocol.at(currentMessage.get_can_port_index())->process_message(currentMessage);
-			heartBeatInterfaces.at(currentMessage.get_can_port_index())->process_rx_message(currentMessage);
 			process_protocol_pgn_callbacks(currentMessage);
 			process_any_control_function_pgn_callbacks(currentMessage);
 			messageHandler.process_rx_message(currentMessage);
