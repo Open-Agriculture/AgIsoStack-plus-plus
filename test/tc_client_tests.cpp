@@ -473,10 +473,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(tcPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
@@ -484,13 +482,12 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x81, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x81);
 	DerivedTestTCClient interfaceUnderTest(nullptr, internalECU);
 	ASSERT_FALSE(interfaceUnderTest.get_is_initialized());
 	EXPECT_DEATH(interfaceUnderTest.initialize(false), "");
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	EXPECT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
@@ -499,11 +496,11 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 	DerivedTestTCClient interfaceUnderTest(tcPartner, nullptr);
 	ASSERT_FALSE(interfaceUnderTest.get_is_initialized());
 	EXPECT_DEATH(interfaceUnderTest.initialize(false), "");
-	ASSERT_TRUE(tcPartner->destroy(3)); // Account for the pointer in the TC client and the language interface
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPDeathTest)
@@ -1111,10 +1108,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	interfaceUnderTest.terminate();
 	CANHardwareInterface::stop();
 
-	//! @todo: Bring the reference count checks back in once network manager' singleton is removed, as of 15/02/2024 it's behaving inconsistently on different hardware
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	// ASSERT_TRUE(tcPartner->destroy(2));
-	// ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
@@ -1149,7 +1144,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(1);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x84, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x84);
 
 	ASSERT_FALSE(internalECU->get_address_valid());
 
@@ -1157,7 +1152,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	CANNetworkManager::CANNetwork.update();
 
@@ -1338,9 +1333,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	interfaceUnderTest.update();
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::Disconnected);
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	tcPartner->destroy(5);
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
@@ -1349,13 +1343,13 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
 	clientNAME.set_industry_group(2);
 	clientNAME.set_ecu_instance(1);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x85, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x85);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
 	vtNameFilters.push_back(testFilter);
 
-	auto tcPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	CANNetworkManager::CANNetwork.update();
 
@@ -1363,7 +1357,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
 	EXPECT_NO_THROW(interfaceUnderTest.initialize(true));
 
 	EXPECT_NO_THROW(interfaceUnderTest.terminate());
-	ASSERT_TRUE(tcPartner->destroy(3)); // Account for the pointer in the TC client and the language interface
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner); // Account for the pointer in the TC client and the language interface
 }
 
 static bool valueRequested = false;
@@ -1692,10 +1686,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 
 	CANHardwareInterface::stop();
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(TestPartnerTC->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, LanguageCommandFallback)
@@ -1763,9 +1755,9 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, LanguageCommandFallback)
 
 	// Test that we didn't get stuck in the request language state
 	EXPECT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::ProcessDDOP);
-	TestPartnerTC->destroy();
-	TestPartnerVT->destroy();
-	internalECU->destroy();
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerVT);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.update();

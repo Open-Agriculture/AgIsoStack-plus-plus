@@ -97,13 +97,13 @@ std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
 TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 {
 	NAME clientNAME(0);
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -131,20 +131,20 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 	EXPECT_NE(nullptr, clientUnderTest.get_partner_control_function());
 
 	clientUnderTest.terminate();
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 {
 	NAME clientNAME(0);
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -178,9 +178,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 	EXPECT_EQ(0x26, clientUnderTest.get_active_working_set_master_address());
 
-	// expectedRefCount=3 is to account for the pointer in the VT client and the language interface
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
@@ -196,13 +195,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 	clientNAME.set_device_class_instance(0);
 	clientNAME.set_manufacturer_code(69);
 
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -234,9 +233,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
 
-	// expectedRefCount=3 is to account for the pointer in the VT client and the language interface
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
@@ -252,13 +250,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 	clientNAME.set_device_class_instance(0);
 	clientNAME.set_manufacturer_code(69);
 
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -283,9 +281,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
@@ -301,13 +298,13 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 	clientNAME.set_device_class_instance(0);
 	clientNAME.set_manufacturer_code(69);
 
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -344,21 +341,20 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 {
 	NAME clientNAME(0);
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 	vtNameFilters.push_back(testFilter);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
@@ -407,9 +403,8 @@ TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 	// Don't support proprietary objects for autoscaling
 	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ManufacturerDefined11));
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
@@ -977,8 +972,6 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	serverVT.close();
 	CANHardwareInterface::stop();
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(vtPartner->destroy(3));
-	ASSERT_TRUE(internalECU->destroy(3));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }

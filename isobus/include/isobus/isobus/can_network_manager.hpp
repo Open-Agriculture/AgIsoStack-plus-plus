@@ -16,12 +16,14 @@
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_extended_transport_protocol.hpp"
 #include "isobus/isobus/can_identifier.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
+#include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/isobus/isobus_heartbeat.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
@@ -37,7 +39,6 @@
 /// @brief This namespace encompasses all of the ISO11783 stack's functionality to reduce global namespace pollution
 namespace isobus
 {
-	class PartneredControlFunction;
 
 	//================================================================================================
 	/// @class CANNetworkManager
@@ -52,6 +53,28 @@ namespace isobus
 
 		/// @brief Initializer function for the network manager
 		void initialize();
+
+		/// @brief The factory function to construct an internal control function, also automatically initializes it to be functional
+		/// @param[in] desiredName The NAME for this control function to claim as
+		/// @param[in] CANPort The CAN channel index for this control function to use
+		/// @param[in] preferredAddress Optionally, the preferred address for this control function to claim as, if not provided or NULL address,
+		/// it will fallback onto a random preferred address somewhere in the arbitrary address range, which means your NAME must have the arbitrary address bit set.
+		/// @returns A shared pointer to an InternalControlFunction object created with the parameters passed in
+		std::shared_ptr<InternalControlFunction> create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress = NULL_CAN_ADDRESS);
+
+		/// @brief The factory function to construct a partnered control function, also automatically initializes it to be functional
+		/// @param[in] CANPort The CAN channel associated with this control function definition
+		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
+		/// @returns A shared pointer to a PartneredControlFunction object created with the parameters passed in
+		std::shared_ptr<PartneredControlFunction> create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
+
+		/// @brief Removes an internal control function from the network manager, making it inactive
+		/// @param[in] controlFunction The control function to deactivate
+		void deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction);
+
+		/// @brief Removes a partnered control function from the network manager, making it inactive
+		/// @param[in] controlFunction The control function to deactivate
+		void deactivate_control_function(std::shared_ptr<PartneredControlFunction> controlFunction);
 
 		/// @brief Called only by the stack, returns a control function based on certain port and address
 		/// @param[in] channelIndex CAN Channel index of the control function
@@ -254,6 +277,17 @@ namespace isobus
 	private:
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
+
+		/// @brief Factory function to create an external control function, also automatically assigns it to the lookup table.
+		/// @param[in] desiredName The NAME of the control function
+		/// @param[in] address The address of the control function
+		/// @param[in] CANPort The CAN channel index of the control function
+		/// @returns A shared pointer to the control function created
+		std::shared_ptr<ControlFunction> create_external_control_function(NAME desiredName, std::uint8_t address, std::uint8_t CANPort);
+
+		/// @brief Removes a control function from the network manager, making it inactive
+		/// @param[in] controlFunction The control function to remove
+		void deactivate_control_function(std::shared_ptr<ControlFunction> controlFunction);
 
 		/// @brief Updates the internal address table based on a received CAN message
 		/// @param[in] message A message being received by the stack

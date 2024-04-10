@@ -25,7 +25,7 @@ using namespace isobus;
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 {
 	NAME clientNAME(0);
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 	LanguageCommandInterface interfaceUnderTest(internalECU);
 	EXPECT_EQ(false, interfaceUnderTest.get_initialized());
 	EXPECT_EQ(false, interfaceUnderTest.send_request_language_command());
@@ -35,8 +35,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 	interfaceUnderTest.initialize(); // double init
 	EXPECT_EQ(true, interfaceUnderTest.get_initialized());
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(internalECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, InvalidICF)
@@ -53,9 +52,9 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
 	vtNameFilters.push_back(testFilter);
 
 	NAME clientNAME(0);
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x26, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
 
-	auto vtPartner = PartneredControlFunction::create(0, vtNameFilters);
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 	LanguageCommandInterface interfaceUnderTest(internalECU, vtPartner);
 	interfaceUnderTest.initialize();
 	ASSERT_TRUE(interfaceUnderTest.get_initialized());
@@ -63,9 +62,8 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
 	//! @todo Test with valid address
 	ASSERT_FALSE(interfaceUnderTest.send_request_language_command());
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(vtPartner->destroy(2));
-	ASSERT_TRUE(internalECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
@@ -77,7 +75,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 {
 	NAME clientNAME(0);
-	auto internalECU = InternalControlFunction::create(clientNAME, 0x80, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x80);
 	LanguageCommandInterface interfaceUnderTest(internalECU, nullptr);
 
 	interfaceUnderTest.initialize();
@@ -181,8 +179,7 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	// Message should have been discarded
 	EXPECT_EQ("pl", interfaceUnderTest.get_language_code());
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(internalECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
@@ -363,8 +360,6 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 
 	testPlugin.close();
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	EXPECT_TRUE(testECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 	CANHardwareInterface::stop();
 }

@@ -6,7 +6,7 @@
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef CAN_PARTNERED_CONTROL_FUNCTION_HPP
@@ -25,29 +25,19 @@ namespace isobus
 	class CANNetworkManager;
 	class InternalControlFunction;
 
-	//================================================================================================
-	/// @class PartneredControlFunction
-	///
 	/// @brief This represents any device on the bus you want to talk to.
 	/// @details To communicate with a device on the bus, create one of these objects and tell it
 	/// via the constructor what the identity of that device is using NAME fields like
 	/// manufacturer code, function, and device class. The stack will take care of locating the
 	/// device on the bus that matches that description, and will allow you to talk to it through
 	/// passing this object to the appropriate send function in the network manager.
-	//================================================================================================
 	class PartneredControlFunction : public ControlFunction
 	{
 	public:
-		/// @brief The factory function to construct a partnered control function
-		/// @param[in] CANPort The CAN channel associated with this control function definition
-		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
-		/// @returns A shared pointer to a PartneredControlFunction object created with the parameters passed in
-		static std::shared_ptr<PartneredControlFunction> create(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
-
 		/// @brief the constructor for a PartneredControlFunction, which is called by the factory function
 		/// @param[in] CANPort The CAN channel associated with this control function definition
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
-		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters, CANLibBadge<PartneredControlFunction>);
+		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
 
 		/// @brief Deleted copy constructor for PartneredControlFunction to avoid slicing
 		PartneredControlFunction(PartneredControlFunction &) = delete;
@@ -101,9 +91,6 @@ namespace isobus
 
 	private:
 		friend class CANNetworkManager; ///< Allows the network manager to use get_parameter_group_number_callback
-
-		/// @brief Make inherited factory function private so that it can't be called
-		static std::shared_ptr<ControlFunction> create(NAME, std::uint8_t, std::uint8_t) = delete;
 
 		/// @brief Returns a parameter group number associated with this control function by index
 		/// @param[in] index The index from which to get the PGN callback data object

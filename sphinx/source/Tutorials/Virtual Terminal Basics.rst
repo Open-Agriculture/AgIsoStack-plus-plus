@@ -101,8 +101,8 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-		auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
-		auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
+		auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
+		auto TestPartnerVT = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 		while (running)
 		{
@@ -561,8 +561,8 @@ Here's the final code for this example:
 
 		const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 		const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-		auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
-		auto TestPartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
+		auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
+		auto TestPartnerVT = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 		virtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 		virtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);

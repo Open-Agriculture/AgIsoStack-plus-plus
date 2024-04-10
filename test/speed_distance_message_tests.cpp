@@ -340,7 +340,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	}
 
-	// EXPECT_TRUE(testECU->destroy()); //! @todo: weird unreproducible error on mac, should be fixed once network manager' singleton is removed
+	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 	CANHardwareInterface::stop();
 }
 

@@ -11,6 +11,7 @@
 #include "isobus/hardware_integration/available_can_drivers.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"
+#include "isobus/isobus/isobus_preferred_addresses.hpp"
 #include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 
@@ -76,9 +77,9 @@ bool Seeder::initialize()
 		                                                      filterTaskControllerIndustryGroup,
 		                                                      filterTaskControllerDeviceClass };
 	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
-	auto InternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
-	auto PartnerVT = isobus::PartneredControlFunction::create(0, vtNameFilters);
-	auto PartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
+	auto InternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
+	auto PartnerVT = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	auto PartnerTC = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, tcNameFilters);
 
 	diagnosticProtocol = std::make_unique<isobus::DiagnosticProtocol>(InternalECU);
 	diagnosticProtocol->initialize();

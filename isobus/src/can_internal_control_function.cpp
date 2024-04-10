@@ -11,40 +11,16 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 
 #include "isobus/isobus/can_constants.hpp"
-#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 
 #include <algorithm>
 
 namespace isobus
 {
-	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort, CANLibBadge<InternalControlFunction>) :
+	InternalControlFunction::InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort) :
 	  ControlFunction(desiredName, NULL_CAN_ADDRESS, CANPort, Type::Internal),
 	  stateMachine(preferredAddress, desiredName, CANPort)
 	{
-	}
-
-	std::shared_ptr<InternalControlFunction> InternalControlFunction::create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort)
-	{
-		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
-		CANLibBadge<InternalControlFunction> badge; // This badge is used to allow creation of the PGN request protocol only from within this class
-		auto controlFunction = std::shared_ptr<InternalControlFunction>(new InternalControlFunction(desiredName, preferredAddress, CANPort, badge));
-		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction, badge));
-		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, badge);
-		return controlFunction;
-	}
-
-	std::shared_ptr<InternalControlFunction> InternalControlFunction::create(NAME desiredName, std::uint8_t CANPort)
-	{
-		return create(desiredName, NULL_CAN_ADDRESS, CANPort);
-	}
-
-	bool InternalControlFunction::destroy(std::uint32_t expectedRefCount)
-	{
-		// We need to destroy the PGN request protocol before we destroy the control function
-		pgnRequestProtocol.reset();
-
-		return ControlFunction::destroy(expectedRefCount);
 	}
 
 	void InternalControlFunction::on_address_violation(CANLibBadge<CANNetworkManager>)

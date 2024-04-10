@@ -34,31 +34,13 @@ namespace isobus
 	class InternalControlFunction : public ControlFunction
 	{
 	public:
-		/// @brief The factory function to construct an internal control function
+		/// @brief The constructor of an internal control function.
+		/// In most cases use `CANNetworkManager::create_internal_control_function()` instead,
+		/// only use this constructor if you have advanced needs.
 		/// @param[in] desiredName The NAME for this control function to claim as
 		/// @param[in] preferredAddress The preferred NAME for this control function
 		/// @param[in] CANPort The CAN channel index for this control function to use
-		/// @returns A shared pointer to an InternalControlFunction object created with the parameters passed in
-		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
-
-		/// @brief The factory function to construct an internal control function.
-		/// This version of the factory function will automatically assign the preferred address somewhere in the arbitrary address
-		/// range, which means your NAME must have the arbitrary address bit set.
-		/// @param[in] desiredName The NAME for this control function to claim as
-		/// @param[in] CANPort The CAN channel index for this control function to use
-		/// @returns A shared pointer to an InternalControlFunction object created with the parameters passed in
-		static std::shared_ptr<InternalControlFunction> create(NAME desiredName, std::uint8_t CANPort);
-
-		/// @brief Destroys this control function, by removing it from the network manager
-		/// @param[in] expectedRefCount The expected number of shared pointers to this control function after removal
-		/// @returns true if the control function was successfully removed from everywhere in the stack, otherwise false
-		bool destroy(std::uint32_t expectedRefCount = 1) override;
-
-		/// @brief The protected constructor for the internal control function, which is called by the (inherited) factory function
-		/// @param[in] desiredName The NAME for this control function to claim as
-		/// @param[in] preferredAddress The preferred NAME for this control function
-		/// @param[in] CANPort The CAN channel index for this control function to use
-		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort, CANLibBadge<InternalControlFunction>);
+		InternalControlFunction(NAME desiredName, std::uint8_t preferredAddress, std::uint8_t CANPort);
 
 		/// @brief Used to inform the member address claim state machine that two CFs are using the same source address.
 		/// @note Address violation occurs when two CFs are using the same source address.
@@ -77,9 +59,12 @@ namespace isobus
 		/// @returns The PGN request protocol for this ICF
 		std::weak_ptr<ParameterGroupNumberRequestProtocol> get_pgn_request_protocol() const;
 
+	protected:
+		friend class CANNetworkManager; ///< Allow the network manager to access the pgn request protocol
+		std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol for this ICF
+
 	private:
 		AddressClaimStateMachine stateMachine; ///< The address claimer for this ICF
-		std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol for this ICF
 	};
 
 } // namespace isobus

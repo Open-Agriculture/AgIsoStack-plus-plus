@@ -34,7 +34,7 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	firstName.set_function_instance(0);
 	firstName.set_device_class_instance(0);
 	firstName.set_manufacturer_code(69);
-	auto firstInternalECU = InternalControlFunction::create(firstName, 0x1C, 0);
+	auto firstInternalECU = CANNetworkManager::CANNetwork.create_internal_control_function(firstName, 0, 0x1C);
 
 	isobus::NAME secondName(0);
 	secondName.set_arbitrary_address_capable(true);
@@ -46,12 +46,12 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	secondName.set_function_instance(0);
 	secondName.set_device_class_instance(0);
 	secondName.set_manufacturer_code(69);
-	auto secondInternalECU2 = InternalControlFunction::create(secondName, 1);
+	auto secondInternalECU2 = CANNetworkManager::CANNetwork.create_internal_control_function(secondName, 1);
 
 	const NAMEFilter filterSecond(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::SeatControl));
-	auto firstPartneredSecondECU = PartneredControlFunction::create(0, { filterSecond });
+	auto firstPartneredSecondECU = CANNetworkManager::CANNetwork.create_partnered_control_function(0, { filterSecond });
 	const isobus::NAMEFilter filterFirst(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::CabClimateControl));
-	auto secondPartneredFirstEcu = PartneredControlFunction::create(1, { filterFirst });
+	auto secondPartneredFirstEcu = CANNetworkManager::CANNetwork.create_partnered_control_function(1, { filterFirst });
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	EXPECT_TRUE(firstInternalECU->get_address_valid());
@@ -60,8 +60,8 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	EXPECT_TRUE(secondPartneredFirstEcu->get_address_valid());
 
 	CANHardwareInterface::stop();
-	ASSERT_TRUE(firstPartneredSecondECU->destroy());
-	ASSERT_TRUE(secondPartneredFirstEcu->destroy());
-	ASSERT_TRUE(firstInternalECU->destroy());
-	ASSERT_TRUE(secondInternalECU2->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(firstPartneredSecondECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(secondPartneredFirstEcu);
+	CANNetworkManager::CANNetwork.deactivate_control_function(firstInternalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(secondInternalECU2);
 }

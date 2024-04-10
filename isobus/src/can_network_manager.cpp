@@ -14,6 +14,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 #include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -40,6 +41,37 @@ namespace isobus
 			get_next_can_message_from_tx_queue();
 		}
 		initialized = true;
+	}
+
+	std::shared_ptr<InternalControlFunction> CANNetworkManager::create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress)
+	{
+		auto controlFunction = std::make_shared<InternalControlFunction>(desiredName, preferredAddress, CANPort);
+		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction));
+		internalControlFunctions.push_back(controlFunction);
+		heartBeatInterfaces.at(CANPort)->on_new_internal_control_function(controlFunction);
+		return controlFunction;
+	}
+
+	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters)
+	{
+		auto controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
+		partneredControlFunctions.push_back(controlFunction);
+		return controlFunction;
+	}
+
+	void CANNetworkManager::deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction)
+	{
+		// We need to unregister the control function from the interfaces managed by the network manager first.
+		controlFunction->pgnRequestProtocol.reset();
+		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
+		internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
+		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
+	}
+
+	void CANNetworkManager::deactivate_control_function(std::shared_ptr<PartneredControlFunction> controlFunction)
+	{
+		partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
+		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
 	}
 
 	std::shared_ptr<ControlFunction> CANNetworkManager::get_control_function(std::uint8_t channelIndex, std::uint8_t address, CANLibBadge<AddressClaimStateMachine>) const
@@ -309,18 +341,8 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::on_control_function_destroyed(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
+	void CANNetworkManager::deactivate_control_function(std::shared_ptr<ControlFunction> controlFunction)
 	{
-		if (ControlFunction::Type::Internal == controlFunction->get_type())
-		{
-			heartBeatInterfaces.at(controlFunction->canPortIndex)->on_destroyed_internal_control_function(std::static_pointer_cast<InternalControlFunction>(controlFunction));
-			internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
-		}
-		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
-		{
-			partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
-		}
-
 		auto result = std::find(inactiveControlFunctions.begin(), inactiveControlFunctions.end(), controlFunction);
 		if (result != inactiveControlFunctions.end())
 		{
@@ -333,46 +355,24 @@ namespace isobus
 			{
 				if (i != controlFunction->get_address())
 				{
-					LOG_WARNING("[NM]: %s control function with address '%d' was at incorrect address '%d' in the lookup table prior to deletion.",
+					LOG_WARNING("[NM]: %s control function with address '%d' was at incorrect address '%d' in the lookup table prior to deactivation.",
 					            controlFunction->get_type_string().c_str(),
 					            controlFunction->get_address(),
 					            i);
 				}
 
-				if (controlFunction->get_address() < NULL_CAN_ADDRESS)
+				controlFunctionTable[controlFunction->get_can_port()][i] = nullptr;
+
+				if (controlFunction->get_address_valid() && (ControlFunction::Type::Partnered == controlFunction->get_type()))
 				{
-					if (initialized)
-					{
-						// The control function was active, replace it with an new external control function
-						controlFunctionTable[controlFunction->get_can_port()][controlFunction->address] = ControlFunction::create(controlFunction->get_NAME(), controlFunction->get_address(), controlFunction->get_can_port());
-					}
-					else
-					{
-						// The network manager is not initialized yet, just remove the control function from the table
-						controlFunctionTable[controlFunction->get_can_port()][i] = nullptr;
-					}
+					// The control function was an active partner when deleted, so we replace it with an new external control function instead
+					create_external_control_function(controlFunction->get_NAME(), controlFunction->get_address(), controlFunction->get_can_port());
 				}
 			}
 		}
-		LOG_INFO("[NM]: %s control function with address '%d' is deleted.",
-		         controlFunction->get_type_string().c_str(),
-		         controlFunction->get_address());
-	}
-
-	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<ControlFunction>)
-	{
-		on_control_function_created(controlFunction);
-	}
-
-	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<InternalControlFunction>)
-	{
-		on_control_function_created(controlFunction);
-		heartBeatInterfaces.at(controlFunction->canPortIndex)->on_new_internal_control_function(std::static_pointer_cast<InternalControlFunction>(controlFunction));
-	}
-
-	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction, CANLibBadge<PartneredControlFunction>)
-	{
-		on_control_function_created(controlFunction);
+		LOG_DEBUG("[NM]: %s control function at address '%d' is deactivated.",
+		          controlFunction->get_type_string().c_str(),
+		          controlFunction->get_address());
 	}
 
 	void CANNetworkManager::add_control_function_status_change_callback(ControlFunctionStateCallback callback)
@@ -522,6 +522,13 @@ namespace isobus
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
 			heartBeatInterfaces.at(i).reset(new HeartbeatInterface(send_frame_callback));
 		}
+	}
+
+	std::shared_ptr<ControlFunction> CANNetworkManager::create_external_control_function(NAME desiredName, std::uint8_t address, std::uint8_t CANPort)
+	{
+		auto controlFunction = std::make_shared<ControlFunction>(desiredName, address, CANPort, ControlFunction::Type::External);
+		controlFunctionTable[CANPort][address] = controlFunction;
+		return controlFunction;
 	}
 
 	void CANNetworkManager::update_address_table(const CANMessage &message)
@@ -680,7 +687,7 @@ namespace isobus
 			auto activeResult = std::find_if(controlFunctionTable[rxFrame.channel].begin(),
 			                                 controlFunctionTable[rxFrame.channel].end(),
 			                                 [claimedNAME](const std::shared_ptr<ControlFunction> &cf) {
-				                                 return (nullptr != cf) && (cf->controlFunctionNAME.get_full_name() == claimedNAME);
+				                                 return (nullptr != cf) && (cf->get_NAME().get_full_name() == claimedNAME);
 			                                 });
 			if (activeResult != controlFunctionTable[rxFrame.channel].end())
 			{
@@ -691,7 +698,7 @@ namespace isobus
 				auto inActiveResult = std::find_if(inactiveControlFunctions.begin(),
 				                                   inactiveControlFunctions.end(),
 				                                   [claimedNAME, &rxFrame](const std::shared_ptr<ControlFunction> &cf) {
-					                                   return (cf->controlFunctionNAME.get_full_name() == claimedNAME) && (cf->get_can_port() == rxFrame.channel);
+					                                   return (cf->get_NAME().get_full_name() == claimedNAME) && (cf->get_can_port() == rxFrame.channel);
 				                                   });
 				if (inActiveResult != inactiveControlFunctions.end())
 				{
@@ -720,25 +727,24 @@ namespace isobus
 			std::for_each(controlFunctionTable[rxFrame.channel].begin(),
 			              controlFunctionTable[rxFrame.channel].end(),
 			              [&foundControlFunction, &claimedAddress](const std::shared_ptr<ControlFunction> &cf) {
-				              if ((nullptr != cf) && (foundControlFunction != cf) && (cf->address == claimedAddress))
+				              if ((nullptr != cf) && (foundControlFunction != cf) && (cf->get_address() == claimedAddress))
 					              cf->address = CANIdentifier::NULL_ADDRESS;
 			              });
 
 			std::for_each(inactiveControlFunctions.begin(),
 			              inactiveControlFunctions.end(),
 			              [&rxFrame, &foundControlFunction, &claimedAddress](const std::shared_ptr<ControlFunction> &cf) {
-				              if ((foundControlFunction != cf) && (cf->address == claimedAddress) && (cf->get_can_port() == rxFrame.channel))
+				              if ((foundControlFunction != cf) && (cf->get_address() == claimedAddress) && (cf->get_can_port() == rxFrame.channel))
 					              cf->address = CANIdentifier::NULL_ADDRESS;
 			              });
 
 			if (nullptr == foundControlFunction)
 			{
 				// New device, need to start keeping track of it
-				foundControlFunction = ControlFunction::create(NAME(claimedNAME), claimedAddress, rxFrame.channel);
-				controlFunctionTable[rxFrame.channel][foundControlFunction->get_address()] = foundControlFunction;
+				foundControlFunction = create_external_control_function(NAME(claimedNAME), claimedAddress, rxFrame.channel);
 				LOG_DEBUG("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
 			}
-			else if (foundControlFunction->address != claimedAddress)
+			else if (foundControlFunction->get_address() != claimedAddress)
 			{
 				if (foundControlFunction->get_address_valid())
 				{
@@ -901,18 +907,6 @@ namespace isobus
 			return retVal;
 		}
 		return CANMessage::create_invalid_message();
-	}
-
-	void CANNetworkManager::on_control_function_created(std::shared_ptr<ControlFunction> controlFunction)
-	{
-		if (ControlFunction::Type::Internal == controlFunction->get_type())
-		{
-			internalControlFunctions.push_back(std::static_pointer_cast<InternalControlFunction>(controlFunction));
-		}
-		else if (ControlFunction::Type::Partnered == controlFunction->get_type())
-		{
-			partneredControlFunctions.push_back(std::static_pointer_cast<PartneredControlFunction>(controlFunction));
-		}
 	}
 
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)

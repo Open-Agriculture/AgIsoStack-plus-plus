@@ -11,7 +11,6 @@
 #include "isobus/isobus/can_control_function.hpp"
 
 #include "isobus/isobus/can_constants.hpp"
-#include "isobus/isobus/can_network_manager.hpp"
 
 #include <string>
 
@@ -25,23 +24,6 @@ namespace isobus
 	  address(addressValue),
 	  canPortIndex(CANPort)
 	{
-	}
-
-	std::shared_ptr<ControlFunction> ControlFunction::create(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort)
-	{
-		// Unfortunately, we can't use `std::make_shared` here because the constructor is private
-		auto controlFunction = std::shared_ptr<ControlFunction>(new ControlFunction(NAMEValue, addressValue, CANPort));
-		CANNetworkManager::CANNetwork.on_control_function_created(controlFunction, CANLibBadge<ControlFunction>());
-		return controlFunction;
-	}
-
-	bool ControlFunction::destroy(std::uint32_t expectedRefCount)
-	{
-		LOCK_GUARD(Mutex, controlFunctionProcessingMutex);
-
-		CANNetworkManager::CANNetwork.on_control_function_destroyed(shared_from_this(), {});
-
-		return static_cast<std::uint32_t>(shared_from_this().use_count()) == expectedRefCount + 1;
 	}
 
 	std::uint8_t ControlFunction::get_address() const

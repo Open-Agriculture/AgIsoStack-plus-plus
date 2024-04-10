@@ -207,8 +207,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 
 	EXPECT_FALSE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	EXPECT_TRUE(testECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 	CANHardwareInterface::stop();
 }
 
@@ -300,8 +299,6 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 
 	testPlugin.close();
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	EXPECT_TRUE(testECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 	CANHardwareInterface::stop();
 }
