@@ -74,11 +74,6 @@ namespace isobus
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
 	}
 
-	std::shared_ptr<ControlFunction> CANNetworkManager::get_control_function(std::uint8_t channelIndex, std::uint8_t address, CANLibBadge<AddressClaimStateMachine>) const
-	{
-		return get_control_function(channelIndex, address);
-	}
-
 	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
 		globalParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, nullptr);
@@ -268,7 +263,7 @@ namespace isobus
 	                                             std::uint8_t priority,
 	                                             const void *data,
 	                                             std::uint32_t size,
-	                                             CANLibBadge<AddressClaimStateMachine>) const
+	                                             CANLibBadge<InternalControlFunction>) const
 	{
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 	}
@@ -610,7 +605,7 @@ namespace isobus
 	{
 		for (const auto &currentInternalControlFunction : internalControlFunctions)
 		{
-			if (currentInternalControlFunction->update_address_claiming({}))
+			if (currentInternalControlFunction->update_address_claiming())
 			{
 				std::uint8_t channelIndex = currentInternalControlFunction->get_can_port();
 				std::uint8_t claimedAddress = currentInternalControlFunction->get_address();
@@ -636,6 +631,14 @@ namespace isobus
 				// ECU has claimed since the last update, add it to the table
 				controlFunctionTable[channelIndex][claimedAddress] = currentInternalControlFunction;
 			}
+		}
+	}
+
+	void CANNetworkManager::process_rx_message_for_address_claiming(const CANMessage &message)
+	{
+		for (const auto &internalCF : internalControlFunctions)
+		{
+			internalCF->process_rx_message_for_address_claiming(message);
 		}
 	}
 
@@ -925,20 +928,12 @@ namespace isobus
 
 	void CANNetworkManager::process_can_message_for_address_violations(const CANMessage &currentMessage)
 	{
-		auto sourceAddress = currentMessage.get_identifier().get_source_address();
-
-		if ((BROADCAST_CAN_ADDRESS != sourceAddress) &&
-		    (NULL_CAN_ADDRESS != sourceAddress))
+		for (const auto &internalCF : internalControlFunctions)
 		{
-			for (auto &internalCF : internalControlFunctions)
+			if ((nullptr != internalCF) &&
+			    internalCF->process_rx_message_for_address_violation(currentMessage))
 			{
-				if ((nullptr != internalCF) &&
-				    (internalCF->get_address() == sourceAddress) &&
-				    (currentMessage.get_can_port_index() == internalCF->get_can_port()))
-				{
-					internalCF->on_address_violation({});
-					addressViolationEventDispatcher.call(internalCF);
-				}
+				addressViolationEventDispatcher.call(internalCF);
 			}
 		}
 	}
@@ -1008,27 +1003,6 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::process_can_message_for_commanded_address(const CANMessage &message)
-	{
-		constexpr std::uint8_t COMMANDED_ADDRESS_LENGTH = 9;
-
-		if ((nullptr == message.get_destination_control_function()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::CommandedAddress) == message.get_identifier().get_parameter_group_number()) &&
-		    (COMMANDED_ADDRESS_LENGTH == message.get_data_length()))
-		{
-			std::uint64_t targetNAME = message.get_uint64_at(0);
-
-			for (const auto &currentICF : internalControlFunctions)
-			{
-				if ((message.get_can_port_index() == currentICF->get_can_port()) &&
-				    (currentICF->get_NAME().get_full_name() == targetNAME))
-				{
-					currentICF->process_commanded_address(message.get_uint8_at(8), {});
-				}
-			}
-		}
-	}
-
 	void CANNetworkManager::process_rx_messages()
 	{
 		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
@@ -1038,6 +1012,7 @@ namespace isobus
 
 			update_address_table(currentMessage);
 			process_can_message_for_address_violations(currentMessage);
+			process_rx_message_for_address_claiming(currentMessage);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
 			transportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
@@ -1113,7 +1088,7 @@ namespace isobus
 	{
 		process_can_message_for_global_and_partner_callbacks(message);
 		process_any_control_function_pgn_callbacks(message);
-		process_can_message_for_commanded_address(message);
+		process_rx_message_for_address_claiming(message);
 	}
 
 } // namespace isobus

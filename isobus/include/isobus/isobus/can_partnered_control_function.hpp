@@ -13,7 +13,6 @@
 #define CAN_PARTNERED_CONTROL_FUNCTION_HPP
 
 #include "isobus/isobus/can_NAME_filter.hpp"
-#include "isobus/isobus/can_address_claim_state_machine.hpp"
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_control_function.hpp"
