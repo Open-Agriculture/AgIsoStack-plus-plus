@@ -86,13 +86,13 @@ namespace isobus
 		/// @brief A callback for handling a value request command from the TC
 		using RequestValueCommandCallback = bool (*)(std::uint16_t elementNumber,
 		                                             std::uint16_t DDI,
-		                                             std::uint32_t &processVariableValue,
+		                                             std::int32_t &processVariableValue,
 		                                             void *parentPointer);
 
 		/// @brief A callback for handling a set value command from the TC
 		using ValueCommandCallback = bool (*)(std::uint16_t elementNumber,
 		                                      std::uint16_t DDI,
-		                                      std::uint32_t processVariableValue,
+		                                      std::int32_t processVariableValue,
 		                                      void *parentPointer);
 
 		/// @brief The constructor for a TaskControllerClient
@@ -112,7 +112,7 @@ namespace isobus
 
 		/// @brief This adds a callback that will be called when the TC requests the value of one of your variables.
 		/// @details The task controller will often send a request for the value of a process data variable.
-		/// When the stack recieves those messages, it will call this callback to request the value from your
+		/// When the stack receives those messages, it will call this callback to request the value from your
 		/// application. You must provide the value at that time for the associated process data variable identified
 		/// by its element number and DDI.
 		/// @param[in] callback The callback to add
@@ -520,7 +520,7 @@ namespace isobus
 		/// @param[in] ddi The DDI for the command
 		/// @param[in] value The value to send
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::uint32_t value) const;
+		bool send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::int32_t value) const;
 
 		/// @brief Sends the version request message to the TC
 		/// @returns `true` if the message was sent, otherwise `false`
@@ -575,8 +575,8 @@ namespace isobus
 			/// @param obj the object to compare against
 			/// @returns true if the ddi and element numbers of the provided objects match, otherwise false
 			bool operator==(const ProcessDataCallbackInfo &obj) const;
-			std::uint32_t processDataValue; ///< The value of the value set command
-			std::uint32_t lastValue; ///< Used for measurement commands to store timestamp or previous values
+			std::int32_t processDataValue; ///< The value of the value set command
+			std::int32_t lastValue; ///< Used for measurement commands to store timestamp or previous values
 			std::uint16_t elementNumber; ///< The element number for the command
 			std::uint16_t ddi; ///< The DDI for the command
 			bool ackRequested; ///< Stores if the TC used the mux that also requires a PDACK

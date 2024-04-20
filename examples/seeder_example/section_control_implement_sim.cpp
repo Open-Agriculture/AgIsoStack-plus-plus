@@ -218,7 +218,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 
 bool SectionControlImplementSimulator::request_value_command_callback(std::uint16_t,
                                                                       std::uint16_t DDI,
-                                                                      std::uint32_t &value,
+                                                                      std::int32_t &value,
                                                                       void *parentPointer)
 {
 	if (nullptr != parentPointer)
@@ -367,7 +367,7 @@ bool SectionControlImplementSimulator::request_value_command_callback(std::uint1
 
 bool SectionControlImplementSimulator::value_command_callback(std::uint16_t,
                                                               std::uint16_t DDI,
-                                                              std::uint32_t processVariableValue,
+                                                              std::int32_t processVariableValue,
                                                               void *parentPointer)
 {
 	if (nullptr != parentPointer)

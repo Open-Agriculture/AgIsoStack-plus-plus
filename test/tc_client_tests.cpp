@@ -1372,11 +1372,11 @@ static std::uint16_t requestedDDI = 0;
 static std::uint16_t commandedDDI = 0;
 static std::uint16_t requestedElement = 0;
 static std::uint16_t commandedElement = 0;
-static std::uint32_t commandedValue = 0;
+static std::int32_t commandedValue = 0;
 
 bool request_value_command_callback(std::uint16_t element,
                                     std::uint16_t ddi,
-                                    std::uint32_t &,
+                                    std::int32_t &,
                                     void *)
 {
 	requestedElement = element;
@@ -1387,7 +1387,7 @@ bool request_value_command_callback(std::uint16_t element,
 
 bool value_command_callback(std::uint16_t element,
                             std::uint16_t ddi,
-                            std::uint32_t value,
+                            std::int32_t value,
                             void *)
 {
 	commandedElement = element;
@@ -1511,6 +1511,29 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	valueRequested = false;
 	requestedDDI = 0;
 	requestedElement = 0;
+
+	// Test negative number
+	testFrame.identifier = 0x18CB86F7;
+	testFrame.data[0] = 0x2A;
+	testFrame.data[1] = 0x05;
+	testFrame.data[2] = 0x29;
+	testFrame.data[3] = 0x48;
+	testFrame.data[4] = 0x11;
+	testFrame.data[5] = 0x01;
+	testFrame.data[6] = 0x00;
+	testFrame.data[7] = 0xF0;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+
+	EXPECT_EQ(true, valueCommanded);
+	EXPECT_EQ(commandedDDI, 0x4829);
+	EXPECT_EQ(commandedElement, 0x52);
+	EXPECT_EQ(commandedValue, -268435183);
+
+	valueCommanded = false;
+	commandedDDI = 0;
+	commandedValue = 0;
 	interfaceUnderTest.remove_request_value_callback(request_value_command_callback, nullptr);
 
 	// Create a request for a value.
@@ -1530,10 +1553,6 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	EXPECT_EQ(false, valueRequested);
 	EXPECT_EQ(requestedDDI, 0);
 	EXPECT_EQ(requestedElement, 0);
-	EXPECT_EQ(true, valueCommanded);
-	EXPECT_EQ(commandedDDI, 0x4829);
-	EXPECT_EQ(commandedElement, 0x52);
-	EXPECT_EQ(commandedValue, 0x5060708);
 
 	valueCommanded = false;
 	commandedDDI = 0;
