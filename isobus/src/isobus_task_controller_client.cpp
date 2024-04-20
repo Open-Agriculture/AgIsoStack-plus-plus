@@ -1040,7 +1040,7 @@ namespace isobus
 
 			for (auto &currentCallback : requestValueCallbacks)
 			{
-				std::uint32_t newValue = 0;
+				std::int32_t newValue = 0;
 				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, newValue, currentCallback.parent))
 				{
 					transmitSuccessful = send_value_command(currentRequest.elementNumber, currentRequest.ddi, newValue);
@@ -1076,13 +1076,13 @@ namespace isobus
 
 		for (auto &measurementTimeCommand : measurementTimeIntervalCommands)
 		{
-			if (SystemTiming::time_expired_ms(measurementTimeCommand.lastValue, measurementTimeCommand.processDataValue))
+			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)))
 			{
 				// Time to update this time interval variable
 				transmitSuccessful = false;
 				for (auto &currentCallback : requestValueCallbacks)
 				{
-					std::uint32_t newValue = 0;
+					std::int32_t newValue = 0;
 					if (currentCallback.callback(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue, currentCallback.parent))
 					{
 						transmitSuccessful = send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue);
@@ -1092,14 +1092,14 @@ namespace isobus
 
 				if (transmitSuccessful)
 				{
-					measurementTimeCommand.lastValue = SystemTiming::get_timestamp_ms();
+					measurementTimeCommand.lastValue = static_cast<std::int32_t>(SystemTiming::get_timestamp_ms());
 				}
 			}
 		}
 		for (auto &measurementMaxCommand : measurementMaximumThresholdCommands)
 		{
 			// Get the current process data value
-			std::uint32_t newValue = 0;
+			std::int32_t newValue = 0;
 			for (auto &currentCallback : requestValueCallbacks)
 			{
 				if (currentCallback.callback(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue, currentCallback.parent))
@@ -1127,7 +1127,7 @@ namespace isobus
 		for (auto &measurementMinCommand : measurementMinimumThresholdCommands)
 		{
 			// Get the current process data value
-			std::uint32_t newValue = 0;
+			std::int32_t newValue = 0;
 			for (auto &currentCallback : requestValueCallbacks)
 			{
 				if (currentCallback.callback(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue, currentCallback.parent))
@@ -1155,7 +1155,7 @@ namespace isobus
 		for (auto &measurementChangeCommand : measurementOnChangeThresholdCommands)
 		{
 			// Get the current process data value
-			std::uint32_t newValue = 0;
+			std::int32_t newValue = 0;
 			for (auto &currentCallback : requestValueCallbacks)
 			{
 				if (currentCallback.callback(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue, currentCallback.parent))
@@ -1566,10 +1566,10 @@ namespace isobus
 							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							requestData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
 							parentTC->queuedValueRequests.push_back(requestData);
 						}
 						break;
@@ -1583,10 +1583,10 @@ namespace isobus
 							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							requestData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
 							parentTC->queuedValueCommands.push_back(requestData);
 						}
 						break;
@@ -1600,10 +1600,10 @@ namespace isobus
 							requestData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							requestData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							requestData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							requestData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
 							parentTC->queuedValueCommands.push_back(requestData);
 						}
 						break;
@@ -1616,11 +1616,11 @@ namespace isobus
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
-							commandData.lastValue = SystemTiming::get_timestamp_ms();
+							commandData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
+							commandData.lastValue = static_cast<std::int32_t>(SystemTiming::get_timestamp_ms());
 
 							auto previousCommand = std::find(parentTC->measurementTimeIntervalCommands.begin(), parentTC->measurementTimeIntervalCommands.end(), commandData);
 							if (parentTC->measurementTimeIntervalCommands.end() == previousCommand)
@@ -1657,10 +1657,10 @@ namespace isobus
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							commandData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
 
 							auto previousCommand = std::find(parentTC->measurementMaximumThresholdCommands.begin(), parentTC->measurementMaximumThresholdCommands.end(), commandData);
 							if (parentTC->measurementMaximumThresholdCommands.end() == previousCommand)
@@ -1690,10 +1690,10 @@ namespace isobus
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							commandData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
 
 							auto previousCommand = std::find(parentTC->measurementMinimumThresholdCommands.begin(), parentTC->measurementMinimumThresholdCommands.end(), commandData);
 							if (parentTC->measurementMinimumThresholdCommands.end() == previousCommand)
@@ -1723,10 +1723,10 @@ namespace isobus
 							commandData.elementNumber = (static_cast<std::uint16_t>(messageData[0] >> 4) | (static_cast<std::uint16_t>(messageData[1]) << 4));
 							commandData.ddi = static_cast<std::uint16_t>(messageData[2]) |
 							  (static_cast<std::uint16_t>(messageData[3]) << 8);
-							commandData.processDataValue = (static_cast<std::uint32_t>(messageData[4]) |
-							                                (static_cast<std::uint16_t>(messageData[5]) << 8) |
-							                                (static_cast<std::uint16_t>(messageData[6]) << 16) |
-							                                (static_cast<std::uint16_t>(messageData[7]) << 24));
+							commandData.processDataValue = (static_cast<std::int32_t>(messageData[4]) |
+							                                (static_cast<std::int32_t>(messageData[5]) << 8) |
+							                                (static_cast<std::int32_t>(messageData[6]) << 16) |
+							                                (static_cast<std::int32_t>(messageData[7]) << 24));
 
 							auto previousCommand = std::find(parentTC->measurementOnChangeThresholdCommands.begin(), parentTC->measurementOnChangeThresholdCommands.end(), commandData);
 							if (parentTC->measurementOnChangeThresholdCommands.end() == previousCommand)
@@ -2002,7 +2002,7 @@ namespace isobus
 		                                                      partnerControlFunction);
 	}
 
-	bool TaskControllerClient::send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::uint32_t value) const
+	bool TaskControllerClient::send_value_command(std::uint16_t elementNumber, std::uint16_t ddi, std::int32_t value) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(static_cast<std::uint8_t>(ProcessDataCommands::Value) |
 			                                                                                   (static_cast<std::uint8_t>(elementNumber & 0x0F) << 4)),
