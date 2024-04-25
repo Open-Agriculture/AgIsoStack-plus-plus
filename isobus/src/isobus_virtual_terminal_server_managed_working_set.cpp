@@ -2317,7 +2317,7 @@ namespace isobus
 												{
 													for (std::uint_fast8_t k = 0; k < 8U; k++)
 													{
-														tempObject->add_raw_data((iopData[1] >> k) & 0x01);
+														tempObject->add_raw_data(static_cast<std::uint8_t>(0 != ((iopData[1]) & (1 << (7 - k)))));
 														lineAmountLeft--;
 
 														if (0 == lineAmountLeft)
@@ -2393,7 +2393,7 @@ namespace isobus
 											{
 												for (std::uint_fast8_t j = 0; j < 8U; j++)
 												{
-													tempObject->add_raw_data((iopData[0] >> j) & 0x01);
+													tempObject->add_raw_data(static_cast<std::uint8_t>(0 != ((iopData[0]) & (1 << (7 - j)))));
 													lineAmountLeft--;
 
 													if (0 == lineAmountLeft)
