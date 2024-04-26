@@ -206,8 +206,32 @@ namespace isobus
 
 			case State::SendArbitraryAddressClaim:
 			{
-				// Search the range of generally available addresses
-				for (std::uint8_t i = 128; i <= 235; i++)
+				// Search the range of available dynamic addresses based on industry group
+				// Ref: https://www.isobus.net/isobus/sourceAddress
+				static constexpr std::uint8_t START_ADDRESS = 128;
+				std::uint8_t endAddress = START_ADDRESS;
+				switch (static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()))
+				{
+					case NAME::IndustryGroup::Global:
+						endAddress = 247;
+						break;
+					case NAME::IndustryGroup::OnHighwayEquipment:
+						endAddress = 158;
+						break;
+					case NAME::IndustryGroup::AgriculturalAndForestryEquipment:
+						endAddress = 235;
+						break;
+					case NAME::IndustryGroup::ConstructionEquipment:
+					case NAME::IndustryGroup::Marine:
+					case NAME::IndustryGroup::IndustrialOrProcessControl:
+						endAddress = 207;
+						break;
+
+					default:
+						break;
+				}
+
+				for (std::uint8_t i = START_ADDRESS; i <= endAddress; i++)
 				{
 					if ((nullptr == CANNetworkManager::CANNetwork.get_control_function(get_can_port(), i)) && (send_address_claim(i)))
 					{

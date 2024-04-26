@@ -522,7 +522,10 @@ namespace isobus
 	std::shared_ptr<ControlFunction> CANNetworkManager::create_external_control_function(NAME desiredName, std::uint8_t address, std::uint8_t CANPort)
 	{
 		auto controlFunction = std::make_shared<ControlFunction>(desiredName, address, CANPort, ControlFunction::Type::External);
-		controlFunctionTable[CANPort][address] = controlFunction;
+		if ((CANPort < CAN_PORT_MAXIMUM) && (address < NULL_CAN_ADDRESS))
+		{
+			controlFunctionTable[CANPort][address] = controlFunction;
+		}
 		return controlFunction;
 	}
 
