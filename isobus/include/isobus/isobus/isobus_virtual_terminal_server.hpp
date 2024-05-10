@@ -171,6 +171,16 @@ namespace isobus
 		/// @returns True if all relevant object pools were deleted from VT non-volatile storage, otherwise false.
 		virtual bool delete_all_versions(NAME clientNAME) = 0;
 
+		/// @brief This function is called when the client wants the server to deactivate its object pool.
+		/// You should treat this as a disconnection by the client, as it may be moving to another VT.
+		/// @attention This does not mean to delete the pool from non-volatile memory!!! This only deactivates the active pool.
+		/// @details This command is used to delete the entire object pool of this Working Set from volatile storage.
+		/// This command can be used by an implement when it wants to move its object pool to another VT,
+		/// or when it is shutting down or during the development of object pools.
+		/// @param[in] clientNAME The NAME of the client that is requesting deletion
+		/// @returns True if the client's active object pool was deactivated and removed from volatile storage, otherwise false.
+		virtual bool delete_object_pool(NAME clientNAME) = 0;
+
 		//------------ Optional functions you can override --------------------
 		virtual VirtualTerminalBase::GraphicMode get_graphic_mode() const;
 		virtual std::uint8_t get_powerup_time() const;
@@ -345,6 +355,20 @@ namespace isobus
 			ObjectIsOpenedForEdit = 2 // VT version 4 and later
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change polygon point response
+		enum class ChangePolygonPointErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidPointIndex = 1,
+			AnyOtherError = 2
+		};
+
+		enum class DeleteObjectPoolErrorBit : std::uint8_t
+		{
+			DeletionError = 0,
+			AnyOtherError = 8
+		};
+
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
 		bool check_if_source_is_managed(const CANMessage &message);
@@ -454,6 +478,13 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Sends a response to a change polygon point command
+		/// @param[in] objectID The object ID of the modified polygon
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+
 		/// @brief Sends a response to a change size command
 		/// @param[in] objectID The object ID for the object whose size was meant to be changed
 		/// @param[in] errorBitfield An error bitfield
@@ -481,6 +512,12 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to a delete object pool command
+		/// @param[in] errorBitfield An error bitfield to report back to the client
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_delete_object_pool_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the enable/disable object command
 		/// @param[in] objectID The object ID for the object

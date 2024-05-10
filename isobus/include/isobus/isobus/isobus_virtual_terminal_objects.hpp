@@ -2506,6 +2506,13 @@ namespace isobus
 		/// @returns A point in the polygon by index, or zeros if the index is out of range.
 		PolygonPoint get_point(std::uint8_t index);
 
+		/// @brief Changes a polygon point by index
+		/// @param[in] index The point index to modify
+		/// @param[in] x The new X position of the point, relative to the top left corner of the polygon
+		/// @param[in] y The new Y position of the point, relative to the top left corner of the polygon
+		/// @returns True if the point was modified, false if the index was out of range
+		bool change_point(std::uint8_t index, std::uint16_t x, std::uint16_t y);
+
 		/// @brief Returns the polygon type of this object
 		/// @returns The polygon type of this object
 		PolygonType get_type() const;
