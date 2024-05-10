@@ -1643,6 +1643,61 @@ namespace isobus
 								}
 								break;
 
+								case Function::DeleteObjectPoolCommand:
+								{
+									CANStackLogger::info("[VT Server]: Client %u requests deletion of object pool from volatile memory.", cf->get_control_function()->get_address());
+									if (parentServer->delete_object_pool(cf->get_control_function()->get_NAME()))
+									{
+										CANStackLogger::info("[VT Server]: Client %u object pool has been deactivated.", cf->get_control_function()->get_address());
+										parentServer->send_delete_object_pool_response(0, message.get_source_control_function());
+									}
+									else
+									{
+										CANStackLogger::error("[VT Server]: Client %u object pool failed to be deactivated.", cf->get_control_function()->get_address());
+										parentServer->send_delete_object_pool_response((1 << static_cast<std::uint8_t>(DeleteObjectPoolErrorBit::DeletionError)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case Function::ChangePolygonPointCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									const std::uint8_t polygonPointIndex = data[3];
+									const std::uint16_t newXValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+									const std::uint16_t newYValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+
+									if (nullptr != targetObject)
+									{
+										if (VirtualTerminalObjectType::OutputPolygon == targetObject->get_object_type())
+										{
+											auto polygon = std::static_pointer_cast<OutputPolygon>(targetObject);
+
+											if (polygon->change_point(polygonPointIndex, newXValue, newYValue))
+											{
+												CANStackLogger::debug("[VT Server]: Client %u change polygon id %u point index %u. X = %u, Y = %u", cf->get_control_function()->get_address(), objectID, polygonPointIndex, newXValue, newYValue);
+												parentServer->send_change_polygon_point_response(objectID, 0, message.get_source_control_function());
+											}
+											else
+											{
+												CANStackLogger::warn("[VT Server]: Client %u change polygon point: the point index of %u is not valid for object %u", cf->get_control_function()->get_address(), polygonPointIndex, objectID);
+												parentServer->send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidPointIndex)), message.get_source_control_function());
+											}
+										}
+										else
+										{
+											CANStackLogger::warn("[VT Server]: Client %u change polygon point: object id %u is not an output polygon", cf->get_control_function()->get_address(), objectID);
+											parentServer->send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										CANStackLogger::warn("[VT Server]: Client %u change polygon point: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
+									}
+								}
+								break;
+
 								case Function::ButtonActivationMessage:
 								case Function::SoftKeyActivationMessage:
 								case Function::PointingEventMessage:
@@ -2136,6 +2191,33 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
+
+			buffer[0] = static_cast<std::uint8_t>(Function::ChangePolygonPointCommand);
+			buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
+			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[3] = errorBitfield;
+			buffer[4] = 0xFF;
+			buffer[5] = 0xFF;
+			buffer[6] = 0xFF;
+			buffer[7] = 0xFF;
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
 	{
 		bool retVal = false;
@@ -2229,6 +2311,32 @@ namespace isobus
 				0xFF,
 				0xFF,
 				errorBitfield,
+				0xFF,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_delete_object_pool_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF,
 				0xFF,
 				0xFF
 			};

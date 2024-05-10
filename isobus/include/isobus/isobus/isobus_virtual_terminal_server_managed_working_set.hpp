@@ -120,6 +120,15 @@ namespace isobus
 		/// @returns The timestamp for when we received the last auxiliary input maintenance message
 		std::uint32_t get_auxiliary_input_maintenance_timestamp_ms() const;
 
+		/// @brief Marks the working set for deletion/deactivation by the server.
+		/// The server will call this when object pool deletion is requested for this working set
+		/// by the appropriate working set master.
+		void request_deletion();
+
+		/// @brief Returns if the server has marked this working set for deletion
+		/// @returns true if the working set should be deleted, otherwise false
+		bool is_deletion_requested() const;
+
 	private:
 		/// @brief Adds an object to the object tree, and replaces an object of the same type
 		/// if there's already one in the tree with the same ID.
@@ -168,6 +177,7 @@ namespace isobus
 		std::uint16_t faultingObjectID = NULL_OBJECT_ID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
+		bool workingSetDeletionRequested = false;
 	};
 } // namespace isobus
 

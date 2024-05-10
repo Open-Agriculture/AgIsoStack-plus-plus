@@ -4933,6 +4933,19 @@ namespace isobus
 		return retVal;
 	}
 
+	bool OutputPolygon::change_point(std::uint8_t index, std::uint16_t x, std::uint16_t y)
+	{
+		bool retVal = false;
+
+		if (index < pointList.size())
+		{
+			pointList.at(index).xValue = x;
+			pointList.at(index).yValue = y;
+			retVal = true;
+		}
+		return retVal;
+	}
+
 	OutputPolygon::PolygonType OutputPolygon::get_type() const
 	{
 		return static_cast<PolygonType>(polygonType);

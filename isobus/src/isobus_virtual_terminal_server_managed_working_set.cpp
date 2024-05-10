@@ -177,6 +177,16 @@ namespace isobus
 		return auxiliaryInputMaintenanceMessageTimestamp_ms;
 	}
 
+	void VirtualTerminalServerManagedWorkingSet::request_deletion()
+	{
+		workingSetDeletionRequested = true;
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::is_deletion_requested() const
+	{
+		return workingSetDeletionRequested;
+	}
+
 	bool VirtualTerminalServerManagedWorkingSet::add_or_replace_object(std::shared_ptr<VTObject> objectToAdd)
 	{
 		bool retVal = false;
