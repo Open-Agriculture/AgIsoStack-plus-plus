@@ -53,7 +53,7 @@ To create a blank PlatformIO project that uses AgIsoStack, here are the basic st
         :width: 360
         :alt: Setting Platform IO project settings
 
-#.  Now you've got a blank project. Try to build it as followed, you should be able to build it successfully at this point.
+#.  Now you've got a blank project, and you should be able to build it successfully at this point to test you've done everything correctly so far.
 
 Now that you have a blank project, you can start adding the AgIsoStack library to it.
 The AgIsoStack++ library is a C++ library, so we need to compile our main file as a C++ file instead of a C file.
