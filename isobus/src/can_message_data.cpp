@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file can_message_data.hpp
+/// @file can_message_data.cpp
 ///
 /// @brief An class that represents a CAN message of arbitrary length being transported.
 /// @author Daan Steenbergen

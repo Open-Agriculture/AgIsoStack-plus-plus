@@ -1,5 +1,5 @@
 //================================================================================================
-/// @file can_transport_protocol_base.hpp
+/// @file can_transport_protocol_base.cpp
 ///
 /// @brief Abstract base class for CAN transport protocols.
 /// @author Daan Steenbergen
