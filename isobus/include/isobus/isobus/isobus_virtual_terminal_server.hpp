@@ -118,23 +118,69 @@ namespace isobus
 		void process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset);
 
 		// ----------- Mandatory Functions you must implement -----------------------
+
+		/// @brief This function is called when the client wants to know if the server has enough memory to store the object pool.
+		/// You should return true if the server has enough memory to store the object pool, otherwise false.
+		/// @param[in] requestedMemory The amount of memory requested by the client
+		/// @returns True if the server has enough memory to store the object pool, otherwise false
 		virtual bool get_is_enough_memory(std::uint32_t requestedMemory) const = 0;
+
+		/// @brief This function is called when the client wants to know the version of the VT.
+		/// @returns The version of the VT
 		virtual VTVersion get_version() const = 0;
+
+		/// @brief This function is called when the interface wants to know the number of navigation soft keys.
+		/// @returns The number of navigation soft keys
 		virtual std::uint8_t get_number_of_navigation_soft_keys() const = 0;
+
+		/// @brief This function is called when the interface needs to know the number of x pixels (width) of your soft keys
+		/// @returns The number of x pixels (width) of your soft keys
 		virtual std::uint8_t get_soft_key_descriptor_x_pixel_width() const = 0;
+
+		/// @brief This function is called when the interface needs to know the number of y pixels (height) of your soft keys
+		/// @returns The number of y pixels (height) of your soft keys
 		virtual std::uint8_t get_soft_key_descriptor_y_pixel_width() const = 0;
+
+		/// @brief This function is called when the interface needs to know the number of possible virtual soft keys in your soft key mask render area
+		/// @returns The number of possible virtual soft keys in your soft key mask render area
 		virtual std::uint8_t get_number_of_possible_virtual_soft_keys_in_soft_key_mask() const = 0;
+
+		/// @brief This function is called when the interface needs to know the number of physical soft keys
+		/// @returns The number of physical soft keys
 		virtual std::uint8_t get_number_of_physical_soft_keys() const = 0;
+
+		/// @brief This function is called when the interface needs to know the number of x pixels (width) of your data key mask render area
+		/// @returns The number of x pixels (width) of your soft key mask render area
 		virtual std::uint16_t get_data_mask_area_size_x_pixels() const = 0;
+
+		/// @brief This function is called when the interface needs to know the number of y pixels (height) of your data key mask render area
+		/// @returns The number of y pixels (height) of your data key mask render area
 		virtual std::uint16_t get_data_mask_area_size_y_pixels() const = 0;
+
+		/// @brief The interface calls this function when it wants you to discontinue/suspend a working set
+		/// @param[in] workingSetWithError The working set to suspend
 		virtual void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSetWithError) = 0;
+
+		/// @brief This function is called when the interface needs to know the wide chars you support
+		/// @param[in] codePlane The code plane to inquire about
+		/// @param[in] firstWideCharInInquiryRange The first wide char in the inquiry range
+		/// @param[in] lastWideCharInInquiryRange The last wide char in the inquiry range
+		/// @param[out] numberOfRanges The number of wide char ranges supported
+		/// @param[out] wideCharRangeArray The wide char range array
+		/// @returns The error code for the supported wide chars inquiry
 		virtual SupportedWideCharsErrorCode get_supported_wide_chars(std::uint8_t codePlane,
 		                                                             std::uint16_t firstWideCharInInquiryRange,
 		                                                             std::uint16_t lastWideCharInInquiryRange,
 		                                                             std::uint8_t &numberOfRanges,
 		                                                             std::vector<std::uint8_t> &wideCharRangeArray) = 0;
 
+		/// @brief This function is called when the interface needs to know what versions of object pools are available for a client.
+		/// @param[in] clientNAME The client requesting the object pool versions
+		/// @returns A vector of object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
+
+		/// @brief This function is called when the interface needs to know what objects are supported by the server.
+		/// @returns A vector of supported objects
 		virtual std::vector<std::uint8_t> get_supported_objects() const = 0;
 
 		/// @brief This function is called when the client wants the server to load a previously stored object pool.
@@ -182,14 +228,38 @@ namespace isobus
 		virtual bool delete_object_pool(NAME clientNAME) = 0;
 
 		//------------ Optional functions you can override --------------------
+
+		/// @brief If you want to override the graphics mode from its default 256 color mode, you can override this function.
+		/// Though, that would be unusual.
+		/// @returns The graphic mode of the VT to report to clients
 		virtual VirtualTerminalBase::GraphicMode get_graphic_mode() const;
+
+		/// @brief If you want to override the amount of time the VT reports it takes to power up, you can override this function.
+		/// @returns The amount of time the VT reports it takes to power up, or 255 if it is not known
 		virtual std::uint8_t get_powerup_time() const;
+
+		/// @brief By default, the VT server will report that it supports all small and large fonts.
+		/// If you want to override this, you can override this function.
+		/// @returns The bitfield of supported small fonts
 		virtual std::uint8_t get_supported_small_fonts_bitfield() const;
+
+		/// @brief By default, the VT server will report that it supports all small and large fonts.
+		/// If you want to override this, you can override this function.
+		/// @returns The bitfield of supported large fonts
 		virtual std::uint8_t get_supported_large_fonts_bitfield() const;
 
 		//-------------- Callbacks/Event driven interface ---------------------
+
+		/// @brief Returns the event dispatcher for repaint events
+		/// @returns The event dispatcher for repaint events
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &get_on_repaint_event_dispatcher();
+
+		/// @brief Returns the event dispatcher for change active mask events
+		/// @returns The event dispatcher for change active mask events
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_mask_event_dispatcher();
+
+		/// @brief Returns the event dispatcher for when an object is focused
+		/// @returns The event dispatcher for when an object is focused
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_focus_object_event_dispatcher();
 
 		//----------------- Other Server Settings -----------------------------
@@ -363,6 +433,7 @@ namespace isobus
 			AnyOtherError = 2
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a delete object pool response
 		enum class DeleteObjectPoolErrorBit : std::uint8_t
 		{
 			DeletionError = 0,
@@ -371,6 +442,8 @@ namespace isobus
 
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
+		/// @param[in] message The CAN message to check
+		/// @returns true if the source of the message is in a valid, managed state by our server, otherwise false
 		bool check_if_source_is_managed(const CANMessage &message);
 
 		/// @brief Processes a macro's execution synchronously as if it were a CAN message.
@@ -397,7 +470,7 @@ namespace isobus
 
 		/// @brief Processes a CAN message from any VT client
 		/// @param[in] message The CAN message being received
-		/// @param[in] parentPointer A context variable to find the relevant VT server class
+		/// @param[in] parent A context variable to find the relevant VT server class
 		static void process_rx_message(const CANMessage &message, void *parent);
 
 		/// @brief Sends a message using the acknowledgement PGN
@@ -449,7 +522,6 @@ namespace isobus
 
 		/// @brief Sends a response to a change fill attributes command
 		/// @param[in] objectID The object ID for the object to change
-		/// @param[in] newObjectID The object ID for the object to place at the specified list index, or NULL_OBJECT_ID (0xFFFF)
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
@@ -464,6 +536,7 @@ namespace isobus
 
 		/// @brief Sends a response to a change list item command
 		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] newObjectID The object ID for the object to place at the specified list index, or NULL_OBJECT_ID (0xFFFF)
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] listIndex The list index to change, numbered 0 to n
 		/// @param[in] destination The control function to send the message to
@@ -537,6 +610,7 @@ namespace isobus
 		/// @param[in] parentIDOfFaultingObject The parent object ID for the faulty object, or NULL_OBJECT_ID
 		/// @param[in] faultingObjectID The faulty object's ID or the NULL_OBJECT_ID
 		/// @param[in] errorCodes A bitfield of error codes that describe the issues with the pool
+		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,
@@ -593,20 +667,20 @@ namespace isobus
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
 
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher;
-		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onFocusObjectEventDispatcher;
-		LanguageCommandInterface languageCommandInterface;
-		std::shared_ptr<InternalControlFunction> serverInternalControlFunction;
-		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> managedWorkingSetList;
-		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> activeWorkingSet;
-		std::uint32_t statusMessageTimestamp_ms = 0;
-		std::uint16_t activeWorkingSetDataMaskObjectID = NULL_OBJECT_ID;
-		std::uint16_t activeWorkingSetSoftkeyMaskObjectID = NULL_OBJECT_ID;
-		std::uint8_t activeWorkingSetMasterAddress = NULL_CAN_ADDRESS;
-		std::uint8_t busyCodesBitfield = 0;
-		std::uint8_t currentCommandFunctionCode = 0;
-		bool initialized = false;
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher; ///< Event dispatcher for active mask change events
+		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> onFocusObjectEventDispatcher; ///< Event dispatcher for focus object events
+		LanguageCommandInterface languageCommandInterface; ///< The language command interface for the server
+		std::shared_ptr<InternalControlFunction> serverInternalControlFunction; ///< The internal control function for the server
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> managedWorkingSetList; ///< The list of managed working sets
+		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> activeWorkingSet; ///< The active working set
+		std::uint32_t statusMessageTimestamp_ms = 0; ///< The timestamp of the last status message sent
+		std::uint16_t activeWorkingSetDataMaskObjectID = NULL_OBJECT_ID; ///< The object ID of the active working set's data mask
+		std::uint16_t activeWorkingSetSoftkeyMaskObjectID = NULL_OBJECT_ID; ///< The object ID of the active working set's soft key mask
+		std::uint8_t activeWorkingSetMasterAddress = NULL_CAN_ADDRESS; ///< The address of the active working set's master
+		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
+		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
+		bool initialized = false; ///< True if the server has been initialized, otherwise false
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP
