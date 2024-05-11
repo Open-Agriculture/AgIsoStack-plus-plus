@@ -13,6 +13,7 @@
 
 namespace isobus
 {
+	/// @brief A base class for the VT client and VT server that stores common definitions
 	class VirtualTerminalBase
 	{
 	public:
@@ -267,6 +268,7 @@ namespace isobus
 
 			/// @brief Allows easy comparison of two `AssignedAuxiliaryFunction` objects
 			/// @param[in] other the object to compare against
+			/// @returns true if the two objects are equal, otherwise false
 			bool operator==(const AssignedAuxiliaryFunction &other) const;
 
 			std::uint16_t functionObjectID; ///< The object ID of the function present in our object pool
