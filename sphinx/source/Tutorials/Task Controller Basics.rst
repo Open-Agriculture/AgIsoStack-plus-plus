@@ -38,7 +38,7 @@ The DDOP is uploaded to the TC during the connection process of the implement to
 In other words, the Device Descriptor Object Pool (DDOP) is a collection of objects that describe the capabilities of the implement, such as the number of sections, the width of each section, and the type of product being applied.
 It is the authoritative source of implement geometry on the machine.
 
-In AgIsoStack, if you use our TC client, you will have to create a DDOP that tells the TC abour your implement.
+In AgIsoStack, if you use our TC client, you will have to create a DDOP that tells the TC about your implement.
 Likewise, if you use the AgIsoStack TC Server, you will receive DDOPs from client implements, and you'll have to know what they mean.
 
 Before we jump into some examples of well constructed DDOPs, let's go over some terminology first. Once you have some understanding of the things you can put in a DDOP, we'll show you how you can use AgIsoStack to easily create one.
@@ -179,3 +179,10 @@ Here's an example of what a DDOP might look like for a more complex implement, l
 The more complex an implement is, the more objects will be in the DDOP to accurately provide the TC with the information it needs to control and monitor the implement.
 
 For DDOPs this complex, a good resource to refer to is `our seeder example <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/examples/seeder_example/section_control_implement_sim.cpp#L98>`_, which contains the code to create a more complex DDOP for a seeder.
+
+AgIsoDDOPGenerator
+^^^^^^^^^^^^^^^^^^
+
+Open-Agriculture has created a tool called `AgIsoDDOPGenerator <https://github.com/Open-Agriculture/AgIsoDDOPGenerator>`_, which can help create, view, and edit binary DDOPs for your implements. Using this tool to view the heierarchies of DDOP objects can be very helpful in understanding how they are structured.
+
+DDOPs created with AgIsoDDOPGenerator can be used with AgIsoStack, and can be uploaded to a TC using the AgIsoStack TC client.
