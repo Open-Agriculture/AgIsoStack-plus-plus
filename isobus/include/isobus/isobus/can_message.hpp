@@ -11,6 +11,7 @@
 #ifndef CAN_MESSAGE_HPP
 #define CAN_MESSAGE_HPP
 
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_identifier.hpp"

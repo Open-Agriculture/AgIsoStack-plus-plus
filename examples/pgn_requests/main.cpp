@@ -128,7 +128,7 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
+	auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
 	std::signal(SIGINT, signal_handler);
 
 	// Make sure address claiming is done before we continue

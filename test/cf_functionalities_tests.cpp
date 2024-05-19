@@ -602,8 +602,6 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	EXPECT_EQ(1, testMessageData.at(18)); // 1 Boom
 	EXPECT_EQ(255, testMessageData.at(19)); // 255 Sections
 
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use destroyed control functions later on
-	ASSERT_TRUE(internalECU->destroy(2));
-	ASSERT_TRUE(otherECU->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(otherECU);
 }

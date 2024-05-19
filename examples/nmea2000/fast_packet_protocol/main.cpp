@@ -86,7 +86,7 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
+	auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
 
 	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->register_multipacket_message_callback(0x1F001, nmea2k_callback, nullptr);
 

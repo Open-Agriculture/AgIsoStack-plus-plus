@@ -32,7 +32,7 @@ namespace isobus
 	public:
 		/// @brief The constructor for this protocol
 		/// @param[in] internalControlFunction The internal control function that owns this protocol and will be used to send messages
-		ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, CANLibBadge<InternalControlFunction>);
+		explicit ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
 
 		/// @brief The destructor for this protocol
 		~ParameterGroupNumberRequestProtocol();

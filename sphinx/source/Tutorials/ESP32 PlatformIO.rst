@@ -188,7 +188,7 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
             TestDeviceNAME.set_function_instance(0);
             TestDeviceNAME.set_device_class_instance(0);
             TestDeviceNAME.set_manufacturer_code(1407);
-            auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
+            auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
 
             while (true)
             {

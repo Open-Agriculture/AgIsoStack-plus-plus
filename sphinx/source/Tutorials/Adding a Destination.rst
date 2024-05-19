@@ -53,7 +53,7 @@ The main reason I use shared_ptr is because that is what the interface for a Vir
 
    std::shared_ptr<isobus::PartneredControlFunction> myPartner = nullptr;
 
-   myPartner = isobus::PartneredControlFunction::create(0, myPartnerFilter);
+   myPartner = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, myPartnerFilter);
 
 Above, we've just instantiated a partner *on CAN channel 0* using the filter we made in the previous step.
 
@@ -148,10 +148,10 @@ The final program for this tutorial (including the code from the previous Hello 
       myPartnerFilter.push_back(virtualTerminalFilter);
 
       // Create our InternalControlFunction
-      myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
+      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
 
       // Create our PartneredControlFunction
-      myPartner = isobus::PartneredControlFunction::create(0, myPartnerFilter);
+      myPartner = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, myPartnerFilter);
 
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

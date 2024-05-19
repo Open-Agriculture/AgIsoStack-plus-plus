@@ -83,8 +83,8 @@ int main()
 		                                                      filterTaskControllerInstance,
 		                                                      filterTaskControllerIndustryGroup,
 		                                                      filterTaskControllerDeviceClass };
-	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
-	auto TestPartnerTC = isobus::PartneredControlFunction::create(0, tcNameFilters);
+	auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
+	auto TestPartnerTC = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, tcNameFilters);
 
 	TestTCClient = std::make_shared<isobus::TaskControllerClient>(TestPartnerTC, TestInternalECU, nullptr);
 

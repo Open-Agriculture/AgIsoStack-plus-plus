@@ -190,8 +190,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 	CANHardwareInterface::stop();
 
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(internalECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST(ISB_TESTS, ShortcutButtonTxTests)
@@ -242,7 +241,5 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 
 	CANHardwareInterface::stop();
-	CANNetworkManager::CANNetwork.update(); //! @todo: quick hack for clearing the transmit queue, can be removed once network manager' singleton is removed
-	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(internalECU->destroy(2));
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }

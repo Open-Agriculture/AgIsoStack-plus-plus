@@ -77,10 +77,10 @@ int main()
 	const NAMEFilter filterOriginator(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::SteeringControl));
 	const NAMEFilter filterRecipient(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
 
-	auto originatorECU = InternalControlFunction::create(originatorNAME, 0x1C, 0);
-	auto originatorPartner = PartneredControlFunction::create(1, { filterOriginator });
-	auto recipientECU = InternalControlFunction::create(recipientNAME, 0x1D, 1);
-	auto recipientPartner = PartneredControlFunction::create(0, { filterRecipient });
+	auto originatorECU = CANNetworkManager::CANNetwork.create_internal_control_function(originatorNAME, 0, 0x1C);
+	auto originatorPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(1, { filterOriginator });
+	auto recipientECU = CANNetworkManager::CANNetwork.create_internal_control_function(recipientNAME, 1, 0x1D);
+	auto recipientPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, { filterRecipient });
 
 	// We want to make sure address claiming is successful before continuing
 	auto addressClaimedFuture = std::async(std::launch::async, [&originatorECU, &recipientECU, &originatorPartner, &recipientPartner]() {

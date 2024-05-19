@@ -19,7 +19,7 @@
 namespace isobus
 {
 
-	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction, CANLibBadge<InternalControlFunction>) :
+	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
 	  myControlFunction(internalControlFunction)
 	{
 		assert(nullptr != myControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");

@@ -31,13 +31,13 @@ TEST(CORE_TESTS, TestCreateAndDestroyPartners)
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
 
-	auto testPartner1 = isobus::PartneredControlFunction::create(0, vtNameFilters);
-	auto testPartner2 = isobus::PartneredControlFunction::create(0, vtNameFilters);
-	EXPECT_TRUE(testPartner2->destroy());
-	auto TestPartner3 = isobus::PartneredControlFunction::create(0, vtNameFilters);
+	auto testPartner1 = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	auto testPartner2 = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	CANNetworkManager::CANNetwork.deactivate_control_function(testPartner2);
+	auto TestPartner3 = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
-	EXPECT_TRUE(testPartner1->destroy());
-	EXPECT_TRUE(TestPartner3->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(testPartner1);
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartner3);
 }
 
 TEST(CORE_TESTS, TestCreateAndDestroyICFs)
@@ -53,17 +53,17 @@ TEST(CORE_TESTS, TestCreateAndDestroyICFs)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto testICF1 = isobus::InternalControlFunction::create(TestDeviceNAME, 0x1C, 0);
+	auto testICF1 = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
 
 	TestDeviceNAME.set_ecu_instance(1);
-	auto testICF2 = isobus::InternalControlFunction::create(TestDeviceNAME, 0x80, 0);
-	ASSERT_TRUE(testICF2->destroy());
+	auto testICF2 = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
+	CANNetworkManager::CANNetwork.deactivate_control_function(testICF2);
 
 	TestDeviceNAME.set_ecu_instance(2);
-	auto testICF3 = isobus::InternalControlFunction::create(TestDeviceNAME, 0x81, 0);
+	auto testICF3 = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
 
-	ASSERT_TRUE(testICF1->destroy());
-	ASSERT_TRUE(testICF3->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(testICF1);
+	CANNetworkManager::CANNetwork.deactivate_control_function(testICF3);
 }
 
 TEST(CORE_TESTS, BusloadTest)
@@ -163,8 +163,8 @@ TEST(CORE_TESTS, CommandedAddress)
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	EXPECT_EQ(0x04, internalECU->get_address());
 
-	EXPECT_TRUE(internalECU->destroy());
-	EXPECT_TRUE(externalECU->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
 	CANHardwareInterface::stop();
 }
 
@@ -215,7 +215,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 
 	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
 	testControlFunction.reset();
-	EXPECT_TRUE(testPartner->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(testPartner);
 	CANHardwareInterface::stop();
 }
 
@@ -227,7 +227,7 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	// Using a less common function to avoid interfering with other tests when not running under CTest
 	const isobus::NAMEFilter filterFuelSystem(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::FuelSystem));
 	const std::vector<isobus::NAMEFilter> nameFilters = { filterFuelSystem };
-	auto TestPartner = isobus::PartneredControlFunction::create(0, nameFilters);
+	auto TestPartner = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, nameFilters);
 
 	// Request the address claim PGN
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
@@ -288,5 +288,5 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 
 	// Partner should never change
 	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), 0xa0000F000425e9f8);
-	EXPECT_TRUE(TestPartner->destroy());
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartner);
 }

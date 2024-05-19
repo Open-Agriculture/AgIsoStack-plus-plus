@@ -144,7 +144,7 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     myNAME.set_manufacturer_code(1407);
 
     // Create our InternalControlFunction
-    myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
+    myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
 
     return 0;
    }
@@ -244,7 +244,7 @@ Let's see what we've got so far:
       myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
-      myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
+      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
 
       return 0;
    }
@@ -311,7 +311,7 @@ Make sure to include the `csignal` and `atomic` headers. `csignal` is for handli
       myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
-      myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
+      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
 
       // Clean up the threads
       isobus::CANHardwareInterface::stop();
@@ -381,7 +381,7 @@ The total result:
     myNAME.set_manufacturer_code(1407);
 
     // Create our InternalControlFunction
-    myECU = isobus::InternalControlFunction::create(myNAME, 0x1C, 0);
+    myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

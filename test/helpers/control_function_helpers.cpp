@@ -64,7 +64,7 @@ namespace test_helpers
 		EXPECT_FALSE(is_address_occupied(address, canPort));
 
 		NAME name = find_available_name(canPort);
-		auto internalECU = InternalControlFunction::create(name, address, canPort);
+		auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(name, canPort, address);
 
 		// Make sure address claiming is done before we return
 		auto addressClaimedFuture = std::async(std::launch::async, [&internalECU]() {
@@ -97,7 +97,7 @@ namespace test_helpers
 			NAMEFilter(NAME::NAMEParameters::IndustryGroup, name.get_industry_group()),
 			NAMEFilter(NAME::NAMEParameters::ArbitraryAddressCapable, name.get_arbitrary_address_capable())
 		};
-		auto partnerECU = PartneredControlFunction::create(canPort, NAMEFilters);
+		auto partnerECU = CANNetworkManager::CANNetwork.create_partnered_control_function(canPort, NAMEFilters);
 
 		// Force claim message
 		CANMessageFrame testFrame = {};
@@ -138,7 +138,7 @@ namespace test_helpers
 	{
 	public:
 		WrappedInternalControlFunction(NAME name, std::uint8_t address, std::uint8_t canPort) :
-		  InternalControlFunction(name, address, canPort, {})
+		  InternalControlFunction(name, address, canPort)
 		{
 			// We need to set the address manually, since there won't be an address claim state machine running
 			ControlFunction::address = address;
