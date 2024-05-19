@@ -122,7 +122,7 @@ So, our updated tutorial program now should look like this:
       myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
-      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function::create(myNAME, 0);
+      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
 
       // Define a NAME filter for our partner
       std::vector<isobus::NAMEFilter> myPartnerFilter;

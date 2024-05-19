@@ -152,7 +152,7 @@ int main()
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto TestInternalECU = isobus::InternalControlFunction::create(TestDeviceNAME, isobus::preferred_addresses::IndustryGroup2::TaskController_MappingComputer, 0);
+	auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0, isobus::preferred_addresses::IndustryGroup2::TaskController_MappingComputer);
 	MyTCServer server(TestInternalECU,
 	                  4, // Booms
 	                  255, // Sections
