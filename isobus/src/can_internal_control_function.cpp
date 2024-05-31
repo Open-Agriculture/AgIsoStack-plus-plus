@@ -16,6 +16,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <random>
 
 namespace isobus
