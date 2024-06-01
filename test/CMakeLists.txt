@@ -51,6 +51,7 @@ set(TEST_SRC
     event_dispatcher_tests.cpp
     isb_tests.cpp
     cf_functionalities_tests.cpp
+    time_date_tests.cpp
     guidance_tests.cpp
     speed_distance_message_tests.cpp
     maintain_power_tests.cpp

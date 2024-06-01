@@ -51,6 +51,7 @@ namespace isobus
 		CommandedAddress = 0xFED8,
 		SoftwareIdentification = 0xFEDA,
 		AllImplementsStopOperationsSwitchState = 0xFD02,
+		TimeDate = 0xFEE6,
 		VesselHeading = 0x1F112,
 		RateOfTurn = 0x1F113,
 		PositionRapidUpdate = 0x1F801,
