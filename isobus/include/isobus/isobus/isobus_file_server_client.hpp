@@ -11,10 +11,11 @@
 
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/utility/processing_flags.hpp"
 
+#include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 namespace isobus
@@ -43,7 +44,7 @@ namespace isobus
 			WaitForChangeDirectoryResponse ///< Waiting for a response to a directory change. Opening files is not allowed until this operation succeeds or fails.
 		};
 
-		/// @brief Enumerates the state a file can be in
+		/// @brief Enumerates the states a file can be in
 		enum class FileState
 		{
 			Uninitialized, ///< The initial state
@@ -53,11 +54,13 @@ namespace isobus
 			FileOpen, ///< The file is currently open and can be interacted with
 			FileOpenFailed, ///< Could not open the file! Close the file, or try and re-open it
 			SendWriteFile, ///< If the write file function is called, this state sends the appropriate message
+			WaitForWriteTransport, ///< Waiting for the transport layer to send our write command to the server
 			WaitForWriteFileResponse, ///< Waiting for a response to our last write file request
 			SendReadFile, ///< If the read file function is called, this state sends the appropriate message
 			WaitForReadFileResponse, ///< Waiting for a response to our last read file request
 			SendCloseFile, ///< Try to close the file
-			WaitForCloseFileResponse ///< Waiting for a response to our request to close a file
+			WaitForCloseFileResponse, ///< Waiting for a response to our request to close a file
+			FileDead ///< Some kind of terrible error state. Indicates the file needs to be pruned.
 		};
 
 		/// @brief Enumerates the different ways a file or directory can be opened
@@ -110,12 +113,21 @@ namespace isobus
 		static constexpr std::uint8_t INVALID_FILE_HANDLE = 0xFF; ///< Used to represent an invalid file handle
 
 		/// @brief A collection of volume data that can be provided to the user on-change or on-request
-		class VolumeStatusInfo
+		struct VolumeStatusInfo
 		{
-		public:
 			std::string volumeName; ///< The name of the current volume on the file server
-			VolumeStatus currentStatus = VolumeStatus::Reserved; ///< The current state of the volume on the file server
+			std::vector<VolumeStatus> currentStatuses; ///< A list of the active statuses for the volume, such as "present" and "in use"
 			std::uint8_t maximumTimeBeforeRemoval = 0; ///< the max time that the volume could be in the VolumeStatus::PreparingForRemoval state
+			bool success = true; ///< If the message is just infomational, this will always be true. If you requested the status to change, this will be true if the change was successful and false if it was not. Use the stack's logging messages to see why it failed.
+		};
+
+		/// @brief A collection of file server properties that can be provided to the user on-change or on-request if the server has transmitted them
+		struct FileServerProperties
+		{
+			std::uint8_t maxNumberSimultaneouslyOpenFiles = 0; ///< The maximum number of files that can be opened simultaneously on the FS
+			std::uint8_t fileServerVersion = 0; ///< The version of the standard that the file server complies to
+			bool supportsMultipleVolumes = false; ///< The file server supports multiple volumes
+			bool supportsRemovableVolumes = false; ///< The file server supports removable volumes
 		};
 
 		/// @brief The constructor for a file server client
@@ -166,6 +178,12 @@ namespace isobus
 		/// @returns `true` If the command was accepted and the interface will attempt to open the file as specified
 		bool open_file(std::string &fileName, bool createIfNotPresent, bool exclusiveAccess, FileOpenMode openMode, FilePointerMode pointerMode);
 
+		/// @brief Creates the manufacturer directory based on our control function's NAME.
+		/// This bypasses the usual file list, since it happens before the client is connected.
+		/// @param[in] fileName The path of the manufacturer directory to create.
+		/// @returns True if the request was sent, otherwise false
+		bool create_manufacturer_directory(std::string &fileName);
+
 		/// @brief Closes a file identified by a file handle
 		/// @param[in] handle The file handle to close
 		/// @returns `true` if the command was accepted and the interface will send the close file message
@@ -173,18 +191,34 @@ namespace isobus
 
 		/// @brief Writes data to a file associated with a handle
 		/// @note File must be open to write, and your handle must be valid.
+		/// @attention Do not use this with a handle that references a directory! It is not allowed in ISO11783-13.
 		/// @param[in] handle The file handle associated to the file you want to write to
 		/// @param[in] data A pointer to some data to write
 		/// @param[in] dataSize The amount of data to write in bytes
-		bool write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize);
+		/// @param[in] writeFileCallback A function the client will call when writing is complete, since it can take a very long time. Can be nullptr if you want to poll the state externally.
+		bool write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize, std::function<void(std::uint8_t handle, bool success)> writeFileCallback);
+
+		/// @brief Reads data from a file (or directory) associated with a handle
+		/// @note File must be open to read, and your handle must be valid.
+		/// @param[in] handle The file handle associated to the file you want to read from
+		/// @param[in] numberOfBytesToRead The number of bytes to read. Must be less than or equal to 65530 bytes!
+		/// @param[in] readDataCallback A function the client will call when reading is complete, since it can take a very long time. Can be nullptr if you want to poll the state externally.
+		bool read_file(std::uint8_t handle, std::uint16_t numberOfBytesToRead, std::function<void(std::uint8_t handle, bool success, const std::vector<std::uint8_t> data)> readDataCallback);
 
 		/// @brief Requests the volume status from the file server for a specific volume
 		/// @param[in] volumeName The name of the volume to request the status of
 		/// @returns true if the request was sent, otherwise false
-		bool request_current_volume_status(std::string volumeName) const;
+		bool request_current_volume_status(std::string volumeName);
+
+		/// @brief If you want to process volume status information retrieved with request_current_volume_status, or which
+		/// is sent by the file server on its own, you can use this function to get the event dispatcher for volume status and
+		/// use it to get callbacks when new information becomes available. This is useful to know if your volume is going to suddenly be
+		/// removed.
+		/// @returns The event dispatcher for volume status information
+		EventDispatcher<VolumeStatusInfo> &get_volume_status_event_dispatcher();
 
 		// Setup Functions
-		/// @brief This function starts the state machine. Call this once you have supplied 1 or more object pool and are ready to connect.
+		/// @brief This function starts the state machine and optionally a thread to manage it.
 		/// @param[in] spawnThread The client will start a thread to manage itself if this parameter is true. Otherwise you must update it cyclically.
 		bool initialize(bool spawnThread);
 
@@ -192,12 +226,21 @@ namespace isobus
 		/// @returns true if the client has been initialized
 		bool get_is_initialized() const;
 
+		/// @brief You can use this to check and see if the client is both connected to the server, and
+		/// has no pending requests that the server is processing. You don't have to use it if you don't want to.
+		bool get_is_ready_for_new_command() const;
+
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
 
 		/// @brief Returns the current state machine state
 		/// @returns The current state machine state
 		StateMachineState get_state() const;
+
+		/// @brief Returns the current file server properties if they have been received. You can check the state
+		/// of the client to see if they have been received yet.
+		/// @returns The current file server properties, or all zeros if they have not been received.
+		FileServerProperties get_file_server_properties() const;
 
 		/// @brief Periodic Update Function (worker thread may call this)
 		/// @details This class can spawn a thread, or you can supply your own to run this function.
@@ -288,6 +331,13 @@ namespace isobus
 			InitializeVolumeRequest = 0x40 ///< Prepare the volume to accept files and directories. All data is lost upon completion
 		};
 
+		/// @brief Enumerates the different capabilities that a file server can have
+		enum class FileServerCapabilities : std::uint8_t
+		{
+			SupportsMultipleVolumes = 0, ///< The file server supports multiple volumes
+			SupportsRemovableVolumes = 1 ///< The file server supports removable volumes. The primary volume should be removable, so this should be quite unversal.
+		};
+
 		/// @brief Enumerates the transmit flags (CAN messages that support non-state-machine-driven retries)
 		enum class TransmitFlags
 		{
@@ -304,6 +354,8 @@ namespace isobus
 			FileInfo() = default;
 
 			std::string fileName; ///< The file name/path of this file
+			std::function<void(std::uint8_t handle, bool success)> writeCallback = nullptr;
+			std::function<void(std::uint8_t handle, bool success, const std::vector<std::uint8_t> data)> readCallback;
 			FileState state = FileState::Uninitialized; ///< A sub-state-machine state for the file
 			FileOpenMode openMode = FileOpenMode::OpenFileForReadingOnly; ///< The file open mode (read only, write only, etc)
 			FilePointerMode pointerMode = FilePointerMode::AppendMode; ///< Where the file pointer should be set for this file
@@ -352,6 +404,20 @@ namespace isobus
 		                                                 std::uint8_t *chunkBuffer,
 		                                                 void *parentPointer);
 
+		/// @brief Used to tell the client when a transport layer write has completed.
+		/// @param[in] parameterGroupNumber The PGN of the transmitted message
+		/// @param[in] dataLength The length of the transmitted message
+		/// @param[in] sourceControlFunction The sending control function
+		/// @param[in] destinationControlFunction The recipient control function
+		/// @param[in] successful Indicates if the message was successfully transmitted by the transport layer
+		/// @param[in] parentPointer A context variable to find the instance of the interface getting the callback
+		static void write_file_tx_callback(std::uint32_t parameterGroupNumber,
+		                                   std::uint32_t dataLength,
+		                                   std::shared_ptr<InternalControlFunction> sourceControlFunction,
+		                                   std::shared_ptr<ControlFunction> destinationControlFunction,
+		                                   bool successful,
+		                                   void *parentPointer);
+
 		/// @brief Sends the change current directory request message
 		/// @param[in] path The new path to change to
 		/// @returns `true` if the message was sent, otherwise false
@@ -368,16 +434,27 @@ namespace isobus
 		/// @brief Sends the close file request message
 		/// @param[in] fileMetadata The file meta data structure used to send the message
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_close_file(std::shared_ptr<FileInfo> fileMetadata) const;
+		bool send_close_file(std::shared_ptr<FileInfo> fileMetadata);
 
 		/// @brief Sends the get file server properties request message
 		/// @returns `true` if the message was sent, otherwise `false`
-		bool send_get_file_server_properties() const;
+		bool send_get_file_server_properties();
 
 		/// @brief Sends the open file request message
 		/// @param[in] fileMetadata The file meta data structure used to send the message
 		/// @returns `true` if the message is sent, otherwise `false`
-		bool send_open_file(std::shared_ptr<FileInfo> fileMetadata) const;
+		bool send_open_file(std::shared_ptr<FileInfo> fileMetadata);
+
+		/// @brief Sends the write file request message
+		/// @param[in] fileToWriteTo The file object representing the file to write into
+		/// @returns True if the request was sucessfully handed to the stack (transport layer), otherwise false
+		bool send_write_request(std::shared_ptr<FileInfo> fileToWriteTo);
+
+		/// @brief Sends the read file request message
+		/// @param[in] fileToReadFrom The file object representing the file to read from
+		/// @param[in] numberBytesToRead The maximum number of bytes to read from the file at the current file pointer location
+		/// @returns True if the request was successfully sent, otherwise false
+		bool send_read_request(std::shared_ptr<FileInfo> fileToReadFrom, std::uint16_t numberBytesToRead);
 
 		/// @brief Sets the current file state and a transition timestamp
 		/// @param[in] state The new state
@@ -402,7 +479,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t SERVER_STATUS_MESSAGE_TIMEOUT_MS = 6000; ///< The max time to wait for a server status message. After this time, we can assume it has shutdown.
 		static constexpr std::uint32_t CLIENT_STATUS_MESSAGE_REPETITION_RATE_MS = 2000; ///< The time interval to use when sending the client maintenance message
-		static constexpr std::uint32_t GENERAL_OPERATION_TIMEOUT = 1250; ///< The standard says that the timouts should be "reasonable" and to use the timeouts from TP and ETP, so I selected the t2/t3 timeout
+		static constexpr std::uint32_t GENERAL_OPERATION_TIMEOUT = 1250; ///< The standard says that the timeouts should be "reasonable" and to use the timeouts from TP and ETP, so I selected the t2/t3 timeout
 		static constexpr std::uint8_t FILE_SERVER_BUSY_READING_BIT_MASK = 0x01; ///< A bitmask for reading the "busy reading" bit out of fileServerStatusBitfield
 		static constexpr std::uint8_t FILE_SERVER_BUSY_WRITING_BIT_MASK = 0x02; ///< A bitmask for reading the "busy writing" bit out of fileServerStatusBitfield
 		static constexpr std::uint8_t FILE_SERVER_CAPABILITIES_BIT_MASK = 0x01; ///< A bitmask for the multiple volume support bit in fileServerCapabilitiesBitfield
@@ -415,21 +492,23 @@ namespace isobus
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 		std::mutex metadataMutex; ///< Protects the TAN and file metadata list
 		std::list<std::shared_ptr<FileInfo>> fileInfoList; ///< List of files the client interface knows about and is managing
-		ProcessingFlags txFlags; ///< A retry mechanism for internal Tx messages
+		EventDispatcher<FileServerProperties> fileServerPropertiesEventDispatcher; ///< Dispatches events when the file server properties change
+		EventDispatcher<VolumeStatusInfo> volumeStatusEventDispatcher; ///< Dispatches events when the volume status changes
 		StateMachineState currentState = StateMachineState::Disconnected; ///< The current state machine state
-		std::string currentDirectory; ///< Maintatains our current working directory location
+		std::string currentDirectory; ///< Maintains our current working directory location
 		const std::uint8_t *currentFileWriteData = nullptr; ///< A pointer to the data for any in-progress file write
 
-		std::uint32_t currentFileWriteSize = 0; ///< The size of any in-progress file write
+		std::uint32_t currentFileOperationSize = 0; ///< The size of any in-progress file write or read
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< The timestamp for when the state machine state was last updated
-		std::uint32_t lastServerStatusTimestamp_ms = 0; ///< The timstamp when we last got a status message from the server
+		std::uint32_t lastServerStatusTimestamp_ms = 0; ///< The timestamp when we last got a status message from the server
 		std::uint8_t fileServerStatusBitfield = 0; ///< The current status of the FS. Can be 0, or have bits set for busy either reading or writing
 		std::uint8_t numberFilesOpen = 0; ///< The number of files that are currently open at the FS.
 		std::uint8_t maxNumberSimultaneouslyOpenFiles = 0; ///< The maximum number of files that can be opened simultaneously on the FS
 		std::uint8_t fileServerCapabilitiesBitfield = 0; ///< If the server supports only 1 volume or multiple volumes
 		std::uint8_t fileServerVersion = 0; ///< The version of the standard that the file server complies to
 		std::uint8_t transactionNumber = 0; ///< The TAN as specified in ISO 11783-13
-		std::uint8_t currentFileWriteHandle = INVALID_FILE_HANDLE; ///< Used to keep track of if we're currently writing a file, and which file is being written.
+		std::uint8_t currentFileOperationHandle = INVALID_FILE_HANDLE; ///< Used to keep track of if we're currently writing a file, and which file is being written.
+		bool waitingOnOperation = false; ///< Used to track if we're waiting for some response from the server before sending more commands
 		bool initialized = false; ///< Stores the client initialization state
 		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
 	};

@@ -40,8 +40,7 @@ namespace isobus
 
 	FileServerClient::FileServerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  partnerControlFunction(partner),
-	  myControlFunction(clientSource),
-	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberFlags), process_flags, this)
+	  myControlFunction(clientSource)
 	{
 	}
 
@@ -58,18 +57,27 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		const std::unique_lock<std::mutex> lock(metadataMutex);
+		const std::lock_guard<std::mutex> lock(metadataMutex);
 
-		/// @todo Change directory
-
+		if (path != currentDirectory)
+		{
+			retVal = send_change_current_directory_request(path);
+		}
 		return retVal;
+	}
+
+	std::string FileServerClient::get_current_directory() const
+	{
+		return currentDirectory;
 	}
 
 	bool FileServerClient::get_file_attribute(std::uint8_t handle, FileHandleAttributesBit attributeToGet)
 	{
 		bool retVal = false;
 
-		for (auto &file : fileInfoList)
+		const std::lock_guard<std::mutex> lock(metadataMutex);
+
+		for (const auto &file : fileInfoList)
 		{
 			if (file->handle == handle)
 			{
@@ -95,9 +103,9 @@ namespace isobus
 	{
 		std::uint8_t retVal = INVALID_FILE_HANDLE;
 
-		const std::unique_lock<std::mutex> lock(metadataMutex);
+		const std::lock_guard<std::mutex> lock(metadataMutex);
 
-		for (auto &file : fileInfoList)
+		for (const auto &file : fileInfoList)
 		{
 			if (file->fileName == filePath)
 			{
@@ -114,7 +122,7 @@ namespace isobus
 
 		const std::unique_lock<std::mutex> lock(metadataMutex);
 
-		for (auto &file : fileInfoList)
+		for (const auto &file : fileInfoList)
 		{
 			if (file->handle == handle)
 			{
@@ -129,9 +137,9 @@ namespace isobus
 	{
 		bool fileAlreadyInList = false;
 
-		const std::unique_lock<std::mutex> lock(metadataMutex);
+		const std::lock_guard<std::mutex> lock(metadataMutex);
 
-		for (auto &file : fileInfoList)
+		for (const auto &file : fileInfoList)
 		{
 			if (file->fileName == fileName)
 			{
@@ -159,6 +167,50 @@ namespace isobus
 		return !fileAlreadyInList;
 	}
 
+	bool FileServerClient::create_manufacturer_directory(std::string &fileName)
+	{
+		std::vector<std::uint8_t> buffer;
+		bool retVal = false;
+
+		if (false == waitingOnOperation)
+		{
+			buffer.resize(5 + fileName.size());
+
+			if (buffer.size() < CAN_DATA_LENGTH)
+			{
+				buffer.resize(CAN_DATA_LENGTH);
+			}
+
+			buffer[0] = static_cast<std::uint8_t>(ClientToFileServerMultiplexor::OpenFileRequest);
+			buffer[1] = transactionNumber;
+			transactionNumber++;
+			buffer[2] = ((static_cast<std::uint8_t>(FileOpenMode::OpenDirectory) & 0x03) |
+			             (0x01 << 2) |
+			             (static_cast<std::uint8_t>(FilePointerMode::AppendMode) << 3));
+			buffer[3] = (fileName.size() & 0xFF);
+			buffer[4] = ((fileName.size() >> 8) & 0xFF);
+
+			for (std::size_t i = 0; i < fileName.size(); i++)
+			{
+				buffer[5 + i] = fileName[i];
+			}
+
+			while (buffer.size() < CAN_DATA_LENGTH)
+			{
+				buffer.push_back(0xFF);
+			}
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    buffer.size(),
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+
+			retVal = waitingOnOperation;
+		}
+		return retVal;
+	}
+
 	bool FileServerClient::close_file(std::uint8_t handle)
 	{
 		bool retVal = false;
@@ -169,7 +221,7 @@ namespace isobus
 		{
 			if (file->handle == handle)
 			{
-				file->state = FileState::SendCloseFile;
+				set_file_state(file, FileState::SendCloseFile);
 				file->transactionNumberForRequest = transactionNumber;
 				transactionNumber++;
 				retVal = true;
@@ -179,11 +231,13 @@ namespace isobus
 		return retVal;
 	}
 
-	bool FileServerClient::write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize)
+	bool FileServerClient::write_file(std::uint8_t handle, const std::uint8_t *data, std::uint8_t dataSize, std::function<void(std::uint8_t handle, bool success)> writeFileCallback)
 	{
 		bool retVal = false;
 
-		if ((INVALID_FILE_HANDLE == currentFileWriteHandle) &&
+		const std::lock_guard<std::mutex> lock(metadataMutex);
+
+		if ((INVALID_FILE_HANDLE == currentFileOperationHandle) &&
 		    (nullptr != data) &&
 		    (0 != dataSize))
 		{
@@ -192,9 +246,11 @@ namespace isobus
 				if (file->handle == handle)
 				{
 					// Handle is valid for a file we're managing
-					currentFileWriteHandle = handle;
+					currentFileOperationHandle = handle;
 					currentFileWriteData = data;
-					currentFileWriteSize = dataSize;
+					currentFileOperationSize = dataSize;
+					file->writeCallback = writeFileCallback;
+					file->state = FileState::SendWriteFile;
 					retVal = true;
 					break;
 				}
@@ -203,50 +259,86 @@ namespace isobus
 		return retVal;
 	}
 
-	bool FileServerClient::request_current_volume_status(std::string volumeName) const
+	bool FileServerClient::read_file(std::uint8_t handle, std::uint16_t numberOfBytesToRead, std::function<void(std::uint8_t handle, bool success, const std::vector<std::uint8_t> data)> readDataCallback)
 	{
-		constexpr std::size_t FIXED_HEADER_LENGTH_BYTES = 5;
+		bool retVal = false;
 
-		std::vector<std::uint8_t> buffer;
+		const std::lock_guard<std::mutex> lock(metadataMutex);
 
-		assert(volumeName.size() < 0xFFFF); // Max length is 65535 since only 2 bytes are allocated for length
-		buffer.resize(FIXED_HEADER_LENGTH_BYTES + volumeName.size());
-
-		if (buffer.size() < CAN_DATA_LENGTH)
+		if (INVALID_FILE_HANDLE == currentFileOperationHandle)
 		{
-			buffer.resize(CAN_DATA_LENGTH);
-		}
-
-		std::uint16_t pathLength = static_cast<std::uint16_t>(volumeName.size());
-
-		buffer[0] = static_cast<std::uint8_t>(ClientToFileServerMultiplexor::VolumeStatusRequest);
-		buffer[1] = 0x00; // Current Status request (B.30)
-		buffer[2] = static_cast<std::uint8_t>(pathLength & 0xFF);
-		buffer[3] = static_cast<std::uint8_t>(pathLength >> 8);
-
-		for (std::size_t i = 0; i < volumeName.size(); i++)
-		{
-			buffer[4 + i] = volumeName[i];
-		}
-
-		if ((pathLength + FIXED_HEADER_LENGTH_BYTES) < CAN_DATA_LENGTH)
-		{
-			for (std::size_t i = (pathLength + FIXED_HEADER_LENGTH_BYTES) - 1; i < CAN_DATA_LENGTH; i++)
+			for (auto &file : fileInfoList)
 			{
-				buffer[i] = 0xFF; // Reserved bytes
+				if (file->handle == handle)
+				{
+					currentFileOperationHandle = handle;
+					currentFileOperationSize = numberOfBytesToRead;
+					file->readCallback = readDataCallback;
+					set_file_state(file, FileState::SendReadFile);
+					break;
+				}
 			}
 		}
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
-		                                                      buffer.data(),
-		                                                      buffer.size(),
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::PriorityLowest7);
+		return retVal;
+	}
+
+	bool FileServerClient::request_current_volume_status(std::string volumeName)
+	{
+		bool retVal = false;
+
+		if (get_is_ready_for_new_command())
+		{
+			constexpr std::size_t FIXED_HEADER_LENGTH_BYTES = 5;
+
+			std::vector<std::uint8_t> buffer;
+
+			assert(volumeName.size() < 0xFFFF); // Max length is 65535 since only 2 bytes are allocated for length
+			buffer.resize(FIXED_HEADER_LENGTH_BYTES + volumeName.size());
+
+			if (buffer.size() < CAN_DATA_LENGTH)
+			{
+				buffer.resize(CAN_DATA_LENGTH);
+			}
+
+			std::uint16_t pathLength = static_cast<std::uint16_t>(volumeName.size());
+
+			buffer[0] = static_cast<std::uint8_t>(ClientToFileServerMultiplexor::VolumeStatusRequest);
+			buffer[1] = 0x00; // Current Status request (B.30)
+			buffer[2] = static_cast<std::uint8_t>(pathLength & 0xFF);
+			buffer[3] = static_cast<std::uint8_t>(pathLength >> 8);
+
+			for (std::size_t i = 0; i < volumeName.size(); i++)
+			{
+				buffer[4 + i] = volumeName[i];
+			}
+
+			if ((pathLength + FIXED_HEADER_LENGTH_BYTES) < CAN_DATA_LENGTH)
+			{
+				for (std::size_t i = (pathLength + FIXED_HEADER_LENGTH_BYTES) - 1; i < CAN_DATA_LENGTH; i++)
+				{
+					buffer[i] = 0xFF; // Reserved bytes
+				}
+			}
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    buffer.size(),
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+			retVal = waitingOnOperation;
+		}
+		return retVal;
+	}
+
+	EventDispatcher<FileServerClient::VolumeStatusInfo> &FileServerClient::get_volume_status_event_dispatcher()
+	{
+		return volumeStatusEventDispatcher;
 	}
 
 	bool FileServerClient::initialize(bool spawnThread)
 	{
-		if ((!initialized) && (nullptr != partnerControlFunction))
+		if ((!initialized) &&
+		    (nullptr != partnerControlFunction))
 		{
 			partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::FileServerToClient), process_message, this);
 			CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::FileServerToClient), process_message, this);
@@ -275,6 +367,32 @@ namespace isobus
 		}
 	}
 
+	FileServerClient::FileServerProperties FileServerClient::get_file_server_properties() const
+	{
+		FileServerProperties retVal;
+
+		switch (get_state())
+		{
+			case StateMachineState::Disconnected:
+			case StateMachineState::SendGetFileServerProperties:
+			case StateMachineState::WaitForGetFileServerPropertiesResponse:
+			{
+				// Not received yet
+			}
+			break;
+
+			default:
+			{
+				retVal.fileServerVersion = fileServerVersion;
+				retVal.maxNumberSimultaneouslyOpenFiles = maxNumberSimultaneouslyOpenFiles;
+				retVal.supportsMultipleVolumes = (0 != (fileServerCapabilitiesBitfield & (1 << static_cast<std::uint8_t>(FileServerCapabilities::SupportsMultipleVolumes))));
+				retVal.supportsRemovableVolumes = (0 != (fileServerCapabilitiesBitfield & (1 << static_cast<std::uint8_t>(FileServerCapabilities::SupportsRemovableVolumes))));
+			}
+			break;
+		}
+		return retVal;
+	}
+
 	FileServerClient::StateMachineState FileServerClient::get_state() const
 	{
 		return currentState;
@@ -285,10 +403,17 @@ namespace isobus
 		return initialized;
 	}
 
+	bool FileServerClient::get_is_ready_for_new_command() const
+	{
+		return (initialized && (StateMachineState::Connected == get_state()) && !waitingOnOperation);
+	}
+
 	void FileServerClient::update()
 	{
 		if (nullptr != partnerControlFunction)
 		{
+			const std::lock_guard<std::mutex> lock(metadataMutex);
+
 			switch (currentState)
 			{
 				case StateMachineState::Disconnected:
@@ -370,6 +495,36 @@ namespace isobus
 					if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
 					    (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
 					{
+						CANStackLogger::error("[FS]: Timeout waiting to change to manufacturer directory.");
+						set_state(StateMachineState::Disconnected);
+						lastServerStatusTimestamp_ms = 0;
+					}
+				}
+				break;
+
+				case StateMachineState::CreateManufacturerDirectory:
+				{
+					// This "MCMC" format for your home directory is defined in ISO11783-13 and is required
+					if (true == create_manufacturer_directory(".\\MCMC" + isobus::to_string(static_cast<int>(myControlFunction->get_NAME().get_manufacturer_code())) + "\\"))
+					{
+						set_state(StateMachineState::WaitForCreateManufacturerDirectory);
+					}
+					else if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
+					         (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
+					{
+						CANStackLogger::error("[FS]: Timeout creating manufacturer directory.");
+						set_state(StateMachineState::Disconnected);
+						lastServerStatusTimestamp_ms = 0;
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForCreateManufacturerDirectory:
+				{
+					if ((SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS)) ||
+					    (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, GENERAL_OPERATION_TIMEOUT)))
+					{
+						CANStackLogger::error("[FS]: Timeout waiting for creation of manufacturer directory to complete.");
 						set_state(StateMachineState::Disconnected);
 						lastServerStatusTimestamp_ms = 0;
 					}
@@ -378,9 +533,9 @@ namespace isobus
 
 				case StateMachineState::Connected:
 				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, CLIENT_STATUS_MESSAGE_REPETITION_RATE_MS))
+					if ((SystemTiming::time_expired_ms(stateMachineTimestamp_ms, CLIENT_STATUS_MESSAGE_REPETITION_RATE_MS)) &&
+					    (send_client_connection_maintenance()))
 					{
-						txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ClientToServerStatus));
 						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 					}
 					if (SystemTiming::time_expired_ms(lastServerStatusTimestamp_ms, SERVER_STATUS_MESSAGE_TIMEOUT_MS))
@@ -412,7 +567,6 @@ namespace isobus
 				break;
 			}
 			update_open_files();
-			txFlags.process_all_flags();
 		}
 	}
 
@@ -434,36 +588,6 @@ namespace isobus
 		return retVal;
 	}
 
-	void FileServerClient::process_flags(std::uint32_t flag, void *parent)
-	{
-		if ((flag <= static_cast<std::uint32_t>(TransmitFlags::NumberFlags)) &&
-		    (nullptr != parent))
-		{
-			TransmitFlags flagToProcess = static_cast<TransmitFlags>(flag);
-			FileServerClient *fsClient = reinterpret_cast<FileServerClient *>(parent);
-			bool transmitSuccessful = false;
-
-			switch (flagToProcess)
-			{
-				case TransmitFlags::ClientToServerStatus:
-				{
-					transmitSuccessful = fsClient->send_client_connection_maintenance();
-				}
-				break;
-
-				default:
-				{
-				}
-				break;
-			}
-
-			if (false == transmitSuccessful)
-			{
-				fsClient->txFlags.set_flag(flag);
-			}
-		}
-	}
-
 	void FileServerClient::process_message(const CANMessage &message)
 	{
 		if ((nullptr != partnerControlFunction) &&
@@ -472,6 +596,7 @@ namespace isobus
 		     (nullptr == message.get_destination_control_function())))
 		{
 			auto &messageData = message.get_data();
+			std::unique_lock<std::mutex> lock(metadataMutex);
 
 			switch (messageData[0])
 			{
@@ -489,7 +614,7 @@ namespace isobus
 
 						if (0 == lastServerStatusTimestamp_ms)
 						{
-							txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ClientToServerStatus));
+							send_client_connection_maintenance();
 						}
 
 						lastServerStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
@@ -515,7 +640,9 @@ namespace isobus
 							                     ", supports up to " +
 							                     isobus::to_string(static_cast<int>(maxNumberSimultaneouslyOpenFiles)) +
 							                     " open files, and supports " + (0 == fileServerCapabilitiesBitfield ? "1 volume." : "multiple volumes."));
+							fileServerPropertiesEventDispatcher.invoke(get_file_server_properties());
 							set_state(StateMachineState::ChangeToRootDirectory);
+							waitingOnOperation = false;
 						}
 						else
 						{
@@ -563,6 +690,7 @@ namespace isobus
 								terminate();
 							}
 						}
+						waitingOnOperation = false;
 					}
 					else
 					{
@@ -575,34 +703,46 @@ namespace isobus
 				{
 					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
-						bool foundMatchingFileInList = false;
-
-						std::unique_lock<std::mutex> lock(metadataMutex);
-
-						for (auto &file : fileInfoList)
+						if (StateMachineState::WaitForCreateManufacturerDirectory == get_state())
 						{
-							if (file->transactionNumberForRequest == messageData[1])
-							{
-								foundMatchingFileInList = true;
-								ErrorCode operationErrorState = static_cast<ErrorCode>(messageData[2]);
-
-								if (ErrorCode::Success == operationErrorState)
-								{
-									file->handle = messageData[3];
-									set_file_state(file, FileState::FileOpen);
-								}
-								else
-								{
-									CANStackLogger::error("[FS]: Open file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
-								}
-
-								break;
-							}
+							waitingOnOperation = false;
+							CANStackLogger::info("[FS]: Created new manufacturer directory.");
+							set_state(StateMachineState::ChangeToManufacturerDirectory);
 						}
-
-						if (!foundMatchingFileInList)
+						else
 						{
-							CANStackLogger::error("[FS]: Open file response TAN could not be matched with any known file. The message will be ignored.");
+							bool foundMatchingFileInList = false;
+
+							for (auto &file : fileInfoList)
+							{
+								if (file->transactionNumberForRequest == messageData[1])
+								{
+									foundMatchingFileInList = true;
+									ErrorCode operationErrorState = static_cast<ErrorCode>(messageData[2]);
+
+									if (ErrorCode::Success == operationErrorState)
+									{
+										file->handle = messageData[3];
+										set_file_state(file, FileState::FileOpen);
+										CANStackLogger::debug("[FS]: File opened.");
+									}
+									else
+									{
+										CANStackLogger::error("[FS]: Open file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
+									}
+
+									break;
+								}
+							}
+
+							if (!foundMatchingFileInList)
+							{
+								CANStackLogger::error("[FS]: Open file response TAN could not be matched with any known file. The message will be ignored.");
+							}
+							else
+							{
+								waitingOnOperation = false;
+							}
 						}
 					}
 					else
@@ -618,8 +758,6 @@ namespace isobus
 					{
 						bool foundMatchingFileInList = false;
 
-						std::unique_lock<std::mutex> lock(metadataMutex);
-
 						for (auto file = fileInfoList.begin(); file != fileInfoList.end(); file++)
 						{
 							if ((*file)->transactionNumberForRequest == messageData[1])
@@ -631,6 +769,7 @@ namespace isobus
 								if (ErrorCode::Success == operationErrorState)
 								{
 									fileInfoList.erase(file);
+									CANStackLogger::debug("[FS]: Closed file OK.");
 								}
 								else
 								{
@@ -643,6 +782,10 @@ namespace isobus
 						if (!foundMatchingFileInList)
 						{
 							CANStackLogger::error("[FS]: Close file response TAN could not be matched with any known file. The message will be ignored.");
+						}
+						else
+						{
+							waitingOnOperation = false;
 						}
 					}
 					else
@@ -658,8 +801,6 @@ namespace isobus
 					{
 						bool foundMatchingFileInList = false;
 
-						std::unique_lock<std::mutex> lock(metadataMutex);
-
 						for (auto &file : fileInfoList)
 						{
 							if (file->transactionNumberForRequest == messageData[1])
@@ -672,6 +813,7 @@ namespace isobus
 									if (file->state == FileState::WaitForWriteFileResponse)
 									{
 										file->state = FileState::FileOpen;
+										CANStackLogger::debug("[FS]: Write file transaction succeeded");
 									}
 									else
 									{
@@ -683,6 +825,7 @@ namespace isobus
 								{
 									CANStackLogger::error("[FS]: Write file failed for file " + file->fileName + " with error code: " + error_code_to_string(operationErrorState));
 								}
+								waitingOnOperation = false;
 								break;
 							}
 						}
@@ -701,6 +844,73 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(FileServerToClientMultiplexor::VolumeStatusResponse):
 				{
+					if (message.get_data_length() >= 7)
+					{
+						VolumeStatusInfo currentVolumeStatus;
+						std::string statusString = "[FS]: Volume ";
+
+						auto volumeNameLength = message.get_uint16_at(4);
+
+						if (message.get_data_length() < (6 + volumeNameLength))
+						{
+							CANStackLogger::warn("[FS]: Detected malformed volume status response message. Message is shorter than the indicated length.");
+						}
+
+						for (std::uint32_t i = 6; i < message.get_data_length(); i++)
+						{
+							currentVolumeStatus.volumeName.push_back(static_cast<char>(messageData[i]));
+						}
+						statusString.append(currentVolumeStatus.volumeName);
+						statusString.append(" status: ");
+
+						if (0 != ((1 << static_cast<std::uint8_t>(VolumeStatus::Present)) & (messageData[1])))
+						{
+							currentVolumeStatus.currentStatuses.push_back(VolumeStatus::Present);
+							statusString.append(" [Present] ");
+						}
+						else
+						{
+							statusString.append(" [Not Present] ");
+						}
+						if (0 != ((1 << static_cast<std::uint8_t>(VolumeStatus::InUse)) & (messageData[1])))
+						{
+							currentVolumeStatus.currentStatuses.push_back(VolumeStatus::InUse);
+							statusString.append(" [In Use] ");
+						}
+						else
+						{
+							statusString.append(" [Not In Use] ");
+						}
+						if (0 != ((1 << static_cast<std::uint8_t>(VolumeStatus::PreparingForRemoval)) & (messageData[1])))
+						{
+							currentVolumeStatus.currentStatuses.push_back(VolumeStatus::PreparingForRemoval);
+							statusString.append(" [Preparing for Removal] ");
+						}
+						else
+						{
+							statusString.append(" [Not Preparing for Removal] ");
+						}
+						if (0 != ((1 << static_cast<std::uint8_t>(VolumeStatus::Removed)) & (messageData[1])))
+						{
+							currentVolumeStatus.currentStatuses.push_back(VolumeStatus::Removed);
+							statusString.append(" [Removed] ");
+						}
+						else
+						{
+							statusString.append(" [Not Removed] ");
+						}
+						currentVolumeStatus.maximumTimeBeforeRemoval = messageData[2];
+						statusString.append(". Max time before removal: ");
+						statusString.append(isobus::to_string(static_cast<int>(currentVolumeStatus.maximumTimeBeforeRemoval)));
+
+						CANStackLogger::debug(statusString);
+						volumeStatusEventDispatcher.invoke(std::move(currentVolumeStatus));
+						waitingOnOperation = false;
+					}
+					else
+					{
+						CANStackLogger::warn("[FS]: Detected malformed volume status response message. DLC must be >= 7.");
+					}
 				}
 				break;
 
@@ -747,14 +957,21 @@ namespace isobus
 		{
 			FileServerClient *parentFSClient = reinterpret_cast<FileServerClient *>(parentPointer);
 
-			if ((bytesOffset + numberOfBytesNeeded) < parentFSClient->currentFileWriteSize)
+			if ((bytesOffset + numberOfBytesNeeded) < parentFSClient->currentFileOperationSize)
 			{
 				// We've got more data to transfer
 				retVal = true;
 				if (0 == bytesOffset)
 				{
+					assert(parentFSClient->currentFileOperationSize <= 65530); // You can only write 65530 bytes or less at a time!
+					const std::lock_guard<std::mutex> lock(parentFSClient->metadataMutex); // Locking to make sure we are the only ones messing with the TAN, since we're on the stack thread in here
 					chunkBuffer[0] = static_cast<std::uint8_t>(ClientToFileServerMultiplexor::WriteFileRequest);
-					std::memcpy(&chunkBuffer[1], &parentFSClient->currentFileWriteData[bytesOffset], numberOfBytesNeeded - 1);
+					chunkBuffer[1] = parentFSClient->transactionNumber;
+					parentFSClient->transactionNumber++;
+					chunkBuffer[2] = parentFSClient->currentFileOperationHandle;
+					chunkBuffer[3] = static_cast<std::uint8_t>(parentFSClient->currentFileOperationSize);
+					chunkBuffer[4] = static_cast<std::uint8_t>(parentFSClient->currentFileOperationSize >> 8);
+					std::memcpy(&chunkBuffer[5], &parentFSClient->currentFileWriteData[bytesOffset], numberOfBytesNeeded - 5);
 				}
 				else
 				{
@@ -762,7 +979,7 @@ namespace isobus
 					std::memcpy(chunkBuffer, &parentFSClient->currentFileWriteData[bytesOffset - 1], numberOfBytesNeeded);
 				}
 			}
-			else if ((bytesOffset + numberOfBytesNeeded) == parentFSClient->currentFileWriteSize + 1)
+			else if ((bytesOffset + numberOfBytesNeeded) == parentFSClient->currentFileOperationSize + 1)
 			{
 				// We have a final non-aligned amount to transfer
 				retVal = true;
@@ -773,13 +990,43 @@ namespace isobus
 		return retVal;
 	}
 
+	void FileServerClient::write_file_tx_callback(std::uint32_t parameterGroupNumber,
+	                                              std::uint32_t dataLength,
+	                                              std::shared_ptr<InternalControlFunction> sourceControlFunction,
+	                                              std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                              bool successful,
+	                                              void *parentPointer)
+	{
+		auto targetInterface = static_cast<FileServerClient *>(parentPointer);
+
+		if (nullptr != targetInterface)
+		{
+			for (auto &file : targetInterface->fileInfoList)
+			{
+				if (file->handle == targetInterface->currentFileOperationHandle)
+				{
+					targetInterface->waitingOnOperation = false;
+					targetInterface->set_file_state(file, FileState::WaitForWriteFileResponse);
+
+					if (false == successful)
+					{
+						file->writeCallback(file->handle, false);
+					}
+					break;
+				}
+			}
+		}
+	}
+
 	bool FileServerClient::send_change_current_directory_request(std::string path)
 	{
 		std::vector<std::uint8_t> buffer;
 		std::vector<std::uint8_t>::iterator it;
 		bool retVal = false;
 
-		if ((0 != path.size()) && (StateMachineState::Disconnected != get_state()))
+		if ((0 != path.size()) &&
+		    (StateMachineState::Disconnected != get_state()) &&
+		    !waitingOnOperation)
 		{
 			buffer.reserve(4 + path.size());
 			buffer.push_back(static_cast<std::uint8_t>(ClientToFileServerMultiplexor::ChangeCurrentDirectoryRequest));
@@ -801,12 +1048,18 @@ namespace isobus
 				}
 			}
 
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        myControlFunction,
-			                                                        partnerControlFunction,
-			                                                        CANIdentifier::CANPriority::PriorityLowest7);
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    buffer.size(),
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+			retVal = waitingOnOperation;
+
+			if (retVal)
+			{
+				transactionNumber++;
+			}
 		}
 		return retVal;
 	}
@@ -830,49 +1083,65 @@ namespace isobus
 		                                                      CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	bool FileServerClient::send_close_file(std::shared_ptr<FileInfo> fileMetadata) const
+	bool FileServerClient::send_close_file(std::shared_ptr<FileInfo> fileMetadata)
 	{
-		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::CloseFileRequest),
-			                                                   fileMetadata->transactionNumberForRequest,
-			                                                   fileMetadata->handle,
-			                                                   0xFF,
-			                                                   0xFF,
-			                                                   0xFF,
-			                                                   0xFF,
-			                                                   0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::PriorityLowest7);
+		bool retVal = false;
+
+		if (!waitingOnOperation)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::CloseFileRequest),
+				                                                         fileMetadata->transactionNumberForRequest,
+				                                                         fileMetadata->handle,
+				                                                         0xFF,
+				                                                         0xFF,
+				                                                         0xFF,
+				                                                         0xFF,
+				                                                         0xFF };
+
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    CAN_DATA_LENGTH,
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+			retVal = waitingOnOperation;
+		}
+		return retVal;
 	}
 
-	bool FileServerClient::send_get_file_server_properties() const
+	bool FileServerClient::send_get_file_server_properties()
 	{
-		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::GetFileServerProperties),
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF,
-			                                                             0xFF };
+		bool retVal = false;
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      myControlFunction,
-		                                                      partnerControlFunction,
-		                                                      CANIdentifier::CANPriority::PriorityLowest7);
+		if (!waitingOnOperation)
+		{
+			constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::GetFileServerProperties),
+				                                                             0xFF,
+				                                                             0xFF,
+				                                                             0xFF,
+				                                                             0xFF,
+				                                                             0xFF,
+				                                                             0xFF,
+				                                                             0xFF };
+
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    CAN_DATA_LENGTH,
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+			retVal = waitingOnOperation;
+		}
+		return retVal;
 	}
 
-	bool FileServerClient::send_open_file(std::shared_ptr<FileInfo> fileMetadata) const
+	bool FileServerClient::send_open_file(std::shared_ptr<FileInfo> fileMetadata)
 	{
 		std::vector<std::uint8_t> buffer;
 		bool retVal = false;
 
-		if (StateMachineState::Connected == get_state())
+		if ((StateMachineState::Connected == get_state()) &&
+		    (false == waitingOnOperation))
 		{
 			buffer.resize(5 + fileMetadata->fileName.size());
 
@@ -899,12 +1168,66 @@ namespace isobus
 			{
 				buffer.push_back(0xFF);
 			}
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        myControlFunction,
-			                                                        partnerControlFunction,
-			                                                        CANIdentifier::CANPriority::PriorityLowest7);
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    buffer.size(),
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+
+			retVal = waitingOnOperation;
+		}
+		return retVal;
+	}
+
+	bool FileServerClient::send_write_request(std::shared_ptr<FileInfo> fileToWriteTo)
+	{
+		bool retVal = false;
+
+		if (!waitingOnOperation)
+		{
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    nullptr,
+			                                                                    currentFileOperationSize + 5, // The data, plus TAN, handle, mux, and size
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7,
+			                                                                    write_file_tx_callback,
+			                                                                    this,
+			                                                                    process_internal_file_write_callback);
+			fileToWriteTo->transactionNumberForRequest = transactionNumber;
+			retVal = waitingOnOperation;
+		}
+		return retVal;
+	}
+
+	bool FileServerClient::send_read_request(std::shared_ptr<FileInfo> fileToReadFrom, std::uint16_t numberBytesToRead)
+	{
+		bool retVal = false;
+
+		if (!waitingOnOperation)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(ClientToFileServerMultiplexor::ReadFileRequest),
+				                                                         transactionNumber,
+				                                                         fileToReadFrom->handle,
+				                                                         static_cast<std::uint8_t>(numberBytesToRead),
+				                                                         static_cast<std::uint8_t>(numberBytesToRead >> 8),
+				                                                         0xFF, // In version 3 and prior, this would control if hidden files were viewable in a directory. Now Reserved.
+				                                                         0xFF,
+				                                                         0xFF };
+			fileToReadFrom->transactionNumberForRequest = transactionNumber;
+
+			waitingOnOperation = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ClientToFileServer),
+			                                                                    buffer.data(),
+			                                                                    buffer.size(),
+			                                                                    myControlFunction,
+			                                                                    partnerControlFunction,
+			                                                                    CANIdentifier::CANPriority::PriorityLowest7);
+			if (waitingOnOperation)
+			{
+				transactionNumber++;
+			}
+			retVal = waitingOnOperation;
 		}
 		return retVal;
 	}
@@ -979,6 +1302,7 @@ namespace isobus
 					else if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
 						CANStackLogger::error("[FS]: Timeout trying to send a close file message.");
+						set_file_state(file, FileState::FileDead);
 					}
 				}
 				break;
@@ -987,7 +1311,52 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
 					{
-						// todo
+						CANStackLogger::error("[FS]: Expected close file response was never received.");
+						set_file_state(file, FileState::FileDead);
+					}
+				}
+				break;
+
+				case FileState::SendWriteFile:
+				{
+					if (send_write_request(file))
+					{
+						set_file_state(file, FileState::WaitForWriteTransport);
+					}
+					else if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
+					{
+						CANStackLogger::error("[FS]: Can't send write file message.");
+						set_file_state(file, FileState::SendCloseFile);
+					}
+				}
+				break;
+
+				case FileState::WaitForWriteTransport:
+				{
+					// This could take a very long time... no timeout
+				}
+				break;
+
+				case FileState::WaitForWriteFileResponse:
+				{
+					if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
+					{
+						CANStackLogger::error("[FS]: No write file response from server.");
+						set_file_state(file, FileState::FileOpen);
+					}
+				}
+				break;
+
+				case FileState::SendReadFile:
+				{
+					if (send_read_request(file, currentFileOperationSize))
+					{
+						set_file_state(file, FileState::WaitForReadFileResponse);
+					}
+					else if (SystemTiming::time_expired_ms(file->timestamp_ms, GENERAL_OPERATION_TIMEOUT))
+					{
+						CANStackLogger::error("[FS]: Can't send read file message.");
+						set_file_state(file, FileState::SendCloseFile);
 					}
 				}
 				break;

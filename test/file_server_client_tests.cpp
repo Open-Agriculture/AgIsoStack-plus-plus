@@ -25,17 +25,17 @@ public:
 		return send_client_connection_maintenance();
 	}
 
-	bool test_wrapper_send_close_file(std::shared_ptr<FileServerClient::FileInfo> fileMetadata) const
+	bool test_wrapper_send_close_file(std::shared_ptr<FileServerClient::FileInfo> fileMetadata)
 	{
 		return FileServerClient::send_close_file(fileMetadata);
 	}
 
-	bool test_wrapper_send_get_file_server_properties() const
+	bool test_wrapper_send_get_file_server_properties()
 	{
 		return send_get_file_server_properties();
 	}
 
-	bool test_wrapper_send_open_file(std::shared_ptr<FileServerClient::FileInfo> fileMetadata) const
+	bool test_wrapper_send_open_file(std::shared_ptr<FileServerClient::FileInfo> fileMetadata)
 	{
 		return send_open_file(fileMetadata);
 	}
@@ -79,7 +79,7 @@ TEST(FILE_SERVER_CLIENT_TESTS, StateMachineTests)
 
 	auto tcPartner = std::make_shared<PartneredControlFunction>(0, fsNameFilters);
 
-	// Force claim a partner
+	// Force claim a partner, needs a specific NAME
 	testFrame.dataLength = 8;
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
@@ -124,7 +124,7 @@ TEST(FILE_SERVER_CLIENT_TESTS, MessageEncoding)
 
 	auto fileServerPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, fsNameFilters);
 
-	// Force claim a partner
+	// Force claim a partner, needs a specific NAME
 	testFrame.dataLength = 8;
 	testFrame.channel = 0;
 	testFrame.isExtendedFrame = true;
