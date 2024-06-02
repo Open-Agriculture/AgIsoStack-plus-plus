@@ -5,7 +5,7 @@
 /// @attention Use of this is governed in part by the MacCAN EULA
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/hardware_integration/mac_can_pcan_plugin.hpp"

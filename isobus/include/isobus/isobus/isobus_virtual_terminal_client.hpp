@@ -4,7 +4,7 @@
 /// @brief A class to manage a client connection to a ISOBUS virtual terminal display
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_CLIENT_HPP

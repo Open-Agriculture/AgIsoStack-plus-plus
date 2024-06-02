@@ -4,7 +4,7 @@
 /// @brief An interface for using the MCP2515 can controller.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/hardware_integration/mcp2515_can_interface.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"

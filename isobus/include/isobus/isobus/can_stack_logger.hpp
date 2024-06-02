@@ -5,7 +5,7 @@
 /// derived class of logger and inject it into the CAN stack to get helpful debug logging.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef CAN_STACK_LOGGER_HPP
 #define CAN_STACK_LOGGER_HPP

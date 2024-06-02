@@ -4,7 +4,7 @@
 /// @brief Defines some PGNs that are used in the library or are very common
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef CAN_GENERAL_PARAMETER_GROUP_NUMBERS_HPP

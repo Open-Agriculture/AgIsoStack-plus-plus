@@ -4,7 +4,7 @@
 /// @brief Defines the different VT object types that can comprise a VT object pool.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP

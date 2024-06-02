@@ -4,7 +4,7 @@
 /// @brief Implements an interface for creating a Task Controller DDOP.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_device_descriptor_object_pool.hpp"
 

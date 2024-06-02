@@ -5,7 +5,7 @@
 /// @note The driver library for this plugin is located at https://github.com/rusoku/
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef TOUCAN_VSCP_CANAL_PLUGIN_HPP
 #define TOUCAN_VSCP_CANAL_PLUGIN_HPP

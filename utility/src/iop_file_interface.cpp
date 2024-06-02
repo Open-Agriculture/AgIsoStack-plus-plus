@@ -4,7 +4,7 @@
 /// @brief Implementation of class that manages reading IOP files
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/utility/iop_file_interface.hpp"
 

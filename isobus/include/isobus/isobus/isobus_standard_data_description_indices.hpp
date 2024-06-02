@@ -6,7 +6,7 @@
 /// @note The full list of standardized DDIs can be found at "isobus.net"
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_STANDARD_DATA_DESCRIPTION_INDICES_HPP
 #define ISOBUS_STANDARD_DATA_DESCRIPTION_INDICES_HPP

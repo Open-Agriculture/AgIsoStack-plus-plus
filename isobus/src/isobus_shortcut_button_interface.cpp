@@ -4,7 +4,7 @@
 /// @brief Implements the interface for an ISOBUS shortcut button
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_shortcut_button_interface.hpp"
 

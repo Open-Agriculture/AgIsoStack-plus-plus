@@ -5,7 +5,7 @@
 /// Can be derived into your platform's required interface.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef SPI_HARDWARE_PLUGIN_HPP

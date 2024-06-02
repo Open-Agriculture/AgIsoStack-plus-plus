@@ -6,7 +6,7 @@
 /// to install their driver first, which in-turn requires you to agree to their terms and conditions.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef PCAN_BASIC_WINDOWS_PLUGIN_HPP
 #define PCAN_BASIC_WINDOWS_PLUGIN_HPP

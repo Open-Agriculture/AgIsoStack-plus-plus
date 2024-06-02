@@ -5,7 +5,7 @@
 /// ECU you want to talk to when creating a partnered control function.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/can_NAME_filter.hpp"
 

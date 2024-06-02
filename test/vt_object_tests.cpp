@@ -4,7 +4,7 @@
 /// @brief Unit tests for the various VT objects
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include <gtest/gtest.h>
 

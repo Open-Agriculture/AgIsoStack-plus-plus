@@ -5,7 +5,7 @@
 /// ISO11783-7 commonly used in VT and TC communication
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_LANGUAGE_COMMAND_INTERFACE_HPP
 #define ISOBUS_LANGUAGE_COMMAND_INTERFACE_HPP

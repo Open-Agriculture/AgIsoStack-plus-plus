@@ -6,7 +6,7 @@
 /// are made and responded to.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef CAN_PARAMETER_GROUP_NUMBER_REQUEST_PROTOCOL_HPP
 #define CAN_PARAMETER_GROUP_NUMBER_REQUEST_PROTOCOL_HPP

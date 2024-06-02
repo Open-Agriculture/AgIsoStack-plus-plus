@@ -11,7 +11,7 @@
 /// You might want to maintain actuator power to ensure your section valves close when keyed off.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_MAINTAIN_POWER_INTERFACE_HPP
 #define ISOBUS_MAINTAIN_POWER_INTERFACE_HPP

@@ -5,7 +5,7 @@
 /// used for testing purposes.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef AVAILABLE_CAN_DRIVERS_HPP
 #define AVAILABLE_CAN_DRIVERS_HPP

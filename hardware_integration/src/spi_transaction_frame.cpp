@@ -4,7 +4,7 @@
 /// @brief A frame containing the data for a single SPI transaction.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/hardware_integration/spi_transaction_frame.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"

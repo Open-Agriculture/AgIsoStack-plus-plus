@@ -7,7 +7,7 @@
 /// @note The full list of standardized speeds can be found at "isobus.net"
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_SPEED_MESSAGES_HPP
 #define ISOBUS_SPEED_MESSAGES_HPP

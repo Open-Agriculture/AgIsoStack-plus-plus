@@ -4,7 +4,7 @@
 /// @brief This is the definition of an example seeder application
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef SEEDER_HPP
 #define SEEDER_HPP

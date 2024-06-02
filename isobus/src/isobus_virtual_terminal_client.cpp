@@ -4,7 +4,7 @@
 /// @brief Implements the client for a virtual terminal
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"

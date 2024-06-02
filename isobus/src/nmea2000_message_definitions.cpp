@@ -10,7 +10,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/nmea2000_message_definitions.hpp"
 #include "isobus/isobus/can_message.hpp"

@@ -4,7 +4,7 @@
 /// @brief A class to manage a client connection to a ISOBUS field computer's task controller
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 

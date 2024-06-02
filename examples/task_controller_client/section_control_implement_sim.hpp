@@ -4,7 +4,7 @@
 /// @brief Defines a class that emulates a section control capable ISO implement.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef SECTION_CONTROL_IMPLEMENT_SIM_HPP
 #define SECTION_CONTROL_IMPLEMENT_SIM_HPP

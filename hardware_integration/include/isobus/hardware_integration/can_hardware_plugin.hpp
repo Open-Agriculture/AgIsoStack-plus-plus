@@ -4,7 +4,7 @@
 /// @brief A base class for a CAN driver. Can be derived into your platform's required interface.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef CAN_HARDEWARE_PLUGIN_HPP
 #define CAN_HARDEWARE_PLUGIN_HPP

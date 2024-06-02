@@ -4,7 +4,7 @@
 /// @brief An interface for using the MCP2515 can controller.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef MCP2515_CAN_INTERFACE_HPP
 #define MCP2515_CAN_INTERFACE_HPP

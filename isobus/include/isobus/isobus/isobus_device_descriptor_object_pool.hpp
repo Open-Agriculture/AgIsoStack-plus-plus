@@ -4,7 +4,7 @@
 /// @brief Defines an interface for creating a Task Controller DDOP.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef ISOBUS_DEVICE_DESCRIPTOR_OBJECT_POOL_HPP

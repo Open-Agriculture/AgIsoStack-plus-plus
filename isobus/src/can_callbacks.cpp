@@ -4,7 +4,7 @@
 /// @brief An object to represent common callbacks used within this CAN stack.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/can_callbacks.hpp"
 

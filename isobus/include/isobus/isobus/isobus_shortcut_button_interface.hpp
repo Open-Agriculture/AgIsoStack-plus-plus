@@ -18,7 +18,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_SHORTCUT_BUTTON_INTERFACE_HPP
 #define ISOBUS_SHORTCUT_BUTTON_INTERFACE_HPP
