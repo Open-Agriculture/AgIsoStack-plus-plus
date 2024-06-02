@@ -14,7 +14,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef NMEA2000_MESSAGE_INTERFACE_HPP
 #define NMEA2000_MESSAGE_INTERFACE_HPP

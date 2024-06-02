@@ -8,7 +8,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_FUNCTIONALITIES_HPP
 #define ISOBUS_FUNCTIONALITIES_HPP

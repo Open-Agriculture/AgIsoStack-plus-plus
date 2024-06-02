@@ -4,7 +4,7 @@
 /// @brief A class that manages reading IOP files
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef IOP_FILE_INTERFACE_HPP

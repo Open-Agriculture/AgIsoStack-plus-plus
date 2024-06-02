@@ -4,7 +4,7 @@
 /// @brief Implements the base functionality of the basic task controller objects.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_task_controller_client_objects.hpp"
 

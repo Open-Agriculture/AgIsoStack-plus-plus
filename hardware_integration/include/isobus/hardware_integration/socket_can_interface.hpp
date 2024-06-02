@@ -5,7 +5,7 @@
 /// used in any application to get the stack hooked up to the bus.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef SOCKET_CAN_INTERFACE_HPP
 #define SOCKET_CAN_INTERFACE_HPP

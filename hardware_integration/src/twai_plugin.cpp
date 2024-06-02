@@ -4,7 +4,7 @@
 /// @brief A driver for Two-Wire Automotive Interface (TWAI).
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifdef ESP_PLATFORM
 #include "isobus/hardware_integration/twai_plugin.hpp"

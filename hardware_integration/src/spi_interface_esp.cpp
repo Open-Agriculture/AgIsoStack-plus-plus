@@ -4,7 +4,7 @@
 /// @brief A driver for (synchronous) SPI communication on ESP platforms.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/hardware_integration/spi_interface_esp.hpp"

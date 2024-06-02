@@ -4,7 +4,7 @@
 /// @brief A class that represents a control function's NAME
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/can_NAME.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"

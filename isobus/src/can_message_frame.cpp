@@ -4,7 +4,7 @@
 /// @brief Implements helper functions for CANMessageFrame
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_constants.hpp"

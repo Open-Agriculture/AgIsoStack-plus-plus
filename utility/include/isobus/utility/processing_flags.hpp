@@ -4,7 +4,7 @@
 /// @brief A class that manages 1 bit flags. Handy as a retry machanism for sending CAN messages.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef PROCESSING_FLAGS_HPP
 #define PROCESSING_FLAGS_HPP

@@ -5,7 +5,7 @@
 /// @details This example is meant to use all the major protocols in a more "complete" application.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "seeder.hpp"
 

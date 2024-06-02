@@ -5,7 +5,7 @@
 /// @attention Use of this is governed in part by the MacCAN EULA
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef MAC_CAN_PCAN_PLUGIN_HPP
 #define MAC_CAN_PCAN_PLUGIN_HPP

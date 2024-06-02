@@ -30,7 +30,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"

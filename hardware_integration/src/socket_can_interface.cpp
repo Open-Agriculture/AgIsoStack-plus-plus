@@ -4,7 +4,7 @@
 /// @brief An CAN driver for socket CAN on linux.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"

@@ -5,7 +5,7 @@
 /// ISO11783-7 commonly used in VT and TC communication
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 

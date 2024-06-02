@@ -7,7 +7,7 @@
 /// implementation.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef TO_STRING_HPP
 #define TO_STRING_HPP

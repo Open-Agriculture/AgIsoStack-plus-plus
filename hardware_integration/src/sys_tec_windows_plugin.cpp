@@ -6,7 +6,7 @@
 /// you use this plugin. Visit https://www.systec-electronic.com/ for the needed software.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/hardware_integration/sys_tec_windows_plugin.hpp"

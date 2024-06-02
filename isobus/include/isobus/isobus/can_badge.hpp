@@ -5,7 +5,7 @@
 /// at compile time. A neat trick from Serenity OS :^)
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef CAN_BADGE_HPP

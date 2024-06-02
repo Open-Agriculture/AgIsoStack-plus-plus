@@ -5,7 +5,7 @@
 /// Useful when trying to convert bytes in memory (like float*) to a specific endianness.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef PLATFORM_ENDIANNESS_HPP
 #define PLATFORM_ENDIANNESS_HPP

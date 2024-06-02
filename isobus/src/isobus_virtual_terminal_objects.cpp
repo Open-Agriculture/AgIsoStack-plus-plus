@@ -4,7 +4,7 @@
 /// @brief Implements VT server object pool objects.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 

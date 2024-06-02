@@ -17,7 +17,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_GUIDANCE_INTERFACE_HPP
 #define ISOBUS_GUIDANCE_INTERFACE_HPP

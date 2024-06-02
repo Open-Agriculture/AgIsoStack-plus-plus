@@ -4,7 +4,7 @@
 /// @brief An interface for using FlexCAN_T4 on a Teensy4/4.1 device.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef FLEX_CAN_T4_PLUGIN_HPP
 #define FLEX_CAN_T4_PLUGIN_HPP

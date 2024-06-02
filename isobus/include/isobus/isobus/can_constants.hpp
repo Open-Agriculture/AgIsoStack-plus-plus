@@ -4,7 +4,7 @@
 /// @brief General constants used throughout this library
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef CAN_CONSTANTS_HPP
 #define CAN_CONSTANTS_HPP

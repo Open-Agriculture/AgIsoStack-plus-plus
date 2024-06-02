@@ -8,7 +8,7 @@
 /// of including this plugin.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/hardware_integration/innomaker_usb2can_windows_plugin.hpp"

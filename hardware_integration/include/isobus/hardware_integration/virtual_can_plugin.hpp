@@ -5,7 +5,7 @@
 /// Any instance connecting to the same channel and in the same process will be able to communicate.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef VIRTUAL_CAN_PLUGIN_HPP
 #define VIRTUAL_CAN_PLUGIN_HPP

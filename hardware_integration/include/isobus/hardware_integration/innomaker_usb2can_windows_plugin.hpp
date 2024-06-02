@@ -6,7 +6,7 @@
 /// an LGPL-2.1 library. Be sure you understand the implications of this before proceeding.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef INNOMAKER_USB2CAN_PLUGIN_HPP
 #define INNOMAKER_USB2CAN_PLUGIN_HPP

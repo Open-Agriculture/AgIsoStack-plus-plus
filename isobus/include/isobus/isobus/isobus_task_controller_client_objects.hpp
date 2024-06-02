@@ -4,7 +4,7 @@
 /// @brief Defines a set of C++ objects that represent a DDOP
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef ISOBUS_TASK_CONTROLLER_CLIENT_OBJECTS_HPP
 #define ISOBUS_TASK_CONTROLLER_CLIENT_OBJECTS_HPP

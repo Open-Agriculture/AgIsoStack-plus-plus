@@ -4,7 +4,7 @@
 /// @brief A driver for a virtual CAN bus that can be used for (automated) testing.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 

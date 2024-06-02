@@ -4,7 +4,7 @@
 /// @brief This is a class for changing stack settings.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/isobus/can_network_configuration.hpp"

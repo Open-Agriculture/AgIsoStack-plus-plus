@@ -5,7 +5,7 @@
 /// Used in combination with SPIHardwarePlugin and allows for multiple transactions to be queued.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef SPI_TRANSACTION_FRAME_HPP
 #define SPI_TRANSACTION_FRAME_HPP

@@ -4,7 +4,7 @@
 /// @brief An interface for using Teensy4/4.1 CAN hardware
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/hardware_integration/flex_can_t4_plugin.hpp"

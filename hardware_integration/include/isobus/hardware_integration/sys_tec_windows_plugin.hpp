@@ -6,7 +6,7 @@
 /// you use this plugin. Visit https://www.systec-electronic.com/ for the needed software.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #ifndef SYS_TEC_WINDOWS_PLUGIN_HPP
 #define SYS_TEC_WINDOWS_PLUGIN_HPP

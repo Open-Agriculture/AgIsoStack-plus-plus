@@ -16,7 +16,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_speed_distance_messages.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"

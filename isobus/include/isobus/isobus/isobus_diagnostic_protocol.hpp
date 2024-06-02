@@ -30,7 +30,7 @@
 ///
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef ISOBUS_DIAGNOSTIC_PROTOCOL_HPP

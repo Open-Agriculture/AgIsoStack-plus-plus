@@ -4,7 +4,7 @@
 /// @brief An abstraction between this CAN stack and any hardware layer
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
 #ifndef CAN_HARDWARE_ABSTRACTION_HPP

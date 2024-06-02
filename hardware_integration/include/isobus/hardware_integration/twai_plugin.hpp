@@ -4,7 +4,7 @@
 /// @brief A driver for using the Two-Wire Automotive Interface (TWAI) with the stack.
 /// @author Daan Steenbergen
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #ifndef TWAI_PLUGIN_HPP
 #define TWAI_PLUGIN_HPP

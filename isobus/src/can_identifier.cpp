@@ -5,7 +5,7 @@
 /// values that are encoded inside, along with some helpful constants.
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2022 Adrian Del Grosso
+/// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/can_identifier.hpp"
 

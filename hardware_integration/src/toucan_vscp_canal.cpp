@@ -6,7 +6,7 @@
 /// @note The driver library for this plugin is located at https://github.com/rusoku/
 /// @author Adrian Del Grosso
 ///
-/// @copyright 2023 Adrian Del Grosso
+/// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
 #include "isobus/hardware_integration/toucan_vscp_canal.hpp"
