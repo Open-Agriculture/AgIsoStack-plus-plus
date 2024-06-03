@@ -289,7 +289,7 @@ namespace isobus
 				session->state = StateMachineState::None;
 				bool successful = (numberOfBytesTransferred == session->get_message_length());
 				close_session(session, successful);
-				LOG_DEBUG("[ETP]: Completed tx session for 0x%05X from %hu", parameterGroupNumber, source->get_address());
+				LOG_DEBUG("[ETP]: Completed tx session for 0x%05X from %hu (successful=%s)", parameterGroupNumber, source->get_address(), successful ? "true" : "false");
 			}
 			else
 			{
