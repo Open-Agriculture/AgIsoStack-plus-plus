@@ -22,19 +22,15 @@ namespace isobus
 	                                            void *parentPointer,
 	                                            DataChunkCallback frameChunkCallback) const
 	{
-		if (!messagingProvider.expired())
-		{
-			return messagingProvider.lock()->send_can_message(parameterGroupNumber,
-			                                                  dataBuffer,
-			                                                  dataLength,
-			                                                  sourceControlFunction,
-			                                                  destinationControlFunction,
-			                                                  priority,
-			                                                  txCompleteCallback,
-			                                                  parentPointer,
-			                                                  frameChunkCallback);
-		}
-		return false;
+		return messagingProvider->send_can_message(parameterGroupNumber,
+		                                           dataBuffer,
+		                                           dataLength,
+		                                           sourceControlFunction,
+		                                           destinationControlFunction,
+		                                           priority,
+		                                           txCompleteCallback,
+		                                           parentPointer,
+		                                           frameChunkCallback);
 	}
 
 	void CANMessageHandler::process_rx_message(const CANMessage &message)
@@ -52,6 +48,10 @@ namespace isobus
 				it = consumers.erase(it);
 			}
 		}
+		for (auto consumer : rawConsumers)
+		{
+			consumer->process_rx_message(message);
+		}
 	}
 
 	void CANMessageHandler::process_tx_message(const CANMessage &message)
@@ -68,6 +68,10 @@ namespace isobus
 			{
 				it = consumers.erase(it);
 			}
+		}
+		for (auto consumer : rawConsumers)
+		{
+			consumer->process_tx_message(message);
 		}
 	}
 
@@ -98,7 +102,23 @@ namespace isobus
 		}
 	}
 
-	void CANMessageHandler::set_messaging_provider(std::shared_ptr<CANMessagingProvider> provider)
+	void CANMessageHandler::add_consumer(CANMessagingConsumer *consumer)
+	{
+		if (nullptr != consumer)
+		{
+			// Ensure the consumer is not already in the list
+			remove_consumer(consumer);
+			consumer->messagingProvider = messagingProvider;
+			rawConsumers.push_back(consumer);
+		}
+	}
+
+	void CANMessageHandler::remove_consumer(CANMessagingConsumer *consumer)
+	{
+		rawConsumers.erase(std::remove(rawConsumers.begin(), rawConsumers.end(), consumer), rawConsumers.end());
+	}
+
+	void CANMessageHandler::set_messaging_provider(CANMessagingProvider *provider)
 	{
 		messagingProvider = provider;
 		for (const auto &consumer : consumers)
@@ -108,6 +128,10 @@ namespace isobus
 			{
 				consumerPtr->messagingProvider = provider;
 			}
+		}
+		for (const auto &consumer : rawConsumers)
+		{
+			consumer->messagingProvider = provider;
 		}
 	}
 }; // namespace isobus

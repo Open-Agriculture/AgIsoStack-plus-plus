@@ -41,10 +41,7 @@ namespace isobus
 			get_next_can_message_from_tx_queue();
 		}
 
-		//! @todo: Remove this unsafe way of making a shared pointer to the network manager once the network manager is no longer a singleton,
-		//! it's the cause of a double-free right now, but since it must be at the end of an application since the CANNetwork is a sngleton, it shouldn't harm too much for now
-		messagingProvider = std::shared_ptr<CANNetworkManager>(this);
-		messageHandler.set_messaging_provider(messagingProvider);
+		messageHandler.set_messaging_provider(this);
 		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
 		{
 			messageHandler.add_consumer(heartBeatInterfaces.at(i));

@@ -108,7 +108,9 @@ namespace isobus
 		                      DataChunkCallback frameChunkCallback = nullptr) const;
 
 		friend class CANMessageHandler; ///< Allow the CANMessageHandler to modify the messaging provider
-		std::weak_ptr<CANMessagingProvider> messagingProvider; ///< The messaging provider to use for sending messages
+
+		//! @todo: change to std::weak_ptr once network manager is no longer a singleton
+		CANMessagingProvider *messagingProvider = nullptr; ///< The messaging provider to use for sending messages
 	};
 
 	/// @brief A class for managing the routing of incoming and outgoing CAN messages
@@ -131,12 +133,25 @@ namespace isobus
 		/// @param consumer The consumer to remove
 		void remove_consumer(std::shared_ptr<CANMessagingConsumer> consumer);
 
+		/// @brief Adds a raw pointer to a consumer to the list of consumers (not recommended)
+		/// @note This is an unsafe operation, and should only be used when the consumer is guaranteed to exist.
+		/// Where possible, use the shared pointer version of this function.
+		/// @param consumer The consumer to add
+		void add_consumer(CANMessagingConsumer *consumer);
+
+		/// @brief Removes a raw pointer to a consumer from the list of consumers (not recommended)
+		/// @note This is an unsafe operation, and should only be used when the consumer is guaranteed to exist.
+		/// Where possible, use the shared pointer version of this function.
+		/// @param consumer The consumer to remove
+		void remove_consumer(CANMessagingConsumer *consumer);
+
 		/// @brief Sets the messaging provider to use for sending messages
 		/// @param provider The messaging provider to use for sending messages
-		void set_messaging_provider(std::shared_ptr<CANMessagingProvider> provider);
+		void set_messaging_provider(CANMessagingProvider *provider);
 
 	private:
 		std::vector<std::weak_ptr<CANMessagingConsumer>> consumers; ///< The list of consumers to route messages to
+		std::vector<CANMessagingConsumer *> rawConsumers; ///< The list of consumers to (unsafely) route messages to
 	};
 } // namespace isobus
 
