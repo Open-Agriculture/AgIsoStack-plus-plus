@@ -3170,13 +3170,13 @@ namespace isobus
 							{
 								parentVT->unsupportedFunctions.push_back(unsupportedFunction);
 							}
-							LOG_WARNING("[VT]: Server indicated VT Function '%llu' is unsupported, caching it", unsupportedFunction);
+							LOG_WARNING("[VT]: Server indicated VT Function '%hu' is unsupported, caching it", unsupportedFunction);
 						}
 						break;
 						default:
 						{
 							std::uint8_t unsupportedFunction = message.get_uint8_at(0);
-							LOG_WARNING("[VT]: Server sent function '%llu' which we do not support", unsupportedFunction);
+							LOG_WARNING("[VT]: Server sent function '%hu' which we do not support", unsupportedFunction);
 							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 								static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
 								unsupportedFunction,
