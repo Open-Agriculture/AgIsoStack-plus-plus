@@ -25,12 +25,13 @@ if(BUILD_TESTING AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
 endif()
 
 # Set the source files
-set(HARDWARE_INTEGRATION_SRC "can_hardware_interface.cpp")
+set(HARDWARE_INTEGRATION_SRC "can_hardware_interface.cpp"
+                             "vector_asc_logger.cpp")
 
 # Set the include files
 set(HARDWARE_INTEGRATION_INCLUDE
     "can_hardware_interface.hpp" "can_hardware_plugin.hpp"
-    "available_can_drivers.hpp")
+    "vector_asc_logger.hpp" "available_can_drivers.hpp")
 
 # Add the source/include files based on the CAN driver chosen
 if("SocketCAN" IN_LIST CAN_DRIVER)
