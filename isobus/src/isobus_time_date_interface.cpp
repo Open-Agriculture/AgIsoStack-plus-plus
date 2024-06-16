@@ -186,7 +186,7 @@ namespace isobus
 	bool TimeDateInterface::process_request_for_time_date(std::uint32_t parameterGroupNumber,
 	                                                      std::shared_ptr<ControlFunction>,
 	                                                      bool &acknowledge,
-	                                                      AcknowledgementType &acknowledgeType,
+	                                                      AcknowledgementType &,
 	                                                      void *parentPointer)
 	{
 		bool retVal = false;
