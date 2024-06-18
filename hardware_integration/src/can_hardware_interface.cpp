@@ -314,9 +314,9 @@ namespace isobus
 			return false;
 		}
 
-		if (channel->frameHandler->get_is_valid())
+		if ((channel->frameHandler->get_is_valid()) &&
+		    (channel->messagesToBeTransmittedQueue.push(frame)))
 		{
-			channel->messagesToBeTransmittedQueue.push(frame);
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			updateThreadWakeupCondition.notify_all();
 #endif
