@@ -95,7 +95,7 @@ bool SeederVtApplication::initialize()
 		update_section_objects(i);
 	}
 
-	speedMessages.initialize();
+	isobus::CANNetworkManager::CANNetwork.get_can_message_handler().add_consumer(&speedMessages);
 	speedMessages.get_machine_selected_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed) { this->handle_machine_selected_speed(mssData, changed); });
 	speedMessages.get_ground_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool changed) { this->handle_ground_based_speed(gbsData, changed); });
 	speedMessages.get_wheel_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool changed) { this->handle_wheel_based_speed(wbsData, changed); });

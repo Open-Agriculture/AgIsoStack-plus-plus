@@ -20,7 +20,6 @@
 //================================================================================================
 #include "isobus/isobus/isobus_speed_distance_messages.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
-#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -39,16 +38,9 @@ namespace isobus
 	  machineSelectedSpeedCommandTransmitData(MachineSelectedSpeedCommandData(enableSendingMachineSelectedSpeedCommandPeriodically ? source : nullptr)),
 	  txFlags(static_cast<std::uint32_t>(TransmitFlags::NumberOfFlags), process_flags, this)
 	{
-	}
-
-	SpeedMessagesInterface::~SpeedMessagesInterface()
-	{
-		if (initialized)
+		if (nullptr != machineSelectedSpeedCommandTransmitData.get_sender_control_function())
 		{
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed), process_rx_message, this);
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance), process_rx_message, this);
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance), process_rx_message, this);
-			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand), process_rx_message, this);
+			LOG_WARNING("[Speed/Distance]: Use extreme cation! You have configured an interface to command the speed of the machine. The machine may move without warning!");
 		}
 	}
 
@@ -413,27 +405,6 @@ namespace isobus
 		return timestamp_ms;
 	}
 
-	void SpeedMessagesInterface::initialize()
-	{
-		if (!initialized)
-		{
-			if (nullptr != machineSelectedSpeedCommandTransmitData.get_sender_control_function())
-			{
-				LOG_WARNING("[Speed/Distance]: Use extreme cation! You have configured an interface to command the speed of the machine. The machine may move without warning!");
-			}
-			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance), process_rx_message, this);
-			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand), process_rx_message, this);
-			initialized = true;
-		}
-	}
-
-	bool SpeedMessagesInterface::get_initialized() const
-	{
-		return initialized;
-	}
-
 	std::size_t SpeedMessagesInterface::get_number_received_wheel_based_speed_sources() const
 	{
 		return receivedWheelBasedSpeedMessages.size();
@@ -520,7 +491,7 @@ namespace isobus
 
 	void SpeedMessagesInterface::update()
 	{
-		if (initialized)
+		if (nullptr != messagingProvider)
 		{
 			receivedMachineSelectedSpeedMessages.erase(std::remove_if(receivedMachineSelectedSpeedMessages.begin(),
 			                                                          receivedMachineSelectedSpeedMessages.end(),
@@ -575,7 +546,7 @@ namespace isobus
 		}
 		else
 		{
-			LOG_ERROR("[Speed/Distance]: ISOBUS speed messages interface has not been initialized yet.");
+			LOG_ERROR("[Speed/Distance]: ISOBUS speed messages interface does not have a messaging provider set. Cannot send or receive messages.");
 		}
 	}
 
@@ -623,11 +594,8 @@ namespace isobus
 		}
 	}
 
-	void SpeedMessagesInterface::process_rx_message(const CANMessage &message, void *parentPointer)
+	void SpeedMessagesInterface::process_rx_message(const CANMessage &message)
 	{
-		assert(nullptr != parentPointer);
-		auto targetInterface = static_cast<SpeedMessagesInterface *>(parentPointer);
-
 		switch (message.get_identifier().get_parameter_group_number())
 		{
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed):
@@ -636,17 +604,17 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedMachineSelectedSpeedMessages.cbegin(),
-						                           targetInterface->receivedMachineSelectedSpeedMessages.cend(),
+						auto result = std::find_if(receivedMachineSelectedSpeedMessages.cbegin(),
+						                           receivedMachineSelectedSpeedMessages.cend(),
 						                           [&message](const std::shared_ptr<MachineSelectedSpeedData> &receivedInfo) {
 							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
 						                           });
 
-						if (result == targetInterface->receivedMachineSelectedSpeedMessages.end())
+						if (result == receivedMachineSelectedSpeedMessages.end())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedMachineSelectedSpeedMessages.push_back(std::make_shared<MachineSelectedSpeedData>(message.get_source_control_function()));
-							result = targetInterface->receivedMachineSelectedSpeedMessages.end() - 1;
+							receivedMachineSelectedSpeedMessages.push_back(std::make_shared<MachineSelectedSpeedData>(message.get_source_control_function()));
+							result = receivedMachineSelectedSpeedMessages.end() - 1;
 						}
 
 						auto &mssMessage = *result;
@@ -660,7 +628,7 @@ namespace isobus
 						changed |= mssMessage->set_limit_status(static_cast<MachineSelectedSpeedData::LimitStatus>((message.get_uint8_at(7) >> 5) & 0x03));
 						mssMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->machineSelectedSpeedDataEventPublisher.call(mssMessage, changed);
+						machineSelectedSpeedDataEventPublisher.call(mssMessage, changed);
 					}
 				}
 				else
@@ -676,17 +644,17 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedWheelBasedSpeedMessages.cbegin(),
-						                           targetInterface->receivedWheelBasedSpeedMessages.cend(),
+						auto result = std::find_if(receivedWheelBasedSpeedMessages.cbegin(),
+						                           receivedWheelBasedSpeedMessages.cend(),
 						                           [&message](const std::shared_ptr<WheelBasedMachineSpeedData> &receivedInfo) {
 							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
 						                           });
 
-						if (result == targetInterface->receivedWheelBasedSpeedMessages.end())
+						if (result == receivedWheelBasedSpeedMessages.end())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedWheelBasedSpeedMessages.push_back(std::make_shared<WheelBasedMachineSpeedData>(message.get_source_control_function()));
-							result = targetInterface->receivedWheelBasedSpeedMessages.end() - 1;
+							receivedWheelBasedSpeedMessages.push_back(std::make_shared<WheelBasedMachineSpeedData>(message.get_source_control_function()));
+							result = receivedWheelBasedSpeedMessages.end() - 1;
 						}
 
 						auto &wheelSpeedMessage = *result;
@@ -701,7 +669,7 @@ namespace isobus
 						changed |= wheelSpeedMessage->set_operator_direction_reversed_state(static_cast<WheelBasedMachineSpeedData::OperatorDirectionReversed>((message.get_uint8_at(7) >> 6) & 0x03));
 						wheelSpeedMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->wheelBasedMachineSpeedDataEventPublisher.call(wheelSpeedMessage, changed);
+						wheelBasedMachineSpeedDataEventPublisher.call(wheelSpeedMessage, changed);
 					}
 				}
 				else
@@ -717,17 +685,17 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedGroundBasedSpeedMessages.cbegin(),
-						                           targetInterface->receivedGroundBasedSpeedMessages.cend(),
+						auto result = std::find_if(receivedGroundBasedSpeedMessages.cbegin(),
+						                           receivedGroundBasedSpeedMessages.cend(),
 						                           [&message](const std::shared_ptr<GroundBasedSpeedData> &receivedInfo) {
 							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
 						                           });
 
-						if (result == targetInterface->receivedGroundBasedSpeedMessages.end())
+						if (result == receivedGroundBasedSpeedMessages.end())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGroundBasedSpeedMessages.push_back(std::make_shared<GroundBasedSpeedData>(message.get_source_control_function()));
-							result = targetInterface->receivedGroundBasedSpeedMessages.end() - 1;
+							receivedGroundBasedSpeedMessages.push_back(std::make_shared<GroundBasedSpeedData>(message.get_source_control_function()));
+							result = receivedGroundBasedSpeedMessages.end() - 1;
 						}
 
 						auto &groundSpeedMessage = *result;
@@ -738,7 +706,7 @@ namespace isobus
 						changed |= groundSpeedMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
 						groundSpeedMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->groundBasedSpeedDataEventPublisher.call(groundSpeedMessage, changed);
+						groundBasedSpeedDataEventPublisher.call(groundSpeedMessage, changed);
 					}
 				}
 				else
@@ -754,17 +722,17 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedMachineSelectedSpeedCommandMessages.cbegin(),
-						                           targetInterface->receivedMachineSelectedSpeedCommandMessages.cend(),
+						auto result = std::find_if(receivedMachineSelectedSpeedCommandMessages.cbegin(),
+						                           receivedMachineSelectedSpeedCommandMessages.cend(),
 						                           [&message](const std::shared_ptr<MachineSelectedSpeedCommandData> &receivedInfo) {
 							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
 						                           });
 
-						if (result == targetInterface->receivedMachineSelectedSpeedCommandMessages.end())
+						if (result == receivedMachineSelectedSpeedCommandMessages.end())
 						{
 							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedMachineSelectedSpeedCommandMessages.push_back(std::make_shared<MachineSelectedSpeedCommandData>(message.get_source_control_function()));
-							result = targetInterface->receivedMachineSelectedSpeedCommandMessages.end() - 1;
+							receivedMachineSelectedSpeedCommandMessages.push_back(std::make_shared<MachineSelectedSpeedCommandData>(message.get_source_control_function()));
+							result = receivedMachineSelectedSpeedCommandMessages.end() - 1;
 						}
 
 						auto &commandMessage = *result;
@@ -775,7 +743,7 @@ namespace isobus
 						commandMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
 						commandMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 
-						targetInterface->machineSelectedSpeedCommandDataEventPublisher.call(commandMessage, changed);
+						machineSelectedSpeedCommandDataEventPublisher.call(commandMessage, changed);
 					}
 				}
 				else
@@ -808,12 +776,12 @@ namespace isobus
 				                                                                             (static_cast<std::uint8_t>(machineSelectedSpeedTransmitData.get_limit_status()) << 5))
 
 			};
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
-			                                                        nullptr,
-			                                                        CANIdentifier::CANPriority::Priority3);
+			retVal = send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeed),
+			                          buffer.data(),
+			                          buffer.size(),
+			                          std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedTransmitData.get_sender_control_function()),
+			                          nullptr,
+			                          CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -835,12 +803,12 @@ namespace isobus
 				                                                                             (static_cast<std::uint8_t>(wheelBasedSpeedTransmitData.get_key_switch_state()) << 2) |
 				                                                                             (static_cast<std::uint8_t>(wheelBasedSpeedTransmitData.get_implement_start_stop_operations_state()) << 4) |
 				                                                                             (static_cast<std::uint8_t>(wheelBasedSpeedTransmitData.get_operator_direction_reversed_state()) << 6)) };
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        std::static_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
-			                                                        nullptr,
-			                                                        CANIdentifier::CANPriority::Priority3);
+			retVal = send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance),
+			                          buffer.data(),
+			                          buffer.size(),
+			                          std::static_pointer_cast<InternalControlFunction>(wheelBasedSpeedTransmitData.get_sender_control_function()),
+			                          nullptr,
+			                          CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -859,12 +827,12 @@ namespace isobus
 				                                                   static_cast<std::uint8_t>((groundBasedSpeedTransmitData.get_machine_distance() >> 24) & 0xFF),
 				                                                   0xFF, // Reserved
 				                                                   static_cast<std::uint8_t>(0xFC | static_cast<std::uint8_t>(groundBasedSpeedTransmitData.get_machine_direction_of_travel())) }; // 0xFC sets reserved bits to 1s
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        std::static_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
-			                                                        nullptr,
-			                                                        CANIdentifier::CANPriority::Priority3);
+			retVal = send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::GroundBasedSpeedAndDistance),
+			                          buffer.data(),
+			                          buffer.size(),
+			                          std::static_pointer_cast<InternalControlFunction>(groundBasedSpeedTransmitData.get_sender_control_function()),
+			                          nullptr,
+			                          CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
@@ -883,12 +851,12 @@ namespace isobus
 				                                                   0xFF,
 				                                                   0xFF,
 				                                                   static_cast<std::uint8_t>(0xFC | static_cast<std::uint8_t>(machineSelectedSpeedCommandTransmitData.get_machine_direction_command())) };
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand),
-			                                                        buffer.data(),
-			                                                        buffer.size(),
-			                                                        std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
-			                                                        nullptr,
-			                                                        CANIdentifier::CANPriority::Priority3);
+			retVal = send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::MachineSelectedSpeedCommand),
+			                          buffer.data(),
+			                          buffer.size(),
+			                          std::static_pointer_cast<InternalControlFunction>(machineSelectedSpeedCommandTransmitData.get_sender_control_function()),
+			                          nullptr,
+			                          CANIdentifier::CANPriority::Priority3);
 		}
 		return retVal;
 	}
