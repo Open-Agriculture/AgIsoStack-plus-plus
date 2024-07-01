@@ -12,6 +12,7 @@
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_NAME_filter.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"

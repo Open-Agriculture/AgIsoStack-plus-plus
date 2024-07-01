@@ -68,14 +68,12 @@ namespace isobus
 		virtual ~CANMessagingConsumer() = default;
 
 		/// @brief Processes incoming CAN messages
-		/// @param message The incoming CAN message to process
 		virtual void process_rx_message(const CANMessage &)
 		{
 			// Override this function in the derived class, if you want to process incoming messages
 		}
 
 		/// @brief Processes outgoing CAN messages
-		/// @param message The outgoing CAN message to process
 		virtual void process_tx_message(const CANMessage &)
 		{
 			// Override this function in the derived class, if you want to process outgoing messages

@@ -44,19 +44,19 @@ namespace isobus
 
 		if ((nullptr != sourceControlFunction) &&
 		    (nullptr != destinationControlFunction) &&
+		    (nullptr != sourceControlFunction->get_pgn_request_protocol()) &&
 		    enabled)
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
-			                                                                      SEQUENCE_REPETITION_RATE_MS,
-			                                                                      sourceControlFunction,
-			                                                                      destinationControlFunction);
+			retVal = sourceControlFunction->get_pgn_request_protocol()->request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
+			                                                                                    SEQUENCE_REPETITION_RATE_MS,
+			                                                                                    destinationControlFunction);
 		}
 		return retVal;
 	}
 
 	void HeartbeatInterface::on_new_internal_control_function(std::shared_ptr<InternalControlFunction> newControlFunction)
 	{
-		auto pgnRequestProtocol = newControlFunction->get_pgn_request_protocol().lock();
+		auto pgnRequestProtocol = newControlFunction->get_pgn_request_protocol();
 
 		if (nullptr != pgnRequestProtocol)
 		{
@@ -66,7 +66,7 @@ namespace isobus
 
 	void HeartbeatInterface::on_destroyed_internal_control_function(std::shared_ptr<InternalControlFunction> destroyedControlFunction)
 	{
-		auto pgnRequestProtocol = destroyedControlFunction->get_pgn_request_protocol().lock();
+		auto pgnRequestProtocol = destroyedControlFunction->get_pgn_request_protocol();
 
 		if (nullptr != pgnRequestProtocol)
 		{

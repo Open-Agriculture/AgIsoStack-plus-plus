@@ -143,13 +143,13 @@ int main()
 	}
 
 	// Register a callback to handle PROPA PGN Requests
-	TestInternalECU->get_pgn_request_protocol().lock()->register_pgn_request_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_pgn_request_handler, nullptr);
+	TestInternalECU->get_pgn_request_protocol()->register_pgn_request_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_pgn_request_handler, nullptr);
 
 	// Now, if you send a PGN request for EF00 to our internal control function, the stack will acknowledge it. Other requests will be NACK'ed (negative acknowledged)
 	// NOTE the device you send from MUST have address claimed.
 
 	// Now we'll set up a callback to handle requests for repetition rate for the PROPA PGN
-	TestInternalECU->get_pgn_request_protocol().lock()->register_request_for_repetition_rate_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_request_for_repetition_rate_handler, nullptr);
+	TestInternalECU->get_pgn_request_protocol()->register_request_for_repetition_rate_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_request_for_repetition_rate_handler, nullptr);
 
 	// Now we'll get a callback when someone requests a repetition rate for PROPA.
 	// The application (not the stack) must handle these requests, as the CAN stack does not know what data to send when responding.
@@ -159,7 +159,7 @@ int main()
 
 	// This is how you would request a PGN from someone else. In this example, we request it from the broadcast address.
 	// Generally you'd want to replace nullptr with your partner control function as its a little nicer than just asking everyone on the bus for a PGN
-	isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), TestInternalECU, nullptr);
+	TestInternalECU->get_pgn_request_protocol()->request_parameter_group_number(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), nullptr);
 
 	while (running)
 	{

@@ -11,6 +11,7 @@
 #include "isobus/isobus/isobus_time_date_interface.hpp"
 
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -38,7 +39,7 @@ namespace isobus
 	{
 		if (initialized && (nullptr != myControlFunction))
 		{
-			auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol().lock();
+			auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol();
 
 			if (nullptr != pgnRequestProtocol)
 			{
@@ -57,7 +58,7 @@ namespace isobus
 
 			if (nullptr != myControlFunction)
 			{
-				auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol().lock();
+				auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol();
 
 				if (nullptr != pgnRequestProtocol)
 				{
@@ -118,11 +119,10 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != requestingControlFunction)
+		if ((nullptr != requestingControlFunction) && (nullptr != requestingControlFunction->get_pgn_request_protocol()))
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TimeDate),
-			                                                                             requestingControlFunction,
-			                                                                             optionalDestination);
+			retVal = requestingControlFunction->get_pgn_request_protocol()->request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TimeDate),
+			                                                                                               optionalDestination);
 		}
 		return retVal;
 	}

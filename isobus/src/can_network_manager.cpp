@@ -52,7 +52,8 @@ namespace isobus
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress)
 	{
 		auto controlFunction = std::make_shared<InternalControlFunction>(desiredName, preferredAddress, CANPort);
-		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction));
+		controlFunction->set_pgn_request_protocol(std::make_shared<ParameterGroupNumberRequestProtocol>(controlFunction));
+		messageHandler.add_consumer(controlFunction->get_pgn_request_protocol());
 		internalControlFunctions.push_back(controlFunction);
 		heartBeatInterfaces.at(CANPort)->on_new_internal_control_function(controlFunction);
 		return controlFunction;
@@ -68,7 +69,7 @@ namespace isobus
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction)
 	{
 		// We need to unregister the control function from the interfaces managed by the network manager first.
-		controlFunction->pgnRequestProtocol.reset();
+		controlFunction->set_pgn_request_protocol(nullptr);
 		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
 		internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));

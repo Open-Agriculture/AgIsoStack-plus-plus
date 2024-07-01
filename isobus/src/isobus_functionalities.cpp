@@ -8,6 +8,7 @@
 //================================================================================================
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 
 #include <algorithm>
@@ -22,7 +23,7 @@ namespace isobus
 	{
 		set_functionality_is_supported(Functionalities::MinimumControlFunction, 1, true); // Support the absolute minimum by default
 
-		if (auto pgnRequestProtocol = sourceControlFunction->get_pgn_request_protocol().lock())
+		if (auto pgnRequestProtocol = sourceControlFunction->get_pgn_request_protocol())
 		{
 			pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
 		}
@@ -34,7 +35,7 @@ namespace isobus
 
 	ControlFunctionFunctionalities::~ControlFunctionFunctionalities()
 	{
-		if (auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol().lock())
+		if (auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol())
 		{
 			pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities), pgn_request_handler, this);
 		}
