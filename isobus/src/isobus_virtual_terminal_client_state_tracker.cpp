@@ -160,6 +160,24 @@ namespace isobus
 		attributeMap[attribute] = initialValue;
 	}
 
+	void VirtualTerminalClientStateTracker::add_tracked_attribute_float(std::uint16_t objectId, std::uint8_t attribute, float initialValue)
+	{
+		if (floatAttributeStates.find(objectId) == floatAttributeStates.end())
+		{
+			floatAttributeStates[objectId] = {};
+		}
+
+		auto &attributeMap = floatAttributeStates.at(objectId);
+		if ((attributeMap.find(attribute) != attributeMap.end()) ||
+		    (floatAttributeStates.find(attribute) != floatAttributeStates.end()))
+		{
+			LOG_WARNING("[VTStateHelper] add_tracked_attribute: attribute '%lu' of objectId '%lu' already tracked", attribute, objectId);
+			return;
+		}
+
+		attributeMap[attribute] = initialValue;
+	}
+
 	void VirtualTerminalClientStateTracker::remove_tracked_attribute(std::uint16_t objectId, std::uint8_t attribute)
 	{
 		if (attributeStates.find(objectId) == attributeStates.end())
@@ -194,6 +212,37 @@ namespace isobus
 		}
 
 		return attributeMap.at(attribute);
+	}
+
+	float VirtualTerminalClientStateTracker::get_attribute_float(std::uint16_t objectId, std::uint8_t attribute) const
+	{
+		if (attributeStates.find(objectId) == attributeStates.end())
+		{
+			if (floatAttributeStates.find(objectId) == floatAttributeStates.end())
+			{
+				LOG_WARNING("[VTStateHelper] get_attribute_float: objectId '%lu' has no tracked float attributes", objectId);
+				return 0.0f;
+			}
+
+			const auto &floatAttributeMap = floatAttributeStates.at(objectId);
+			if (floatAttributeStates.find(attribute) == floatAttributeStates.end())
+			{
+				LOG_WARNING("[VTStateHelper] get_attribute_float: float attribute '%lu' of objectId '%lu' not tracked", attribute, objectId);
+				return 0;
+			}
+			return floatAttributeMap.at(attribute);
+		}
+		else
+		{
+			const auto &attributeMap = attributeStates.at(objectId);
+
+			if (attributeMap.find(attribute) != attributeMap.end())
+			{
+				LOG_WARNING("[VTStateHelper] get_attribute_float: attribute '%lu' of objectId '%lu' was tracked as an integer. You are calling the wrong function to get its value!", attribute, objectId);
+				return static_cast<float>(attributeMap.at(attribute));
+			}
+		}
+		return 0.0f;
 	}
 
 	void VirtualTerminalClientStateTracker::cache_active_mask(std::uint16_t maskId)
