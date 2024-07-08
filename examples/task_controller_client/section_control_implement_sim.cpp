@@ -79,7 +79,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	poolToPopulate->clear();
 
 	// English, decimal point, 12 hour time, ddmmyyyy, all units imperial
-	constexpr std::array<std::uint8_t, 7> localizationData = { 'e', 'n', 0b01010000, 0x00, 0b01010101, 0b01010101, 0xFF };
+	constexpr std::array<std::uint8_t, 7> localizationData = { 'e', 'n', 0x50, 0x00, 0x55, 0x55, 0xFF };
 
 	// Make a test pool as a 120ft sprayer with 16 sections, 1 liquid product
 	// Set up device

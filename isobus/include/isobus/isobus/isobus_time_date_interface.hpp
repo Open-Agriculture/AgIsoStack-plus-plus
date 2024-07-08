@@ -33,7 +33,7 @@ namespace isobus
 		/// We store it slightly differently than the PGN to make it easier to work with.
 		struct TimeAndDate
 		{
-			std::uint8_t milliseconds = 0; ///< Number of milliseconds. This has resolution of 0.25s, so it will be either 0, 250, 500, or 750
+			std::uint16_t milliseconds = 0; ///< Number of milliseconds. This has resolution of 0.25s, so it will be either 0, 250, 500, or 750
 			std::uint8_t seconds = 0; ///< Number of seconds, range: 0 to 59s
 			std::uint8_t minutes = 0; ///< Number of minutes, range: 0 to 59m
 			std::uint8_t hours = 0; ///< Number of hours, range: 0 to 23h

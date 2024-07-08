@@ -136,9 +136,7 @@ private:
 	isobus::SpeedMessagesInterface speedMessages; ///< Interface for reading speed from the bus
 	std::shared_ptr<isobus::DeviceDescriptorObjectPool> ddop = nullptr; ///< Stores our application's DDOP
 	std::uint32_t slowUpdateTimestamp_ms = 0; ///< A timestamp to limit some polled data to 1Hz update rate
-	std::uint32_t lastMachineSpeed = 0; ///< Used to help track speed source timeouts
 	bool languageDataRequested = false; ///< Stores if we've requested the current language data yet
-	bool alarmsEnabled = true; ///< Enables or disables showing alarms
 };
 
 #endif // VT_APPLICATION_HPP

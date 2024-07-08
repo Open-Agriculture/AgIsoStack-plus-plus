@@ -204,55 +204,55 @@ public:
 		return !failActivations;
 	}
 
-	bool change_designator(std::shared_ptr<ControlFunction>, std::uint16_t, const std::vector<std::uint8_t> &)
+	bool change_designator(std::shared_ptr<ControlFunction>, std::uint16_t, const std::vector<std::uint8_t> &) override
 	{
 		return true;
 	}
 
-	bool deactivate_object_pool(std::shared_ptr<ControlFunction>)
+	bool deactivate_object_pool(std::shared_ptr<ControlFunction>) override
 	{
 		return true;
 	}
 
-	bool delete_device_descriptor_object_pool(std::shared_ptr<ControlFunction>, ObjectPoolDeletionErrors &)
+	bool delete_device_descriptor_object_pool(std::shared_ptr<ControlFunction>, ObjectPoolDeletionErrors &) override
 	{
 		return true;
 	}
 
-	bool get_is_stored_device_descriptor_object_pool_by_structure_label(std::shared_ptr<ControlFunction>, const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &)
+	bool get_is_stored_device_descriptor_object_pool_by_structure_label(std::shared_ptr<ControlFunction>, const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &) override
 	{
 		return !testStructureLabel.empty();
 	}
 
-	bool get_is_stored_device_descriptor_object_pool_by_localization_label(std::shared_ptr<ControlFunction>, const std::array<std::uint8_t, 7> &)
+	bool get_is_stored_device_descriptor_object_pool_by_localization_label(std::shared_ptr<ControlFunction>, const std::array<std::uint8_t, 7> &) override
 	{
 		return 0 != testLocalizationLabel.at(0);
 	}
 
-	bool get_is_enough_memory_available(std::uint32_t)
+	bool get_is_enough_memory_available(std::uint32_t) override
 	{
 		return enoughMemory;
 	}
 
-	void identify_task_controller(std::uint8_t tcNumber)
+	void identify_task_controller(std::uint8_t tcNumber) override
 	{
 		identifyTC = tcNumber;
 	}
 
-	void on_client_timeout(std::shared_ptr<ControlFunction>)
+	void on_client_timeout(std::shared_ptr<ControlFunction>) override
 	{
 	}
 
-	void on_process_data_acknowledge(std::shared_ptr<ControlFunction>, std::uint16_t, std::uint16_t, std::uint8_t, ProcessDataCommands)
+	void on_process_data_acknowledge(std::shared_ptr<ControlFunction>, std::uint16_t, std::uint16_t, std::uint8_t, ProcessDataCommands) override
 	{
 	}
 
-	bool on_value_command(std::shared_ptr<ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &)
+	bool on_value_command(std::shared_ptr<ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &) override
 	{
 		return true;
 	}
 
-	bool store_device_descriptor_object_pool(std::shared_ptr<ControlFunction>, const std::vector<std::uint8_t> &, bool)
+	bool store_device_descriptor_object_pool(std::shared_ptr<ControlFunction>, const std::vector<std::uint8_t> &, bool) override
 	{
 		return true;
 	}

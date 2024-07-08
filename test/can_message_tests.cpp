@@ -14,7 +14,7 @@ using namespace isobus;
 std::uint64_t value64;
 std::uint16_t value16;
 
-void callback(const CANMessage &message, void *parent)
+void callback(const CANMessage &message, void *)
 {
 	value16 = message.get_int16_at(0);
 	EXPECT_EQ(value16, 513);

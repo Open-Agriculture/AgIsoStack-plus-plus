@@ -1136,7 +1136,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificConcurrentMessaging)
 
 		std::uint32_t pgnToCheck;
 		const std::uint8_t *dataToCheck;
-		std::size_t dataLengthToCheck;
+		std::size_t dataLengthToCheck = 0;
 
 		if ((message.get_destination_control_function() == receiver1) || (message.get_source_control_function() == originator1))
 		{
