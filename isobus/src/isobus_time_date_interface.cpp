@@ -146,7 +146,7 @@ namespace isobus
 
 				timeAndDateInformation.controlFunction = message.get_source_control_function();
 				timeAndDateInformation.timeAndDate.seconds = message.get_uint8_at(0) / 4; // This is SPN 959
-				timeAndDateInformation.timeAndDate.milliseconds = (message.get_uint8_at(0) % 4) * 250; // This is also part of SPN 959
+				timeAndDateInformation.timeAndDate.milliseconds = static_cast<std::uint16_t>((message.get_uint8_at(0) % 4) * 250); // This is also part of SPN 959
 				timeAndDateInformation.timeAndDate.minutes = message.get_uint8_at(1); // This is SPN 960
 				timeAndDateInformation.timeAndDate.hours = message.get_uint8_at(2); // This is SPN 961
 				timeAndDateInformation.timeAndDate.month = message.get_uint8_at(3); // This is SPN 963

@@ -80,7 +80,7 @@ namespace isobus
 		/// @param[in] dataOrAlarmMaskId The data/alarm mask to remove the soft key mask from tracking for.
 		void remove_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId);
 
-		/// @brief Get the soft key mask currently active on thse server for this client. It may not be displayed if the working set is not active.
+		/// @brief Get the soft key mask currently active on the server for this client. It may not be displayed if the working set is not active.
 		/// @return The soft key mask currently active on the server for this client.
 		std::uint16_t get_active_soft_key_mask() const;
 
