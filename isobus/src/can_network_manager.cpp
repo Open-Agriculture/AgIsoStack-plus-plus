@@ -40,13 +40,20 @@ namespace isobus
 		{
 			get_next_can_message_from_tx_queue();
 		}
+
+		messageHandler.set_messaging_provider(this);
+		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
+		{
+			messageHandler.add_consumer(heartBeatInterfaces.at(i));
+		}
 		initialized = true;
 	}
 
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress)
 	{
 		auto controlFunction = std::make_shared<InternalControlFunction>(desiredName, preferredAddress, CANPort);
-		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction));
+		controlFunction->set_pgn_request_protocol(std::make_shared<ParameterGroupNumberRequestProtocol>(controlFunction));
+		messageHandler.add_consumer(controlFunction->get_pgn_request_protocol());
 		internalControlFunctions.push_back(controlFunction);
 		heartBeatInterfaces.at(CANPort)->on_new_internal_control_function(controlFunction);
 		return controlFunction;
@@ -62,7 +69,7 @@ namespace isobus
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction)
 	{
 		// We need to unregister the control function from the interfaces managed by the network manager first.
-		controlFunction->pgnRequestProtocol.reset();
+		controlFunction->set_pgn_request_protocol(nullptr);
 		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
 		internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
@@ -456,6 +463,11 @@ namespace isobus
 		return addressViolationEventDispatcher;
 	}
 
+	CANMessageHandler &CANNetworkManager::get_can_message_handler()
+	{
+		return messageHandler;
+	}
+
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;
@@ -493,6 +505,7 @@ namespace isobus
 		currentBusloadBitAccumulator.fill(0);
 		lastAddressClaimRequestTimestamp_ms.fill(0);
 		controlFunctionTable.fill({ nullptr });
+		heartBeatInterfaces.fill({ std::make_shared<HeartbeatInterface>() });
 
 		auto send_frame_callback = [this](std::uint32_t parameterGroupNumber,
 		                                  CANDataSpan data,
@@ -515,7 +528,6 @@ namespace isobus
 			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
-			heartBeatInterfaces.at(i).reset(new HeartbeatInterface(send_frame_callback));
 		}
 	}
 
@@ -1021,9 +1033,9 @@ namespace isobus
 			transportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
 			extendedTransportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
 			fastPacketProtocol.at(currentMessage.get_can_port_index())->process_message(currentMessage);
-			heartBeatInterfaces.at(currentMessage.get_can_port_index())->process_rx_message(currentMessage);
 			process_protocol_pgn_callbacks(currentMessage);
 			process_any_control_function_pgn_callbacks(currentMessage);
+			messageHandler.process_rx_message(currentMessage);
 
 			// Update Others
 			process_can_message_for_global_and_partner_callbacks(currentMessage);
@@ -1036,6 +1048,8 @@ namespace isobus
 		while (!transmittedMessageQueue.empty())
 		{
 			CANMessage currentMessage = get_next_can_message_from_tx_queue();
+
+			messageHandler.process_tx_message(currentMessage);
 
 			// Update listen-only callbacks
 			messageTransmittedEventDispatcher.call(currentMessage);
@@ -1092,6 +1106,7 @@ namespace isobus
 		process_can_message_for_global_and_partner_callbacks(message);
 		process_any_control_function_pgn_callbacks(message);
 		process_rx_message_for_address_claiming(message);
+		messageHandler.process_rx_message(message);
 	}
 
 } // namespace isobus

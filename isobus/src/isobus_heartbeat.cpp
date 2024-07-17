@@ -23,11 +23,6 @@
 
 namespace isobus
 {
-	HeartbeatInterface::HeartbeatInterface(const CANMessageFrameCallback &sendCANFrameCallback) :
-	  sendCANFrameCallback(sendCANFrameCallback)
-	{
-	}
-
 	void HeartbeatInterface::set_enabled(bool enable)
 	{
 		if ((!enable) && (enable != enabled))
@@ -49,19 +44,19 @@ namespace isobus
 
 		if ((nullptr != sourceControlFunction) &&
 		    (nullptr != destinationControlFunction) &&
+		    (nullptr != sourceControlFunction->get_pgn_request_protocol()) &&
 		    enabled)
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
-			                                                                      SEQUENCE_REPETITION_RATE_MS,
-			                                                                      sourceControlFunction,
-			                                                                      destinationControlFunction);
+			retVal = sourceControlFunction->get_pgn_request_protocol()->request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
+			                                                                                    SEQUENCE_REPETITION_RATE_MS,
+			                                                                                    destinationControlFunction);
 		}
 		return retVal;
 	}
 
 	void HeartbeatInterface::on_new_internal_control_function(std::shared_ptr<InternalControlFunction> newControlFunction)
 	{
-		auto pgnRequestProtocol = newControlFunction->get_pgn_request_protocol().lock();
+		auto pgnRequestProtocol = newControlFunction->get_pgn_request_protocol();
 
 		if (nullptr != pgnRequestProtocol)
 		{
@@ -71,7 +66,7 @@ namespace isobus
 
 	void HeartbeatInterface::on_destroyed_internal_control_function(std::shared_ptr<InternalControlFunction> destroyedControlFunction)
 	{
-		auto pgnRequestProtocol = destroyedControlFunction->get_pgn_request_protocol().lock();
+		auto pgnRequestProtocol = destroyedControlFunction->get_pgn_request_protocol();
 
 		if (nullptr != pgnRequestProtocol)
 		{
@@ -139,11 +134,12 @@ namespace isobus
 		bool retVal = false;
 		const std::array<std::uint8_t, 1> buffer = { sequenceCounter };
 
-		retVal = parent.sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
-		                                     CANDataSpan(buffer.data(), buffer.size()),
-		                                     CANNetworkManager::CANNetwork.get_internal_control_function(controlFunction),
-		                                     nullptr,
-		                                     CANIdentifier::CANPriority::Priority3);
+		retVal = parent.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
+		                                 buffer.data(),
+		                                 buffer.size(),
+		                                 std::static_pointer_cast<InternalControlFunction>(controlFunction),
+		                                 nullptr,
+		                                 CANIdentifier::CANPriority::Priority3);
 		if (retVal)
 		{
 			timestamp_ms = SystemTiming::get_timestamp_ms(); // Sent OK

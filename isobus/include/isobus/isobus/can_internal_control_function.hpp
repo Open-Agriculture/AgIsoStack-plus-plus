@@ -76,7 +76,12 @@ namespace isobus
 
 		/// @brief Gets the PGN request protocol for this ICF
 		/// @returns The PGN request protocol for this ICF
-		std::weak_ptr<ParameterGroupNumberRequestProtocol> get_pgn_request_protocol() const;
+		std::shared_ptr<ParameterGroupNumberRequestProtocol> get_pgn_request_protocol() const;
+
+		/// @brief Sets the PGN request protocol for this ICF, only use this if you have advanced needs.
+		/// Normally, when you create the internal control function via the network manager, it will set this for you.
+		/// @param[in] protocol The PGN request protocol for this ICF
+		void set_pgn_request_protocol(std::shared_ptr<ParameterGroupNumberRequestProtocol> protocol);
 
 		/// @brief Validates that a CAN message has not caused an address violation for this ICF.
 		/// If a violation is found, a re-claim will be executed for as is required by ISO 11783-5,
@@ -87,10 +92,6 @@ namespace isobus
 		/// @param[in] message The message to process
 		/// @returns true if the message caused an address violation, otherwise false
 		bool process_rx_message_for_address_violation(const CANMessage &message);
-
-	protected:
-		friend class CANNetworkManager; ///< Allow the network manager to access the pgn request protocol
-		std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol; ///< The PGN request protocol for this ICF
 
 	private:
 		/// @brief Sends the PGN request for the address claim PGN
@@ -119,6 +120,7 @@ namespace isobus
 		std::uint8_t preferredAddress; ///< The address we'd prefer to claim as (we may not get it)
 		std::uint8_t randomClaimDelay_ms; ///< The random delay before claiming an address as required by the ISO11783 standard
 		EventDispatcher<std::uint8_t> addressClaimedDispatcher; ///< The event dispatcher for when an address is claimed
+		std::shared_ptr<ParameterGroupNumberRequestProtocol> pgnRequestProtocol = nullptr; ///< The PGN request protocol for this ICF
 	};
 
 } // namespace isobus

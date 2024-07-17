@@ -11,6 +11,7 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -300,9 +301,14 @@ namespace isobus
 		return addressClaimedDispatcher;
 	}
 
-	std::weak_ptr<ParameterGroupNumberRequestProtocol> InternalControlFunction::get_pgn_request_protocol() const
+	std::shared_ptr<ParameterGroupNumberRequestProtocol> InternalControlFunction::get_pgn_request_protocol() const
 	{
 		return pgnRequestProtocol;
+	}
+
+	void InternalControlFunction::set_pgn_request_protocol(std::shared_ptr<ParameterGroupNumberRequestProtocol> protocol)
+	{
+		pgnRequestProtocol = protocol;
 	}
 
 	bool InternalControlFunction::send_request_to_claim() const

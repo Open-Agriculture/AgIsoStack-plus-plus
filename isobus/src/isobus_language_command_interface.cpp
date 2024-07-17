@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -40,9 +41,10 @@ namespace isobus
 		{
 			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
 
-			if (respondToRequests && (!myControlFunction->get_pgn_request_protocol().expired()))
+			auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol();
+			if (respondToRequests && (nullptr != pgnRequestProtocol))
 			{
-				myControlFunction->get_pgn_request_protocol().lock()->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
+				pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
 			}
 		}
 	}
@@ -55,9 +57,10 @@ namespace isobus
 			{
 				CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), process_rx_message, this);
 
-				if (respondToRequests && (!myControlFunction->get_pgn_request_protocol().expired()))
+				auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol();
+				if (respondToRequests && (nullptr != pgnRequestProtocol))
 				{
-					myControlFunction->get_pgn_request_protocol().lock()->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
+					pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
 				}
 				initialized = true;
 			}
@@ -93,7 +96,7 @@ namespace isobus
 
 		if (initialized)
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction, myPartner);
+			retVal = myControlFunction->get_pgn_request_protocol()->request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myPartner);
 		}
 		else
 		{

@@ -20,6 +20,7 @@
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
+#include "isobus/isobus/can_message_handling.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 
 #include <list>
@@ -27,7 +28,7 @@
 namespace isobus
 {
 	/// @brief This class is used to send and receive ISOBUS heartbeats.
-	class HeartbeatInterface
+	class HeartbeatInterface : public CANMessagingConsumer
 	{
 	public:
 		/// @brief This enum is used to define the possible errors that can occur when receiving a heartbeat.
@@ -36,10 +37,6 @@ namespace isobus
 			InvalidSequenceCounter, ///< The sequence counter is not valid
 			TimedOut ///< The heartbeat message has not been received within the repetition rate
 		};
-
-		/// @brief Constructor for a HeartbeatInterface
-		/// @param[in] sendCANFrameCallback A callback used to send CAN frames
-		HeartbeatInterface(const CANMessageFrameCallback &sendCANFrameCallback);
 
 		/// @brief This can be used to disable or enable this heartbeat functionality.
 		/// It's probably best to leave it enabled for most applications, but it's not
@@ -91,7 +88,7 @@ namespace isobus
 
 		/// @brief Processes a CAN message, called by the network manager.
 		/// @param[in] message The CAN message being received
-		void process_rx_message(const CANMessage &message);
+		void process_rx_message(const CANMessage &message) override;
 
 		/// @brief Updates the interface. Called by the network manager,
 		/// so there is no need for you to call it in your application.
@@ -143,7 +140,6 @@ namespace isobus
 		                                          std::uint32_t repetitionRate,
 		                                          void *parentPointer);
 
-		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		EventDispatcher<HeartBeatError, std::shared_ptr<ControlFunction>> heartbeatErrorEventDispatcher; ///< Event dispatcher for heartbeat errors
 		EventDispatcher<std::shared_ptr<ControlFunction>> newTrackedHeartbeatEventDispatcher; ///< Event dispatcher for when a heartbeat message from another control function becomes tracked by this interface
 		std::list<Heartbeat> trackedHeartbeats; ///< Store tracked heartbeat data, per CF

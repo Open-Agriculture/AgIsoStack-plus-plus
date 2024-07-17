@@ -21,6 +21,7 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
+#include "isobus/isobus/can_message_handling.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
@@ -45,7 +46,7 @@ namespace isobus
 	/// @brief The main CAN network manager object, handles protocol management and updating other
 	/// stack components. Provides an interface for sending CAN messages.
 	//================================================================================================
-	class CANNetworkManager
+	class CANNetworkManager : public CANMessagingProvider
 	{
 	public:
 		static CANNetworkManager CANNetwork; ///< Static singleton of the one network manager. Use this to access stack functionality.
@@ -152,7 +153,7 @@ namespace isobus
 		                      CANIdentifier::CANPriority priority = CANIdentifier::CANPriority::PriorityDefault6,
 		                      TransmitCompleteCallback txCompleteCallback = nullptr,
 		                      void *parentPointer = nullptr,
-		                      DataChunkCallback frameChunkCallback = nullptr);
+		                      DataChunkCallback frameChunkCallback = nullptr) override;
 
 		/// @brief The main update function for the network manager. Updates all protocols.
 		void update();
@@ -212,6 +213,10 @@ namespace isobus
 		/// address violation occurs involving an internal control function.
 		/// @returns An event dispatcher which can be used to get notified about address violations
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> &get_address_violation_event_dispatcher();
+
+		/// @brief Returns the message handler to subscribe to incoming and outgoing messages from the network manager
+		/// @returns The message handler
+		CANMessageHandler &get_can_message_handler();
 
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
@@ -390,7 +395,7 @@ namespace isobus
 		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
 		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
 		std::array<std::unique_ptr<FastPacketProtocol>, CAN_PORT_MAXIMUM> fastPacketProtocol; ///< One instance of the fast packet protocol for each channel
-		std::array<std::unique_ptr<HeartbeatInterface>, CAN_PORT_MAXIMUM> heartBeatInterfaces; ///< Manages ISOBUS heartbeat requests, one per channel
+		std::array<std::shared_ptr<HeartbeatInterface>, CAN_PORT_MAXIMUM> heartBeatInterfaces; ///< Manages ISOBUS heartbeat requests, one per channel
 
 		std::array<std::deque<std::uint32_t>, CAN_PORT_MAXIMUM> busloadMessageBitsHistory; ///< Stores the approximate number of bits processed on each channel over multiple previous time windows
 		std::array<std::uint32_t, CAN_PORT_MAXIMUM> currentBusloadBitAccumulator; ///< Accumulates the approximate number of bits processed on each channel during the current time window
@@ -407,6 +412,8 @@ namespace isobus
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+		CANMessageHandler messageHandler; ///< The message handler driven by the network manager
+		std::shared_ptr<CANMessagingProvider> messagingProvider; ///< The messaging provider for the network manager, currently set to itself
 		EventDispatcher<CANMessage> messageTransmittedEventDispatcher; ///< An event dispatcher for notifying consumers about transmitted messages by our application
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
 		Mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety

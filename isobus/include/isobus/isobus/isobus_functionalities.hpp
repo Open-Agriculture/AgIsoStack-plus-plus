@@ -23,8 +23,6 @@
 
 namespace isobus
 {
-	class DiagnosticProtocol; // Forward declaration
-
 	/// @brief Manages the control function functionalities message
 	class ControlFunctionFunctionalities
 	{

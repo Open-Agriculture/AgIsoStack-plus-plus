@@ -13,6 +13,7 @@
 #define ISOBUS_SPEED_MESSAGES_HPP
 
 #include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_message_handling.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
 
@@ -23,7 +24,7 @@
 namespace isobus
 {
 	/// @brief This interface manages and parses ISOBUS speed messages
-	class SpeedMessagesInterface
+	class SpeedMessagesInterface : public CANMessagingConsumer
 	{
 	public:
 		/// @brief Constructor for a SpeedMessagesInterface
@@ -39,9 +40,6 @@ namespace isobus
 		                       bool enableSendingWheelBasedSpeedPeriodically = false,
 		                       bool enableSendingMachineSelectedSpeedPeriodically = false,
 		                       bool enableSendingMachineSelectedSpeedCommandPeriodically = false);
-
-		/// @brief Destructor for SpeedMessagesInterface. Cleans up PGN registrations if needed.
-		~SpeedMessagesInterface();
 
 		/// @brief Enumerates the values of the direction of travel for the machine.
 		enum class MachineDirection : std::uint8_t
@@ -477,14 +475,6 @@ namespace isobus
 			MachineDirection machineDirectionCommand = MachineDirection::NotAvailable; ///< Stores commanded direction of travel.
 		};
 
-		/// @brief Sets up the class and registers it to receive callbacks from the network manager for processing
-		/// guidance messages. The class will not receive messages if this is not called.
-		void initialize();
-
-		/// @brief Returns if the interface has been initialized
-		/// @returns true if initialize has been called for this interface, otherwise false
-		bool get_initialized() const;
-
 		/// @brief Use this to configure transmission of the machine selected speed message.
 		/// If you pass in an internal control function to the constructor of this class, then this message is available to be sent.
 		MachineSelectedSpeedData machineSelectedSpeedTransmitData;
@@ -597,8 +587,7 @@ namespace isobus
 
 		/// @brief Processes a CAN message
 		/// @param[in] message The CAN message being received
-		/// @param[in] parentPointer A context variable to find the relevant instance of this class
-		static void process_rx_message(const CANMessage &message, void *parentPointer);
+		void process_rx_message(const CANMessage &message);
 
 		/// @brief Sends the machine selected speed message
 		/// @returns true if the message was sent, otherwise false
@@ -629,7 +618,6 @@ namespace isobus
 		std::uint32_t machineSelectedSpeedTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the machine selected speed message in milliseconds
 		std::uint32_t groundBasedSpeedTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the ground-based speed message in milliseconds
 		std::uint32_t machineSelectedSpeedCommandTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the ground-based speed message in milliseconds
-		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 } // namespace isobus
 

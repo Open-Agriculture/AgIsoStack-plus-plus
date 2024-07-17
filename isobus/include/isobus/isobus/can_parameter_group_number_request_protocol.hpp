@@ -13,29 +13,22 @@
 
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
-#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_message_handling.hpp"
 
 #include <memory>
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class ParameterGroupNumberRequestProtocol
-	///
 	/// @brief A protocol that handles PGN requests
 	/// @details The purpose of this protocol is to simplify and standardize how PGN requests
 	/// are made and responded to. It provides a way to easily send a PGN request or a request for
 	/// repetition rate, as well as methods to receive PGN requests.
-	//================================================================================================
-	class ParameterGroupNumberRequestProtocol
+	class ParameterGroupNumberRequestProtocol : public CANMessagingConsumer
 	{
 	public:
 		/// @brief The constructor for this protocol
 		/// @param[in] internalControlFunction The internal control function that owns this protocol and will be used to send messages
 		explicit ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction);
-
-		/// @brief The destructor for this protocol
-		~ParameterGroupNumberRequestProtocol();
 
 		/// @brief Remove the copy constructor
 		ParameterGroupNumberRequestProtocol(const ParameterGroupNumberRequestProtocol &) = delete;
@@ -45,19 +38,17 @@ namespace isobus
 
 		/// @brief Sends a PGN request to the specified control function
 		/// @param[in] pgn The PGN to request
-		/// @param[in] source The internal control function to send from
 		/// @param[in] destination The control function to request `pgn` from
 		/// @returns `true` if the request was successfully sent
-		static bool request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		bool request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a PGN request for repetition rate
 		/// @details Use this if you want the destination CF to send you the specified PGN at some fixed interval
 		/// @param[in] pgn The PGN to request
 		/// @param[in] repetitionRate_ms The repetition rate to request in milliseconds
-		/// @param[in] source The internal control function to send from
 		/// @param[in] destination The control function to send the request to
 		/// @returns `true` if the request was sent
-		static bool request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		bool request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Registers for a callback on receipt of a PGN request
 		/// @param[in] pgn The PGN you want to handle in the callback
@@ -142,12 +133,7 @@ namespace isobus
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
-		void process_message(const CANMessage &message);
-
-		/// @brief A generic way for a protocol to process a received message
-		/// @param[in] message A received CAN message
-		/// @param[in] parent Provides the context to the actual TP manager object
-		static void process_message(const CANMessage &message, void *parent);
+		void process_rx_message(const CANMessage &message) override;
 
 		/// @brief Sends a message using the acknowledgement PGN
 		/// @param[in] type The type of acknowledgement to send (Ack, vs Nack, etc)

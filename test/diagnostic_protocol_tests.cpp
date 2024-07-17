@@ -2,6 +2,7 @@
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_diagnostic_protocol.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -20,7 +21,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 	EXPECT_TRUE(diagnosticProtocol->initialize());
 	EXPECT_FALSE(diagnosticProtocol->initialize()); // Should not be able to initialize twice
 
-	auto pgnRequestProtocol = TestInternalECU->get_pgn_request_protocol().lock();
+	auto pgnRequestProtocol = TestInternalECU->get_pgn_request_protocol();
 	ASSERT_TRUE(pgnRequestProtocol);
 
 	EXPECT_NO_THROW(diagnosticProtocol->terminate());

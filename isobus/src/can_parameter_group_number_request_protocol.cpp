@@ -23,17 +23,9 @@ namespace isobus
 	  myControlFunction(internalControlFunction)
 	{
 		assert(nullptr != myControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");
-		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
-		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
 	}
 
-	ParameterGroupNumberRequestProtocol::~ParameterGroupNumberRequestProtocol()
-	{
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
-	}
-
-	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
+	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<ControlFunction> destination)
 	{
 		std::array<std::uint8_t, PGN_REQUEST_LENGTH> buffer;
 
@@ -41,14 +33,14 @@ namespace isobus
 		buffer[1] = static_cast<std::uint8_t>((pgn >> 8) & 0xFF);
 		buffer[2] = static_cast<std::uint8_t>((pgn >> 16) & 0xFF);
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest),
-		                                                      buffer.data(),
-		                                                      PGN_REQUEST_LENGTH,
-		                                                      source,
-		                                                      destination);
+		return send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest),
+		                        buffer.data(),
+		                        PGN_REQUEST_LENGTH,
+		                        myControlFunction,
+		                        destination);
 	}
 
-	bool ParameterGroupNumberRequestProtocol::request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
+	bool ParameterGroupNumberRequestProtocol::request_repetition_rate(std::uint32_t pgn, std::uint16_t repetitionRate_ms, std::shared_ptr<ControlFunction> destination)
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -61,11 +53,11 @@ namespace isobus
 		buffer[6] = 0xFF;
 		buffer[7] = 0xFF;
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      source,
-		                                                      destination);
+		return send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate),
+		                        buffer.data(),
+		                        CAN_DATA_LENGTH,
+		                        myControlFunction,
+		                        destination);
 	}
 
 	bool ParameterGroupNumberRequestProtocol::register_pgn_request_callback(std::uint32_t pgn, PGNRequestCallback callback, void *parentPointer)
@@ -162,18 +154,16 @@ namespace isobus
 		return ((obj.callbackFunction == this->callbackFunction) && (obj.pgn == this->pgn) && (obj.parent == this->parent));
 	}
 
-	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message)
+	void ParameterGroupNumberRequestProtocol::process_rx_message(const CANMessage &message)
 	{
-		if (((nullptr == message.get_destination_control_function()) &&
-		     (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
-		    (message.get_destination_control_function() == myControlFunction))
+		if (message.is_broadcast() || message.is_destination(myControlFunction))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate):
 				{
 					// Can't send this request to global, and must be 8 bytes. Ignore illegal message formats
-					if ((CAN_DATA_LENGTH == message.get_data_length()) && (nullptr != message.get_destination_control_function()))
+					if ((CAN_DATA_LENGTH == message.get_data_length()) && message.is_destination(myControlFunction))
 					{
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 						std::uint16_t requestedRate = message.get_uint16_at(3);
@@ -235,7 +225,7 @@ namespace isobus
 							}
 						}
 
-						if ((!anyCallbackProcessed) && (nullptr != message.get_destination_control_function()))
+						if ((!anyCallbackProcessed) && message.is_destination(myControlFunction))
 						{
 							send_acknowledgement(AcknowledgementType::Negative,
 							                     requestedPGN,
@@ -258,14 +248,6 @@ namespace isobus
 		}
 	}
 
-	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message, void *parent)
-	{
-		if (nullptr != parent)
-		{
-			reinterpret_cast<ParameterGroupNumberRequestProtocol *>(parent)->process_message(message);
-		}
-	}
-
 	bool ParameterGroupNumberRequestProtocol::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
@@ -283,11 +265,11 @@ namespace isobus
 			buffer[6] = static_cast<std::uint8_t>((parameterGroupNumber >> 8) & 0xFF);
 			buffer[7] = static_cast<std::uint8_t>((parameterGroupNumber >> 16) & 0xFF);
 
-			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
-			                                                        buffer.data(),
-			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction,
-			                                                        nullptr);
+			retVal = send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
+			                          buffer.data(),
+			                          CAN_DATA_LENGTH,
+			                          myControlFunction,
+			                          nullptr);
 		}
 		return retVal;
 	}
