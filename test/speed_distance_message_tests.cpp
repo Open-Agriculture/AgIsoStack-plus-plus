@@ -189,7 +189,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 		                                    (static_cast<std::uint16_t>(testFrame.data[5]) << 24));
 		EXPECT_EQ(123456, decodedDistance_mm);
 		EXPECT_EQ(testFrame.data[6] & 0x3F, 15); // Reason == 15?
-		EXPECT_EQ(testFrame.data[7] & 0x03, 0); // Direction == forward?
+		EXPECT_EQ(testFrame.data[7] & 0x03, 1); // Direction == forward?
 		EXPECT_EQ((testFrame.data[7] >> 2) & 0x07, 2); // Source == navigation?
 		EXPECT_EQ((testFrame.data[7] >> 5) & 0x07, 3); // low limited?
 
@@ -240,7 +240,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 		                                    (static_cast<std::uint16_t>(testFrame.data[5]) << 24));
 		EXPECT_EQ(5000, decodedDistance_mm);
 		EXPECT_EQ(3, testFrame.data[6]);
-		EXPECT_EQ(testFrame.data[7] & 0x03, 1); // Direction == reverse?
+		EXPECT_EQ(testFrame.data[7] & 0x03, 0); // Direction == reverse?
 		EXPECT_EQ((testFrame.data[7] >> 2) & 0x03, 1); // Key not off?
 		EXPECT_EQ((testFrame.data[7] >> 4) & 0x03, 1); // Implement operations permitted?
 		EXPECT_EQ((testFrame.data[7] >> 6) & 0x03, 0); // Not reversed?
@@ -296,11 +296,11 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 
 		interfaceUnderTest.machineSelectedSpeedCommandTransmitData.set_machine_selected_speed_setpoint_limit(12345);
 		interfaceUnderTest.machineSelectedSpeedCommandTransmitData.set_machine_speed_setpoint_command(56789);
-		interfaceUnderTest.machineSelectedSpeedCommandTransmitData.set_machine_direction_of_travel(SpeedMessagesInterface::MachineDirection::Reverse);
+		interfaceUnderTest.machineSelectedSpeedCommandTransmitData.set_machine_direction_of_travel(SpeedMessagesInterface::MachineDirection::Forward);
 
 		EXPECT_EQ(12345, interfaceUnderTest.machineSelectedSpeedCommandTransmitData.get_machine_selected_speed_setpoint_limit());
 		EXPECT_EQ(56789, interfaceUnderTest.machineSelectedSpeedCommandTransmitData.get_machine_speed_setpoint_command());
-		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Reverse, interfaceUnderTest.machineSelectedSpeedCommandTransmitData.get_machine_direction_command());
+		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Forward, interfaceUnderTest.machineSelectedSpeedCommandTransmitData.get_machine_direction_command());
 
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_ground_based_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
@@ -420,7 +420,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		EXPECT_EQ(965742, mss->get_machine_distance());
 		EXPECT_EQ(4000, mss->get_machine_speed());
 		EXPECT_EQ(SpeedMessagesInterface::MachineSelectedSpeedData::LimitStatus::OperatorLimitedControlled, mss->get_limit_status());
-		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Reverse, mss->get_machine_direction_of_travel());
+		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Forward, mss->get_machine_direction_of_travel());
 		EXPECT_EQ(SpeedMessagesInterface::MachineSelectedSpeedData::SpeedSource::GroundBasedSpeed, mss->get_speed_source());
 		EXPECT_NE(0, mss->get_timestamp_ms());
 	}
@@ -460,7 +460,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		EXPECT_EQ(SpeedMessagesInterface::WheelBasedMachineSpeedData::ImplementStartStopOperations::StartEnableImplementOperations, wheelSpeed->get_implement_start_stop_operations_state());
 		EXPECT_EQ(SpeedMessagesInterface::WheelBasedMachineSpeedData::KeySwitchState::NotOff, wheelSpeed->get_key_switch_state());
 		EXPECT_EQ(SpeedMessagesInterface::WheelBasedMachineSpeedData::OperatorDirectionReversed::Reversed, wheelSpeed->get_operator_direction_reversed_state());
-		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Reverse, wheelSpeed->get_machine_direction_of_travel());
+		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Forward, wheelSpeed->get_machine_direction_of_travel());
 		EXPECT_EQ(965742, wheelSpeed->get_machine_distance());
 		EXPECT_EQ(4000, wheelSpeed->get_machine_speed());
 		EXPECT_EQ(200, wheelSpeed->get_maximum_time_of_tractor_power());
@@ -480,7 +480,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		testFrame.data[4] = static_cast<std::uint8_t>((encodedDistance >> 16) & 0xFF);
 		testFrame.data[5] = static_cast<std::uint8_t>((encodedDistance >> 24) & 0xFF);
 		testFrame.data[6] = 0xFF;
-		testFrame.data[7] = 0x01; // Reversed
+		testFrame.data[7] = 0x01; // Forward
 
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
@@ -500,7 +500,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 
 		EXPECT_EQ(965742, groundSpeed->get_machine_distance());
 		EXPECT_EQ(4000, groundSpeed->get_machine_speed());
-		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Reverse, groundSpeed->get_machine_direction_of_travel());
+		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Forward, groundSpeed->get_machine_direction_of_travel());
 		EXPECT_NE(0, groundSpeed->get_timestamp_ms());
 	}
 
@@ -534,7 +534,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		ASSERT_NE(nullptr, command);
 
 		EXPECT_NE(0, command->get_timestamp_ms());
-		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Forward, command->get_machine_direction_command());
+		EXPECT_EQ(SpeedMessagesInterface::MachineDirection::Reverse, command->get_machine_direction_command());
 		EXPECT_EQ(5000, command->get_machine_selected_speed_setpoint_limit());
 		EXPECT_EQ(4000, command->get_machine_speed_setpoint_command());
 		EXPECT_NE(nullptr, command->get_sender_control_function());

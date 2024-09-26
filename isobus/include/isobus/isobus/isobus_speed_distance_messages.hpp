@@ -46,8 +46,8 @@ namespace isobus
 		/// @brief Enumerates the values of the direction of travel for the machine.
 		enum class MachineDirection : std::uint8_t
 		{
-			Forward = 0,
-			Reverse = 1,
+			Reverse = 0,
+			Forward = 1,
 			Error = 2,
 			NotAvailable = 3
 		};
