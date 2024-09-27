@@ -3870,6 +3870,20 @@ namespace isobus
 			}
 			break;
 
+			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
+			{
+				retVal = 6;
+			}
+			break;
+
+			case VirtualTerminalObjectType::AuxiliaryInputType1:
+			{
+				retVal = 7;
+			}
+			break;
+
 			default:
 			{
 				LOG_ERROR("[VT]: Cannot autoscale object pool due to unknown object minimum length - type " + isobus::to_string(static_cast<int>(type)));
