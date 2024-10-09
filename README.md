@@ -75,3 +75,4 @@ This project's sponsors are a big part of making this project successful. Their 
 Thank you:
 
 - Franz Höpfinger [franz-ms-muc](https://github.com/franz-ms-muc)
+- Balázs Gunics [gunicsba](https://github.com/gunicsba)
