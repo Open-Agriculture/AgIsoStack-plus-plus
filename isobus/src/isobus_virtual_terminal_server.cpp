@@ -129,7 +129,7 @@ namespace isobus
 				CANStackLogger::info("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
 				if (data[2] > get_vt_version_byte(get_version()))
 				{
-					CANStackLogger::warn("[VT Server]: Client %u version %u is not supported", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
+					CANStackLogger::warn("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
 				}
 				managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 			}
@@ -1326,8 +1326,8 @@ namespace isobus
 
 								case Function::ChangeSoftKeyMaskCommand:
 								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[2]) | (static_cast<std::uint16_t>(data[3]) << 8));
+									auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
 									auto targetObject = cf->get_object_by_id(objectID);
 									auto newObject = cf->get_object_by_id(newObjectID);
 
