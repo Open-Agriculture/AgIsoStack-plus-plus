@@ -428,6 +428,7 @@ namespace isobus
 			std::uint32_t clientDDOPsize_bytes = 0; ///< The size of the client's DDOP in bytes.
 			std::uint32_t statusBitfield = 0; ///< The status bitfield that the client is reporting to us.
 			std::uint16_t numberOfObjectPoolSegments = 0; ///< The number of object pool segments that have been sent to the client.
+			std::uint8_t reportedVersion = 0; ///< The value representing a version reported by the client.
 			bool isDDOPActive = false; ///< Whether or not the client's DDOP is active.
 		};
 

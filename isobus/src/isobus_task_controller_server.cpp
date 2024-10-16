@@ -228,8 +228,11 @@ namespace isobus
 									{
 										if (CAN_DATA_LENGTH == rxMessage.get_data_length())
 										{
-											// Not sure if we care about this one, since we'll treat clients the same regardless.
-											LOG_DEBUG("[TC Server]: Client reports that its version is %u", rxData[1]);
+											uint8_t version = rxData[1];
+
+											// We can store the reported version to use the proper DDOP parsing approach later on.
+											LOG_DEBUG("[TC Server]: Client reports that its version is %u", version);
+											get_active_client(rxMessage.get_source_control_function())->reportedVersion = version;
 										}
 									}
 									break;
