@@ -161,11 +161,11 @@ namespace isobus
 		if (ByteFormat::LittleEndian == format)
 		{
 			retVal = data.at(index);
-			retVal |= static_cast<std::uint16_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::uint16_t>(static_cast<std::uint16_t>(data.at(index + 1)) << 8);
 		}
 		else
 		{
-			retVal = static_cast<std::uint16_t>(data.at(index)) << 8;
+			retVal = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data.at(index)) << 8);
 			retVal |= data.at(index + 1);
 		}
 		return retVal;
@@ -177,11 +177,11 @@ namespace isobus
 		if (ByteFormat::LittleEndian == format)
 		{
 			retVal = static_cast<std::int16_t>(data.at(index));
-			retVal |= static_cast<std::int16_t>(data.at(index + 1)) << 8;
+			retVal |= static_cast<std::int16_t>(static_cast<std::int16_t>(data.at(index + 1)) << 8);
 		}
 		else
 		{
-			retVal = static_cast<std::int16_t>(data.at(index)) << 8;
+			retVal = static_cast<std::int16_t>(static_cast<std::int16_t>(data.at(index)) << 8);
 			retVal |= static_cast<std::int16_t>(data.at(index + 1));
 		}
 		return retVal;
@@ -322,7 +322,7 @@ namespace isobus
 	bool isobus::CANMessage::get_bool_at(const std::uint32_t byteIndex, const std::uint8_t bitIndex, const std::uint8_t length) const
 	{
 		assert(length <= 8 - bitIndex && "length must be less than or equal to 8 - bitIndex");
-		std::uint8_t mask = ((1 << length) - 1) << bitIndex;
+		auto mask = static_cast<std::uint8_t>(((1 << length) - 1) << bitIndex);
 		return (get_uint8_at(byteIndex) & mask) == mask;
 	}
 

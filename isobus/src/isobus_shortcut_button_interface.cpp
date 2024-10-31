@@ -108,7 +108,7 @@ namespace isobus
 		if (SystemTiming::time_expired_ms(allImplementsStopOperationsSwitchStateTimestamp_ms, TRANSMISSION_RATE_MS))
 		{
 			// Prune old ISBs
-			isobusShorcutButtonList.erase(std::remove_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), [](ISBServerData &isb) {
+			isobusShorcutButtonList.erase(std::remove_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), [](const ISBServerData &isb) {
 				                              return SystemTiming::time_expired_ms(isb.messageReceivedTimestamp_ms, TRANSMISSION_TIMEOUT_MS);
 			                              }),
 			                              isobusShorcutButtonList.end());
@@ -155,7 +155,7 @@ namespace isobus
 			if (CAN_DATA_LENGTH == message.get_data_length())
 			{
 				auto messageNAME = message.get_source_control_function()->get_NAME();
-				auto matches_isoname = [messageNAME](ISBServerData &isb) { return isb.ISONAME == messageNAME; };
+				auto matches_isoname = [messageNAME](const ISBServerData &isb) { return isb.ISONAME == messageNAME; };
 				auto ISB = std::find_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), matches_isoname);
 				auto &messageData = message.get_data();
 				StopAllImplementOperationsState previousState = get_state();

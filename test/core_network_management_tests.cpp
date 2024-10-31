@@ -229,6 +229,9 @@ TEST(CORE_TESTS, SimilarControlFunctions)
 	const std::vector<isobus::NAMEFilter> nameFilters = { filterFuelSystem };
 	auto TestPartner = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, nameFilters);
 
+	// Quick test to make sure partner is working
+	EXPECT_EQ(1, TestPartner->get_number_name_filters_with_parameter_type(isobus::NAME::NAMEParameters::FunctionCode));
+
 	// Request the address claim PGN
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
 	  0xEE00, // Address Claim PGN

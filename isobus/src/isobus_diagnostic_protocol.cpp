@@ -180,7 +180,7 @@ namespace isobus
 			}
 			else
 			{
-				if ((0 != activeDTCList.size()) &&
+				if ((!activeDTCList.empty()) &&
 				    (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
 				{
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));

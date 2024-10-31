@@ -33,7 +33,7 @@ namespace isobus
 		/// @brief Alters the settings object to indicate you want to support documentation.
 		/// @param[in] supported Whether or not the TC supports documentation.
 		/// @returns An updated settings object.
-		TaskControllerOptions with_documentation(bool supported = true);
+		TaskControllerOptions with_documentation(bool supported = true) const;
 
 		/// @brief Alters the settings object to indicate you want to support tc-geo without position based control.
 		/// @param[in] supported Whether or not the TC supports tc-geo without position based control.

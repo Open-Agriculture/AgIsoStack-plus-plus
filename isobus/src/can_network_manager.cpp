@@ -52,7 +52,7 @@ namespace isobus
 		return controlFunction;
 	}
 
-	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters)
+	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters)
 	{
 		auto controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
 		partneredControlFunctions.push_back(controlFunction);
@@ -116,7 +116,7 @@ namespace isobus
 		return messageTransmittedEventDispatcher;
 	}
 
-	std::shared_ptr<InternalControlFunction> CANNetworkManager::get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction)
+	std::shared_ptr<InternalControlFunction> CANNetworkManager::get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction) const
 	{
 		std::shared_ptr<InternalControlFunction> retVal = nullptr;
 
@@ -207,7 +207,7 @@ namespace isobus
 					retVal = send_can_message_raw(sourceControlFunction->get_can_port(), sourceControlFunction->get_address(), destinationControlFunction->get_address(), parameterGroupNumber, static_cast<std::uint8_t>(priority), dataBuffer, dataLength);
 				}
 
-				if ((retVal) &&
+				if (retVal &&
 				    (nullptr != transmitCompleteCallback))
 				{
 					// Message was not sent via a protocol, so handle the tx callback now
@@ -268,7 +268,7 @@ namespace isobus
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
 	}
 
-	ParameterGroupNumberCallbackData CANNetworkManager::get_global_parameter_group_number_callback(std::uint32_t index) const
+	ParameterGroupNumberCallbackData CANNetworkManager::get_global_parameter_group_number_callback(std::size_t index) const
 	{
 		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr, nullptr);
 
@@ -637,7 +637,7 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::process_rx_message_for_address_claiming(const CANMessage &message)
+	void CANNetworkManager::process_rx_message_for_address_claiming(const CANMessage &message) const
 	{
 		for (const auto &internalCF : internalControlFunctions)
 		{
@@ -962,7 +962,7 @@ namespace isobus
 		}
 	}
 
-	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(const CANMessage &message)
+	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(const CANMessage &message) const
 	{
 		std::shared_ptr<ControlFunction> messageDestination = message.get_destination_control_function();
 		if ((nullptr == messageDestination) &&

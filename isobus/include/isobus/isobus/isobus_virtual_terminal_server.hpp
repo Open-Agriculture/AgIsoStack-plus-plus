@@ -479,14 +479,14 @@ namespace isobus
 		/// @param[in] source The source control function to send from
 		/// @param[in] destination The destination control function to send the acknowledgement to
 		/// @returns true if the message was sent, false otherwise
-		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination);
+		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change active mask command
 		/// @param[in] newMaskObjectID The object ID for the new active mask
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_active_mask_response(std::uint16_t newMaskObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_active_mask_response(std::uint16_t newMaskObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change attribute command
 		/// @param[in] objectID The object ID for the target object
@@ -494,7 +494,7 @@ namespace isobus
 		/// @param[in] attributeID The attribute ID that was changed
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination);
+		bool send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change background colour command
 		/// @param[in] objectID The object ID for the object to change
@@ -502,7 +502,7 @@ namespace isobus
 		/// @param[in] colour The colour the background was set to
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_background_colour_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t colour, std::shared_ptr<ControlFunction> destination);
+		bool send_change_background_colour_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t colour, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change child location command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
@@ -510,7 +510,7 @@ namespace isobus
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change child position command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
@@ -518,21 +518,21 @@ namespace isobus
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change fill attributes command
 		/// @param[in] objectID The object ID for the object to change
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change font attributes command
 		/// @param[in] objectID The object ID for the object to change
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change list item command
 		/// @param[in] objectID The object ID for the object to change
@@ -541,7 +541,7 @@ namespace isobus
 		/// @param[in] listIndex The list index to change, numbered 0 to n
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_list_item_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::uint8_t listIndex, std::shared_ptr<ControlFunction> destination);
+		bool send_change_list_item_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::uint8_t listIndex, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change numeric value command
 		/// @param[in] objectID The object ID for the object whose numeric value was meant to be changed
@@ -549,21 +549,21 @@ namespace isobus
 		/// @param[in] value The value that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination);
+		bool send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change polygon point command
 		/// @param[in] objectID The object ID of the modified polygon
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change size command
 		/// @param[in] objectID The object ID for the object whose size was meant to be changed
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change soft key mask command
 		/// @param[in] objectID The object ID of a data mask or alarm mask
@@ -571,14 +571,14 @@ namespace isobus
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_soft_key_mask_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_soft_key_mask_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change string value command
 		/// @param[in] objectID The object ID for the object whose value was meant to be changed
 		/// @param[in] errorBitfield An error bitfield
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
+		bool send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a delete version command
 		/// @param[in] errorBitfield An error bitfield to report back to the client

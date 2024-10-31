@@ -310,7 +310,7 @@ namespace isobus
 
 		/// @brief Returns The raw bytes that comprise the current localization data as defined in ISO11783-7
 		/// @returns The raw bytes that comprise the current localization data
-		const std::array<std::uint8_t, 7> get_localization_raw_data() const;
+		std::array<std::uint8_t, 7> get_localization_raw_data() const;
 
 		/// @brief Parses incoming CAN messages into usable unit and language settings
 		/// @param message The CAN message to parse

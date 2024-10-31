@@ -581,7 +581,7 @@ namespace isobus
 		}
 	}
 
-	void ExtendedTransportProtocolManager::send_data_transfer_packets(std::shared_ptr<ExtendedTransportProtocolSession> &session) const
+	void ExtendedTransportProtocolManager::send_data_transfer_packets(const std::shared_ptr<ExtendedTransportProtocolSession> &session) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 		std::uint8_t framesToSend = session->get_dpo_number_of_packets_remaining();
@@ -725,7 +725,7 @@ namespace isobus
 		}
 	}
 
-	bool ExtendedTransportProtocolManager::abort_session(std::shared_ptr<ExtendedTransportProtocolSession> &session, ConnectionAbortReason reason)
+	bool ExtendedTransportProtocolManager::abort_session(const std::shared_ptr<ExtendedTransportProtocolSession> &session, ConnectionAbortReason reason)
 	{
 		bool retVal = false;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
@@ -771,7 +771,7 @@ namespace isobus
 		                            CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	void ExtendedTransportProtocolManager::close_session(std::shared_ptr<ExtendedTransportProtocolSession> &session, bool successful)
+	void ExtendedTransportProtocolManager::close_session(const std::shared_ptr<ExtendedTransportProtocolSession> &session, bool successful)
 	{
 		session->complete(successful);
 		auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
@@ -782,7 +782,7 @@ namespace isobus
 		}
 	}
 
-	bool ExtendedTransportProtocolManager::send_request_to_send(std::shared_ptr<ExtendedTransportProtocolSession> &session) const
+	bool ExtendedTransportProtocolManager::send_request_to_send(const std::shared_ptr<ExtendedTransportProtocolSession> &session) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			REQUEST_TO_SEND_MULTIPLEXOR,
@@ -801,7 +801,7 @@ namespace isobus
 		                            CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	bool ExtendedTransportProtocolManager::send_clear_to_send(std::shared_ptr<ExtendedTransportProtocolSession> &session) const
+	bool ExtendedTransportProtocolManager::send_clear_to_send(const std::shared_ptr<ExtendedTransportProtocolSession> &session) const
 	{
 		std::uint32_t nextPacketNumber = session->get_last_packet_number() + 1;
 		std::uint8_t packetLimit = session->get_cts_number_of_packet_limit();
@@ -833,7 +833,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool isobus::ExtendedTransportProtocolManager::send_data_packet_offset(std::shared_ptr<ExtendedTransportProtocolSession> &session) const
+	bool isobus::ExtendedTransportProtocolManager::send_data_packet_offset(const std::shared_ptr<ExtendedTransportProtocolSession> &session) const
 	{
 		std::uint8_t packetsThisSegment = 0xFF;
 		if (packetsThisSegment > session->get_number_of_remaining_packets())
@@ -877,7 +877,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool ExtendedTransportProtocolManager::send_end_of_session_acknowledgement(std::shared_ptr<ExtendedTransportProtocolSession> &session) const
+	bool ExtendedTransportProtocolManager::send_end_of_session_acknowledgement(const std::shared_ptr<ExtendedTransportProtocolSession> &session) const
 	{
 		std::uint32_t messageLength = session->get_message_length();
 		std::uint32_t parameterGroupNumber = session->get_parameter_group_number();

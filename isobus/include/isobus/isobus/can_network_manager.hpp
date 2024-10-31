@@ -65,7 +65,7 @@ namespace isobus
 		/// @param[in] CANPort The CAN channel associated with this control function definition
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
 		/// @returns A shared pointer to a PartneredControlFunction object created with the parameters passed in
-		std::shared_ptr<PartneredControlFunction> create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
+		std::shared_ptr<PartneredControlFunction> create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters);
 
 		/// @brief Removes an internal control function from the network manager, making it inactive
 		/// @param[in] controlFunction The control function to deactivate
@@ -118,7 +118,7 @@ namespace isobus
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
 		/// @param[in] controlFunction The control function to get the internal control function from
 		/// @returns An internal control function casted from the passed in control function
-		std::shared_ptr<InternalControlFunction> get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction);
+		std::shared_ptr<InternalControlFunction> get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction) const;
 
 		/// @brief Returns an estimated busload between 0.0f and 100.0f
 		/// @details This calculates busload over a 1 second window.
@@ -282,7 +282,7 @@ namespace isobus
 
 		/// @brief Processes a message for each internal control function for address claiming
 		/// @param[in] message The message to process
-		void process_rx_message_for_address_claiming(const CANMessage &message);
+		void process_rx_message_for_address_claiming(const CANMessage &message) const;
 
 		/// @brief Processes a CAN message's contribution to the current busload
 		/// @param[in] channelIndex The CAN channel index associated to the message being processed
@@ -349,7 +349,7 @@ namespace isobus
 
 		/// @brief Matches a CAN message to any matching PGN callback, and calls that callback
 		/// @param[in] message A pointer to a CAN message to be processed
-		void process_can_message_for_global_and_partner_callbacks(const CANMessage &message);
+		void process_can_message_for_global_and_partner_callbacks(const CANMessage &message) const;
 
 		/// @brief Processes the internal received message queue
 		void process_rx_messages();
@@ -381,7 +381,7 @@ namespace isobus
 		/// @brief Gets a PGN callback for the global address by index
 		/// @param[in] index The index of the callback to get
 		/// @returns A structure containing the global PGN callback data
-		ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::uint32_t index) const;
+		ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::size_t index) const;
 
 		static constexpr std::uint32_t BUSLOAD_SAMPLE_WINDOW_MS = 1000; ///< Using a 1s window to average the bus load, otherwise it's very erratic
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window

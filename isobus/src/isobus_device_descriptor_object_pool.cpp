@@ -37,7 +37,7 @@ namespace isobus
 	{
 		bool retVal = true;
 
-		for (auto &currentObject : objectList)
+		for (const auto &currentObject : objectList)
 		{
 			if (task_controller_object::ObjectTypes::Device == currentObject->get_object_type())
 			{
@@ -543,9 +543,9 @@ namespace isobus
 						if ((binaryPoolSizeBytes >= expectedSize) && retVal)
 						{
 							std::string deviceElementDesignator;
-							std::uint16_t parentObject = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[9 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[10 + numberDesignatorBytes]) << 8));
-							std::uint16_t uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
-							std::uint16_t elementNumber = static_cast<std::uint16_t>(binaryPool[7 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[8 + numberDesignatorBytes]) << 8);
+							auto parentObject = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[9 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[10 + numberDesignatorBytes]) << 8));
+							auto uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
+							auto elementNumber = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[7 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[8 + numberDesignatorBytes]) << 8));
 							auto type = static_cast<task_controller_object::DeviceElementObject::Type>(binaryPool[5]);
 
 							for (std::uint16_t i = 0; i < numberDesignatorBytes; i++)
@@ -602,9 +602,9 @@ namespace isobus
 						if ((binaryPoolSizeBytes >= expectedSize) && retVal)
 						{
 							std::string processDataDesignator;
-							std::uint16_t DDI = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[5]) | (static_cast<std::uint16_t>(binaryPool[6]) << 8));
-							std::uint16_t uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
-							std::uint16_t presentationObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[10 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[11 + numberDesignatorBytes]) << 8));
+							auto DDI = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[5]) | (static_cast<std::uint16_t>(binaryPool[6]) << 8));
+							auto uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
+							auto presentationObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[10 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[11 + numberDesignatorBytes]) << 8));
 
 							for (std::uint16_t i = 0; i < numberDesignatorBytes; i++)
 							{
@@ -652,9 +652,9 @@ namespace isobus
 							  (static_cast<std::int32_t>(binaryPool[8]) << 8) |
 							  (static_cast<std::int32_t>(binaryPool[9]) << 16) |
 							  (static_cast<std::int32_t>(binaryPool[10]) << 24);
-							std::uint16_t DDI = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[5]) | (static_cast<std::uint16_t>(binaryPool[6]) << 8));
-							std::uint16_t uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
-							std::uint16_t presentationObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[12 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[13 + numberDesignatorBytes]) << 8));
+							auto DDI = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[5]) | (static_cast<std::uint16_t>(binaryPool[6]) << 8));
+							auto uniqueID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[3]) | (static_cast<std::uint16_t>(binaryPool[4]) << 8));
+							auto presentationObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(binaryPool[12 + numberDesignatorBytes]) | (static_cast<std::uint16_t>(binaryPool[13 + numberDesignatorBytes]) << 8));
 
 							for (std::uint16_t i = 0; i < numberDesignatorBytes; i++)
 							{
@@ -780,7 +780,7 @@ namespace isobus
 		if (resolve_parent_ids_to_objects())
 		{
 			retVal = true;
-			for (auto &currentObject : objectList)
+			for (const auto &currentObject : objectList)
 			{
 				auto objectBinary = currentObject->get_binary_object();
 
@@ -818,14 +818,14 @@ namespace isobus
 		if (resolve_parent_ids_to_objects())
 		{
 			std::ostringstream xmlOutput;
-			std::ios initialStreamFormat(NULL);
+			std::ios initialStreamFormat(nullptr);
 			std::size_t numberOfDevices = 1;
 			std::size_t numberOfElements = 1;
 			initialStreamFormat.copyfmt(xmlOutput);
 			retVal = true;
 
-			xmlOutput << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" << std::endl;
-			xmlOutput << "<ISO11783_TaskData VersionMajor=\"3\" VersionMinor=\"0\" DataTransferOrigin=\"1\">" << std::endl;
+			xmlOutput << R"(<?xml version="1.0" encoding="UTF-8"?>)" << std::endl;
+			xmlOutput << R"(<ISO11783_TaskData VersionMajor="3" VersionMinor="0" DataTransferOrigin="1">)" << std::endl;
 
 			// Find the device object, which will be the first object written
 			for (std::size_t i = 0; i < size(); i++)
@@ -849,7 +849,7 @@ namespace isobus
 					auto lStructureLabel = rootDevice->get_structure_label();
 					for (std::uint8_t j = 0; j < 7; j++)
 					{
-						std::uint8_t structureByte = static_cast<std::uint8_t>(lStructureLabel.at(6 - j));
+						auto structureByte = static_cast<std::uint8_t>(lStructureLabel.at(6 - j));
 						xmlOutput << std::uppercase << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(structureByte);
 					}
 
@@ -986,7 +986,7 @@ namespace isobus
 	{
 		std::shared_ptr<task_controller_object::Object> retVal;
 
-		for (auto &currentObject : objectList)
+		for (const auto &currentObject : objectList)
 		{
 			if (currentObject->get_object_id() == objectID)
 			{
@@ -1062,7 +1062,7 @@ namespace isobus
 	{
 		bool retVal = true;
 
-		for (auto &currentObject : objectList)
+		for (const auto &currentObject : objectList)
 		{
 			assert(nullptr != currentObject);
 			switch (currentObject->get_object_type())
@@ -1217,7 +1217,7 @@ namespace isobus
 
 		if ((0 != uniqueID) && (NULL_OBJECT_ID != uniqueID))
 		{
-			for (auto &currentObject : objectList)
+			for (const auto &currentObject : objectList)
 			{
 				if (uniqueID == currentObject->get_object_id())
 				{

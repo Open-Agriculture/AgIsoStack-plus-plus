@@ -107,7 +107,7 @@ namespace isobus
 
 		// This is the static callback for the instance.
 		// See if we need to set up a new managed working set.
-		for (auto &cf : managedWorkingSetList)
+		for (const auto &cf : managedWorkingSetList)
 		{
 			if (cf->get_control_function() == message.get_source_control_function())
 			{
@@ -712,7 +712,7 @@ namespace isobus
 
 								case Function::HideShowObjectCommand:
 								{
-									std::uint16_t objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto targetObject = cf->get_object_by_id(objectId);
 
 									if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
@@ -742,7 +742,7 @@ namespace isobus
 
 								case Function::EnableDisableObjectCommand:
 								{
-									std::uint16_t objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 									auto lTargetObject = cf->get_object_by_id(objectId);
 
 									if (nullptr != lTargetObject)
@@ -753,7 +753,7 @@ namespace isobus
 											{
 												case VirtualTerminalObjectType::InputBoolean:
 												{
-													std::static_pointer_cast<InputBoolean>(lTargetObject)->set_enabled((0 != data[3]));
+													std::static_pointer_cast<InputBoolean>(lTargetObject)->set_enabled(0 != data[3]);
 													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
 													parentServer->onRepaintEventDispatcher.call(cf);
 												}
@@ -822,8 +822,8 @@ namespace isobus
 
 										if (nullptr != lTargetObject)
 										{
-											std::int8_t xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
-											std::int8_t yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
+											auto xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
+											auto yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
 											bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
 
 											parentServer->onRepaintEventDispatcher.call(cf);
@@ -892,8 +892,8 @@ namespace isobus
 
 								case Function::ChangeStringValueCommand:
 								{
-									std::uint16_t objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									std::uint16_t numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+									auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
 									auto stringObject = cf->get_object_by_id(objectIdToChange);
 
 									if (message.get_data_length() >= static_cast<std::uint32_t>(numberOfBytesInString + 5))
@@ -984,8 +984,8 @@ namespace isobus
 
 								case Function::ChangeFillAttributesCommand:
 								{
-									std::uint16_t objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									std::uint16_t fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+									auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
 									auto object = cf->get_object_by_id(objectIdToChange);
 									auto fillPatternObject = cf->get_object_by_id(fillPatternID);
 
@@ -1730,7 +1730,7 @@ namespace isobus
 		}
 	}
 
-	bool VirtualTerminalServer::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1757,7 +1757,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_active_mask_response(std::uint16_t newMaskObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_active_mask_response(std::uint16_t newMaskObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1784,7 +1784,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_attribute_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t attributeID, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1811,7 +1811,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_background_colour_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t colour, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_background_colour_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t colour, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1838,7 +1838,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1865,7 +1865,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1892,7 +1892,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_fill_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1918,7 +1918,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -1944,7 +1944,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_list_item_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::uint8_t listIndex, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_list_item_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::uint8_t listIndex, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -2164,7 +2164,7 @@ namespace isobus
 		}
 	}
 
-	bool VirtualTerminalServer::send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -2191,7 +2191,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -2218,7 +2218,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -2245,7 +2245,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_soft_key_mask_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_soft_key_mask_response(std::uint16_t objectID, std::uint16_t newObjectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -2272,7 +2272,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 

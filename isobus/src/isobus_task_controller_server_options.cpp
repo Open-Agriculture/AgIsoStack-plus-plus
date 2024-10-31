@@ -10,7 +10,7 @@
 
 namespace isobus
 {
-	TaskControllerOptions TaskControllerOptions::with_documentation(bool supported)
+	TaskControllerOptions TaskControllerOptions::with_documentation(bool supported) const
 	{
 		TaskControllerOptions copy = *this;
 		copy.optionDocumentation = supported;
@@ -61,10 +61,10 @@ namespace isobus
 
 	std::uint8_t TaskControllerOptions::get_bitfield() const
 	{
-		return static_cast<std::uint8_t>(optionDocumentation) |
-		  static_cast<std::uint8_t>(optionTCGEOWithoutPositionBasedControl << 1) |
-		  static_cast<std::uint8_t>(optionTCGEOWithPositionBasedControl << 2) |
-		  static_cast<std::uint8_t>(optionPeerControlAssignment << 3) |
-		  static_cast<std::uint8_t>(optionImplementSectionControl << 4);
+		return static_cast<std::uint8_t>(static_cast<std::uint8_t>(optionDocumentation) |
+		                                 (static_cast<std::uint8_t>(optionTCGEOWithoutPositionBasedControl) << 1) |
+		                                 (static_cast<std::uint8_t>(optionTCGEOWithPositionBasedControl) << 2) |
+		                                 (static_cast<std::uint8_t>(optionPeerControlAssignment) << 3) |
+		                                 (static_cast<std::uint8_t>(optionImplementSectionControl) << 4));
 	}
 } // namespace isobus

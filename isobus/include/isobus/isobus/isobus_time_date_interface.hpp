@@ -66,7 +66,7 @@ namespace isobus
 		/// should be relatively quick as it will be called from the CAN stack's thread, and you don't want to delay the stack's update thread.
 		/// The function should return "true" if the time and date information was successfully populated, and "false" if it was not.
 		/// Note that if it returns false, the request will probably be NACKed, which is not ideal.
-		TimeDateInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::function<bool(TimeAndDate &timeAndDateToPopulate)> timeAndDateCallback);
+		TimeDateInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, const std::function<bool(TimeAndDate &timeAndDateToPopulate)> &timeAndDateCallback);
 
 		/// @brief Destructor for the TimeDateInterface class.
 		~TimeDateInterface();

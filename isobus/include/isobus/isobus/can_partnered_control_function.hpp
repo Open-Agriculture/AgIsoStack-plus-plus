@@ -36,7 +36,7 @@ namespace isobus
 		/// @brief the constructor for a PartneredControlFunction, which is called by the factory function
 		/// @param[in] CANPort The CAN channel associated with this control function definition
 		/// @param[in] NAMEFilters A list of filters that describe the identity of the CF based on NAME components
-		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters);
+		PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters);
 
 		/// @brief Deleted copy constructor for PartneredControlFunction to avoid slicing
 		PartneredControlFunction(PartneredControlFunction &) = delete;
@@ -74,7 +74,7 @@ namespace isobus
 		/// @brief Returns the number of NAME filters with a specific NAME parameter component, like manufacturer code
 		/// @param[in] parameter The NAME parameter to check against
 		/// @returns The number of NAME filters with a specific NAME parameter component
-		std::size_t get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter);
+		std::size_t get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter) const;
 
 		/// @brief Returns a NAME filter by index
 		/// @param[in] index The index of the filter to get

@@ -89,6 +89,7 @@ namespace isobus
 
 			default:
 			{
+				// Shouldn't be possible, filter will not match.
 			}
 			break;
 		}

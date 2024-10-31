@@ -1223,7 +1223,7 @@ namespace isobus
 		return activeWorkingSetSoftKeyMaskObjectID;
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size, std::string version)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size, const std::string &version)
 	{
 		if ((nullptr != pool) &&
 		    (0 != size))
@@ -1252,10 +1252,10 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool, std::string version)
+	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool, const std::string &version)
 	{
 		if ((nullptr != pool) &&
-		    (0 != pool->size()))
+		    (!pool->empty()))
 		{
 			ObjectPoolDataStruct tempData;
 
@@ -1370,7 +1370,7 @@ namespace isobus
 						set_state(StateMachineState::Disconnected);
 					}
 
-					if (0 != objectPools.size())
+					if (!objectPools.empty())
 					{
 						set_state(StateMachineState::SendGetMemory);
 						send_working_set_maintenance(true);
@@ -1385,7 +1385,7 @@ namespace isobus
 				{
 					std::uint32_t totalPoolSize = 0;
 
-					for (auto &pool : objectPools)
+					for (const auto &pool : objectPools)
 					{
 						totalPoolSize += pool.objectPoolSize;
 					}
@@ -2012,7 +2012,7 @@ namespace isobus
 		{
 			errorCode |= 0x01;
 		}
-		if ((isAlreadyAssigned) && (false == is_vt_version_supported(VTVersion::Version6)))
+		if (isAlreadyAssigned && (false == is_vt_version_supported(VTVersion::Version6)))
 		{
 			errorCode |= 0x02;
 		}
@@ -2137,9 +2137,9 @@ namespace isobus
 		if (StateMachineState::Disconnected == value)
 		{
 			lastVTStatusTimestamp_ms = 0;
-			for (std::size_t i = 0; i < objectPools.size(); i++)
+			for (auto &pool : objectPools)
 			{
-				objectPools[i].uploaded = false;
+				pool.uploaded = false;
 			}
 		}
 	}
@@ -2149,8 +2149,8 @@ namespace isobus
 		if ((flag <= static_cast<std::uint32_t>(TransmitFlags::NumberFlags)) &&
 		    (nullptr != parent))
 		{
-			TransmitFlags flagToProcess = static_cast<TransmitFlags>(flag);
-			VirtualTerminalClient *vtClient = static_cast<VirtualTerminalClient *>(parent);
+			auto flagToProcess = static_cast<TransmitFlags>(flag);
+			auto vtClient = static_cast<VirtualTerminalClient *>(parent);
 			bool transmitSuccessful = false;
 
 			switch (flagToProcess)
@@ -2180,9 +2180,9 @@ namespace isobus
 				}
 				break;
 
-				case TransmitFlags::NumberFlags:
 				default:
 				{
+					// Flag not handled
 				}
 				break;
 			}
@@ -2196,7 +2196,7 @@ namespace isobus
 
 	void VirtualTerminalClient::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
-		VirtualTerminalClient *parentVT = static_cast<VirtualTerminalClient *>(parentPointer);
+		auto parentVT = static_cast<VirtualTerminalClient *>(parentPointer);
 		if ((nullptr != parentPointer) &&
 		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
 		    ((nullptr == message.get_destination_control_function()) ||
@@ -2299,7 +2299,7 @@ namespace isobus
 							std::uint16_t xPosition = message.get_uint16_at(1);
 							std::uint16_t yPosition = message.get_uint16_at(3);
 
-							std::uint8_t touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
+							auto touchState = static_cast<std::uint8_t>(KeyActivationCode::ButtonPressedOrLatched);
 							std::uint16_t parentMaskObjectID = NULL_OBJECT_ID;
 							std::uint8_t transactionNumber = 0xF;
 							if (parentVT->is_vt_version_supported(VTVersion::Version6))
@@ -4195,7 +4195,7 @@ namespace isobus
 		buffer[6] = (height >> 8);
 	}
 
-	bool VirtualTerminalClient::resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type)
+	bool VirtualTerminalClient::resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type) const
 	{
 		bool retVal = false;
 
@@ -4330,8 +4330,8 @@ namespace isobus
 					// Reposition the child points
 					for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
 					{
-						auto xPosition = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[14 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (4 * i)]) << 8))) * scaleFactor);
-						auto yPosition = static_cast<std::uint16_t>(((static_cast<std::uint16_t>(buffer[16 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[17 + (4 * i)]) << 8))) * scaleFactor);
+						auto xPosition = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[14 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[15 + (4 * i)]) << 8)) * scaleFactor);
+						auto yPosition = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[16 + (4 * i)]) | (static_cast<std::uint16_t>(buffer[17 + (4 * i)]) << 8)) * scaleFactor);
 						buffer[14 + (4 * i)] = (xPosition & 0xFF);
 						buffer[15 + (4 * i)] = (xPosition >> 8);
 						buffer[16 + (4 * i)] = (yPosition & 0xFF);
@@ -4374,8 +4374,8 @@ namespace isobus
 					// Iterate over the list of children and move them proportionally to the new size
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[20 + (6 * i)]) | (static_cast<std::int16_t>(buffer[21 + (6 * i)]) << 8))) * scaleFactor);
-						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[22 + (6 * i)]) | (static_cast<std::int16_t>(buffer[23 + (6 * i)]) << 8))) * scaleFactor);
+						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[20 + (6 * i)]) | (static_cast<std::int16_t>(buffer[21 + (6 * i)]) << 8)) * scaleFactor);
+						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[22 + (6 * i)]) | (static_cast<std::int16_t>(buffer[23 + (6 * i)]) << 8)) * scaleFactor);
 						buffer[20 + (6 * i)] = (childX & 0xFF);
 						buffer[21 + (6 * i)] = (childX >> 8);
 						buffer[22 + (6 * i)] = (childY & 0xFF);
@@ -4391,8 +4391,8 @@ namespace isobus
 
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8))) * scaleFactor);
-						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[11 + (6 * i)]) | (static_cast<std::int16_t>(buffer[12 + (6 * i)]) << 8))) * scaleFactor);
+						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8)) * scaleFactor);
+						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[11 + (6 * i)]) | (static_cast<std::int16_t>(buffer[12 + (6 * i)]) << 8)) * scaleFactor);
 						buffer[9 + (6 * i)] = (childX & 0xFF);
 						buffer[10 + (6 * i)] = (childX >> 8);
 						buffer[11 + (6 * i)] = (childY & 0xFF);
@@ -4417,8 +4417,8 @@ namespace isobus
 
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[8 + (6 * i)]) | (static_cast<std::int16_t>(buffer[9 + (6 * i)]) << 8))) * scaleFactor);
-						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[10 + (6 * i)]) | (static_cast<std::int16_t>(buffer[11 + (6 * i)]) << 8))) * scaleFactor);
+						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[8 + (6 * i)]) | (static_cast<std::int16_t>(buffer[9 + (6 * i)]) << 8)) * scaleFactor);
+						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[10 + (6 * i)]) | (static_cast<std::int16_t>(buffer[11 + (6 * i)]) << 8)) * scaleFactor);
 						buffer[8 + (6 * i)] = (childX & 0xFF);
 						buffer[9 + (6 * i)] = (childX >> 8);
 						buffer[10 + (6 * i)] = (childY & 0xFF);
@@ -4434,8 +4434,8 @@ namespace isobus
 
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8))) * scaleFactor);
-						auto childY = static_cast<std::int16_t>(((static_cast<std::int16_t>(buffer[11 + (6 * i)]) | (static_cast<std::int16_t>(buffer[12 + (6 * i)]) << 8))) * scaleFactor);
+						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[9 + (6 * i)]) | (static_cast<std::int16_t>(buffer[10 + (6 * i)]) << 8)) * scaleFactor);
+						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[11 + (6 * i)]) | (static_cast<std::int16_t>(buffer[12 + (6 * i)]) << 8)) * scaleFactor);
 						buffer[9 + (6 * i)] = (childX & 0xFF);
 						buffer[10 + (6 * i)] = (childX >> 8);
 						buffer[11 + (6 * i)] = (childY & 0xFF);

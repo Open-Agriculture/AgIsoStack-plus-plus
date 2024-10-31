@@ -22,7 +22,7 @@ namespace isobus
 		return faultingObjectID;
 	}
 
-	void VirtualTerminalWorkingSetBase::add_iop_raw_data(std::vector<std::uint8_t> &dataToAdd)
+	void VirtualTerminalWorkingSetBase::add_iop_raw_data(const std::vector<std::uint8_t> &dataToAdd)
 	{
 		iopFilesRawData.push_back(dataToAdd);
 	}
@@ -72,7 +72,7 @@ namespace isobus
 		if (iopLength > 3)
 		{
 			// We at least have object ID and type
-			std::uint16_t decodedID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+			auto decodedID = static_cast<uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
 			VirtualTerminalObjectType decodedType = static_cast<VirtualTerminalObjectType>(iopData[2]);
 
 			switch (decodedType)
@@ -107,8 +107,8 @@ namespace isobus
 								for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 								{
 									std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-									std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-									std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+									auto childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
+									auto childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
 									tempObject->add_child(childID, childX, childY);
 									iopLength -= 6;
 									iopData += 6;
@@ -449,8 +449,8 @@ namespace isobus
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
 								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-								std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-								std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+								auto childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
+								auto childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
 								tempObject->add_child(childID, childX, childY);
 								iopLength -= 6;
 								iopData += 6;
@@ -847,8 +847,8 @@ namespace isobus
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
 								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-								std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-								std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+								auto childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
+								auto childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
 								tempObject->add_child(childID, childX, childY);
 								iopLength -= 6;
 								iopData += 6;
