@@ -657,7 +657,7 @@ namespace isobus
 		}
 	}
 
-	void TransportProtocolManager::send_data_transfer_packets(std::shared_ptr<TransportProtocolSession> &session)
+	void TransportProtocolManager::send_data_transfer_packets(const std::shared_ptr<TransportProtocolSession> &session)
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 		std::uint8_t framesToSend = session->get_cts_number_of_packets_remaining();
@@ -832,7 +832,7 @@ namespace isobus
 		}
 	}
 
-	bool TransportProtocolManager::abort_session(std::shared_ptr<TransportProtocolSession> &session, ConnectionAbortReason reason)
+	bool TransportProtocolManager::abort_session(const std::shared_ptr<TransportProtocolSession> &session, ConnectionAbortReason reason)
 	{
 		bool retVal = false;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
@@ -878,7 +878,7 @@ namespace isobus
 		                            CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	void TransportProtocolManager::close_session(std::shared_ptr<TransportProtocolSession> &session, bool successful)
+	void TransportProtocolManager::close_session(const std::shared_ptr<TransportProtocolSession> &session, bool successful)
 	{
 		session->complete(successful);
 
@@ -890,7 +890,7 @@ namespace isobus
 		}
 	}
 
-	bool TransportProtocolManager::send_broadcast_announce_message(std::shared_ptr<TransportProtocolSession> &session) const
+	bool TransportProtocolManager::send_broadcast_announce_message(const std::shared_ptr<TransportProtocolSession> &session) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			BROADCAST_ANNOUNCE_MESSAGE_MULTIPLEXOR,
@@ -909,7 +909,7 @@ namespace isobus
 		                            CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	bool TransportProtocolManager::send_request_to_send(std::shared_ptr<TransportProtocolSession> &session) const
+	bool TransportProtocolManager::send_request_to_send(const std::shared_ptr<TransportProtocolSession> &session) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			REQUEST_TO_SEND_MULTIPLEXOR,
@@ -928,7 +928,7 @@ namespace isobus
 		                            CANIdentifier::CANPriority::PriorityLowest7);
 	}
 
-	bool TransportProtocolManager::send_clear_to_send(std::shared_ptr<TransportProtocolSession> &session) const
+	bool TransportProtocolManager::send_clear_to_send(const std::shared_ptr<TransportProtocolSession> &session) const
 	{
 		bool retVal = false;
 
@@ -966,7 +966,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool TransportProtocolManager::send_end_of_session_acknowledgement(std::shared_ptr<TransportProtocolSession> &session) const
+	bool TransportProtocolManager::send_end_of_session_acknowledgement(const std::shared_ptr<TransportProtocolSession> &session) const
 	{
 		std::uint32_t messageLength = session->get_message_length();
 		std::uint32_t parameterGroupNumber = session->get_parameter_group_number();

@@ -33,10 +33,6 @@ namespace isobus
 		}
 	}
 
-	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
-	{
-	}
-
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
 	{
 		if (nullptr == objectPoolProcessingThread)
@@ -57,7 +53,7 @@ namespace isobus
 
 	bool VirtualTerminalServerManagedWorkingSet::get_any_object_pools() const
 	{
-		return (0 != iopFilesRawData.size());
+		return (!iopFilesRawData.empty());
 	}
 
 	VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState VirtualTerminalServerManagedWorkingSet::get_object_pool_processing_state()
@@ -139,7 +135,7 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
 	{
-		if (0 != iopFilesRawData.size())
+		if (!iopFilesRawData.empty())
 		{
 			bool lSuccess = true;
 

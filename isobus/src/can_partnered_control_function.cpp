@@ -17,7 +17,7 @@
 
 namespace isobus
 {
-	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> NAMEFilters) :
+	PartneredControlFunction::PartneredControlFunction(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters) :
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort, Type::Partnered),
 	  NAMEFilterList(NAMEFilters)
 	{
@@ -63,13 +63,13 @@ namespace isobus
 		return retVal;
 	}
 
-	std::size_t PartneredControlFunction::get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter)
+	std::size_t PartneredControlFunction::get_number_name_filters_with_parameter_type(NAME::NAMEParameters parameter) const
 	{
 		std::size_t retVal = 0;
 
-		for (std::size_t i = 0; i < NAMEFilterList.size(); i++)
+		for (const auto &filter : NAMEFilterList)
 		{
-			if (parameter == NAMEFilterList[i].get_parameter())
+			if (parameter == filter.get_parameter())
 			{
 				retVal++;
 			}

@@ -1172,12 +1172,10 @@ namespace isobus
 
 			if ((newValue != measurementChangeCommand.lastValue) &&
 			    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
-			     (newValue <= lowerLimit)))
+			     (newValue <= lowerLimit)) &&
+			    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
 			{
-				if (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue))
-				{
-					measurementChangeCommand.lastValue = newValue;
-				}
+				measurementChangeCommand.lastValue = newValue;
 			}
 		}
 	}

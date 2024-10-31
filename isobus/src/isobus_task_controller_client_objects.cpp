@@ -92,14 +92,15 @@ namespace isobus
 			retVal.push_back(static_cast<std::uint8_t>(get_object_id() & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((get_object_id() >> 8) & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>(designator.size()));
-			for (std::size_t i = 0; i < designator.size(); i++)
+
+			for (const auto &character : designator)
 			{
-				retVal.push_back(designator[i]);
+				retVal.push_back(character);
 			}
 			retVal.push_back(static_cast<std::uint8_t>(softwareVersion.size()));
-			for (std::size_t i = 0; i < softwareVersion.size(); i++)
+			for (const auto &character : softwareVersion)
 			{
-				retVal.push_back(softwareVersion[i]);
+				retVal.push_back(character);
 			}
 			retVal.push_back(static_cast<std::uint8_t>(NAME & 0xFF));
 			retVal.push_back(static_cast<std::uint8_t>((NAME >> 8) & 0xFF));

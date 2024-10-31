@@ -24,7 +24,7 @@
 
 namespace isobus
 {
-	TimeDateInterface::TimeDateInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, std::function<bool(TimeAndDate &timeAndDateToPopulate)> timeAndDateCallback) :
+	TimeDateInterface::TimeDateInterface(std::shared_ptr<InternalControlFunction> sourceControlFunction, const std::function<bool(TimeAndDate &timeAndDateToPopulate)> &timeAndDateCallback) :
 	  myControlFunction(sourceControlFunction),
 	  userTimeDateCallback(timeAndDateCallback)
 	{

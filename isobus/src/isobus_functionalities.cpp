@@ -418,7 +418,16 @@ namespace isobus
 		}
 		else
 		{
-			retVal = get_functionality_byte_option(Functionalities::TractorImplementManagementServer, get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option));
+			std::uint8_t optionBit = get_tim_option_bit_index(option);
+
+			if (optionBit < 0xFF)
+			{
+				retVal = get_functionality_byte_option(Functionalities::TractorImplementManagementServer, get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option));
+			}
+			else
+			{
+				retVal = false;
+			}
 		}
 		return retVal;
 	}
@@ -630,7 +639,7 @@ namespace isobus
 			}
 			else
 			{
-				serializedValue.at(byteIndex) = (serializedValue.at(byteIndex) & ~(bit));
+				serializedValue.at(byteIndex) = (serializedValue.at(byteIndex) & ~bit);
 			}
 		}
 	}
@@ -641,7 +650,7 @@ namespace isobus
 
 		if ((byteIndex < serializedValue.size()) && (bit < std::numeric_limits<std::uint8_t>::max()))
 		{
-			retVal = (0 != (serializedValue.at(byteIndex) & (bit)));
+			retVal = (0 != (serializedValue.at(byteIndex) & bit));
 		}
 		return retVal;
 	}

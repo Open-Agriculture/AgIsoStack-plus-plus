@@ -217,7 +217,7 @@ namespace isobus
 		/// @param[in] session The session to abort
 		/// @param[in] reason The reason we're aborting the session
 		/// @returns true if the abort was send OK, false if not sent
-		bool abort_session(std::shared_ptr<TransportProtocolSession> &session, ConnectionAbortReason reason);
+		bool abort_session(const std::shared_ptr<TransportProtocolSession> &session, ConnectionAbortReason reason);
 
 		/// @brief Send an abort with no corresponding session with the specified abort reason. Sends a CAN message.
 		/// @param[in] sender The sender of the abort
@@ -233,31 +233,31 @@ namespace isobus
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
 		/// @param[in] successful Denotes if the session was successful
-		void close_session(std::shared_ptr<TransportProtocolSession> &session, bool successful);
+		void close_session(const std::shared_ptr<TransportProtocolSession> &session, bool successful);
 
 		/// @brief Sends the "broadcast announce" message
 		/// @param[in] session The session for which we're sending the BAM
 		/// @returns true if the BAM was sent, false if sending was not successful
-		bool send_broadcast_announce_message(std::shared_ptr<TransportProtocolSession> &session) const;
+		bool send_broadcast_announce_message(const std::shared_ptr<TransportProtocolSession> &session) const;
 
 		/// @brief Sends the "request to send" message as part of initiating a transmit
 		/// @param[in] session The session for which we're sending the RTS
 		/// @returns true if the RTS was sent, false if sending was not successful
-		bool send_request_to_send(std::shared_ptr<TransportProtocolSession> &session) const;
+		bool send_request_to_send(const std::shared_ptr<TransportProtocolSession> &session) const;
 
 		/// @brief Sends the "clear to send" message
 		/// @param[in] session The session for which we're sending the CTS
 		/// @returns true if the CTS was sent, false if sending was not successful
-		bool send_clear_to_send(std::shared_ptr<TransportProtocolSession> &session) const;
+		bool send_clear_to_send(const std::shared_ptr<TransportProtocolSession> &session) const;
 
 		/// @brief Sends the "end of message acknowledgement" message for the provided session
 		/// @param[in] session The session for which we're sending the EOM ACK
 		/// @returns true if the EOM was sent, false if sending was not successful
-		bool send_end_of_session_acknowledgement(std::shared_ptr<TransportProtocolSession> &session) const;
+		bool send_end_of_session_acknowledgement(const std::shared_ptr<TransportProtocolSession> &session) const;
 
 		///@brief Sends data transfer packets for the specified TransportProtocolSession.
 		/// @param[in] session The TransportProtocolSession for which to send data transfer packets.
-		void send_data_transfer_packets(std::shared_ptr<TransportProtocolSession> &session);
+		void send_data_transfer_packets(const std::shared_ptr<TransportProtocolSession> &session);
 
 		/// @brief Processes a broadcast announce message.
 		/// @param[in] source The source control function that sent the broadcast announce message.

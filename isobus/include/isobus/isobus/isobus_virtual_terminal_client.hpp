@@ -1223,7 +1223,7 @@ namespace isobus
 		void set_object_pool(std::uint8_t poolIndex,
 		                     const std::uint8_t *pool,
 		                     std::uint32_t size,
-		                     std::string version = "");
+		                     const std::string &version = "");
 
 		/// @brief Assigns an object pool to the client using a vector.
 		/// @details This is good for small pools or pools where you have all the data in memory.
@@ -1232,7 +1232,7 @@ namespace isobus
 		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
 		void set_object_pool(std::uint8_t poolIndex,
 		                     const std::vector<std::uint8_t> *pool,
-		                     std::string version = "");
+		                     const std::string &version = "");
 
 		/// @brief Configures an object pool to be automatically scaled to match the target VT server
 		/// @param[in] poolIndex The index of the pool you want to auto-scale
@@ -1553,7 +1553,7 @@ namespace isobus
 		/// @param[in] scaleFactor The scale factor to scale the object by
 		/// @param[in] type The type of the object to resize. Must match the object located at `buffer`
 		/// @returns true if the object was resized, otherwise false
-		bool resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type);
+		bool resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type) const;
 
 		/// @brief Extract from the cache whether a VT does not support a specific function
 		/// @param[in] function The function to check

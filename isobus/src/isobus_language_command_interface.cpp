@@ -295,7 +295,7 @@ namespace isobus
 		genericUnitSystem = units;
 	}
 
-	const std::array<std::uint8_t, 7> LanguageCommandInterface::get_localization_raw_data() const
+	std::array<std::uint8_t, 7> LanguageCommandInterface::get_localization_raw_data() const
 	{
 		std::array<std::uint8_t, 7> retVal = { 0 };
 
