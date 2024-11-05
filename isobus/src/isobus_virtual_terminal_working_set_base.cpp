@@ -2374,26 +2374,17 @@ namespace isobus
 
 						if (iopLength >= length)
 						{
-							if ((length >= 2) && (0xFF == iopData[0]) && (0xFE == iopData[1]))
-							{
-								// This string is UTF-16
-								CANStackLogger::error("[WS]: UTF-16 strings are not supported at this time. (todo)");
-							}
-							else
-							{
-								// Regular chars
-								std::string tempStringValue;
-								tempStringValue.reserve(length);
+							std::string tempStringValue;
+							tempStringValue.reserve(length);
 
-								for (std::uint32_t i = 0; i < length; i++)
-								{
-									tempStringValue.push_back(static_cast<char>(iopData[0]));
-									iopData++;
-									iopLength--;
-								}
-								tempObject->set_value(tempStringValue);
-								retVal = true;
+							for (std::uint32_t i = 0; i < length; i++)
+							{
+								tempStringValue.push_back(static_cast<char>(iopData[0]));
+								iopData++;
+								iopLength--;
 							}
+							tempObject->set_value(tempStringValue);
+							retVal = true;
 						}
 						else
 						{
