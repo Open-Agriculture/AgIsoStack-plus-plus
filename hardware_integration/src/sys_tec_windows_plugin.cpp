@@ -12,6 +12,8 @@
 #include "isobus/hardware_integration/sys_tec_windows_plugin.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 
+#include <thread>
+
 namespace isobus
 {
 	SysTecWindowsPlugin::SysTecWindowsPlugin(std::uint8_t channel, std::uint32_t baudrate) :

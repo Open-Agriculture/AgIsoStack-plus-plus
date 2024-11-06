@@ -178,24 +178,31 @@ if("WindowsInnoMakerUSB2CAN" IN_LIST CAN_DRIVER)
     set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
   endif()
 
-  message(STATUS "Target Arch: ${CMAKE_SYSTEM_PROCESSOR}")
-  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL
-                                                "x64")
-    message(STATUS "Detected AMD64, linking to INNOMAKER USB2CAN x64 Library")
-    target_link_libraries(
-      HardwareIntegration
-      PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/InnoMakerUsb2CanLib64.lib)
-  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
-                                                     STREQUAL "X86")
-    message(STATUS "Detected x86, linking to INNOMAKER USB2CAN x86 Library")
-    target_link_libraries(
-      HardwareIntegration
-      PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/InnoMakerUsb2CanLib32.lib)
-  else()
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND MINGW)
     message(
       FATAL_ERROR
-        "Windows InnoMaker USB2CAN Selected but no supported processor arch was detected. Only x64 and x86 are supported."
+        "The InnoMaker driver is compatible only with MSVC, and won't work with mingw"
     )
+  else()
+    message(STATUS "Target Arch: ${CMAKE_SYSTEM_PROCESSOR}")
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR
+                                                  STREQUAL "x64")
+      message(STATUS "Detected AMD64, linking to INNOMAKER USB2CAN x64 Library")
+      target_link_libraries(
+        HardwareIntegration
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/InnoMakerUsb2CanLib64.lib)
+    elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
+                                                       STREQUAL "X86")
+      message(STATUS "Detected x86, linking to INNOMAKER USB2CAN x86 Library")
+      target_link_libraries(
+        HardwareIntegration
+        PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Windows/InnoMakerUsb2CanLib32.lib)
+    else()
+      message(
+        FATAL_ERROR
+          "Windows InnoMaker USB2CAN Selected but no supported processor arch was detected. Only x64 and x86 are supported."
+      )
+    endif()
   endif()
 endif()
 
