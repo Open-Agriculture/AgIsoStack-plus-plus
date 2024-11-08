@@ -7638,18 +7638,9 @@ namespace isobus
 		{
 			for (const auto &command : commandPackets)
 			{
-				bool currentCommandAllowed = false;
-
-				for (const auto &allowedCommand : ALLOWED_COMMANDS_LOOKUP_TABLE)
-				{
-					if (!command.empty() && (command.at(0) == allowedCommand))
-					{
-						currentCommandAllowed = true;
-						break;
-					}
-				}
-
-				if (!currentCommandAllowed)
+				if (command.empty() ||
+					std::find(ALLOWED_COMMANDS_LOOKUP_TABLE.begin(), ALLOWED_COMMANDS_LOOKUP_TABLE.end(), command[0]) ==
+					ALLOWED_COMMANDS_LOOKUP_TABLE.end())
 				{
 					retVal = false;
 					break;

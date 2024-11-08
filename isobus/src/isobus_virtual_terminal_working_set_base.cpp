@@ -2753,39 +2753,56 @@ namespace isobus
 
 							while (numberBytesProcessed < numberBytesToFollow)
 							{
-								if (180 == iopData[0]) // Special case for change child position, which is 9 bytes.
+								auto commandLength = 8;
+								switch (static_cast<Macro::Command>(iopData[0]))
 								{
-									retVal = tempObject->add_command_packet({
-									  iopData[0],
-									  iopData[1],
-									  iopData[2],
-									  iopData[3],
-									  iopData[4],
-									  iopData[5],
-									  iopData[6],
-									  iopData[7],
-									  iopData[8],
-									});
-									iopLength -= CAN_DATA_LENGTH + 1;
-									iopData += CAN_DATA_LENGTH + 1;
-									numberBytesProcessed += CAN_DATA_LENGTH + 1;
+									case Macro::Command::ChangeChildPosition:
+										// special case: 9 bytes
+										retVal = tempObject->add_command_packet({
+											iopData[0],
+											iopData[1],
+											iopData[2],
+											iopData[3],
+											iopData[4],
+											iopData[5],
+											iopData[6],
+											iopData[7],
+											iopData[8],
+										});
+										commandLength = 9;
+										break;
+									case Macro::Command::GraphicsContextCommand:
+										// FIXME
+										break;
+									case Macro::Command::ChangeStringValue: {
+										// Change string value has variable length
+										std::vector<std::uint8_t> command;
+										auto stringLength = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
+										for (int i = 0; i<(stringLength + 5); i++) {
+											command.push_back(iopData[i]);
+										}
+										retVal = tempObject->add_command_packet(command);
+										commandLength = 5 + stringLength;
+										break;
+									}
+									default:
+										// all other macro commands are 8 byte long
+										retVal = tempObject->add_command_packet({
+											iopData[0],
+											iopData[1],
+											iopData[2],
+											iopData[3],
+											iopData[4],
+											iopData[5],
+											iopData[6],
+											iopData[7],
+										});
+										commandLength = 8;
+										break;
 								}
-								else
-								{
-									retVal = tempObject->add_command_packet({
-									  iopData[0],
-									  iopData[1],
-									  iopData[2],
-									  iopData[3],
-									  iopData[4],
-									  iopData[5],
-									  iopData[6],
-									  iopData[7],
-									});
-									iopLength -= CAN_DATA_LENGTH;
-									iopData += CAN_DATA_LENGTH;
-									numberBytesProcessed += CAN_DATA_LENGTH;
-								}
+								iopLength -= commandLength;
+								iopData += commandLength;
+								numberBytesProcessed += commandLength;
 
 								if (!retVal)
 								{

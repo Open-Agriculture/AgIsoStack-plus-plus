@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_constants.hpp"
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
