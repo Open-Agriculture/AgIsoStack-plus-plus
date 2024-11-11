@@ -2759,26 +2759,28 @@ namespace isobus
 									case Macro::Command::ChangeChildPosition:
 										// special case: 9 bytes
 										retVal = tempObject->add_command_packet({
-											iopData[0],
-											iopData[1],
-											iopData[2],
-											iopData[3],
-											iopData[4],
-											iopData[5],
-											iopData[6],
-											iopData[7],
-											iopData[8],
+										  iopData[0],
+										  iopData[1],
+										  iopData[2],
+										  iopData[3],
+										  iopData[4],
+										  iopData[5],
+										  iopData[6],
+										  iopData[7],
+										  iopData[8],
 										});
 										commandLength = 9;
 										break;
 									case Macro::Command::GraphicsContextCommand:
 										// FIXME
 										break;
-									case Macro::Command::ChangeStringValue: {
+									case Macro::Command::ChangeStringValue:
+									{
 										// Change string value has variable length
 										std::vector<std::uint8_t> command;
 										auto stringLength = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
-										for (int i = 0; i<(stringLength + 5); i++) {
+										for (int i = 0; i < (stringLength + 5); i++)
+										{
 											command.push_back(iopData[i]);
 										}
 										retVal = tempObject->add_command_packet(command);
@@ -2788,14 +2790,14 @@ namespace isobus
 									default:
 										// all other macro commands are 8 byte long
 										retVal = tempObject->add_command_packet({
-											iopData[0],
-											iopData[1],
-											iopData[2],
-											iopData[3],
-											iopData[4],
-											iopData[5],
-											iopData[6],
-											iopData[7],
+										  iopData[0],
+										  iopData[1],
+										  iopData[2],
+										  iopData[3],
+										  iopData[4],
+										  iopData[5],
+										  iopData[6],
+										  iopData[7],
 										});
 										commandLength = 8;
 										break;
