@@ -7,6 +7,7 @@
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
 namespace isobus
 {
@@ -3329,6 +3330,20 @@ namespace isobus
 	std::string OutputString::get_value() const
 	{
 		return stringValue;
+	}
+
+	std::string OutputString::displayed_value(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet) const
+	{
+		if (isobus::NULL_OBJECT_ID != get_variable_reference())
+		{
+			auto child = get_object_by_id(get_variable_reference(), parentWorkingSet->get_object_tree());
+
+			if ((nullptr != child) && (isobus::VirtualTerminalObjectType::StringVariable == child->get_object_type()))
+			{
+				return std::static_pointer_cast<isobus::StringVariable>(child)->get_value();
+			}
+		}
+		return get_value();
 	}
 
 	void OutputString::set_value(const std::string &value)
