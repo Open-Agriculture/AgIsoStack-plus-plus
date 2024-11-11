@@ -1787,6 +1787,7 @@ namespace isobus
 		std::string get_value() const;
 
 		/// @brief Returns the value of the variable (if referenced) otherwise the set value
+		/// @param[in] parentWorkingSet the working set of the given OutputString object
 		/// @returns The displayed value of the string
 		std::string displayed_value(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet) const;
 
