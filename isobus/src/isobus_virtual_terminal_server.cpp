@@ -1169,16 +1169,17 @@ namespace isobus
 											break;
 
 											case VirtualTerminalObjectType::Animation:
-											case VirtualTerminalObjectType::OutputArchedBarGraph:
-											case VirtualTerminalObjectType::OutputPolygon:
-											case VirtualTerminalObjectType::OutputEllipse:
-											case VirtualTerminalObjectType::OutputRectangle:
-											case VirtualTerminalObjectType::OutputLine:
-											case VirtualTerminalObjectType::OutputNumber:
-											case VirtualTerminalObjectType::OutputList:
-											case VirtualTerminalObjectType::InputList:
 											case VirtualTerminalObjectType::Button:
 											case VirtualTerminalObjectType::Container:
+											case VirtualTerminalObjectType::InputList:
+											case VirtualTerminalObjectType::OutputArchedBarGraph:
+											case VirtualTerminalObjectType::OutputEllipse:
+											case VirtualTerminalObjectType::OutputLine:
+											case VirtualTerminalObjectType::OutputList:
+											case VirtualTerminalObjectType::OutputNumber:
+											case VirtualTerminalObjectType::OutputPolygon:
+											case VirtualTerminalObjectType::OutputRectangle:
+											case VirtualTerminalObjectType::OutputString:
 											{
 												targetObject->set_width(newWidth);
 												targetObject->set_height(newHeight);
