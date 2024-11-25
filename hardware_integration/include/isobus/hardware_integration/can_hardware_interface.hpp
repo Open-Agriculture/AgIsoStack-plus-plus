@@ -146,9 +146,13 @@ namespace isobus
 			void stop_threads();
 
 			/// @brief The receiving thread loop for this CAN channel
+#ifdef USE_CMSIS_RTOS2_THREADING
+			static void receive_thread_function(void *parent);
+#else
 			void receive_thread_function();
+#endif
 
-			std::unique_ptr<std::thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
+			std::unique_ptr<Thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
 			bool receiveThreadRunning = false; ///< Flag to indicate if the receive thread is running
 #endif
 
@@ -170,7 +174,11 @@ namespace isobus
 		virtual ~CANHardwareInterface();
 
 		/// @brief The main thread loop for updating the stack
+#if defined USE_CMSIS_RTOS2_THREADING
+		static void update_thread_function(void *);
+#else
 		static void update_thread_function();
+#endif
 
 		/// @brief Starts all threads related to the hardware interface
 		static void start_threads();
@@ -178,7 +186,7 @@ namespace isobus
 		/// @brief Stops all threads related to the hardware interface
 		static void stop_threads();
 
-		static std::unique_ptr<std::thread> updateThread; ///< The main thread
+		static std::unique_ptr<Thread> updateThread; ///< The main thread
 		static std::condition_variable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
 #endif
 		static std::uint32_t lastUpdateTimestamp; ///< The last time the network manager was updated
