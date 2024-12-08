@@ -169,6 +169,7 @@ namespace isobus
 			{
 				child.xLocation += xOffset;
 				child.yLocation += yOffset;
+				retVal = true;
 			}
 		}
 		return retVal;
