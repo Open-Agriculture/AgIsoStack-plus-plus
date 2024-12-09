@@ -100,6 +100,10 @@ if("SYS_TEC" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "UsbCanLs.h")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "UsbCanUp.h")
 endif()
+if("NTCAN" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "ntcan_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "ntcan_plugin.hpp")
+endif()
 
 # Prepend the source directory path to all the source files
 prepend(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR}
@@ -301,6 +305,46 @@ if("SYS_TEC" IN_LIST CAN_DRIVER)
     message(
       FATAL_ERROR
         "SYS TEC Selected but no supported OS was detected. Only Windows is supported currently."
+    )
+  endif()
+endif()
+if("NTCAN" IN_LIST CAN_DRIVER)
+  if(MSVC)
+    # See https://gitlab.kitware.com/cmake/cmake/-/issues/15170
+    set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
+  endif()
+  if(WIN32)
+    if(DEFINED ENV{CanSdkDir})
+      if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR
+                                                    STREQUAL "x64")
+        message(STATUS "Detected x64, linking to NTCAN x64 library")
+        target_link_libraries(HardwareIntegration
+                              PRIVATE $ENV{CanSdkDir}/lib/VC/amd64/ntcan.lib)
+        target_include_directories(HardwareIntegration
+                                   PUBLIC $ENV{CanSdkDir}/include)
+      elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR
+                                                         STREQUAL "X86")
+        message(STATUS "Detected x86, linking to NTCAN x86 library")
+        target_link_libraries(HardwareIntegration
+                              PRIVATE $ENV{CanSdkDir}/lib/VC/i386/ntcan.lib)
+        target_include_directories(HardwareIntegration
+                                   PUBLIC $ENV{CanSdkDir}/include)
+      else()
+        message(
+          FATAL_ERROR
+            "NTCAN Selected but no supported processor arch was detected. Only x64 and x86 are supported."
+        )
+      endif()
+    else()
+      message(
+        FATAL_ERROR
+          "NTCAN Selected but no NTCAN SDK was found. Set the 'CanSdkDir' environment variable to the path of the NTCAN SDK."
+      )
+    endif()
+  else()
+    message(
+      FATAL_ERROR
+        "NTCAN Selected but no supported OS was detected. Only Windows is supported currently."
     )
   endif()
 endif()
