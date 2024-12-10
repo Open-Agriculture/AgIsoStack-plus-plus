@@ -43,11 +43,31 @@ namespace isobus
 			colourTable[i] = VTColourVector((51.0f * (redCounter) / 255.0f), ((51.0f * (greenCounter)) / 255.0f), ((51.0f * blueCounter) / 255.0f));
 		}
 
-		// The rest are proprietary. Init to white for now.
-		for (std::uint16_t i = 232; i < VT_COLOUR_TABLE_SIZE; i++)
-		{
-			colourTable[i] = VTColourVector(1.0f, 1.0f, 1.0f);
-		}
+		// Proprietary colors copied it over manually from the Jetter Iso Designer color palette
+		colourTable[232] = VTColourVector(0.039f, 0.039f, 0.039f);
+		colourTable[233] = VTColourVector(0.082f, 0.082f, 0.082f);
+		colourTable[234] = VTColourVector(0.122f, 0.122f, 0.122f);
+		colourTable[235] = VTColourVector(0.165f, 0.165f, 0.165f);
+		colourTable[236] = VTColourVector(0.216f, 0.216f, 0.216f);
+		colourTable[237] = VTColourVector(0.243f, 0.243f, 0.243f);
+		colourTable[238] = VTColourVector(0.294f, 0.294f, 0.294f);
+		colourTable[239] = VTColourVector(0.333f, 0.333f, 0.333f);
+		colourTable[240] = VTColourVector(0.369f, 0.369f, 0.369f);
+		colourTable[241] = VTColourVector(0.416f, 0.416f, 0.416f);
+		colourTable[242] = VTColourVector(0.459f, 0.459f, 0.459f);
+		colourTable[243] = VTColourVector(0.498f, 0.498f, 0.498f);
+		colourTable[244] = VTColourVector(0.545f, 0.545f, 0.545f);
+		colourTable[245] = VTColourVector(0.584f, 0.584f, 0.584f);
+		colourTable[246] = VTColourVector(0.627f, 0.627f, 0.627f);
+		colourTable[247] = VTColourVector(0.667f, 0.667f, 0.667f);
+		colourTable[248] = VTColourVector(0.710f, 0.710f, 0.710f);
+		colourTable[249] = VTColourVector(0.745f, 0.745f, 0.745f);
+		colourTable[250] = VTColourVector(0.788f, 0.788f, 0.788f);
+		colourTable[251] = VTColourVector(0.831f, 0.831f, 0.831f);
+		colourTable[252] = VTColourVector(0.875f, 0.875f, 0.875f);
+		colourTable[253] = VTColourVector(0.914f, 0.914f, 0.914f);
+		colourTable[254] = VTColourVector(0.957f, 0.957f, 0.957f);
+		colourTable[255] = VTColourVector(0.996f, 0.996f, 0.996f);
 	}
 
 	VTColourVector VTColourTable::get_colour(std::uint8_t colourIndex) const
