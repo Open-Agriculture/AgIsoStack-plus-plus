@@ -1168,18 +1168,29 @@ namespace isobus
 											}
 											break;
 
+											case isobus::VirtualTerminalObjectType::PictureGraphic:
+											{
+												targetObject->set_width(newWidth);
+											}
+											break;
+
 											case VirtualTerminalObjectType::Animation:
 											case VirtualTerminalObjectType::Button:
 											case VirtualTerminalObjectType::Container:
+											case VirtualTerminalObjectType::InputBoolean:
 											case VirtualTerminalObjectType::InputList:
+											case VirtualTerminalObjectType::InputString:
+											case VirtualTerminalObjectType::InputNumber:
 											case VirtualTerminalObjectType::OutputArchedBarGraph:
 											case VirtualTerminalObjectType::OutputEllipse:
 											case VirtualTerminalObjectType::OutputLine:
+											case VirtualTerminalObjectType::OutputLinearBarGraph:
 											case VirtualTerminalObjectType::OutputList:
 											case VirtualTerminalObjectType::OutputNumber:
 											case VirtualTerminalObjectType::OutputPolygon:
 											case VirtualTerminalObjectType::OutputRectangle:
 											case VirtualTerminalObjectType::OutputString:
+											case VirtualTerminalObjectType::ScaledGraphic:
 											{
 												targetObject->set_width(newWidth);
 												targetObject->set_height(newHeight);
