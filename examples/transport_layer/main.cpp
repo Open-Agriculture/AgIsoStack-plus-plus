@@ -35,7 +35,7 @@ int main()
 #ifndef ISOBUS_VIRTUALCAN_AVAILABLE
 	std::cout << "This example requires the VirtualCAN plugin to be available. If using CMake, set the `-DCAN_DRIVER=VirtualCAN`." << std::endl;
 	return -1;
-#endif
+#else
 
 	std::shared_ptr<CANHardwarePlugin> originatorDriver = std::make_shared<VirtualCANPlugin>("test-channel");
 	std::shared_ptr<CANHardwarePlugin> recipientDriver = std::make_shared<VirtualCANPlugin>("test-channel");
@@ -175,7 +175,7 @@ int main()
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(4));
 	}
-
+#endif
 	CANHardwareInterface::stop();
 	return 0;
 }

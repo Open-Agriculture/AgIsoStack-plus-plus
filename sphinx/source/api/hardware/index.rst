@@ -47,6 +47,7 @@ When compiling with CMake, a default CAN driver plug-in will be selected for you
 - :code:`-DCAN_DRIVER=WindowsInnoMakerUSB2CAN` for the InnoMaker USB2CAN adapter (Windows)
 - :code:`-DCAN_DRIVER=TouCAN` for the Rusoku TouCAN (Windows)
 - :code:`-DCAN_DRIVER=SYS_TEC` for a SYS TEC sysWORXX USB CAN adapter (Windows)
+- :code:`-DCAN_DRIVER=NTCAN` for the NTCAN driver (Windows)
 
 Or specify multiple using a semicolon separated list: :code:`-DCAN_DRIVER="<driver1>;<driver2>"`
 
