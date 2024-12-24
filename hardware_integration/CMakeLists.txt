@@ -42,6 +42,16 @@ if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "pcan_basic_windows_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "pcan_basic_windows_plugin.hpp")
 endif()
+if("PeakEthernetGateway" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "peak_ethernet_gateway_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "peak_ethernet_gateway_plugin.hpp")
+  if(WIN32)
+    find_library(SOCKET_LIB ws2_32)
+    if(SOCKET_LIB)
+      message(STATUS "Linking Winsock2 due to PEAK Ethernet Gateway")
+    endif()
+  endif()
+endif()
 if("VirtualCAN" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "virtual_can_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "virtual_can_plugin.hpp")
@@ -120,8 +130,9 @@ add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
 
 target_compile_features(HardwareIntegration PUBLIC cxx_std_11)
 set_target_properties(HardwareIntegration PROPERTIES CXX_EXTENSIONS OFF)
-target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility
-                                                  ${PROJECT_NAME}::Isobus)
+target_link_libraries(
+  HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility ${PROJECT_NAME}::Isobus
+                              ${SOCKET_LIB})
 
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
   if(MSVC)
