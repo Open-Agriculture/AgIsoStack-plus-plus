@@ -12,6 +12,7 @@
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 
+#include <ctime>
 #include <fstream>
 
 namespace isobus
