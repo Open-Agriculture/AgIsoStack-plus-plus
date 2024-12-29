@@ -27,9 +27,9 @@ jobs:
         with:
           python-version: 3.8
           cache: "pip"
-      - name: install gcovr 5.0
+      - name: install gcovr
         run: |
-          pip install gcovr==5.0 # 5.1 is not supported
+          pip install gcovr
       - name: Install sonar-scanner and build-wrapper
         uses: SonarSource/sonarcloud-github-c-cpp@v2
       - name: Run build-wrapper
