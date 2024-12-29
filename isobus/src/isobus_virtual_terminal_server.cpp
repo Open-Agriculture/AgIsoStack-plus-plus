@@ -309,8 +309,8 @@ namespace isobus
 									buffer[1] = parentServer->get_number_of_navigation_soft_keys(); // No navigation softkeys
 									buffer[2] = 0xFF; // Reserved
 									buffer[3] = 0xFF; // Reserved
-									buffer[4] = parentServer->get_soft_key_descriptor_x_pixel_width(); // Pixel width of X softkey descriptor
-									buffer[5] = parentServer->get_soft_key_descriptor_y_pixel_height(); // Pixel width of Y softkey descriptor
+									buffer[4] = parentServer->get_soft_key_descriptor_x_pixel_width(); // Width of the softkey descriptor in pixels
+									buffer[5] = parentServer->get_soft_key_descriptor_y_pixel_height(); // Height of the softkey descriptor in pixels
 									buffer[6] = parentServer->get_number_of_possible_virtual_soft_keys_in_soft_key_mask(); // Number of possible virtual Soft Keys in a Soft Key Mask
 									buffer[7] = parentServer->get_number_of_physical_soft_keys(); // No physical softkeys
 
