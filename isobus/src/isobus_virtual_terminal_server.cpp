@@ -310,7 +310,7 @@ namespace isobus
 									buffer[2] = 0xFF; // Reserved
 									buffer[3] = 0xFF; // Reserved
 									buffer[4] = parentServer->get_soft_key_descriptor_x_pixel_width(); // Pixel width of X softkey descriptor
-									buffer[5] = parentServer->get_soft_key_descriptor_y_pixel_width(); // Pixel width of Y softkey descriptor
+									buffer[5] = parentServer->get_soft_key_descriptor_y_pixel_height(); // Pixel width of Y softkey descriptor
 									buffer[6] = parentServer->get_number_of_possible_virtual_soft_keys_in_soft_key_mask(); // Number of possible virtual Soft Keys in a Soft Key Mask
 									buffer[7] = parentServer->get_number_of_physical_soft_keys(); // No physical softkeys
 
