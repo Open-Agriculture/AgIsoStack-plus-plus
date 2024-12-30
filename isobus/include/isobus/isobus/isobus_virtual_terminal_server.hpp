@@ -139,7 +139,7 @@ namespace isobus
 
 		/// @brief This function is called when the interface needs to know the number of y pixels (height) of your soft keys
 		/// @returns The number of y pixels (height) of your soft keys
-		virtual std::uint8_t get_soft_key_descriptor_y_pixel_width() const = 0;
+		virtual std::uint8_t get_soft_key_descriptor_y_pixel_height() const = 0;
 
 		/// @brief This function is called when the interface needs to know the number of possible virtual soft keys in your soft key mask render area
 		/// @returns The number of possible virtual soft keys in your soft key mask render area
