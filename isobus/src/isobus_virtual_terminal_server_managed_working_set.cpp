@@ -8,6 +8,7 @@
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -127,10 +128,45 @@ namespace isobus
 		return workingSetDeletionRequested;
 	}
 
+	void VirtualTerminalServerManagedWorkingSet::set_iop_size(std::uint32_t newIopSize)
+	{
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		objectPoolTransferInProgress = true;
+		iopSize = newIopSize;
+	}
+
+	float VirtualTerminalServerManagedWorkingSet::iop_load_percentage() const
+	{
+		if (iopSize == 0)
+		{
+			return 0.0f;
+		}
+
+		auto totalTransferredSize = transferredIopSize;
+		if (totalTransferredSize < iopSize) {
+			// if IOP transfer is not completed check if there is an ongoing IOP transfer to us
+			auto sessions = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0);
+			for (const auto &session : sessions)
+			{
+				if (session->get_source()->get_address() == get_control_function()->get_address())
+				{
+					totalTransferredSize += session->get_total_bytes_transferred();
+					break;
+				}
+			}
+		}
+
+		return (totalTransferredSize / (float)iopSize) * 100.0f;
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
 	{
 		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		processingState = value;
+		if (value != ObjectPoolProcessingThreadState::None)
+		{
+			objectPoolTransferInProgress = false;
+		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
@@ -168,6 +204,11 @@ namespace isobus
 			CANStackLogger::error("[WS]: Object pool failed to be parsed.");
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
 		}
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::is_object_pool_transfer_in_progress() const
+	{
+		return objectPoolTransferInProgress;
 	}
 
 } // namespace isobus

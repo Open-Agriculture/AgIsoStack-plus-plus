@@ -121,6 +121,12 @@ namespace isobus
 		/// @returns true if the working set should be deleted, otherwise false
 		bool is_deletion_requested() const;
 
+		void set_iop_size(std::uint32_t newIopSize);
+
+		float iop_load_percentage() const;
+
+		bool is_object_pool_transfer_in_progress() const;
+
 	private:
 		/// @brief Sets the object pool processing state to a new value
 		/// @param[in] value The new state of processing the object pool
@@ -138,6 +144,7 @@ namespace isobus
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
+		bool objectPoolTransferInProgress = false;
 	};
 } // namespace isobus
 
