@@ -51,16 +51,10 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if ((nullptr != objectToAdd) &&
-		    ((!get_object_id_exists(objectToAdd->get_id())) ||
-		     (objectToAdd->get_object_type() == vtObjectTree[objectToAdd->get_id()]->get_object_type())))
+		if (nullptr != objectToAdd)
 		{
 			vtObjectTree[objectToAdd->get_id()] = objectToAdd;
 			retVal = true;
-		}
-		else if (nullptr != objectToAdd)
-		{
-			CANStackLogger::error("[WS]: Cannot replace an object with duplicate ID %u with a different type of object." + isobus::to_string(static_cast<int>(objectToAdd->get_id())));
 		}
 		return retVal;
 	}
