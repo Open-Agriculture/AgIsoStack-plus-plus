@@ -63,7 +63,7 @@ namespace isobus
 		std::uint16_t get_object_pool_faulting_object_id();
 
 	protected:
-		/// @brief Adds an object to the object tree, and replaces an object of the same type
+		/// @brief Adds an object to the object tree, and replaces an object
 		/// if there's already one in the tree with the same ID.
 		/// @param[in] objectToAdd The object to add to the object tree
 		/// @returns true if the object was added or replaced, otherwise false
