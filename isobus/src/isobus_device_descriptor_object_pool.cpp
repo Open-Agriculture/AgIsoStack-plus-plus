@@ -345,6 +345,35 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DeviceDescriptorObjectPool::remove_objects_with_type(task_controller_object::ObjectTypes objectType)
+	{
+		return remove_where([objectType](const task_controller_object::Object &object) { return object.get_object_type() == objectType; });
+	}
+
+	bool DeviceDescriptorObjectPool::remove_object_with_id(std::uint16_t objectID)
+	{
+		return remove_where([objectID](const task_controller_object::Object &object) { return object.get_object_id() == objectID; });
+	}
+
+	bool DeviceDescriptorObjectPool::remove_where(std::function<bool(const task_controller_object::Object &)> predicate)
+	{
+		bool retVal = false;
+
+		for (auto it = objectList.begin(); it != objectList.end();)
+		{
+			if (predicate(*(*it)))
+			{
+				it = objectList.erase(it);
+				retVal = true;
+			}
+			else
+			{
+				++it;
+			}
+		}
+		return retVal;
+	}
+
 	bool DeviceDescriptorObjectPool::deserialize_binary_object_pool(std::vector<std::uint8_t> &binaryPool, NAME clientNAME)
 	{
 		return deserialize_binary_object_pool(binaryPool.data(), static_cast<std::uint32_t>(binaryPool.size()), clientNAME);
@@ -357,7 +386,6 @@ namespace isobus
 		if ((nullptr != binaryPool) && (0 != binaryPoolSizeBytes))
 		{
 			LOG_DEBUG("[DDOP]: Attempting to deserialize a binary object pool with size %u.", binaryPoolSizeBytes);
-			clear();
 
 			// Iterate over the DDOP and convert to objects.
 			// Using the size to track how much is left to process.
@@ -489,6 +517,7 @@ namespace isobus
 								extendedStructureLabel.push_back(binaryPool[31 + numberDeviceSerialNumberBytes + numberDesignatorBytes + numberSoftwareVersionBytes + i]);
 							}
 
+							remove_objects_with_type(task_controller_object::ObjectTypes::Device); // Make sure the previous device object is removed
 							if (add_device(deviceDesignator, deviceSoftwareVersion, deviceSerialNumber, deviceStructureLabel, localizationLabel, extendedStructureLabel, clientNAME.get_full_name()))
 							{
 								binaryPoolSizeBytes -= expectedSize;
@@ -553,6 +582,7 @@ namespace isobus
 								deviceElementDesignator.push_back(binaryPool[7 + i]);
 							}
 
+							remove_object_with_id(uniqueID); // Make sure the previous device element object is removed
 							if (add_device_element(deviceElementDesignator, elementNumber, parentObject, type, uniqueID))
 							{
 								auto DETObject = std::static_pointer_cast<task_controller_object::DeviceElementObject>(get_object_by_id(uniqueID));
@@ -611,6 +641,7 @@ namespace isobus
 								processDataDesignator.push_back(binaryPool[10 + i]);
 							}
 
+							remove_object_with_id(uniqueID); // Make sure the previous device process data object is removed
 							if (add_device_process_data(processDataDesignator, DDI, presentationObjectID, binaryPool[7], binaryPool[8], uniqueID))
 							{
 								binaryPoolSizeBytes -= expectedSize;
@@ -661,6 +692,7 @@ namespace isobus
 								designator.push_back(binaryPool[12 + i]);
 							}
 
+							remove_object_with_id(uniqueID); // Make sure the previous device property object is removed
 							if (add_device_property(designator, propertyValue, DDI, presentationObjectID, uniqueID))
 							{
 								binaryPoolSizeBytes -= expectedSize;
@@ -723,6 +755,7 @@ namespace isobus
 								designator.push_back(binaryPool[15 + i]);
 							}
 
+							remove_object_with_id(uniqueID); // Make sure the previous device value presentation object is removed
 							if (add_device_value_presentation(designator, offset, scale, binaryPool[13], uniqueID))
 							{
 								binaryPoolSizeBytes -= expectedSize;

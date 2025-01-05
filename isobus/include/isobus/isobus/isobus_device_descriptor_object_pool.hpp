@@ -13,6 +13,7 @@
 #include "isobus/isobus/can_NAME.hpp"
 #include "isobus/isobus/isobus_task_controller_client_objects.hpp"
 
+#include <functional>
 #include <memory>
 
 namespace isobus
@@ -107,25 +108,43 @@ namespace isobus
 		                                   std::uint8_t numberDecimals,
 		                                   std::uint16_t uniqueID);
 
+		/// @brief Removes all objects from the DDOP that have a certain type
+		/// @param objectType The type of object to remove
+		/// @returns `true` if any objects were removed, `false` if no objects were removed
+		bool remove_objects_with_type(task_controller_object::ObjectTypes objectType);
+
+		/// @brief Removes all objects from the DDOP that have a certain object ID
+		/// @param objectID The object ID to remove
+		/// @returns `true` if any objects were removed, `false` if no objects were removed
+		bool remove_object_with_id(std::uint16_t objectID);
+
+		/// @brief Removes all objects from the DDOP that match a certain predicate
+		/// @param predicate The predicate to match against
+		/// @returns `true` if any objects were removed, `false` if no objects were removed
+		bool remove_where(std::function<bool(const task_controller_object::Object &)> predicate);
+
 		/// @brief Attempts to take a binary object pool and convert it back into
-		/// C++ objects. Useful for a task controller server or to view the content
+		/// C++ objects. The object's will be added to the list of objects,
+		/// or replaced if an object already exists with the same identifier.
 		/// of a DDOP captured in a CAN log, for example.
 		/// @param binaryPool The binary object pool, as an array of bytes.
 		/// @param clientNAME The ISO NAME of the source ECU for this DDOP, or NAME(0) to ignore checking against actual ECU NAME
 		/// @returns True if the object pool was successfully deserialized, otherwise false.
-		/// NOTE: This only means that the pool was deserialized. It does not mean that the
+		/// @note This only means that the pool was deserialized. It does not mean that the
 		/// relationship between objects is valid. You may have to do additional
 		/// checking on the pool before using it.
 		bool deserialize_binary_object_pool(std::vector<std::uint8_t> &binaryPool, NAME clientNAME = NAME(0));
 
 		/// @brief Attempts to take a binary object pool and convert it back into
-		/// C++ objects. Useful for a task controller server or to view the content
+		/// C++ objects. The object's will be added to the list of objects,
+		/// or replaced if an object already exists with the same identifier.
+		/// Useful for a task controller server or to view the content
 		/// of a DDOP captured in a CAN log, for example.
 		/// @param binaryPool The binary object pool, as an array of bytes.
 		/// @param binaryPoolSizeBytes The size of the DDOP to process in bytes.
 		/// @param clientNAME The ISO NAME of the source ECU for this DDOP, or NAME(0) to ignore checking against actual ECU NAME
 		/// @returns True if the object pool was successfully deserialized, otherwise false.
-		/// NOTE: This only means that the pool was deserialized. It does not mean that the
+		/// @note This only means that the pool was deserialized. It does not mean that the
 		/// relationship between objects is valid. You may have to do additional
 		/// checking on the pool before using it.
 		bool deserialize_binary_object_pool(const std::uint8_t *binaryPool, std::uint32_t binaryPoolSizeBytes, NAME clientNAME = NAME(0));
