@@ -1930,14 +1930,31 @@ namespace isobus
 		foregroundColourObjectID = fontAttributeValue;
 	}
 
-	std::uint16_t InputBoolean::get_variable_reference() const
+	std::uint16_t VTObjectWithVariableReference::get_variable_reference() const
 	{
 		return variableReference;
 	}
 
-	void InputBoolean::set_variable_reference(std::uint16_t numberVariableValue)
+	void VTObjectWithVariableReference::set_variable_reference(std::uint16_t variableValue)
 	{
-		variableReference = numberVariableValue;
+		variableReference = variableValue;
+	}
+
+	bool StringVTObject::get_option(Options option) const
+	{
+		return (0 != ((1 << static_cast<std::uint8_t>(option)) & optionsBitfield));
+	}
+
+	void StringVTObject::set_option(Options option, bool value)
+	{
+		if (value)
+		{
+			optionsBitfield |= (1 << static_cast<std::uint8_t>(option));
+		}
+		else
+		{
+			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
+		}
 	}
 
 	VirtualTerminalObjectType InputString::get_object_type() const
@@ -2240,11 +2257,6 @@ namespace isobus
 		return (0 != ((1 << static_cast<std::uint8_t>(option)) & optionsBitfield));
 	}
 
-	void InputString::set_options(std::uint8_t value)
-	{
-		optionsBitfield = value;
-	}
-
 	void InputString::set_option(Options option, bool value)
 	{
 		if (value)
@@ -2257,21 +2269,6 @@ namespace isobus
 		}
 	}
 
-	InputString::HorizontalJustification InputString::get_horizontal_justification() const
-	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
-	}
-
-	InputString::VerticalJustification InputString::get_vertical_justification() const
-	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
-	}
-
-	void InputString::set_justification_bitfield(std::uint8_t value)
-	{
-		justificationBitfield = value;
-	}
-
 	std::string InputString::get_value() const
 	{
 		return stringValue;
@@ -2280,26 +2277,6 @@ namespace isobus
 	void InputString::set_value(const std::string &value)
 	{
 		stringValue = value;
-	}
-
-	std::uint16_t InputString::get_font_attributes() const
-	{
-		return fontAttributes;
-	}
-
-	void InputString::set_font_attributes(std::uint16_t fontAttributesValue)
-	{
-		fontAttributes = fontAttributesValue;
-	}
-
-	std::uint16_t InputString::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	void InputString::set_variable_reference(std::uint16_t variableReferenceValue)
-	{
-		variableReference = variableReferenceValue;
 	}
 
 	std::uint16_t InputString::get_input_attributes() const
@@ -2558,7 +2535,7 @@ namespace isobus
 
 				case static_cast<std::uint8_t>(AttributeName::Options):
 				{
-					returnedAttributeData = options;
+					returnedAttributeData = optionsBitfield;
 					retVal = true;
 				}
 				break;
@@ -2645,31 +2622,6 @@ namespace isobus
 		return retVal;
 	}
 
-	InputNumber::HorizontalJustification InputNumber::get_horizontal_justification() const
-	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
-	}
-
-	InputNumber::VerticalJustification InputNumber::get_vertical_justification() const
-	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
-	}
-
-	void InputNumber::set_justification_bitfield(std::uint8_t newJustification)
-	{
-		justificationBitfield = newJustification;
-	}
-
-	float InputNumber::get_scale() const
-	{
-		return scale;
-	}
-
-	void InputNumber::set_scale(float newScale)
-	{
-		scale = newScale;
-	}
-
 	std::uint32_t InputNumber::get_maximum_value() const
 	{
 		return maximumValue;
@@ -2690,55 +2642,20 @@ namespace isobus
 		minimumValue = newMin;
 	}
 
-	std::int32_t InputNumber::get_offset() const
+	bool NumberVTObject::get_option(Options newOption) const
 	{
-		return offset;
+		return (0 != ((1 << static_cast<std::uint8_t>(newOption)) & optionsBitfield));
 	}
 
-	void InputNumber::set_offset(std::int32_t newOffset)
-	{
-		offset = newOffset;
-	}
-
-	std::uint8_t InputNumber::get_number_of_decimals() const
-	{
-		return numberOfDecimals;
-	}
-
-	void InputNumber::set_number_of_decimals(std::uint8_t numDecimals)
-	{
-		numberOfDecimals = numDecimals;
-	}
-
-	bool InputNumber::get_format() const
-	{
-		return format;
-	}
-
-	void InputNumber::set_format(bool newFormat)
-	{
-		format = newFormat;
-	}
-
-	bool InputNumber::get_option(Options newOption) const
-	{
-		return (0 != ((1 << static_cast<std::uint8_t>(newOption)) & options));
-	}
-
-	void InputNumber::set_options(std::uint8_t newOptions)
-	{
-		options = newOptions;
-	}
-
-	void InputNumber::set_option(Options option, bool optionValue)
+	void NumberVTObject::set_option(Options option, bool optionValue)
 	{
 		if (optionValue)
 		{
-			options |= (1 << static_cast<std::uint8_t>(option));
+			optionsBitfield |= (1 << static_cast<std::uint8_t>(option));
 		}
 		else
 		{
-			options &= ~(1 << static_cast<std::uint8_t>(option));
+			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
 		}
 	}
 
@@ -2764,34 +2681,39 @@ namespace isobus
 		}
 	}
 
-	std::uint32_t InputNumber::get_value() const
+	std::uint32_t NumberVTObject::get_value() const
 	{
 		return value;
 	}
 
-	void InputNumber::set_value(std::uint32_t inputValue)
+	void NumberVTObject::set_value(std::uint32_t inputValue)
 	{
 		value = inputValue;
 	}
 
-	std::uint16_t InputNumber::get_font_attributes() const
+	TextualVTObject::HorizontalJustification TextualVTObject::get_horizontal_justification() const
+	{
+		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
+	}
+
+	TextualVTObject::VerticalJustification TextualVTObject::get_vertical_justification() const
+	{
+		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
+	}
+
+	void TextualVTObject::set_justification_bitfield(std::uint8_t value)
+	{
+		justificationBitfield = value;
+	}
+
+	std::uint16_t TextualVTObject::get_font_attributes() const
 	{
 		return fontAttributes;
 	}
 
-	void InputNumber::set_font_attributes(std::uint16_t fontAttributesValue)
+	void TextualVTObject::set_font_attributes(std::uint16_t fontAttributesValue)
 	{
 		fontAttributes = fontAttributesValue;
-	}
-
-	std::uint16_t InputNumber::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	void InputNumber::set_variable_reference(std::uint16_t variableReferenceValue)
-	{
-		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType InputList::get_object_type() const
@@ -2999,16 +2921,6 @@ namespace isobus
 		}
 	}
 
-	std::uint8_t InputList::get_value() const
-	{
-		return value;
-	}
-
-	void InputList::set_value(std::uint8_t inputValue)
-	{
-		value = inputValue;
-	}
-
 	bool InputList::change_list_item(std::uint8_t index, std::uint16_t newListItem, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool)
 	{
 		bool retVal = false;
@@ -3058,26 +2970,6 @@ namespace isobus
 			}
 		}
 		return retVal;
-	}
-
-	void InputList::set_variable_reference(std::uint16_t referencedObjectID)
-	{
-		variableReference = referencedObjectID;
-	}
-
-	std::uint16_t InputList::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	std::uint8_t InputList::get_number_of_list_items() const
-	{
-		return numberOfListItems;
-	}
-
-	void InputList::set_number_of_list_items(std::uint8_t value)
-	{
-		numberOfListItems = value;
 	}
 
 	VirtualTerminalObjectType OutputString::get_object_type() const
@@ -3316,11 +3208,6 @@ namespace isobus
 		return (0 != (optionsBitfield & (1 << static_cast<std::uint8_t>(option))));
 	}
 
-	void OutputString::set_options(std::uint8_t value)
-	{
-		optionsBitfield = value;
-	}
-
 	void OutputString::set_option(Options option, bool value)
 	{
 		if (value)
@@ -3331,21 +3218,6 @@ namespace isobus
 		{
 			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
 		}
-	}
-
-	OutputString::HorizontalJustification OutputString::get_horizontal_justification() const
-	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
-	}
-
-	OutputString::VerticalJustification OutputString::get_vertical_justification() const
-	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
-	}
-
-	void OutputString::set_justification_bitfield(std::uint8_t value)
-	{
-		justificationBitfield = value;
 	}
 
 	std::string OutputString::get_value() const
@@ -3370,26 +3242,6 @@ namespace isobus
 	void OutputString::set_value(const std::string &value)
 	{
 		stringValue = value;
-	}
-
-	std::uint16_t OutputString::get_font_attributes() const
-	{
-		return fontAttributes;
-	}
-
-	void OutputString::set_font_attributes(std::uint16_t fontAttributesValue)
-	{
-		fontAttributes = fontAttributesValue;
-	}
-
-	std::uint16_t OutputString::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	void OutputString::set_variable_reference(std::uint16_t variableReferenceValue)
-	{
-		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType OutputNumber::get_object_type() const
@@ -3683,111 +3535,49 @@ namespace isobus
 		return retVal;
 	}
 
-	bool OutputNumber::get_option(Options option) const
-	{
-		return (0 != ((1 << static_cast<std::uint8_t>(option)) & optionsBitfield));
-	}
-
-	void OutputNumber::set_options(std::uint8_t value)
+	void TextualVTObject::set_options(std::uint8_t value)
 	{
 		optionsBitfield = value;
 	}
 
-	void OutputNumber::set_option(Options option, bool value)
-	{
-		if (value)
-		{
-			optionsBitfield |= (1 << static_cast<std::uint8_t>(option));
-		}
-		else
-		{
-			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
-		}
-	}
-
-	OutputNumber::HorizontalJustification OutputNumber::get_horizontal_justification() const
-	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
-	}
-
-	OutputNumber::VerticalJustification OutputNumber::get_vertical_justification() const
-	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
-	}
-
-	void OutputNumber::set_justification_bitfield(std::uint8_t value)
-	{
-		justificationBitfield = value;
-	}
-
-	float OutputNumber::get_scale() const
+	float NumberVTObject::get_scale() const
 	{
 		return scale;
 	}
 
-	void OutputNumber::set_scale(float scaleValue)
+	void NumberVTObject::set_scale(float scaleValue)
 	{
 		scale = scaleValue;
 	}
 
-	std::int32_t OutputNumber::get_offset() const
+	std::int32_t NumberVTObject::get_offset() const
 	{
 		return offset;
 	}
 
-	void OutputNumber::set_offset(std::int32_t offsetValue)
+	void NumberVTObject::set_offset(std::int32_t offsetValue)
 	{
 		offset = offsetValue;
 	}
 
-	std::uint8_t OutputNumber::get_number_of_decimals() const
+	std::uint8_t NumberVTObject::get_number_of_decimals() const
 	{
 		return numberOfDecimals;
 	}
 
-	void OutputNumber::set_number_of_decimals(std::uint8_t decimalValue)
+	void NumberVTObject::set_number_of_decimals(std::uint8_t decimalValue)
 	{
 		numberOfDecimals = decimalValue;
 	}
 
-	bool OutputNumber::get_format() const
+	bool NumberVTObject::get_format() const
 	{
 		return format;
 	}
 
-	void OutputNumber::set_format(bool shouldFormatAsExponential)
+	void NumberVTObject::set_format(bool shouldFormatAsExponential)
 	{
 		format = shouldFormatAsExponential;
-	}
-
-	std::uint32_t OutputNumber::get_value() const
-	{
-		return value;
-	}
-
-	void OutputNumber::set_value(std::uint32_t inputValue)
-	{
-		value = inputValue;
-	}
-
-	void OutputNumber::set_variable_reference(std::uint16_t referencedObjectID)
-	{
-		variableReference = referencedObjectID;
-	}
-
-	std::uint16_t OutputNumber::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	std::uint16_t OutputNumber::get_font_attributes() const
-	{
-		return fontAttributes;
-	}
-
-	void OutputNumber::set_font_attributes(std::uint16_t fontAttributesValue)
-	{
-		fontAttributes = fontAttributesValue;
 	}
 
 	VirtualTerminalObjectType OutputList::get_object_type() const
@@ -3985,22 +3775,22 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint8_t OutputList::get_number_of_list_items() const
+	std::uint8_t ListVTObject::get_number_of_list_items() const
 	{
 		return numberOfListItems;
 	}
 
-	void OutputList::set_number_of_list_items(std::uint8_t value)
+	void ListVTObject::set_number_of_list_items(std::uint8_t value)
 	{
 		numberOfListItems = value;
 	}
 
-	std::uint8_t OutputList::get_value() const
+	std::uint8_t ListVTObject::get_value() const
 	{
 		return value;
 	}
 
-	void OutputList::set_value(std::uint8_t aValue)
+	void ListVTObject::set_value(std::uint8_t aValue)
 	{
 		value = aValue;
 	}
@@ -4018,16 +3808,6 @@ namespace isobus
 			retVal = true;
 		}
 		return retVal;
-	}
-
-	void OutputList::set_variable_reference(std::uint16_t referencedObjectID)
-	{
-		variableReference = referencedObjectID;
-	}
-
-	std::uint16_t OutputList::get_variable_reference() const
-	{
-		return variableReference;
 	}
 
 	VirtualTerminalObjectType OutputLine::get_object_type() const
@@ -5396,16 +5176,6 @@ namespace isobus
 		endAngle = value;
 	}
 
-	std::uint16_t OutputMeter::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	void OutputMeter::set_variable_reference(std::uint16_t variableReferenceValue)
-	{
-		variableReference = variableReferenceValue;
-	}
-
 	VirtualTerminalObjectType OutputLinearBarGraph::get_object_type() const
 	{
 		return VirtualTerminalObjectType::OutputLinearBarGraph;
@@ -5796,16 +5566,6 @@ namespace isobus
 		{
 			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
 		}
-	}
-
-	std::uint16_t OutputLinearBarGraph::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	void OutputLinearBarGraph::set_variable_reference(std::uint16_t variableReferenceValue)
-	{
-		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType OutputArchedBarGraph::get_object_type() const
@@ -6232,16 +5992,6 @@ namespace isobus
 	void OutputArchedBarGraph::set_target_value_reference(std::uint16_t value)
 	{
 		targetValueReference = value;
-	}
-
-	std::uint16_t OutputArchedBarGraph::get_variable_reference() const
-	{
-		return variableReference;
-	}
-
-	void OutputArchedBarGraph::set_variable_reference(std::uint16_t variableReferenceValue)
-	{
-		variableReference = variableReferenceValue;
 	}
 
 	VirtualTerminalObjectType PictureGraphic::get_object_type() const
