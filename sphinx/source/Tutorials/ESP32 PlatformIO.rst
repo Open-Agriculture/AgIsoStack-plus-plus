@@ -252,6 +252,13 @@ To build and run a minimal, but interactive project that will load an ISOBUS obj
 	
     The example's :code:`platformio.ini` file is configured for a WROOM/Denky-32 board, so you may need to edit it to match your board type.
 
+.. note::
+
+    To embed a binary file, like an object pool, into your project, you should use the :code:`target_add_binary_data` function in your :code:`CMakeLists.txt` file, as shown in the example `here <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/255fd580925e1d7d9baea1b16ad4ffcedf1fc974/examples/virtual_terminal/esp32_platformio_object_pool/src/CMakeLists.txt#L7>`_.
+    Furthermore, in the :code:`platformio.ini` file, you should specify the file under :code:`board_build.embed_txtfiles` to embed the object pool into your binary, as shown in the example `here <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/255fd580925e1d7d9baea1b16ad4ffcedf1fc974/examples/virtual_terminal/esp32_platformio_object_pool/platformio.ini#L16`_.
+
+    For more details about embedding files with ESP32 in combination with PlatformIO, see their documentation on `embedding binary data <https://docs.platformio.org/en/latest/platforms/espressif32.html#embedding-binary-data>`_.
+
 
 The Wiring
 ^^^^^^^^^^^
