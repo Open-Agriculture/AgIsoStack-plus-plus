@@ -135,7 +135,7 @@ extern "C" void app_main()
 	auto TestPartnerVT = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
 	virtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
-	virtualTerminalClient->set_object_pool(0, testPool, (object_pool_end - object_pool_start) - 1, "ais1");
+	virtualTerminalClient->set_object_pool(0, testPool, (object_pool_end - object_pool_start), "ais1");
 	virtualTerminalClient->get_vt_soft_key_event_dispatcher().add_listener(handle_softkey_event);
 	virtualTerminalClient->get_vt_button_event_dispatcher().add_listener(handle_button_event);
 	virtualTerminalClient->initialize(true);
