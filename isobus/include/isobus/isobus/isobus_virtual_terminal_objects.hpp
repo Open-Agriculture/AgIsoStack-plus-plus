@@ -365,6 +365,24 @@ namespace isobus
 		std::uint8_t backgroundColor = 0; ///< The background color (from the VT colour table)
 	};
 
+	/// @brief Common class for VT objects having variable reference
+	class VTObjectWithVariableReference : public VTObject
+	{
+	public:
+		/// @brief Returns the object ID of a variable object that contains the value of the current object
+		/// or the null ID if the "value" attribute is used instead.
+		/// @returns The object ID of a variable object that contains the value of the current object, or the null ID
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Sets the object ID of the variable object that contains the value of the current object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] variableValue The object ID of the variable object that contains the value of the current object, or the null ID
+		void set_variable_reference(std::uint16_t variableValue);
+
+	protected:
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a number variable object that contains the value of the current object
+	};
+
 	/// @brief This object shall include one or more objects that fit inside a Soft Key designator for use as an
 	/// identification of the Working Set.
 	class WorkingSet : public VTObject
@@ -1043,7 +1061,7 @@ namespace isobus
 	};
 
 	/// @brief The Input Boolean object is used to input a TRUE/FALSE type indication from the operator
-	class InputBoolean : public VTObject
+	class InputBoolean : public VTObjectWithVariableReference
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -1125,27 +1143,92 @@ namespace isobus
 		/// @param[in] fontAttributeValue The object ID of the foreground colour object
 		void set_foreground_colour_object_id(std::uint16_t fontAttributeValue);
 
-		/// @brief Returns the object ID of a number variable object that contains the value of the Input Boolean object
-		/// or the null ID if the "value" attribute is used instead.
-		/// @returns The object ID of a number variable object that contains the value of the Input Boolean object, or the null ID
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the object ID of the number variable object that contains the value of the Input Boolean object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] numberVariableValue The object ID of the number variable object that contains the value of the Input Boolean object, or the null ID
-		void set_variable_reference(std::uint16_t numberVariableValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
 		std::uint16_t foregroundColourObjectID = NULL_OBJECT_ID; ///< Object ID of a font attributes that contains the foreground colour of the Input Boolean object
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a number variable object that contains the value of the Input Boolean object
 		std::uint8_t value = 0; ///< Used only if it has no number variable child object
 		bool enabled = false; ///< If the bool is interactable
 	};
 
+	/// @brief Base class for Input/OutputString and Input/OutputNumber
+	class TextualVTObject : public VTObjectWithVariableReference
+	{
+	public:
+		/// @brief The allowable horizontal justification options
+		enum class HorizontalJustification : std::uint8_t
+		{
+			PositionLeft = 0, ///< The string is horizontally justified to the left side of its bounding box
+			PositionMiddle = 1, ///< The string is horizontally justified to the center of its bounding box
+			PositionRight = 2, ///< The string is horizontally justified to the right side of its bounding box
+			Reserved = 3 ///< Reserved
+		};
+
+		/// @brief The allowable vertical justification options
+		enum class VerticalJustification : std::uint8_t
+		{
+			PositionTop = 0, ///< The string is vertically justified to the top of its bounding box
+			PositionMiddle = 1, ///< The string is vertically justified to the center of its bounding box
+			PositionBottom = 2, ///< The string is vertically justified to the bottom of its bounding box
+			Reserved = 3 ///< Reserved
+		};
+
+		/// @brief Returns the horizontal justification setting of the string
+		/// @returns The horizontal justification setting of the string
+		HorizontalJustification get_horizontal_justification() const;
+
+		/// @brief Returns the vertical justification setting of the string
+		/// @returns The vertical justification setting of the string
+		VerticalJustification get_vertical_justification() const;
+
+		/// @brief Sets the justification bitfield of the string
+		/// @param[in] value The justification bitfield to set
+		void set_justification_bitfield(std::uint8_t value);
+
+		/// @brief Sets the options bitfield for this object to a new value
+		/// @param[in] value The new value for the options bitfield
+		void set_options(std::uint8_t value);
+
+		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the string object
+		/// @returns The object ID of a font attributes object that defines the font attributes of the string object
+		std::uint16_t get_font_attributes() const;
+
+		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the string object.
+		/// Does no error checking on the type of the supplied object.
+		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the string object
+		void set_font_attributes(std::uint16_t fontAttributesValue);
+
+	protected:
+		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
+	};
+
+	/// @brief Base class for InputString and OutputString
+	class StringVTObject : public TextualVTObject
+	{
+	public:
+		/// @brief Enumerates the option bits in the options bitfield for a string
+		enum class Options
+		{
+			Transparent = 0, ///< If TRUE, the field is displayed with background showing through instead of using the background colour
+			AutoWrap = 1, ///< Auto-Wrapping rules apply
+			WrapOnHyphen = 2 ///< If TRUE, Auto-Wrapping can occur between a hyphen and the next character
+		};
+
+		/// @brief Returns the state of a single option in the object's option bitfield
+		/// @param[in] option The option to check the value of in the object's option bitfield
+		/// @returns The state of the associated option bit
+		bool get_option(Options option) const;
+
+		/// @brief Sets a single option in the options bitfield to the specified value
+		/// @param[in] option The option to set
+		/// @param[in] value The new value of the option bit
+		void set_option(Options option, bool value);
+	};
+
 	/// @brief This object is used to input a character string from the operator
-	class InputString : public VTObject
+	class InputString : public StringVTObject
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -1164,32 +1247,6 @@ namespace isobus
 			Enabled = 9, // Version 4 and later
 
 			NumberOfAttributes = 10
-		};
-
-		/// @brief Options that can be applied to the input string
-		enum class Options : std::uint8_t
-		{
-			Transparent = 0, ///< If TRUE, the input field is displayed with background showing through instead of using the background colour
-			AutoWrap = 1, ///< Auto-Wrapping rules apply
-			WrapOnHyphen = 2 ///< If TRUE, Auto-Wrapping can occur between a hyphen and the following character.
-		};
-
-		/// @brief The allowable horizontal justification options
-		enum class HorizontalJustification : std::uint8_t
-		{
-			PositionLeft = 0, ///< The input string is horizontally justified to the left side of its bounding box
-			PositionMiddle = 1, ///< The input string is horizontally justified to the center of its bounding box
-			PositionRight = 2, ///< The input string is horizontally justified to the right side of its bounding box
-			Reserved = 3 ///< Reserved
-		};
-
-		/// @brief The allowable vertical justification options
-		enum class VerticalJustification : std::uint8_t
-		{
-			PositionTop = 0, ///< The input string is vertically justified to the top of its bounding box
-			PositionMiddle = 1, ///< The input string is vertically justified to the center of its bounding box
-			PositionBottom = 2, ///< The input string is vertically justified to the bottom of its bounding box
-			Reserved = 3 ///< Reserved
 		};
 
 		/// @brief Constructor for a input string object
@@ -1242,26 +1299,10 @@ namespace isobus
 		/// @returns The state of the associated option bit
 		bool get_option(Options option) const;
 
-		/// @brief Sets the options bitfield for this object to a new value
-		/// @param[in] value The new value for the options bitfield
-		void set_options(std::uint8_t value);
-
 		/// @brief Sets a single option in the options bitfield to the specified value
 		/// @param[in] option The option to set
 		/// @param[in] value The new value of the option bit
 		void set_option(Options option, bool value);
-
-		/// @brief Returns the horizontal justification setting of the string
-		/// @returns The horizontal justification setting of the string
-		HorizontalJustification get_horizontal_justification() const;
-
-		/// @brief Returns the vertical justification setting of the string
-		/// @returns The vertical justification setting of the string
-		VerticalJustification get_vertical_justification() const;
-
-		/// @brief Sets the justification bitfield of the string
-		/// @param[in] value The justification bitfield to set
-		void set_justification_bitfield(std::uint8_t value);
 
 		/// @brief Returns a copy of the stored string value. Used only when no string
 		/// variable objects are children of this object.
@@ -1272,24 +1313,6 @@ namespace isobus
 		/// string variable objects are children of this object.
 		/// @param[in] value The new string value
 		void set_value(const std::string &value);
-
-		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Input String object
-		/// @returns The object ID of a font attributes object that defines the font attributes of the Input String object
-		std::uint16_t get_font_attributes() const;
-
-		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Input String object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Input String object
-		void set_font_attributes(std::uint16_t fontAttributesValue);
-
-		/// @brief Returns the object ID of a string variable object that contains the value of the Input String object
-		/// @returns The object ID of a string variable object that contains the value of the Input String object
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the object ID of a string variable object that contains the value of the Input String object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] variableReferenceValue The object ID of a string variable object that contains the value of the Input String object
-		void set_variable_reference(std::uint16_t variableReferenceValue);
 
 		/// @brief Returns the object ID of a input attributes object that defines what can be input into the Input String object.
 		/// @returns The object ID of a input attributes object that defines the input attributes of the Input String object
@@ -1304,17 +1327,88 @@ namespace isobus
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 19; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
-		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
 		std::uint16_t inputAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a input attributes object that will be used to determine what can be input into this object.
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a string variable object that will be used in place of the string value attribute if it is not NULL_OBJECT_ID.
-		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
 		bool enabled = false; ///< If the string is interactable
+	};
+
+	/// @brief Base class for InputNumber and OutputNumber
+	class NumberVTObject : public TextualVTObject
+	{
+	public:
+		/// @brief Options that can be applied to the input number
+		enum class Options : std::uint8_t
+		{
+			Transparent = 0, ///< If TRUE, the input field is displayed with background showing through instead of using the background colour
+			DisplayLeadingZeros = 1, ///< If TRUE, fill left to width of field with zeros; justification is applied after filling
+			DisplayZeroAsBlank = 2, ///< When this option bit is set, a blank field is displayed if and only if the displayed value of the object is exactly zero
+			Truncate = 3 ///< If TRUE the value shall be truncated to the specified number of decimals. Otherwise it shall be rounded off to the specified number of decimals.
+		};
+
+		/// @brief Returns the state of a single option in the object's option bitfield
+		/// @param[in] option The option to check the value of in the object's option bitfield
+		/// @returns The state of the associated option bit
+		bool get_option(Options option) const;
+
+		/// @brief Sets a single option in the options bitfield to the specified value
+		/// @param[in] option The option to set
+		/// @param[in] optionValue The new value of the option bit
+		void set_option(Options option, bool optionValue);
+
+		/// @brief Returns the value of the output number (only matters if there's no child number variable object).
+		/// @returns The value of the output number.
+		std::uint32_t get_value() const;
+
+		/// @brief Sets the value of the output number (only matters if there's no child number variable object).
+		/// @param[in] inputValue The value to set for the output number
+		void set_value(std::uint32_t inputValue);
+
+		/// @brief Returns the scale factor of the output number
+		/// @returns The scale factor of the output number
+		float get_scale() const;
+
+		/// @brief Sets the scale factor for the output number
+		/// @param[in] scaleValue The new value for the scale factor
+		void set_scale(float scaleValue);
+
+		/// @brief Returns the offset that is applied to the output number
+		/// @returns The offset of the output number
+		std::int32_t get_offset() const;
+
+		/// @brief Sets the offset of the output number
+		/// @param[in] offsetValue The offset to set for the output number
+		void set_offset(std::int32_t offsetValue);
+
+		/// @brief Returns the number of decimals to render in the output number
+		/// @returns The number of decimals to render in the output number
+		std::uint8_t get_number_of_decimals() const;
+
+		/// @brief Sets the number of decimals to render in the output number
+		/// @param[in] decimalValue The number of decimals to render in the output number
+		void set_number_of_decimals(std::uint8_t decimalValue);
+
+		/// @brief Returns if the "format" option is set for this object
+		/// @details The format option determines if fixed decimal or exponential notation is used.
+		/// A value of `false` is fixed decimal notation, and `true` is exponential notation
+		/// @returns `true` if the format option is set
+		bool get_format() const;
+
+		/// @brief Sets the format option for this object.
+		/// @details The format option determines if fixed decimal or exponential notation is used.
+		/// A value of `false` is fixed decimal notation, and `true` is exponential notation
+		/// @param[in] shouldFormatAsExponential `true` to use fixed decimal notation (####.nn), `false` to use exponential ([−]###.nnE[+/−]##)
+		void set_format(bool shouldFormatAsExponential);
+
+	protected:
+		std::uint32_t value = 0; ///< Raw unsigned value of the output field before scaling (unsigned 32-bit integer). Used only if variable reference attribute is NULL
+		float scale = 1.0f; ///< Scale to be applied to the input value and min/max values.
+		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
+		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
+		bool format = false; ///< 0 = use fixed format decimal display (####.nn), 1 = use e
 	};
 
 	/// @brief This object is used to format, display and change a numeric value based on a supplied integer value.
 	/// @details Displayed value = (value attribute + Offset) * Scaling Factor
-	class InputNumber : public VTObject
+	class InputNumber : public NumberVTObject
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -1341,38 +1435,11 @@ namespace isobus
 			NumberOfAttributes = 16
 		};
 
-		/// @brief Options that can be applied to the input number
-		enum class Options : std::uint8_t
-		{
-			Transparent = 0, ///< If TRUE, the input field is displayed with background showing through instead of using the background colour
-			DisplayLeadingZeros = 1, ///< If TRUE, fill left to width of field with zeros; justification is applied after filling
-			DisplayZeroAsBlank = 2, ///< When this option bit is set, a blank field is displayed if and only if the displayed value of the object is exactly zero
-			Truncate = 3 ///< If TRUE the value shall be truncated to the specified number of decimals. Otherwise it shall be rounded off to the specified number of decimals.
-		};
-
 		/// @brief More options, for some reason they are different bytes
 		enum class Options2 : std::uint8_t
 		{
 			Enabled = 0, ///< If TRUE the object shall be enabled
 			RealTimeEditing = 1 ///< If TRUE the value shall be transmitted to the ECU as it is being changed
-		};
-
-		/// @brief The allowable horizontal justification options
-		enum class HorizontalJustification : std::uint8_t
-		{
-			PositionLeft = 0, ///< The input number is horizontally justified to the left side of its bounding box
-			PositionMiddle = 1, ///< The input number is horizontally justified to the center of its bounding box
-			PositionRight = 2, ///< The input number is horizontally justified to the right side of its bounding box
-			Reserved = 3 ///< Reserved
-		};
-
-		/// @brief The allowable vertical justification options
-		enum class VerticalJustification : std::uint8_t
-		{
-			PositionTop = 0, ///< The input number is vertically justified to the top of its bounding box
-			PositionMiddle = 1, ///< The input number is vertically justified to the center of its bounding box
-			PositionBottom = 2, ///< The input number is vertically justified to the bottom of its bounding box
-			Reserved = 3 ///< Reserved
 		};
 
 		/// @brief Constructor for an input number object
@@ -1412,26 +1479,6 @@ namespace isobus
 		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
 		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
 
-		/// @brief Returns the horizontal justification setting of the input number
-		/// @returns The horizontal justification setting of the input number
-		HorizontalJustification get_horizontal_justification() const;
-
-		/// @brief Returns the vertical justification setting of the input number
-		/// @returns The vertical justification setting of the input number
-		VerticalJustification get_vertical_justification() const;
-
-		/// @brief Sets the justification bitfield of the input number
-		/// @param[in] newJustification The justification bitfield to set
-		void set_justification_bitfield(std::uint8_t newJustification);
-
-		/// @brief Returns the scale factor that is applied to the value of the input number
-		/// @returns The scale factor that is applied to the value of the input number
-		float get_scale() const;
-
-		/// @brief Sets the scale factor that is applied to the value of the input number
-		/// @param[in] newScale The scale factor to set
-		void set_scale(float newScale);
-
 		/// @brief Returns the maximum value for the input number
 		/// @details The VT shall not accept values higher than this for this input number's value
 		/// @returns The maximum value for the input number
@@ -1452,48 +1499,6 @@ namespace isobus
 		/// @param[in] newMin The minimum value to set for the input number
 		void set_minimum_value(std::uint32_t newMin);
 
-		/// @brief Returns the offset that will be applied to the number's value when it is displayed
-		/// @returns The offset that will be applied to the number's value when it is displayed
-		std::int32_t get_offset() const;
-
-		/// @brief Sets the offset that will be applied to the number's value when it is displayed
-		/// @param[in] newOffset The new offset that will be applied to the number's value when it is displayed
-		void set_offset(std::int32_t newOffset);
-
-		/// @brief Returns the number of decimals to display when rendering this input number
-		/// @returns The number of decimals to display when rendering the input number
-		std::uint8_t get_number_of_decimals() const;
-
-		/// @brief Sets the number of decimals to display when rendering this number
-		/// @param[in] numDecimals The number of decimals to display
-		void set_number_of_decimals(std::uint8_t numDecimals);
-
-		/// @brief Returns if the format option is set for this input number
-		/// @details The format option determines if the value is shown in fixed decimal or exponential form.
-		/// A value of `true` means fixed decimal (####.nn), and `false` means exponential ([−]###.nnE[+/−]##)
-		/// @returns `true` if the format option is set for this input number, otherwise `false`
-		bool get_format() const;
-
-		/// @brief Sets the format option
-		/// @details The format option determines if the value is shown in fixed decimal or exponential form.
-		/// A value of `true` means fixed decimal (####.nn), and `false` means exponential ([−]###.nnE[+/−]##)
-		/// @param[in] newFormat The format value to set. `true` for fixed decimal, false for exponential.
-		void set_format(bool newFormat);
-
-		/// @brief Returns the state of a single option in the object's option bitfield
-		/// @param[in] option The option to check the value of in the object's option bitfield
-		/// @returns The state of the associated option bit
-		bool get_option(Options option) const;
-
-		/// @brief Sets the options bitfield for this object to a new value
-		/// @param[in] newOptions The new value for the options bitfield
-		void set_options(std::uint8_t newOptions);
-
-		/// @brief Sets a single option in the options bitfield to the specified value
-		/// @param[in] option The option to set
-		/// @param[in] optionValue The new value of the option bit
-		void set_option(Options option, bool optionValue);
-
 		/// @brief Returns the state of a single option in the object's second option bitfield
 		/// @param[in] newOption The option to check the value of in the object's second option bitfield
 		/// @returns The state of the associated option bit
@@ -1508,52 +1513,46 @@ namespace isobus
 		/// @param[in] newOption The new value of the option bit
 		void set_option2(Options2 option, bool newOption);
 
-		/// @brief Returns the value of the input number (only matters if there's no child number variable object).
-		/// @returns The value of the input number
-		std::uint32_t get_value() const;
-
-		/// @brief Sets the value of the input number (only matters if there's no child number variable object).
-		/// @param[in] inputValue The value to set for the input number
-		void set_value(std::uint32_t inputValue);
-
-		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Input Number object
-		/// @returns The object ID of a font attributes object that defines the font attributes of the Input Number object
-		std::uint16_t get_font_attributes() const;
-
-		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Input Number object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Input Number object
-		void set_font_attributes(std::uint16_t fontAttributesValue);
-
-		/// @brief Returns the object ID of a number variable object that contains the value of the Input Number object
-		/// @returns The object ID of a number variable object that contains the value of the Input Number object
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the object ID of a number variable object that contains the value of the Input Number object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] variableReferenceValue The object ID of a number variable object that contains the value of the Input Number object
-		void set_variable_reference(std::uint16_t variableReferenceValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 38; ///< The fewest bytes of IOP data that can represent this object
 
-		float scale = 0.0f; ///< Scale to be applied to the input value and min/max values.
 		std::uint32_t maximumValue = 0; ///< Raw maximum value for the input
 		std::uint32_t minimumValue = 0; ///< Raw minimum value for the input before scaling
-		std::uint32_t value = 0; ///< The raw value of the object, used if no number variable child has been set
-		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
-		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a number variable object that will be used in place of the value attribute if it is not NULL_OBJECT_ID.
-		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
-		std::uint8_t options = 0; ///< Options byte 1
 		std::uint8_t options2 = 0; ///< Options byte 2
-		std::uint8_t justificationBitfield = 0; ///< Indicates how the number is positioned in the field defined by height and width
-		bool format = false; ///< 0 = use fixed format decimal display (####.nn), 1 = use exponential format ([-]###.nnE[+/-]##) where n is set by the number of decimals
+	};
+
+	/// @brief Common class for Input/OutputList objects
+	class ListVTObject : public VTObjectWithVariableReference
+	{
+	public:
+		/// @brief Returns the value of the selected list index (only matters if there is no child number variable)
+		/// @returns The value of the selected list index
+		std::uint8_t get_value() const;
+
+		/// @brief Sets the selected list index (only matters when the object has no child number variable)
+		/// @param[in] inputValue The new value for the selected list index
+		void set_value(std::uint8_t inputValue);
+
+		/// @brief Returns the number of items in the list
+		/// @note This is not the number of children, it's the number of allocated
+		/// list items. The number of children can be less than this number.
+		/// @returns The number of items in the list
+		std::uint8_t get_number_of_list_items() const;
+
+		/// @brief Sets the number of items in the list
+		/// @note This is not the number of children, it's the number of allocated
+		/// list items. The number of children can be less than this number.
+		/// @param[in] value The number of items in the list
+		void set_number_of_list_items(std::uint8_t value);
+
+	protected:
+		std::uint8_t numberOfListItems = 0; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
+		std::uint8_t value = 0; ///< Selected list index of this object. Used only if variable reference attribute is NULL
 	};
 
 	/// @brief The Input List object is used to show one object out of a set of objects,
 	/// and to allow operator selection of one object from the set.
-	class InputList : public VTObject
+	class InputList : public ListVTObject
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -1628,24 +1627,6 @@ namespace isobus
 		/// @param[in] optionValue The new value of the option bit
 		void set_option(Options option, bool optionValue);
 
-		/// @brief Returns the value of the selected list index (only matters if there is no child number variable)
-		/// @returns The value of the selected list index
-		std::uint8_t get_value() const;
-
-		/// @brief Sets the selected list index (only matters when the object has no child number variable)
-		/// @param[in] inputValue The new value for the selected list index
-		void set_value(std::uint8_t inputValue);
-
-		/// @brief A dedicated way to set the stored variable reference so we don't have
-		/// to worry about the child object list getting messed up from changing the attribute
-		/// or a list item.
-		/// @param[in] referencedObjectID The object ID of a number variable to set as the value reference
-		void set_variable_reference(std::uint16_t referencedObjectID);
-
-		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
-		/// @returns The variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
-		std::uint16_t get_variable_reference() const;
-
 		/// @brief Changes a list item to a new ID by index
 		/// @param[in] index The index to change (starting from 0)
 		/// @param[in] newListItem The object ID to use as the new list item at the specified index
@@ -1653,29 +1634,14 @@ namespace isobus
 		/// @returns True if the operation was successful, otherwise false (perhaps the index is out of bounds?)
 		bool change_list_item(std::uint8_t index, std::uint16_t newListItem, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool);
 
-		/// @brief Returns the number of items in the list
-		/// @note This is not the number of children, it's the number of allocated
-		/// list items. The number of children can be less than this number.
-		/// @returns The number of items in the list
-		std::uint8_t get_number_of_list_items() const;
-
-		/// @brief Sets the number of items in the list
-		/// @note This is not the number of children, it's the number of allocated
-		/// list items. The number of children can be less than this number.
-		/// @param[in] value The number of items in the list
-		void set_number_of_list_items(std::uint8_t value);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a number variable that will be used as the value, or the NULL_OBJECT_ID if not used.
-		std::uint8_t numberOfListItems = 0; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
 		std::uint8_t optionsBitfield = 0; ///< Options byte
-		std::uint8_t value = 0; ///< Selected list index of this object. Used only if variable reference attribute is NULL
 	};
 
 	/// @brief This object is used to output a string of text
-	class OutputString : public VTObject
+	class OutputString : public StringVTObject
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -1692,32 +1658,6 @@ namespace isobus
 			Justification = 7,
 
 			NumberOfAttributes = 8
-		};
-
-		/// @brief Enumerates the option bits in the options bitfield for an output string
-		enum class Options
-		{
-			Transparent = 0, ///< If TRUE, the output field is displayed with background showing through instead of using the background colour
-			AutoWrap = 1, ///< Auto-Wrapping rules apply
-			WrapOnHyphen = 2 ///< If TRUE, Auto-Wrapping can occur between a hyphen and the next character
-		};
-
-		/// @brief The allowable horizontal justification options
-		enum class HorizontalJustification : std::uint8_t
-		{
-			PositionLeft = 0, ///< Output string is horizontally aligned to the left of its bounding box
-			PositionMiddle = 1, ///< Output string is horizontally aligned to the center of its bounding box
-			PositionRight = 2, ///< Output string is horizontally aligned to the right of its bounding box
-			Reserved = 3 ///< Reserved
-		};
-
-		/// @brief The allowable vertical justification options
-		enum class VerticalJustification : std::uint8_t
-		{
-			PositionTop = 0, ///< Output string is vertically aligned to the top of its bounding box
-			PositionMiddle = 1, ///< Output string is vertically aligned to the center of its bounding box
-			PositionBottom = 2, ///< Output string is vertically aligned to the bottom of its bounding box
-			Reserved = 3 ///< Reserved
 		};
 
 		/// @brief Constructor for an output string object
@@ -1762,26 +1702,10 @@ namespace isobus
 		/// @returns The state of the associated option bit
 		bool get_option(Options option) const;
 
-		/// @brief Sets the options bitfield for this object to a new value
-		/// @param[in] value The new value for the options bitfield
-		void set_options(std::uint8_t value);
-
 		/// @brief Sets a single option in the options bitfield to the specified value
 		/// @param[in] option The option to set
 		/// @param[in] value The new value of the option bit
 		void set_option(Options option, bool value);
-
-		/// @brief Returns the horizontal justification of the output string within its bounding box
-		/// @returns The horizontal justification of the output string within its bounding box
-		HorizontalJustification get_horizontal_justification() const;
-
-		/// @brief Returns the vertical justification of the output string within its bounding box
-		/// @returns The vertical justification of the output string within its bounding box
-		VerticalJustification get_vertical_justification() const;
-
-		/// @brief Sets the justification bitfield for the object to a new value
-		/// @param[in] value The new value for the justification bitfield
-		void set_justification_bitfield(std::uint8_t value);
 
 		/// @brief Returns the value of the string, used only if the variable reference (a child var string) is NULL_OBJECT_ID
 		/// @returns The value of the string
@@ -1796,36 +1720,14 @@ namespace isobus
 		/// @param[in] value The new value for the string
 		void set_value(const std::string &value);
 
-		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Output String object
-		/// @returns The object ID of a font attributes object that defines the font attributes of the Output String object
-		std::uint16_t get_font_attributes() const;
-
-		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Output String object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Output String object
-		void set_font_attributes(std::uint16_t fontAttributesValue);
-
-		/// @brief Returns the object ID of a string variable object that contains the value of the Output String object
-		/// @returns The object ID of a string variable object that contains the value of the Output String object
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the object ID of a string variable object that contains the value of the Output String object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] variableReferenceValue The object ID of a string variable object that contains the value of the Output String object
-		void set_variable_reference(std::uint16_t variableReferenceValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
-		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a string variable object that will be used in place of the string value attribute if it is not NULL_OBJECT_ID.
-		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
-	class OutputNumber : public VTObject
+	class OutputNumber : public NumberVTObject
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -1846,33 +1748,6 @@ namespace isobus
 			Justification = 11,
 
 			NumberOfAttributes = 12
-		};
-
-		/// @brief Options that can be applied to the input number
-		enum class Options : std::uint8_t
-		{
-			Transparent = 0, ///< If true, the input field is displayed with background showing through instead of using the background colour
-			DisplayLeadingZeros = 1, ///< If true, fill left to width of field with zeros; justification is applied after filling
-			DisplayZeroAsBlank = 2, ///< When this option bit is set, a blank field is displayed if and only if the displayed value of the object is exactly zero
-			Truncate = 3 ///< If true the value shall be truncated to the specified number of decimals. Otherwise it shall be rounded off to the specified number of decimals.
-		};
-
-		/// @brief The allowable horizontal justification options
-		enum class HorizontalJustification : std::uint8_t
-		{
-			PositionLeft = 0, ///< The output number is horizontally justified to the left side of its bounding box
-			PositionMiddle = 1, ///< The output number is horizontally justified to the center of its bounding box
-			PositionRight = 2, ///< The output number is horizontally justified to the right side of its bounding box
-			Reserved = 3 ///< Reserved
-		};
-
-		/// @brief The allowable vertical justification options
-		enum class VerticalJustification : std::uint8_t
-		{
-			PositionTop = 0, ///< The output number is vertically justified to the top of its bounding box
-			PositionMiddle = 1, ///< The output number is vertically justified to the center of its bounding box
-			PositionBottom = 2, ///< The output number is vertically justified to the bottom of its bounding box
-			Reserved = 3 ///< Reserved
 		};
 
 		/// @brief Constructor for an output number object
@@ -1912,111 +1787,12 @@ namespace isobus
 		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
 		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
 
-		/// @brief Returns the state of a single option in the object's option bitfield
-		/// @param[in] option The option to check the value of in the object's option bitfield
-		/// @returns The state of the associated option bit
-		bool get_option(Options option) const;
-
-		/// @brief Sets the options bitfield for this object to a new value
-		/// @param[in] value The new value for the options bitfield
-		void set_options(std::uint8_t value);
-
-		/// @brief Sets a single option in the options bitfield to the specified value
-		/// @param[in] option The option to set
-		/// @param[in] value The new value of the option bit
-		void set_option(Options option, bool value);
-
-		/// @brief Returns the horizontal justification of the output number within its bounding box
-		/// @return The horizontal justification of the output number within its bounding box
-		HorizontalJustification get_horizontal_justification() const;
-
-		/// @brief Returns the vertical justification of the output number within its bounding box
-		/// @return The vertical justification of the output number within its bounding box
-		VerticalJustification get_vertical_justification() const;
-
-		/// @brief Sets the justification bitfield to a new value
-		/// @param[in] value The new value for the justification bitfield
-		void set_justification_bitfield(std::uint8_t value);
-
-		/// @brief Returns the scale factor of the output number
-		/// @returns The scale factor of the output number
-		float get_scale() const;
-
-		/// @brief Sets the scale factor for the output number
-		/// @param[in] scaleValue The new value for the scale factor
-		void set_scale(float scaleValue);
-
-		/// @brief Returns the offset that is applied to the output number
-		/// @returns The offset of the output number
-		std::int32_t get_offset() const;
-
-		/// @brief Sets the offset of the output number
-		/// @param[in] offsetValue The offset to set for the output number
-		void set_offset(std::int32_t offsetValue);
-
-		/// @brief Returns the number of decimals to render in the output number
-		/// @returns The number of decimals to render in the output number
-		std::uint8_t get_number_of_decimals() const;
-
-		/// @brief Sets the number of decimals to render in the output number
-		/// @param[in] decimalValue The number of decimals to render in the output number
-		void set_number_of_decimals(std::uint8_t decimalValue);
-
-		/// @brief Returns if the "format" option is set for this object
-		/// @details The format option determines if fixed decimal or exponential notation is used.
-		/// A value of `false` is fixed decimal notation, and `true` is exponential notation
-		/// @returns `true` if the format option is set
-		bool get_format() const;
-
-		/// @brief Sets the format option for this object.
-		/// @details The format option determines if fixed decimal or exponential notation is used.
-		/// A value of `false` is fixed decimal notation, and `true` is exponential notation
-		/// @param[in] shouldFormatAsExponential `true` to use fixed decimal notation (####.nn), `false` to use exponential ([−]###.nnE[+/−]##)
-		void set_format(bool shouldFormatAsExponential);
-
-		/// @brief Returns the value of the output number (only matters if there's no child number variable object).
-		/// @returns The value of the output number.
-		std::uint32_t get_value() const;
-
-		/// @brief Sets the value of the output number (only matters if there's no child number variable object).
-		/// @param[in] inputValue The value to set for the output number
-		void set_value(std::uint32_t inputValue);
-
-		/// @brief A dedicated way to set the stored variable reference so we don't have
-		/// to worry about the child object list getting messed up from changing the attribute
-		/// or a list item.
-		/// @param[in] referencedObjectID The object ID of a number variable to set as the value reference
-		void set_variable_reference(std::uint16_t referencedObjectID);
-
-		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
-		/// @returns The variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Returns the object ID of a font attributes object that defines the font attributes of the Output Number object
-		/// @returns The object ID of a font attributes object that defines the font attributes of the Output Number object
-		std::uint16_t get_font_attributes() const;
-
-		/// @brief Sets the object ID of a font attributes object that defines the font attributes of the Output Number object.
-		/// Does no error checking on the type of the supplied object.
-		/// @param[in] fontAttributesValue The object ID of a font attributes object that defines the font attributes of the Output Number object
-		void set_font_attributes(std::uint16_t fontAttributesValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 29; ///< The fewest bytes of IOP data that can represent this object
-
-		float scale = 1.0f; ///< Scale to be applied to the input value and min/max values.
-		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
-		std::uint32_t value = 0; ///< Raw unsigned value of the output field before scaling (unsigned 32-bit integer). Used only if variable reference attribute is NULL
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a number variable that will be used as the value, or the NULL_OBJECT_ID if not used.
-		std::uint16_t fontAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a font attributes object that will be used to display this object.
-		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
-		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
-		bool format = false; ///< 0 = use fixed format decimal display (####.nn), 1 = use exponential format ([-]###.nnE[+/-]##) where n is set by the number of decimals
 	};
 
 	/// @brief Used to show one object out of a set of objects
-	class OutputList : public VTObject
+	class OutputList : public ListVTObject
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -2069,36 +1845,6 @@ namespace isobus
 		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
 		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
 
-		/// @brief Returns the number of items in the list
-		/// @note This is not the number of children, it's the number of allocated
-		/// list items. The number of children can be less than this number.
-		/// @returns The number of items in the list
-		std::uint8_t get_number_of_list_items() const;
-
-		/// @brief Sets the number of items in the list
-		/// @note This is not the number of children, it's the number of allocated
-		/// list items. The number of children can be less than this number.
-		/// @param[in] value The number of items in the list
-		void set_number_of_list_items(std::uint8_t value);
-
-		/// @brief Returns the value of the selected list index (only matters if no child number variable object is present)
-		/// @returns The value of the selected list index
-		std::uint8_t get_value() const;
-
-		/// @brief Sets the value of the selected list index (only matters if no child number variable object is present)
-		/// @param[in] value The value to set for the list's selected index
-		void set_value(std::uint8_t value);
-
-		/// @brief A dedicated way to set the stored variable reference so we don't have
-		/// to worry about the child object list getting messed up from changing the attribute
-		/// or a list item.
-		/// @param[in] referencedObjectID The object ID of a number variable to set as the value reference
-		void set_variable_reference(std::uint16_t referencedObjectID);
-
-		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
-		/// @returns The variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
-		std::uint16_t get_variable_reference() const;
-
 		/// @brief Changes a list item to a new ID by index
 		/// @param[in] index The index to change (starting from 0)
 		/// @param[in] newListItem The object ID to use as the new list item at the specified index
@@ -2108,10 +1854,6 @@ namespace isobus
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
-
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< The object ID of a number variable to use for the value/selected index, or NULL_OBJECT_ID
-		std::uint8_t numberOfListItems = 0; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
-		std::uint8_t value = 0; ///< Selected list index of this object. Used only if variable reference attribute is NULL
 	};
 
 	/// @brief This object outputs a line shape. The starting point for the line is found in the parent object
@@ -2557,7 +2299,7 @@ namespace isobus
 	};
 
 	/// @brief This object is a meter. Meter is drawn about a circle enclosed within a defined square.
-	class OutputMeter : public VTObject
+	class OutputMeter : public VTObjectWithVariableReference
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -2717,24 +2459,12 @@ namespace isobus
 		/// @param[in] value End angle/2 (in degrees) from positive X axis anticlockwise(90° is straight up).
 		void set_end_angle(std::uint8_t value);
 
-		/// @brief Returns the value reference object ID, which is a number variable object
-		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
-		/// @returns The object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the value reference object ID, which is a number variable object
-		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
-		/// Does not do any checking on the type of the object ID.
-		/// @param[in] variableReferenceValue The object ID of a number variable to use for the target value
-		void set_variable_reference(std::uint16_t variableReferenceValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 21; ///< The fewest bytes of IOP data that can represent this object
 
 		std::uint16_t minValue = 0; ///< Minimum value. Represents value when needle is at the start of arc
 		std::uint16_t maxValue = 0; ///< Maximum value. Represents when the needle is at the end of the arc.
 		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
 		std::uint8_t needleColour = 0; ///< Needle (indicator) colour
 		std::uint8_t borderColour = 0; ///< Border colour (if drawn)
 		std::uint8_t arcAndTickColour = 0; ///< Meter arc and tick colour (if drawn)
@@ -2745,7 +2475,7 @@ namespace isobus
 	};
 
 	/// @brief This is a linear bar graph or thermometer, defined by an enclosing rectangle.
-	class OutputLinearBarGraph : public VTObject
+	class OutputLinearBarGraph : public VTObjectWithVariableReference
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -2900,17 +2630,6 @@ namespace isobus
 		/// @param[in] optionValue The new value of the option bit
 		void set_option(Options option, bool optionValue);
 
-		/// @brief Returns the value reference object ID, which is a number variable object
-		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
-		/// @returns The object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the value reference object ID, which is a number variable object
-		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
-		/// Does not do any checking on the type of the object ID.
-		/// @param[in] variableReferenceValue The object ID of a number variable to use for the target value
-		void set_variable_reference(std::uint16_t variableReferenceValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 24; ///< The fewest bytes of IOP data that can represent this object
 
@@ -2919,7 +2638,6 @@ namespace isobus
 		std::uint16_t targetValue = 0; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
 		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
 		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which to retrieve the bar graph’s value.
 		std::uint8_t numberOfTicks = 0; ///< Number of ticks to draw along the bar graph
 		std::uint8_t colour = 0; ///< Bar graph fill and border colour.
 		std::uint8_t targetLineColour = 0; ///< Target line colour (if drawn).
@@ -2928,7 +2646,7 @@ namespace isobus
 
 	/// @brief TThis object is similar in concept to a linear bar graph but appears arched. Arched bar graphs are drawn about
 	/// an Output Ellipse object enclosed within a defined rectangle
-	class OutputArchedBarGraph : public VTObject
+	class OutputArchedBarGraph : public VTObjectWithVariableReference
 	{
 	public:
 		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
@@ -3102,17 +2820,6 @@ namespace isobus
 		/// @param[in] value The object ID of a number variable to use for the target value
 		void set_target_value_reference(std::uint16_t value);
 
-		/// @brief Returns the value reference object ID, which is a number variable object
-		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
-		/// @returns The object ID of a number variable to use for the value, or NULL_OBJECT_ID if not used.
-		std::uint16_t get_variable_reference() const;
-
-		/// @brief Sets the value reference object ID, which is a number variable object
-		/// that should be used to determine the value of the graph instead of the value itself if it's not NULL_OBJECT_ID.
-		/// Does not do any checking on the type of the object ID.
-		/// @param[in] variableReferenceValue The object ID of a number variable to use for the target value
-		void set_variable_reference(std::uint16_t variableReferenceValue);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 27; ///< The fewest bytes of IOP data that can represent this object
 
@@ -3122,7 +2829,6 @@ namespace isobus
 		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
 		std::uint16_t targetValue = 0; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
 		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which to retrieve the bar graph’s target value.
-		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which to retrieve the bar graph’s value.
 		std::uint8_t targetLineColour = 0; ///< Target line colour (if drawn)
 		std::uint8_t colour = 0; ///< Bar graph fill and border colour
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
