@@ -103,7 +103,7 @@ namespace isobus
 		/// @param[in] objectId The object id of the attribute to track.
 		/// @param[in] attribute The attribute to track. Make sure it's a float attribute!
 		/// @param[in] initialValue The initial value of the attribute to track.
-		void add_tracked_attribute_float(std::uint16_t objectId, std::uint8_t attribute, float initialValue = 0.0f);
+		void add_tracked_attribute(std::uint16_t objectId, std::uint8_t attribute, float initialValue = 0.0f);
 
 		/// @brief Removes an attribute from tracking.
 		/// @param[in] objectId The object id of the attribute to remove from tracking.
@@ -116,11 +116,11 @@ namespace isobus
 		/// @return The value of the attribute of the tracked object.
 		std::uint32_t get_attribute(std::uint16_t objectId, std::uint8_t attribute) const;
 
-		/// @brief Get the value of an attribute of a tracked object, if you tracked it with add_tracked_attribute_float.
+		/// @brief Get the value of an attribute of a tracked object as a float.
 		/// @param[in] objectId The object id of the attribute to get.
 		/// @param[in] attribute The attribute to get.
 		/// @return The value of the attribute of the tracked object.
-		float get_attribute_float(std::uint16_t objectId, std::uint8_t attribute) const;
+		float get_attribute_as_float(std::uint16_t objectId, std::uint8_t attribute) const;
 
 	protected:
 		std::shared_ptr<ControlFunction> client; ///< The control function of the virtual terminal client to track.
@@ -146,7 +146,6 @@ namespace isobus
 		std::uint8_t activeWorkingSetAddress = NULL_CAN_ADDRESS; ///< Holds the address of the control function that currently has
 		std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
 		std::map<std::uint16_t, std::map<std::uint8_t, std::uint32_t>> attributeStates; ///< Holds the 'attribute' state of tracked objects.
-		std::map<std::uint16_t, std::map<std::uint8_t, float>> floatAttributeStates; ///< Holds the 'attribute' state of tracked objects, for attributes that use floats (scale, for example).
 		//! TODO: std::map<std::uint16_t, std::uint8_t> alarmMaskPrioritiesStates; ///< Holds the 'alarm mask priority' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::pair<std::uint8_t, std::uint16_t>> listItemStates; ///< Holds the 'list item' state of tracked objects.
 		//! TODO: add lock/unlock mask state

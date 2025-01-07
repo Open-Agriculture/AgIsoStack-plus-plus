@@ -10,6 +10,7 @@
 #include "isobus/utility/platform_endianness.hpp"
 
 #include <cstdint>
+#include <cstring>
 
 namespace isobus
 {
@@ -24,4 +25,37 @@ namespace isobus
 	{
 		return (false == is_little_endian());
 	}
-} // namespace isobus
+
+	std::uint32_t float_to_little_endian(float value)
+	{
+		static_assert(sizeof(float) == 4, "Float must be 4 bytes");
+		std::uint32_t byteRepresentation;
+		std::memcpy(&byteRepresentation, &value, sizeof(float));
+		if (is_big_endian())
+		{
+			byteRepresentation =
+			  ((byteRepresentation & 0x000000FF) << 24) |
+			  ((byteRepresentation & 0x0000FF00) << 8) |
+			  ((byteRepresentation & 0x00FF0000) >> 8) |
+			  ((byteRepresentation & 0xFF000000) >> 24);
+		}
+		return byteRepresentation;
+	}
+
+	float little_endian_to_float(std::uint32_t byteRepresentation)
+	{
+		static_assert(sizeof(float) == 4, "Float must be 4 bytes");
+		if (is_big_endian())
+		{
+			byteRepresentation =
+			  ((byteRepresentation & 0x000000FF) << 24) |
+			  ((byteRepresentation & 0x0000FF00) << 8) |
+			  ((byteRepresentation & 0x00FF0000) >> 8) |
+			  ((byteRepresentation & 0xFF000000) >> 24);
+		}
+		float value;
+		std::memcpy(&value, &byteRepresentation, sizeof(float));
+		return value;
+	}
+}
+// namespace isobus

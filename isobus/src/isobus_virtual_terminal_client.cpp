@@ -545,24 +545,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value)
 	{
-		static_assert(sizeof(float) == 4, "Float must be 4 bytes");
-		std::array<std::uint8_t, sizeof(float)> floatBytes = { 0 };
-		memcpy(floatBytes.data(), &value, sizeof(float));
-
-		if (is_big_endian())
-		{
-			std::reverse(floatBytes.begin(), floatBytes.end());
-		}
-
-		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeAttributeCommand),
-			                                         static_cast<std::uint8_t>(objectID & 0xFF),
-			                                         static_cast<std::uint8_t>(objectID >> 8),
-			                                         attributeID,
-			                                         floatBytes[0],
-			                                         floatBytes[1],
-			                                         floatBytes[2],
-			                                         floatBytes[3] };
-		return queue_command(buffer);
+		return send_change_attribute(objectID, attributeID, float_to_little_endian(value));
 	}
 
 	bool VirtualTerminalClient::send_change_priority(std::uint16_t alarmMaskObjectID, AlarmMaskPriority priority)
