@@ -76,13 +76,13 @@ bool SeederVtApplication::initialize()
 	VTClientUpdateHelper.add_tracked_numeric_value(currentAlarms2_ObjPtr);
 
 	// Track the attribute values we want to update
-	VTClientUpdateHelper.add_tracked_attribute_float(speed_OutNum, 8, 0.0036f);
-	VTClientUpdateHelper.add_tracked_attribute(section1Status_OutRect, 5, solidGreen_FillAttr);
-	VTClientUpdateHelper.add_tracked_attribute(section2Status_OutRect, 5, solidYellow_FillAttr);
-	VTClientUpdateHelper.add_tracked_attribute(section3Status_OutRect, 5, solidRed_FillAttr);
-	VTClientUpdateHelper.add_tracked_attribute(section4Status_OutRect, 5, solidRed_FillAttr);
-	VTClientUpdateHelper.add_tracked_attribute(section5Status_OutRect, 5, solidYellow_FillAttr);
-	VTClientUpdateHelper.add_tracked_attribute(section6Status_OutRect, 5, solidGreen_FillAttr);
+	VTClientUpdateHelper.add_tracked_attribute(speed_OutNum, 8, 0.0036f);
+	VTClientUpdateHelper.add_tracked_attribute(section1Status_OutRect, 5, (std::uint32_t)solidGreen_FillAttr);
+	VTClientUpdateHelper.add_tracked_attribute(section2Status_OutRect, 5, (std::uint32_t)solidYellow_FillAttr);
+	VTClientUpdateHelper.add_tracked_attribute(section3Status_OutRect, 5, (std::uint32_t)solidRed_FillAttr);
+	VTClientUpdateHelper.add_tracked_attribute(section4Status_OutRect, 5, (std::uint32_t)solidRed_FillAttr);
+	VTClientUpdateHelper.add_tracked_attribute(section5Status_OutRect, 5, (std::uint32_t)solidYellow_FillAttr);
+	VTClientUpdateHelper.add_tracked_attribute(section6Status_OutRect, 5, (std::uint32_t)solidGreen_FillAttr);
 
 	VTClientUpdateHelper.initialize();
 
