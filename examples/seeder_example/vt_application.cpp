@@ -360,7 +360,7 @@ void SeederVtApplication::update()
 		VTClientUpdateHelper.set_numeric_value(tcSupportedSections_VarNum, TCClientInterface.get_connected_tc_number_sections_supported());
 		VTClientUpdateHelper.set_numeric_value(tcVersion_VarNum, static_cast<std::uint32_t>(TCClientInterface.get_connected_tc_version()));
 
-		if ((0 == speedMessages.get_number_received_machine_selected_speed_command_sources()) &&
+		if ((0 == speedMessages.get_number_received_machine_selected_speed_sources()) &&
 		    (0 == speedMessages.get_number_received_ground_based_speed_sources()) &&
 		    (0 == speedMessages.get_number_received_wheel_based_speed_sources()))
 		{
@@ -688,7 +688,7 @@ void SeederVtApplication::update_alarms()
 	if (VTClientInterface->get_is_connected() && VTClientUpdateHelper.get_numeric_value(enableAlarms_VarNum))
 	{
 		// Check if we have a speed source
-		if ((0 == speedMessages.get_number_received_machine_selected_speed_command_sources()) &&
+		if ((0 == speedMessages.get_number_received_machine_selected_speed_sources()) &&
 		    (0 == speedMessages.get_number_received_ground_based_speed_sources()) &&
 		    (0 == speedMessages.get_number_received_wheel_based_speed_sources()))
 		{
