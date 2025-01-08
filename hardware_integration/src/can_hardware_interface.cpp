@@ -18,7 +18,7 @@
 namespace isobus
 {
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-	std::unique_ptr<std::thread> CANHardwareInterface::updateThread;
+	std::unique_ptr<Thread> CANHardwareInterface::updateThread;
 	std::condition_variable CANHardwareInterface::updateThreadWakeupCondition;
 #endif
 	std::uint32_t CANHardwareInterface::periodicUpdateInterval = PERIODIC_UPDATE_INTERVAL;
@@ -112,7 +112,11 @@ namespace isobus
 		receiveThreadRunning = true;
 		if (nullptr == receiveMessageThread)
 		{
-			receiveMessageThread.reset(new std::thread([this]() { receive_thread_function(); }));
+#ifdef USE_CMSIS_RTOS2_THREADING
+			receiveMessageThread.reset(new Thread(receive_thread_function, this));
+#else
+			receiveMessageThread.reset(new Thread([this]() { receive_thread_function(); }));
+#endif
 		}
 	}
 
@@ -129,6 +133,31 @@ namespace isobus
 		}
 	}
 
+#ifdef USE_CMSIS_RTOS2_THREADING
+	void CANHardwareInterface::CANHardware::receive_thread_function(void *parent)
+	{
+		auto target = static_cast<CANHardware *>(parent);
+		while (target->receiveThreadRunning)
+		{
+			if ((nullptr != target->frameHandler) && target->frameHandler->get_is_valid())
+			{
+				if (!target->receive_can_frame())
+				{
+					// There was no frame to receive, and osThreadYield may not exist
+					osDelay(1);
+				}
+				else
+				{
+					CANHardwareInterface::updateThreadWakeupCondition.notify_all();
+				}
+			}
+			else
+			{
+				osDelay(1000); // Arbitrary, but don't want to infinite loop on the validity check.
+			}
+		}
+	}
+#else
 	void CANHardwareInterface::CANHardware::receive_thread_function()
 	{
 		while (receiveThreadRunning)
@@ -151,6 +180,7 @@ namespace isobus
 			}
 		}
 	}
+#endif
 #endif
 
 	bool send_can_message_frame_to_hardware(const CANMessageFrame &frame)
@@ -407,6 +437,22 @@ namespace isobus
 	}
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+
+#if defined USE_CMSIS_RTOS2_THREADING
+	void CANHardwareInterface::update_thread_function(void *)
+	{
+		hardwareChannelsMutex.lock();
+		// Wait until everything is running
+		hardwareChannelsMutex.unlock();
+
+		while (started)
+		{
+			LOCK_GUARD(Mutex, updateMutex);
+			updateThreadWakeupCondition.wait_for(updateMutex, periodicUpdateInterval); // Update with at least the periodic interval
+			update();
+		}
+	}
+#else
 	void CANHardwareInterface::update_thread_function()
 	{
 		std::unique_lock<std::mutex> hardwareLock(hardwareChannelsMutex);
@@ -420,13 +466,18 @@ namespace isobus
 			update();
 		}
 	}
+#endif
 
 	void CANHardwareInterface::start_threads()
 	{
 		started = true;
 		if (nullptr == updateThread)
 		{
-			updateThread.reset(new std::thread(update_thread_function));
+#ifdef USE_CMSIS_RTOS2_THREADING
+			updateThread.reset(new Thread(update_thread_function, nullptr));
+#else
+			updateThread.reset(new Thread(update_thread_function));
+#endif
 		}
 	}
 
