@@ -44,7 +44,7 @@ namespace isobus
 		}
 		if (numericValueStates.find(object_id) == numericValueStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] set_numeric_value: objectId %lu not tracked", object_id);
+			LOG_WARNING("[VTStateHelper] set_numeric_value: objectId %hu not tracked", object_id);
 			return false;
 		}
 		if (numericValueStates.at(object_id) == value)
@@ -127,7 +127,7 @@ namespace isobus
 		}
 		if (softKeyMasks.find(maskId) == softKeyMasks.end())
 		{
-			LOG_WARNING("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%lu' not tracked", maskId);
+			LOG_WARNING("[VTStateHelper] set_active_soft_key_mask: data/alarm mask '%hu' not tracked", maskId);
 			return false;
 		}
 		if (softKeyMasks.at(maskId) == softKeyMaskId)
@@ -152,12 +152,12 @@ namespace isobus
 		}
 		if (attributeStates.find(objectId) == attributeStates.end())
 		{
-			LOG_ERROR("[VTStateHelper] set_attribute: objectId %lu not tracked", objectId);
+			LOG_ERROR("[VTStateHelper] set_attribute: objectId %hu not tracked", objectId);
 			return false;
 		}
 		if (attributeStates.at(objectId).find(attribute) == attributeStates.at(objectId).end())
 		{
-			LOG_WARNING("[VTStateHelper] set_attribute: attribute %lu of objectId %lu not tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] set_attribute: attribute %hhu of objectId %hu not tracked", attribute, objectId);
 			return false;
 		}
 		if (attributeStates.at(objectId).at(attribute) == value)
