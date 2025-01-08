@@ -2294,9 +2294,7 @@ namespace isobus
 									CANStackLogger::warn("[WS]: Skipped parsing macro reference in picture graphic object (todo)");
 								}
 
-								if ((0 != tempObject->get_actual_width()) &&
-								    (0 != tempObject->get_actual_height()) &&
-								    (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height())))
+								if (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height()))
 								{
 									retVal = true;
 								}
