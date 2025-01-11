@@ -121,10 +121,15 @@ namespace isobus
 		/// @returns true if the working set should be deleted, otherwise false
 		bool is_deletion_requested() const;
 
+		/// @brief Set the IOP size used for download percentage calculations
 		void set_iop_size(std::uint32_t newIopSize);
 
+		/// @brief Function to retrive the IOP load progress
+		/// @returns state of the IOP loading in percentage (0-100.0). Returns 0 if the IOP size is not set.
 		float iop_load_percentage() const;
 
+		/// @brief Function to check the IOP loading state
+		/// @returns returns true if the IOP size is known but the transfer is not finished
 		bool is_object_pool_transfer_in_progress() const;
 
 	private:
