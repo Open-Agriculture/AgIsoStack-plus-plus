@@ -1582,6 +1582,12 @@ namespace isobus
 		/// @returns true if the message was replaced successfully
 		bool replace_command(const std::vector<std::uint8_t> &data);
 
+		/// @brief Tests whether two VT commands focus on changing/requesting the same thing
+		/// @param[in] first The first command to compare
+		/// @param[in] second The second command to compare
+		/// @returns true if the two commands are similar
+		static bool are_commands_similar(const std::vector<std::uint8_t> &first, const std::vector<std::uint8_t> &second);
+
 		/// @brief Tries to send all messages in the queue
 		void process_command_queue();
 

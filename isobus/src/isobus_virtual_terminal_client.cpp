@@ -273,7 +273,7 @@ namespace isobus
 			                                         0xFF,
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_enable_disable_object(std::uint16_t objectID, EnableDisableObjectCommand command)
@@ -286,7 +286,7 @@ namespace isobus
 			                                         0xFF,
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_select_input_object(std::uint16_t objectID, SelectInputObjectOptions option)
@@ -359,7 +359,7 @@ namespace isobus
 			                                         relativeXPositionChange,
 			                                         relativeYPositionChange,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition)
@@ -375,7 +375,7 @@ namespace isobus
 			static_cast<std::uint8_t>(yPosition & 0xFF),
 			static_cast<std::uint8_t>(yPosition >> 8),
 		};
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight)
@@ -388,7 +388,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newHeight & 0xFF),
 			                                         static_cast<std::uint8_t>(newHeight >> 8),
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_background_colour(std::uint16_t objectID, std::uint8_t colour)
@@ -401,7 +401,7 @@ namespace isobus
 			                                         0xFF,
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_numeric_value(std::uint16_t objectID, std::uint32_t value)
@@ -416,7 +416,7 @@ namespace isobus
 			static_cast<std::uint8_t>((value >> 16) & 0xFF),
 			static_cast<std::uint8_t>((value >> 24) & 0xFF),
 		};
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, uint16_t stringLength, const char *value)
@@ -441,7 +441,7 @@ namespace isobus
 			{
 				buffer.push_back(0xFF); // Pad to minimum length
 			}
-			retVal = queue_command(buffer);
+			retVal = queue_command(buffer, true);
 		}
 		return retVal;
 	}
@@ -462,7 +462,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(height_px & 0xFF),
 			                                         static_cast<std::uint8_t>(height_px >> 8),
 			                                         static_cast<std::uint8_t>(direction) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield)
@@ -475,7 +475,7 @@ namespace isobus
 			                                         type,
 			                                         styleBitfield,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_line_attributes(std::uint16_t objectID, std::uint8_t colour, std::uint8_t width, std::uint16_t lineArtBitmask)
@@ -488,7 +488,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(lineArtBitmask & 0xFF),
 			                                         static_cast<std::uint8_t>(lineArtBitmask >> 8),
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_fill_attributes(std::uint16_t objectID, FillType fillType, std::uint8_t colour, std::uint16_t fillPatternObjectID)
@@ -501,7 +501,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(fillPatternObjectID & 0xFF),
 			                                         static_cast<std::uint8_t>(fillPatternObjectID >> 8),
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_active_mask(std::uint16_t workingSetObjectID, std::uint16_t newActiveMaskObjectID)
@@ -540,7 +540,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>((value >> 8) & 0xFF),
 			                                         static_cast<std::uint8_t>((value >> 16) & 0xFF),
 			                                         static_cast<std::uint8_t>((value >> 24) & 0xFF) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_attribute(std::uint16_t objectID, std::uint8_t attributeID, float value)
@@ -558,7 +558,7 @@ namespace isobus
 			                                         0xFF,
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_list_item(std::uint16_t objectID, std::uint8_t listIndex, std::uint16_t newObjectID)
@@ -571,7 +571,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newObjectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_lock_unlock_mask(MaskLockState state, std::uint16_t objectID, std::uint16_t timeout_ms)
@@ -584,7 +584,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(timeout_ms >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer);
 	}
 
 	bool VirtualTerminalClient::send_execute_macro(std::uint16_t objectID)
@@ -623,7 +623,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newXValue >> 8),
 			                                         static_cast<std::uint8_t>(newYValue & 0xFF),
 			                                         static_cast<std::uint8_t>(newYValue >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute)
@@ -636,7 +636,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(heightAttribute & 0xFF),
 			                                         static_cast<std::uint8_t>(heightAttribute >> 8),
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_select_colour_map_or_palette(std::uint16_t objectID)
@@ -689,7 +689,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(xPosition >> 8),
 			                                         static_cast<std::uint8_t>(yPosition & 0xFF),
 			                                         static_cast<std::uint8_t>(yPosition >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_move_graphics_cursor(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset)
@@ -702,7 +702,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(xOffset >> 8),
 			                                         static_cast<std::uint8_t>(yOffset & 0xFF),
 			                                         static_cast<std::uint8_t>(yOffset >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_set_foreground_colour(std::uint16_t objectID, std::uint8_t colour)
@@ -715,7 +715,7 @@ namespace isobus
 			                                         0xFF,
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_set_background_colour(std::uint16_t objectID, std::uint8_t colour)
@@ -728,7 +728,7 @@ namespace isobus
 			                                         0xFF,
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_set_line_attributes_object_id(std::uint16_t objectID, std::uint16_t lineAttributesObjectID)
@@ -741,7 +741,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(lineAttributesObjectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_set_fill_attributes_object_id(std::uint16_t objectID, std::uint16_t fillAttributesObjectID)
@@ -754,7 +754,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(fillAttributesObjectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_set_font_attributes_object_id(std::uint16_t objectID, std::uint16_t fontAttributesObjectID)
@@ -767,7 +767,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(fontAttributesObjectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_erase_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
@@ -780,7 +780,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(width >> 8),
 			                                         static_cast<std::uint8_t>(height & 0xFF),
 			                                         static_cast<std::uint8_t>(height >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_draw_point(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset)
@@ -793,7 +793,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(xOffset >> 8),
 			                                         static_cast<std::uint8_t>(yOffset & 0xFF),
 			                                         static_cast<std::uint8_t>(yOffset >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_draw_line(std::uint16_t objectID, std::int16_t xOffset, std::int16_t yOffset)
@@ -806,7 +806,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(xOffset >> 8),
 			                                         static_cast<std::uint8_t>(yOffset & 0xFF),
 			                                         static_cast<std::uint8_t>(yOffset >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_draw_rectangle(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
@@ -819,7 +819,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(width >> 8),
 			                                         static_cast<std::uint8_t>(height & 0xFF),
 			                                         static_cast<std::uint8_t>(height >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_draw_closed_ellipse(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
@@ -832,7 +832,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(width >> 8),
 			                                         static_cast<std::uint8_t>(height & 0xFF),
 			                                         static_cast<std::uint8_t>(height >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_draw_polygon(std::uint16_t objectID, std::uint8_t numberOfPoints, const std::int16_t *listOfXOffsetsRelativeToCursor, const std::int16_t *listOfYOffsetsRelativeToCursor)
@@ -859,7 +859,7 @@ namespace isobus
 				buffer[7 + i] = static_cast<std::uint8_t>(listOfYOffsetsRelativeToCursor[0] & 0xFF);
 				buffer[8 + i] = static_cast<std::uint8_t>((listOfYOffsetsRelativeToCursor[0] >> 8) & 0xFF);
 			}
-			retVal = queue_command(buffer);
+			retVal = queue_command(buffer, true);
 		}
 		return retVal;
 	}
@@ -886,7 +886,7 @@ namespace isobus
 			{
 				buffer.push_back(0xFF); // Pad short text to minimum message length
 			}
-			retVal = queue_command(buffer);
+			retVal = queue_command(buffer, true);
 		}
 		return retVal;
 	}
@@ -901,7 +901,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(xAttribute >> 8),
 			                                         static_cast<std::uint8_t>(yAttribute & 0xFF),
 			                                         static_cast<std::uint8_t>(yAttribute >> 8) };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_zoom_viewport(std::uint16_t objectID, float zoom)
@@ -923,7 +923,7 @@ namespace isobus
 			                                         floatBytes[1],
 			                                         floatBytes[2],
 			                                         floatBytes[3] };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_pan_and_zoom_viewport(std::uint16_t objectID, std::int16_t xAttribute, std::int16_t yAttribute, float zoom)
@@ -949,7 +949,7 @@ namespace isobus
 			                                         floatBytes[1],
 			                                         floatBytes[2],
 			                                         floatBytes[3] };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_change_viewport_size(std::uint16_t objectID, std::uint16_t width, std::uint16_t height)
@@ -968,7 +968,7 @@ namespace isobus
 				                                         static_cast<std::uint8_t>(width >> 8),
 				                                         static_cast<std::uint8_t>(height & 0xFF),
 				                                         static_cast<std::uint8_t>(height >> 8) };
-			retVal = queue_command(buffer);
+			retVal = queue_command(buffer, true);
 		}
 		return retVal;
 	}
@@ -983,7 +983,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(objectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_copy_canvas_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID)
@@ -996,7 +996,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(objectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_copy_viewport_to_picture_graphic(std::uint16_t graphicsContextObjectID, std::uint16_t objectID)
@@ -1009,7 +1009,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(objectID >> 8),
 			                                         0xFF,
 			                                         0xFF };
-		return queue_command(buffer);
+		return queue_command(buffer, true);
 	}
 
 	bool VirtualTerminalClient::send_get_attribute_value(std::uint16_t objectID, std::uint8_t attributeID)
@@ -4515,8 +4515,7 @@ namespace isobus
 		bool alreadyReplaced = false;
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			bool matchesFunctionCode = (it->at(0) == data[0]);
-			if (matchesFunctionCode)
+			if (are_commands_similar(*it, data))
 			{
 				if (!alreadyReplaced)
 				{
@@ -4535,6 +4534,97 @@ namespace isobus
 			}
 		}
 		return alreadyReplaced;
+	}
+
+	bool VirtualTerminalClient::are_commands_similar(const std::vector<std::uint8_t> &first, const std::vector<std::uint8_t> &second)
+	{
+		if (first.size() != second.size())
+		{
+			return false;
+		}
+
+		// Check if function codes match
+		if (first[0] != second[0])
+		{
+			return false;
+		}
+
+		// Perform other checks based on function code
+		Function function = static_cast<Function>(first[0]);
+		switch (function)
+		{
+			case Function::HideShowObjectCommand:
+			case Function::EnableDisableObjectCommand:
+			case Function::ChangeSizeCommand:
+			case Function::ChangeBackgroundColourCommand:
+			case Function::ChangeNumericValueCommand:
+			case Function::ChangeStringValueCommand:
+			case Function::ChangeEndPointCommand:
+			case Function::ChangeFontAttributesCommand:
+			case Function::ChangeLineAttributesCommand:
+			case Function::ChangeFillAttributesCommand:
+			case Function::ChangeActiveMaskCommand:
+			case Function::ChangePriorityCommand:
+			case Function::ChangePolygonScaleCommand:
+			{
+				// Check if the target object IDs match
+				if ((first[1] != second[1]) || (first[2] != second[2]))
+				{
+					return false;
+				}
+			}
+			break;
+
+			case Function::ChangeChildLocationCommand:
+			case Function::ChangeChildPositionCommand:
+			{
+				// Check if the parent IDs match
+				if ((first[1] != second[1]) || (first[2] != second[2]))
+				{
+					return false;
+				}
+
+				// Check if the target object IDs match
+				if ((first[3] != second[3]) || (first[4] != second[4]))
+				{
+					return false;
+				}
+			}
+			break;
+
+			case Function::ChangeSoftKeyMaskCommand:
+			case Function::ChangeAttributeCommand:
+			case Function::ChangeListItemCommand:
+			case Function::LockUnlockMaskCommand:
+			case Function::ChangePolygonPointCommand:
+			case Function::GraphicsContextCommand:
+			case Function::GetAttributeValueMessage:
+			{
+				// Check if the first 3 bytes match
+				if ((first[1] != second[1]) || (first[2] != second[2]) || (first[3] != second[3]))
+				{
+					return false;
+				}
+			}
+			break;
+
+			case Function::ExecuteMacroCommand:
+			{
+				// Check if the macro IDs match
+				if (first[1] != second[1])
+				{
+					return false;
+				}
+			}
+			break;
+
+			default:
+			{
+				// No additional checks
+			}
+		}
+
+		return true;
 	}
 
 	void VirtualTerminalClient::process_command_queue()
