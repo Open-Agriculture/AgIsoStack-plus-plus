@@ -27,7 +27,7 @@ namespace isobus
 		/// @brief Constructor for the VSCOM VSCAN CAN driver
 		/// @param[in] channel The COM port or IP address of the VSCAN device to use.
 		/// @param[in] baudrate The baudrate to use for the CAN connection.
-		VSCANPlugin(std::string channel, void *baudrate = VSCAN_SPEED_250K);
+		VSCANPlugin(const std::string &channel, void *baudrate = VSCAN_SPEED_250K);
 
 		/// @brief The destructor for VSCANPlugin
 		virtual ~VSCANPlugin() = default;
@@ -56,13 +56,13 @@ namespace isobus
 		/// @param[in] channel The COM port or IP address of the VSCAN device to use.
 		/// @param[in] baudrate The baudrate to use for the CAN connection.
 		/// @returns True if the configuration was changed, otherwise false (if the device is open false will be returned)
-		bool reconfigure(std::string channel, void *baudrate = VSCAN_SPEED_250K);
+		bool reconfigure(const std::string &channel, void *baudrate = VSCAN_SPEED_250K);
 
 	private:
 		/// @brief Parses the error from the status code
 		/// @param[in] status The status code to parse
 		/// @returns The error message
-		std::string parse_error_from_status(VSCAN_STATUS status);
+		static std::string parse_error_from_status(VSCAN_STATUS status);
 
 		std::string channel; ///< The COM port or IP address of the VSCAN device to use.
 		void *baudrate; ///< The baudrate to use for the CAN connection.

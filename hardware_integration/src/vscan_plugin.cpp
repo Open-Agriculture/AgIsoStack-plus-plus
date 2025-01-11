@@ -13,11 +13,12 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 
 #include <chrono>
+#include <cstring>
 #include <thread>
 
 namespace isobus
 {
-	VSCANPlugin::VSCANPlugin(std::string channel, void *baudrate) :
+	VSCANPlugin::VSCANPlugin(const std::string &channel, void *baudrate) :
 	  channel(channel),
 	  baudrate(baudrate)
 	{
@@ -138,7 +139,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VSCANPlugin::reconfigure(std::string channel, void *baudrate)
+	bool VSCANPlugin::reconfigure(const std::string &channel, void *baudrate)
 	{
 		bool retVal = false;
 
@@ -153,9 +154,16 @@ namespace isobus
 
 	std::string VSCANPlugin::parse_error_from_status(VSCAN_STATUS status)
 	{
-		char errorBuffer[256] = { 0 };
-		VSCAN_GetErrorString(status, errorBuffer, sizeof(errorBuffer));
-		return std::string(errorBuffer);
+		// Arbitrary buffer size, should be enough for most error messages
+		size_t bufferSize = 256;
+		std::vector<char> errorBuffer(bufferSize, 0);
+
+		VSCAN_GetErrorString(status, errorBuffer.data(), bufferSize);
+
+		// Ensure the string is null-terminated, just in case
+		errorBuffer[bufferSize - 1] = '\0';
+
+		return std::string(errorBuffer.data());
 	}
 }
 // namespace isobus

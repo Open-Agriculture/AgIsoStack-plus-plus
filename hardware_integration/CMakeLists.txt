@@ -358,12 +358,12 @@ if("VSCAN" IN_LIST CAN_DRIVER)
     set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
   endif()
   if(DEFINED ENV{VSCAN_API_DIR})
-    message(
-      AUTHOR_WARNING
-        "The VSCAN driver requires vs_can_api.dll to be in the same directory as the executable. You can find this file in the VSCAN API directory."
-    )
     target_include_directories(HardwareIntegration PUBLIC $ENV{VSCAN_API_DIR})
     if(WIN32)
+      message(
+        AUTHOR_WARNING
+          "The VSCAN driver requires vs_can_api.dll to be in the same directory as the executable. You can find this file in the VSCAN API directory."
+      )
       if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64" OR CMAKE_SYSTEM_PROCESSOR
                                                     STREQUAL "x64")
         message(STATUS "Detected Windows x64, linking to VSCAN API x64 library")
@@ -390,8 +390,8 @@ if("VSCAN" IN_LIST CAN_DRIVER)
                                                          STREQUAL "X86")
         message(STATUS "Detected Linux x86, linking to VSCAN API x86 library")
         target_link_libraries(
-          HardwareIntegration PRIVATE $ENV{VSCAN_API_DIR}/Linux
-                                      x86-64/libvs_can_api.a)
+          HardwareIntegration
+          PRIVATE "$ENV{VSCAN_API_DIR}/Linux x86-64/libvs_can_api.a")
       else()
         message(
           FATAL_ERROR
