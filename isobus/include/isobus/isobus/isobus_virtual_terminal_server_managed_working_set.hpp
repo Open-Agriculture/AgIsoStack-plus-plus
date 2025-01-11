@@ -122,6 +122,7 @@ namespace isobus
 		bool is_deletion_requested() const;
 
 		/// @brief Set the IOP size used for download percentage calculations
+		/// @param[in] newIopSize IOP size in bytes
 		void set_iop_size(std::uint32_t newIopSize);
 
 		/// @brief Function to retrive the IOP load progress
@@ -149,7 +150,7 @@ namespace isobus
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
-		bool objectPoolTransferInProgress = false;
+		bool objectPoolTransferInProgress = false; ///< Variable to store the IOP download state
 	};
 } // namespace isobus
 
