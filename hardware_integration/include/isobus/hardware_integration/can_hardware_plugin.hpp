@@ -21,6 +21,8 @@ namespace isobus
 	class CANHardwarePlugin
 	{
 	public:
+		virtual ~CANHardwarePlugin() = default;
+
 		/// @brief Returns if the driver is ready and in a good state
 		/// @details This should return `false` until `open` is called, and after `close` is called, or
 		/// if anything happens that causes the driver to be invalid, like the hardware is disconnected.
