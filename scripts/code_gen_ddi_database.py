@@ -68,10 +68,10 @@ with open("export.txt",'r', encoding="utf8") as f:
             for sub in entityLine:
                 strippedEntityLine.append(sub.replace("\n", ""))
             
-            print("Processing entity", line)
+            print("Processing entity", line.replace("\n", ""))
             resultingArray += f"		{{ {strippedEntityLine[2]}, \"{strippedEntityLine[3]}\", "
 
-        if "Unit:" in line and processUnit:
+        if "Unit: " in line and processUnit:
             entityLine = line.split(' ', 1)
             if "n.a. -" in entityLine[1]:
                 entityLine[1] = "None"
@@ -80,14 +80,24 @@ with open("export.txt",'r', encoding="utf8") as f:
             resultingArray += f"\"{entityLine[1].strip()}\", "
             processUnit = False
         
-        if "Resolution" in line:
+        if "Resolution: " in line:
             entityLine = line.split(' ', 1)
             entityLine[1] = entityLine[1].replace(",", ".")
             if '1' == entityLine[1].strip():
                 entityLine[1] = '1.0'
             if '0' == entityLine[1].strip():
                 entityLine[1] = '0.0'
-            resultingArray += f"{entityLine[1].strip()}f }},\n"
+            resultingArray += f"{entityLine[1].strip()}f, "
+            
+        # CANbus Range: 0 - 2147483647
+        if "CANBus Range: " in line:
+            entityLine = line.split(' ', 2)
+            rangeValues = entityLine[2].split(' - ')
+            for i in range(2):
+                if '' == rangeValues[i].strip():
+                    rangeValues[i] = '0'
+            print("Range values", rangeValues)
+            resultingArray += f"std::make_pair({rangeValues[0].strip()}, {rangeValues[1].strip()}) }},\n"
 
 resultingArray += "	}"
 

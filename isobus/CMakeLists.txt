@@ -31,6 +31,7 @@ set(ISOBUS_SRC
     "isobus_data_dictionary.cpp"
     "isobus_language_command_interface.cpp"
     "isobus_time_date_interface.cpp"
+    "isobus_standard_data_description_indices.cpp"
     "isobus_task_controller_client_objects.cpp"
     "isobus_task_controller_client.cpp"
     "isobus_device_descriptor_object_pool.cpp"

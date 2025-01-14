@@ -3,7 +3,7 @@
 ///
 /// @brief This file contains the definition of an auto-generated lookup of all ISOBUS DDIs
 /// as defined in ISO11783-11, exported from isobus.net.
-/// This file was generated January 25, 2024.
+/// This file was generated January 15, 2025.
 ///
 /// @author Adrian Del Grosso
 /// @copyright 2024 The Open-Agriculture Developers
@@ -28,6 +28,7 @@ namespace isobus
 			const std::string name; ///< The name of the DDI
 			const std::string units; ///< The units of the DDI
 			const float resolution; ///< The resolution of the DDI
+			const std::pair<std::int32_t, std::uint32_t> range; ///< The range of the DDI
 		};
 
 		/// @brief Checks the ISO 11783-11 database for the given DDI number
@@ -38,7 +39,7 @@ namespace isobus
 
 	private:
 #ifndef DISABLE_ISOBUS_DATA_DICTIONARY
-		static const Entry DDI_ENTRIES[715]; ///< A lookup table of all DDI entries in ISO11783-11
+		static const Entry DDI_ENTRIES[724]; ///< A lookup table of all DDI entries in ISO11783-11
 #endif
 		static const Entry DEFAULT_ENTRY; ///< A default "unknown" DDI to return if a DDI is not in the database
 	};

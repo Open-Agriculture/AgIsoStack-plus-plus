@@ -5,6 +5,7 @@
 /// Does not include proprietary DDIs.
 /// @note The full list of standardized DDIs can be found at "isobus.net"
 /// @author Adrian Del Grosso
+/// @author Daan Steenbergen
 ///
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
@@ -12,6 +13,7 @@
 #define ISOBUS_STANDARD_DATA_DESCRIPTION_INDICES_HPP
 
 #include <cstdint>
+#include <string>
 
 namespace isobus
 {
@@ -544,6 +546,27 @@ namespace isobus
 		RequestDefaultProcessData = 0xDFFF, ///< Request Default Process Data. This DDE is the highest ISO assigned entity.  The range above this number is reserved for manufacture specific DDE's.
 		Reserved = 0xFFFF
 	};
+
+	/**
+	 * @brief Helper functions of the DataDescriptionIndex enum
+	 */
+	namespace DataDescriptionIndexHelper
+	{
+		/**
+		 * @brief Get the string representation of the DataDescriptionIndex
+		 * @param ddi The DataDescriptionIndex
+		 * @return The string representation of the DataDescriptionIndex
+		 */
+		std::string to_string(DataDescriptionIndex ddi);
+
+		/**
+		 * @brief Format a value to a string based on the DataDescriptionIndex
+		 * @param ddi The DataDescriptionIndex
+		 * @param value The value to format
+		 * @return The formatted value
+		 */
+		std::string format_value(DataDescriptionIndex ddi, std::int32_t value);
+	}
 }
 
 #endif // ISOBUS_STANDARD_DATA_DESCRIPTION_INDICES_HPP
