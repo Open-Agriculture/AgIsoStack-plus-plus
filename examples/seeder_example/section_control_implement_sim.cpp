@@ -23,7 +23,7 @@ bool SectionControlImplementSimulator::get_section_actual_state(std::uint8_t ind
 	// We currently are just simulating here. In a real implement, you would want to read the actual state from the implement.
 	if (isAutoMode)
 	{
-		return sectionSetpointStates.at(index);
+		return sectionSwitchStates.at(index) && sectionSetpointStates.at(index);
 	}
 	else
 	{

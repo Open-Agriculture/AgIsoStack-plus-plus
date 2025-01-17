@@ -179,7 +179,28 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 			case autoManualToggle_Button:
 			{
 				sectionControl.set_is_mode_auto(!sectionControl.get_is_mode_auto());
+				TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SectionControlState));
 				VTClientUpdateHelper.set_numeric_value(autoManual_ObjPtr, sectionControl.get_is_mode_auto() ? autoMode_Container : manualMode_Container);
+
+				// If going from manual to auto, and all sections are off, turn them all on
+				bool areAllOff = true;
+				for (std::uint8_t i = 0; i < NUMBER_ONSCREEN_SECTIONS; ++i)
+				{
+					if (sectionControl.get_section_switch_state(i))
+					{
+						areAllOff = false;
+						break;
+					}
+				}
+				if (areAllOff)
+				{
+					for (std::uint8_t i = 0; i < NUMBER_ONSCREEN_SECTIONS; ++i)
+					{
+						sectionControl.set_section_switch_state(i, true);
+					}
+					TCClientInterface.on_value_changed_trigger(2, static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCondensedWorkState1_16));
+				}
+
 				for (std::uint8_t i = 0; i < NUMBER_ONSCREEN_SECTIONS; ++i)
 				{
 					update_section_objects(i);
@@ -393,18 +414,18 @@ void SeederVtApplication::update_section_objects(std::uint8_t sectionIndex)
 		newObject = onButtonSliderSmall_OutPict;
 	}
 
-	std::uint32_t fillAttribute = solidRed_FillAttr;
-	if (sectionControl.get_section_actual_state(sectionIndex))
+	std::uint32_t fillAttribute = solidRed_FillAttr; // Default to red
+	if (!sectionControl.get_section_switch_state(sectionIndex) && sectionControl.get_is_mode_auto())
+	{
+		fillAttribute = solidWhite_FillAttr;
+	}
+	else if (sectionControl.get_section_actual_state(sectionIndex))
 	{
 		fillAttribute = solidGreen_FillAttr;
 	}
 	else if (sectionControl.get_section_setpoint_state(sectionIndex))
 	{
 		fillAttribute = solidYellow_FillAttr;
-	}
-	else
-	{
-		fillAttribute = solidRed_FillAttr;
 	}
 
 	std::uint16_t switchPointerId = UNDEFINED;
