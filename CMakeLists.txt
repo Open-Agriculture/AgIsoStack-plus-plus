@@ -77,6 +77,10 @@ if(BUILD_TESTING)
   add_subdirectory("test")
 endif()
 
+if(ESP_PLATFORM)
+    return()
+endif()
+
 install(
   TARGETS Isobus Utility HardwareIntegration
   EXPORT isobusTargets
