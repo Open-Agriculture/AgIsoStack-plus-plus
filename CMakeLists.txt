@@ -78,7 +78,7 @@ if(BUILD_TESTING)
 endif()
 
 if(ESP_PLATFORM)
-    return()
+  return()
 endif()
 
 install(
