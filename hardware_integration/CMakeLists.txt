@@ -122,6 +122,9 @@ target_compile_features(HardwareIntegration PUBLIC cxx_std_11)
 set_target_properties(HardwareIntegration PROPERTIES CXX_EXTENSIONS OFF)
 target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility
                                                   ${PROJECT_NAME}::Isobus)
+if(ESP_PLATFORM)
+  target_link_libraries(HardwareIntegration PRIVATE idf::driver)
+endif()
 
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
   if(MSVC)
