@@ -159,11 +159,12 @@ namespace isobus
 		// Remove any clients that have timed out.
 		activeClients.erase(std::remove_if(activeClients.begin(),
 		                                   activeClients.end(),
-		                                   [](std::shared_ptr<ActiveClient> clientInfo) {
+		                                   [this](std::shared_ptr<ActiveClient> clientInfo) {
 			                                   constexpr std::uint32_t CLIENT_TASK_TIMEOUT_MS = 6000;
 			                                   if (SystemTiming::time_expired_ms(clientInfo->lastStatusMessageTimestamp_ms, CLIENT_TASK_TIMEOUT_MS))
 			                                   {
 				                                   LOG_WARNING("[TC Server]: Client 0x%02X has timed out. Removing from active client list.", clientInfo->clientControlFunction->get_address());
+				                                   on_client_timeout(clientInfo->clientControlFunction);
 				                                   return true;
 			                                   }
 			                                   return false;
