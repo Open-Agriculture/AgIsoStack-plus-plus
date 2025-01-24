@@ -137,28 +137,24 @@ namespace isobus
 
 	float VirtualTerminalServerManagedWorkingSet::iop_load_percentage() const
 	{
-		if (iopSize == 0)
+		if (processingState != ObjectPoolProcessingThreadState::None)
 		{
-			return 0.0f;
+			return 100.0f;
 		}
-
-		auto totalTransferredSize = transferredIopSize;
-		if (totalTransferredSize < iopSize)
+	
+		// if IOP transfer is not completed check if there is an ongoing IOP transfer to us
+		auto sessions = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0);
+		for (const auto &session : sessions)
 		{
-			// if IOP transfer is not completed check if there is an ongoing IOP transfer to us
-			auto sessions = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0);
-			for (const auto &session : sessions)
+			if (session->get_source()->get_address() == get_control_function()->get_address() &&
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == session->get_parameter_group_number()) &&
+			    (session->get_total_bytes_transferred() >= 1) &&
+			    (session->get_data().get_byte(0) == static_cast<std::uint8_t>(VirtualTerminalBase::Function::ObjectPoolTransferMessage)))
 			{
-				if (session->get_source()->get_address() == get_control_function()->get_address() &&
-				    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == session->get_parameter_group_number()))
-				{
-					totalTransferredSize += session->get_total_bytes_transferred();
-					break;
-				}
+				return session->get_percentage_bytes_transferred();
 			}
 		}
-
-		return (totalTransferredSize / static_cast<float>(iopSize)) * 100.0f;
+		return 0.0f;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
