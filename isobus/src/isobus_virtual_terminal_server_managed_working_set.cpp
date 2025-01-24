@@ -210,7 +210,7 @@ namespace isobus
 
 	bool VirtualTerminalServerManagedWorkingSet::is_object_pool_transfer_in_progress() const
 	{
-		return objectPoolTransferInProgress;
+		return iop_load_percentage() != 0.0f;
 	}
 
 } // namespace isobus
