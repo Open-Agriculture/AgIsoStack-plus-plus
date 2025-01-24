@@ -148,8 +148,8 @@ namespace isobus
 		{
 			if (session->get_source()->get_address() == get_control_function()->get_address() &&
 			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == session->get_parameter_group_number()) &&
-			    (session->get_total_bytes_transferred() >= 1) &&
-			    (session->get_data().get_byte(0) == static_cast<std::uint8_t>(VirtualTerminalBase::Function::ObjectPoolTransferMessage)))
+					(session->get_data().size() >= 1) &&
+					(session->get_data().get_byte(0) == 0x11)) // ObjectPoolTransferMessage
 			{
 				return session->get_percentage_bytes_transferred();
 			}
