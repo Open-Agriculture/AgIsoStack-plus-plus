@@ -46,6 +46,11 @@ namespace isobus
 		return controlFunctionNAME;
 	}
 
+	void ControlFunction::set_NAME(const NAME &newNAME)
+	{
+		controlFunctionNAME = newNAME;
+	}
+
 	ControlFunction::Type ControlFunction::get_type() const
 	{
 		return controlFunctionType;
