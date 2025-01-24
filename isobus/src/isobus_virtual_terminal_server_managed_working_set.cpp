@@ -141,7 +141,7 @@ namespace isobus
 		{
 			return 100.0f;
 		}
-	
+
 		// if IOP transfer is not completed check if there is an ongoing IOP transfer to us
 		auto sessions = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0);
 		for (const auto &session : sessions)
