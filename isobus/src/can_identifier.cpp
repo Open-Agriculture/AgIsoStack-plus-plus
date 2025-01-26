@@ -27,16 +27,16 @@ namespace isobus
 		{
 			m_RawIdentifier = (static_cast<std::uint32_t>(priority) << PRIORITY_DATA_BIT_OFFSET);
 
-			if (((pgn << PARAMTER_GROUP_NUMBER_OFFSET) & PDU2_FORMAT_MASK) < PDU2_FORMAT_MASK)
+			if (((pgn << PARAMETER_GROUP_NUMBER_OFFSET) & PDU2_FORMAT_MASK) < PDU2_FORMAT_MASK)
 			{
 				pgn = (pgn & DESTINATION_SPECIFIC_PGN_MASK);
-				pgn = (pgn << PARAMTER_GROUP_NUMBER_OFFSET);
+				pgn = (pgn << PARAMETER_GROUP_NUMBER_OFFSET);
 				m_RawIdentifier |= pgn;
-				m_RawIdentifier |= (static_cast<std::uint32_t>(destinationAddress) << PARAMTER_GROUP_NUMBER_OFFSET);
+				m_RawIdentifier |= (static_cast<std::uint32_t>(destinationAddress) << PARAMETER_GROUP_NUMBER_OFFSET);
 			}
 			else
 			{
-				m_RawIdentifier |= ((pgn & BROADCAST_PGN_MASK) << PARAMTER_GROUP_NUMBER_OFFSET);
+				m_RawIdentifier |= ((pgn & BROADCAST_PGN_MASK) << PARAMETER_GROUP_NUMBER_OFFSET);
 			}
 		}
 		m_RawIdentifier |= static_cast<std::uint32_t>(sourceAddress);
@@ -88,11 +88,11 @@ namespace isobus
 		{
 			if ((PDU2_FORMAT_MASK & m_RawIdentifier) < PDU2_FORMAT_MASK)
 			{
-				retVal = ((m_RawIdentifier >> PARAMTER_GROUP_NUMBER_OFFSET) & DESTINATION_SPECIFIC_PGN_MASK);
+				retVal = ((m_RawIdentifier >> PARAMETER_GROUP_NUMBER_OFFSET) & DESTINATION_SPECIFIC_PGN_MASK);
 			}
 			else
 			{
-				retVal = ((m_RawIdentifier >> PARAMTER_GROUP_NUMBER_OFFSET) & BROADCAST_PGN_MASK);
+				retVal = ((m_RawIdentifier >> PARAMETER_GROUP_NUMBER_OFFSET) & BROADCAST_PGN_MASK);
 			}
 		}
 		return retVal;
