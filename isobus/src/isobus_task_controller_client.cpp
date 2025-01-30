@@ -60,7 +60,7 @@ namespace isobus
 
 		if (!initialized)
 		{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO && !defined USE_CMSIS_RTOS2_THREADING
 			if (spawnThread)
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
