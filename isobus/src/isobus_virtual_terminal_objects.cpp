@@ -590,6 +590,7 @@ namespace isobus
 			set_soft_key_mask(newMaskID);
 			retVal = true;
 		}
+
 		return retVal;
 	}
 
