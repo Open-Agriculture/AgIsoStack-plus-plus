@@ -1045,7 +1045,7 @@ namespace isobus
 
 		/// @brief Sets the options bitfield for this object to a new value
 		/// @param[in] value The new value for the options bitfield
-		void set_options(std::uint8_t value);
+		virtual void set_options(std::uint8_t value);
 
 		/// @brief Sets a single option in the options bitfield to the specified value
 		/// @param[in] option The option to set
