@@ -137,24 +137,31 @@ namespace isobus
 
 	float VirtualTerminalServerManagedWorkingSet::iop_load_percentage() const
 	{
-		if (processingState != ObjectPoolProcessingThreadState::None)
+		if (processingState != ObjectPoolProcessingThreadState::None || transferredIopSize > iopSize)
 		{
 			return 100.0f;
 		}
 
 		// if IOP transfer is not completed check if there is an ongoing IOP transfer to us
 		auto sessions = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0);
+		auto currentTransferredIopSize = transferredIopSize;
 		for (const auto &session : sessions)
 		{
 			if (session->get_source()->get_address() == get_control_function()->get_address() &&
 			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == session->get_parameter_group_number()) &&
-					(session->get_data().size() >= 1) &&
-					(session->get_data().get_byte(0) == 0x11)) // ObjectPoolTransferMessage
+			    (session->get_data().size() >= 1) &&
+			    (session->get_data().get_byte(0) == 0x11)) // ObjectPoolTransferMessage
 			{
-				return session->get_percentage_bytes_transferred();
+				currentTransferredIopSize += session->get_total_bytes_transferred();
 			}
 		}
-		return 0.0f;
+
+		if (currentTransferredIopSize > iopSize)
+		{
+			return 100.0f;
+		}
+
+		return (currentTransferredIopSize / (float)iopSize) * 100.0f;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
