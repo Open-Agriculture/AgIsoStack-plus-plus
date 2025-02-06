@@ -61,36 +61,43 @@ namespace isobus
 
 	bool TaskControllerServer::send_time_interval_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t timeInterval) const
 	{
+		LOG_DEBUG("[TC Server]: Sending measurement time-interval command to client %hhu for element %hu for DDI %s with time interval %u ms", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), timeInterval);
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::MeasurementTimeInterval), dataDescriptionIndex, elementNumber, timeInterval);
 	}
 
 	bool TaskControllerServer::send_distance_interval_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t distanceInterval) const
 	{
+		LOG_DEBUG("[TC Server]: Sending measurement distance-interval command to client %hhu for element %hu for DDI %s with distance interval %u mm", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), distanceInterval);
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::MeasurementDistanceInterval), dataDescriptionIndex, elementNumber, distanceInterval);
 	}
 
 	bool TaskControllerServer::send_minimum_threshold_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t minimum) const
 	{
+		LOG_DEBUG("[TC Server]: Sending measurement minimum-threshold command to client %hhu for element %hu for DDI %s with minimum %u", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), minimum);
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::MeasurementMinimumWithinThreshold), dataDescriptionIndex, elementNumber, minimum);
 	}
 
 	bool TaskControllerServer::send_maximum_threshold_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t maximum) const
 	{
+		LOG_DEBUG("[TC Server]: Sending measurement maximum-threshold command to client %hhu for element %hu for DDI %s with maximum %u", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), maximum);
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::MeasurementMaximumWithinThreshold), dataDescriptionIndex, elementNumber, maximum);
 	}
 
 	bool TaskControllerServer::send_change_threshold_measurement_command(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t threshold) const
 	{
+		LOG_DEBUG("[TC Server]: Sending measurement change-threshold command to client %hhu for element %hu for DDI %s with threshold %u", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), threshold);
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::MeasurementChangeThreshold), dataDescriptionIndex, elementNumber, threshold);
 	}
 
 	bool TaskControllerServer::send_set_value_and_acknowledge(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t processDataValue) const
 	{
+		LOG_DEBUG("[TC Server]: Sending value & acknowledge command to client %hhu for element %hu for DDI %s with value %s", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), DataDictionary::format_value_with_ddi(dataDescriptionIndex, processDataValue).c_str());
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::SetValueAndAcknowledge), dataDescriptionIndex, elementNumber, processDataValue);
 	}
 
 	bool TaskControllerServer::send_set_value(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint32_t processDataValue) const
 	{
+		LOG_DEBUG("[TC Server]: Sending value command to client %hhu for element %hu for DDI %s with value %s", clientControlFunction->get_address(), elementNumber, DataDictionary::ddi_to_string(dataDescriptionIndex).c_str(), DataDictionary::format_value_with_ddi(dataDescriptionIndex, processDataValue).c_str());
 		return send_measurement_command(clientControlFunction, static_cast<std::uint8_t>(ProcessDataCommands::Value), dataDescriptionIndex, elementNumber, processDataValue);
 	}
 
