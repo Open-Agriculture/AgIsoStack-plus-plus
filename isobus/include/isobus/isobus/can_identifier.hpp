@@ -99,7 +99,7 @@ namespace isobus
 		static constexpr std::uint32_t BROADCAST_PGN_MASK = 0x0003FFFF; ///< Broadcast PGNs don't mask off the bits used for destination in the PGN
 		static constexpr std::uint32_t DESTINATION_SPECIFIC_PGN_MASK = 0x0003FF00; ///< Destination specific PGNs mask the destination out of the PGN itself
 		static constexpr std::uint32_t PDU2_FORMAT_MASK = 0x00F00000; ///< Mask that denotes the ID as being PDU2 format
-		static constexpr std::uint8_t PARAMTER_GROUP_NUMBER_OFFSET = 8; ///< PGN is offset 8 bits into the ID
+		static constexpr std::uint8_t PARAMETER_GROUP_NUMBER_OFFSET = 8; ///< PGN is offset 8 bits into the ID
 		static constexpr std::uint8_t PRIORITY_DATA_BIT_OFFSET = 26; ///< Priority is offset 26 bits into the ID
 
 		std::uint32_t m_RawIdentifier; ///< The raw encoded 29 bit ID
