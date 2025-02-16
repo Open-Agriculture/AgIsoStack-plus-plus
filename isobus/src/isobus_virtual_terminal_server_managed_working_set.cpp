@@ -131,7 +131,6 @@ namespace isobus
 	void VirtualTerminalServerManagedWorkingSet::set_iop_size(std::uint32_t newIopSize)
 	{
 		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
-		objectPoolTransferInProgress = true;
 		iopSize = newIopSize;
 	}
 
@@ -168,10 +167,6 @@ namespace isobus
 	{
 		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		processingState = value;
-		if (value != ObjectPoolProcessingThreadState::None)
-		{
-			objectPoolTransferInProgress = false;
-		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::worker_thread_function()
