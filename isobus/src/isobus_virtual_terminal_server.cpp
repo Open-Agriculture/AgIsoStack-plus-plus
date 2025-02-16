@@ -1427,6 +1427,7 @@ namespace isobus
 												CANStackLogger::debug("[VT Server]: Client %u change background colour command: colour = %u", cf->get_control_function()->get_address(), objectID, backgroundColour);
 												parentServer->send_change_background_colour_response(objectID, 0, backgroundColour, message.get_source_control_function());
 												parentServer->process_macro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), cf);
+												parentServer->onRepaintEventDispatcher.call(cf);
 											}
 											break;
 
