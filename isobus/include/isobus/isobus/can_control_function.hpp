@@ -58,6 +58,7 @@ namespace isobus
 		NAME get_NAME() const;
 
 		/// @brief Function to set the control function name
+		/// @param[in] newNAME the new NAME of the control function
 		void set_NAME(const NAME &newNAME);
 
 		/// @brief Returns the `Type` of the control function
