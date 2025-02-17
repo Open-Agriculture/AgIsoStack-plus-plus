@@ -288,6 +288,7 @@ namespace isobus
 									{
 										CANStackLogger::debug("[VT Server]: Callback indicated there may be enough memory, but since there is overhead associated to object storage it is impossible to be sure.", requiredMemory);
 									}
+									cf->set_iop_size(requiredMemory);
 
 									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 									buffer[0] = static_cast<std::uint8_t>(Function::GetMemoryMessage);
@@ -452,6 +453,7 @@ namespace isobus
 									auto loadedVersion = parentServer->load_version(versionLabel, message.get_source_control_function()->get_NAME());
 									if (!loadedVersion.empty())
 									{
+										cf->set_iop_size(loadedVersion.size());
 										cf->add_iop_raw_data(loadedVersion);
 									}
 									else
@@ -1430,6 +1432,7 @@ namespace isobus
 												CANStackLogger::debug("[VT Server]: Client %u change background colour command: colour = %u", cf->get_control_function()->get_address(), objectID, backgroundColour);
 												parentServer->send_change_background_colour_response(objectID, 0, backgroundColour, message.get_source_control_function());
 												parentServer->process_macro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), cf);
+												parentServer->onRepaintEventDispatcher.call(cf);
 											}
 											break;
 
