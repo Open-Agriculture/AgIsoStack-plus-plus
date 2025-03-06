@@ -5,6 +5,7 @@
 #include "isobus/isobus/nmea2000_message_interface.hpp"
 
 #include <math.h>
+#include <chrono>
 #include <csignal>
 #include <future>
 #include <iostream>
