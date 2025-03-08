@@ -248,6 +248,9 @@ namespace isobus
 		/// @returns The bitfield of supported large fonts
 		virtual std::uint8_t get_supported_large_fonts_bitfield() const;
 
+		/// @brief This function is called when the Identify VT version message is received
+		virtual void identify_vt();
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events
