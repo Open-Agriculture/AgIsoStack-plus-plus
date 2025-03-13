@@ -453,6 +453,7 @@ namespace isobus
 							}
 							break;
 						}
+						break;
 
 					case 4: // Sensor
 						switch (subType)
