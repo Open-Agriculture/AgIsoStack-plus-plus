@@ -213,6 +213,14 @@ namespace isobus
 		/// @returns An event dispatcher which can be used to get notified about address violations
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> &get_address_violation_event_dispatcher();
 
+		/// @brief Transmits a request for the address claim PGN on the specified channel.
+		/// @attention This is not to be used for normal address claiming. The Internal Control Functions handle this automatically.
+		/// This function is only for special cases where you need to request an address claim to forcefully reconstruct the address table.
+		/// Use this function with caution and sparingly.
+		/// @param[in] canPortIndex The CAN channel index to send the request on
+		/// @returns `true` if the request was sent, otherwise `false`
+		bool send_request_for_address_claim(std::uint8_t canPortIndex) const;
+
 	protected:
 		// Using protected region to allow protocols use of special functions from the network manager
 		friend class InternalControlFunction; ///< Allows the network manager to work closely with the address claiming process

@@ -457,6 +457,28 @@ namespace isobus
 		return addressViolationEventDispatcher;
 	}
 
+	bool CANNetworkManager::send_request_for_address_claim(std::uint8_t canPortIndex) const
+	{
+		const auto parameterGroupNumber = static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim);
+		static const std::array<std::uint8_t, 3> dataBuffer{
+			static_cast<std::uint8_t>(parameterGroupNumber),
+			static_cast<std::uint8_t>(parameterGroupNumber >> 8),
+			static_cast<std::uint8_t>(parameterGroupNumber >> 16)
+		};
+		const bool retVal = CANNetworkManager::CANNetwork.send_can_message_raw(canPortIndex,
+		                                                                       NULL_CAN_ADDRESS,
+		                                                                       BROADCAST_CAN_ADDRESS,
+		                                                                       static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest),
+		                                                                       static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
+		                                                                       dataBuffer.data(),
+		                                                                       dataBuffer.size());
+		if (retVal)
+		{
+			LOG_DEBUG("[NM]: Sending a forced request for address claim on channel '%d'.", canPortIndex);
+		}
+		return retVal;
+	}
+
 	bool CANNetworkManager::add_protocol_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parentPointer)
 	{
 		bool retVal = false;

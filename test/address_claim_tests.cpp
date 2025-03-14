@@ -59,6 +59,9 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	EXPECT_TRUE(firstPartneredSecondECU->get_address_valid());
 	EXPECT_TRUE(secondPartneredFirstEcu->get_address_valid());
 
+	// Test sending a forced request for address claim
+	EXPECT_TRUE(CANNetworkManager::CANNetwork.send_request_for_address_claim(0));
+
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(firstPartneredSecondECU);
 	CANNetworkManager::CANNetwork.deactivate_control_function(secondPartneredFirstEcu);
