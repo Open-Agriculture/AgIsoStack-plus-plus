@@ -80,6 +80,11 @@ namespace isobus
 		return 0xFF;
 	}
 
+	void VirtualTerminalServer::identify_vt()
+	{
+		CANStackLogger::error("[VT Server]: The Identify VT command is not implemented");
+	}
+
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &VirtualTerminalServer::get_on_repaint_event_dispatcher()
 	{
 		return onRepaintEventDispatcher;
@@ -1717,6 +1722,12 @@ namespace isobus
 								case Function::VTControlAudioSignalTerminationMessage:
 								{
 									// Todo, do something with the responses
+								}
+								break;
+
+								case Function::IdentifyVTMessage:
+								{
+									parentServer->identify_vt();
 								}
 								break;
 
