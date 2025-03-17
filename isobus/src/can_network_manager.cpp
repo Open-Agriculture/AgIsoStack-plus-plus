@@ -332,8 +332,20 @@ namespace isobus
 
 		if (initialized)
 		{
-			LOCK_GUARD(Mutex, transmittedMessageQueueMutex);
-			transmittedMessageQueue.push(std::move(message));
+			{
+				LOCK_GUARD(Mutex, transmittedMessageQueueMutex);
+				transmittedMessageQueue.push(message);
+			}
+
+			// We need to receive manual requests for the address claim PGN.
+			if ((CANIdentifier::Type::Extended == message.get_identifier().get_identifier_type()) &&
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
+			    (3 == message.get_data_length()) &&
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_data_custom_length(0, 24)))
+			{
+				LOCK_GUARD(Mutex, receivedMessageQueueMutex);
+				receivedMessageQueue.push(std::move(message));
+			}
 		}
 	}
 
