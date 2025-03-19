@@ -71,31 +71,6 @@ namespace isobus
 			}
 			break;
 
-			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim):
-			{
-				if (get_address() == message.get_identifier().get_source_address())
-				{
-					std::uint64_t NAMEClaimed = message.get_uint64_at(0);
-
-					// Check to see if another ECU is hijacking our address
-					// This is not really a needed check, as we can be pretty sure that our address
-					// has been stolen if we're running this logic. But, you never know, someone could be
-					// spoofing us I guess, or we could be getting an echo? CAN Bridge from another channel?
-					// Seemed safest to just confirm.
-					if (NAMEClaimed != get_NAME().get_full_name())
-					{
-						// Wait for things to shake out a bit, then claim a new address.
-						set_current_state(State::WaitForRequestContentionPeriod);
-						address = NULL_CAN_ADDRESS;
-						LOG_WARNING("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
-						            get_NAME().get_full_name(),
-						            get_can_port(),
-						            NAMEClaimed);
-					}
-				}
-			}
-			break;
-
 			case static_cast<std::uint32_t>(CANLibParameterGroupNumber::CommandedAddress):
 			{
 				constexpr std::uint8_t COMMANDED_ADDRESS_LENGTH = 9;
@@ -280,7 +255,19 @@ namespace isobus
 
 			case State::ContendForPreferredAddress:
 			{
-				/// @todo Non-arbitratable address contention (there is not a good reason to use this, but we should add support anyways)
+				if (send_address_claim(preferredAddress))
+				{
+					LOG_DEBUG("[AC]: Internal control function %016llx has won address contention and claimed address %u on channel %u",
+					          get_NAME().get_full_name(),
+					          get_preferred_address(),
+					          get_can_port());
+					hasClaimedAddress = true;
+					set_current_state(State::AddressClaimingComplete);
+				}
+				else
+				{
+					set_current_state(State::None); // Bus went down? Restart.
+				}
 			}
 			break;
 
