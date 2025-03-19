@@ -756,9 +756,39 @@ namespace isobus
 			// Remove any CF that has the same address as the one claiming
 			std::for_each(controlFunctionTable[rxFrame.channel].begin(),
 			              controlFunctionTable[rxFrame.channel].end(),
-			              [&foundControlFunction, &claimedAddress](const std::shared_ptr<ControlFunction> &cf) {
+			              [&foundControlFunction, &claimedAddress, &claimedNAME](const std::shared_ptr<ControlFunction> &cf) {
 				              if ((nullptr != cf) && (foundControlFunction != cf) && (cf->get_address() == claimedAddress))
+				              {
+					              if (ControlFunction::Type::Internal == cf->controlFunctionType)
+					              {
+						              // If an internal control function had its address stolen from it,
+						              // it might need to re-do some of the address claim procedure.
+
+						              if (cf->address == claimedAddress)
+						              {
+							              // Check to see if another ECU is hijacking our address
+							              // This is not really a needed check, as we can be pretty sure that our address
+							              // has been stolen if we're running this logic. But, you never know, someone could be
+							              // spoofing us I guess, or we could be getting an echo? CAN Bridge from another channel?
+							              // Seemed safest to just confirm.
+							              if (claimedNAME != cf->get_NAME().get_full_name())
+							              {
+								              LOG_WARNING("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
+								                          cf->get_NAME().get_full_name(),
+								                          cf->get_can_port(),
+								                          claimedNAME);
+
+								              // This check is not strictly needed, but sanity check the state of the address claim state machine
+								              // to ensure we're not advancing it. We don't want to go from an unclaimed state to the contention state.
+								              if (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state())
+								              {
+									              std::static_pointer_cast<InternalControlFunction>(cf)->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
+								              }
+							              }
+						              }
+					              }
 					              cf->address = CANIdentifier::NULL_ADDRESS;
+				              }
 			              });
 
 			std::for_each(inactiveControlFunctions.begin(),
@@ -774,7 +804,7 @@ namespace isobus
 				foundControlFunction = create_external_control_function(NAME(claimedNAME), claimedAddress, rxFrame.channel);
 				LOG_DEBUG("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
 			}
-			else if (foundControlFunction->get_address() != claimedAddress)
+			else if ((foundControlFunction->get_address() != claimedAddress) && (claimedAddress < NULL_CAN_ADDRESS))
 			{
 				if (foundControlFunction->get_address_valid())
 				{
