@@ -114,7 +114,7 @@ namespace isobus
 		}
 		else
 		{
-			CANStackLogger::error("[ASC Logger]: Failed to open log file for writing");
+			LOG_ERROR("[ASC Logger]: Failed to open log file for writing");
 		}
 	}
 

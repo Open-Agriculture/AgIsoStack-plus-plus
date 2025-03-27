@@ -171,14 +171,14 @@ namespace isobus
 					oss << " in the year " << isobus::to_string(static_cast<int>(timeAndDateInformation.timeAndDate.year));
 					oss << " with a local offset of " << isobus::to_string(static_cast<int>(timeAndDateInformation.timeAndDate.localHourOffset));
 					oss << " hours and " << isobus::to_string(static_cast<int>(timeAndDateInformation.timeAndDate.localMinuteOffset)) << " minutes.";
-					CANStackLogger::debug(oss.str());
+					LOG_DEBUG(oss.str());
 				}
 #endif
 				timeDateInterface->timeAndDateEventDispatcher.invoke(std::move(timeAndDateInformation));
 			}
 			else
 			{
-				CANStackLogger::warn("[Time/Date]: Received a Time/Date message with an invalid data length. DLC must be 8.");
+				LOG_WARNING("[Time/Date]: Received a Time/Date message with an invalid data length. DLC must be 8.");
 			}
 		}
 	}
@@ -202,13 +202,13 @@ namespace isobus
 				TimeAndDate timeAndDateInformation;
 				if (interface->userTimeDateCallback(timeAndDateInformation)) // Getting the time and date information from the user callback
 				{
-					CANStackLogger::debug("[Time/Date]: Received a request for Time/Date information and interface is configured to reply. Sending Time/Date.");
+					LOG_DEBUG("[Time/Date]: Received a request for Time/Date information and interface is configured to reply. Sending Time/Date.");
 					retVal = interface->send_time_and_date(timeAndDateInformation);
 					acknowledge = false;
 				}
 				else
 				{
-					CANStackLogger::error("[Time/Date]: Your application failed to provide Time/Date information when requested! You are probably doing something wrong. The request may be NACKed as a result.");
+					LOG_ERROR("[Time/Date]: Your application failed to provide Time/Date information when requested! You are probably doing something wrong. The request may be NACKed as a result.");
 				}
 			}
 		}
