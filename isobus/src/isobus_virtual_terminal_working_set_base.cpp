@@ -126,7 +126,7 @@ namespace isobus
 											}
 											else
 											{
-												CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 												retVal = false;
 												break;
 											}
@@ -140,7 +140,7 @@ namespace isobus
 											}
 											else
 											{
-												CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 												retVal = false;
 												break;
 											}
@@ -160,28 +160,28 @@ namespace isobus
 											langCode.push_back(static_cast<char>(iopData[1]));
 											iopLength -= 2;
 											iopData += 2;
-											CANStackLogger::debug("[WS]: IOP Language parsed: " + langCode);
+											LOG_DEBUG("[WS]: IOP Language parsed: " + langCode);
 										}
 									}
 									else
 									{
-										CANStackLogger::error("[WS]: Not enough IOP data to parse working set language codes for object " + isobus::to_string(static_cast<int>(decodedID)));
+										LOG_ERROR("[WS]: Not enough IOP data to parse working set language codes for object " + isobus::to_string(static_cast<int>(decodedID)));
 									}
 									retVal = true;
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to parse working set macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Not enough IOP data to parse working set macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse working set children for object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse working set children for object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse working set object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse working set object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 
 						if (retVal)
@@ -191,7 +191,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Multiple working set objects are not allowed in the object pool. Faulting object " + isobus::to_string(static_cast<int>(decodedID)));
+						LOG_ERROR("[WS]: Multiple working set objects are not allowed in the object pool. Faulting object " + isobus::to_string(static_cast<int>(decodedID)));
 					}
 				}
 				break;
@@ -242,7 +242,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -256,7 +256,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -273,17 +273,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse data mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse data mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse data mask children for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse data mask children for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse data mask object for object " + isobus::to_string(static_cast<int>(decodedID)));
+						LOG_ERROR("[WS]: Not enough IOP data to parse data mask object for object " + isobus::to_string(static_cast<int>(decodedID)));
 					}
 
 					if (retVal)
@@ -346,7 +346,7 @@ namespace isobus
 												}
 												else
 												{
-													CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 													retVal = false;
 													break;
 												}
@@ -360,7 +360,7 @@ namespace isobus
 												}
 												else
 												{
-													CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 													retVal = false;
 													break;
 												}
@@ -377,33 +377,33 @@ namespace isobus
 									}
 									else
 									{
-										CANStackLogger::error("[WS]: Not enough IOP data to parse alarm mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+										LOG_ERROR("[WS]: Not enough IOP data to parse alarm mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 									}
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to parse alarm mask children for object " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Not enough IOP data to parse alarm mask children for object " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Invalid acoustic signal priority " +
-								                      isobus::to_string(static_cast<int>(iopData[7])) +
-								                      " specified for alarm mask object " +
-								                      isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Invalid acoustic signal priority " +
+								          isobus::to_string(static_cast<int>(iopData[7])) +
+								          " specified for alarm mask object " +
+								          isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Invalid alarm mask priority " +
-							                      isobus::to_string(static_cast<int>(iopData[6])) +
-							                      " specified for alarm mask object" +
-							                      isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Invalid alarm mask priority " +
+							          isobus::to_string(static_cast<int>(iopData[6])) +
+							          " specified for alarm mask object" +
+							          isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse alarm mask object for object " + isobus::to_string(static_cast<int>(decodedID)));
+						LOG_ERROR("[WS]: Not enough IOP data to parse alarm mask object for object " + isobus::to_string(static_cast<int>(decodedID)));
 					}
 
 					if (retVal)
@@ -426,9 +426,9 @@ namespace isobus
 
 						if (iopData[7] > 1)
 						{
-							CANStackLogger::warn("[WS]: Container " +
-							                     isobus::to_string(static_cast<int>(decodedID)) +
-							                     " hidden attribute is not a supported value. Assuming that it is hidden.");
+							LOG_WARNING("[WS]: Container " +
+							            isobus::to_string(static_cast<int>(decodedID)) +
+							            " hidden attribute is not a supported value. Assuming that it is hidden.");
 						}
 
 						// Now add child objects
@@ -469,7 +469,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -483,7 +483,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -500,17 +500,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse container macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse container macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse container children for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse container children for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse container object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse container object");
 					}
 
 					if (retVal)
@@ -531,19 +531,19 @@ namespace isobus
 
 						if ((iopData[3] != 1) && (iopData[3] != 2))
 						{
-							CANStackLogger::warn("[WS]: Unknown window mask width for object %u. Allowed range is 1-2.", decodedID);
+							LOG_WARNING("[WS]: Unknown window mask width for object %u. Allowed range is 1-2.", decodedID);
 						}
 						tempObject->set_width(iopData[3]);
 
 						if ((iopData[4] < 1) || (iopData[4] > 6))
 						{
-							CANStackLogger::warn("[WS]: Unknown window mask height for object %u. Allowed range is 1-6.", decodedID);
+							LOG_WARNING("[WS]: Unknown window mask height for object %u. Allowed range is 1-6.", decodedID);
 						}
 						tempObject->set_height(iopData[4]);
 
 						if (iopData[5] > 18)
 						{
-							CANStackLogger::error("[WS]: Unknown window mask type for object %u. Allowed range is 1-18.", decodedID);
+							LOG_ERROR("[WS]: Unknown window mask type for object %u. Allowed range is 1-18.", decodedID);
 							retVal = false;
 						}
 						else
@@ -588,7 +588,7 @@ namespace isobus
 									if (1 != numberOfObjectReferences)
 									{
 										retVal = false;
-										CANStackLogger::error("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 1.", decodedID);
+										LOG_ERROR("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 1.", decodedID);
 									}
 								}
 								break;
@@ -603,7 +603,7 @@ namespace isobus
 									if (2 != numberOfObjectReferences)
 									{
 										retVal = false;
-										CANStackLogger::error("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 2.", decodedID);
+										LOG_ERROR("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 2.", decodedID);
 									}
 								}
 								break;
@@ -613,7 +613,7 @@ namespace isobus
 									if (0 != numberOfObjectReferences)
 									{
 										retVal = false;
-										CANStackLogger::error("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 0.", decodedID);
+										LOG_ERROR("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 0.", decodedID);
 									}
 								}
 								break;
@@ -662,7 +662,7 @@ namespace isobus
 												}
 												else
 												{
-													CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 													retVal = false;
 													break;
 												}
@@ -676,7 +676,7 @@ namespace isobus
 												}
 												else
 												{
-													CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 													retVal = false;
 													break;
 												}
@@ -693,19 +693,19 @@ namespace isobus
 									}
 									else
 									{
-										CANStackLogger::error("[WS]: Not enough IOP data to parse macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+										LOG_ERROR("[WS]: Not enough IOP data to parse macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 										retVal = false;
 									}
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to parse children for object " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Not enough IOP data to parse children for object " + isobus::to_string(static_cast<int>(decodedID)));
 									retVal = false;
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse object references for object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse object references for object " + isobus::to_string(static_cast<int>(decodedID)));
 								retVal = false;
 							}
 
@@ -717,7 +717,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse window mask object.");
+						LOG_ERROR("[WS]: Not enough IOP data to parse window mask object.");
 					}
 				}
 				break;
@@ -768,7 +768,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -782,7 +782,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -799,17 +799,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse soft key mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse soft key mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse soft key mask children for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse soft key mask children for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse soft key mask object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse soft key mask object");
 					}
 
 					if (retVal)
@@ -867,7 +867,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -881,7 +881,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -898,17 +898,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for key object" + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for key object" + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse key children for object" + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse key children for object" + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to key object");
+						LOG_ERROR("[WS]: Not enough IOP data to key object");
 					}
 
 					if (retVal)
@@ -969,7 +969,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -983,7 +983,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -1000,17 +1000,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for button object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for button object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse button children for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse button children for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse button object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse button object");
 					}
 
 					if (retVal)
@@ -1063,28 +1063,28 @@ namespace isobus
 										/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 										iopLength -= 2;
 										iopData += 2;
-										CANStackLogger::warn("[WS]: Skipped parsing macro reference in key group object (todo)");
+										LOG_WARNING("[WS]: Skipped parsing macro reference in key group object (todo)");
 									}
 									retVal = true;
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to parse macros for key group object " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Not enough IOP data to parse macros for key group object " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Key group " + isobus::to_string(static_cast<int>(decodedID)) + " has too many child key objects! Only 4 are permitted.");
+								LOG_ERROR("[WS]: Key group " + isobus::to_string(static_cast<int>(decodedID)) + " has too many child key objects! Only 4 are permitted.");
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse key group object children");
+							LOG_ERROR("[WS]: Not enough IOP data to parse key group object children");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse key group object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse key group object");
 					}
 
 					if (retVal)
@@ -1133,7 +1133,7 @@ namespace isobus
 									}
 									else
 									{
-										CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 										retVal = false;
 										break;
 									}
@@ -1147,7 +1147,7 @@ namespace isobus
 									}
 									else
 									{
-										CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 										retVal = false;
 										break;
 									}
@@ -1164,12 +1164,12 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for input boolean object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for input boolean object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse input boolean object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse input boolean object");
 					}
 
 					if (retVal)
@@ -1235,7 +1235,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -1249,7 +1249,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -1266,17 +1266,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for input boolean object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for input boolean object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse input string object value");
+							LOG_ERROR("[WS]: Not enough IOP data to parse input string object value");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse input string object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse input string object");
 					}
 
 					if (retVal)
@@ -1330,7 +1330,7 @@ namespace isobus
 
 						if (iopData[34] > 1)
 						{
-							CANStackLogger::warn("[WS]: Input number " + isobus::to_string(static_cast<int>(decodedID)) + " format byte has undefined value. Setting to exponential format.");
+							LOG_WARNING("[WS]: Input number " + isobus::to_string(static_cast<int>(decodedID)) + " format byte has undefined value. Setting to exponential format.");
 						}
 
 						tempObject->set_justification_bitfield(iopData[35]);
@@ -1350,18 +1350,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in input number (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in input number (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for input number object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for input number object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse input number object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse input number object");
 					}
 
 					if (retVal)
@@ -1422,7 +1422,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
 											retVal = false;
 											break;
 										}
@@ -1436,7 +1436,7 @@ namespace isobus
 										}
 										else
 										{
-											CANStackLogger::error("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
 											retVal = false;
 											break;
 										}
@@ -1453,17 +1453,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for input list object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for input list object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse children of input list object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse children of input list object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse input list object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse input list object");
 					}
 
 					if (retVal)
@@ -1519,23 +1519,23 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in output string object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in output string object (todo)");
 								}
 								retVal = true;
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output string object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for output string object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse output string object value");
+							LOG_ERROR("[WS]: Not enough IOP data to parse output string object value");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output string object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output string object");
 					}
 
 					if (retVal)
@@ -1581,9 +1581,9 @@ namespace isobus
 
 						if (iopData[26] > 1)
 						{
-							CANStackLogger::warn("[WS]: Output number " +
-							                     isobus::to_string(static_cast<int>(decodedID)) +
-							                     " format byte has undefined value. Setting to exponential format.");
+							LOG_WARNING("[WS]: Output number " +
+							            isobus::to_string(static_cast<int>(decodedID)) +
+							            " format byte has undefined value. Setting to exponential format.");
 						}
 						tempObject->set_justification_bitfield(iopData[27]);
 
@@ -1601,18 +1601,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in output number (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in output number (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output number object {}" + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output number object {}" + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output number object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output number object");
 					}
 
 					if (retVal)
@@ -1660,23 +1660,23 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in output list object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in output list object (todo)");
 								}
 								retVal = true;
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output list object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for output list object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse children for output list object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse children for output list object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output list object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output list object");
 					}
 
 					if (retVal)
@@ -1703,7 +1703,7 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Unknown output line direction in object %u", decodedID);
+							LOG_ERROR("[WS]: Unknown output line direction in object %u", decodedID);
 						}
 
 						iopData += 10;
@@ -1724,18 +1724,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in output line object (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in output line object (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output line object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output line object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output line object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output line object");
 					}
 
 					if (retVal)
@@ -1775,18 +1775,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in output rectangle object (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in output rectangle object (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output rectangle object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output rectangle object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output rectangle object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output rectangle object");
 					}
 
 					if (retVal)
@@ -1831,23 +1831,23 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in output ellipse object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in output ellipse object (todo)");
 								}
 								retVal = true;
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output ellipse object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for output ellipse object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Output Ellipse type is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Output Ellipse type is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output ellipse object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output ellipse object");
 					}
 
 					if (retVal)
@@ -1880,7 +1880,7 @@ namespace isobus
 
 							if (numberOfPoints < 3)
 							{
-								CANStackLogger::warn("[WS]: Output Polygon must have at least 3 points. Polygon %u will not be drawable.", decodedID);
+								LOG_WARNING("[WS]: Output Polygon must have at least 3 points. Polygon %u will not be drawable.", decodedID);
 							}
 
 							if (iopLength >= static_cast<std::uint16_t>((numberOfPoints * 4)))
@@ -1902,28 +1902,28 @@ namespace isobus
 										/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 										iopLength -= 2;
 										iopData += 2;
-										CANStackLogger::warn("[WS]: Skipped parsing macro reference in output polygon object (todo)");
+										LOG_WARNING("[WS]: Skipped parsing macro reference in output polygon object (todo)");
 									}
 									retVal = true;
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output polygon object " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Not enough IOP data to parse macros for output polygon object " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse output polygon child points for object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse output polygon child points for object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Polygon type is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Polygon type is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output polygon object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output polygon object");
 					}
 
 					if (retVal)
@@ -1966,18 +1966,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in output meter object (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in output meter object (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output meter object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output meter object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output meter object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output meter object");
 					}
 
 					if (retVal)
@@ -2019,18 +2019,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in output linear bar graph object (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in output linear bar graph object (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output linear bar graph object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output linear bar graph object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output linear bar graph object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output linear bar graph object");
 					}
 
 					if (retVal)
@@ -2074,18 +2074,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in output arched bar graph object (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in output arched bar graph object (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for output arched bar graph object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output arched bar graph object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse output arched bar graph object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse output arched bar graph object");
 					}
 
 					if (retVal)
@@ -2097,13 +2097,13 @@ namespace isobus
 
 				case VirtualTerminalObjectType::GraphicsContext:
 				{
-					CANStackLogger::error("[WS]: Graphics context not supported yet (todo)");
+					LOG_ERROR("[WS]: Graphics context not supported yet (todo)");
 				}
 				break;
 
 				case VirtualTerminalObjectType::Animation:
 				{
-					CANStackLogger::error("[WS]: Animation not supported yet (todo)");
+					LOG_ERROR("[WS]: Animation not supported yet (todo)");
 				}
 				break;
 
@@ -2137,7 +2137,7 @@ namespace isobus
 							{
 								if (0 != (tempObject->get_number_of_bytes_in_raw_data() % 2))
 								{
-									CANStackLogger::error("[WS]: Picture graphic has RLE but an odd number of data bytes. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Picture graphic has RLE but an odd number of data bytes. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 								else
 								{
@@ -2280,7 +2280,7 @@ namespace isobus
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to deserialize picture graphic's pixel data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Not enough IOP data to deserialize picture graphic's pixel data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 
@@ -2292,7 +2292,7 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in picture graphic object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in picture graphic object (todo)");
 								}
 
 								if (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height()))
@@ -2301,22 +2301,22 @@ namespace isobus
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Picture graphic object has invalid dimensions compared to its data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+									LOG_ERROR("[WS]: Picture graphic object has invalid dimensions compared to its data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for picture graphic object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for picture graphic object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Picture graphic format is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Picture graphic format is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse picture graphic object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse picture graphic object");
 					}
 
 					if (retVal)
@@ -2343,7 +2343,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse number variable object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse number variable object");
 					}
 
 					if (retVal)
@@ -2381,12 +2381,12 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse string variable object raw data");
+							LOG_ERROR("[WS]: Not enough IOP data to parse string variable object raw data");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse string variable object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse string variable object");
 					}
 
 					if (retVal)
@@ -2426,23 +2426,23 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in font attributes object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in font attributes object (todo)");
 								}
 								retVal = true;
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for font attributes object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for font attributes object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Proprietary and reserved fonts are not supported, and will likely never be supported.");
+							LOG_ERROR("[WS]: Proprietary and reserved fonts are not supported, and will likely never be supported.");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse font attributes object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse font attributes object");
 					}
 
 					if (retVal)
@@ -2476,18 +2476,18 @@ namespace isobus
 								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 								iopLength -= 2;
 								iopData += 2;
-								CANStackLogger::warn("[WS]: Skipped parsing macro reference in line attributes object (todo)");
+								LOG_WARNING("[WS]: Skipped parsing macro reference in line attributes object (todo)");
 							}
 							retVal = true;
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse macros for line attributes object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for line attributes object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse line attributes object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse line attributes object");
 					}
 
 					if (retVal)
@@ -2524,23 +2524,23 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in fill attributes object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in fill attributes object (todo)");
 								}
 								retVal = true;
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for fill attributes object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for fill attributes object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Fill attribute type is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Fill attribute type is undefined for object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse fill attributes object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse fill attributes object");
 					}
 
 					if (retVal)
@@ -2565,7 +2565,7 @@ namespace isobus
 						else
 						{
 							tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(iopData[3] & 0x01));
-							CANStackLogger::warn("[WS]: Invalid input attributes validation type. Validation type must be < 2");
+							LOG_WARNING("[WS]: Invalid input attributes validation type. Validation type must be < 2");
 						}
 
 						const std::uint8_t validationStringLength = iopData[4];
@@ -2599,23 +2599,23 @@ namespace isobus
 									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
 									iopLength -= 2;
 									iopData += 2;
-									CANStackLogger::warn("[WS]: Skipped parsing macro reference in input attributes object (todo)");
+									LOG_WARNING("[WS]: Skipped parsing macro reference in input attributes object (todo)");
 								}
 								retVal = true;
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse macros for input attributes object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Not enough IOP data to parse macros for input attributes object " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Not enough IOP data to parse input attributes validation string");
+							LOG_ERROR("[WS]: Not enough IOP data to parse input attributes validation string");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse input attributes object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse input attributes object");
 					}
 
 					if (retVal)
@@ -2640,16 +2640,16 @@ namespace isobus
 						else
 						{
 							tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(iopData[3] & 0x01));
-							CANStackLogger::warn("[WS]: Invalid extended input attributes validation type. Validation type must be < 2");
+							LOG_WARNING("[WS]: Invalid extended input attributes validation type. Validation type must be < 2");
 						}
 
 						const std::uint8_t numberOfCodePlanesToFollow = iopData[4];
 						tempObject->set_number_of_code_planes(numberOfCodePlanesToFollow);
-						CANStackLogger::error("[WS]: Extended input attributes not supported yet (todo)");
+						LOG_ERROR("[WS]: Extended input attributes not supported yet (todo)");
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse extended input attributes object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse extended input attributes object");
 					}
 
 					if (retVal)
@@ -2669,7 +2669,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse colour map object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse colour map object");
 					}
 
 					if (retVal)
@@ -2681,7 +2681,7 @@ namespace isobus
 
 				case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 				{
-					CANStackLogger::error("[WS]: Object label reference not supported yet (todo)");
+					LOG_ERROR("[WS]: Object label reference not supported yet (todo)");
 				}
 				break;
 
@@ -2699,7 +2699,7 @@ namespace isobus
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse object pointer object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse object pointer object");
 					}
 
 					if (retVal)
@@ -2711,19 +2711,19 @@ namespace isobus
 
 				case VirtualTerminalObjectType::ExternalObjectDefinition:
 				{
-					CANStackLogger::error("[WS]: External object definition not supported yet (todo)");
+					LOG_ERROR("[WS]: External object definition not supported yet (todo)");
 				}
 				break;
 
 				case VirtualTerminalObjectType::ExternalReferenceNAME:
 				{
-					CANStackLogger::error("[WS]: External reference name not supported yet (todo)");
+					LOG_ERROR("[WS]: External reference name not supported yet (todo)");
 				}
 				break;
 
 				case VirtualTerminalObjectType::ExternalObjectPointer:
 				{
-					CANStackLogger::error("[WS]: External object pointer not supported yet (todo)");
+					LOG_ERROR("[WS]: External object pointer not supported yet (todo)");
 				}
 				break;
 
@@ -2801,7 +2801,7 @@ namespace isobus
 
 								if (!retVal)
 								{
-									CANStackLogger::error("[WS]: Macro object %u cannot be parsed because a command packet could not be added.", decodedID);
+									LOG_ERROR("[WS]: Macro object %u cannot be parsed because a command packet could not be added.", decodedID);
 									break;
 								}
 							}
@@ -2812,18 +2812,18 @@ namespace isobus
 
 								if (!retVal)
 								{
-									CANStackLogger::error("[WS]: Macro object %u contains malformed commands", decodedID);
+									LOG_ERROR("[WS]: Macro object %u contains malformed commands", decodedID);
 								}
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Macro object %u cannot be parsed because there is not enough IOP data left", decodedID);
+							LOG_ERROR("[WS]: Macro object %u cannot be parsed because there is not enough IOP data left", decodedID);
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse macro object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse macro object");
 					}
 
 					if (retVal)
@@ -2837,7 +2837,7 @@ namespace isobus
 				{
 					auto tempObject = std::make_shared<AuxiliaryFunctionType1>();
 
-					CANStackLogger::warn("[WS]: Deserializing an Aux function type 1 object. This object is parsed and validated but NOT utilized by version 3 or later VTs in making Auxiliary Control Assignments.");
+					LOG_WARNING("[WS]: Deserializing an Aux function type 1 object. This object is parsed and validated but NOT utilized by version 3 or later VTs in making Auxiliary Control Assignments.");
 
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
@@ -2869,17 +2869,17 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 1 object's children.");
+								LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary function type 1 object's children.");
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Auxiliary function type 1 object with ID %u has an invalid function type. The function type must be 2 or less.", decodedID);
+							LOG_ERROR("[WS]: Auxiliary function type 1 object with ID %u has an invalid function type. The function type must be 2 or less.", decodedID);
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 1 object.");
+						LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary function type 1 object.");
 					}
 
 					if (retVal)
@@ -2893,7 +2893,7 @@ namespace isobus
 				{
 					auto tempObject = std::make_shared<AuxiliaryInputType1>();
 
-					CANStackLogger::warn("[WS]: Deserializing an Aux input type 1 object. This object is parsed and validated but NOT utilized by version 3 or later VTs in making Auxiliary Control Assignments.");
+					LOG_WARNING("[WS]: Deserializing an Aux input type 1 object. This object is parsed and validated but NOT utilized by version 3 or later VTs in making Auxiliary Control Assignments.");
 
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
@@ -2929,22 +2929,22 @@ namespace isobus
 								}
 								else
 								{
-									CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 2 object's children.");
+									LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary function type 2 object's children.");
 								}
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Auxiliary input type 1 object %u has an invalid input ID. Input ID must be 250 or less, but was decoded as %u", decodedID, iopData[5]);
+								LOG_ERROR("[WS]: Auxiliary input type 1 object %u has an invalid input ID. Input ID must be 250 or less, but was decoded as %u", decodedID, iopData[5]);
 							}
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Auxiliary input type 1 object %u has an invalid function type. Function type must be 2 or less.");
+							LOG_ERROR("[WS]: Auxiliary input type 1 object %u has an invalid function type. Function type must be 2 or less.");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary input type 1 object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary input type 1 object");
 					}
 
 					if (retVal)
@@ -2965,11 +2965,11 @@ namespace isobus
 
 						if ((iopData[4] & 0x1F) >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
 						{
-							CANStackLogger::error("[WS]: Auxiliary function type 2 with object ID %u has a reserved function type.", decodedID);
+							LOG_ERROR("[WS]: Auxiliary function type 2 with object ID %u has a reserved function type.", decodedID);
 						}
 						else if ((iopData[4] & 0x1F) == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
 						{
-							CANStackLogger::error("[WS]: Auxiliary function type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
+							LOG_ERROR("[WS]: Auxiliary function type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
 						}
 						else
 						{
@@ -2999,13 +2999,13 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 2 object's children.");
+								LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary function type 2 object's children.");
 							}
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary function type 2 object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary function type 2 object");
 					}
 
 					if (retVal)
@@ -3026,11 +3026,11 @@ namespace isobus
 
 						if ((iopData[4] & 0x1F) >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
 						{
-							CANStackLogger::error("[WS]: Auxiliary input type 2 with object ID %u has a reserved function type.", decodedID);
+							LOG_ERROR("[WS]: Auxiliary input type 2 with object ID %u has a reserved function type.", decodedID);
 						}
 						else if ((iopData[4] & 0x1F) == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
 						{
-							CANStackLogger::error("[WS]: Auxiliary input type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
+							LOG_ERROR("[WS]: Auxiliary input type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
 						}
 						else
 						{
@@ -3040,7 +3040,7 @@ namespace isobus
 
 							if (0 != (iopData[4] & 0x40))
 							{
-								CANStackLogger::warn("[WS]: Auxiliary input type 2 with object ID %u is using the assignment restriction attribute, which is reserved and should be zero.", decodedID);
+								LOG_WARNING("[WS]: Auxiliary input type 2 with object ID %u is using the assignment restriction attribute, which is reserved and should be zero.", decodedID);
 							}
 
 							const std::uint8_t numberOfObjectsToFollow = iopData[5];
@@ -3063,13 +3063,13 @@ namespace isobus
 							}
 							else
 							{
-								CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary input type 2 object's children.");
+								LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary input type 2 object's children.");
 							}
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary input type 2 object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary input type 2 object");
 					}
 
 					if (retVal)
@@ -3097,12 +3097,12 @@ namespace isobus
 						}
 						else
 						{
-							CANStackLogger::error("[WS]: Auxiliary control designator type 2 object %u  has an invalid pointer type. Pointer type must be 3 or less.");
+							LOG_ERROR("[WS]: Auxiliary control designator type 2 object %u  has an invalid pointer type. Pointer type must be 3 or less.");
 						}
 					}
 					else
 					{
-						CANStackLogger::error("[WS]: Not enough IOP data to parse auxiliary control designator type 2 object");
+						LOG_ERROR("[WS]: Not enough IOP data to parse auxiliary control designator type 2 object");
 					}
 
 					if (retVal)
@@ -3114,7 +3114,7 @@ namespace isobus
 
 				default:
 				{
-					CANStackLogger::error("[WS]: Unsupported Object");
+					LOG_ERROR("[WS]: Unsupported Object");
 				}
 				break;
 			}
@@ -3209,7 +3209,7 @@ namespace isobus
 			{
 				if (!parse_next_object(currentIopPointer, remainingLength))
 				{
-					CANStackLogger::error("[WS]: Parsing object pool failed.");
+					LOG_ERROR("[WS]: Parsing object pool failed.");
 					retVal = false;
 					break;
 				}

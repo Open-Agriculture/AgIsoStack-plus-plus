@@ -18,7 +18,7 @@ namespace isobus
 {
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet()
 	{
-		CANStackLogger::info("[WS]: New VT Server Object Created with no associated control function");
+		LOG_INFO("[WS]: New VT Server Object Created with no associated control function");
 	}
 
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet(std::shared_ptr<ControlFunction> associatedControlFunction) :
@@ -26,11 +26,11 @@ namespace isobus
 	{
 		if (nullptr != associatedControlFunction)
 		{
-			CANStackLogger::info("[WS]: New VT Server Object Created for CF " + to_string(static_cast<int>(associatedControlFunction->get_NAME().get_full_name())));
+			LOG_INFO("[WS]: New VT Server Object Created for CF " + to_string(static_cast<int>(associatedControlFunction->get_NAME().get_full_name())));
 		}
 		else
 		{
-			CANStackLogger::info("[WS]: New VT Server Object Created with no associated control function");
+			LOG_INFO("[WS]: New VT Server Object Created with no associated control function");
 		}
 	}
 
@@ -176,9 +176,9 @@ namespace isobus
 			bool lSuccess = true;
 
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
-			CANStackLogger::info("[WS]: Beginning parsing of object pool. This pool has " +
-			                     isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
-			                     " IOP components.");
+			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
+			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
+			         " IOP components.");
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
 				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
@@ -190,18 +190,18 @@ namespace isobus
 
 			if (lSuccess)
 			{
-				CANStackLogger::info("[WS]: Object pool successfully parsed.");
+				LOG_INFO("[WS]: Object pool successfully parsed.");
 				set_object_pool_processing_state(ObjectPoolProcessingThreadState::Success);
 			}
 			else
 			{
-				CANStackLogger::error("[WS]: Object pool failed to be parsed.");
+				LOG_ERROR("[WS]: Object pool failed to be parsed.");
 				set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
 			}
 		}
 		else
 		{
-			CANStackLogger::error("[WS]: Object pool failed to be parsed.");
+			LOG_ERROR("[WS]: Object pool failed to be parsed.");
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
 		}
 	}
