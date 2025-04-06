@@ -9,6 +9,8 @@ We accept all public contributions that adhere to our code of conduct. Additiona
 Our code style rules and PR reviews are based loosely on Autosar's `Guidelines for the use of the C++14 language in critical and safety-related systems` and `MISRA C++` suggestions and try to ensure the highest quality possible.
 
 * Contributions must follow the style defined in our `.clang-format` and `.cmake-format` files. You can ensure you pass this check by running `find . -iname *.hpp -o -iname *.cpp | xargs clang-format -i` and `find . -name CMakeLists.txt | xargs cmake-format -i` at the root of the repo before submitting your PR.
+* It is recommended to call the docs/pre-commit-hook.sh as a git pre-commit hook.
+  * ```ln -s $PWD/docs/pre-commit-hook.sh $PWD/.git/hooks/pre-commit; chmod +x docs/pre-commit-hook.sh``` will do this trick for you
 * Contributions should follow these additional style requirements, which will be checked in code reviews.
   * Function names `snake_case`
   * Variables `camelCase`
@@ -23,6 +25,7 @@ Our code style rules and PR reviews are based loosely on Autosar's `Guidelines f
   * Where possible, declare variables as `constexpr` if their value can be determined at compile time
   * Only those characters specified in the C++ Language Standard basic source character set shall be used in the source code except within the text of a wide string.
   * In general, prefer C++ over C, though exceptions may be granted if needed
+  * Do not use CANStackLogger::warn/critical/error/info/debug methods directly, use LOG_WARN/CRITICAL/ERROR/INFO/DEBUG macros instead of them. Otherwise the build with disabled CAN logger will fail.
   * This list of style items is not exhaustive, and some best practices such as include guards will also be checked in our PR reviews.
 * Doxygen should compile with no warnings when run at the root of the project with the command `doxygen doxyfile`
 * Absolutely no code shall be added that is under a more strict license than MIT or which has not had conditions met to be distributed under our license
