@@ -350,6 +350,16 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a preferred assignment response
+		enum class ChangePreferredAssignmentErrorBit : std::uint8_t
+		{
+			AuxiliaryInputNAMEOrModelCodeNotValid = 0,
+			FunctionObjectIDsNotValid = 1,
+			InputObjectIDsNotValid = 2,
+			DuplicateObjectIDOfAuxiliaryFunction = 3,
+			AnyOtherError = 4
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a change size response
 		enum class ChangeSizeErrorBit : std::uint8_t
 		{
@@ -648,6 +658,12 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Sends a response to the preferred assignment command
+		/// @param[in] objectIDofFaultyAssignment The object ID of the faulty assignment, or the NULL ID if there are no errors
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] Aux function object ID of faulty assignment, or the NULL ID if no errors
+		bool send_preferred_assignment_response(std::uint16_t objectIDofFaultyAssignment, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief Sends a response to the select input object command
 		/// @param[in] objectID The object ID for the object

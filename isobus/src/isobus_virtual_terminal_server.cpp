@@ -1732,6 +1732,39 @@ namespace isobus
 								}
 								break;
 
+								case Function::PreferredAssignmentCommand:
+								{
+									if (parentServer->get_version() > VTVersion::Version2OrOlder)
+									{
+										std::uint8_t numberOfInputUnits = message.get_uint8_at(8);
+
+										if (message.get_data_length() >= (numberOfInputUnits * 11 + 2))
+										{
+											std::uint32_t assignmentsByteOffset = 0;
+
+											for (std::uint16_t i = 0; i < numberOfInputUnits; i++)
+											{
+												std::uint64_t nameOfAuxInputUnit = message.get_uint64_at(2 + (11 * i) + assignmentsByteOffset);
+												std::uint16_t modelNumberOfAuxInput = message.get_uint16_at(10 + (11 * i) + assignmentsByteOffset);
+												std::uint8_t numberOfPreferredFunctionsForThisInput = message.get_uint8_at(12 + (11 * i) + assignmentsByteOffset);
+											}
+
+											LOG_DEBUG("[VT Server]: Client %u preferred assignment command with %u input units.", cf->get_control_function()->get_address(), numberOfInputUnits);
+											parentServer->send_preferred_assignment_response(NULL_OBJECT_ID, 0, message.get_source_control_function());
+										}
+										else
+										{
+											LOG_WARNING("[VT Server]: Client %u preferred assignment command: invalid message length", cf->get_control_function()->get_address());
+											parentServer->send_preferred_assignment_response(NULL_OBJECT_ID, (1 << static_cast<std::uint8_t>(ChangePreferredAssignmentErrorBit::AnyOtherError)), message.get_source_control_function());
+										}
+									}
+									else
+									{
+										LOG_WARNING("[VT Server]: Client %u sent a preferred assignment command, but is not at least version 3. The command will be ignored.");
+									}
+								}
+								break;
+
 								case Function::IdentifyVTMessage:
 								{
 									parentServer->identify_vt();
@@ -2496,6 +2529,27 @@ namespace isobus
 		buffer[2] = ((objectID >> 8) & 0xFF);
 		buffer[3] = priority;
 		buffer[4] = errorBitfield;
+		buffer[5] = 0xFF; // Reserved
+		buffer[6] = 0xFF; // Reserved
+		buffer[7] = 0xFF; // Reserved
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_preferred_assignment_response(std::uint16_t objectIDofFaultyAssignment, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination)
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::PreferredAssignmentCommand);
+		buffer[1] = errorBitfield;
+		buffer[1] = static_cast<std::uint8_t>(objectIDofFaultyAssignment & 0xFF);
+		buffer[2] = static_cast<std::uint8_t>((objectIDofFaultyAssignment >> 8) & 0xFF);
+		buffer[4] = 0xFF; // Reserved
 		buffer[5] = 0xFF; // Reserved
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
