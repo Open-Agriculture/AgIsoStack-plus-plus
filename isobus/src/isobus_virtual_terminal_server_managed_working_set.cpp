@@ -141,6 +141,11 @@ namespace isobus
 			return 100.0f;
 		}
 
+		if (0 == iopSize)
+		{
+			return 0.0f;
+		}
+
 		// if IOP transfer is not completed check if there is an ongoing IOP transfer to us
 		auto sessions = CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(0);
 		auto currentTransferredIopSize = transferredIopSize;
@@ -159,8 +164,7 @@ namespace isobus
 		{
 			return 100.0f;
 		}
-
-		return (currentTransferredIopSize / (float)iopSize) * 100.0f;
+		return (static_cast<float>(currentTransferredIopSize) / static_cast<float>(iopSize)) * 100.0f;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
