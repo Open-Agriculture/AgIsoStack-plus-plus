@@ -955,48 +955,7 @@ namespace isobus
 							// Next, parse macro list
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1057,15 +1016,7 @@ namespace isobus
 								const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 								if (iopLength >= sizeOfMacros)
 								{
-									for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-									{
-										// If the first byte is 255, then more bytes are used! 4.6.22.3
-										/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-										iopLength -= 2;
-										iopData += 2;
-										LOG_WARNING("[WS]: Skipped parsing macro reference in key group object (todo)");
-									}
-									retVal = true;
+									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 								}
 								else
 								{
@@ -1119,48 +1070,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-								{
-									std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-									if (EventID::Reserved != get_event_from_byte(iopData[2]))
-									{
-										tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-										retVal = true;
-									}
-									else
-									{
-										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-										retVal = false;
-										break;
-									}
-								}
-								else
-								{
-									if (EventID::Reserved != get_event_from_byte(iopData[0]))
-									{
-										tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-										retVal = true;
-									}
-									else
-									{
-										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-										retVal = false;
-										break;
-									}
-								}
-
-								iopLength -= 2;
-								iopData += 2;
-							}
-
-							if (0 == sizeOfMacros)
-							{
-								retVal = true;
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1221,48 +1131,7 @@ namespace isobus
 							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1344,15 +1213,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in input number (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1408,48 +1269,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1513,15 +1333,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in output string object (todo)");
-								}
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1595,15 +1407,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in output number (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1654,15 +1458,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in output list object (todo)");
-								}
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1718,15 +1514,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in output line object (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1769,15 +1557,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in output rectangle object (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1825,15 +1605,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in output ellipse object (todo)");
-								}
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1896,15 +1668,7 @@ namespace isobus
 
 								if (iopLength >= sizeOfMacros)
 								{
-									for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-									{
-										// If the first byte is 255, then more bytes are used! 4.6.22.3
-										/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-										iopLength -= 2;
-										iopData += 2;
-										LOG_WARNING("[WS]: Skipped parsing macro reference in output polygon object (todo)");
-									}
-									retVal = true;
+									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 								}
 								else
 								{
@@ -1960,15 +1724,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in output meter object (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2013,15 +1769,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in output linear bar graph object (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2068,15 +1816,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in output arched bar graph object (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2286,14 +2026,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in picture graphic object (todo)");
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 
 								if (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height()))
 								{
@@ -2420,15 +2153,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in font attributes object (todo)");
-								}
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -2470,15 +2195,7 @@ namespace isobus
 
 						if (iopLength >= sizeOfMacros)
 						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-								iopLength -= 2;
-								iopData += 2;
-								LOG_WARNING("[WS]: Skipped parsing macro reference in line attributes object (todo)");
-							}
-							retVal = true;
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2518,15 +2235,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in fill attributes object (todo)");
-								}
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -2593,15 +2302,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									/// @todo Parse macro data, check VT version 5 for 16 bit macro IDs
-									iopLength -= 2;
-									iopData += 2;
-									LOG_WARNING("[WS]: Skipped parsing macro reference in input attributes object (todo)");
-								}
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -3226,5 +2927,58 @@ namespace isobus
 	{
 		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		faultingObjectID = value;
+	}
+
+	bool VirtualTerminalWorkingSetBase::parse_object_macro_reference(
+	  std::shared_ptr<VTObject> object,
+	  const uint8_t numberOfMacrosToFollow,
+	  uint8_t *&iopData,
+	  uint32_t &iopLength) const
+	{
+		bool retVal = true;
+		for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
+		{
+			// If the first byte is 255, then more bytes are used! 4.6.22.3
+			if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
+			{
+				std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+
+				if (EventID::Reserved != get_event_from_byte(iopData[2]))
+				{
+					object->add_macro({ get_event_from_byte(iopData[2]), macroID });
+					retVal = true;
+				}
+				else
+				{
+					LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an "
+					          "invalid or unsupported event ID.",
+					          macroID,
+					          object->get_id());
+					retVal = false;
+					break;
+				}
+			}
+			else
+			{
+				if (EventID::Reserved != get_event_from_byte(iopData[0]))
+				{
+					object->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
+					retVal = true;
+				}
+				else
+				{
+					LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an "
+					          "invalid or unsupported event ID.",
+					          iopData[1],
+					          object->get_id());
+					retVal = false;
+					break;
+				}
+			}
+
+			iopLength -= 2;
+			iopData += 2;
+		}
+		return retVal;
 	}
 } // namespace isobus
