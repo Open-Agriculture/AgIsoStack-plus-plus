@@ -791,7 +791,7 @@ namespace isobus
 								              // check our ISO NAME versus the claimed NAME. If ours is lower, we win the
 								              // arbitration and can keep our address. If not, we need to
 								              // re-arbitrate our address.
-								              if ((claimedNAME < cf->get_NAME().get_full_name()) &&
+								              if ((claimedNAME > cf->get_NAME().get_full_name()) &&
 								                  (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state()))
 								              {
 									              LOG_DEBUG("[AC]: Internal control function %016llx on channel %u won address contention against an ECU with NAME %016llx.",
