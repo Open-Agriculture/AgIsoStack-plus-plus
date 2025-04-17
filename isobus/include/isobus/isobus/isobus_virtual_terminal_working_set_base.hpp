@@ -90,6 +90,17 @@ namespace isobus
 		/// @param[in] value The object ID to set as the faulting object
 		void set_object_pool_faulting_object_id(std::uint16_t value);
 
+		/// @brief Parse the macro references of an IOP object
+		/// @param[in] object The IOP object which is currently parsed
+		/// @param[in] numberOfMacrosToFollow The number of macro references deterined by parsing the IOP before the macros section.
+		/// @param[in] iopData Pointer to the raw IOP data pointing to the start of the macro references of the object.
+		/// @param[in] iopLength The remaining IOP data length to be parsed.
+		/// @returns True if the macro reference parsing is successful otherwise returns false
+		bool parse_object_macro_reference(std::shared_ptr<VTObject> object,
+		                                  const std::uint8_t numberOfMacrosToFollow,
+		                                  std::uint8_t *&iopData,
+		                                  std::uint32_t &iopLength) const;
+
 		std::mutex managedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
 		VTColourTable workingSetColourTable; ///< This working set's colour table
 		std::uint32_t iopSize = 0; ///< Total size of the IOP in bytes
