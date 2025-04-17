@@ -669,6 +669,16 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false.
 		bool send_supported_objects(std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends the Control Audio Signal response to the client with "No errors" error code
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false.
+		bool send_audio_signal_successful(std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends the Set Audio Volume response to the client with "No error" error code
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false.
+		bool send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Cyclic update function
 		void update();
 
