@@ -42,7 +42,7 @@ namespace isobus
 
 		if (PCAN_ERROR_OK != openResult)
 		{
-			LOG_CRITICAL("[PCAN]: Error trying to connect to PCAN probe");
+			LOG_CRITICAL("[PCAN]: Error trying to connect to PCAN probe, error code: %d", static_cast<std::uint32_t>(openResult));
 		}
 	}
 
