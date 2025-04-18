@@ -617,7 +617,8 @@ namespace isobus
 		{
 			auto requestedPGN = message.get_uint24_at(0);
 
-			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN)
+			if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN) &&
+			    (CANIdentifier::GLOBAL_ADDRESS == message.get_identifier().get_destination_address()))
 			{
 				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = SystemTiming::get_timestamp_ms();
 
