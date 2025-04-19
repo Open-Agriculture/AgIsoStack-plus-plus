@@ -1732,6 +1732,18 @@ namespace isobus
 								}
 								break;
 
+								case Function::ControlAudioSignalCommand:
+								{
+									parentServer->send_audio_signal_successful(message.get_source_control_function());
+								}
+								break;
+
+								case Function::SetAudioVolumeCommand:
+								{
+									parentServer->send_audio_volume_response(message.get_source_control_function());
+								}
+								break;
+
 								case Function::IdentifyVTMessage:
 								{
 									parentServer->identify_vt();
@@ -2559,6 +2571,28 @@ namespace isobus
 		{
 			buffer.push_back(supportedObject);
 		}
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_audio_signal_successful(std::shared_ptr<ControlFunction> destination) const
+	{
+		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ControlAudioSignalCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const
+	{
+		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::SetAudioVolumeCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,
