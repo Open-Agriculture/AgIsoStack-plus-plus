@@ -1079,7 +1079,7 @@ namespace isobus
 			{
 				if ((nullptr != partner) &&
 				    (partner->get_can_port() == message.get_can_port_index()) &&
-                    (partner == messageSource))
+                                    (partner == messageSource))
 				{
 					// Message matches CAN port for a partnered control function
 					for (std::size_t k = 0; k < partner->get_number_parameter_group_number_callbacks(); k++)
