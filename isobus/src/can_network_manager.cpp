@@ -1054,8 +1054,10 @@ namespace isobus
 	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(const CANMessage &message) const
 	{
 		std::shared_ptr<ControlFunction> messageDestination = message.get_destination_control_function();
-		if ((nullptr == messageDestination) &&
-		    ((nullptr != message.get_source_control_function()) ||
+        std::shared_ptr<ControlFunction> messageSource = message.get_source_control_function();
+
+        if ((nullptr == messageDestination) &&
+		    ((nullptr != messageSource) ||
 		     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
 		      (NULL_CAN_ADDRESS == message.get_identifier().get_source_address()))))
 		{
@@ -1076,7 +1078,8 @@ namespace isobus
 			for (const auto &partner : partneredControlFunctions)
 			{
 				if ((nullptr != partner) &&
-				    (partner->get_can_port() == message.get_can_port_index()))
+				    (partner->get_can_port() == message.get_can_port_index()) &&
+                    (partner == messageSource))
 				{
 					// Message matches CAN port for a partnered control function
 					for (std::size_t k = 0; k < partner->get_number_parameter_group_number_callbacks(); k++)
