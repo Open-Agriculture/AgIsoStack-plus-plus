@@ -683,13 +683,17 @@ namespace isobus
 
 	void CANNetworkManager::update_busload(std::uint8_t channelIndex, std::uint32_t numberOfBitsProcessed)
 	{
+#ifndef DISABLE_BUSLOAD_MONITORING
 		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		currentBusloadBitAccumulator.at(channelIndex) += numberOfBitsProcessed;
+        printf("Busload update enabled\n");
+#endif
 	}
 
 	void CANNetworkManager::update_busload_history()
 	{
-		LOCK_GUARD(Mutex, busloadUpdateMutex);
+#ifndef DISABLE_BUSLOAD_MONITORING
+        LOCK_GUARD(Mutex, busloadUpdateMutex);
 		if (SystemTiming::time_expired_ms(busloadUpdateTimestamp_ms, BUSLOAD_UPDATE_FREQUENCY_MS))
 		{
 			for (std::size_t i = 0; i < busloadMessageBitsHistory.size(); i++)
@@ -704,6 +708,7 @@ namespace isobus
 			}
 			busloadUpdateTimestamp_ms = SystemTiming::get_timestamp_ms();
 		}
+#endif
 	}
 
 	void CANNetworkManager::update_control_functions(const CANMessageFrame &rxFrame)
