@@ -15,6 +15,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -4538,6 +4539,20 @@ namespace isobus
 		std::uint8_t pointerType = 0; ///< The pointer type, defines how this should be rendered
 	};
 
+	template<typename T>
+	/// @brief A specialized replacement for std::to_string
+	/// @param object_id An ID of an IsoBus object
+	/// @returns in the case if the object_id is 65535 (NULL object ID) returns "NULL" otherwise it returns the number as string
+	std::string object_id_to_string(T const &object_id)
+	{
+		if (isobus::NULL_OBJECT_ID == object_id)
+		{
+			return "NULL";
+		}
+		std::ostringstream oss;
+		oss << object_id;
+		return oss.str();
+	}
 } // namespace isobus
 
 #endif // ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP

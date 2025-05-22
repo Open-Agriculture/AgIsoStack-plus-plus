@@ -14,7 +14,6 @@
 
 #include <sstream>
 #include <string>
-#include "../../isobus/include/isobus/isobus/can_constants.hpp"
 
 namespace isobus
 {
@@ -27,21 +26,6 @@ namespace isobus
 	{
 		std::ostringstream oss;
 		oss << t;
-		return oss.str();
-	}
-
-	template<typename T>
-	/// @brief A specialized replacement for std::to_string
-	/// @tparam object ID
-	/// @returns in the case if the object_id is 65535 (NULL object ID) returns "NULL" otherwise it returns the number as string
-	std::string object_id_to_string(T const &object_id)
-	{
-		if (isobus::NULL_OBJECT_ID == object_id)
-		{
-			return "NULL";
-		}
-		std::ostringstream oss;
-		oss << object_id;
 		return oss.str();
 	}
 } // namespace isobus_utils
