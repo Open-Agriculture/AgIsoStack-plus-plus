@@ -1597,7 +1597,7 @@ namespace isobus
 		/// @brief A method to print the End of Object pool response message error field with LOG_ERROR
 		/// @param[in] errorCodes byte 2 from the End of Object Pool response
 		/// @param[in] objectPoolErrorCodes byte 7 from the End of Object Pool response
-		static void print_objectpool_error(uint8_t errorCodes, uint8_t objectPoolErrorCodes);
+		static void print_objectpool_error(std::uint8_t errorCodes, std::uint8_t objectPoolErrorCodes);
 
 		static constexpr std::uint32_t VT_STATUS_TIMEOUT_MS = 3000; ///< The max allowable time between VT status messages before its considered offline
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The delay between working set maintenance messages
