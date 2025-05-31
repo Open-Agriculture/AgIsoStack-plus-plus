@@ -497,6 +497,18 @@ namespace isobus
 			ManufacturerProprietary_255,
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a screen capture response
+		enum class ScreenCaptureResponseErrorBit : std::uint8_t
+		{
+			NoError = 0,
+			ScreenCaptureNotEnabled = 1,
+			TransferBufferBusy = 2,
+			UnsupportedItemRequest = 4,
+			UnsupportedPathRequest = 8,
+			RemovableMediaUnavailable = 16,
+			AnyOtherError = 32
+		};
+
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
 		/// @param[in] message The CAN message to check
