@@ -117,6 +117,13 @@ namespace isobus
 		/// @param[in] workingset The working set to execute the macro on
 		void process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset);
 
+    /// @brief Handle the Select Active Working set command
+    /// This method will send respons and will change the active working set if the change is possible
+    /// @param[in] name The name of the working set to be selected
+    /// @param[in] requestor the control function which requested the working set change (should be identical to the current working set)
+    /// @returns True if the working set change was successful, false if the change is not possible
+    bool handle_select_active_ws_command(std::uint64_t name, std::shared_ptr<ControlFunction> requestor);
+
 		// ----------- Mandatory Functions you must implement -----------------------
 
 		/// @brief This function is called when the client wants to know if the server has enough memory to store the object pool.
@@ -250,6 +257,8 @@ namespace isobus
 
 		/// @brief This function is called when the Identify VT version message is received
 		virtual void identify_vt();
+
+    virtual void change_selected_working_set(std::uint8_t index);
 
 		//-------------- Callbacks/Event driven interface ---------------------
 
@@ -442,6 +451,18 @@ namespace isobus
 			DeletionError = 0,
 			AnyOtherError = 8
 		};
+
+    /// @brief Enumerates the bit indices of the error fields that can be set in a select active workingset response
+    enum class SelectActiveWsErrorBit : std::uint8_t
+    {
+      NoError                   = 0,    // No error, the WS will be activated
+      NotFromActiveWs           = 1,    // Command was not sent from the active WS
+      ActiveMaskIsAlarm         = 2,    // Currently active mask is an Alarm Mask
+      NameDoesNotIdentifyWsm    = 4,    // NAME in command does not identify a WSM
+      WsmHasNoObjectPool        = 8,    // WSM identified by NAME does not have an object pool on this VT
+      WsmHasNoActiveDataMask    = 16,   // WSM identified by NAME does not have an active data mask
+      OtherError                = 128   // Any other error
+    };
 
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
@@ -664,6 +685,13 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false.
 		bool send_supported_objects(std::shared_ptr<ControlFunction> destination) const;
+
+
+    /// @brief Sends the response to the Select Active Workingset command
+    /// @param[in] destination The control function to send the message to
+    /// @param[in] error The error field of the response
+    /// @returns true if the message was sent, otherwise false.
+    bool send_select_active_ws_response(std::shared_ptr<ControlFunction> destination, SelectActiveWsErrorBit error = SelectActiveWsErrorBit::NoError);
 
 		/// @brief Cyclic update function
 		void update();

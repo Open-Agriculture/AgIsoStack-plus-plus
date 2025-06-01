@@ -1731,6 +1731,20 @@ namespace isobus
 								}
 								break;
 
+                case Function::SelectActiveWorkingSet:
+                {
+                  const auto newWsName = static_cast<std::uint64_t>(static_cast<std::uint64_t>(data[1])
+                                                                    | (static_cast<std::uint64_t>(data[2]) << 8)
+                                                                    | (static_cast<std::uint64_t>(data[3]) << 16)
+                                                                    | (static_cast<std::uint64_t>(data[4]) << 24)
+                                                                    | (static_cast<std::uint64_t>(data[5]) << 32)
+                                                                    | (static_cast<std::uint64_t>(data[6]) << 40)
+                                                                    | (static_cast<std::uint64_t>(data[7]) << 48)
+                                                                    | (static_cast<std::uint64_t>(data[8]) << 56));
+                  parentServer->handle_select_active_ws_command(newWsName, message.get_source_control_function());
+                }
+                break;
+
 								default:
 								{
 									CANStackLogger::error("[VT Server]: Unimplemented Command %u", data[0]);
@@ -2183,6 +2197,50 @@ namespace isobus
 		}
 	}
 
+  bool VirtualTerminalServer::handle_select_active_ws_command(uint64_t name, std::shared_ptr<ControlFunction> requestor)
+  {
+    // If the VT receives this command from a Working Set which is not the active Working Set
+    // then the VT shall ignore the request and set the appropriate Error Code in the response message.
+    if (requestor->get_address() != get_active_working_set()->get_control_function()->get_address() )
+    {
+      return send_select_active_ws_response(requestor, SelectActiveWsErrorBit::NotFromActiveWs);
+    }
+
+
+    // Changing working set while the current working set has an active alarm mask is forbidden
+    auto workingSetObject = std::static_pointer_cast<isobus::WorkingSet>(get_active_working_set()->get_working_set_object());
+    if ((nullptr != workingSetObject) && (isobus::NULL_OBJECT_ID != workingSetObject->get_active_mask()))
+    {
+      auto activeMask = get_active_working_set()->get_object_by_id(workingSetObject->get_active_mask());
+      if (isobus::VirtualTerminalObjectType::AlarmMask == activeMask->get_object_type())
+      {
+        return send_select_active_ws_response(requestor, SelectActiveWsErrorBit::ActiveMaskIsAlarm);
+      }
+    }
+
+    for (std::size_t i = 0; i < managedWorkingSetList.size(); i++)
+    {
+      if (managedWorkingSetList[i]->get_control_function()->get_NAME().get_full_name() == name)
+      {
+        if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined != managedWorkingSetList[i]->get_object_pool_processing_state())
+        {
+          return send_select_active_ws_response(requestor, SelectActiveWsErrorBit::WsmHasNoObjectPool);
+        }
+
+        auto selectedWsWorkingSetObject = std::static_pointer_cast<isobus::WorkingSet>(managedWorkingSetList[i]->get_working_set_object());
+        if ((nullptr == selectedWsWorkingSetObject) || (isobus::NULL_OBJECT_ID != selectedWsWorkingSetObject->get_active_mask()))
+        {
+          return send_select_active_ws_response(requestor, SelectActiveWsErrorBit::WsmHasNoActiveDataMask);
+        }
+
+        change_selected_working_set(i);
+        break;
+      }
+    }
+
+    return send_select_active_ws_response(requestor, SelectActiveWsErrorBit::NameDoesNotIdentifyWsm);
+  }
+
 	bool VirtualTerminalServer::send_change_numeric_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint32_t value, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
@@ -2560,6 +2618,26 @@ namespace isobus
 		                                                      get_priority());
 	}
 
+  bool VirtualTerminalServer::send_select_active_ws_response(std::shared_ptr<ControlFunction> destination, SelectActiveWsErrorBit error)
+  {
+    std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+    buffer[0] = static_cast<std::uint8_t>(Function::SelectActiveWorkingSet);
+    buffer[1] = static_cast<std::uint8_t>(error);
+    buffer[2] = 0xFF;
+    buffer[3] = 0xFF;
+    buffer[4] = 0xFF;
+    buffer[5] = 0xFF;
+    buffer[6] = 0xFF;
+    buffer[7] = 0xFF;
+    return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+                                                          buffer.data(),
+                                                          CAN_DATA_LENGTH,
+                                                          serverInternalControlFunction,
+                                                          destination,
+                                                          get_priority());
+  }
+
 	void VirtualTerminalServer::update()
 	{
 		if ((isobus::SystemTiming::time_expired_ms(statusMessageTimestamp_ms, 1000)) &&
@@ -2589,3 +2667,54 @@ namespace isobus
 		}
 	}
 }
+
+
+void isobus::VirtualTerminalServer::change_selected_working_set(uint8_t index)
+{
+  if ((index < managedWorkingSetList.size()) &&
+      (nullptr != managedWorkingSetList.at(index)->get_working_set_object()) &&
+      (std::static_pointer_cast<isobus::WorkingSet>(managedWorkingSetList.at(index)->get_working_set_object())->get_selectable()))
+  {
+    for (auto &ws : managedWorkingSetList)
+    {
+      ws->clear_callback_handles();
+    }
+    auto &ws = managedWorkingSetList.at(index);
+
+    if (activeWorkingSetMasterAddress != ws->get_control_function()->get_address())
+    {
+      if (nullptr != activeWorkingSet)
+      {
+        process_macro(activeWorkingSet->get_working_set_object(), isobus::EventID::OnDeactivate, isobus::VirtualTerminalObjectType::WorkingSet, activeWorkingSet);
+        process_macro(ws->get_object_by_id(std::static_pointer_cast<isobus::WorkingSet>(ws->get_working_set_object())->get_active_mask()), isobus::EventID::OnHide, isobus::VirtualTerminalObjectType::DataMask, activeWorkingSet);
+      }
+    }
+
+    activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
+
+    auto workingSetObject = std::static_pointer_cast<isobus::WorkingSet>(ws->get_working_set_object());
+    std::uint16_t previousActiveMask = activeWorkingSetDataMaskObjectID;
+    activeWorkingSetDataMaskObjectID = std::static_pointer_cast<isobus::WorkingSet>(ws->get_working_set_object())->get_active_mask();
+
+    activeWorkingSet = ws;
+    process_macro(activeWorkingSet->get_working_set_object(), isobus::EventID::OnActivate, isobus::VirtualTerminalObjectType::WorkingSet, activeWorkingSet);
+
+    if (send_status_message())
+    {
+      statusMessageTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
+    }
+    else
+    {
+      statusMessageTimestamp_ms = 0;
+    }
+
+    if (previousActiveMask != activeWorkingSetDataMaskObjectID)
+    {
+      process_macro(ws->get_object_by_id(previousActiveMask), isobus::EventID::OnHide, isobus::VirtualTerminalObjectType::DataMask, activeWorkingSet);
+      process_macro(ws->get_object_by_id(previousActiveMask), isobus::EventID::OnHide, isobus::VirtualTerminalObjectType::AlarmMask, activeWorkingSet);
+      process_macro(ws->get_object_by_id(activeWorkingSetDataMaskObjectID), isobus::EventID::OnShow, isobus::VirtualTerminalObjectType::DataMask, activeWorkingSet);
+      process_macro(ws->get_object_by_id(activeWorkingSetDataMaskObjectID), isobus::EventID::OnShow, isobus::VirtualTerminalObjectType::AlarmMask, activeWorkingSet);
+    }
+  }
+}
+
