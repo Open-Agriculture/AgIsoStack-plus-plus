@@ -153,7 +153,6 @@ install(
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin)
 
-# Install header files
 install(
   DIRECTORY include/
   DESTINATION include
