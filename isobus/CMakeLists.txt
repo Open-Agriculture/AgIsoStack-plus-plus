@@ -148,7 +148,14 @@ target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::Utility)
 
 install(
   TARGETS Isobus
-  EXPORT IsobusTargets
+  EXPORT isobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin)
+
+# Install header files
+install(
+  DIRECTORY include/
+  DESTINATION include
+  FILES_MATCHING
+  PATTERN "*.hpp")
