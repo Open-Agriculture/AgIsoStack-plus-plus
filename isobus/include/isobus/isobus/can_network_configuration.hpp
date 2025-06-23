@@ -87,7 +87,7 @@ namespace isobus
 	private:
 		static constexpr std::uint8_t DEFAULT_BAM_PACKET_DELAY_TIME_MS = 50; ///< The default time between BAM frames, as defined by J1939
 
-		std::uint32_t maxNumberTransportProtocolSessions = 4; ///< The max number of TP sessions allowed
+		std::uint32_t maxNumberTransportProtocolSessions = 64; ///< The max number of TP sessions allowed
 		std::uint32_t minimumTimeBetweenTransportProtocolBAMFrames = DEFAULT_BAM_PACKET_DELAY_TIME_MS; ///< The configurable time between BAM frames
 		std::uint8_t networkManagerMaxFramesToSendPerUpdate = 0xFF; ///< Used to control the max number of transport layer frames added to the driver queue per network manager update
 		std::uint8_t numberOfPacketsPerDPOMessage = 16; ///< The number of packets per DPO message for ETP sessions
