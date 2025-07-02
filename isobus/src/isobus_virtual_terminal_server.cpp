@@ -72,12 +72,12 @@ namespace isobus
 
 	std::uint8_t VirtualTerminalServer::get_supported_small_fonts_bitfield() const
 	{
-		return 0xFF;
+		return 0x7F;
 	}
 
 	std::uint8_t VirtualTerminalServer::get_supported_large_fonts_bitfield() const
 	{
-		return 0xFF;
+		return 0x7F;
 	}
 
 	void VirtualTerminalServer::identify_vt()
