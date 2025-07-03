@@ -455,7 +455,7 @@ namespace isobus
 		void set_active_mask(std::uint16_t value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 18; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<std::string> languageCodes; ///< A list of 2 character language codes, like "en"
 		std::uint16_t activeMask = NULL_OBJECT_ID; ///< The currently active mask for this working set
