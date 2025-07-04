@@ -1331,7 +1331,7 @@ namespace isobus
 											font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
 											font->set_type(static_cast<FontAttributes::FontType>(fontType));
 											font->set_style(fontStyle);
-											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), fontSize, objectID);
+											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), objectID);
 											parentServer->send_change_font_attributes_response(objectID, 0, message.get_source_control_function());
 											parentServer->onRepaintEventDispatcher.call(cf);
 										}
