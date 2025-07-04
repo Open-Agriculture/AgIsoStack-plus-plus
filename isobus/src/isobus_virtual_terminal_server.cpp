@@ -1327,7 +1327,7 @@ namespace isobus
 										if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
 										{
 											auto font = std::static_pointer_cast<FontAttributes>(targetObject);
-											font->set_background_color(fontColour);
+											font->set_colour(fontColour);
 											font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
 											font->set_type(static_cast<FontAttributes::FontType>(fontType));
 											font->set_style(fontStyle);
