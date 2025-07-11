@@ -851,6 +851,7 @@ namespace isobus
 					         foundControlFunction->get_address(),
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
+					foundControlFunction->address = claimedAddress;
 				}
 				else
 				{
@@ -859,9 +860,9 @@ namespace isobus
 					         foundControlFunction->get_NAME().get_full_name(),
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
+					foundControlFunction->address = claimedAddress;
 					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 				}
-				foundControlFunction->address = claimedAddress;
 			}
 		}
 	}
