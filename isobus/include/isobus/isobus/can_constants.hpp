@@ -9,6 +9,10 @@
 #ifndef CAN_CONSTANTS_HPP
 #define CAN_CONSTANTS_HPP
 
+#ifndef CAN_PORT_MAXIMUM_VALUE
+#define CAN_PORT_MAXIMUM_VALUE 4
+#endif
+
 #include <cstdint>
 
 namespace isobus
@@ -18,7 +22,7 @@ namespace isobus
 	constexpr std::uint8_t NULL_CAN_ADDRESS = 0xFE; ///< The NULL CAN address defined by J1939 and ISO11783
 	constexpr std::uint8_t BROADCAST_CAN_ADDRESS = 0xFF; ///< The global/broadcast CAN address
 	constexpr std::uint8_t CAN_DATA_LENGTH = 8; ///< The length of a classical CAN frame
-	constexpr std::uint32_t CAN_PORT_MAXIMUM = 4; ///< An arbitrary limit for memory consumption
+	constexpr std::uint32_t CAN_PORT_MAXIMUM = CAN_PORT_MAXIMUM_VALUE; ///< Set from CMake with -DCAN_PORT_MAXIMUM_VALUE
 	constexpr std::uint16_t NULL_OBJECT_ID = 65535; ///< Special ID used to indicate no object
 
 }
