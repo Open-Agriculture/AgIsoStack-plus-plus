@@ -102,6 +102,11 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_address_claim(std::uint8_t address);
 
+		/// @brief Sends the "cannot claim source address" message
+		/// @note If a CF attempting to claim an SA is unsuccessful it shall send the cannot claim source address message
+		/// @returns true if the message was sent, otherwise false
+		bool send_cannot_claim_source_address();
+
 		/// @brief Attempts to process a commanded address.
 		/// @details If the state machine has claimed successfully before,
 		/// this will attempt to move a NAME from the claimed address to the new, specified address.

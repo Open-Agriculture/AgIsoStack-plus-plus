@@ -160,6 +160,7 @@ namespace isobus
 						          get_NAME().get_full_name(),
 						          preferredAddress,
 						          get_can_port());
+						send_cannot_claim_source_address();
 					}
 				}
 			}
@@ -241,7 +242,9 @@ namespace isobus
 					LOG_CRITICAL("[AC]: Internal control function %016llx failed to claim an address on channel %u",
 					             get_NAME().get_full_name(),
 					             get_can_port());
+
 					set_current_state(State::UnableToClaim);
+					send_cannot_claim_source_address();
 				}
 			}
 			break;
@@ -342,6 +345,11 @@ namespace isobus
 			address = addressToClaim;
 		}
 		return retVal;
+	}
+
+	bool InternalControlFunction::send_cannot_claim_source_address()
+	{
+		return send_address_claim(0xFE);
 	}
 
 	void InternalControlFunction::process_commanded_address(std::uint8_t commandedAddress)
