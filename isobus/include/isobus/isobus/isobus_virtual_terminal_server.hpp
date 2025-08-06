@@ -603,6 +603,13 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to a change line attributes command
+		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_line_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to a change list item command
 		/// @param[in] objectID The object ID for the object to change
 		/// @param[in] newObjectID The object ID for the object to place at the specified list index, or NULL_OBJECT_ID (0xFFFF)
