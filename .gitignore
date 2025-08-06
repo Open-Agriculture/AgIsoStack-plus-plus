@@ -53,3 +53,6 @@ Makefile
 
 # PlatformIO
 .pio
+
+# QtCreator immediate file
+CMakeLists.txt.user
