@@ -12,6 +12,9 @@
 #ifndef CAN_TRANSPORT_PROTOCOL_HPP
 #define CAN_TRANSPORT_PROTOCOL_HPP
 
+#include <list>
+#include <mutex>
+
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol_base.hpp"
@@ -191,7 +194,7 @@ namespace isobus
 		/// @brief Gets all the active transport protocol sessions that are currently active
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
 		/// @returns A list of all the active transport protocol sessions
-		const std::vector<std::shared_ptr<TransportProtocolSession>> &get_sessions() const;
+		std::list<std::shared_ptr<TransportProtocolSession>> get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -310,11 +313,17 @@ namespace isobus
 		/// @returns a matching session, or nullptr if no session matched the supplied parameters
 		std::shared_ptr<TransportProtocolSession> get_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
+		/// @brief Get the number of active sessions.
+		/// @return The number of active sessions
+		std::size_t get_sessions_count() const;
+
 		/// @brief Update the state machine for the passed in session
 		/// @param[in] session The session to update
 		void update_state_machine(std::shared_ptr<TransportProtocolSession> &session);
 
-		std::vector<std::shared_ptr<TransportProtocolSession>> activeSessions; ///< A list of all active TP sessions
+		mutable std::mutex activeSessionsMutex; ///< Synchronizes access to @ref activeSessions
+		std::list<std::shared_ptr<TransportProtocolSession>> activeSessions; ///< A list of all active TP sessions
+
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the TP protocol
 		const CANNetworkConfiguration *configuration; ///< The configuration to use for this protocol
