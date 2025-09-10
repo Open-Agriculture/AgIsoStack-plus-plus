@@ -100,7 +100,7 @@ bool SeederVtApplication::initialize()
 	speedMessages.get_ground_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool changed) { this->handle_ground_based_speed(gbsData, changed); });
 	speedMessages.get_wheel_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool changed) { this->handle_wheel_based_speed(wbsData, changed); });
 
-	ddop = std::make_shared<isobus::DeviceDescriptorObjectPool>(3);
+	ddop = std::make_shared<isobus::DeviceDescriptorObjectPool>();
 	if (sectionControl.create_ddop(ddop, TCClientInterface.get_internal_control_function()->get_NAME()))
 	{
 		TCClientInterface.configure(ddop, 1, 255, 255, true, true, true, false, true);
