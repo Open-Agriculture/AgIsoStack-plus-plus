@@ -1060,13 +1060,13 @@ namespace isobus
 					break;
 				}
 			}
-			queuedValueCommands.pop_front();
 
 			//! @todo process PDACKs better
 			if (currentRequest.ackRequested)
 			{
 				transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
 			}
+			queuedValueCommands.pop_front();
 		}
 	}
 
