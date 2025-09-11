@@ -93,6 +93,18 @@ namespace isobus
 		LOG_ERROR("[VT Server]: The Screen Capture command is not implemented");
 	}
 
+	uint8_t VirtualTerminalServer::get_user_layout_softkeymask_bg_color() const
+	{
+		LOG_ERROR("[VT Server]: The Get User Layout Softkeymask background color is not implemented, returning with black");
+		return 0;
+	}
+
+	uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
+	{
+		LOG_ERROR("[VT Server]: The Get User Layout Datamask background color is not implemented, returning with black");
+		return 0;
+	}
+
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &VirtualTerminalServer::get_on_repaint_event_dispatcher()
 	{
 		return onRepaintEventDispatcher;
@@ -1790,6 +1802,11 @@ namespace isobus
 									parentServer->screen_capture(data[1], data[2], message.get_source_control_function());
 								}
 								break;
+								case Function::GetWindowMaskDataMessage:
+								{
+									parentServer->send_get_window_mask_data_response(message.get_source_control_function());
+								}
+								break;
 
 								default:
 								{
@@ -2649,6 +2666,27 @@ namespace isobus
 	bool VirtualTerminalServer::send_audio_signal_successful(std::shared_ptr<ControlFunction> destination) const
 	{
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ControlAudioSignalCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const
+	{
+		std::vector<std::uint8_t> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::GetWindowMaskDataMessage);
+		buffer[1] = get_user_layout_datamask_bg_color();
+		buffer[2] = get_user_layout_softkeymask_bg_color();
+		buffer[3] = 0xFF; // Reserved
+		buffer[4] = 0xFF; // Reserved
+		buffer[5] = 0xFF; // Reserved
+		buffer[6] = 0xFF; // Reserved
+		buffer[7] = 0xFF; // Reserved
+
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
 		                                                      CAN_DATA_LENGTH,

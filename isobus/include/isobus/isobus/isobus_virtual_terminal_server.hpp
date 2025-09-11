@@ -257,6 +257,16 @@ namespace isobus
 		/// @param[in] requestor The control function requesting screen capture
 		virtual void screen_capture(std::uint8_t item, std::uint8_t path, std::shared_ptr<ControlFunction> requestor);
 
+		/// @brief This function returns the Background colour of VT’s User-Layout Data Masks
+		/// Used in the Get Window Mask Data response
+		/// @returns The background color on the datamasks
+		virtual std::uint8_t get_user_layout_datamask_bg_color() const;
+
+		/// @brief This function returns the Background colour of VT’s Key-Cells when on a User-Layout softkey mask
+		/// Used in the Get Window Mask Data response
+		/// @returns The background color on the softkey mask
+		virtual std::uint8_t get_user_layout_softkeymask_bg_color() const;
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events
@@ -756,6 +766,11 @@ namespace isobus
 		/// @param[in] requestor The control function which requested the screen capture
 		/// @returns true if the message was sent, otherwise false
 		bool send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const;
+
+		/// @brief Sends the response to the get window mask data message
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent
+		bool send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Cyclic update function
 		void update();
