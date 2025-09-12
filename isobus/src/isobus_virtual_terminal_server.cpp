@@ -2676,7 +2676,7 @@ namespace isobus
 
 	bool VirtualTerminalServer::send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const
 	{
-		std::vector<std::uint8_t> buffer = { 0 };
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::GetWindowMaskDataMessage);
 		buffer[1] = get_user_layout_datamask_bg_color();
