@@ -3043,14 +3043,12 @@ namespace isobus
 						{
 							if (StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state)
 							{
-								bool anyErrorInPool = message.get_bool_at(1, 0);
-								bool vtRanOutOfMemory = message.get_bool_at(1, 1);
-								bool otherErrors = message.get_bool_at(1, 3);
+								std::uint8_t errorCodes = message.get_uint8_at(1);
 								std::uint16_t parentObjectIDOfFaultyObject = message.get_uint16_at(2);
 								std::uint16_t objectIDOfFaultyObject = message.get_uint16_at(4);
 								std::uint8_t objectPoolErrorBitmask = message.get_uint8_at(6);
 
-								if ((!anyErrorInPool) &&
+								if ((0 == errorCodes) &&
 								    (0 == objectPoolErrorBitmask))
 								{
 									// Clear scaling buffers
@@ -3086,19 +3084,11 @@ namespace isobus
 									parentVT->set_state(StateMachineState::Failed);
 									LOG_ERROR("[VT]: Error in end of object pool message." +
 									          std::string("Faulty Object ") +
-									          isobus::to_string(static_cast<int>(objectIDOfFaultyObject)) +
+									          isobus::object_id_to_string(objectIDOfFaultyObject) +
 									          std::string(" Faulty Object Parent ") +
-									          isobus::to_string(static_cast<int>(parentObjectIDOfFaultyObject)) +
-									          std::string(" Pool error bitmask value ") +
-									          isobus::to_string(static_cast<int>(objectPoolErrorBitmask)));
-									if (vtRanOutOfMemory)
-									{
-										LOG_ERROR("[VT]: Ran out of memory");
-									}
-									if (otherErrors)
-									{
-										LOG_ERROR("[VT]: Reported other errors in EOM response");
-									}
+									          isobus::object_id_to_string(parentObjectIDOfFaultyObject) +
+									          std::string(" Pool errors: "));
+									print_objectpool_error(errorCodes, objectPoolErrorBitmask);
 								}
 							}
 						}
@@ -3218,6 +3208,50 @@ namespace isobus
 		else
 		{
 			LOG_WARNING("[VT]: VT-ECU Client message invalid");
+		}
+	}
+
+	void VirtualTerminalClient::print_objectpool_error(std::uint8_t errorCodes, std::uint8_t objectPoolErrorCodes)
+	{
+		LOG_ERROR("Error(s) occured during the IOP parsing process:");
+		if (errorCodes & 0x2)
+		{
+			LOG_ERROR(" - VT ran out of memory during transfer");
+		}
+
+		if (errorCodes & 0x10)
+		{
+			LOG_ERROR(" - Other error detected");
+		}
+
+		if (errorCodes & 0xEC)
+		{
+			LOG_ERROR(" - Reserved bits are set in the Error codes byte: 0x%02X", errorCodes & 0xEC);
+		}
+
+		if (objectPoolErrorCodes & 0x1)
+		{
+			LOG_ERROR(" - Method or attribute not supported by the VT");
+		}
+
+		if (objectPoolErrorCodes & 0x2)
+		{
+			LOG_ERROR(" - Unknown object reference (missing object)");
+		}
+
+		if (objectPoolErrorCodes & 0x4)
+		{
+			LOG_ERROR(" - Other error detected");
+		}
+
+		if (objectPoolErrorCodes & 0x8)
+		{
+			LOG_ERROR(" - Object pool was deleted from volatile memory");
+		}
+
+		if (objectPoolErrorCodes & 0xF0)
+		{
+			LOG_ERROR(" - Reserved bits are set in the Object Pool Error Codes field: 0x%02X", objectPoolErrorCodes & 0xF0);
 		}
 	}
 

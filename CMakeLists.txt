@@ -84,30 +84,6 @@ if(ESP_PLATFORM)
 endif()
 
 install(
-  TARGETS Isobus Utility HardwareIntegration
-  EXPORT isobusTargets
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION bin)
-
-# Install all the header files for all the libraries
-install(
-  DIRECTORY isobus/include/
-  DESTINATION include
-  FILES_MATCHING
-  PATTERN "*.hpp")
-install(
-  DIRECTORY hardware_integration/include/
-  DESTINATION include
-  FILES_MATCHING
-  PATTERN "*.hpp")
-install(
-  DIRECTORY utility/include/
-  DESTINATION include
-  FILES_MATCHING
-  PATTERN "*.hpp")
-
-install(
   EXPORT isobusTargets
   FILE isobusTargets.cmake
   NAMESPACE isobus::

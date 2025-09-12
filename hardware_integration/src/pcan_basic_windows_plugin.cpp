@@ -40,10 +40,14 @@ namespace isobus
 	{
 		openResult = CAN_Initialize(handle, PCAN_BAUD_250K);
 
+#ifndef DISABLE_CAN_STACK_LOGGER
 		if (PCAN_ERROR_OK != openResult)
 		{
-			LOG_CRITICAL("[PCAN]: Error trying to connect to PCAN probe");
+			char strMsg[256];
+			CAN_GetErrorText(openResult, 0, strMsg);
+			LOG_CRITICAL("[PCAN]: Error trying to connect to PCAN probe, error code: %d %s", static_cast<std::uint32_t>(openResult), strMsg);
 		}
+#endif
 	}
 
 	bool PCANBasicWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)

@@ -116,9 +116,31 @@ option(DISABLE_CAN_STACK_LOGGER
 option(DISABLE_ISOBUS_DATA_DICTIONARY
        "Disables the ISOBUS data dictionary to minimize binary size" OFF)
 
+set(CAN_PORT_MAXIMUM_VALUE
+    "4"
+    CACHE STRING "Set the maximum number of CAN ports (1-16, default: 4)")
+if(NOT CAN_PORT_MAXIMUM_VALUE MATCHES "^[0-9]+$")
+  message(
+    FATAL_ERROR
+      "CAN_PORT_MAXIMUM_VALUE must be a positive integer, got: ${CAN_PORT_MAXIMUM_VALUE}"
+  )
+endif()
+if(CAN_PORT_MAXIMUM_VALUE LESS 1 OR CAN_PORT_MAXIMUM_VALUE GREATER 16)
+  message(
+    FATAL_ERROR
+      "CAN_PORT_MAXIMUM_VALUE must be between 1 and 16, got: ${CAN_PORT_MAXIMUM_VALUE}"
+  )
+endif()
+
 # Create the library from the source and include files
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
 add_library(${PROJECT_NAME}::Isobus ALIAS Isobus)
+
+if(NOT CAN_PORT_MAXIMUM_VALUE STREQUAL "4")
+  message(STATUS "CAN_PORT_MAXIMUM_VALUE set to: ${CAN_PORT_MAXIMUM_VALUE}")
+endif()
+target_compile_definitions(
+  Isobus PUBLIC CAN_PORT_MAXIMUM_VALUE=${CAN_PORT_MAXIMUM_VALUE})
 
 target_compile_features(Isobus PUBLIC cxx_std_11)
 set_target_properties(Isobus PROPERTIES CXX_EXTENSIONS OFF)
@@ -148,7 +170,13 @@ target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::Utility)
 
 install(
   TARGETS Isobus
-  EXPORT IsobusTargets
+  EXPORT isobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+  FILES_MATCHING
+  PATTERN "*.hpp")

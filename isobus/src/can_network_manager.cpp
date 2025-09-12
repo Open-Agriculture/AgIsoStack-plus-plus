@@ -443,7 +443,12 @@ namespace isobus
 	std::list<std::shared_ptr<TransportProtocolSessionBase>> isobus::CANNetworkManager::get_active_transport_protocol_sessions(std::uint8_t canPortIndex) const
 	{
 		std::list<std::shared_ptr<TransportProtocolSessionBase>> retVal;
-		retVal.insert(retVal.end(), transportProtocols[canPortIndex]->get_sessions().begin(), transportProtocols[canPortIndex]->get_sessions().end());
+
+		{
+			auto sessions = transportProtocols[canPortIndex]->get_sessions();
+			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
+		}
+
 		retVal.insert(retVal.end(), extendedTransportProtocols[canPortIndex]->get_sessions().begin(), extendedTransportProtocols[canPortIndex]->get_sessions().end());
 		return retVal;
 	}
@@ -617,7 +622,8 @@ namespace isobus
 		{
 			auto requestedPGN = message.get_uint24_at(0);
 
-			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN)
+			if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN) &&
+			    (CANIdentifier::GLOBAL_ADDRESS == message.get_identifier().get_destination_address()))
 			{
 				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = SystemTiming::get_timestamp_ms();
 
@@ -769,6 +775,8 @@ namespace isobus
 			std::for_each(controlFunctionTable[rxFrame.channel].begin(),
 			              controlFunctionTable[rxFrame.channel].end(),
 			              [&foundControlFunction, &claimedAddress, &claimedNAME](const std::shared_ptr<ControlFunction> &cf) {
+				              bool wonContention = false;
+
 				              if ((nullptr != cf) && (foundControlFunction != cf) && (cf->get_address() == claimedAddress))
 				              {
 					              if (ControlFunction::Type::Internal == cf->controlFunctionType)
@@ -785,21 +793,42 @@ namespace isobus
 							              // Seemed safest to just confirm.
 							              if (claimedNAME != cf->get_NAME().get_full_name())
 							              {
-								              LOG_WARNING("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
-								                          cf->get_NAME().get_full_name(),
-								                          cf->get_can_port(),
-								                          claimedNAME);
-
-								              // This check is not strictly needed, but sanity check the state of the address claim state machine
-								              // to ensure we're not advancing it. We don't want to go from an unclaimed state to the contention state.
-								              if (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state())
+								              // Since this is likely a J1939 style address claim if they're evicting us, we need to
+								              // check our ISO NAME versus the claimed NAME. If ours is lower, we win the
+								              // arbitration and can keep our address. If not, we need to
+								              // re-arbitrate our address.
+								              if ((claimedNAME > cf->get_NAME().get_full_name()) &&
+								                  (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state()))
 								              {
-									              std::static_pointer_cast<InternalControlFunction>(cf)->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
+									              LOG_DEBUG("[AC]: Internal control function %016llx on channel %u won address contention against an ECU with NAME %016llx.",
+									                        cf->get_NAME().get_full_name(),
+									                        cf->get_can_port(),
+									                        claimedNAME);
+									              std::static_pointer_cast<InternalControlFunction>(cf)->set_current_state(InternalControlFunction::State::SendReclaimAddressOnRequest);
+									              wonContention = true;
+								              }
+								              else
+								              {
+									              LOG_WARNING("[AC]: Internal control function %016llx on channel %u must re-arbitrate its address because it was stolen by another ECU with NAME %016llx.",
+									                          cf->get_NAME().get_full_name(),
+									                          cf->get_can_port(),
+									                          claimedNAME);
+
+									              // This check is not strictly needed, but sanity check the state of the address claim state machine
+									              // to ensure we're not advancing it. We don't want to go from an unclaimed state to the contention state.
+									              if (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state())
+									              {
+										              std::static_pointer_cast<InternalControlFunction>(cf)->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
+									              }
 								              }
 							              }
 						              }
 					              }
-					              cf->address = CANIdentifier::NULL_ADDRESS;
+
+					              if (!wonContention)
+					              {
+						              cf->address = CANIdentifier::NULL_ADDRESS;
+					              }
 				              }
 			              });
 
@@ -827,6 +856,7 @@ namespace isobus
 					         foundControlFunction->get_address(),
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
+					foundControlFunction->address = claimedAddress;
 				}
 				else
 				{
@@ -835,9 +865,9 @@ namespace isobus
 					         foundControlFunction->get_NAME().get_full_name(),
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
+					foundControlFunction->address = claimedAddress;
 					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 				}
-				foundControlFunction->address = claimedAddress;
 			}
 		}
 	}
@@ -1031,8 +1061,10 @@ namespace isobus
 	void CANNetworkManager::process_can_message_for_global_and_partner_callbacks(const CANMessage &message) const
 	{
 		std::shared_ptr<ControlFunction> messageDestination = message.get_destination_control_function();
+		std::shared_ptr<ControlFunction> messageSource = message.get_source_control_function();
+
 		if ((nullptr == messageDestination) &&
-		    ((nullptr != message.get_source_control_function()) ||
+		    ((nullptr != messageSource) ||
 		     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
 		      (NULL_CAN_ADDRESS == message.get_identifier().get_source_address()))))
 		{
@@ -1053,7 +1085,8 @@ namespace isobus
 			for (const auto &partner : partneredControlFunctions)
 			{
 				if ((nullptr != partner) &&
-				    (partner->get_can_port() == message.get_can_port_index()))
+				    (partner->get_can_port() == message.get_can_port_index()) &&
+				    (partner == messageSource))
 				{
 					// Message matches CAN port for a partnered control function
 					for (std::size_t k = 0; k < partner->get_number_parameter_group_number_callbacks(); k++)
