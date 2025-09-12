@@ -93,13 +93,13 @@ namespace isobus
 		LOG_ERROR("[VT Server]: The Screen Capture command is not implemented");
 	}
 
-	uint8_t VirtualTerminalServer::get_user_layout_softkeymask_bg_color() const
+	std::uint8_t VirtualTerminalServer::get_user_layout_softkeymask_bg_color() const
 	{
 		LOG_ERROR("[VT Server]: The Get User Layout Softkeymask background color is not implemented, returning with black");
 		return 0;
 	}
 
-	uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
+	std::uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
 	{
 		LOG_ERROR("[VT Server]: The Get User Layout Datamask background color is not implemented, returning with black");
 		return 0;
