@@ -17,7 +17,7 @@ class Seeder
 public:
 	Seeder() = default;
 
-	bool initialize();
+	bool initialize(const std::string &interfaceName = "");
 
 	void terminate();
 
