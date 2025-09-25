@@ -1264,6 +1264,11 @@ namespace isobus
 		}
 	}
 
+	std::size_t VirtualTerminalClient::get_number_of_object_pools() const
+	{
+		return objectPools.size();
+	}
+
 	void VirtualTerminalClient::set_object_pool_scaling(std::uint8_t poolIndex,
 	                                                    std::uint32_t originalDataMaskDimensions_px,
 	                                                    std::uint32_t originalSoftKyeDesignatorHeight_px)
@@ -1303,6 +1308,11 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalClient::set_on_ready_for_object_pool_callback(std::function<void(VTVersion)> callback)
+	{
+		onReadyForObjectPoolCallback = callback;
+	}
+
 	void VirtualTerminalClient::update()
 	{
 		StateMachineState previousStateMachineState = state; // Save state to see if it changes this update
@@ -1337,7 +1347,26 @@ namespace isobus
 				{
 					if (send_working_set_master())
 					{
-						set_state(StateMachineState::ReadyForObjectPool);
+						set_state(StateMachineState::SendGetMemoryInitial);
+					}
+				}
+				break;
+
+				case StateMachineState::SendGetMemoryInitial:
+				{
+					if (send_get_memory(0))
+					{
+						set_state(StateMachineState::WaitForGetMemoryInitialResponse);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForGetMemoryInitialResponse:
+				{
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						LOG_ERROR("[VT]: VT server has timed out while waiting for initial get memory message. Disconnecting.");
+						set_state(StateMachineState::Disconnected);
 					}
 				}
 				break;
@@ -1351,6 +1380,11 @@ namespace isobus
 					{
 						LOG_ERROR("[VT]: Ready to upload pool, but VT server has timed out. Disconnecting.");
 						set_state(StateMachineState::Disconnected);
+					}
+					else if (onReadyForObjectPoolCallback)
+					{
+						// Attempt to indicate to the user that we need at least one object pool to proceed.
+						onReadyForObjectPoolCallback(get_connected_vt_version());
 					}
 
 					if (!objectPools.empty())
@@ -2774,10 +2808,14 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::GetMemoryMessage):
 						{
-							if (StateMachineState::WaitForGetMemoryResponse == parentVT->state)
+							if (StateMachineState::WaitForGetMemoryInitialResponse == parentVT->state)
 							{
 								parentVT->connectedVTVersion = message.get_uint8_at(1);
-
+								LOG_DEBUG("[VT]: Server version is " + isobus::to_string(static_cast<int>(parentVT->connectedVTVersion)));
+								parentVT->set_state(StateMachineState::ReadyForObjectPool);
+							}
+							else if (StateMachineState::WaitForGetMemoryResponse == parentVT->state)
+							{
 								if (0 == message.get_uint8_at(2))
 								{
 									// There IS enough memory
