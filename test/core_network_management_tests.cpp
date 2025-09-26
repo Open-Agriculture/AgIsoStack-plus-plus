@@ -4,9 +4,9 @@
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
+#include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
-#include "isobus/utility/system_timing.hpp"
 
 #include <memory>
 #include <thread>
@@ -217,6 +217,83 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	testControlFunction.reset();
 	CANNetworkManager::CANNetwork.deactivate_control_function(testPartner);
 	CANHardwareInterface::stop();
+}
+
+TEST(CORE_TESTS, NewExternalControlFunctionTriggersStateCallback)
+{
+	wasTestStateCallbackHit = false;
+	testControlFunction.reset();
+	testControlFunctionState = ControlFunctionState::Offline;
+	CANNetworkManager::CANNetwork.update();
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
+
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t INITIAL_ADDRESS = 0x91;
+
+	isobus::CANMessageFrame addressClaim = {};
+	addressClaim.channel = TEST_CHANNEL;
+	addressClaim.identifier = 0x18EEFF00 | INITIAL_ADDRESS;
+	addressClaim.isExtendedFrame = true;
+	addressClaim.dataLength = 8;
+
+	constexpr std::uint64_t DUMMY_NAME = 0x0123456789ABCDEFULL;
+	for (std::uint8_t byteIndex = 0; byteIndex < addressClaim.dataLength; byteIndex++)
+	{
+		addressClaim.data[byteIndex] = static_cast<std::uint8_t>(DUMMY_NAME >> (8 * byteIndex));
+	}
+
+	isobus::CANNetworkManager::CANNetwork.process_receive_can_message_frame(addressClaim);
+
+	EXPECT_TRUE(wasTestStateCallbackHit);
+	ASSERT_NE(nullptr, testControlFunction);
+	EXPECT_EQ(isobus::ControlFunctionState::Online, testControlFunctionState);
+	EXPECT_EQ(INITIAL_ADDRESS, testControlFunction->get_address());
+	EXPECT_EQ(TEST_CHANNEL, testControlFunction->get_can_port());
+
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
+	testControlFunction.reset();
+	wasTestStateCallbackHit = false;
+}
+
+TEST(CORE_TESTS, ControlFunctionAddressChangeTriggersStateCallback)
+{
+	wasTestStateCallbackHit = false;
+	testControlFunction.reset();
+	testControlFunctionState = ControlFunctionState::Offline;
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
+
+	constexpr std::uint8_t INITIAL_ADDRESS = 0x92;
+	constexpr std::uint8_t NEW_ADDRESS = 0x93;
+	auto partner = test_helpers::force_claim_partnered_control_function(INITIAL_ADDRESS, 0);
+
+	// Reset after the initial Online event so we can capture the address change notification
+	wasTestStateCallbackHit = false;
+	testControlFunction.reset();
+	testControlFunctionState = ControlFunctionState::Offline;
+
+	isobus::CANMessageFrame addressClaim = {};
+	addressClaim.channel = partner->get_can_port();
+	addressClaim.identifier = 0x18EEFF00 | NEW_ADDRESS;
+	addressClaim.isExtendedFrame = true;
+	addressClaim.dataLength = 8;
+
+	const std::uint64_t fullName = partner->get_NAME().get_full_name();
+	for (std::uint8_t byteIndex = 0; byteIndex < addressClaim.dataLength; byteIndex++)
+	{
+		addressClaim.data[byteIndex] = static_cast<std::uint8_t>(fullName >> (8 * byteIndex));
+	}
+
+	isobus::CANNetworkManager::CANNetwork.process_receive_can_message_frame(addressClaim);
+
+	EXPECT_TRUE(wasTestStateCallbackHit);
+	EXPECT_EQ(isobus::ControlFunctionState::Online, testControlFunctionState);
+	ASSERT_EQ(partner, testControlFunction);
+	EXPECT_EQ(NEW_ADDRESS, partner->get_address());
+
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+	testControlFunction.reset();
+	wasTestStateCallbackHit = false;
 }
 
 TEST(CORE_TESTS, SimilarControlFunctions)
