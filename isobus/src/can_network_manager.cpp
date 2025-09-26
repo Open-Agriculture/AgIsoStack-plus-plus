@@ -844,6 +844,7 @@ namespace isobus
 				// New device, need to start keeping track of it
 				foundControlFunction = create_external_control_function(NAME(claimedNAME), claimedAddress, rxFrame.channel);
 				LOG_DEBUG("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
+				process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 			}
 			else if ((foundControlFunction->get_address() != claimedAddress) && (claimedAddress < NULL_CAN_ADDRESS))
 			{
@@ -857,6 +858,7 @@ namespace isobus
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
 					foundControlFunction->address = claimedAddress;
+					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 				}
 				else
 				{
