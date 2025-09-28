@@ -40,7 +40,13 @@ target_include_directories(
 
 install(
   TARGETS Utility
-  EXPORT IsobusTargets
+  EXPORT isobusTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+  FILES_MATCHING
+  PATTERN "*.hpp")

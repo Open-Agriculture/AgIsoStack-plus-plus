@@ -72,17 +72,37 @@ namespace isobus
 
 	std::uint8_t VirtualTerminalServer::get_supported_small_fonts_bitfield() const
 	{
-		return 0xFF;
+		return 0x7F;
 	}
 
 	std::uint8_t VirtualTerminalServer::get_supported_large_fonts_bitfield() const
 	{
-		return 0xFF;
+		return 0x7F;
 	}
 
 	void VirtualTerminalServer::identify_vt()
 	{
 		LOG_ERROR("[VT Server]: The Identify VT command is not implemented");
+	}
+
+	void VirtualTerminalServer::screen_capture(std::uint8_t item, std::uint8_t path, std::shared_ptr<ControlFunction> requestor)
+	{
+		(void)item;
+		(void)path;
+		(void)requestor;
+		LOG_ERROR("[VT Server]: The Screen Capture command is not implemented");
+	}
+
+	std::uint8_t VirtualTerminalServer::get_user_layout_softkeymask_bg_color() const
+	{
+		LOG_ERROR("[VT Server]: The Get User Layout Softkeymask background color is not implemented, returning with black");
+		return 0;
+	}
+
+	std::uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
+	{
+		LOG_ERROR("[VT Server]: The Get User Layout Datamask background color is not implemented, returning with black");
+		return 0;
 	}
 
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &VirtualTerminalServer::get_on_repaint_event_dispatcher()
@@ -1319,11 +1339,11 @@ namespace isobus
 										if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
 										{
 											auto font = std::static_pointer_cast<FontAttributes>(targetObject);
-											font->set_background_color(fontColour);
+											font->set_colour(fontColour);
 											font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
 											font->set_type(static_cast<FontAttributes::FontType>(fontType));
 											font->set_style(fontStyle);
-											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), fontSize, objectID);
+											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), objectID);
 											parentServer->send_change_font_attributes_response(objectID, 0, message.get_source_control_function());
 											parentServer->onRepaintEventDispatcher.call(cf);
 										}
@@ -1337,6 +1357,33 @@ namespace isobus
 									{
 										LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
 										parentServer->send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								case Function::ChangeLineAttributesCommand:
+								{
+									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+									auto targetObject = cf->get_object_by_id(objectID);
+									std::uint8_t lineColour = data[3];
+									std::uint8_t lineWidth = data[4];
+									std::uint16_t lineArt = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+
+									if ((nullptr != targetObject) &&
+									    (VirtualTerminalObjectType::LineAttributes == targetObject->get_object_type()))
+									{
+										auto line = std::static_pointer_cast<LineAttributes>(targetObject);
+										line->set_background_color(lineColour);
+										line->set_width(lineWidth);
+										line->set_line_art_bit_pattern(lineArt);
+										LOG_DEBUG("[VT Server]: Client %u change line attributes command: ObjectID: %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_line_attributes_response(objectID, 0, message.get_source_control_function());
+										parentServer->onRepaintEventDispatcher.call(cf);
+									}
+									else
+									{
+										LOG_WARNING("[VT Server]: Client %u change line attributes command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
+										parentServer->send_change_line_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
 									}
 								}
 								break;
@@ -1750,6 +1797,17 @@ namespace isobus
 								}
 								break;
 
+								case Function::ScreenCapture:
+								{
+									parentServer->screen_capture(data[1], data[2], message.get_source_control_function());
+								}
+								break;
+								case Function::GetWindowMaskDataMessage:
+								{
+									parentServer->send_get_window_mask_data_response(message.get_source_control_function());
+								}
+								break;
+
 								default:
 								{
 									LOG_ERROR("[VT Server]: Unimplemented Command %u", data[0]);
@@ -1964,6 +2022,32 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand),
+				static_cast<std::uint8_t>(objectID & 0xFF),
+				static_cast<std::uint8_t>(objectID >> 8),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_line_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeLineAttributesCommand),
 				static_cast<std::uint8_t>(objectID & 0xFF),
 				static_cast<std::uint8_t>(objectID >> 8),
 				errorBitfield,
@@ -2590,6 +2674,27 @@ namespace isobus
 		                                                      get_priority());
 	}
 
+	bool VirtualTerminalServer::send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::GetWindowMaskDataMessage);
+		buffer[1] = get_user_layout_datamask_bg_color();
+		buffer[2] = get_user_layout_softkeymask_bg_color();
+		buffer[3] = 0xFF; // Reserved
+		buffer[4] = 0xFF; // Reserved
+		buffer[5] = 0xFF; // Reserved
+		buffer[6] = 0xFF; // Reserved
+		buffer[7] = 0xFF; // Reserved
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
 	bool VirtualTerminalServer::send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const
 	{
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::SetAudioVolumeCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -2598,6 +2703,26 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::ScreenCapture);
+		buffer[1] = item;
+		buffer[2] = path;
+		buffer[3] = errorCode;
+		buffer[4] = static_cast<std::uint8_t>(imageId & 0xFF);
+		buffer[5] = static_cast<std::uint8_t>((imageId >> 8) & 0xFF);
+		buffer[6] = 0xFF;
+		buffer[7] = 0xFF;
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      requestor,
 		                                                      get_priority());
 	}
 

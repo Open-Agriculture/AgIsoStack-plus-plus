@@ -251,6 +251,22 @@ namespace isobus
 		/// @brief This function is called when the Identify VT version message is received
 		virtual void identify_vt();
 
+		/// @brief This function is called when the Screen capture command is received
+		/// @param[in] item Item requested from the Screen Capture command
+		/// @param[in] path Path requested from the Screen Capture command
+		/// @param[in] requestor The control function requesting screen capture
+		virtual void screen_capture(std::uint8_t item, std::uint8_t path, std::shared_ptr<ControlFunction> requestor);
+
+		/// @brief This function returns the Background colour of VT’s User-Layout Data Masks
+		/// Used in the Get Window Mask Data response
+		/// @returns The background color on the datamasks
+		virtual std::uint8_t get_user_layout_datamask_bg_color() const;
+
+		/// @brief This function returns the Background colour of VT’s Key-Cells when on a User-Layout softkey mask
+		/// Used in the Get Window Mask Data response
+		/// @returns The background color on the softkey mask
+		virtual std::uint8_t get_user_layout_softkeymask_bg_color() const;
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events
@@ -447,6 +463,62 @@ namespace isobus
 			AnyOtherError = 8
 		};
 
+		/// @brief Enumerates the possible values of the Screen Capture command Item Requested field
+		enum class ScreenCaptureItem
+		{
+			ScreenImage = 0,
+			ManufacturerProprietary_240,
+			ManufacturerProprietary_241,
+			ManufacturerProprietary_242,
+			ManufacturerProprietary_243,
+			ManufacturerProprietary_244,
+			ManufacturerProprietary_245,
+			ManufacturerProprietary_246,
+			ManufacturerProprietary_247,
+			ManufacturerProprietary_248,
+			ManufacturerProprietary_249,
+			ManufacturerProprietary_250,
+			ManufacturerProprietary_251,
+			ManufacturerProprietary_252,
+			ManufacturerProprietary_253,
+			ManufacturerProprietary_254,
+			ManufacturerProprietary_255,
+		};
+
+		/// @brief Enumerates the possible values of the Screen Capture command Path field
+		enum class ScreenCapturePath
+		{
+			VT_StorageOrRemovableMedia = 1,
+			ManufacturerProprietary_240,
+			ManufacturerProprietary_241,
+			ManufacturerProprietary_242,
+			ManufacturerProprietary_243,
+			ManufacturerProprietary_244,
+			ManufacturerProprietary_245,
+			ManufacturerProprietary_246,
+			ManufacturerProprietary_247,
+			ManufacturerProprietary_248,
+			ManufacturerProprietary_249,
+			ManufacturerProprietary_250,
+			ManufacturerProprietary_251,
+			ManufacturerProprietary_252,
+			ManufacturerProprietary_253,
+			ManufacturerProprietary_254,
+			ManufacturerProprietary_255,
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a screen capture response
+		enum class ScreenCaptureResponseErrorBit : std::uint8_t
+		{
+			NoError = 0,
+			ScreenCaptureNotEnabled = 1,
+			TransferBufferBusy = 2,
+			UnsupportedItemRequest = 4,
+			UnsupportedPathRequest = 8,
+			RemovableMediaUnavailable = 16,
+			AnyOtherError = 32
+		};
+
 		/// @brief Checks to see if the message should be listened to based on
 		/// what the message is, and if the client has sent the proper working set master message
 		/// @param[in] message The CAN message to check
@@ -540,6 +612,13 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_font_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to a change line attributes command
+		/// @param[in] objectID The object ID for the object to change
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_line_attributes_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change list item command
 		/// @param[in] objectID The object ID for the object to change
@@ -678,6 +757,20 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false.
 		bool send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response message to the Screen capture command
+		/// @param[in] item Item requested from the Screen Capture command
+		/// @param[in] path Path requested from the Screen Capture command
+		/// @param[in] errorCode Error codes
+		/// @param[in] imageId Error codes
+		/// @param[in] requestor The control function which requested the screen capture
+		/// @returns true if the message was sent, otherwise false
+		bool send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const;
+
+		/// @brief Sends the response to the get window mask data message
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent
+		bool send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Cyclic update function
 		void update();
