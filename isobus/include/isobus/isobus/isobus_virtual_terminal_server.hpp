@@ -547,6 +547,16 @@ namespace isobus
 		/// @returns The VT version byte associated to the specified version
 		static std::uint8_t get_vt_version_byte(VTVersion version);
 
+		/// @brief Processes a stateless CAN message from any VT client
+		/// @param[in] message The CAN message being received
+		void process_stateless_messages(const CANMessage &message);
+
+		/// @brief Processes a connection-dependent CAN message from only VT clients
+		/// with whom we've established a working set master relationship
+		/// @param[in] message The CAN message being received
+		/// @param[in] managedWorkingSet The working set that is associated to the client sending the message
+		void process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet);
+
 		/// @brief Processes a CAN message from any VT client
 		/// @param[in] message The CAN message being received
 		/// @param[in] parent A context variable to find the relevant VT server class
