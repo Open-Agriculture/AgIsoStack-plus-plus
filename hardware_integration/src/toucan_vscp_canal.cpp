@@ -31,6 +31,11 @@ namespace isobus
 	{
 	}
 
+	std::string TouCANPlugin::get_name() const
+	{
+		return "Rusoku TouCAN";
+	}
+
 	bool TouCANPlugin::get_is_valid() const
 	{
 		return (CANAL_ERROR_SUCCESS == openResult);
