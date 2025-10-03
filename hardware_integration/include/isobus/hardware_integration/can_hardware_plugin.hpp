@@ -9,6 +9,7 @@
 #ifndef CAN_HARDEWARE_PLUGIN_HPP
 #define CAN_HARDEWARE_PLUGIN_HPP
 
+#include <string>
 #include "isobus/isobus/can_message_frame.hpp"
 
 namespace isobus
@@ -22,6 +23,11 @@ namespace isobus
 	{
 	public:
 		virtual ~CANHardwarePlugin() = default;
+
+		/// @brief Returns with the name of the plugin in a format which is suitable to be displayed
+		/// to the user for e.g. on a ComboBox
+		/// @returns the name of the plugin
+		virtual std::string get_name() const = 0;
 
 		/// @brief Returns if the driver is ready and in a good state
 		/// @details This should return `false` until `open` is called, and after `close` is called, or

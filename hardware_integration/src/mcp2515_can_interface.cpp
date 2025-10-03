@@ -29,6 +29,11 @@ namespace isobus
 		close();
 	}
 
+	std::string MCP2515CANInterface::get_name() const
+	{
+		return "MCP2515";
+	}
+
 	bool MCP2515CANInterface::get_is_valid() const
 	{
 		return (transactionHandler) && (initialized);

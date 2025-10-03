@@ -35,6 +35,10 @@ namespace isobus
 		/// @brief The destructor for SocketCANInterface
 		virtual ~SocketCANInterface();
 
+		/// @brief Returns the displayable name of the plugin
+		/// @returns SocketCAN
+		std::string get_name() const override;
+
 		/// @brief Returns if the socket connection is valid
 		/// @returns `true` if connected, `false` if not connected
 		bool get_is_valid() const override;

@@ -33,6 +33,11 @@ namespace isobus
 		close();
 	}
 
+	std::string TWAIPlugin::get_name() const
+	{
+		return "TWAI";
+	}
+
 	bool TWAIPlugin::get_is_valid() const
 	{
 		twai_status_info_t status;

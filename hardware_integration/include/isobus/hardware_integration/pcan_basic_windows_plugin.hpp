@@ -39,6 +39,10 @@ namespace isobus
 		/// @brief The destructor for PCANBasicWindowsPlugin
 		virtual ~PCANBasicWindowsPlugin();
 
+		/// @brief Returns the displayable name of the plugin
+		/// @returns PEAK CAN
+		std::string get_name() const override;
+
 		/// @brief Returns if the connection with the hardware is valid
 		/// @returns `true` if connected, `false` if not connected
 		bool get_is_valid() const override;

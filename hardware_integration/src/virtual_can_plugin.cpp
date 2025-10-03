@@ -29,6 +29,11 @@ namespace isobus
 		ourDevice->condition.notify_one();
 	}
 
+	std::string VirtualCANPlugin::get_name() const
+	{
+		return "Open-Agriculture Virtual CAN";
+	}
+
 	bool VirtualCANPlugin::get_is_valid() const
 	{
 		return running;

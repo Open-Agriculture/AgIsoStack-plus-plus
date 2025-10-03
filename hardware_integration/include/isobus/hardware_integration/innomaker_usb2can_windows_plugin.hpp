@@ -59,6 +59,10 @@ namespace isobus
 		/// @brief The destructor for InnoMakerUSB2CANWindowsPlugin
 		virtual ~InnoMakerUSB2CANWindowsPlugin();
 
+		/// @brief Returns the displayable name of the plugin
+		/// @returns INNO-Maker USB2CAN
+		std::string get_name() const override;
+
 		/// @brief Returns if the connection with the hardware is valid
 		/// @returns `true` if connected, `false` if not connected
 		bool get_is_valid() const override;

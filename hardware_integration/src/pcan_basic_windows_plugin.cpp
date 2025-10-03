@@ -26,6 +26,11 @@ namespace isobus
 	{
 	}
 
+	std::string PCANBasicWindowsPlugin::get_name() const
+	{
+		return "PEAK CAN";
+	}
+
 	bool PCANBasicWindowsPlugin::get_is_valid() const
 	{
 		return (PCAN_ERROR_OK == openResult);

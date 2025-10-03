@@ -27,6 +27,11 @@ namespace isobus
 	{
 	}
 
+	std::string FlexCANT4Plugin::get_name() const
+	{
+		return "FlexCANT4";
+	}
+
 	bool FlexCANT4Plugin::get_is_valid() const
 	{
 		return isOpen;
