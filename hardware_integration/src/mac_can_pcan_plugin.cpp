@@ -25,6 +25,11 @@ namespace isobus
 	{
 	}
 
+	std::string MacCANPCANPlugin::get_name() const
+	{
+		return "MacCAN";
+	}
+
 	bool MacCANPCANPlugin::get_is_valid() const
 	{
 		return (PCAN_ERROR_OK == openResult);

@@ -24,6 +24,11 @@ namespace isobus
 	{
 	}
 
+	std::string NTCANPlugin::get_name() const
+	{
+		return "ESD NTCAN";
+	}
+
 	bool NTCANPlugin::get_is_valid() const
 	{
 		return (NTCAN_SUCCESS == openResult) && (NTCAN_NO_HANDLE != handle);
