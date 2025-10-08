@@ -269,1558 +269,1576 @@ namespace isobus
 		return retVal;
 	}
 
+	void VirtualTerminalServer::process_stateless_messages(const CANMessage &message)
+	{
+		auto &data = message.get_data();
+
+		switch (static_cast<Function>(data.at(0)))
+		{
+			case Function::GetMemoryMessage:
+			{
+				std::uint32_t requiredMemory = (data[2] | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16) | (static_cast<std::uint32_t>(data[5]) << 24));
+				bool isEnoughMemory = get_is_enough_memory(requiredMemory);
+				LOG_INFO("[VT Server]: An ecu requested %u bytes of memory.", requiredMemory);
+
+				if (!isEnoughMemory)
+				{
+					LOG_WARNING("[VT Server]: Callback indicated there is NOT enough memory.", requiredMemory);
+				}
+				else
+				{
+					LOG_DEBUG("[VT Server]: Callback indicated there may be enough memory, but since there is overhead associated to object storage it is impossible to be sure.", requiredMemory);
+				}
+
+				std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+				buffer[0] = static_cast<std::uint8_t>(Function::GetMemoryMessage);
+				buffer[1] = static_cast<std::uint8_t>(get_vt_version_byte(get_version()));
+				buffer[2] = static_cast<std::uint8_t>(!isEnoughMemory);
+				buffer[3] = 0xFF; // Reserved
+				buffer[4] = 0xFF; // Reserved
+				buffer[5] = 0xFF; // Reserved
+				buffer[6] = 0xFF; // Reserved
+				buffer[7] = 0xFF; // Reserved
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
+			case Function::GetNumberOfSoftKeysMessage:
+			{
+				std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+				buffer[0] = static_cast<std::uint8_t>(Function::GetNumberOfSoftKeysMessage);
+				buffer[1] = get_number_of_navigation_soft_keys(); // No navigation softkeys
+				buffer[2] = 0xFF; // Reserved
+				buffer[3] = 0xFF; // Reserved
+				buffer[4] = get_soft_key_descriptor_x_pixel_width(); // Width of the softkey descriptor in pixels
+				buffer[5] = get_soft_key_descriptor_y_pixel_height(); // Height of the softkey descriptor in pixels
+				buffer[6] = get_number_of_possible_virtual_soft_keys_in_soft_key_mask(); // Number of possible virtual Soft Keys in a Soft Key Mask
+				buffer[7] = get_number_of_physical_soft_keys(); // No physical softkeys
+
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
+			case Function::GetTextFontDataMessage:
+			{
+				std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+				buffer[0] = static_cast<std::uint8_t>(Function::GetTextFontDataMessage);
+				buffer[1] = 0xFF; // Reserved
+				buffer[2] = 0xFF; // Reserved
+				buffer[3] = 0xFF; // Reserved
+				buffer[4] = 0xFF; // Reserved
+				buffer[5] = get_supported_small_fonts_bitfield(); // Say we support all small fonts
+				buffer[6] = get_supported_large_fonts_bitfield(); // Say we support all large fonts
+				buffer[7] = 0x8F; // Support normal, bold, italic, proportional
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
+			case Function::GetHardwareMessage:
+			{
+				std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+				buffer[0] = static_cast<std::uint8_t>(Function::GetHardwareMessage);
+				buffer[1] = get_powerup_time();
+				buffer[2] = static_cast<std::uint8_t>(get_graphic_mode()); // 256 Colour Mode by default
+				buffer[3] = 0x0F; // Support pointing event message
+				buffer[4] = (get_data_mask_area_size_x_pixels() & 0xFF); // X Pixels LSB
+				buffer[5] = (get_data_mask_area_size_x_pixels() >> 8); // X Pixels MSB
+				buffer[6] = (get_data_mask_area_size_y_pixels() & 0xFF); // Y Pixels LSB
+				buffer[7] = (get_data_mask_area_size_y_pixels() >> 8); // Y Pixels MSB
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
+			case Function::GetSupportedWidecharsMessage:
+			{
+				std::vector<std::uint8_t> wideCharRangeArray;
+				std::uint8_t numberOfRanges = 0;
+				std::uint8_t codePlane = data.at(1);
+				std::uint16_t firstWideCharInInquiryRange = static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8);
+				std::uint16_t lastWideCharInInquiryRange = static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8);
+				auto errorCode = get_supported_wide_chars(codePlane, firstWideCharInInquiryRange, lastWideCharInInquiryRange, numberOfRanges, wideCharRangeArray);
+
+				std::vector<std::uint8_t> buffer;
+				buffer.push_back(static_cast<std::uint8_t>(Function::GetSupportedWidecharsMessage));
+				buffer.push_back(codePlane);
+				buffer.push_back(static_cast<std::uint8_t>(firstWideCharInInquiryRange & 0xFF));
+				buffer.push_back(static_cast<std::uint8_t>((firstWideCharInInquiryRange >> 8) & 0xFF));
+				buffer.push_back(static_cast<std::uint8_t>(lastWideCharInInquiryRange & 0xFF));
+				buffer.push_back(static_cast<std::uint8_t>((lastWideCharInInquiryRange >> 8) & 0xFF));
+				buffer.push_back(static_cast<std::uint8_t>(errorCode));
+				buffer.push_back(numberOfRanges);
+
+				for (const auto &range : wideCharRangeArray)
+				{
+					buffer.push_back(range);
+				}
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               static_cast<std::uint32_t>(buffer.size()),
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
+			case Function::GetWindowMaskDataMessage:
+			{
+				send_get_window_mask_data_response(message.get_source_control_function());
+			}
+			break;
+
+			default:
+				break;
+		}
+	}
+
+	void VirtualTerminalServer::process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet)
+	{
+		auto &data = message.get_data();
+
+		switch (static_cast<Function>(data.at(0)))
+		{
+			case Function::GetMemoryMessage:
+			{
+				// The response is handled in process_stateless_messages
+				// but save the size requested for later use if we have a connected working set
+				std::uint32_t requiredMemory = (data[2] | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16) | (static_cast<std::uint32_t>(data[5]) << 24));
+				managedWorkingSet->set_iop_size(requiredMemory);
+			}
+			break;
+
+			case Function::ObjectPoolTransferMessage:
+			{
+				std::vector<std::uint8_t> tempPool = data; // Make a copy of the data (ouch)
+				tempPool.erase(tempPool.begin()); // Strip off the mux byte (double ouch, good thing this is rare)
+				LOG_INFO("[VT Server]: An ecu at address %u transferred %u bytes of object pool data to us.", message.get_identifier().get_source_address(), static_cast<std::uint32_t>(tempPool.size()));
+				managedWorkingSet->add_iop_raw_data(tempPool);
+			}
+			break;
+
+			case Function::GetVersionsMessage:
+			{
+				auto versions = get_versions(message.get_source_control_function()->get_NAME());
+
+				std::vector<std::uint8_t> buffer;
+				buffer.push_back(static_cast<std::uint32_t>(Function::GetVersionsResponse));
+
+				LOG_DEBUG("[VT Server]: Client %u requests stored versions", message.get_source_control_function()->get_address());
+
+				if (versions.size() > 255)
+				{
+					LOG_WARNING("[VT Server]: get_versions returned too many versions! This client should really delete some.");
+				}
+
+				buffer.push_back(static_cast<std::uint8_t>(versions.size() & 0xFF));
+
+				for (const auto &version : versions)
+				{
+					for (const auto &versionByte : version)
+					{
+						buffer.push_back(versionByte);
+					}
+				}
+
+				while (buffer.size() < CAN_DATA_LENGTH)
+				{
+					buffer.push_back(0xFF);
+				}
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               static_cast<std::uint32_t>(buffer.size()),
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
+			case Function::LoadVersionCommand:
+			{
+				constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
+				std::vector<std::uint8_t> versionLabel;
+
+				versionLabel.reserve(VERSION_LABEL_LENGTH);
+
+				for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
+				{
+					versionLabel.push_back(data[i + 1]);
+				}
+
+				auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
+				if (!loadedVersion.empty())
+				{
+					managedWorkingSet->set_iop_size(loadedVersion.size());
+					managedWorkingSet->add_iop_raw_data(loadedVersion);
+				}
+				else
+				{
+					send_load_version_response(0x01, managedWorkingSet->get_control_function());
+					LOG_ERROR("[VT Server]: Failed to load requested object pool version");
+				}
+
+				if (managedWorkingSet->get_any_object_pools())
+				{
+					managedWorkingSet->start_parsing_thread();
+					managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, {});
+					LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
+				}
+			}
+			break;
+
+			case Function::StoreVersionCommand:
+			{
+				if (managedWorkingSet->get_any_object_pools())
+				{
+					std::ostringstream nameString;
+					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
+					std::vector<std::uint8_t> versionLabel;
+					bool allPoolsSaved = true;
+					versionLabel.reserve(VERSION_LABEL_LENGTH);
+
+					for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
+					{
+						versionLabel.push_back(static_cast<char>(data[i + 1]));
+					}
+
+					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
+					{
+						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
+
+						if (didSave)
+						{
+							LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+						}
+						else
+						{
+							LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
+							allPoolsSaved = false;
+							break;
+						}
+					}
+
+					std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+					buffer[0] = static_cast<std::uint8_t>(Function::StoreVersionCommand);
+					buffer[1] = 0xFF; // Reserved
+					buffer[2] = 0xFF; // Reserved
+					buffer[3] = 0xFF; // Reserved
+					buffer[4] = 0xFF; // Reserved
+					if (allPoolsSaved)
+					{
+						buffer[5] = 0; // No error
+					}
+					else
+					{
+						buffer[5] = 0x04; // Any other error
+					}
+					buffer[6] = 0xFF; // Reserved
+					buffer[7] = 0xFF; // Reserved
+					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+					                                               buffer.data(),
+					                                               CAN_DATA_LENGTH,
+					                                               serverInternalControlFunction,
+					                                               message.get_source_control_function(),
+					                                               get_priority());
+				}
+				else
+				{
+					// Whomever this is appears to be behaving badly, send them a NACK
+					send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), serverInternalControlFunction, managedWorkingSet->get_control_function());
+				}
+			}
+			break;
+
+			case Function::DeleteVersionCommand:
+			{
+				std::vector<std::uint8_t> versionLabel;
+				std::ostringstream nameString;
+				nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
+				versionLabel.reserve(VERSION_LABEL_LENGTH);
+
+				for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
+				{
+					versionLabel.push_back(data[i + 1]);
+				}
+
+				bool wasDeleted = delete_version(versionLabel, managedWorkingSet->get_control_function()->get_NAME());
+
+				if (wasDeleted)
+				{
+					LOG_INFO("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str().c_str());
+					send_delete_version_response(0, managedWorkingSet->get_control_function());
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Delete version failed for client NAME %s", nameString.str().c_str());
+					send_delete_version_response((1 << static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+				}
+			}
+			break;
+
+			case Function::EndOfObjectPoolMessage:
+			{
+				if (managedWorkingSet->get_any_object_pools())
+				{
+					managedWorkingSet->start_parsing_thread();
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: End of object pool message ignored - no object pools are loaded for the source control function");
+				}
+			}
+			break;
+
+			case Function::WorkingSetMaintenanceMessage:
+			{
+				if (0 != managedWorkingSet->get_working_set_maintenance_message_timestamp_ms())
+				{
+					managedWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+				}
+			}
+			break;
+
+			case Function::ChangeNumericValueCommand:
+			{
+				std::uint32_t value = (static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
+				auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
+				bool logSuccess = true;
+
+				if (nullptr != lTargetObject)
+				{
+					switch (lTargetObject->get_object_type())
+					{
+						case VirtualTerminalObjectType::InputBoolean:
+						{
+							std::static_pointer_cast<InputBoolean>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputNumber:
+						{
+							std::static_pointer_cast<InputNumber>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputList:
+						{
+							std::static_pointer_cast<InputList>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::OutputNumber:
+						{
+							std::static_pointer_cast<OutputNumber>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::OutputList:
+						{
+							std::static_pointer_cast<OutputList>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::OutputMeter:
+						{
+							std::static_pointer_cast<OutputMeter>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::OutputLinearBarGraph:
+						{
+							std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::OutputArchedBarGraph:
+						{
+							std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::NumberVariable:
+						{
+							std::static_pointer_cast<NumberVariable>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::ObjectPointer:
+						{
+							std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(value);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+						}
+						break;
+
+						case VirtualTerminalObjectType::ExternalObjectPointer:
+						{
+							std::uint16_t externalReferenceNAMEObjectIdD = (static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+							std::uint16_t referencedObjectID = (static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
+							std::static_pointer_cast<ExternalObjectPointer>(lTargetObject)->set_external_reference_name_id(externalReferenceNAMEObjectIdD);
+							std::static_pointer_cast<ExternalObjectPointer>(lTargetObject)->set_external_object_id(referencedObjectID);
+							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+							// Todo: event dispatcher
+						}
+						break;
+
+						case VirtualTerminalObjectType::Animation:
+						{
+							// Todo std::static_pointer_cast<Animation>(lTargetObject)->set_value(value);
+							// onChangeNumericValueEventDispatcher.call(objectId, value);
+							send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::AnyOtherError)), value, managedWorkingSet->get_control_function());
+							LOG_WARNING("[VT Server]: Client %u change numeric value for animation not implemented yet", managedWorkingSet->get_control_function()->get_address());
+							logSuccess = false;
+						}
+						break;
+
+						default:
+						{
+							send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, managedWorkingSet->get_control_function());
+							LOG_WARNING("[VT Server]: Client %u change numeric value invalid object type. ID: %u", managedWorkingSet->get_control_function()->get_address(), objectId);
+							logSuccess = false;
+						}
+						break;
+					}
+
+					if (logSuccess)
+					{
+						LOG_DEBUG("[VT Server]: Client %u change numeric value command: change object ID %u to be %u", managedWorkingSet->get_control_function()->get_address(), objectId, value);
+						process_macro(lTargetObject, isobus::EventID::OnChangeValue, lTargetObject->get_object_type(), managedWorkingSet);
+					}
+				}
+				else
+				{
+					send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u change numeric value invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectId);
+				}
+			}
+			break;
+
+			case Function::HideShowObjectCommand:
+			{
+				auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectId);
+
+				if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
+				{
+					std::static_pointer_cast<Container>(targetObject)->set_hidden(0 == data[3]);
+					send_hide_show_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+					onRepaintEventDispatcher.call(managedWorkingSet);
+
+					if (0 == data[3])
+					{
+						LOG_DEBUG("[VT Server]: Client %u hide object command %u", managedWorkingSet->get_control_function()->get_address(), objectId);
+						process_macro(targetObject, EventID::OnHide, targetObject->get_object_type(), managedWorkingSet);
+					}
+					else
+					{
+						LOG_DEBUG("[VT Server]: Client %u show object command %u", managedWorkingSet->get_control_function()->get_address(), objectId);
+						process_macro(targetObject, EventID::OnShow, targetObject->get_object_type(), managedWorkingSet);
+					}
+				}
+				else
+				{
+					send_hide_show_object_response(objectId, (1 << static_cast<std::uint8_t>(HideShowObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u hide/show object command failed. It can only affect containers! ID: %u", managedWorkingSet->get_control_function()->get_address(), objectId);
+				}
+			}
+			break;
+
+			case Function::EnableDisableObjectCommand:
+			{
+				auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
+
+				if (nullptr != lTargetObject)
+				{
+					if (data[3] <= 1)
+					{
+						switch (lTargetObject->get_object_type())
+						{
+							case VirtualTerminalObjectType::InputBoolean:
+							{
+								std::static_pointer_cast<InputBoolean>(lTargetObject)->set_enabled(0 != data[3]);
+								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+							}
+							break;
+
+							case VirtualTerminalObjectType::InputList:
+							{
+								std::static_pointer_cast<InputList>(lTargetObject)->set_option(InputList::Options::Enabled, (0 != data[3]));
+								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+							}
+							break;
+
+							case VirtualTerminalObjectType::InputString:
+							{
+								std::static_pointer_cast<InputString>(lTargetObject)->set_enabled((0 != data[3]));
+								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+							}
+							break;
+
+							case VirtualTerminalObjectType::InputNumber:
+							{
+								std::static_pointer_cast<InputNumber>(lTargetObject)->set_option2(InputNumber::Options2::Enabled, (0 != data[3]));
+								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+							}
+							break;
+
+							case VirtualTerminalObjectType::Button:
+							{
+								std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
+								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+							}
+							break;
+
+							default:
+							{
+								send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+							}
+							break;
+						}
+					}
+					else
+					{
+						send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidEnableDisableCommandValue)), (0 != data[3]), managedWorkingSet->get_control_function());
+					}
+				}
+				else
+				{
+					send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeChildLocationCommand:
+			{
+				auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
+
+				if (nullptr != parentObject)
+				{
+					auto lTargetObject = managedWorkingSet->get_object_by_id(objectID);
+
+					if (nullptr != lTargetObject)
+					{
+						auto xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
+						auto yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
+						bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
+
+						onRepaintEventDispatcher.call(managedWorkingSet);
+
+						if (anyObjectMatched)
+						{
+							send_change_child_location_response(parentObjectId, objectID, 0, managedWorkingSet->get_control_function());
+							LOG_DEBUG("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", managedWorkingSet->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
+							process_macro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), managedWorkingSet);
+						}
+						else
+						{
+							send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
+							LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u isn't applicable", managedWorkingSet->get_control_function()->get_address(), objectID);
+						}
+					}
+					else
+					{
+						send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
+						LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u doesn't exist", managedWorkingSet->get_control_function()->get_address(), objectID);
+					}
+				}
+				else
+				{
+					send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
+				}
+			}
+			break;
+
+			case Function::ChangeActiveMaskCommand:
+			{
+				auto workingSetObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto newActiveMaskObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto workingSetObject = managedWorkingSet->get_object_by_id(workingSetObjectId);
+
+				if (nullptr != workingSetObject)
+				{
+					if (nullptr != managedWorkingSet->get_object_by_id(newActiveMaskObjectId))
+					{
+						std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
+						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
+						onChangeActiveMaskEventDispatcher.call(managedWorkingSet, workingSetObjectId, newActiveMaskObjectId);
+						LOG_DEBUG("[VT Server]: Client %u changed active mask to object %u for working set object %u", managedWorkingSet->get_control_function()->get_address(), newActiveMaskObjectId, workingSetObjectId);
+					}
+					else
+					{
+						send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), managedWorkingSet->get_control_function());
+						LOG_WARNING("[VT Server]: Client %u change active mask failed because the new mask object ID %u was not valid.", managedWorkingSet->get_control_function()->get_address(), newActiveMaskObjectId);
+					}
+				}
+				else
+				{
+					send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u change active mask failed because the working set object ID %u was not valid.", managedWorkingSet->get_control_function()->get_address(), workingSetObjectId);
+				}
+			}
+			break;
+
+			case Function::GetSupportedObjectsMessage:
+			{
+				send_supported_objects(message.get_source_control_function());
+				LOG_DEBUG("[VT Server]: Sent supported object list to client %u", managedWorkingSet->get_control_function()->get_address());
+			}
+			break;
+
+			case Function::ChangeStringValueCommand:
+			{
+				auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto stringObject = managedWorkingSet->get_object_by_id(objectIdToChange);
+
+				if (message.get_data_length() >= static_cast<std::uint32_t>(numberOfBytesInString + 5))
+				{
+					if (nullptr != stringObject)
+					{
+						std::string newStringValue;
+
+						for (std::uint32_t i = 0; i < numberOfBytesInString; i++)
+						{
+							newStringValue.push_back(static_cast<char>(data.at(5 + i)));
+						}
+
+						switch (stringObject->get_object_type())
+						{
+							case VirtualTerminalObjectType::StringVariable:
+							{
+								auto stringVariable = std::static_pointer_cast<StringVariable>(stringObject);
+
+								// The transferred string is allowed to be smaller than the length of the value attribute of the target object
+								// and in this case the VT shall pad the value attribute with space characters.
+								while (newStringValue.length() < stringVariable->get_value().length())
+								{
+									newStringValue.push_back(' ');
+								}
+								stringVariable->set_value(newStringValue);
+								send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+								LOG_DEBUG("[VT Server]: Client %u change string value command for string variable object %u. Value: " + newStringValue, managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+							}
+							break;
+
+							case VirtualTerminalObjectType::OutputString:
+							{
+								auto outputString = std::static_pointer_cast<OutputString>(stringObject);
+
+								// The transferred string is allowed to be smaller than the length of the value attribute of the target object
+								// and in this case the VT shall pad the value attribute with space characters.
+								while (newStringValue.length() < outputString->get_value().length())
+								{
+									newStringValue.push_back(' ');
+								}
+								outputString->set_value(newStringValue);
+								send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+								LOG_DEBUG("[VT Server]: Client %u change string value command for output string object %u. Value: " + newStringValue, managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+							}
+							break;
+
+							case VirtualTerminalObjectType::InputString:
+							{
+								auto inputString = std::static_pointer_cast<InputString>(stringObject);
+
+								// The transferred string is allowed to be smaller than the length of the value attribute of the target object
+								// and in this case the VT shall pad the value attribute with space characters.
+								while (newStringValue.length() < inputString->get_value().length())
+								{
+									newStringValue.push_back(' ');
+								}
+								inputString->set_value(newStringValue);
+								send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
+								onRepaintEventDispatcher.call(managedWorkingSet);
+								LOG_DEBUG("[VT Server]: Client %u change string value command for input string object %u. Value: " + newStringValue, managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+							}
+							break;
+
+							default:
+							{
+								send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+								LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because the object ID was for an object that isn't a string.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+							}
+							break;
+						}
+					}
+					else
+					{
+						send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+						LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because the object ID was invalid.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+					}
+				}
+				else
+				{
+					send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::AnyOtherError)), message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because data length is not valid when compared to the amount sent.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+				}
+			}
+			break;
+
+			case Function::ChangeFillAttributesCommand:
+			{
+				auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+				auto object = managedWorkingSet->get_object_by_id(objectIdToChange);
+				auto fillPatternObject = managedWorkingSet->get_object_by_id(fillPatternID);
+
+				if ((nullptr != object) && (VirtualTerminalObjectType::FillAttributes == object->get_object_type()))
+				{
+					auto fillObject = std::static_pointer_cast<FillAttributes>(object);
+
+					if (((nullptr != fillPatternObject) && (VirtualTerminalObjectType::PictureGraphic == fillPatternObject->get_object_type())) || (NULL_OBJECT_ID == fillPatternID))
+					{
+						if (data[3] <= static_cast<std::uint8_t>(FillAttributes::FillType::FillWithPatternGivenByFillPatternAttribute))
+						{
+							fillObject->set_fill_pattern(fillPatternID);
+							fillObject->set_type(static_cast<FillAttributes::FillType>(data[3]));
+							fillObject->set_background_color(data[4]);
+							send_change_fill_attributes_response(objectIdToChange, 0, message.get_source_control_function());
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							LOG_DEBUG("[VT Server]: Client %u change fill attributes command for object %u", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+						}
+						else
+						{
+							send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidType)), message.get_source_control_function());
+							LOG_WARNING("[VT Server]: Client %u change fill attributes of object %u invalid fill object type. Must be a picture graphic.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+						}
+					}
+					else
+					{
+						send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidPatternObjectID)), message.get_source_control_function());
+						LOG_WARNING("[VT Server]: Client %u change fill attributes invalid pattern object ID of %u for object %u", managedWorkingSet->get_control_function()->get_address(), fillPatternID, objectIdToChange);
+					}
+				}
+				else
+				{
+					send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u change fill attributes invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+				}
+			}
+			break;
+
+			case Function::ChangeChildPositionCommand:
+			{
+				auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				if (message.get_data_length() > CAN_DATA_LENGTH) // Must be at least 9 bytes
+				{
+					std::uint16_t newXPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+					std::uint16_t newYPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[7]) | (static_cast<std::uint16_t>(data[8]) << 8));
+					auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
+					auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+					if (nullptr != parentObject)
+					{
+						if (nullptr != targetObject)
+						{
+							switch (parentObject->get_object_type())
+							{
+								case VirtualTerminalObjectType::Button:
+								case VirtualTerminalObjectType::Container:
+								case VirtualTerminalObjectType::AlarmMask:
+								case VirtualTerminalObjectType::DataMask:
+								case VirtualTerminalObjectType::Key:
+								case VirtualTerminalObjectType::WorkingSet:
+								case VirtualTerminalObjectType::AuxiliaryInputType2:
+								case VirtualTerminalObjectType::WindowMask:
+								{
+									bool wasFound = false;
+
+									// If a parent object includes the child object multiple times, then each instance will be moved
+									for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
+									{
+										if (objectID == parentObject->get_child_id(i))
+										{
+											wasFound = true;
+											parentObject->set_child_x(i, newXPosition);
+											parentObject->set_child_y(i, newYPosition);
+											onRepaintEventDispatcher.call(managedWorkingSet);
+										}
+									}
+
+									if (wasFound)
+									{
+										LOG_DEBUG("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+										send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
+										process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), managedWorkingSet);
+									}
+									else
+									{
+										LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+										send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
+									}
+								}
+								break;
+
+								default:
+								{
+									LOG_WARNING("[VT Server]: Client %u change child position error. Parent object type cannot be targeted by this command: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+									send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+								}
+								break;
+							}
+						}
+						else
+						{
+							LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+							send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change child position error. Parent object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+						send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change child position error. DLC must be 9 bytes for the message to be valid.");
+					send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeAttributeCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				std::uint8_t attributeID = data[3];
+				std::uint32_t attributeData = static_cast<std::uint32_t>(static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
+				VTObject::AttributeError errorCode = VTObject::AttributeError::AnyOtherError;
+
+				if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
+				{
+					if (targetObject->set_attribute(attributeID, attributeData, managedWorkingSet->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
+					{
+						send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
+						LOG_DEBUG("[VT Server]: Client %u changed object %u attribute %u to %u", managedWorkingSet->get_control_function()->get_address(), objectID, attributeID, attributeData);
+						onRepaintEventDispatcher.call(managedWorkingSet);
+						process_macro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), managedWorkingSet);
+					}
+					else
+					{
+						send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(errorCode)), data.at(3), message.get_source_control_function());
+						LOG_WARNING("[VT Server]: Client %u change object %u attribute %u to %ul error %u", managedWorkingSet->get_control_function()->get_address(), objectID, attributeID, attributeData, static_cast<std::uint8_t>(errorCode));
+					}
+				}
+				else
+				{
+					send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(VTObject::AttributeError::InvalidObjectID)), data.at(3), message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u change attribute %u invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), attributeID, objectID);
+				}
+			}
+			break;
+
+			case Function::ChangeSizeCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto newWidth = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto newHeight = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					bool success = false;
+
+					switch (targetObject->get_object_type())
+					{
+						case VirtualTerminalObjectType::OutputMeter:
+						{
+							if (newWidth == newHeight) // Output meter must be square!
+							{
+								targetObject->set_width(newWidth);
+								targetObject->set_height(newHeight);
+								success = true;
+								LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight);
+								onRepaintEventDispatcher.call(managedWorkingSet);
+							}
+							else
+							{
+								LOG_WARNING("[VT Server]: Client %u change size command: invalid new size. Meter must be square! Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+								send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
+							}
+						}
+						break;
+
+						case VirtualTerminalObjectType::Animation:
+						case VirtualTerminalObjectType::Button:
+						case VirtualTerminalObjectType::Container:
+						case VirtualTerminalObjectType::InputBoolean:
+						case VirtualTerminalObjectType::InputList:
+						case VirtualTerminalObjectType::InputString:
+						case VirtualTerminalObjectType::InputNumber:
+						case VirtualTerminalObjectType::OutputArchedBarGraph:
+						case VirtualTerminalObjectType::OutputEllipse:
+						case VirtualTerminalObjectType::OutputLine:
+						case VirtualTerminalObjectType::OutputLinearBarGraph:
+						case VirtualTerminalObjectType::OutputList:
+						case VirtualTerminalObjectType::OutputNumber:
+						case VirtualTerminalObjectType::OutputPolygon:
+						case VirtualTerminalObjectType::OutputRectangle:
+						case VirtualTerminalObjectType::OutputString:
+						{
+							targetObject->set_width(newWidth);
+							targetObject->set_height(newHeight);
+							success = true;
+							LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+						}
+						break;
+
+						default:
+						{
+							LOG_WARNING("[VT Server]: Client %u change size command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
+						}
+						break;
+					}
+
+					if (success)
+					{
+						send_change_size_response(objectID, 0, message.get_source_control_function());
+						process_macro(targetObject, EventID::OnChangeSize, targetObject->get_object_type(), managedWorkingSet);
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change size command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID))), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeListItemCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+				auto listIndex = data[3];
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				auto newObject = managedWorkingSet->get_object_by_id(newObjectID);
+
+				if (nullptr != targetObject)
+				{
+					if ((NULL_OBJECT_ID == newObjectID) || (nullptr != newObject))
+					{
+						switch (targetObject->get_object_type())
+						{
+							case VirtualTerminalObjectType::InputList:
+							{
+								if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID, managedWorkingSet->get_object_tree()))
+								{
+									send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+									LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
+								else
+								{
+									send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+								}
+							}
+							break;
+
+							case VirtualTerminalObjectType::Animation:
+							case VirtualTerminalObjectType::ExternalObjectDefinition:
+							{
+								// @todo
+								send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+								LOG_WARNING("[VT Server]: Client %u change list item command: TODO object type", managedWorkingSet->get_control_function()->get_address());
+							}
+							break;
+
+							case VirtualTerminalObjectType::OutputList:
+							{
+								if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID, managedWorkingSet->get_object_tree()))
+								{
+									send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+									LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
+								else
+								{
+									send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
+								}
+							}
+							break;
+
+							default:
+							{
+								LOG_WARNING("[VT Server]: Client %u change list item command: invalid object type. Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+								send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+							}
+							break;
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change list item command: invalid new object ID of %u", managedWorkingSet->get_control_function()->get_address(), newObjectID);
+						send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidNewListItemObjectID)), listIndex, message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change list item command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeFontAttributesCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				std::uint8_t fontColour = data[3];
+				std::uint8_t fontSize = data[4];
+				std::uint8_t fontType = data[5];
+				std::uint8_t fontStyle = data[6];
+
+				if ((nullptr != targetObject) &&
+				    (VirtualTerminalObjectType::FontAttributes == targetObject->get_object_type()))
+				{
+					if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
+					{
+						auto font = std::static_pointer_cast<FontAttributes>(targetObject);
+						font->set_colour(fontColour);
+						font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
+						font->set_type(static_cast<FontAttributes::FontType>(fontType));
+						font->set_style(fontStyle);
+						LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_font_attributes_response(objectID, 0, message.get_source_control_function());
+						onRepaintEventDispatcher.call(managedWorkingSet);
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid font size %u. ObjectID: %u", managedWorkingSet->get_control_function()->get_address(), fontSize, objectID);
+						send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidSize)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeLineAttributesCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				std::uint8_t lineColour = data[3];
+				std::uint8_t lineWidth = data[4];
+				std::uint16_t lineArt = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+
+				if ((nullptr != targetObject) &&
+				    (VirtualTerminalObjectType::LineAttributes == targetObject->get_object_type()))
+				{
+					auto line = std::static_pointer_cast<LineAttributes>(targetObject);
+					line->set_background_color(lineColour);
+					line->set_width(lineWidth);
+					line->set_line_art_bit_pattern(lineArt);
+					LOG_DEBUG("[VT Server]: Client %u change line attributes command: ObjectID: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_line_attributes_response(objectID, 0, message.get_source_control_function());
+					onRepaintEventDispatcher.call(managedWorkingSet);
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change line attributes command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_line_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeSoftKeyMaskCommand:
+			{
+				auto dataOrAlarmMaskId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[2]) | (static_cast<std::uint16_t>(data[3]) << 8));
+				auto newSoftKeyMaskId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+				auto targetMask = managedWorkingSet->get_object_by_id(dataOrAlarmMaskId);
+				auto newSoftKeyMask = managedWorkingSet->get_object_by_id(newSoftKeyMaskId);
+
+				if (nullptr != targetMask)
+				{
+					if ((NULL_OBJECT_ID == newSoftKeyMaskId) || (nullptr != newSoftKeyMask))
+					{
+						switch (targetMask->get_object_type())
+						{
+							case VirtualTerminalObjectType::AlarmMask:
+							{
+								if (std::static_pointer_cast<AlarmMask>(targetMask)->change_soft_key_mask(newSoftKeyMaskId, managedWorkingSet->get_object_tree()))
+								{
+									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
+									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
+									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, managedWorkingSet);
+								}
+								else
+								{
+									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+								}
+							}
+							break;
+
+							case VirtualTerminalObjectType::DataMask:
+							{
+								if (std::static_pointer_cast<DataMask>(targetMask)->change_soft_key_mask(newSoftKeyMaskId, managedWorkingSet->get_object_tree()))
+								{
+									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
+									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
+									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, managedWorkingSet);
+								}
+								else
+								{
+									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+								}
+							}
+							break;
+
+							default:
+							{
+								LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId);
+								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+							}
+							break;
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid soft key object ID of %u", managedWorkingSet->get_control_function()->get_address(), newSoftKeyMaskId);
+						send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid data mask or alarm mask object ID of %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId);
+					send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeBackgroundColourCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				std::uint8_t backgroundColour = data[3];
+
+				if (nullptr != targetObject)
+				{
+					switch (targetObject->get_object_type())
+					{
+						case VirtualTerminalObjectType::AuxiliaryInputType2:
+						case VirtualTerminalObjectType::WorkingSet:
+						case VirtualTerminalObjectType::DataMask:
+						case VirtualTerminalObjectType::AlarmMask:
+						case VirtualTerminalObjectType::SoftKeyMask:
+						case VirtualTerminalObjectType::Key:
+						case VirtualTerminalObjectType::Button:
+						case VirtualTerminalObjectType::InputNumber:
+						case VirtualTerminalObjectType::InputBoolean:
+						case VirtualTerminalObjectType::InputString:
+						case VirtualTerminalObjectType::OutputString:
+						case VirtualTerminalObjectType::OutputNumber:
+						case VirtualTerminalObjectType::GraphicsContext:
+						case VirtualTerminalObjectType::WindowMask:
+						{
+							targetObject->set_background_color(backgroundColour);
+							LOG_DEBUG("[VT Server]: Client %u change background colour command: colour = %u", managedWorkingSet->get_control_function()->get_address(), objectID, backgroundColour);
+							send_change_background_colour_response(objectID, 0, backgroundColour, message.get_source_control_function());
+							process_macro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), managedWorkingSet);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+						}
+						break;
+
+						default:
+						{
+							LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
+						}
+						break;
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangePriorityCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				std::uint8_t newPriority = data[3];
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::AlarmMask == targetObject->get_object_type())
+					{
+						if (newPriority <= static_cast<std::uint8_t>(AlarmMaskPriority::Low))
+						{
+							send_change_priority_response(objectID, 0, newPriority, message.get_source_control_function());
+							LOG_DEBUG("[VT Server]: Client %u change priority command: New Priority %u", managedWorkingSet->get_control_function()->get_address(), newPriority);
+							process_macro(targetObject, EventID::OnChangePriority, VirtualTerminalObjectType::AlarmMask, managedWorkingSet);
+						}
+						else
+						{
+							send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidPriority)), newPriority, message.get_source_control_function());
+							LOG_WARNING("[VT Server]: Client %u change priority command: Invalid Priority %u. Must be 2 or less.", managedWorkingSet->get_control_function()->get_address(), newPriority);
+						}
+					}
+					else
+					{
+						send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
+						LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u - the object must be an alarm mask.", managedWorkingSet->get_control_function()->get_address(), objectID);
+					}
+				}
+				else
+				{
+					send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+				}
+			}
+			break;
+
+			case Function::SelectInputObjectCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					switch (targetObject->get_object_type())
+					{
+						case VirtualTerminalObjectType::Button:
+						case VirtualTerminalObjectType::Key:
+						{
+							if (get_vt_version_byte(get_version()) > 3)
+							{
+								if (0 == data[3])
+								{
+									// 0 in Version 4+ means to activate the object for input
+									managedWorkingSet->set_object_focus(objectID);
+									LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
+									onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, true);
+									send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
+									process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
+								}
+								else if (0xFF == data[3])
+								{
+									// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
+									managedWorkingSet->set_object_focus(objectID);
+									LOG_DEBUG("[VT Server]: Client %u select input object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+									onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, false);
+									send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
+									process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
+								}
+								else
+								{
+									LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
+									send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+								}
+							}
+							else
+							{
+								send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+								LOG_WARNING("[VT Server]: Client %u select input object command: buttons and keys can only be selected when the server is version 4 or higher.", managedWorkingSet->get_control_function()->get_address(), objectID);
+							}
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputNumber:
+						case VirtualTerminalObjectType::InputString:
+						case VirtualTerminalObjectType::InputList:
+						{
+							if (0 == data[3])
+							{
+								// 0 in Version 4+ means to activate the object for input
+								managedWorkingSet->set_object_focus(objectID);
+								LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
+								onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, true);
+								send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
+								process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
+							}
+							else if (0xFF == data[3])
+							{
+								// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
+								managedWorkingSet->set_object_focus(objectID);
+								LOG_DEBUG("[VT Server]: Client %u select input object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+								onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, false);
+								send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
+								process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
+							}
+							else
+							{
+								LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
+								send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+							}
+						}
+						break;
+
+						default:
+						{
+							LOG_WARNING("[VT Server]: Client %u select input object command: invalid object type", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+						}
+						break;
+					}
+				}
+				else
+				{
+					send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u select input object command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+				}
+			}
+			break;
+
+			case Function::AuxiliaryInputTypeTwoMaintenanceMessage:
+			{
+				// Todo? auto modelIdentificationCode = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				// Todo? bool isReady = (1 == data[3]);
+				managedWorkingSet->set_auxiliary_input_maintenance_timestamp_ms(SystemTiming::get_timestamp_ms());
+			}
+			break;
+
+			case Function::ExecuteMacroCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::Macro == targetObject->get_object_type())
+					{
+						if (execute_macro(objectID, managedWorkingSet))
+						{
+							LOG_DEBUG("[VT Server]: Client %u execute macro command %u: completed.", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_execute_macro_or_extended_macro_response(objectID, 0, message.get_source_control_function(), false);
+						}
+						else
+						{
+							LOG_ERROR("[VT Server]: Client %u execute macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), false);
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u execute macro command: object ID %u is not a macro!", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), false);
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u execute macro command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), false);
+				}
+			}
+			break;
+
+			case Function::ExecuteExtendedMacroCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::Macro == targetObject->get_object_type())
+					{
+						if (execute_macro(objectID, managedWorkingSet))
+						{
+							LOG_DEBUG("[VT Server]: Client %u execute extended macro command %u: completed.", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_execute_macro_or_extended_macro_response(objectID, 0, message.get_source_control_function(), true);
+						}
+						else
+						{
+							LOG_ERROR("[VT Server]: Client %u execute extended macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), true);
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u execute extended macro command: object ID %u is not a macro!", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), true);
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u execute extended macro command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), true);
+				}
+			}
+			break;
+
+			case Function::DeleteObjectPoolCommand:
+			{
+				LOG_INFO("[VT Server]: Client %u requests deletion of object pool from volatile memory.", managedWorkingSet->get_control_function()->get_address());
+				if (delete_object_pool(managedWorkingSet->get_control_function()->get_NAME()))
+				{
+					LOG_INFO("[VT Server]: Client %u object pool has been deactivated.", managedWorkingSet->get_control_function()->get_address());
+					send_delete_object_pool_response(0, message.get_source_control_function());
+				}
+				else
+				{
+					LOG_ERROR("[VT Server]: Client %u object pool failed to be deactivated.", managedWorkingSet->get_control_function()->get_address());
+					send_delete_object_pool_response((1 << static_cast<std::uint8_t>(DeleteObjectPoolErrorBit::DeletionError)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangePolygonPointCommand:
+			{
+				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				const std::uint8_t polygonPointIndex = data[3];
+				const std::uint16_t newXValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+				const std::uint16_t newYValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::OutputPolygon == targetObject->get_object_type())
+					{
+						auto polygon = std::static_pointer_cast<OutputPolygon>(targetObject);
+
+						if (polygon->change_point(polygonPointIndex, newXValue, newYValue))
+						{
+							LOG_DEBUG("[VT Server]: Client %u change polygon id %u point index %u. X = %u, Y = %u", managedWorkingSet->get_control_function()->get_address(), objectID, polygonPointIndex, newXValue, newYValue);
+							send_change_polygon_point_response(objectID, 0, message.get_source_control_function());
+						}
+						else
+						{
+							LOG_WARNING("[VT Server]: Client %u change polygon point: the point index of %u is not valid for object %u", managedWorkingSet->get_control_function()->get_address(), polygonPointIndex, objectID);
+							send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidPointIndex)), message.get_source_control_function());
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change polygon point: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change polygon point: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ControlAudioSignalCommand:
+			{
+				send_audio_signal_successful(message.get_source_control_function());
+			}
+			break;
+
+			case Function::SetAudioVolumeCommand:
+			{
+				send_audio_volume_response(message.get_source_control_function());
+			}
+			break;
+
+			case Function::IdentifyVTMessage:
+			{
+				identify_vt();
+			}
+			break;
+
+			case Function::ScreenCapture:
+			{
+				screen_capture(data[1], data[2], message.get_source_control_function());
+			}
+			break;
+
+			case Function::ButtonActivationMessage:
+			case Function::SoftKeyActivationMessage:
+			case Function::PointingEventMessage:
+			case Function::VTSelectInputObjectMessage:
+			case Function::VTESCMessage:
+			case Function::VTChangeNumericValueMessage:
+			case Function::VTChangeActiveMaskMessage:
+			case Function::VTChangeStringValueMessage:
+			case Function::VTControlAudioSignalTerminationMessage:
+			{
+				// Todo, do something with the responses
+			}
+			break;
+
+			default:
+				break;
+		}
+	}
+
 	void VirtualTerminalServer::process_rx_message(const CANMessage &message, void *parent)
 	{
 		auto parentServer = static_cast<VirtualTerminalServer *>(parent);
 		if ((nullptr != message.get_source_control_function()) &&
 		    (nullptr != parentServer) &&
 		    ((CAN_DATA_LENGTH <= message.get_data_length()) ||
-		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0)))) && // Technically this message can be 6 bytes
-		    (parentServer->check_if_source_is_managed(message)))
+		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0))))) // Technically this message can be 6 bytes
 		{
-			for (auto cf : parentServer->managedWorkingSetList)
+			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
 			{
-				if (cf->get_control_function() == message.get_source_control_function())
+				parentServer->process_stateless_messages(message);
+
+				if ((parentServer->check_if_source_is_managed(message)))
 				{
-					auto &data = message.get_data();
-
-					switch (message.get_identifier().get_parameter_group_number())
+					for (auto &cf : parentServer->managedWorkingSetList)
 					{
-						case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal):
+						if (cf->get_control_function() == message.get_source_control_function())
 						{
-							switch (static_cast<Function>(data[0]))
-							{
-								case Function::ObjectPoolTransferMessage:
-								{
-									auto tempPool = data; // Make a copy of the data (ouch)
-									tempPool.erase(tempPool.begin()); // Strip off the mux byte (double ouch, good thing this is rare)
-									LOG_INFO("[VT Server]: An ecu at address %u transferred %u bytes of object pool data to us.", message.get_identifier().get_source_address(), static_cast<std::uint32_t>(tempPool.size()));
-									cf->add_iop_raw_data(tempPool);
-								}
-								break;
-
-								case Function::GetMemoryMessage:
-								{
-									std::uint32_t requiredMemory = (data[2] | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16) | (static_cast<std::uint32_t>(data[5]) << 24));
-									bool isEnoughMemory = parentServer->get_is_enough_memory(requiredMemory);
-									LOG_INFO("[VT Server]: An ecu requested %u bytes of memory.", requiredMemory);
-
-									if (!isEnoughMemory)
-									{
-										LOG_WARNING("[VT Server]: Callback indicated there is NOT enough memory.", requiredMemory);
-									}
-									else
-									{
-										LOG_DEBUG("[VT Server]: Callback indicated there may be enough memory, but since there is overhead associated to object storage it is impossible to be sure.", requiredMemory);
-									}
-									cf->set_iop_size(requiredMemory);
-
-									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-									buffer[0] = static_cast<std::uint8_t>(Function::GetMemoryMessage);
-									buffer[1] = static_cast<std::uint8_t>(get_vt_version_byte(parentServer->get_version()));
-									buffer[2] = static_cast<std::uint8_t>(!isEnoughMemory);
-									buffer[3] = 0xFF; // Reserved
-									buffer[4] = 0xFF; // Reserved
-									buffer[5] = 0xFF; // Reserved
-									buffer[6] = 0xFF; // Reserved
-									buffer[7] = 0xFF; // Reserved
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               CAN_DATA_LENGTH,
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               parentServer->get_priority());
-								}
-								break;
-
-								case Function::GetNumberOfSoftKeysMessage:
-								{
-									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-									buffer[0] = static_cast<std::uint8_t>(Function::GetNumberOfSoftKeysMessage);
-									buffer[1] = parentServer->get_number_of_navigation_soft_keys(); // No navigation softkeys
-									buffer[2] = 0xFF; // Reserved
-									buffer[3] = 0xFF; // Reserved
-									buffer[4] = parentServer->get_soft_key_descriptor_x_pixel_width(); // Width of the softkey descriptor in pixels
-									buffer[5] = parentServer->get_soft_key_descriptor_y_pixel_height(); // Height of the softkey descriptor in pixels
-									buffer[6] = parentServer->get_number_of_possible_virtual_soft_keys_in_soft_key_mask(); // Number of possible virtual Soft Keys in a Soft Key Mask
-									buffer[7] = parentServer->get_number_of_physical_soft_keys(); // No physical softkeys
-
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               CAN_DATA_LENGTH,
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               parentServer->get_priority());
-								}
-								break;
-
-								case Function::GetTextFontDataMessage:
-								{
-									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-									buffer[0] = static_cast<std::uint8_t>(Function::GetTextFontDataMessage);
-									buffer[1] = 0xFF; // Reserved
-									buffer[2] = 0xFF; // Reserved
-									buffer[3] = 0xFF; // Reserved
-									buffer[4] = 0xFF; // Reserved
-									buffer[5] = parentServer->get_supported_small_fonts_bitfield(); // Say we support all small fonts
-									buffer[6] = parentServer->get_supported_large_fonts_bitfield(); // Say we support all large fonts
-									buffer[7] = 0x8F; // Support normal, bold, italic, proportional
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               CAN_DATA_LENGTH,
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               parentServer->get_priority());
-								}
-								break;
-
-								case Function::GetHardwareMessage:
-								{
-									std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-									buffer[0] = static_cast<std::uint8_t>(Function::GetHardwareMessage);
-									buffer[1] = parentServer->get_powerup_time();
-									buffer[2] = static_cast<std::uint8_t>(parentServer->get_graphic_mode()); // 256 Colour Mode by default
-									buffer[3] = 0x0F; // Support pointing event message
-									buffer[4] = (parentServer->get_data_mask_area_size_x_pixels() & 0xFF); // X Pixels LSB
-									buffer[5] = (parentServer->get_data_mask_area_size_x_pixels() >> 8); // X Pixels MSB
-									buffer[6] = (parentServer->get_data_mask_area_size_y_pixels() & 0xFF); // Y Pixels LSB
-									buffer[7] = (parentServer->get_data_mask_area_size_y_pixels() >> 8); // Y Pixels MSB
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               CAN_DATA_LENGTH,
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               parentServer->get_priority());
-								}
-								break;
-
-								case Function::GetSupportedWidecharsMessage:
-								{
-									std::vector<std::uint8_t> wideCharRangeArray;
-									std::uint8_t numberOfRanges = 0;
-									std::uint8_t codePlane = data.at(1);
-									std::uint16_t firstWideCharInInquiryRange = static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8);
-									std::uint16_t lastWideCharInInquiryRange = static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8);
-									auto errorCode = parentServer->get_supported_wide_chars(codePlane, firstWideCharInInquiryRange, lastWideCharInInquiryRange, numberOfRanges, wideCharRangeArray);
-
-									std::vector<std::uint8_t> buffer;
-									buffer.push_back(static_cast<std::uint8_t>(Function::GetSupportedWidecharsMessage));
-									buffer.push_back(codePlane);
-									buffer.push_back(static_cast<std::uint8_t>(firstWideCharInInquiryRange & 0xFF));
-									buffer.push_back(static_cast<std::uint8_t>((firstWideCharInInquiryRange >> 8) & 0xFF));
-									buffer.push_back(static_cast<std::uint8_t>(lastWideCharInInquiryRange & 0xFF));
-									buffer.push_back(static_cast<std::uint8_t>((lastWideCharInInquiryRange >> 8) & 0xFF));
-									buffer.push_back(static_cast<std::uint8_t>(errorCode));
-									buffer.push_back(numberOfRanges);
-
-									for (const auto &range : wideCharRangeArray)
-									{
-										buffer.push_back(range);
-									}
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               static_cast<std::uint32_t>(buffer.size()),
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               parentServer->get_priority());
-								}
-								break;
-
-								case Function::GetVersionsMessage:
-								{
-									auto versions = parentServer->get_versions(message.get_source_control_function()->get_NAME());
-
-									std::vector<std::uint8_t> buffer;
-									buffer.push_back(static_cast<std::uint32_t>(Function::GetVersionsResponse));
-
-									LOG_DEBUG("[VT Server]: Client %u requests stored versions", message.get_source_control_function()->get_address());
-
-									if (versions.size() > 255)
-									{
-										LOG_WARNING("[VT Server]: get_versions returned too many versions! This client should really delete some.");
-									}
-
-									buffer.push_back(static_cast<std::uint8_t>(versions.size() & 0xFF));
-
-									for (const auto &version : versions)
-									{
-										for (const auto &versionByte : version)
-										{
-											buffer.push_back(versionByte);
-										}
-									}
-
-									while (buffer.size() < CAN_DATA_LENGTH)
-									{
-										buffer.push_back(0xFF);
-									}
-									CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-									                                               buffer.data(),
-									                                               static_cast<std::uint32_t>(buffer.size()),
-									                                               parentServer->serverInternalControlFunction,
-									                                               message.get_source_control_function(),
-									                                               parentServer->get_priority());
-								}
-								break;
-
-								case Function::LoadVersionCommand:
-								{
-									constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
-									std::vector<std::uint8_t> versionLabel;
-
-									versionLabel.reserve(VERSION_LABEL_LENGTH);
-
-									for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
-									{
-										versionLabel.push_back(data[i + 1]);
-									}
-
-									auto loadedVersion = parentServer->load_version(versionLabel, message.get_source_control_function()->get_NAME());
-									if (!loadedVersion.empty())
-									{
-										cf->set_iop_size(loadedVersion.size());
-										cf->add_iop_raw_data(loadedVersion);
-									}
-									else
-									{
-										parentServer->send_load_version_response(0x01, cf->get_control_function());
-										LOG_ERROR("[VT Server]: Failed to load requested object pool version");
-									}
-
-									if (cf->get_any_object_pools())
-									{
-										cf->start_parsing_thread();
-										cf->set_was_object_pool_loaded_from_non_volatile_memory(true, {});
-										LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
-									}
-								}
-								break;
-
-								case Function::StoreVersionCommand:
-								{
-									if (cf->get_any_object_pools())
-									{
-										std::ostringstream nameString;
-										nameString << std::hex << std::setfill('0') << std::setw(16) << cf->get_control_function()->get_NAME().get_full_name();
-										std::vector<std::uint8_t> versionLabel;
-										bool allPoolsSaved = true;
-										versionLabel.reserve(VERSION_LABEL_LENGTH);
-
-										for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
-										{
-											versionLabel.push_back(static_cast<char>(data[i + 1]));
-										}
-
-										for (std::size_t i = 0; i < cf->get_number_iop_files(); i++)
-										{
-											bool didSave = parentServer->save_version(cf->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
-
-											if (didSave)
-											{
-												LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
-											}
-											else
-											{
-												LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
-												allPoolsSaved = false;
-												break;
-											}
-										}
-
-										std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-										buffer[0] = static_cast<std::uint8_t>(Function::StoreVersionCommand);
-										buffer[1] = 0xFF; // Reserved
-										buffer[2] = 0xFF; // Reserved
-										buffer[3] = 0xFF; // Reserved
-										buffer[4] = 0xFF; // Reserved
-										if (allPoolsSaved)
-										{
-											buffer[5] = 0; // No error
-										}
-										else
-										{
-											buffer[5] = 0x04; // Any other error
-										}
-										buffer[6] = 0xFF; // Reserved
-										buffer[7] = 0xFF; // Reserved
-										CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-										                                               buffer.data(),
-										                                               CAN_DATA_LENGTH,
-										                                               parentServer->serverInternalControlFunction,
-										                                               message.get_source_control_function(),
-										                                               parentServer->get_priority());
-									}
-									else
-									{
-										// Whomever this is is being bad, send them a NACK
-										parentServer->send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), parentServer->serverInternalControlFunction, cf->get_control_function());
-									}
-								}
-								break;
-
-								case Function::DeleteVersionCommand:
-								{
-									std::vector<std::uint8_t> versionLabel;
-									std::ostringstream nameString;
-									nameString << std::hex << std::setfill('0') << std::setw(16) << cf->get_control_function()->get_NAME().get_full_name();
-									versionLabel.reserve(VERSION_LABEL_LENGTH);
-
-									for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
-									{
-										versionLabel.push_back(data[i + 1]);
-									}
-
-									bool wasDeleted = parentServer->delete_version(versionLabel, cf->get_control_function()->get_NAME());
-
-									if (wasDeleted)
-									{
-										LOG_INFO("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str().c_str());
-										parentServer->send_delete_version_response(0, cf->get_control_function());
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Delete version failed for client NAME %s", nameString.str().c_str());
-										parentServer->send_delete_version_response((1 << static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), cf->get_control_function());
-									}
-								}
-								break;
-
-								case Function::EndOfObjectPoolMessage:
-								{
-									if (cf->get_any_object_pools())
-									{
-										cf->start_parsing_thread();
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: End of object pool message ignored - no object pools are loaded for the source control function");
-									}
-								}
-								break;
-
-								case Function::WorkingSetMaintenanceMessage:
-								{
-									if (0 != cf->get_working_set_maintenance_message_timestamp_ms())
-									{
-										cf->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-									}
-								}
-								break;
-
-								case Function::ChangeNumericValueCommand:
-								{
-									std::uint32_t value = (static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
-									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto lTargetObject = cf->get_object_by_id(objectId);
-									bool logSuccess = true;
-
-									if (nullptr != lTargetObject)
-									{
-										switch (lTargetObject->get_object_type())
-										{
-											case VirtualTerminalObjectType::InputBoolean:
-											{
-												std::static_pointer_cast<InputBoolean>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::InputNumber:
-											{
-												std::static_pointer_cast<InputNumber>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::InputList:
-											{
-												std::static_pointer_cast<InputList>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::OutputNumber:
-											{
-												std::static_pointer_cast<OutputNumber>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::OutputList:
-											{
-												std::static_pointer_cast<OutputList>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::OutputMeter:
-											{
-												std::static_pointer_cast<OutputMeter>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::OutputLinearBarGraph:
-											{
-												std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::OutputArchedBarGraph:
-											{
-												std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::NumberVariable:
-											{
-												std::static_pointer_cast<NumberVariable>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::ObjectPointer:
-											{
-												std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(value);
-												parentServer->onRepaintEventDispatcher.call(cf);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-											}
-											break;
-
-											case VirtualTerminalObjectType::ExternalObjectPointer:
-											{
-												std::uint16_t externalReferenceNAMEObjectIdD = (static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
-												std::uint16_t referencedObjectID = (static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
-												std::static_pointer_cast<ExternalObjectPointer>(lTargetObject)->set_external_reference_name_id(externalReferenceNAMEObjectIdD);
-												std::static_pointer_cast<ExternalObjectPointer>(lTargetObject)->set_external_object_id(referencedObjectID);
-												parentServer->send_change_numeric_value_response(objectId, 0, value, cf->get_control_function());
-												// Todo: event dispatcher
-											}
-											break;
-
-											case VirtualTerminalObjectType::Animation:
-											{
-												//Todo std::static_pointer_cast<Animation>(lTargetObject)->set_value(value);
-												// parentServer->onChangeNumericValueEventDispatcher.call(objectId, value);
-												parentServer->send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::AnyOtherError)), value, cf->get_control_function());
-												LOG_WARNING("[VT Server]: Client %u change numeric value for animation not implemented yet", cf->get_control_function()->get_address());
-												logSuccess = false;
-											}
-											break;
-
-											default:
-											{
-												parentServer->send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, cf->get_control_function());
-												LOG_WARNING("[VT Server]: Client %u change numeric value invalid object type. ID: %u", cf->get_control_function()->get_address(), objectId);
-												logSuccess = false;
-											}
-											break;
-										}
-
-										if (logSuccess)
-										{
-											LOG_DEBUG("[VT Server]: Client %u change numeric value command: change object ID %u to be %u", cf->get_control_function()->get_address(), objectId, value);
-											parentServer->process_macro(lTargetObject, isobus::EventID::OnChangeValue, lTargetObject->get_object_type(), cf);
-										}
-									}
-									else
-									{
-										parentServer->send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, cf->get_control_function());
-										LOG_WARNING("[VT Server]: Client %u change numeric value invalid object ID of %u", cf->get_control_function()->get_address(), objectId);
-									}
-								}
-								break;
-
-								case Function::HideShowObjectCommand:
-								{
-									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectId);
-
-									if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
-									{
-										std::static_pointer_cast<Container>(targetObject)->set_hidden(0 == data[3]);
-										parentServer->send_hide_show_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-										parentServer->onRepaintEventDispatcher.call(cf);
-
-										if (0 == data[3])
-										{
-											LOG_DEBUG("[VT Server]: Client %u hide object command %u", cf->get_control_function()->get_address(), objectId);
-											parentServer->process_macro(targetObject, EventID::OnHide, targetObject->get_object_type(), cf);
-										}
-										else
-										{
-											LOG_DEBUG("[VT Server]: Client %u show object command %u", cf->get_control_function()->get_address(), objectId);
-											parentServer->process_macro(targetObject, EventID::OnShow, targetObject->get_object_type(), cf);
-										}
-									}
-									else
-									{
-										parentServer->send_hide_show_object_response(objectId, (1 << static_cast<std::uint8_t>(HideShowObjectErrorBit::InvalidObjectID)), (0 != data[3]), cf->get_control_function());
-										LOG_WARNING("[VT Server]: Client %u hide/show object command failed. It can only affect containers! ID: %u", cf->get_control_function()->get_address(), objectId);
-									}
-								}
-								break;
-
-								case Function::EnableDisableObjectCommand:
-								{
-									auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto lTargetObject = cf->get_object_by_id(objectId);
-
-									if (nullptr != lTargetObject)
-									{
-										if (data[3] <= 1)
-										{
-											switch (lTargetObject->get_object_type())
-											{
-												case VirtualTerminalObjectType::InputBoolean:
-												{
-													std::static_pointer_cast<InputBoolean>(lTargetObject)->set_enabled(0 != data[3]);
-													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-												}
-												break;
-
-												case VirtualTerminalObjectType::InputList:
-												{
-													std::static_pointer_cast<InputList>(lTargetObject)->set_option(InputList::Options::Enabled, (0 != data[3]));
-													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-												}
-												break;
-
-												case VirtualTerminalObjectType::InputString:
-												{
-													std::static_pointer_cast<InputString>(lTargetObject)->set_enabled((0 != data[3]));
-													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-												}
-												break;
-
-												case VirtualTerminalObjectType::InputNumber:
-												{
-													std::static_pointer_cast<InputNumber>(lTargetObject)->set_option2(InputNumber::Options2::Enabled, (0 != data[3]));
-													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-												}
-												break;
-
-												case VirtualTerminalObjectType::Button:
-												{
-													std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
-													parentServer->send_enable_disable_object_response(objectId, 0, (0 != data[3]), cf->get_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-												}
-												break;
-
-												default:
-												{
-													parentServer->send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), cf->get_control_function());
-												}
-												break;
-											}
-										}
-										else
-										{
-											parentServer->send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidEnableDisableCommandValue)), (0 != data[3]), cf->get_control_function());
-										}
-									}
-									else
-									{
-										parentServer->send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), cf->get_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeChildLocationCommand:
-								{
-									auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
-									auto parentObject = cf->get_object_by_id(parentObjectId);
-
-									if (nullptr != parentObject)
-									{
-										auto lTargetObject = cf->get_object_by_id(objectID);
-
-										if (nullptr != lTargetObject)
-										{
-											auto xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
-											auto yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
-											bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
-
-											parentServer->onRepaintEventDispatcher.call(cf);
-
-											if (anyObjectMatched)
-											{
-												parentServer->send_change_child_location_response(parentObjectId, objectID, 0, cf->get_control_function());
-												LOG_DEBUG("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", cf->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
-												parentServer->process_macro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), cf);
-											}
-											else
-											{
-												parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
-												LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u isn't applicable", cf->get_control_function()->get_address(), objectID);
-											}
-										}
-										else
-										{
-											parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), cf->get_control_function());
-											LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u doesn't exist", cf->get_control_function()->get_address(), objectID);
-										}
-									}
-									else
-									{
-										parentServer->send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), cf->get_control_function());
-										LOG_WARNING("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", cf->get_control_function()->get_address(), parentObjectId);
-									}
-								}
-								break;
-
-								case Function::ChangeActiveMaskCommand:
-								{
-									auto workingSetObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto newActiveMaskObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
-									auto workingSetObject = cf->get_object_by_id(workingSetObjectId);
-
-									if (nullptr != workingSetObject)
-									{
-										if (nullptr != cf->get_object_by_id(newActiveMaskObjectId))
-										{
-											std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
-											parentServer->send_change_active_mask_response(newActiveMaskObjectId, 0, cf->get_control_function());
-											parentServer->onChangeActiveMaskEventDispatcher.call(cf, workingSetObjectId, newActiveMaskObjectId);
-											LOG_DEBUG("[VT Server]: Client %u changed active mask to object %u for working set object %u", cf->get_control_function()->get_address(), newActiveMaskObjectId, workingSetObjectId);
-										}
-										else
-										{
-											parentServer->send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), cf->get_control_function());
-											LOG_WARNING("[VT Server]: Client %u change active mask failed because the new mask object ID %u was not valid.", cf->get_control_function()->get_address(), newActiveMaskObjectId);
-										}
-									}
-									else
-									{
-										parentServer->send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), cf->get_control_function());
-										LOG_WARNING("[VT Server]: Client %u change active mask failed because the working set object ID %u was not valid.", cf->get_control_function()->get_address(), workingSetObjectId);
-									}
-								}
-								break;
-
-								case Function::GetSupportedObjectsMessage:
-								{
-									parentServer->send_supported_objects(message.get_source_control_function());
-									LOG_DEBUG("[VT Server]: Sent supported object list to client %u", cf->get_control_function()->get_address());
-								}
-								break;
-
-								case Function::ChangeStringValueCommand:
-								{
-									auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
-									auto stringObject = cf->get_object_by_id(objectIdToChange);
-
-									if (message.get_data_length() >= static_cast<std::uint32_t>(numberOfBytesInString + 5))
-									{
-										if (nullptr != stringObject)
-										{
-											std::string newStringValue;
-
-											for (std::uint32_t i = 0; i < numberOfBytesInString; i++)
-											{
-												newStringValue.push_back(static_cast<char>(data.at(5 + i)));
-											}
-
-											switch (stringObject->get_object_type())
-											{
-												case VirtualTerminalObjectType::StringVariable:
-												{
-													auto stringVariable = std::static_pointer_cast<StringVariable>(stringObject);
-
-													// The transferred string is allowed to be smaller than the length of the value attribute of the target object
-													// and in this case the VT shall pad the value attribute with space characters.
-													while (newStringValue.length() < stringVariable->get_value().length())
-													{
-														newStringValue.push_back(' ');
-													}
-													stringVariable->set_value(newStringValue);
-													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-													LOG_DEBUG("[VT Server]: Client %u change string value command for string variable object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
-												}
-												break;
-
-												case VirtualTerminalObjectType::OutputString:
-												{
-													auto outputString = std::static_pointer_cast<OutputString>(stringObject);
-
-													// The transferred string is allowed to be smaller than the length of the value attribute of the target object
-													// and in this case the VT shall pad the value attribute with space characters.
-													while (newStringValue.length() < outputString->get_value().length())
-													{
-														newStringValue.push_back(' ');
-													}
-													outputString->set_value(newStringValue);
-													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-													LOG_DEBUG("[VT Server]: Client %u change string value command for output string object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
-												}
-												break;
-
-												case VirtualTerminalObjectType::InputString:
-												{
-													auto inputString = std::static_pointer_cast<InputString>(stringObject);
-
-													// The transferred string is allowed to be smaller than the length of the value attribute of the target object
-													// and in this case the VT shall pad the value attribute with space characters.
-													while (newStringValue.length() < inputString->get_value().length())
-													{
-														newStringValue.push_back(' ');
-													}
-													inputString->set_value(newStringValue);
-													parentServer->send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
-													parentServer->onRepaintEventDispatcher.call(cf);
-													LOG_DEBUG("[VT Server]: Client %u change string value command for input string object %u. Value: " + newStringValue, cf->get_control_function()->get_address(), objectIdToChange);
-												}
-												break;
-
-												default:
-												{
-													parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
-													LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because the object ID was for an object that isn't a string.", cf->get_control_function()->get_address(), objectIdToChange);
-												}
-												break;
-											}
-										}
-										else
-										{
-											parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
-											LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because the object ID was invalid.", cf->get_control_function()->get_address(), objectIdToChange);
-										}
-									}
-									else
-									{
-										parentServer->send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::AnyOtherError)), message.get_source_control_function());
-										LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because data length is not valid when compared to the amount sent.", cf->get_control_function()->get_address(), objectIdToChange);
-									}
-								}
-								break;
-
-								case Function::ChangeFillAttributesCommand:
-								{
-									auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
-									auto object = cf->get_object_by_id(objectIdToChange);
-									auto fillPatternObject = cf->get_object_by_id(fillPatternID);
-
-									if ((nullptr != object) && (VirtualTerminalObjectType::FillAttributes == object->get_object_type()))
-									{
-										auto fillObject = std::static_pointer_cast<FillAttributes>(object);
-
-										if (((nullptr != fillPatternObject) && (VirtualTerminalObjectType::PictureGraphic == fillPatternObject->get_object_type())) || (NULL_OBJECT_ID == fillPatternID))
-										{
-											if (data[3] <= static_cast<std::uint8_t>(FillAttributes::FillType::FillWithPatternGivenByFillPatternAttribute))
-											{
-												fillObject->set_fill_pattern(fillPatternID);
-												fillObject->set_type(static_cast<FillAttributes::FillType>(data[3]));
-												fillObject->set_background_color(data[4]);
-												parentServer->send_change_fill_attributes_response(objectIdToChange, 0, message.get_source_control_function());
-												parentServer->onRepaintEventDispatcher.call(cf);
-												LOG_DEBUG("[VT Server]: Client %u change fill attributes command for object %u", cf->get_control_function()->get_address(), objectIdToChange);
-											}
-											else
-											{
-												parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidType)), message.get_source_control_function());
-												LOG_WARNING("[VT Server]: Client %u change fill attributes of object %u invalid fill object type. Must be a picture graphic.", cf->get_control_function()->get_address(), objectIdToChange);
-											}
-										}
-										else
-										{
-											parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidPatternObjectID)), message.get_source_control_function());
-											LOG_WARNING("[VT Server]: Client %u change fill attributes invalid pattern object ID of %u for object %u", cf->get_control_function()->get_address(), fillPatternID, objectIdToChange);
-										}
-									}
-									else
-									{
-										parentServer->send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
-										LOG_WARNING("[VT Server]: Client %u change fill attributes invalid object ID of %u", cf->get_control_function()->get_address(), objectIdToChange);
-									}
-								}
-								break;
-
-								case Function::ChangeChildPositionCommand:
-								{
-									auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
-									if (message.get_data_length() > CAN_DATA_LENGTH) // Must be at least 9 bytes
-									{
-										std::uint16_t newXPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
-										std::uint16_t newYPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[7]) | (static_cast<std::uint16_t>(data[8]) << 8));
-										auto parentObject = cf->get_object_by_id(parentObjectId);
-										auto targetObject = cf->get_object_by_id(objectID);
-
-										if (nullptr != parentObject)
-										{
-											if (nullptr != targetObject)
-											{
-												switch (parentObject->get_object_type())
-												{
-													case VirtualTerminalObjectType::Button:
-													case VirtualTerminalObjectType::Container:
-													case VirtualTerminalObjectType::AlarmMask:
-													case VirtualTerminalObjectType::DataMask:
-													case VirtualTerminalObjectType::Key:
-													case VirtualTerminalObjectType::WorkingSet:
-													case VirtualTerminalObjectType::AuxiliaryInputType2:
-													case VirtualTerminalObjectType::WindowMask:
-													{
-														bool wasFound = false;
-
-														// If a parent object includes the child object multiple times, then each instance will be moved
-														for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
-														{
-															if (objectID == parentObject->get_child_id(i))
-															{
-																wasFound = true;
-																parentObject->set_child_x(i, newXPosition);
-																parentObject->set_child_y(i, newYPosition);
-																parentServer->onRepaintEventDispatcher.call(cf);
-															}
-														}
-
-														if (wasFound)
-														{
-															LOG_DEBUG("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-															parentServer->send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
-															parentServer->process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), cf);
-														}
-														else
-														{
-															LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-															parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
-														}
-													}
-													break;
-
-													default:
-													{
-														LOG_WARNING("[VT Server]: Client %u change child position error. Parent object type cannot be targeted by this command: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-														parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
-													}
-													break;
-												}
-											}
-											else
-											{
-												LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-												parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
-											}
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u change child position error. Parent object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", cf->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-											parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change child position error. DLC must be 9 bytes for the message to be valid.");
-										parentServer->send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeAttributeCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-									std::uint8_t attributeID = data[3];
-									std::uint32_t attributeData = static_cast<std::uint32_t>(static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
-									VTObject::AttributeError errorCode = VTObject::AttributeError::AnyOtherError;
-
-									if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
-									{
-										if (targetObject->set_attribute(attributeID, attributeData, cf->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
-										{
-											parentServer->send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
-											LOG_DEBUG("[VT Server]: Client %u changed object %u attribute %u to %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData);
-											parentServer->onRepaintEventDispatcher.call(cf);
-											parentServer->process_macro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), cf);
-										}
-										else
-										{
-											parentServer->send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(errorCode)), data.at(3), message.get_source_control_function());
-											LOG_WARNING("[VT Server]: Client %u change object %u attribute %u to %ul error %u", cf->get_control_function()->get_address(), objectID, attributeID, attributeData, static_cast<std::uint8_t>(errorCode));
-										}
-									}
-									else
-									{
-										parentServer->send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(VTObject::AttributeError::InvalidObjectID)), data.at(3), message.get_source_control_function());
-										LOG_WARNING("[VT Server]: Client %u change attribute %u invalid object ID of %u", cf->get_control_function()->get_address(), attributeID, objectID);
-									}
-								}
-								break;
-
-								case Function::ChangeSizeCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto newWidth = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
-									auto newHeight = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-
-									if (nullptr != targetObject)
-									{
-										bool success = false;
-
-										switch (targetObject->get_object_type())
-										{
-											case VirtualTerminalObjectType::OutputMeter:
-											{
-												if (newWidth == newHeight) // Output meter must be square!
-												{
-													targetObject->set_width(newWidth);
-													targetObject->set_height(newHeight);
-													success = true;
-													LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", cf->get_control_function()->get_address(), objectID, newWidth, newHeight);
-													parentServer->onRepaintEventDispatcher.call(cf);
-												}
-												else
-												{
-													LOG_WARNING("[VT Server]: Client %u change size command: invalid new size. Meter must be square! Object: %u", cf->get_control_function()->get_address(), objectID);
-													parentServer->send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
-												}
-											}
-											break;
-
-											case VirtualTerminalObjectType::Animation:
-											case VirtualTerminalObjectType::Button:
-											case VirtualTerminalObjectType::Container:
-											case VirtualTerminalObjectType::InputBoolean:
-											case VirtualTerminalObjectType::InputList:
-											case VirtualTerminalObjectType::InputString:
-											case VirtualTerminalObjectType::InputNumber:
-											case VirtualTerminalObjectType::OutputArchedBarGraph:
-											case VirtualTerminalObjectType::OutputEllipse:
-											case VirtualTerminalObjectType::OutputLine:
-											case VirtualTerminalObjectType::OutputLinearBarGraph:
-											case VirtualTerminalObjectType::OutputList:
-											case VirtualTerminalObjectType::OutputNumber:
-											case VirtualTerminalObjectType::OutputPolygon:
-											case VirtualTerminalObjectType::OutputRectangle:
-											case VirtualTerminalObjectType::OutputString:
-											{
-												targetObject->set_width(newWidth);
-												targetObject->set_height(newHeight);
-												success = true;
-												LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", cf->get_control_function()->get_address(), objectID, newWidth, newHeight);
-												parentServer->onRepaintEventDispatcher.call(cf);
-											}
-											break;
-
-											default:
-											{
-												LOG_WARNING("[VT Server]: Client %u change size command: invalid object type for object %u", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
-											}
-											break;
-										}
-
-										if (success)
-										{
-											parentServer->send_change_size_response(objectID, 0, message.get_source_control_function());
-											parentServer->process_macro(targetObject, EventID::OnChangeSize, targetObject->get_object_type(), cf);
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change size command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID))), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeListItemCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
-									auto listIndex = data[3];
-									auto targetObject = cf->get_object_by_id(objectID);
-									auto newObject = cf->get_object_by_id(newObjectID);
-
-									if (nullptr != targetObject)
-									{
-										if ((NULL_OBJECT_ID == newObjectID) || (nullptr != newObject))
-										{
-											switch (targetObject->get_object_type())
-											{
-												case VirtualTerminalObjectType::InputList:
-												{
-													if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID, cf->get_object_tree()))
-													{
-														parentServer->send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
-														LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
-														parentServer->onRepaintEventDispatcher.call(cf);
-													}
-													else
-													{
-														parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
-														LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
-													}
-												}
-												break;
-
-												case VirtualTerminalObjectType::Animation:
-												case VirtualTerminalObjectType::ExternalObjectDefinition:
-												{
-													// @todo
-													parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
-													LOG_WARNING("[VT Server]: Client %u change list item command: TODO object type", cf->get_control_function()->get_address());
-												}
-												break;
-
-												case VirtualTerminalObjectType::OutputList:
-												{
-													if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID, cf->get_object_tree()))
-													{
-														parentServer->send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
-														LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
-														parentServer->onRepaintEventDispatcher.call(cf);
-													}
-													else
-													{
-														parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
-														LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", cf->get_control_function()->get_address(), objectID, newObjectID, listIndex);
-													}
-												}
-												break;
-
-												default:
-												{
-													LOG_WARNING("[VT Server]: Client %u change list item command: invalid object type. Object: %u", cf->get_control_function()->get_address(), objectID);
-													parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
-												}
-												break;
-											}
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u change list item command: invalid new object ID of %u", cf->get_control_function()->get_address(), newObjectID);
-											parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidNewListItemObjectID)), listIndex, message.get_source_control_function());
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change list item command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeFontAttributesCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-									std::uint8_t fontColour = data[3];
-									std::uint8_t fontSize = data[4];
-									std::uint8_t fontType = data[5];
-									std::uint8_t fontStyle = data[6];
-
-									if ((nullptr != targetObject) &&
-									    (VirtualTerminalObjectType::FontAttributes == targetObject->get_object_type()))
-									{
-										if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
-										{
-											auto font = std::static_pointer_cast<FontAttributes>(targetObject);
-											font->set_colour(fontColour);
-											font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
-											font->set_type(static_cast<FontAttributes::FontType>(fontType));
-											font->set_style(fontStyle);
-											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), objectID);
-											parentServer->send_change_font_attributes_response(objectID, 0, message.get_source_control_function());
-											parentServer->onRepaintEventDispatcher.call(cf);
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid font size %u. ObjectID: %u", cf->get_control_function()->get_address(), fontSize, objectID);
-											parentServer->send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidSize)), message.get_source_control_function());
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeLineAttributesCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-									std::uint8_t lineColour = data[3];
-									std::uint8_t lineWidth = data[4];
-									std::uint16_t lineArt = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
-
-									if ((nullptr != targetObject) &&
-									    (VirtualTerminalObjectType::LineAttributes == targetObject->get_object_type()))
-									{
-										auto line = std::static_pointer_cast<LineAttributes>(targetObject);
-										line->set_background_color(lineColour);
-										line->set_width(lineWidth);
-										line->set_line_art_bit_pattern(lineArt);
-										LOG_DEBUG("[VT Server]: Client %u change line attributes command: ObjectID: %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_line_attributes_response(objectID, 0, message.get_source_control_function());
-										parentServer->onRepaintEventDispatcher.call(cf);
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change line attributes command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_line_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeSoftKeyMaskCommand:
-								{
-									auto dataOrAlarmMaskId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[2]) | (static_cast<std::uint16_t>(data[3]) << 8));
-									auto newSoftKeyMaskId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
-									auto targetMask = cf->get_object_by_id(dataOrAlarmMaskId);
-									auto newSoftKeyMask = cf->get_object_by_id(newSoftKeyMaskId);
-
-									if (nullptr != targetMask)
-									{
-										if ((NULL_OBJECT_ID == newSoftKeyMaskId) || (nullptr != newSoftKeyMask))
-										{
-											switch (targetMask->get_object_type())
-											{
-												case VirtualTerminalObjectType::AlarmMask:
-												{
-													if (std::static_pointer_cast<AlarmMask>(targetMask)->change_soft_key_mask(newSoftKeyMaskId, cf->get_object_tree()))
-													{
-														LOG_DEBUG("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", cf->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-														parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
-														parentServer->onChangeActiveSoftKeyMaskEventDispatcher.call(cf, dataOrAlarmMaskId, newSoftKeyMaskId);
-														parentServer->process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, cf);
-													}
-													else
-													{
-														LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for alarm mask object %u to %u", cf->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-														parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
-													}
-												}
-												break;
-
-												case VirtualTerminalObjectType::DataMask:
-												{
-													if (std::static_pointer_cast<DataMask>(targetMask)->change_soft_key_mask(newSoftKeyMaskId, cf->get_object_tree()))
-													{
-														LOG_DEBUG("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", cf->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-														parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
-														parentServer->onChangeActiveSoftKeyMaskEventDispatcher.call(cf, dataOrAlarmMaskId, newSoftKeyMaskId);
-														parentServer->process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, cf);
-													}
-													else
-													{
-														LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for data mask object %u to %u", cf->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-														parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
-													}
-												}
-												break;
-
-												default:
-												{
-													LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid object type for object %u", cf->get_control_function()->get_address(), dataOrAlarmMaskId);
-													parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
-												}
-												break;
-											}
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid soft key object ID of %u", cf->get_control_function()->get_address(), newSoftKeyMaskId);
-											parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid data mask or alarm mask object ID of %u", cf->get_control_function()->get_address(), dataOrAlarmMaskId);
-										parentServer->send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangeBackgroundColourCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-									std::uint8_t backgroundColour = data[3];
-
-									if (nullptr != targetObject)
-									{
-										switch (targetObject->get_object_type())
-										{
-											case VirtualTerminalObjectType::AuxiliaryInputType2:
-											case VirtualTerminalObjectType::WorkingSet:
-											case VirtualTerminalObjectType::DataMask:
-											case VirtualTerminalObjectType::AlarmMask:
-											case VirtualTerminalObjectType::SoftKeyMask:
-											case VirtualTerminalObjectType::Key:
-											case VirtualTerminalObjectType::Button:
-											case VirtualTerminalObjectType::InputNumber:
-											case VirtualTerminalObjectType::InputBoolean:
-											case VirtualTerminalObjectType::InputString:
-											case VirtualTerminalObjectType::OutputString:
-											case VirtualTerminalObjectType::OutputNumber:
-											case VirtualTerminalObjectType::GraphicsContext:
-											case VirtualTerminalObjectType::WindowMask:
-											{
-												targetObject->set_background_color(backgroundColour);
-												LOG_DEBUG("[VT Server]: Client %u change background colour command: colour = %u", cf->get_control_function()->get_address(), objectID, backgroundColour);
-												parentServer->send_change_background_colour_response(objectID, 0, backgroundColour, message.get_source_control_function());
-												parentServer->process_macro(targetObject, EventID::OnChangeBackgroundColour, targetObject->get_object_type(), cf);
-												parentServer->onRepaintEventDispatcher.call(cf);
-											}
-											break;
-
-											default:
-											{
-												LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object type for object %u", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
-											}
-											break;
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangePriorityCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-									std::uint8_t newPriority = data[3];
-
-									if (nullptr != targetObject)
-									{
-										if (VirtualTerminalObjectType::AlarmMask == targetObject->get_object_type())
-										{
-											if (newPriority <= static_cast<std::uint8_t>(AlarmMaskPriority::Low))
-											{
-												parentServer->send_change_priority_response(objectID, 0, newPriority, message.get_source_control_function());
-												LOG_DEBUG("[VT Server]: Client %u change priority command: New Priority %u", cf->get_control_function()->get_address(), newPriority);
-												parentServer->process_macro(targetObject, EventID::OnChangePriority, VirtualTerminalObjectType::AlarmMask, cf);
-											}
-											else
-											{
-												parentServer->send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidPriority)), newPriority, message.get_source_control_function());
-												LOG_WARNING("[VT Server]: Client %u change priority command: Invalid Priority %u. Must be 2 or less.", cf->get_control_function()->get_address(), newPriority);
-											}
-										}
-										else
-										{
-											parentServer->send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
-											LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u - the object must be an alarm mask.", cf->get_control_function()->get_address(), objectID);
-										}
-									}
-									else
-									{
-										parentServer->send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
-										LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-									}
-								}
-								break;
-
-								case Function::SelectInputObjectCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-
-									if (nullptr != targetObject)
-									{
-										switch (targetObject->get_object_type())
-										{
-											case VirtualTerminalObjectType::Button:
-											case VirtualTerminalObjectType::Key:
-											{
-												if (get_vt_version_byte(parentServer->get_version()) > 3)
-												{
-													if (0 == data[3])
-													{
-														// 0 in Version 4+ means to activate the object for input
-														cf->set_object_focus(objectID);
-														LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", cf->get_control_function()->get_address(), objectID);
-														parentServer->onFocusObjectEventDispatcher.call(cf, objectID, true);
-														parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-														parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
-													}
-													else if (0xFF == data[3])
-													{
-														// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
-														cf->set_object_focus(objectID);
-														LOG_DEBUG("[VT Server]: Client %u select input object %u", cf->get_control_function()->get_address(), objectID);
-														parentServer->onFocusObjectEventDispatcher.call(cf, objectID, false);
-														parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-														parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
-													}
-													else
-													{
-														LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", cf->get_control_function()->get_address(), objectID);
-														parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-													}
-												}
-												else
-												{
-													parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-													LOG_WARNING("[VT Server]: Client %u select input object command: buttons and keys can only be selected when the server is version 4 or higher.", cf->get_control_function()->get_address(), objectID);
-												}
-											}
-											break;
-
-											case VirtualTerminalObjectType::InputNumber:
-											case VirtualTerminalObjectType::InputString:
-											case VirtualTerminalObjectType::InputList:
-											{
-												if (0 == data[3])
-												{
-													// 0 in Version 4+ means to activate the object for input
-													cf->set_object_focus(objectID);
-													LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", cf->get_control_function()->get_address(), objectID);
-													parentServer->onFocusObjectEventDispatcher.call(cf, objectID, true);
-													parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-													parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
-												}
-												else if (0xFF == data[3])
-												{
-													// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
-													cf->set_object_focus(objectID);
-													LOG_DEBUG("[VT Server]: Client %u select input object %u", cf->get_control_function()->get_address(), objectID);
-													parentServer->onFocusObjectEventDispatcher.call(cf, objectID, false);
-													parentServer->send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-													parentServer->process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), cf);
-												}
-												else
-												{
-													LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", cf->get_control_function()->get_address(), objectID);
-													parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-												}
-											}
-											break;
-
-											default:
-											{
-												LOG_WARNING("[VT Server]: Client %u select input object command: invalid object type", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-											}
-											break;
-										}
-									}
-									else
-									{
-										parentServer->send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-										LOG_WARNING("[VT Server]: Client %u select input object command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-									}
-								}
-								break;
-
-								case Function::AuxiliaryInputTypeTwoMaintenanceMessage:
-								{
-									// Todo? auto modelIdentificationCode = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									// Todo? bool isReady = (1 == data[3]);
-									cf->set_auxiliary_input_maintenance_timestamp_ms(SystemTiming::get_timestamp_ms());
-								}
-								break;
-
-								case Function::ExecuteMacroCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]));
-									auto targetObject = cf->get_object_by_id(objectID);
-
-									if (nullptr != targetObject)
-									{
-										if (VirtualTerminalObjectType::Macro == targetObject->get_object_type())
-										{
-											if (parentServer->execute_macro(objectID, cf))
-											{
-												LOG_DEBUG("[VT Server]: Client %u execute macro command %u: completed.", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_execute_macro_or_extended_macro_response(objectID, 0, message.get_source_control_function(), false);
-											}
-											else
-											{
-												LOG_ERROR("[VT Server]: Client %u execute macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), false);
-											}
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u execute macro command: object ID %u is not a macro!", cf->get_control_function()->get_address(), objectID);
-											parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), false);
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u execute macro command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), false);
-									}
-								}
-								break;
-
-								case Function::ExecuteExtendedMacroCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-
-									if (nullptr != targetObject)
-									{
-										if (VirtualTerminalObjectType::Macro == targetObject->get_object_type())
-										{
-											if (parentServer->execute_macro(objectID, cf))
-											{
-												LOG_DEBUG("[VT Server]: Client %u execute extended macro command %u: completed.", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_execute_macro_or_extended_macro_response(objectID, 0, message.get_source_control_function(), true);
-											}
-											else
-											{
-												LOG_ERROR("[VT Server]: Client %u execute extended macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", cf->get_control_function()->get_address(), objectID);
-												parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), true);
-											}
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u execute extended macro command: object ID %u is not a macro!", cf->get_control_function()->get_address(), objectID);
-											parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), true);
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u execute extended macro command: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), true);
-									}
-								}
-								break;
-
-								case Function::DeleteObjectPoolCommand:
-								{
-									LOG_INFO("[VT Server]: Client %u requests deletion of object pool from volatile memory.", cf->get_control_function()->get_address());
-									if (parentServer->delete_object_pool(cf->get_control_function()->get_NAME()))
-									{
-										LOG_INFO("[VT Server]: Client %u object pool has been deactivated.", cf->get_control_function()->get_address());
-										parentServer->send_delete_object_pool_response(0, message.get_source_control_function());
-									}
-									else
-									{
-										LOG_ERROR("[VT Server]: Client %u object pool failed to be deactivated.", cf->get_control_function()->get_address());
-										parentServer->send_delete_object_pool_response((1 << static_cast<std::uint8_t>(DeleteObjectPoolErrorBit::DeletionError)), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ChangePolygonPointCommand:
-								{
-									auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-									const std::uint8_t polygonPointIndex = data[3];
-									const std::uint16_t newXValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
-									const std::uint16_t newYValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
-									auto targetObject = cf->get_object_by_id(objectID);
-
-									if (nullptr != targetObject)
-									{
-										if (VirtualTerminalObjectType::OutputPolygon == targetObject->get_object_type())
-										{
-											auto polygon = std::static_pointer_cast<OutputPolygon>(targetObject);
-
-											if (polygon->change_point(polygonPointIndex, newXValue, newYValue))
-											{
-												LOG_DEBUG("[VT Server]: Client %u change polygon id %u point index %u. X = %u, Y = %u", cf->get_control_function()->get_address(), objectID, polygonPointIndex, newXValue, newYValue);
-												parentServer->send_change_polygon_point_response(objectID, 0, message.get_source_control_function());
-											}
-											else
-											{
-												LOG_WARNING("[VT Server]: Client %u change polygon point: the point index of %u is not valid for object %u", cf->get_control_function()->get_address(), polygonPointIndex, objectID);
-												parentServer->send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidPointIndex)), message.get_source_control_function());
-											}
-										}
-										else
-										{
-											LOG_WARNING("[VT Server]: Client %u change polygon point: object id %u is not an output polygon", cf->get_control_function()->get_address(), objectID);
-											parentServer->send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
-										}
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change polygon point: invalid object ID of %u", cf->get_control_function()->get_address(), objectID);
-										parentServer->send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
-									}
-								}
-								break;
-
-								case Function::ButtonActivationMessage:
-								case Function::SoftKeyActivationMessage:
-								case Function::PointingEventMessage:
-								case Function::VTSelectInputObjectMessage:
-								case Function::VTESCMessage:
-								case Function::VTChangeNumericValueMessage:
-								case Function::VTChangeActiveMaskMessage:
-								case Function::VTChangeStringValueMessage:
-								case Function::VTControlAudioSignalTerminationMessage:
-								{
-									// Todo, do something with the responses
-								}
-								break;
-
-								case Function::ControlAudioSignalCommand:
-								{
-									parentServer->send_audio_signal_successful(message.get_source_control_function());
-								}
-								break;
-
-								case Function::SetAudioVolumeCommand:
-								{
-									parentServer->send_audio_volume_response(message.get_source_control_function());
-								}
-								break;
-
-								case Function::IdentifyVTMessage:
-								{
-									parentServer->identify_vt();
-								}
-								break;
-
-								case Function::ScreenCapture:
-								{
-									parentServer->screen_capture(data[1], data[2], message.get_source_control_function());
-								}
-								break;
-								case Function::GetWindowMaskDataMessage:
-								{
-									parentServer->send_get_window_mask_data_response(message.get_source_control_function());
-								}
-								break;
-
-								default:
-								{
-									LOG_ERROR("[VT Server]: Unimplemented Command %u", data[0]);
-								}
-								break;
-							}
+							parentServer->process_connection_dependent_messages(message, cf);
 						}
-						break;
-
-						default:
-							break;
 					}
-					break;
 				}
 			}
 		}
