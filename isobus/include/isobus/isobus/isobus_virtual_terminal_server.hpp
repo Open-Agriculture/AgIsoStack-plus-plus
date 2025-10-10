@@ -775,6 +775,11 @@ namespace isobus
 		/// @brief Cyclic update function
 		void update();
 
+		/// @brief A function to provide a path where the IOP data could be saved before parsing
+		/// If empty value returned the IOP data will not be saved.
+		/// @returns Path to save the IOP contents before parsing
+		virtual std::string debug_iop_path() const;
+
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
