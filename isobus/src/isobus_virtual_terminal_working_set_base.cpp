@@ -1113,7 +1113,7 @@ namespace isobus
 							std::string tempString;
 							tempString.reserve(lengthOfStringObject);
 
-							for (std::uint_fast8_t i = 0; i < lengthOfStringObject; i++)
+							for (std::uint_fast16_t i = 0; i < lengthOfStringObject; i++)
 							{
 								tempString.push_back(static_cast<char>(iopData[17 + i]));
 							}
@@ -1317,7 +1317,7 @@ namespace isobus
 
 						if (iopLength >= stringLengthToFollow)
 						{
-							for (uint_fast8_t i = 0; i < stringLengthToFollow; i++)
+							for (uint_fast16_t i = 0; i < stringLengthToFollow; i++)
 							{
 								tempString.push_back(static_cast<char>(iopData[0]));
 								iopData++;
