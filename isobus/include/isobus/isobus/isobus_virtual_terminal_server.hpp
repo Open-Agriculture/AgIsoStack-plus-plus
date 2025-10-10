@@ -775,6 +775,8 @@ namespace isobus
 		/// @brief Cyclic update function
 		void update();
 
+		virtual std::string debug_iop_path() const;
+
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
