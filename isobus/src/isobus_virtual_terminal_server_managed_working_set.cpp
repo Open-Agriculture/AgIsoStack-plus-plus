@@ -13,6 +13,8 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <cstring>
+#include <fstream>
+#include <iostream>
 
 namespace isobus
 {
@@ -183,6 +185,20 @@ namespace isobus
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
+
+			if (!debugIopSavePath.empty())
+			{
+				LOG_INFO("[WS]: Saving IOP data to  %s", debugIopSavePath);
+				std::ofstream fs(debugIopSavePath, std::ios::out | std::ios::binary);
+
+				for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
+				{
+					fs.write(reinterpret_cast<const char *>(iopFilesRawData[i].data()), static_cast<std::streamsize>(iopFilesRawData[i].size()));
+				}
+
+				fs.close();
+			}
+
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
 				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
@@ -208,6 +224,11 @@ namespace isobus
 			LOG_ERROR("[WS]: Object pool failed to be parsed.");
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Fail);
 		}
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_debug_iop_save_path(const std::string &newDebugIopSavePath)
+	{
+		debugIopSavePath = newDebugIopSavePath;
 	}
 
 	bool VirtualTerminalServerManagedWorkingSet::is_object_pool_transfer_in_progress() const

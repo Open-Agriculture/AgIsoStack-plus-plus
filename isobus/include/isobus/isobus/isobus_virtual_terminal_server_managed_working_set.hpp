@@ -133,6 +133,8 @@ namespace isobus
 		/// @returns returns true if the IOP size is known but the transfer is not finished
 		bool is_object_pool_transfer_in_progress() const;
 
+		void set_debug_iop_save_path(const std::string &newDebugIopSavePath);
+
 	private:
 		/// @brief Sets the object pool processing state to a new value
 		/// @param[in] value The new state of processing the object pool
@@ -141,6 +143,7 @@ namespace isobus
 		/// @brief The object pool processing thread will execute this function when it runs
 		void worker_thread_function();
 
+		std::string debugIopSavePath;
 		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set

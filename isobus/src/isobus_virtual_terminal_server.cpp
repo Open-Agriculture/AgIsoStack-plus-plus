@@ -153,7 +153,9 @@ namespace isobus
 			    (message.get_data()[1] & 0x01)) // Init bit is set
 			{
 				// This CF is probably trying to initiate communication with us.
-				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
+				auto n = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
+				n->set_debug_iop_save_path(debug_iop_path());
+				managedWorkingSetList.emplace_back(n);
 				auto &data = message.get_data();
 
 				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
@@ -2753,5 +2755,10 @@ namespace isobus
 				send_end_of_object_pool_response(true, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), 0, ws->get_control_function());
 			}
 		}
+	}
+
+	std::string VirtualTerminalServer::debug_iop_path() const
+	{
+		return "";
 	}
 }
