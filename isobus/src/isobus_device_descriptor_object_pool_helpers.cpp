@@ -236,6 +236,14 @@ namespace isobus
 					set_value_from_property(retVal.yOffset_mm, property, DataDescriptionIndex::DeviceElementOffsetY);
 					set_value_from_property(retVal.zOffset_mm, property, DataDescriptionIndex::DeviceElementOffsetZ);
 					set_value_from_property(retVal.width_mm, property, DataDescriptionIndex::ActualWorkingWidth);
+					if(!retVal.width_mm.isValuePresent)
+					{
+						set_value_from_property(retVal.width_mm, property, DataDescriptionIndex::MaximumWorkingWidth);
+					}
+					if(!retVal.width_mm.isValuePresent)
+					{
+						set_value_from_property(retVal.width_mm, property, DataDescriptionIndex::DefaultWorkingWidth);
+					}
 				}
 				else if (task_controller_object::ObjectTypes::DeviceProcessData == sectionChildObject->get_object_type())
 				{
