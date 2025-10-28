@@ -29,7 +29,7 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "gcc -v"
+	"postCreateCommand": "bash -lc 'set -e; gcc -v; if ! command -v pip3 >/dev/null 2>&1; then apt-get update && apt-get install -y python3-pip; fi; pip3 install --upgrade pip; if [ -f requirements.txt ]; then pip3 install -r requirements.txt; fi'"
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"

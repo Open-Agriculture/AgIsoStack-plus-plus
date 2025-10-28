@@ -3,7 +3,7 @@
 ///
 /// @brief This file contains an auto-generated lookup table of all ISOBUS DDIs as defined
 /// in ISO11783-11, exported from isobus.net.
-/// This file was generated January 16, 2025.
+/// This file was generated October 28, 2025.
 ///
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
@@ -914,9 +914,18 @@ namespace isobus
 		}
 #endif
 
-		// No special formatting, apply offset, resolution and units
-		double offset = displayRange.first - (static_cast<double>(std::numeric_limits<std::int32_t>::min()) * resolution);
-		double scaledValue = static_cast<double>(value) * resolution + offset;
+		// No special formatting, apply resolution and units
+		double scaledValue = static_cast<double>(value) * resolution;
+
+		// Clamp within display range
+		if (scaledValue < displayRange.first)
+		{
+			scaledValue = displayRange.first;
+		}
+		else if (scaledValue > displayRange.second)
+		{
+			scaledValue = displayRange.second;
+		}
 		std::string valueString = std::to_string(scaledValue);
 		size_t end = valueString.find_last_not_of('0'); // Find the last non-zero character
 		if (valueString[end] == '.')
@@ -1289,8 +1298,8 @@ namespace isobus
 		{ 336, "Rear PTO hours", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 337, "Lifetime Front PTO hours", "h", "Hour", 0.1f, std::make_pair(0.0f, 214748364.7f) },
 		{ 338, "Lifetime Rear PTO Hours", "h", "Hour", 0.1f, std::make_pair(0.0f, 214748364.7f) },
-		{ 339, "Effective Total Loading Time", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
-		{ 340, "Effective Total Unloading Time", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 339, "Total Loading Time", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 340, "Total Unloading Time", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 341, "Setpoint Grain Kernel Cracker Gap", "mm", "Length", 0.001f, std::make_pair(0.000f, 2147483.647f) },
 		{ 342, "Actual Grain Kernel Cracker Gap", "mm", "Length", 0.001f, std::make_pair(0.000f, 2147483.647f) },
 		{ 343, "Minimum Grain Kernel Cracker Gap", "mm", "Length", 0.001f, std::make_pair(0.000f, 2147483.647f) },
@@ -1471,7 +1480,7 @@ namespace isobus
 		{ 519, "Last Bale Lifetime Count", "", "n.a.", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 520, "Actual Canopy Height", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 521, "GNSS Installation Type", "", "n.a.", 1.0f, std::make_pair(0.0f, 100.0f) },
-		{ 522, "Twine Bale Total Count", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 522, "Twine Bale Total Count (Deprecated)", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 523, "Mesh Bale Total Count (Deprecated)", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 524, "Lifetime Twine Bale Total Count (Deprecated)", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 525, "Lifetime Mesh Bale Total Count (Deprecated)", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
@@ -1618,12 +1627,12 @@ namespace isobus
 		{ 667, "Distance between Guidance Track Number 0R and 1", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 668, "Distance between Guidance Track Number 0R and 0L", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 669, "Bout Track Number Shift", "", "n.a.", 1.0f, std::make_pair(-2147483648.0f, 2147483647.0f) },
-		{ 670, "Tramline Crop protection/fertilization Working Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
-		{ 671, "Tramline Tire Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
-		{ 672, "Tramline Wheel Distance", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
-		{ 673, "Tramline Irrigation Working Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
-		{ 674, "Tramline Irrigation Tire Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
-		{ 675, "Tramline Irrigation Wheel Distance", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 670, "Tramline Primary Working Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 671, "Tramline Primary Tire Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 672, "Tramline Primary Wheel Distance", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 673, "Tramline Secondary Working Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 674, "Tramline Secondary Tire Width", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 675, "Tramline Secondary Wheel Distance", "mm", "Length", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 676, "Last Bale Binding Mesh Layers", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 677, "Last Bale Binding Film Layers", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 678, "Last Bale Binding Twine Layers", "#", "Quantity/Count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
@@ -1641,6 +1650,8 @@ namespace isobus
 		{ 690, "Ineffective Total Electrical Battery Energy Consumption", "kWh", "Electrical energy", 0.001f, std::make_pair(-2147483.648f, 2147483.647f) },
 		{ 691, "Instantaneous Electrical Battery Energy Consumption per Time", "W", "Electrical Power", 1.0f, std::make_pair(-2147483648.0f, 2147483647.0f) },
 		{ 692, "Instantaneous Electrical Battery Energy Consumption per Area", "kWh/m²", "Electrical energy per area", 1.0E-5f, std::make_pair(-21474.83648f, 21474.836470000002f) },
+		{ 693, "Lifetime Total Loading Time", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
+		{ 694, "Lifetime Total Unloading Time", "s", "Time count", 1.0f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 32768, "Maximum Droplet Size", "", "n.a.", 1.0f, std::make_pair(0.0f, 255.0f) },
 		{ 32769, "Maximum Crop Grade Diameter", "mm", "Length", 0.001f, std::make_pair(0.0f, 2147483647.0f) },
 		{ 32770, "Maximum Crop Grade Length", "mm", "Length", 0.001f, std::make_pair(0.0f, 2147483647.0f) },
