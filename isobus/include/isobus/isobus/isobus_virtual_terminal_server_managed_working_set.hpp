@@ -138,6 +138,12 @@ namespace isobus
 		/// @param[in] newDebugIopSavePath path to the IOP to be saved before parsing (if empty string the IOP will not be saved)
 		void set_debug_iop_save_path(const std::string &newDebugIopSavePath);
 
+		//-------------- Callbacks/Event driven interface ---------------------
+
+		/// @brief Returns the event dispatcher for getting a notification before the starting of the the IOP parsing
+		/// @returns The event dispatcher for IOP parse beginning
+		EventDispatcher<std::vector<std::vector<std::uint8_t>>> &get_iop_parse_start_event_dispatcher();
+
 	private:
 		/// @brief Sets the object pool processing state to a new value
 		/// @param[in] value The new state of processing the object pool
@@ -156,6 +162,7 @@ namespace isobus
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
+		EventDispatcher<std::vector<std::vector<std::uint8_t>>> onObjectPoolParseStartEventDispatcher; ///< Event dispatcher for start of the IOP parsing
 	};
 } // namespace isobus
 

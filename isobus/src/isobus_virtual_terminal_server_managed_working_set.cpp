@@ -186,6 +186,7 @@ namespace isobus
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
 
+			onObjectPoolParseStartEventDispatcher.call(iopFilesRawData);
 			if (!debugIopSavePath.empty())
 			{
 				LOG_INFO("[WS]: Saving IOP data to  %s", debugIopSavePath.c_str());
@@ -223,14 +224,14 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::set_debug_iop_save_path(const std::string &newDebugIopSavePath)
-	{
-		debugIopSavePath = newDebugIopSavePath;
-	}
-
 	bool VirtualTerminalServerManagedWorkingSet::is_object_pool_transfer_in_progress() const
 	{
 		return iop_load_percentage() != 0.0f;
+	}
+
+	EventDispatcher<std::vector<std::vector<uint8_t>>> &VirtualTerminalServerManagedWorkingSet::get_iop_parse_start_event_dispatcher()
+	{
+		return onObjectPoolParseStartEventDispatcher;
 	}
 
 } // namespace isobus
