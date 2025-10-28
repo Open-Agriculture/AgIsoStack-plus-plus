@@ -13,6 +13,8 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <cstring>
+#include <fstream>
+#include <iostream>
 
 namespace isobus
 {
@@ -183,6 +185,18 @@ namespace isobus
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
+
+			onObjectPoolParseStartEventDispatcher.call(iopFilesRawData);
+			if (!debugIopSavePath.empty())
+			{
+				LOG_INFO("[WS]: Saving IOP data to  %s", debugIopSavePath.c_str());
+				std::ofstream fs(debugIopSavePath, std::ios::out | std::ios::binary);
+				std::for_each(iopFilesRawData.begin(), iopFilesRawData.end(), [&fs](const std::vector<uint8_t> &fragment) {
+					fs.write(reinterpret_cast<const char *>(fragment.data()), static_cast<std::streamsize>(fragment.size()));
+				});
+				fs.close();
+			}
+
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
 				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
@@ -213,6 +227,11 @@ namespace isobus
 	bool VirtualTerminalServerManagedWorkingSet::is_object_pool_transfer_in_progress() const
 	{
 		return iop_load_percentage() != 0.0f;
+	}
+
+	EventDispatcher<std::vector<std::vector<uint8_t>>> &VirtualTerminalServerManagedWorkingSet::get_iop_parse_start_event_dispatcher()
+	{
+		return onObjectPoolParseStartEventDispatcher;
 	}
 
 } // namespace isobus
