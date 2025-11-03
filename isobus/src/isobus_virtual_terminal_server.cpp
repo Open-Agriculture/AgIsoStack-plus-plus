@@ -99,6 +99,11 @@ namespace isobus
 		return 0;
 	}
 
+	void VirtualTerminalServer::transferred_object_pool_parse_start(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> &ws) const
+	{
+		(void)ws;
+	}
+
 	std::uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
 	{
 		LOG_ERROR("[VT Server]: The Get User Layout Datamask background color is not implemented, returning with black");
@@ -589,6 +594,7 @@ namespace isobus
 								{
 									if (cf->get_any_object_pools())
 									{
+										parentServer->transferred_object_pool_parse_start(cf);
 										cf->start_parsing_thread();
 									}
 									else
