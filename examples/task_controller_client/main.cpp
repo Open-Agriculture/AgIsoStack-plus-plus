@@ -7,7 +7,7 @@
 #include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 
-#include "console_logger.cpp"
+#include "../common/console_logger.cpp"
 #include "section_control_implement_sim.hpp"
 
 #include <atomic>

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../common/console_logger.cpp"
+#include "../../common/console_logger.cpp"
 
 int main(int argc, char *argv[])
 {
