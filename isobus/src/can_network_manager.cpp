@@ -39,7 +39,7 @@ namespace isobus
 
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress)
 	{
-		LOCK_GUARD(Mutex, internalControlFunctionsMutex);
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		auto controlFunction = std::make_shared<InternalControlFunction>(desiredName, preferredAddress, CANPort);
 		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction));
 		internalControlFunctions.push_back(controlFunction);
@@ -49,6 +49,7 @@ namespace isobus
 
 	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters)
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		auto controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
 		partneredControlFunctions.push_back(controlFunction);
 		return controlFunction;
@@ -56,6 +57,7 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction)
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		// We need to unregister the control function from the interfaces managed by the network manager first.
 		controlFunction->pgnRequestProtocol.reset();
 		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
@@ -65,6 +67,7 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<PartneredControlFunction> controlFunction)
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
 	}
@@ -342,27 +345,24 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<ControlFunction> controlFunction)
 	{
-		auto result = std::find(inactiveControlFunctions.begin(), inactiveControlFunctions.end(), controlFunction);
-		if (result != inactiveControlFunctions.end())
-		{
-			inactiveControlFunctions.erase(result);
-		}
+		inactiveControlFunctions.remove(controlFunction);
 
-		for (std::uint8_t i = 0; i < NULL_CAN_ADDRESS; i++)
+		const auto channelIndex = controlFunction->get_can_port();
+		for (std::uint8_t address = 0; address < NULL_CAN_ADDRESS; address++)
 		{
-			if (controlFunctionTable[controlFunction->get_can_port()][i] == controlFunction)
+			if (controlFunctionTable[channelIndex][address] == controlFunction)
 			{
-				if (i != controlFunction->get_address())
+				if (address != controlFunction->get_address())
 				{
 					LOG_WARNING("[NM]: %s control function with address '%d' was at incorrect address '%d' in the lookup table prior to deactivation.",
 					            controlFunction->get_type_string().c_str(),
 					            controlFunction->get_address(),
-					            i);
+					            address);
 				}
 
-				controlFunctionTable[controlFunction->get_can_port()][i] = nullptr;
+				controlFunctionTable[channelIndex][address] = nullptr;
 
-				if (controlFunction->get_address_valid() && (ControlFunction::Type::Partnered == controlFunction->get_type()))
+				if (controlFunction->get_address_valid() && ControlFunction::Type::Partnered == controlFunction->get_type())
 				{
 					// The control function was an active partner when deleted, so we replace it with an new external control function instead
 					create_external_control_function(controlFunction->get_NAME(), controlFunction->get_address(), controlFunction->get_can_port());
@@ -398,18 +398,21 @@ namespace isobus
 		}
 	}
 
-	const std::list<std::shared_ptr<InternalControlFunction>> &CANNetworkManager::get_internal_control_functions() const
+	std::list<std::shared_ptr<InternalControlFunction>> CANNetworkManager::get_internal_control_functions() const
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		return internalControlFunctions;
 	}
 
-	const std::list<std::shared_ptr<PartneredControlFunction>> &CANNetworkManager::get_partnered_control_functions() const
+	std::list<std::shared_ptr<PartneredControlFunction>> CANNetworkManager::get_partnered_control_functions() const
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		return partneredControlFunctions;
 	}
 
 	std::list<std::shared_ptr<ControlFunction>> isobus::CANNetworkManager::get_control_functions(bool includingOffline) const
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		std::list<std::shared_ptr<ControlFunction>> retVal;
 
 		for (std::uint8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
@@ -567,10 +570,11 @@ namespace isobus
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
 		    (channelIndex < CAN_PORT_MAXIMUM))
 		{
+			LOCK_GUARD(Mutex, controlFunctionsMutex);
 			std::uint8_t claimedAddress = message.get_identifier().get_source_address();
-			auto targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
-			if ((nullptr != targetControlFunction) &&
-			    (CANIdentifier::NULL_ADDRESS == targetControlFunction->get_address()))
+			auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
+
+			if (targetControlFunction != nullptr && CANIdentifier::NULL_ADDRESS == targetControlFunction->get_address())
 			{
 				// Someone is at that spot in the table, but their address was stolen
 				// Need to evict them from the table and move them to the inactive list
@@ -591,20 +595,22 @@ namespace isobus
 			else
 			{
 				// Look through all inactive CFs, maybe one of them has freshly claimed the address
-				for (auto currentControlFunction : inactiveControlFunctions)
+				const auto result = std::find_if(inactiveControlFunctions.cbegin(),
+				                                 inactiveControlFunctions.cend(),
+				                                 [claimedAddress, channelIndex](const std::shared_ptr<ControlFunction> &cf) {
+					                                 return (cf != nullptr) && (cf->get_address() == claimedAddress) && (cf->get_can_port() == channelIndex);
+				                                 });
+
+				if (result != inactiveControlFunctions.end())
 				{
-					if ((currentControlFunction->get_address() == claimedAddress) &&
-					    (currentControlFunction->get_can_port() == channelIndex))
-					{
-						controlFunctionTable[channelIndex][claimedAddress] = currentControlFunction;
-						LOG_DEBUG("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
-						          currentControlFunction->get_type_string().c_str(),
-						          currentControlFunction->get_NAME().get_full_name(),
-						          claimedAddress,
-						          channelIndex);
-						process_control_function_state_change_callback(currentControlFunction, ControlFunctionState::Online);
-						break;
-					}
+					targetControlFunction = *result;
+
+					LOG_DEBUG("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
+					          targetControlFunction->get_type_string().c_str(),
+					          targetControlFunction->get_NAME().get_full_name(),
+					          claimedAddress,
+					          channelIndex);
+					process_control_function_state_change_callback(targetControlFunction, ControlFunctionState::Online);
 				}
 			}
 		}
@@ -638,7 +644,7 @@ namespace isobus
 
 	void CANNetworkManager::update_internal_cfs()
 	{
-		LOCK_GUARD(Mutex, internalControlFunctionsMutex);
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		for (const auto &currentInternalControlFunction : internalControlFunctions)
 		{
 			if (currentInternalControlFunction->update_address_claiming())
@@ -647,31 +653,31 @@ namespace isobus
 				std::uint8_t claimedAddress = currentInternalControlFunction->get_address();
 
 				// Check if the internal control function switched addresses, and therefore needs to be moved in the table
-				for (std::uint8_t address = 0; address < NULL_CAN_ADDRESS; address++)
+				auto result = std::find(controlFunctionTable[channelIndex].begin(),
+				                        controlFunctionTable[channelIndex].end(),
+				                        currentInternalControlFunction);
+				if (result != controlFunctionTable[channelIndex].end())
 				{
-					if (controlFunctionTable[channelIndex][address] == currentInternalControlFunction)
-					{
-						controlFunctionTable[channelIndex][address] = nullptr;
-						break;
-					}
+					*result = nullptr;
 				}
 
-				if (nullptr != controlFunctionTable[channelIndex][claimedAddress])
+				auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
+				if (nullptr != targetControlFunction)
 				{
 					// Someone is at that spot in the table, but their address was stolen by an internal control function
 					// Need to evict them from the table
-					controlFunctionTable[channelIndex][claimedAddress]->address = NULL_CAN_ADDRESS;
-					controlFunctionTable[channelIndex][claimedAddress] = nullptr;
+					targetControlFunction->address = NULL_CAN_ADDRESS;
 				}
 
 				// ECU has claimed since the last update, add it to the table
-				controlFunctionTable[channelIndex][claimedAddress] = currentInternalControlFunction;
+				targetControlFunction = currentInternalControlFunction;
 			}
 		}
 	}
 
 	void CANNetworkManager::process_rx_message_for_address_claiming(const CANMessage &message) const
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		for (const auto &internalCF : internalControlFunctions)
 		{
 			internalCF->process_rx_message_for_address_claiming(message);
@@ -709,6 +715,8 @@ namespace isobus
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
 		    (rxFrame.channel < CAN_PORT_MAXIMUM))
 		{
+			LOCK_GUARD(Mutex, controlFunctionsMutex);
+
 			std::uint64_t claimedNAME;
 			std::shared_ptr<ControlFunction> foundControlFunction = nullptr;
 			uint8_t claimedAddress = CANIdentifier(rxFrame.identifier).get_source_address();
@@ -867,6 +875,7 @@ namespace isobus
 
 	void CANNetworkManager::update_new_partners()
 	{
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		for (const auto &partner : partneredControlFunctions)
 		{
 			if (!partner->initialized)
@@ -1112,32 +1121,35 @@ namespace isobus
 
 	void CANNetworkManager::prune_inactive_control_functions()
 	{
+		constexpr std::uint32_t MAX_ADDRESS_CLAIM_RESOLUTION_TIME = 755; // This is 250ms + RTxD + 250ms
+
+		LOCK_GUARD(Mutex, controlFunctionsMutex);
 		for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
 		{
-			constexpr std::uint32_t MAX_ADDRESS_CLAIM_RESOLUTION_TIME = 755; // This is 250ms + RTxD + 250ms
-			if ((0 != lastAddressClaimRequestTimestamp_ms.at(channelIndex)) &&
-			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTimestamp_ms.at(channelIndex), MAX_ADDRESS_CLAIM_RESOLUTION_TIME)))
+			auto &lastAddressClaimRequestTime = lastAddressClaimRequestTimestamp_ms[channelIndex];
+			if ((0 != lastAddressClaimRequestTime) &&
+			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, MAX_ADDRESS_CLAIM_RESOLUTION_TIME)))
 			{
-				for (std::uint_fast8_t i = 0; i < NULL_CAN_ADDRESS; i++)
+				for (auto &tableEntry : controlFunctionTable[channelIndex])
 				{
-					auto controlFunction = controlFunctionTable[channelIndex][i];
-					if ((nullptr != controlFunction) &&
-					    (!controlFunction->claimedAddressSinceLastAddressClaimRequest) &&
-					    (ControlFunction::Type::Internal != controlFunction->get_type()))
+					if ((nullptr == tableEntry) ||
+					    (tableEntry->claimedAddressSinceLastAddressClaimRequest))
+					{
+						continue;
+					}
+
+					auto controlFunction = tableEntry;
+					if (ControlFunction::Type::Internal != controlFunction->get_type())
 					{
 						inactiveControlFunctions.push_back(controlFunction);
 						LOG_INFO("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
-						controlFunctionTable[channelIndex][i] = nullptr;
+						tableEntry = nullptr;
 						controlFunction->address = NULL_CAN_ADDRESS;
-						process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
 					}
-					else if ((nullptr != controlFunction) &&
-					         (!controlFunction->claimedAddressSinceLastAddressClaimRequest))
-					{
-						process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
-					}
+
+					process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
 				}
-				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = 0;
+				lastAddressClaimRequestTime = 0;
 			}
 		}
 	}

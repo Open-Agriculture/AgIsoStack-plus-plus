@@ -176,11 +176,11 @@ namespace isobus
 
 		/// @brief Gets all the internal control functions that are currently registered in the network manager
 		/// @returns A list of all the internal control functions
-		const std::list<std::shared_ptr<InternalControlFunction>> &get_internal_control_functions() const;
+		std::list<std::shared_ptr<InternalControlFunction>> get_internal_control_functions() const;
 
 		/// @brief Gets all the partnered control functions that are currently registered in the network manager
 		/// @returns A list of all the partnered control functions
-		const std::list<std::shared_ptr<PartneredControlFunction>> &get_partnered_control_functions() const;
+		std::list<std::shared_ptr<PartneredControlFunction>> get_partnered_control_functions() const;
 
 		/// @brief Gets all the control functions that are known to the network manager
 		/// @param[in] includingOffline If true, all control functions are returned, otherwise only online control functions are returned
@@ -397,8 +397,8 @@ namespace isobus
 		std::array<std::array<std::shared_ptr<ControlFunction>, NULL_CAN_ADDRESS>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
 		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctions; ///< A list of the internal control functions
-		Mutex internalControlFunctionsMutex; ///< A mutex for internal control functions thread safety
 		std::list<std::shared_ptr<PartneredControlFunction>> partneredControlFunctions; ///< A list of the partnered control functions
+		mutable Mutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions.
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		Queue<std::shared_ptr<CANMessage>> receivedMessageQueue; ///< A queue of received messages to process
