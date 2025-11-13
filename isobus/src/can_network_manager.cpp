@@ -398,16 +398,6 @@ namespace isobus
 		}
 	}
 
-	const std::list<std::shared_ptr<InternalControlFunction>> &CANNetworkManager::get_internal_control_functions() const
-	{
-		return internalControlFunctions;
-	}
-
-	const std::list<std::shared_ptr<PartneredControlFunction>> &CANNetworkManager::get_partnered_control_functions() const
-	{
-		return partneredControlFunctions;
-	}
-
 	std::list<std::shared_ptr<ControlFunction>> isobus::CANNetworkManager::get_control_functions(bool includingOffline) const
 	{
 		std::list<std::shared_ptr<ControlFunction>> retVal;

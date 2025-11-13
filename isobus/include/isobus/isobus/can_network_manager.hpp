@@ -174,14 +174,6 @@ namespace isobus
 		/// @param[in] callback The callback you want to remove
 		void remove_control_function_status_change_callback(ControlFunctionStateCallback callback);
 
-		/// @brief Gets all the internal control functions that are currently registered in the network manager
-		/// @returns A list of all the internal control functions
-		const std::list<std::shared_ptr<InternalControlFunction>> &get_internal_control_functions() const;
-
-		/// @brief Gets all the partnered control functions that are currently registered in the network manager
-		/// @returns A list of all the partnered control functions
-		const std::list<std::shared_ptr<PartneredControlFunction>> &get_partnered_control_functions() const;
-
 		/// @brief Gets all the control functions that are known to the network manager
 		/// @param[in] includingOffline If true, all control functions are returned, otherwise only online control functions are returned
 		/// @returns A list of all the control functions
