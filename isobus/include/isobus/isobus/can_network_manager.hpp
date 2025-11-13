@@ -94,10 +94,6 @@ namespace isobus
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
 		void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
-		/// @brief Returns the number of global PGN callbacks that have been registered with the network manager
-		/// @returns The number of global PGN callbacks that have been registered with the network manager
-		std::size_t get_number_global_parameter_group_number_callbacks() const;
-
 		/// @brief Registers a callback for ANY control function sending the associated PGN
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is received from any control function
@@ -376,11 +372,6 @@ namespace isobus
 		                          const void *data,
 		                          std::uint32_t size) const;
 
-		/// @brief Gets a PGN callback for the global address by index
-		/// @param[in] index The index of the callback to get
-		/// @returns A structure containing the global PGN callback data
-		ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::size_t index) const;
-
 		static constexpr std::uint32_t BUSLOAD_SAMPLE_WINDOW_MS = 1000; ///< Using a 1s window to average the bus load, otherwise it's very erratic
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
 
@@ -409,6 +400,7 @@ namespace isobus
 		EventDispatcher<CANMessage> messageTransmittedEventDispatcher; ///< An event dispatcher for notifying consumers about transmitted messages by our application
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
 		Mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
+		mutable Mutex globalPGNCallbacksMutex; ///< Mutex to protect the global PGN callbacks
 		Mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
 		Mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
 		Mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list

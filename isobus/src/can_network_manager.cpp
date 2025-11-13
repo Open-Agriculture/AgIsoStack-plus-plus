@@ -74,22 +74,19 @@ namespace isobus
 
 	void CANNetworkManager::add_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
+		LOCK_GUARD(Mutex, globalPGNCallbacksMutex);
 		globalParameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, nullptr);
 	}
 
 	void CANNetworkManager::remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
 	{
+		LOCK_GUARD(Mutex, globalPGNCallbacksMutex);
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, nullptr);
 		auto callbackLocation = std::find(globalParameterGroupNumberCallbacks.begin(), globalParameterGroupNumberCallbacks.end(), tempObject);
 		if (globalParameterGroupNumberCallbacks.end() != callbackLocation)
 		{
 			globalParameterGroupNumberCallbacks.erase(callbackLocation);
 		}
-	}
-
-	std::size_t CANNetworkManager::get_number_global_parameter_group_number_callbacks() const
-	{
-		return globalParameterGroupNumberCallbacks.size();
 	}
 
 	void CANNetworkManager::add_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent)
@@ -264,17 +261,6 @@ namespace isobus
 	                                             CANLibBadge<InternalControlFunction>) const
 	{
 		return send_can_message_raw(portIndex, sourceAddress, destAddress, parameterGroupNumber, priority, data, size);
-	}
-
-	ParameterGroupNumberCallbackData CANNetworkManager::get_global_parameter_group_number_callback(std::size_t index) const
-	{
-		ParameterGroupNumberCallbackData retVal(0, nullptr, nullptr, nullptr);
-
-		if (index < get_number_global_parameter_group_number_callbacks())
-		{
-			retVal = globalParameterGroupNumberCallbacks[index];
-		}
-		return retVal;
 	}
 
 	void receive_can_message_frame_from_hardware(const CANMessageFrame &rxFrame)
@@ -1040,20 +1026,28 @@ namespace isobus
 	{
 		std::shared_ptr<ControlFunction> messageDestination = message.get_destination_control_function();
 		std::shared_ptr<ControlFunction> messageSource = message.get_source_control_function();
+		const auto message_parameter_group_number = message.get_identifier().get_parameter_group_number();
 
 		if ((nullptr == messageDestination) &&
 		    ((nullptr != messageSource) ||
-		     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
+		     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message_parameter_group_number) &&
 		      (NULL_CAN_ADDRESS == message.get_identifier().get_source_address()))))
 		{
-			// Message destined to global
-			for (std::size_t i = 0; i < get_number_global_parameter_group_number_callbacks(); i++)
+			std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
+
 			{
-				if ((message.get_identifier().get_parameter_group_number() == get_global_parameter_group_number_callback(i).get_parameter_group_number()) &&
-				    (nullptr != get_global_parameter_group_number_callback(i).get_callback()))
+				LOCK_GUARD(Mutex, globalPGNCallbacksMutex);
+				callbacksCopy = globalParameterGroupNumberCallbacks;
+			}
+
+			// Message destined to global
+			for (const auto &callback : callbacksCopy)
+			{
+				if (message_parameter_group_number == callback.get_parameter_group_number() &&
+				    nullptr != callback.get_callback())
 				{
 					// We have a callback that matches this PGN
-					get_global_parameter_group_number_callback(i).get_callback()(message, get_global_parameter_group_number_callback(i).get_parent());
+					callback.get_callback()(message, callback.get_parent());
 				}
 			}
 		}
@@ -1069,7 +1063,7 @@ namespace isobus
 					// Message matches CAN port for a partnered control function
 					for (std::size_t k = 0; k < partner->get_number_parameter_group_number_callbacks(); k++)
 					{
-						if ((message.get_identifier().get_parameter_group_number() == partner->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
+						if ((message_parameter_group_number == partner->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
 						    (nullptr != partner->get_parameter_group_number_callback(k).get_callback()) &&
 						    ((nullptr == partner->get_parameter_group_number_callback(k).get_internal_control_function()) ||
 						     (partner->get_parameter_group_number_callback(k).get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
