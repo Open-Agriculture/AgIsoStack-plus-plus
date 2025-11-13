@@ -32,14 +32,8 @@ namespace isobus
 	void CANNetworkManager::initialize()
 	{
 		// Clear queues
-		while (!receivedMessageQueue.empty())
-		{
-			get_next_can_message_from_rx_queue();
-		}
-		while (!transmittedMessageQueue.empty())
-		{
-			get_next_can_message_from_tx_queue();
-		}
+		receivedMessageQueue.clear();
+		transmittedMessageQueue.clear();
 		initialized = true;
 	}
 
@@ -300,19 +294,18 @@ namespace isobus
 		update_control_functions(rxFrame);
 
 		CANIdentifier identifier(rxFrame.identifier);
-		CANMessage message(CANMessage::Type::Receive,
-		                   identifier,
-		                   rxFrame.data,
-		                   rxFrame.dataLength,
-		                   get_control_function(rxFrame.channel, identifier.get_source_address()),
-		                   get_control_function(rxFrame.channel, identifier.get_destination_address()),
-		                   rxFrame.channel);
+		auto message = std::make_shared<CANMessage>(CANMessage::Type::Receive,
+		                                            identifier,
+		                                            rxFrame.data,
+		                                            rxFrame.dataLength,
+		                                            get_control_function(rxFrame.channel, identifier.get_source_address()),
+		                                            get_control_function(rxFrame.channel, identifier.get_destination_address()),
+		                                            rxFrame.channel);
 
 		update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
 
 		if (initialized)
 		{
-			LOCK_GUARD(Mutex, receivedMessageQueueMutex);
 			receivedMessageQueue.push(std::move(message));
 		}
 	}
@@ -322,28 +315,26 @@ namespace isobus
 		update_busload(txFrame.channel, txFrame.get_number_bits_in_message());
 
 		CANIdentifier identifier(txFrame.identifier);
-		CANMessage message(CANMessage::Type::Transmit,
-		                   identifier,
-		                   txFrame.data,
-		                   txFrame.dataLength,
-		                   get_control_function(txFrame.channel, identifier.get_source_address()),
-		                   get_control_function(txFrame.channel, identifier.get_destination_address()),
-		                   txFrame.channel);
+		auto message = std::make_shared<CANMessage>(CANMessage::Type::Transmit,
+		                                            identifier,
+		                                            txFrame.data,
+		                                            txFrame.dataLength,
+		                                            get_control_function(txFrame.channel, identifier.get_source_address()),
+		                                            get_control_function(txFrame.channel, identifier.get_destination_address()),
+		                                            txFrame.channel);
 
 		if (initialized)
 		{
 			{
-				LOCK_GUARD(Mutex, transmittedMessageQueueMutex);
 				transmittedMessageQueue.push(message);
 			}
 
 			// We need to receive manual requests for the address claim PGN.
-			if ((CANIdentifier::Type::Extended == message.get_identifier().get_identifier_type()) &&
-			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
-			    (3 == message.get_data_length()) &&
-			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_data_custom_length(0, 24)))
+			if ((CANIdentifier::Type::Extended == message->get_identifier().get_identifier_type()) &&
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message->get_identifier().get_parameter_group_number()) &&
+			    (3 == message->get_data_length()) &&
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message->get_data_custom_length(0, 24)))
 			{
-				LOCK_GUARD(Mutex, receivedMessageQueueMutex);
 				receivedMessageQueue.push(std::move(message));
 			}
 		}
@@ -989,30 +980,6 @@ namespace isobus
 		return retVal;
 	}
 
-	CANMessage CANNetworkManager::get_next_can_message_from_rx_queue()
-	{
-		LOCK_GUARD(Mutex, receivedMessageQueueMutex);
-		if (!receivedMessageQueue.empty())
-		{
-			CANMessage retVal = std::move(receivedMessageQueue.front());
-			receivedMessageQueue.pop();
-			return retVal;
-		}
-		return CANMessage::create_invalid_message();
-	}
-
-	CANMessage CANNetworkManager::get_next_can_message_from_tx_queue()
-	{
-		LOCK_GUARD(Mutex, transmittedMessageQueueMutex);
-		if (!transmittedMessageQueue.empty())
-		{
-			CANMessage retVal = std::move(transmittedMessageQueue.front());
-			transmittedMessageQueue.pop();
-			return retVal;
-		}
-		return CANMessage::create_invalid_message();
-	}
-
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)
 	{
 		LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
@@ -1109,37 +1076,37 @@ namespace isobus
 
 	void CANNetworkManager::process_rx_messages()
 	{
-		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
-		while (!receivedMessageQueue.empty())
-		{
-			CANMessage currentMessage = get_next_can_message_from_rx_queue();
+		std::shared_ptr<CANMessage> message = nullptr;
 
-			update_address_table(currentMessage);
-			process_can_message_for_address_violations(currentMessage);
-			process_rx_message_for_address_claiming(currentMessage);
+		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
+		while (receivedMessageQueue.pop(&message))
+		{
+			update_address_table(*message);
+			process_can_message_for_address_violations(*message);
+			process_rx_message_for_address_claiming(*message);
 
 			// Update Special Callbacks, like protocols and non-cf specific ones
-			transportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
-			extendedTransportProtocols.at(currentMessage.get_can_port_index())->process_message(currentMessage);
-			fastPacketProtocol.at(currentMessage.get_can_port_index())->process_message(currentMessage);
-			heartBeatInterfaces.at(currentMessage.get_can_port_index())->process_rx_message(currentMessage);
-			process_protocol_pgn_callbacks(currentMessage);
-			process_any_control_function_pgn_callbacks(currentMessage);
+			transportProtocols.at(message->get_can_port_index())->process_message(*message);
+			extendedTransportProtocols.at(message->get_can_port_index())->process_message(*message);
+			fastPacketProtocol.at(message->get_can_port_index())->process_message(*message);
+			heartBeatInterfaces.at(message->get_can_port_index())->process_rx_message(*message);
+			process_protocol_pgn_callbacks(*message);
+			process_any_control_function_pgn_callbacks(*message);
 
 			// Update Others
-			process_can_message_for_global_and_partner_callbacks(currentMessage);
+			process_can_message_for_global_and_partner_callbacks(*message);
 		}
 	}
 
 	void CANNetworkManager::process_tx_messages()
 	{
-		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
-		while (!transmittedMessageQueue.empty())
-		{
-			CANMessage currentMessage = get_next_can_message_from_tx_queue();
+		std::shared_ptr<CANMessage> message = nullptr;
 
+		// We may miss a message without locking the mutex when checking if empty, but that's okay. It will be picked up on the next iteration
+		while (transmittedMessageQueue.pop(&message))
+		{
 			// Update listen-only callbacks
-			messageTransmittedEventDispatcher.call(currentMessage);
+			messageTransmittedEventDispatcher.call(*message);
 		}
 	}
 

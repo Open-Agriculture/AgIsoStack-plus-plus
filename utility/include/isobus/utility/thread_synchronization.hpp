@@ -203,4 +203,78 @@ private:
 
 #endif
 
+#include <mutex>
+#include <queue>
+
+template<typename T>
+class UnsafeQueue
+{
+public:
+	using value_type = T;
+
+	template<typename U, typename = typename std::enable_if<std::is_convertible<U, value_type>::value>::type>
+	void push(U &&item)
+	{
+		queue.push(std::forward<U>(item));
+	}
+
+	bool pop(value_type *item)
+	{
+		if (queue.empty())
+		{
+			return false;
+		}
+		*item = std::move(queue.front());
+		queue.pop();
+		return true;
+	}
+
+	void clear()
+	{
+		queue = {};
+	}
+
+private:
+	std::queue<value_type> queue;
+};
+
+template<typename T>
+class SafeQueue : private UnsafeQueue<T>
+{
+	using Q = UnsafeQueue<T>;
+
+public:
+	using value_type = T;
+
+	template<typename U, typename = typename std::enable_if<std::is_convertible<U, value_type>::value>::type>
+	void push(U &&item)
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		Q::push(std::forward<U>(item));
+	}
+
+	bool pop(value_type *item)
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::pop(item);
+	}
+
+	void clear()
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		Q::clear();
+	}
+
+private:
+	std::mutex mtx;
+};
+
+#if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
+template<typename T>
+using Queue = UnsafeQueue<T>;
+#else
+template<typename T>
+using Queue = SafeQueue<T>;
+#endif
+
 #endif // THREAD_SYNCHRONIZATION_HPP
