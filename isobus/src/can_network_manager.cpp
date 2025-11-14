@@ -215,9 +215,6 @@ namespace isobus
 
 	void CANNetworkManager::update()
 	{
-		auto &processingMutex = ControlFunction::controlFunctionProcessingMutex;
-		LOCK_GUARD(Mutex, processingMutex);
-
 		if (!initialized)
 		{
 			initialize();
@@ -1061,17 +1058,7 @@ namespace isobus
 				    (partner == messageSource))
 				{
 					// Message matches CAN port for a partnered control function
-					for (std::size_t k = 0; k < partner->get_number_parameter_group_number_callbacks(); k++)
-					{
-						if ((message_parameter_group_number == partner->get_parameter_group_number_callback(k).get_parameter_group_number()) &&
-						    (nullptr != partner->get_parameter_group_number_callback(k).get_callback()) &&
-						    ((nullptr == partner->get_parameter_group_number_callback(k).get_internal_control_function()) ||
-						     (partner->get_parameter_group_number_callback(k).get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
-						{
-							// We have a callback matching this message
-							partner->get_parameter_group_number_callback(k).get_callback()(message, partner->get_parameter_group_number_callback(k).get_parent());
-						}
-					}
+					partner->dispatch_parameter_group_number_callback(message);
 				}
 			}
 		}
