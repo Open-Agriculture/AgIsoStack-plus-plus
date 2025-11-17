@@ -2377,7 +2377,7 @@ namespace isobus
 
 							for (std::uint_fast16_t i = 0; i < numberOfIndexes; i++)
 							{
-								tempObject->set_colour_map_index(i, iopData[5 + i]);
+								tempObject->set_colour_map_index(static_cast<std::uint8_t>(i), iopData[5 + i]);
 							}
 
 							iopData += (5 + tempObject->get_number_of_colour_indexes());
