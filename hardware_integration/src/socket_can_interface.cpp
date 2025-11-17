@@ -36,6 +36,11 @@ namespace isobus
 		}
 	}
 
+	std::string SocketCANInterface::get_name() const
+	{
+		return "SocketCAN";
+	}
+
 	SocketCANInterface::~SocketCANInterface()
 	{
 		close();

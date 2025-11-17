@@ -37,6 +37,11 @@ namespace isobus
 		close();
 	}
 
+	std::string SysTecWindowsPlugin::get_name() const
+	{
+		return "SYS TEC";
+	}
+
 	bool SysTecWindowsPlugin::get_is_valid() const
 	{
 		return (openResult && (USBCAN_INVALID_HANDLE != handle));
