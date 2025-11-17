@@ -2369,9 +2369,9 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 						std::uint16_t numberOfIndexes = static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8);
-						if (2 == numberOfIndexes ||
-						    16 == numberOfIndexes ||
-						    256 == numberOfIndexes)
+						if ((2 == numberOfIndexes) ||
+						    (16 == numberOfIndexes) ||
+						    (256 == numberOfIndexes))
 						{
 							tempObject->set_number_of_colour_indexes(numberOfIndexes);
 
