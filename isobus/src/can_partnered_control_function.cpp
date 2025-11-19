@@ -11,6 +11,7 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -21,28 +22,23 @@ namespace isobus
 	  ControlFunction(NAME(0), NULL_CAN_ADDRESS, CANPort, Type::Partnered),
 	  NAMEFilterList(NAMEFilters)
 	{
-		auto &processingMutex = ControlFunction::controlFunctionProcessingMutex;
-		LOCK_GUARD(Mutex, processingMutex);
 	}
 
 	void PartneredControlFunction::add_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
+		LOCK_GUARD(Mutex, parameterGroupNumberCallbacksMutex);
 		parameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, internalControlFunction);
 	}
 
 	void PartneredControlFunction::remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, internalControlFunction);
+		LOCK_GUARD(Mutex, parameterGroupNumberCallbacksMutex);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
 		if (parameterGroupNumberCallbacks.end() != callbackLocation)
 		{
 			parameterGroupNumberCallbacks.erase(callbackLocation);
 		}
-	}
-
-	std::size_t PartneredControlFunction::get_number_parameter_group_number_callbacks() const
-	{
-		return parameterGroupNumberCallbacks.size();
 	}
 
 	std::size_t PartneredControlFunction::get_number_name_filters() const
@@ -163,10 +159,27 @@ namespace isobus
 		return retVal;
 	}
 
-	ParameterGroupNumberCallbackData &PartneredControlFunction::get_parameter_group_number_callback(std::size_t index)
+	void PartneredControlFunction::dispatch_parameter_group_number_callback(const CANMessage &message)
 	{
-		assert(index < get_number_parameter_group_number_callbacks());
-		return parameterGroupNumberCallbacks[index];
+		const auto message_parameter_group_number = message.get_identifier().get_parameter_group_number();
+
+		std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
+		{
+			LOCK_GUARD(Mutex, parameterGroupNumberCallbacksMutex);
+			callbacksCopy = parameterGroupNumberCallbacks;
+		}
+
+		for (const auto &callback : callbacksCopy)
+		{
+			if ((message_parameter_group_number == callback.get_parameter_group_number()) &&
+			    (nullptr != callback.get_callback()) &&
+			    ((nullptr == callback.get_internal_control_function()) ||
+			     (callback.get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
+			{
+				// We have a callback matching this message
+				callback.get_callback()(message, callback.get_parent());
+			}
+		}
 	}
 
 } // namespace isobus

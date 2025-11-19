@@ -45,11 +45,6 @@ namespace isobus
 	{
 	}
 
-	CANMessage CANMessage::create_invalid_message()
-	{
-		return CANMessage(CANMessage::Type::Receive, CANIdentifier(CANIdentifier::UNDEFINED_PARAMETER_GROUP_NUMBER), {}, nullptr, nullptr, 0);
-	}
-
 	CANMessage::Type CANMessage::get_type() const
 	{
 		return messageType;

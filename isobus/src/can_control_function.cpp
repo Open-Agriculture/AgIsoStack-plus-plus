@@ -16,8 +16,6 @@
 
 namespace isobus
 {
-	Mutex ControlFunction::controlFunctionProcessingMutex;
-
 	isobus::ControlFunction::ControlFunction(NAME NAMEValue, std::uint8_t addressValue, std::uint8_t CANPort, Type type) :
 	  controlFunctionType(type),
 	  controlFunctionNAME(NAMEValue),

@@ -63,10 +63,6 @@ namespace isobus
 		/// @param[in] internalControlFunction The ICF being used to filter messages against
 		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
-		/// @brief Returns the number of parameter group number callbacks associated with this control function
-		/// @returns The number of parameter group number callbacks associated with this control function
-		std::size_t get_number_parameter_group_number_callbacks() const;
-
 		/// @brief Returns the number of NAME filter objects that describe the identity of this control function
 		/// @returns The number of NAME filter objects that describe the identity of this control function
 		std::size_t get_number_name_filters() const;
@@ -88,16 +84,16 @@ namespace isobus
 		/// @returns true if this control function matches the NAME that was passed in, false otherwise
 		bool check_matches_name(NAME NAMEToCheck) const;
 
+		/// @brief Dispatches the incoming CAN message to any matching parameter group number callbacks.
+		/// @param[in] message The CAN message to dispatch.
+		void dispatch_parameter_group_number_callback(const CANMessage &message);
+
 	private:
 		friend class CANNetworkManager; ///< Allows the network manager to use get_parameter_group_number_callback
 
-		/// @brief Returns a parameter group number associated with this control function by index
-		/// @param[in] index The index from which to get the PGN callback data object
-		/// @returns A reference to the PGN callback data object at the index specified
-		ParameterGroupNumberCallbackData &get_parameter_group_number_callback(std::size_t index);
-
 		const std::vector<NAMEFilter> NAMEFilterList; ///< A list of NAME parameters that describe this control function's identity
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks associated with this control function
+		Mutex parameterGroupNumberCallbacksMutex; ///< Mutex to protect access to the parameter group number callbacks
 		bool initialized = false; ///< A way to track if the network manager has processed this CF against existing CFs
 	};
 
