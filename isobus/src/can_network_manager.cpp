@@ -131,6 +131,7 @@ namespace isobus
 
 	float CANNetworkManager::get_estimated_busload(std::uint8_t canChannel)
 	{
+#ifndef DISABLE_BUSLOAD_MONITORING
 		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		constexpr float ISOBUS_BAUD_RATE_BPS = 250000.0f;
 		float retVal = 0.0f;
@@ -142,6 +143,11 @@ namespace isobus
 			retVal = (0 != totalTimeInAccumulatorWindow) ? ((totalBitCount / (totalTimeInAccumulatorWindow * ISOBUS_BAUD_RATE_BPS)) * 100.0f) : 0.0f;
 		}
 		return retVal;
+#else
+		// Busload monitoring is disabled, always return 0
+		(void)canChannel; // Suppress unused parameter warning
+		return 0.0f;
+#endif
 	}
 
 	bool CANNetworkManager::send_can_message(std::uint32_t parameterGroupNumber,
