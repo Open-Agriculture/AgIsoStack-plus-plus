@@ -329,9 +329,8 @@ namespace isobus
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 				std::size_t bytes_to_copy = std::min(
-					static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
-					static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred)
-				);
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
+				  static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred));
 
 				if (bytes_to_copy > 0)
 				{
@@ -404,9 +403,8 @@ namespace isobus
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 				std::size_t bytes_to_copy = std::min(
-					static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME - 1),
-					static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred)
-				);
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME - 1),
+				  static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred));
 
 				if (bytes_to_copy > 0)
 				{

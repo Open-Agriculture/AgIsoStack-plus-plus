@@ -500,11 +500,11 @@ namespace isobus
 				// Correct sequence number, copy the data (optimized with memcpy)
 				std::uint32_t currentDataIndex = PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number();
 				std::size_t bytes_to_copy = std::min(
-					static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
-					static_cast<std::size_t>(session->get_message_length() - currentDataIndex)
-				);
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
+				  static_cast<std::size_t>(session->get_message_length() - currentDataIndex));
 
-				if (bytes_to_copy > 0) {
+				if (bytes_to_copy > 0)
+				{
 					memcpy(&data[currentDataIndex], message.get_data().data() + 1, bytes_to_copy);
 				}
 
