@@ -479,7 +479,7 @@ namespace isobus
 
 		auto sequenceNumber = message.get_uint8_at(SEQUENCE_NUMBER_DATA_INDEX);
 
-		auto session = get_session(source, destination);  // Where does the session go?
+		auto session = get_session(source, destination);
 		if (nullptr != session)
 		{
 			if (StateMachineState::WaitForDataTransferPacket != session->state)
