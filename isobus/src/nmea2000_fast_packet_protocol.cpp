@@ -20,6 +20,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 namespace isobus
 {
@@ -327,18 +328,15 @@ namespace isobus
 				// Correct sequence number, copy the data
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
-				for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
+				std::size_t bytes_to_copy = std::min(
+					static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
+					static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred)
+				);
+
+				if (bytes_to_copy > 0)
 				{
-					if (session->numberOfBytesTransferred < session->get_message_length())
-					{
-						data.set_byte(session->numberOfBytesTransferred, message.get_uint8_at(1 + i));
-						session->add_number_of_bytes_transferred(1);
-					}
-					else
-					{
-						// Reached the end of the message, no need to copy any more data
-						break;
-					}
+					memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 1, bytes_to_copy);
+					session->add_number_of_bytes_transferred(static_cast<std::uint8_t>(bytes_to_copy));
 				}
 
 				if (session->numberOfBytesTransferred >= session->get_message_length())
@@ -405,10 +403,15 @@ namespace isobus
 				// Save the 6 bytes of payload in this first message
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
-				for (std::uint8_t i = 0; i < (PROTOCOL_BYTES_PER_FRAME - 1); i++)
+				std::size_t bytes_to_copy = std::min(
+					static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME - 1),
+					static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred)
+				);
+
+				if (bytes_to_copy > 0)
 				{
-					data.set_byte(session->numberOfBytesTransferred, message.get_uint8_at(2 + i));
-					session->add_number_of_bytes_transferred(1);
+					memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 2, bytes_to_copy);
+					session->add_number_of_bytes_transferred(static_cast<std::uint8_t>(bytes_to_copy));
 				}
 
 				LOCK_GUARD(Mutex, sessionMutex);
