@@ -686,14 +686,13 @@ namespace isobus
 #ifndef DISABLE_BUSLOAD_MONITORING
 		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		currentBusloadBitAccumulator.at(channelIndex) += numberOfBitsProcessed;
-        printf("Busload update enabled\n");
 #endif
 	}
 
 	void CANNetworkManager::update_busload_history()
 	{
 #ifndef DISABLE_BUSLOAD_MONITORING
-        LOCK_GUARD(Mutex, busloadUpdateMutex);
+		LOCK_GUARD(Mutex, busloadUpdateMutex);
 		if (SystemTiming::time_expired_ms(busloadUpdateTimestamp_ms, BUSLOAD_UPDATE_FREQUENCY_MS))
 		{
 			for (std::size_t i = 0; i < busloadMessageBitsHistory.size(); i++)
