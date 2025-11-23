@@ -39,6 +39,11 @@ namespace isobus
 		close();
 	}
 
+	std::string InnoMakerUSB2CANWindowsPlugin::get_name() const
+	{
+		return "INNO-Maker USB2CAN";
+	}
+
 	bool InnoMakerUSB2CANWindowsPlugin::get_is_valid() const
 	{
 		return nullptr != driverInstance->getInnoMakerDevice(channel) && driverInstance->getInnoMakerDevice(channel)->isOpen;

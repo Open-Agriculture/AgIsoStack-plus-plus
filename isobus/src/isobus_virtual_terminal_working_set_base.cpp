@@ -1113,10 +1113,11 @@ namespace isobus
 							std::string tempString;
 							tempString.reserve(lengthOfStringObject);
 
-							for (std::uint_fast8_t i = 0; i < lengthOfStringObject; i++)
+							for (std::uint_fast16_t i = 0; i < lengthOfStringObject; i++)
 							{
 								tempString.push_back(static_cast<char>(iopData[17 + i]));
 							}
+							tempObject->set_value(tempString);
 
 							tempObject->set_enabled(iopData[17 + lengthOfStringObject]);
 							iopData += (18 + lengthOfStringObject);
@@ -1316,7 +1317,7 @@ namespace isobus
 
 						if (iopLength >= stringLengthToFollow)
 						{
-							for (uint_fast8_t i = 0; i < stringLengthToFollow; i++)
+							for (uint_fast16_t i = 0; i < stringLengthToFollow; i++)
 							{
 								tempString.push_back(static_cast<char>(iopData[0]));
 								iopData++;
@@ -2367,6 +2368,27 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
+						std::uint16_t numberOfIndexes = static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8);
+						if ((2 == numberOfIndexes) ||
+						    (16 == numberOfIndexes) ||
+						    (256 == numberOfIndexes))
+						{
+							tempObject->set_number_of_colour_indexes(numberOfIndexes);
+
+							for (std::uint_fast16_t i = 0; i < numberOfIndexes; i++)
+							{
+								tempObject->set_colour_map_index(static_cast<std::uint8_t>(i), iopData[5 + i]);
+							}
+
+							iopData += (5 + tempObject->get_number_of_colour_indexes());
+							iopLength -= (5 + tempObject->get_number_of_colour_indexes());
+
+							retVal = true;
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Colour map with invalid number of indexes: %d", numberOfIndexes);
+						}
 					}
 					else
 					{
@@ -2815,7 +2837,7 @@ namespace isobus
 
 				default:
 				{
-					LOG_ERROR("[WS]: Unsupported Object");
+					LOG_ERROR("[WS]: Unsupported Object (Type: %d)", decodedType);
 				}
 				break;
 			}

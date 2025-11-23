@@ -3161,7 +3161,7 @@ namespace isobus
 			CrossedOut = 1, ///< Crossed-out font style (strikethrough)
 			Underlined = 2, ///< Underlined font style
 			Italic = 3, ///< Italic font style
-			Inverted = 4, ///< Inverted font style (upside down)
+			Inverted = 4, ///< Inverted font style (exchange background and pen colours)
 			Flashing = 5, ///< Flashing font style
 			FlashingHidden = 6, ///< Flashing between hidden and shown font style
 			ProportionalFontRendering = 7 ///< Enables proportional font rendering if supported by the server

@@ -108,10 +108,10 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 
 	// Make a pool with 1 granular product
 	// Set up device and device element
-	retVal &= poolToPopulate->add_device("Isobus Seeder", "1.0.0", "123", "IS1.1", localizationData, std::vector<std::uint8_t>(), clientName.get_full_name());
+	retVal &= poolToPopulate->add_device("Isobus Seeder", "1.0.0", "123", "IS1.2", localizationData, std::vector<std::uint8_t>(), clientName.get_full_name());
 	retVal &= poolToPopulate->add_device_element("Seeder", elementCounter, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement));
 	retVal &= poolToPopulate->add_device_process_data("Actual Work State", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkState), isobus::NULL_OBJECT_ID, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::OnChange), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
-	retVal &= poolToPopulate->add_device_process_data("Request Default PD", static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData), isobus::NULL_OBJECT_ID, 0, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData));
+	retVal &= poolToPopulate->add_device_process_data("Request Default PD", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::RequestDefaultProcessData), isobus::NULL_OBJECT_ID, 0, static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData));
 	retVal &= poolToPopulate->add_device_process_data("Total Time", static_cast<std::uint16_t>(isobus::DataDescriptionIndex::EffectiveTotalTime), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::TimePresentation), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::MemberOfDefaultSet) | static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), static_cast<std::uint8_t>(isobus::task_controller_object::DeviceProcessDataObject::AvailableTriggerMethods::Total), static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceTotalTime));
 	elementCounter++; // Increment element number. Needs to be unique for each element.
 
@@ -179,14 +179,15 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 	// Add child linkages to device elements if all objects were added OK
 	if (retVal)
 	{
-		auto sprayer = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement)));
+		auto seeder = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainDeviceElement)));
 		auto connector = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::Connector)));
 		auto boom = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::MainBoom)));
 		auto product = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(poolToPopulate->get_object_by_id(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::GranularProduct)));
 
-		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
-		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointWorkState));
-		sprayer->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceTotalTime));
+		seeder->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceActualWorkState));
+		seeder->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SetpointWorkState));
+		seeder->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::DeviceTotalTime));
+		seeder->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::RequestDefaultProcessData));
 
 		connector->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ConnectorXOffset));
 		connector->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ConnectorYOffset));
@@ -197,6 +198,7 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::BoomZOffset));
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualWorkingWidth));
 		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::SectionControlState));
+		boom->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::AreaTotal));
 
 		sectionCounter = 0;
 		while (sectionCounter < get_number_of_sections())
@@ -213,6 +215,111 @@ bool SectionControlImplementSimulator::create_ddop(std::shared_ptr<isobus::Devic
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualCulturalPractice));
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::TargetRate));
 		product->add_reference_to_child_object(static_cast<std::uint16_t>(ImplementDDOPObjectIDs::ActualRate));
+	}
+	return retVal;
+}
+
+bool SectionControlImplementSimulator::default_process_data_request_callback(std::uint16_t elementNumber,
+                                                                             std::uint16_t DDI,
+                                                                             isobus::TaskControllerClient::DefaultProcessDataSettings &returnedSettings,
+                                                                             void *parentPointer)
+{
+	bool retVal = false;
+
+	if (nullptr != parentPointer)
+	{
+		switch (elementNumber)
+		{
+			case static_cast<std::uint16_t>(ImplementDDOPElementNumbers::BinElement):
+			{
+				switch (DDI)
+				{
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointCountPerAreaApplicationRate):
+					{
+						returnedSettings.enableChangeThresholdTrigger = true;
+						returnedSettings.changeThreshold = 1;
+						retVal = true;
+					}
+					break;
+
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::MaximumCountContent):
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCountContent):
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCountPerAreaApplicationRate):
+					{
+						returnedSettings.enableChangeThresholdTrigger = true;
+						returnedSettings.enableTimeTrigger = true;
+						returnedSettings.changeThreshold = 1;
+						returnedSettings.timeTriggerInterval_ms = 1000;
+						retVal = true;
+					}
+					break;
+
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::PrescriptionControlState):
+					{
+						returnedSettings.enableChangeThresholdTrigger = true;
+						returnedSettings.enableTimeTrigger = true;
+						returnedSettings.changeThreshold = 1;
+						returnedSettings.timeTriggerInterval_ms = 5000;
+						retVal = true;
+					}
+					break;
+
+					default:
+					{
+					}
+					break;
+				}
+			}
+			break;
+
+			case static_cast<std::uint16_t>(ImplementDDOPElementNumbers::BoomElement):
+			{
+				switch (DDI)
+				{
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkingWidth):
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SetpointWorkState):
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualCondensedWorkState1_16):
+					{
+						returnedSettings.enableChangeThresholdTrigger = true;
+						returnedSettings.changeThreshold = 1;
+						retVal = true;
+					}
+					break;
+
+					case static_cast<std::uint16_t>(isobus::DataDescriptionIndex::SectionControlState):
+					{
+						returnedSettings.enableChangeThresholdTrigger = true;
+						returnedSettings.enableTimeTrigger = true;
+						returnedSettings.changeThreshold = 1;
+						returnedSettings.timeTriggerInterval_ms = 1000;
+						retVal = true;
+					}
+					break;
+
+					default:
+					{
+					}
+					break;
+				}
+			}
+			break;
+
+			case static_cast<std::uint16_t>(ImplementDDOPElementNumbers::DeviceElement):
+			{
+				if (static_cast<std::uint16_t>(isobus::DataDescriptionIndex::ActualWorkState) == DDI)
+				{
+					returnedSettings.enableChangeThresholdTrigger = true;
+					returnedSettings.changeThreshold = 1;
+					retVal = true;
+				}
+			}
+			break;
+
+			default:
+			{
+			}
+			break;
+		}
 	}
 	return retVal;
 }
