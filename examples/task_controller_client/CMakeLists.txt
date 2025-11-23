@@ -8,7 +8,7 @@ find_package(Threads REQUIRED)
 
 add_executable(
   TaskControllerClientExample
-  main.cpp console_logger.cpp section_control_implement_sim.cpp
+  main.cpp ../common/console_logger.cpp section_control_implement_sim.cpp
   section_control_implement_sim.hpp)
 
 target_compile_features(TaskControllerClientExample PUBLIC cxx_std_11)

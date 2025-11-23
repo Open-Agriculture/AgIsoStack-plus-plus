@@ -135,7 +135,7 @@ namespace isobus
 	                                                                  std::uint8_t totalNumberOfPackets)
 	{
 		// The standard defines that we may not send aborts for messages with a global destination, we can only ignore them if we need to
-		if (activeSessions.size() >= configuration->get_max_number_transport_protocol_sessions())
+		if (get_sessions_count() >= configuration->get_max_number_transport_protocol_sessions())
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
 			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, configured maximum number of sessions reached.",
@@ -176,7 +176,12 @@ namespace isobus
 			else
 			{
 				newSession->set_state(StateMachineState::WaitForDataTransferPacket);
-				activeSessions.push_back(newSession);
+
+				{
+					std::lock_guard<std::mutex> lock(activeSessionsMutex);
+					activeSessions.push_back(newSession);
+				}
+
 				update_state_machine(newSession);
 				LOG_DEBUG("[TP]: New rx broadcast message session for 0x%05X. Source: %hu", parameterGroupNumber, source->get_address());
 			}
@@ -190,7 +195,7 @@ namespace isobus
 	                                                       std::uint8_t totalNumberOfPackets,
 	                                                       std::uint8_t clearToSendPacketMax)
 	{
-		if (activeSessions.size() >= configuration->get_max_number_transport_protocol_sessions())
+		if (get_sessions_count() >= configuration->get_max_number_transport_protocol_sessions())
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
 			LOG_WARNING("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.", parameterGroupNumber);
@@ -243,7 +248,12 @@ namespace isobus
 			else
 			{
 				newSession->set_state(StateMachineState::SendClearToSend);
-				activeSessions.push_back(newSession);
+
+				{
+					std::lock_guard<std::mutex> lock(activeSessionsMutex);
+					activeSessions.push_back(newSession);
+				}
+
 				LOG_DEBUG("[TP]: New rx session for 0x%05X. Source: %hu, destination: %hu", parameterGroupNumber, source->get_address(), destination->get_address());
 				update_state_machine(newSession);
 			}
@@ -629,17 +639,20 @@ namespace isobus
 			          source->get_address(),
 			          destination->get_address());
 		}
-		activeSessions.push_back(session);
+
+		{
+			std::lock_guard<std::mutex> lock(activeSessionsMutex);
+			activeSessions.push_back(session);
+		}
+
 		update_state_machine(session);
 		return true;
 	}
 
 	void TransportProtocolManager::update()
 	{
-		// We use a fancy for loop here to allow us to remove sessions from the list while iterating
-		for (std::size_t i = activeSessions.size(); i > 0; i--)
+		for (auto &session : get_sessions())
 		{
-			auto session = activeSessions.at(i - 1);
 			if (!session->get_source()->get_address_valid())
 			{
 				LOG_WARNING("[TP]: Closing active session as the source control function is no longer valid");
@@ -882,6 +895,7 @@ namespace isobus
 	{
 		session->complete(successful);
 
+		std::lock_guard<std::mutex> lock(activeSessionsMutex);
 		auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
 		if (activeSessions.end() != sessionLocation)
 		{
@@ -992,6 +1006,7 @@ namespace isobus
 
 	bool TransportProtocolManager::has_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
+		std::lock_guard<std::mutex> lock(activeSessionsMutex);
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
@@ -1000,14 +1015,22 @@ namespace isobus
 	std::shared_ptr<TransportProtocolManager::TransportProtocolSession> TransportProtocolManager::get_session(std::shared_ptr<ControlFunction> source,
 	                                                                                                          std::shared_ptr<ControlFunction> destination)
 	{
+		std::lock_guard<std::mutex> lock(activeSessionsMutex);
 		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
 		return (activeSessions.end() != result) ? (*result) : nullptr;
 	}
 
-	const std::vector<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> &TransportProtocolManager::get_sessions() const
+	std::size_t TransportProtocolManager::get_sessions_count() const
 	{
+		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		return activeSessions.size();
+	}
+
+	std::list<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
+	{
+		std::lock_guard<std::mutex> lock(activeSessionsMutex);
 		return activeSessions;
 	}
 }

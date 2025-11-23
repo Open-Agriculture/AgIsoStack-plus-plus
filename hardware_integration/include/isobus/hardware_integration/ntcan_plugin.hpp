@@ -30,6 +30,10 @@ namespace isobus
 		/// @param[in] baudrate The baudrate to use for the CAN connection.
 		explicit NTCANPlugin(int channel, int baudrate = NTCAN_BAUD_250);
 
+		/// @brief Returns the displayable name of the plugin
+		/// @returns ESD NTCAN
+		std::string get_name() const override;
+
 		/// @brief The destructor for NTCANPlugin
 		virtual ~NTCANPlugin() = default;
 

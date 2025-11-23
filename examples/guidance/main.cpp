@@ -3,7 +3,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_guidance_interface.hpp"
 
-#include "console_logger.cpp"
+#include "../common/console_logger.cpp"
 
 #include <atomic>
 #include <csignal>

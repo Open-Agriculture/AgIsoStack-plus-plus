@@ -6,7 +6,8 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(TaskControllerServerExample main.cpp console_logger.cpp)
+add_executable(TaskControllerServerExample main.cpp
+                                           ../common/console_logger.cpp)
 
 target_compile_features(TaskControllerServerExample PUBLIC cxx_std_11)
 set_target_properties(TaskControllerServerExample PROPERTIES CXX_EXTENSIONS OFF)

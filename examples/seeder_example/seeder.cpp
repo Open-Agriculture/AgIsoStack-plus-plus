@@ -14,24 +14,29 @@
 #include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 
-#include "console_logger.cpp"
+#include "../common/console_logger.cpp"
 
 #include <iostream>
 
-bool Seeder::initialize()
+bool Seeder::initialize(const std::string &interfaceName)
 {
 	bool retVal = true;
 
 	// Automatically load the desired CAN driver based on the available drivers
 	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
 #if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
-#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
+	std::string interfaceNameToOpen = interfaceName.empty() ? "can0" : interfaceName;
+	canDriver = std::make_shared<isobus::SocketCANInterface>(interfaceNameToOpen);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+	int channel = interfaceName.empty() ? 0 : std::stoi(interfaceName);
 	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
-#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
+#elif (defined(ISOBUS_MACCANPCAN_AVAILABLE) || defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE))
+	int channel = interfaceName.empty() ? PCAN_USBBUS1 : (std::stoi(interfaceName) - 1 + PCAN_USBBUS1);
+#if defined(ISOBUS_MACCANPCAN_AVAILABLE)
+	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(channel);
+#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(channel);
+#endif
 #endif
 	if (nullptr == canDriver)
 	{

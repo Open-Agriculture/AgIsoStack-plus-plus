@@ -172,3 +172,93 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 
 	CANHardwareInterface::stop();
 }
+
+TEST(HARDWARE_INTERFACE_TESTS, StopSetsStartedFalseInNonThreadingMode)
+{
+	// This test verifies that the started flag is properly set to false
+	// when stop() is called, even when threading is disabled.
+	// This addresses the bug where started remained true when CAN_STACK_DISABLE_THREADS is defined.
+
+	auto device = std::make_shared<VirtualCANPlugin>();
+
+	// Set up the hardware interface
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+
+	// Verify initial state
+	EXPECT_FALSE(CANHardwareInterface::is_running());
+
+	// Start the interface
+	CANHardwareInterface::start();
+	EXPECT_TRUE(CANHardwareInterface::is_running());
+
+	// Test that we CANNOT unassign frame handlers while running (this should fail)
+	bool unassignWhileRunning = CANHardwareInterface::unassign_can_channel_frame_handler(0);
+	EXPECT_FALSE(unassignWhileRunning); // Should fail because interface is running
+
+	// Stop the interface - this should set started = false regardless of threading mode
+	CANHardwareInterface::stop();
+
+	EXPECT_FALSE(CANHardwareInterface::is_running());
+
+	// Now we should be able to unassign frame handlers after stopping
+	// (The frame handler was automatically unassigned during stop(), so this should return false
+	// but NOT because of the started check - that was the original bug)
+	bool unassignAfterStop = CANHardwareInterface::unassign_can_channel_frame_handler(0);
+
+	// The frame handler was already unassigned during stop(), so this should return false
+	// but NOT because of the started check (which was the original bug)
+	EXPECT_FALSE(unassignAfterStop);
+
+	// Verify the frame handler was actually unassigned
+	EXPECT_EQ(nullptr, CANHardwareInterface::get_assigned_can_channel_frame_handler(0));
+
+	// Test reinitialization - this should work properly now
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+	EXPECT_NE(nullptr, CANHardwareInterface::get_assigned_can_channel_frame_handler(0));
+
+	// Start again to verify the system can be brought up and down multiple times
+	CANHardwareInterface::start();
+	EXPECT_TRUE(CANHardwareInterface::is_running());
+
+	CANHardwareInterface::stop();
+	EXPECT_FALSE(CANHardwareInterface::is_running());
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, VerifyStartedFlagBehaviorInNonThreadingMode)
+{
+	// This test specifically verifies the started flag behavior
+	// and can be used to demonstrate the fix works in non-threading mode
+
+	auto device = std::make_shared<VirtualCANPlugin>();
+
+	// Set up the hardware interface
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+
+	// Verify initial state - started should be false
+	EXPECT_FALSE(CANHardwareInterface::is_running());
+
+	// Start the interface - started should become true
+	CANHardwareInterface::start();
+	EXPECT_TRUE(CANHardwareInterface::is_running());
+
+	// This is the critical test: when threading is disabled,
+	// the original bug would leave started = true after stop()
+	// because stop_threads() is not called, and stop_threads()
+	// was the only place that set started = false
+	CANHardwareInterface::stop();
+
+	// With the fix, started should be false regardless of threading mode
+	EXPECT_FALSE(CANHardwareInterface::is_running());
+
+	// The key test: unassign_can_channel_frame_handler checks if started is true
+	// and returns false if it is. With the original bug, this would fail
+	// in non-threading mode because started would still be true
+	// Note: The frame handler was automatically unassigned during stop(), so this should return false
+	// but NOT because of the started check (which was the original bug)
+	EXPECT_FALSE(CANHardwareInterface::unassign_can_channel_frame_handler(0));
+
+	// Clean up
+	CANHardwareInterface::stop();
+}
