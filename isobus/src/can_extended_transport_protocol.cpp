@@ -437,7 +437,7 @@ namespace isobus
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 
-				// Correct sequence number, copy the data (optimized with memcpy)
+				// Correct sequence number, copy the data (hybrid optimization)
 				std::uint32_t currentDataIndex = PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number();
 				std::size_t bytes_to_copy = std::min(
 				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
@@ -445,7 +445,19 @@ namespace isobus
 
 				if (bytes_to_copy > 0)
 				{
-					memcpy(&data[currentDataIndex], message.get_data().data() + 1, bytes_to_copy);
+					if (bytes_to_copy <= 4)
+					{
+						// Use byte-by-byte for small copies (better for tiny data)
+						for (std::size_t i = 0; i < bytes_to_copy; i++)
+						{
+							data[currentDataIndex + i] = message.get_data().data()[1 + i];
+						}
+					}
+					else
+					{
+						// Use memcpy for larger copies (better for bulk data)
+						memcpy(&data[currentDataIndex], message.get_data().data() + 1, bytes_to_copy);
+					}
 				}
 
 				session->set_last_sequency_number(sequenceNumber);

@@ -325,7 +325,7 @@ namespace isobus
 			}
 			else
 			{
-				// Correct sequence number, copy the data
+				// Correct sequence number, copy the data (hybrid optimization)
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 				std::size_t bytes_to_copy = std::min(
@@ -334,7 +334,19 @@ namespace isobus
 
 				if (bytes_to_copy > 0)
 				{
-					memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 1, bytes_to_copy);
+					if (bytes_to_copy <= 4)
+					{
+						// Use byte-by-byte for small copies (better for tiny data)
+						for (std::size_t i = 0; i < bytes_to_copy; i++)
+						{
+							data[session->numberOfBytesTransferred + i] = message.get_data().data()[1 + i];
+						}
+					}
+					else
+					{
+						// Use memcpy for larger copies (better for bulk data)
+						memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 1, bytes_to_copy);
+					}
 					session->add_number_of_bytes_transferred(static_cast<std::uint8_t>(bytes_to_copy));
 				}
 
@@ -399,7 +411,7 @@ namespace isobus
 				                                                      nullptr, // No callback
 				                                                      nullptr);
 
-				// Save the 6 bytes of payload in this first message
+				// Save the 6 bytes of payload in this first message (hybrid optimization)
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 				std::size_t bytes_to_copy = std::min(
@@ -408,7 +420,19 @@ namespace isobus
 
 				if (bytes_to_copy > 0)
 				{
-					memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 2, bytes_to_copy);
+					if (bytes_to_copy <= 4)
+					{
+						// Use byte-by-byte for small copies (better for tiny data)
+						for (std::size_t i = 0; i < bytes_to_copy; i++)
+						{
+							data[session->numberOfBytesTransferred + i] = message.get_data().data()[2 + i];
+						}
+					}
+					else
+					{
+						// Use memcpy for larger copies (better for bulk data)
+						memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 2, bytes_to_copy);
+					}
 					session->add_number_of_bytes_transferred(static_cast<std::uint8_t>(bytes_to_copy));
 				}
 
