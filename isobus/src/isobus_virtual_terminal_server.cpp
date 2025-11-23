@@ -72,17 +72,25 @@ namespace isobus
 
 	std::uint8_t VirtualTerminalServer::get_supported_small_fonts_bitfield() const
 	{
-		return 0xFF;
+		return 0x7F;
 	}
 
 	std::uint8_t VirtualTerminalServer::get_supported_large_fonts_bitfield() const
 	{
-		return 0xFF;
+		return 0x7F;
 	}
 
 	void VirtualTerminalServer::identify_vt()
 	{
 		LOG_ERROR("[VT Server]: The Identify VT command is not implemented");
+	}
+
+	void VirtualTerminalServer::screen_capture(std::uint8_t item, std::uint8_t path, std::shared_ptr<ControlFunction> requestor)
+	{
+		(void)item;
+		(void)path;
+		(void)requestor;
+		LOG_ERROR("[VT Server]: The Screen Capture command is not implemented");
 	}
 
 	EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> &VirtualTerminalServer::get_on_repaint_event_dispatcher()
@@ -1319,11 +1327,11 @@ namespace isobus
 										if (fontSize <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
 										{
 											auto font = std::static_pointer_cast<FontAttributes>(targetObject);
-											font->set_background_color(fontColour);
+											font->set_colour(fontColour);
 											font->set_size(static_cast<FontAttributes::FontSize>(fontSize));
 											font->set_type(static_cast<FontAttributes::FontType>(fontType));
 											font->set_style(fontStyle);
-											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), fontSize, objectID);
+											LOG_DEBUG("[VT Server]: Client %u change font attributes command: ObjectID: %u", cf->get_control_function()->get_address(), objectID);
 											parentServer->send_change_font_attributes_response(objectID, 0, message.get_source_control_function());
 											parentServer->onRepaintEventDispatcher.call(cf);
 										}
@@ -1747,6 +1755,12 @@ namespace isobus
 								case Function::IdentifyVTMessage:
 								{
 									parentServer->identify_vt();
+								}
+								break;
+
+								case Function::ScreenCapture:
+								{
+									parentServer->screen_capture(data[1], data[2], message.get_source_control_function());
 								}
 								break;
 
@@ -2598,6 +2612,26 @@ namespace isobus
 		                                                      CAN_DATA_LENGTH,
 		                                                      serverInternalControlFunction,
 		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+
+		buffer[0] = static_cast<std::uint8_t>(Function::ScreenCapture);
+		buffer[1] = item;
+		buffer[2] = path;
+		buffer[3] = errorCode;
+		buffer[4] = static_cast<std::uint8_t>(imageId & 0xFF);
+		buffer[5] = static_cast<std::uint8_t>((imageId >> 8) & 0xFF);
+		buffer[6] = 0xFF;
+		buffer[7] = 0xFF;
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      requestor,
 		                                                      get_priority());
 	}
 

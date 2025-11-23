@@ -251,6 +251,12 @@ namespace isobus
 		/// @brief This function is called when the Identify VT version message is received
 		virtual void identify_vt();
 
+		/// @brief This function is called when the Screen capture command is received
+		/// @param[in] item Item requested from the Screen Capture command
+		/// @param[in] path Path requested from the Screen Capture command
+		/// @param[in] requestor The control function requesting screen capture
+		virtual void screen_capture(std::uint8_t item, std::uint8_t path, std::shared_ptr<ControlFunction> requestor);
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events
@@ -445,6 +451,62 @@ namespace isobus
 		{
 			DeletionError = 0,
 			AnyOtherError = 8
+		};
+
+		/// @brief Enumerates the possible values of the Screen Capture command Item Requested field
+		enum class ScreenCaptureItem
+		{
+			ScreenImage = 0,
+			ManufacturerProprietary_240,
+			ManufacturerProprietary_241,
+			ManufacturerProprietary_242,
+			ManufacturerProprietary_243,
+			ManufacturerProprietary_244,
+			ManufacturerProprietary_245,
+			ManufacturerProprietary_246,
+			ManufacturerProprietary_247,
+			ManufacturerProprietary_248,
+			ManufacturerProprietary_249,
+			ManufacturerProprietary_250,
+			ManufacturerProprietary_251,
+			ManufacturerProprietary_252,
+			ManufacturerProprietary_253,
+			ManufacturerProprietary_254,
+			ManufacturerProprietary_255,
+		};
+
+		/// @brief Enumerates the possible values of the Screen Capture command Path field
+		enum class ScreenCapturePath
+		{
+			VT_StorageOrRemovableMedia = 1,
+			ManufacturerProprietary_240,
+			ManufacturerProprietary_241,
+			ManufacturerProprietary_242,
+			ManufacturerProprietary_243,
+			ManufacturerProprietary_244,
+			ManufacturerProprietary_245,
+			ManufacturerProprietary_246,
+			ManufacturerProprietary_247,
+			ManufacturerProprietary_248,
+			ManufacturerProprietary_249,
+			ManufacturerProprietary_250,
+			ManufacturerProprietary_251,
+			ManufacturerProprietary_252,
+			ManufacturerProprietary_253,
+			ManufacturerProprietary_254,
+			ManufacturerProprietary_255,
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a screen capture response
+		enum class ScreenCaptureResponseErrorBit : std::uint8_t
+		{
+			NoError = 0,
+			ScreenCaptureNotEnabled = 1,
+			TransferBufferBusy = 2,
+			UnsupportedItemRequest = 4,
+			UnsupportedPathRequest = 8,
+			RemovableMediaUnavailable = 16,
+			AnyOtherError = 32
 		};
 
 		/// @brief Checks to see if the message should be listened to based on
@@ -678,6 +740,15 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false.
 		bool send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response message to the Screen capture command
+		/// @param[in] item Item requested from the Screen Capture command
+		/// @param[in] path Path requested from the Screen Capture command
+		/// @param[in] errorCode Error codes
+		/// @param[in] imageId Error codes
+		/// @param[in] requestor The control function which requested the screen capture
+		/// @returns true if the message was sent, otherwise false
+		bool send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const;
 
 		/// @brief Cyclic update function
 		void update();

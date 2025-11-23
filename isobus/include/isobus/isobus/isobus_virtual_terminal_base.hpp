@@ -340,6 +340,7 @@ namespace isobus
 			GetTextFontDataMessage = 0xC3,
 			GetWindowMaskDataMessage = 0xC4,
 			GetSupportedObjectsMessage = 0xC5,
+			ScreenCapture = 0xC6,
 			GetHardwareMessage = 0xC7,
 			StoreVersionCommand = 0xD0,
 			LoadVersionCommand = 0xD1,
