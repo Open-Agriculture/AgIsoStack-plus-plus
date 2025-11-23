@@ -70,6 +70,7 @@ TEST(CORE_TESTS, BusloadTest)
 {
 	EXPECT_EQ(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(200)); // Invalid channel should return zero load
 
+#ifndef DISABLE_BUSLOAD_MONITORING
 	// Send a bunch of messages through the receive process
 	CANMessageFrame testFrame;
 	testFrame.dataLength = 8;
@@ -95,6 +96,10 @@ TEST(CORE_TESTS, BusloadTest)
 	// Bus load should be non zero, and less than 100%
 	EXPECT_NE(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(0));
 	EXPECT_LT(CANNetworkManager::CANNetwork.get_estimated_busload(0), 100.0f);
+#else
+	// When busload monitoring is disabled, get_estimated_busload should always return 0
+	EXPECT_EQ(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(0));
+#endif
 }
 
 TEST(CORE_TESTS, CommandedAddress)

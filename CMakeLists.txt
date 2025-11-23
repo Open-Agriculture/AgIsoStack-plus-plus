@@ -27,6 +27,8 @@ elseif(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+option(DISABLE_BUSLOAD_MONITORING "Disable CAN bus load monitoring" OFF)
+
 option(
   CAN_STACK_DISABLE_THREADS
   "Set to ON to disable multi-threading, which removes the need for std::thread, std::mutex, and related libraries."
