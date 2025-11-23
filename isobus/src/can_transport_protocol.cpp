@@ -19,6 +19,7 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 
 namespace isobus
@@ -506,19 +507,15 @@ namespace isobus
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 
-				// Correct sequence number, copy the data
-				for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
+				// Correct sequence number, copy the data (optimized with memcpy)
+				std::uint32_t currentDataIndex = PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number();
+				std::size_t bytes_to_copy = std::min(
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
+				  static_cast<std::size_t>(session->get_message_length() - currentDataIndex));
+
+				if (bytes_to_copy > 0)
 				{
-					std::uint32_t currentDataIndex = (PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number()) + i;
-					if (currentDataIndex < session->get_message_length())
-					{
-						data.set_byte(currentDataIndex, message.get_uint8_at(1 + i));
-					}
-					else
-					{
-						// Reached the end of the message, no need to copy any more data
-						break;
-					}
+					memcpy(&data[currentDataIndex], message.get_data().data() + 1, bytes_to_copy);
 				}
 
 				session->set_last_sequency_number(sequenceNumber);
@@ -947,6 +944,7 @@ namespace isobus
 		bool retVal = false;
 
 		std::uint8_t packetsThisSegment = session->get_number_of_remaining_packets();
+
 		if (packetsThisSegment > session->get_rts_number_of_packet_limit())
 		{
 			packetsThisSegment = session->get_rts_number_of_packet_limit();
