@@ -144,7 +144,7 @@ namespace isobus
 		}
 		return retVal;
 #else
-		// Busload monitoring is disabled, always return 0
+		LOG_WARNING("[NM]: get_estimated_busload() called but DISABLE_BUSLOAD_MONITORING is defined. Returning 0.0f.");
 		(void)canChannel; // Suppress unused parameter warning
 		return 0.0f;
 #endif
