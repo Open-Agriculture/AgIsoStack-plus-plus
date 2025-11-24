@@ -439,6 +439,15 @@ namespace isobus
 
 				// Correct sequence number, copy the data (hybrid optimization)
 				std::uint32_t currentDataIndex = PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number();
+
+				// Defensive bounds check to prevent potential buffer overflow
+				if (currentDataIndex >= session->get_message_length())
+				{
+					LOG_ERROR("[ETP]: Protocol violation - packet index %u exceeds message length %u", currentDataIndex, session->get_message_length());
+					abort_session(session, ConnectionAbortReason::AnyOtherError);
+					return;
+				}
+
 				std::size_t bytes_to_copy = std::min(
 				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
 				  static_cast<std::size_t>(session->get_message_length() - currentDataIndex));

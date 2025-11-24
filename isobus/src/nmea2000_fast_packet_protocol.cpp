@@ -328,6 +328,17 @@ namespace isobus
 				// Correct sequence number, copy the data (hybrid optimization)
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
+
+				// Defensive bounds check to prevent potential buffer overflow
+				if (session->numberOfBytesTransferred >= session->get_message_length())
+				{
+					LOG_ERROR("[FP]: Protocol violation - bytes transferred %u exceeds message length %u",
+					          session->numberOfBytesTransferred,
+					          session->get_message_length());
+					close_session(session, false);
+					return;
+				}
+
 				std::size_t bytes_to_copy = std::min(
 				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
 				  static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred));
@@ -414,6 +425,17 @@ namespace isobus
 				// Save the 6 bytes of payload in this first message (hybrid optimization)
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
+
+				// Defensive bounds check to prevent potential buffer overflow
+				if (session->numberOfBytesTransferred >= session->get_message_length())
+				{
+					LOG_ERROR("[FP]: Protocol violation - bytes transferred %u exceeds message length %u",
+					          session->numberOfBytesTransferred,
+					          session->get_message_length());
+					close_session(session, false);
+					return;
+				}
+
 				std::size_t bytes_to_copy = std::min(
 				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME - 1),
 				  static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred));
