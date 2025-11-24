@@ -965,7 +965,6 @@ namespace isobus
 		bool retVal = false;
 
 		std::uint8_t packetsThisSegment = session->get_number_of_remaining_packets();
-
 		if (packetsThisSegment > session->get_rts_number_of_packet_limit())
 		{
 			packetsThisSegment = session->get_rts_number_of_packet_limit();
