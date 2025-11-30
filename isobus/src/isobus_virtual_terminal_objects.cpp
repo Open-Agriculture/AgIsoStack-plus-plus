@@ -8623,4 +8623,166 @@ namespace isobus
 		pointerType = type;
 	}
 
+	VirtualTerminalObjectType ScaledGraphicObject::get_object_type() const
+	{
+		return VirtualTerminalObjectType::ScaledGraphic;
+	}
+
+	bool ScaledGraphicObject::get_attribute(uint8_t attributeID, uint32_t &returnedAttributeData) const
+	{
+		switch (static_cast<AttributeName>(attributeID))
+		{
+			case AttributeName::Width:
+				returnedAttributeData = width;
+				return true;
+
+			case AttributeName::Height:
+				returnedAttributeData = height;
+				return true;
+
+			case AttributeName::ScaleType:
+				returnedAttributeData = scaleType;
+				return true;
+
+			case AttributeName::Options:
+				returnedAttributeData = optionsBitfield;
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	bool ScaledGraphicObject::get_option(Options option) const
+	{
+		return (0 != ((1 << static_cast<std::uint8_t>(option)) & optionsBitfield));
+	}
+
+	void ScaledGraphicObject::set_option(Options option, bool value)
+	{
+		if (value)
+		{
+			optionsBitfield |= (1 << static_cast<std::uint8_t>(option));
+		}
+		else
+		{
+			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
+		}
+	}
+
+	void ScaledGraphicObject::set_options(uint8_t options)
+	{
+		optionsBitfield = options;
+	}
+
+	void ScaledGraphicObject::set_scale_type(uint8_t scale_type)
+	{
+		scaleType = scale_type;
+	}
+
+	void ScaledGraphicObject::get_justification(VerticalJustification &vjust, HorizontalJustification &hjust) const
+	{
+		vjust = static_cast<VerticalJustification>((scaleType & 0x18) >> 3);
+		hjust = static_cast<HorizontalJustification>((scaleType & 0x60) >> 5);
+	}
+
+	uint16_t ScaledGraphicObject::get_graphic_id() const
+	{
+		return graphicID;
+	}
+
+	void ScaledGraphicObject::set_graphic_id(std::uint16_t newGraphicID)
+	{
+		graphicID = newGraphicID;
+	}
+
+	uint8_t ScaledGraphicObject::get_scale_type() const
+	{
+		return scaleType;
+	}
+
+	bool ScaledGraphicObject::set_attribute(uint8_t attributeID, uint32_t rawData, const std::map<uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	{
+		(void)objectPool;
+		switch (static_cast<AttributeName>(attributeID))
+		{
+			case AttributeName::Width:
+				set_width(static_cast<std::uint16_t>(rawData));
+				return true;
+
+			case AttributeName::Height:
+				set_height(static_cast<std::uint16_t>(rawData));
+				return true;
+
+			case AttributeName::ScaleType:
+				if (((rawData & 0x07) >= 5) ||
+				    ((rawData & VERTICAL_JUSTIFICATION_MASK) == VERTICAL_JUSTIFICATION_MASK) ||
+				    ((rawData & HORIZONTAL_JUSTIFICATION_MASK) == HORIZONTAL_JUSTIFICATION_MASK) ||
+				    ((rawData & 0x80) == 0x80))
+				{
+					returnedError = AttributeError::InvalidValue;
+					return false;
+				}
+				scaleType = static_cast<std::uint8_t>(rawData);
+				return true;
+
+			case AttributeName::Options:
+				optionsBitfield = static_cast<std::uint8_t>(rawData & 0xFF);
+				return true;
+			default:
+				returnedError = AttributeError::InvalidAttributeID;
+				return false;
+		}
+	}
+
+	bool ScaledGraphicObject::get_is_valid(const std::map<uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		if (((scaleType & 0x07) >= 5) ||
+		    ((scaleType & VERTICAL_JUSTIFICATION_MASK) == VERTICAL_JUSTIFICATION_MASK) ||
+		    ((scaleType & HORIZONTAL_JUSTIFICATION_MASK) == HORIZONTAL_JUSTIFICATION_MASK) ||
+		    ((scaleType & 0x80) == 0x80))
+		{
+			return false;
+		}
+
+		if (NULL_OBJECT_ID != graphicID)
+		{
+			//  Object identifier of a graphic object, or an Object Pointer object.
+			// Graphic objects include:
+			// —   Graphic Data object;
+			// —   Picture Graphic object.
+			// An Object Pointer object shall point only to one of the above listed graphic objects,
+			// another Object Pointer object, or the NULL object.
+			auto object = get_object_by_id(graphicID, objectPool);
+
+			if (object && (VirtualTerminalObjectType::ObjectPointer == object->get_object_type()))
+			{
+				auto objectPointer = std::static_pointer_cast<ObjectPointer>(object);
+				if (NULL_OBJECT_ID != objectPointer->get_value())
+				{
+					object = get_object_by_id(objectPointer->get_value(), objectPool);
+					if (object &&
+					    (VirtualTerminalObjectType::PictureGraphic != object->get_object_type()) &&
+					    (VirtualTerminalObjectType::GraphicData != object->get_object_type()))
+					{
+						return false;
+					}
+				}
+			}
+
+			if (object &&
+			    (VirtualTerminalObjectType::PictureGraphic != object->get_object_type()) &&
+			    (VirtualTerminalObjectType::GraphicData != object->get_object_type()))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	uint32_t ScaledGraphicObject::get_minumum_object_length() const
+	{
+		return 9;
+	}
+
 } // namespace isobus

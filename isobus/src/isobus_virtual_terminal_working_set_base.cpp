@@ -2814,9 +2814,88 @@ namespace isobus
 				}
 				break;
 
+				case VirtualTerminalObjectType::ScaledGraphic:
+				{
+					auto tempObject = std::make_shared<ScaledGraphicObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
+						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_scale_type(iopData[7]);
+						tempObject->set_options(iopData[8]);
+						tempObject->set_graphic_id((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
+						const std::uint8_t numberOfMacrosToFollow = iopData[11];
+						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
+						iopData += 9;
+						iopLength -= 9;
+
+						if (iopLength >= sizeOfMacros)
+						{
+							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
+							{
+								// If the first byte is 255, then more bytes are used! 4.6.22.3
+								if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
+								{
+									std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+
+									if (EventID::Reserved != get_event_from_byte(iopData[2]))
+									{
+										tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
+										retVal = true;
+									}
+									else
+									{
+										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of scaled graphics object %u has an invalid or unsupported event ID:", macroID, decodedID, iopData[2]);
+										retVal = false;
+										break;
+									}
+								}
+								else
+								{
+									if (EventID::Reserved != get_event_from_byte(iopData[0]))
+									{
+										tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
+										retVal = true;
+									}
+									else
+									{
+										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a scaled graphics object %u has an invalid or unsupported event ID:", iopData[1], decodedID, iopData[0]);
+										retVal = false;
+										break;
+									}
+								}
+
+								iopLength -= 2;
+								iopData += 2;
+							}
+
+							if (0 == sizeOfMacros)
+							{
+								retVal = true;
+							}
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse scaled graphics macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+						}
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse scaled graphics object");
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+					}
+				}
+				break;
+
 				default:
 				{
-					LOG_ERROR("[WS]: Unsupported Object");
+					LOG_ERROR("[WS]: Unsupported Object type: %d", decodedType);
 				}
 				break;
 			}

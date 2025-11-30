@@ -4539,6 +4539,143 @@ namespace isobus
 		std::uint8_t pointerType = 0; ///< The pointer type, defines how this should be rendered
 	};
 
+	/// @brief Defines an Scaled Graphic object.
+	/// The Scaled Graphic object, available in VT version 6 and later, displays a scaled representation of a
+	/// referenced graphic object. The VT shall scale the raw data from the referenced graphic object from the
+	/// actual width and height to the target width and height. See Table B.75 and Table B.76. Therefore the
+	/// target width attribute in the Picture Graphic object shall be ignored when referenced from the Scaled
+	/// Graphic  object.
+	class ScaledGraphicObject : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes that have Attribute IDs (AID)
+		enum class AttributeName : std::uint8_t
+		{
+			Width = 1,
+			Height = 2,
+			ScaleType = 3,
+			Options = 4,
+
+			NumberOfAttributes = 5
+		};
+
+		/// @brief Enumerates the option bits in the options bitfield for a Scale graphics object
+		enum class Options
+		{
+			Flashing = 0, // Flashing. Flash style and rate determined by VT design.
+		};
+
+		enum class ScalingValue : std::uint8_t
+		{
+			NotScaled = 0,
+			ScaleToWidthMaintainAspectRatio = 1,
+			ScaleToHeightMaintainAspectRatio = 2,
+			ScaleToWidthAndHeight = 3,
+			ScaleToWidthAndHeightMaintainAspectRatio = 4,
+		};
+
+		enum class HorizontalJustification : std::uint8_t
+		{
+			PositionLeft = 0,
+			PositionMiddle = 1,
+			PositionRight = 2,
+		};
+
+		enum class VerticalJustification : std::uint8_t
+		{
+			PositionTop = 0,
+			PositionMiddle = 1,
+			PositionBottom = 2,
+		};
+
+		static constexpr uint8_t VERTICAL_JUSTIFICATION_MASK = 0x18;
+		static constexpr uint8_t HORIZONTAL_JUSTIFICATION_MASK = 0x60;
+
+		ScaledGraphicObject() = default;
+		~ScaledGraphicObject() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived objec
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the state of a single option in the object's option bitfield
+		/// @param[in] option The option to check the value of in the object's option bitfield
+		/// @returns The state of the associated option bit
+		bool get_option(Options option) const;
+
+		/// @brief Sets a single option in the options bitfield to the specified value
+		/// @param[in] option The option to set
+		/// @param[in] value The new value of the option bit
+		void set_option(Options option, bool value);
+
+		/// @brief Sets the options bitfield for this object to a new value
+		/// @param[in] value The new value for the options bitfield
+		void set_options(std::uint8_t options);
+
+		/// @brief Returns the scale type of the scaled graphic object
+		/// @returns Scaling type value
+		std::uint8_t get_scale_type() const;
+
+		/// @brief Sets the scaling type of the scaled graphic object
+		/// @returns Scaling type value
+		void set_scale_type(std::uint8_t scale_type);
+
+		/// @brief Helper method the query the vertical and horizontal justification with a single call
+		/// @param[in] vjust reference parameter for the vertical justification
+		/// @param[in] hjust reference parameter for the horizontal justification
+		void get_justification(VerticalJustification &vjust, HorizontalJustification &hjust) const;
+
+		/// @brief Returns the object ID of the referenced Graphics Data, Picture Graphic or object pointer
+		/// @returns The object ID of the referenced Graphics Data, Picture Graphic or object pointer or the null object ID
+		std::uint16_t get_graphic_id() const;
+
+		/// @brief Sets the object ID of the referenced Graphics Data, Picture Graphic or object pointer
+		/// @param[in] id The object ID of the referenced Graphics Data, Picture Graphic or object pointer or the null object ID
+		void set_graphic_id(std::uint16_t newGraphicID);
+
+	private:
+		/// ScaleType bit-field
+		/// Bits 0-2 : scaling type
+		/// Bits 3-4 : horizontal justification
+		/// Bits 5-6 : vertical justification
+		/// Bit 7    : reserved
+		std::uint8_t scaleType = 0;
+
+		/// Options bit-field
+		/// Bit 0 = Flashing
+		/// Bits 1–7 = reserved
+		std::uint8_t optionsBitfield = 0;
+
+		std::uint16_t graphicID = NULL_OBJECT_ID; ///< Object ID of a referenced Graphics Data, Picture Graphic or object pointer or NULL_OBJECT_ID
+	};
+
 	template<typename T>
 	/// @brief A specialized replacement for std::to_string
 	/// @param object_id An ID of an IsoBus object
