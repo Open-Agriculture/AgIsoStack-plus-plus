@@ -8682,8 +8682,8 @@ namespace isobus
 
 	void ScaledGraphicObject::get_justification(VerticalJustification &vjust, HorizontalJustification &hjust) const
 	{
-		hjust = static_cast<HorizontalJustification>((scaleType & VERTICAL_JUSTIFICATION_MASK) >> 3);
-		vjust = static_cast<VerticalJustification>((scaleType & HORIZONTAL_JUSTIFICATION_MASK) >> 5);
+		hjust = static_cast<HorizontalJustification>((scaleType & HORIZONTAL_JUSTIFICATION_MASK) >> 3);
+		vjust = static_cast<VerticalJustification>((scaleType & VERTICAL_JUSTIFICATION_MASK) >> 5);
 	}
 
 	uint16_t ScaledGraphicObject::get_graphic_id() const
