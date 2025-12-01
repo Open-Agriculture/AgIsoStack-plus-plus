@@ -126,7 +126,7 @@ namespace isobus
 											}
 											else
 											{
-												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a working set object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 												retVal = false;
 												break;
 											}
@@ -140,7 +140,7 @@ namespace isobus
 											}
 											else
 											{
-												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a working set object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 												retVal = false;
 												break;
 											}
@@ -242,7 +242,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a data mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 											retVal = false;
 											break;
 										}
@@ -256,7 +256,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a data mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 											retVal = false;
 											break;
 										}
@@ -346,7 +346,7 @@ namespace isobus
 												}
 												else
 												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of an alarm mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 													retVal = false;
 													break;
 												}
@@ -360,7 +360,7 @@ namespace isobus
 												}
 												else
 												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of an alarm mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 													retVal = false;
 													break;
 												}
@@ -469,7 +469,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a container object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 											retVal = false;
 											break;
 										}
@@ -483,7 +483,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a container object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 											retVal = false;
 											break;
 										}
@@ -662,7 +662,7 @@ namespace isobus
 												}
 												else
 												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a window mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 													retVal = false;
 													break;
 												}
@@ -676,7 +676,7 @@ namespace isobus
 												}
 												else
 												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a window mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 													retVal = false;
 													break;
 												}
@@ -768,7 +768,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a soft key mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 											retVal = false;
 											break;
 										}
@@ -782,7 +782,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a soft key mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 											retVal = false;
 											break;
 										}
@@ -867,7 +867,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a key object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
 											retVal = false;
 											break;
 										}
@@ -881,7 +881,7 @@ namespace isobus
 										}
 										else
 										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
+											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a key object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 											retVal = false;
 											break;
 										}
@@ -1412,7 +1412,7 @@ namespace isobus
 						}
 						else
 						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output number object {}" + isobus::to_string(static_cast<int>(decodedID)));
+							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output number object " + isobus::to_string(static_cast<int>(decodedID)));
 						}
 					}
 					else
@@ -2973,9 +2973,10 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an "
-					          "invalid or unsupported event ID.",
+					          "invalid or unsupported event ID: %u",
 					          macroID,
-					          object->get_id());
+					          object->get_id(),
+					          iopData[2]);
 					retVal = false;
 					break;
 				}
@@ -2990,9 +2991,10 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an "
-					          "invalid or unsupported event ID.",
+					          "invalid or unsupported event ID: %u",
 					          iopData[1],
-					          object->get_id());
+					          object->get_id(),
+					          iopData[0]);
 					retVal = false;
 					break;
 				}
