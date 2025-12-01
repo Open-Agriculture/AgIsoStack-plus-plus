@@ -158,6 +158,10 @@ if(DISABLE_ISOBUS_DATA_DICTIONARY)
   message(STATUS "ISOBUS data dictionary is disabled.")
   target_compile_definitions(Isobus PUBLIC DISABLE_ISOBUS_DATA_DICTIONARY)
 endif()
+if(DISABLE_BUSLOAD_MONITORING)
+  message(STATUS "Busload monitoring is disabled.")
+  target_compile_definitions(Isobus PUBLIC DISABLE_BUSLOAD_MONITORING)
+endif()
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

@@ -4559,12 +4559,13 @@ namespace isobus
 			NumberOfAttributes = 5
 		};
 
-		/// @brief Enumerates the option bits in the options bitfield for a Scale graphics object
+		/// @brief Enumerates the option bits in the options bitfield for a Scaled graphics object
 		enum class Options
 		{
 			Flashing = 0, // Flashing. Flash style and rate determined by VT design.
 		};
 
+		/// @brief Enumerates the scaling value bits in the scale type attribute of a Scaled graphics object
 		enum class ScalingValue : std::uint8_t
 		{
 			NotScaled = 0,
@@ -4574,6 +4575,7 @@ namespace isobus
 			ScaleToWidthAndHeightMaintainAspectRatio = 4,
 		};
 
+		/// @brief Enumerates the horizontal justification bits in the scale type attribute of a Scaled graphics object
 		enum class HorizontalJustification : std::uint8_t
 		{
 			PositionLeft = 0,
@@ -4581,6 +4583,7 @@ namespace isobus
 			PositionRight = 2,
 		};
 
+		/// @brief Enumerates the vertical justification bits in the scale type attribute of a Scaled graphics object
 		enum class VerticalJustification : std::uint8_t
 		{
 			PositionTop = 0,
@@ -4588,7 +4591,10 @@ namespace isobus
 			PositionBottom = 2,
 		};
 
+		/// @brief Bitmask of the horizontal justification bits in the scale type attribute of a Scaled graphics object
 		static constexpr uint8_t VERTICAL_JUSTIFICATION_MASK = 0x18;
+
+		/// @brief Bitmask of the vertical justification bits in the scale type attribute of a Scaled graphics object
 		static constexpr uint8_t HORIZONTAL_JUSTIFICATION_MASK = 0x60;
 
 		ScaledGraphicObject() = default;
@@ -4609,7 +4615,7 @@ namespace isobus
 
 		/// @brief Sets an attribute and optionally returns an error code in the last parameter
 		/// @param[in] attributeID The ID of the attribute to change
-		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// @param[in] rawData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
 		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
 		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
@@ -4636,7 +4642,7 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 		/// @brief Sets the options bitfield for this object to a new value
-		/// @param[in] value The new value for the options bitfield
+		/// @param[in] options The new value for the options bitfield
 		void set_options(std::uint8_t options);
 
 		/// @brief Returns the scale type of the scaled graphic object
@@ -4644,7 +4650,7 @@ namespace isobus
 		std::uint8_t get_scale_type() const;
 
 		/// @brief Sets the scaling type of the scaled graphic object
-		/// @returns Scaling type value
+		/// @param[in] scale_type The scale type to set
 		void set_scale_type(std::uint8_t scale_type);
 
 		/// @brief Helper method the query the vertical and horizontal justification with a single call
@@ -4657,7 +4663,7 @@ namespace isobus
 		std::uint16_t get_graphic_id() const;
 
 		/// @brief Sets the object ID of the referenced Graphics Data, Picture Graphic or object pointer
-		/// @param[in] id The object ID of the referenced Graphics Data, Picture Graphic or object pointer or the null object ID
+		/// @param[in] newGraphicID The object ID of the referenced Graphics Data, Picture Graphic or object pointer or the null object ID
 		void set_graphic_id(std::uint16_t newGraphicID);
 
 	private:

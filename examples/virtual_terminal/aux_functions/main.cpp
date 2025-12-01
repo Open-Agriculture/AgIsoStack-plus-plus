@@ -7,7 +7,7 @@
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 
-#include "console_logger.cpp"
+#include "../../common/console_logger.cpp"
 #include "object_pool_ids.h"
 
 #include <atomic>
