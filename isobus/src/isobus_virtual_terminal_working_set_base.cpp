@@ -2849,8 +2849,8 @@ namespace isobus
 						tempObject->set_graphic_id((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
 						const std::uint8_t numberOfMacrosToFollow = iopData[11];
 						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-						iopData += 9;
-						iopLength -= 9;
+						iopData += 12;
+						iopLength -= 12;
 
 						if (iopLength >= sizeOfMacros)
 						{
@@ -2872,6 +2872,8 @@ namespace isobus
 										retVal = false;
 										break;
 									}
+									iopLength -= 4;
+									iopData += 4;
 								}
 								else
 								{
@@ -2882,14 +2884,13 @@ namespace isobus
 									}
 									else
 									{
-										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a scaled graphics object %u has an invalid or unsupported event ID:", iopData[1], decodedID, iopData[0]);
+										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a scaled graphics object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
 										retVal = false;
 										break;
 									}
+									iopLength -= 2;
+									iopData += 2;
 								}
-
-								iopLength -= 2;
-								iopData += 2;
 							}
 
 							if (0 == sizeOfMacros)

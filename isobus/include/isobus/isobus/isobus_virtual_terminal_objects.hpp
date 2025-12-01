@@ -4592,10 +4592,10 @@ namespace isobus
 		};
 
 		/// @brief Bitmask of the horizontal justification bits in the scale type attribute of a Scaled graphics object
-		static constexpr uint8_t VERTICAL_JUSTIFICATION_MASK = 0x18;
+		static constexpr uint8_t HORIZONTAL_JUSTIFICATION_MASK = 0x18;
 
 		/// @brief Bitmask of the vertical justification bits in the scale type attribute of a Scaled graphics object
-		static constexpr uint8_t HORIZONTAL_JUSTIFICATION_MASK = 0x60;
+		static constexpr uint8_t VERTICAL_JUSTIFICATION_MASK = 0x60;
 
 		ScaledGraphicObject() = default;
 		~ScaledGraphicObject() override = default;
