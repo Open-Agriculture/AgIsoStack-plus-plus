@@ -112,44 +112,15 @@ namespace isobus
 								// Next, parse macro list
 								if (iopLength >= sizeOfMacros)
 								{
-									for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-									{
-										// If the first byte is 255, then more bytes are used! 4.6.22.3
-										if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-										{
-											std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
+								}
+								else
+								{
+									LOG_ERROR("[WS]: Not enough IOP data to parse working set macros for object " + isobus::to_string(static_cast<int>(decodedID)));
+								}
 
-											if (EventID::Reserved != get_event_from_byte(iopData[2]))
-											{
-												tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-												retVal = true;
-											}
-											else
-											{
-												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a working set object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-												retVal = false;
-												break;
-											}
-										}
-										else
-										{
-											if (EventID::Reserved != get_event_from_byte(iopData[0]))
-											{
-												tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-												retVal = true;
-											}
-											else
-											{
-												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a working set object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-												retVal = false;
-												break;
-											}
-										}
-
-										iopLength -= 2;
-										iopData += 2;
-									}
-
+								if (retVal)
+								{
 									// Next, parse language list
 									if (iopLength >= static_cast<std::uint16_t>(numberOfLanguagesToFollow * 2))
 									{
@@ -162,16 +133,12 @@ namespace isobus
 											iopData += 2;
 											LOG_DEBUG("[WS]: IOP Language parsed: " + langCode);
 										}
+										retVal = true;
 									}
 									else
 									{
 										LOG_ERROR("[WS]: Not enough IOP data to parse working set language codes for object " + isobus::to_string(static_cast<int>(decodedID)));
 									}
-									retVal = true;
-								}
-								else
-								{
-									LOG_ERROR("[WS]: Not enough IOP data to parse working set macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
@@ -228,48 +195,7 @@ namespace isobus
 							// Next, parse macro list
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a data mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a data mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -332,48 +258,7 @@ namespace isobus
 									// Next, parse macro list
 									if (iopLength >= sizeOfMacros)
 									{
-										for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-										{
-											// If the first byte is 255, then more bytes are used! 4.6.22.3
-											if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-											{
-												std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-												if (EventID::Reserved != get_event_from_byte(iopData[2]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of an alarm mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-													retVal = false;
-													break;
-												}
-											}
-											else
-											{
-												if (EventID::Reserved != get_event_from_byte(iopData[0]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of an alarm mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-													retVal = false;
-													break;
-												}
-											}
-
-											iopLength -= 2;
-											iopData += 2;
-										}
-
-										if (0 == sizeOfMacros)
-										{
-											retVal = true;
-										}
+										retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 									}
 									else
 									{
@@ -455,48 +340,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a container object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a container object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -566,8 +410,8 @@ namespace isobus
 
 							const std::uint8_t numberOfObjectReferences = iopData[14];
 							const std::uint8_t numberOfChildObjects = iopData[15];
-							const std::uint8_t numberOfMacros = iopData[16];
-							const std::uint16_t sizeOfMacros = (numberOfMacros * 2);
+							const std::uint8_t numberOfMacrosToFollow = iopData[16];
+							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							const std::uint16_t sizeOfChildren = (numberOfChildObjects * 6); // ID, X, Y 2 bytes each
 
 							switch (tempObject->get_window_type())
@@ -648,48 +492,7 @@ namespace isobus
 
 									if (iopLength >= sizeOfMacros)
 									{
-										for (std::uint_fast8_t i = 0; i < numberOfMacros; i++)
-										{
-											// If the first byte is 255, then more bytes are used! 4.6.22.3
-											if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-											{
-												std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-												if (EventID::Reserved != get_event_from_byte(iopData[2]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a window mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-													retVal = false;
-													break;
-												}
-											}
-											else
-											{
-												if (EventID::Reserved != get_event_from_byte(iopData[0]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a window mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-													retVal = false;
-													break;
-												}
-											}
-
-											iopLength -= 2;
-											iopData += 2;
-										}
-
-										if (0 == sizeOfMacros)
-										{
-											retVal = true;
-										}
+										retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 									}
 									else
 									{
@@ -754,48 +557,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a soft key mask object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a soft key mask object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -853,48 +615,7 @@ namespace isobus
 
 							if (iopLength >= sizeOfMacros)
 							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a key object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a key object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -2963,12 +2684,18 @@ namespace isobus
 			// If the first byte is 255, then more bytes are used! 4.6.22.3
 			if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
 			{
-				std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-				if (EventID::Reserved != get_event_from_byte(iopData[2]))
+				if (iopLength < 4)
 				{
-					object->add_macro({ get_event_from_byte(iopData[2]), macroID });
-					retVal = true;
+					LOG_ERROR("[WS]: Not enough IOP data to parse extended macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
+					retVal = false;
+					break;
+				}
+
+				std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+				auto eventID = get_event_from_byte(iopData[2]);
+				if (EventID::Reserved != eventID)
+				{
+					object->add_macro({ eventID, macroID });
 				}
 				else
 				{
@@ -2980,13 +2707,21 @@ namespace isobus
 					retVal = false;
 					break;
 				}
+				iopLength -= 4;
+				iopData += 4;
 			}
 			else
 			{
+				if (iopLength < 2)
+				{
+					LOG_ERROR("[WS]: Not enough IOP data to parse macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
+					retVal = false;
+					break;
+				}
+
 				if (EventID::Reserved != get_event_from_byte(iopData[0]))
 				{
 					object->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-					retVal = true;
 				}
 				else
 				{
@@ -2998,10 +2733,9 @@ namespace isobus
 					retVal = false;
 					break;
 				}
+				iopLength -= 2;
+				iopData += 2;
 			}
-
-			iopLength -= 2;
-			iopData += 2;
 		}
 		return retVal;
 	}
