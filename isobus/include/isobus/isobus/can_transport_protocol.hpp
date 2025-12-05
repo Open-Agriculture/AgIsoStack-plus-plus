@@ -321,7 +321,7 @@ namespace isobus
 		/// @param[in] session The session to update
 		void update_state_machine(std::shared_ptr<TransportProtocolSession> &session);
 
-		mutable std::mutex activeSessionsMutex; ///< Synchronizes access to @ref activeSessions
+		mutable Mutex activeSessionsMutex; ///< Synchronizes access to @ref activeSessions
 		std::list<std::shared_ptr<TransportProtocolSession>> activeSessions; ///< A list of all active TP sessions
 
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
