@@ -22,7 +22,9 @@ if(BUILD_TESTING
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 endif()
 
-if(ESP_PLATFORM)
+if(ARM_NONE_EABI_PLATFORM)
+  add_compile_options(-Wall -Wextra)
+elseif(ESP_PLATFORM)
   add_compile_options(-Wall -Wextra)
 elseif(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -123,7 +125,7 @@ if(BUILD_TESTING)
   add_subdirectory("test")
 endif()
 
-if(ESP_PLATFORM)
+if(ARM_NONE_EABI_PLATFORM OR ESP_PLATFORM)
   return()
 endif()
 
