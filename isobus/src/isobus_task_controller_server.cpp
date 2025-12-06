@@ -694,7 +694,7 @@ namespace isobus
 					{
 						std::uint8_t numberOfWorkingSetMembers = rxData[0];
 
-						if (1 == numberOfWorkingSetMembers)
+						if (1 >= numberOfWorkingSetMembers)
 						{
 							if (nullptr == get_active_client(rxMessage.get_source_control_function()))
 							{
