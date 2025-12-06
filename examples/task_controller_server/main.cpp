@@ -7,7 +7,7 @@
 #include "isobus/isobus/isobus_preferred_addresses.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 
-#include "console_logger.cpp"
+#include "../common/console_logger.cpp"
 
 #include <atomic>
 #include <csignal>

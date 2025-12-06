@@ -7,7 +7,7 @@
 #include "isobus/isobus/isobus_virtual_terminal_client_update_helper.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 
-#include "console_logger.cpp"
+#include "../../common/console_logger.cpp"
 #include "objectPoolObjects.h"
 
 #include <atomic>
@@ -102,7 +102,7 @@ int main()
 	// Automatically load the desired CAN driver based on the available drivers
 	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
 #if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
+	canDriver = std::make_shared<isobus::SocketCANInterface>("vcan0");
 #elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
 	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)

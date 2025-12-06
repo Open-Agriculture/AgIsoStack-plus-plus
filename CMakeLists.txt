@@ -27,6 +27,8 @@ elseif(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+option(DISABLE_BUSLOAD_MONITORING "Disable CAN bus load monitoring" OFF)
+
 option(
   CAN_STACK_DISABLE_THREADS
   "Set to ON to disable multi-threading, which removes the need for std::thread, std::mutex, and related libraries."
@@ -69,6 +71,7 @@ if(BUILD_EXAMPLES)
   add_subdirectory("examples/virtual_terminal/version3_object_pool")
   add_subdirectory("examples/virtual_terminal/aux_functions")
   add_subdirectory("examples/virtual_terminal/aux_inputs")
+  add_subdirectory("examples/virtual_terminal/iop_parser_tester")
   add_subdirectory("examples/task_controller_client")
   add_subdirectory("examples/task_controller_server")
   add_subdirectory("examples/guidance")
