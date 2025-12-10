@@ -104,14 +104,13 @@ if("NTCAN" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "ntcan_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "ntcan_plugin.hpp")
 endif()
-if("WindowsCANlib" IN_LIST CAN_DRIVER)
+if("WindowsKvaserCANlib" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "canlib_windows_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "canlib_windows_plugin.hpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "canlib.h")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "canstat.h")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "canevt.h")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "predef.h")
-  list(APPEND HARDWARE_INTEGRATION_INCLUDE "obsolete.h")
 endif()
 
 # Prepend the source directory path to all the source files
@@ -360,7 +359,7 @@ if("NTCAN" IN_LIST CAN_DRIVER)
     )
   endif()
 endif()
-if("WindowsCANlib" IN_LIST CAN_DRIVER)
+if("WindowsKvaserCANlib" IN_LIST CAN_DRIVER)
   if(MSVC)
     # See https://gitlab.kitware.com/cmake/cmake/-/issues/15170
     set(CMAKE_SYSTEM_PROCESSOR ${MSVC_CXX_ARCHITECTURE_ID})
@@ -370,7 +369,7 @@ if("WindowsCANlib" IN_LIST CAN_DRIVER)
     message(
       AUTHOR_WARNING
         "
-    The WindowsCANlib driver requires canlib32.dll to be in the same directory as the executable.
+    The WindowsKvaserCANlib driver requires canlib32.dll to be in the same directory as the executable.
     A copy of this file is included in the repository under the /hardware_integration/lib/Windows directory.
     Make sure you have the Kvaser CANlib drivers installed from https://www.kvaser.com/
     ")
@@ -380,7 +379,7 @@ if("WindowsCANlib" IN_LIST CAN_DRIVER)
   else()
     message(
       FATAL_ERROR
-        "WindowsCANlib Selected but no supported OS was detected. Only Windows is supported."
+        "WindowsKvaserCANlib Selected but no supported OS was detected. Only Windows is supported."
     )
   endif()
 endif()

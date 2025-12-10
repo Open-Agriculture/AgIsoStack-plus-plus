@@ -159,7 +159,7 @@ namespace isobus
 
 			canStatus result = canWrite(handle,
 			                            static_cast<long>(canFrame.identifier),
-			                            const_cast<void*>(static_cast<const void*>(canFrame.data)),
+			                            const_cast<void *>(static_cast<const void *>(canFrame.data)),
 			                            static_cast<unsigned int>(canFrame.dataLength),
 			                            flags);
 

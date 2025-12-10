@@ -973,7 +973,11 @@ EXCLUDE_SYMLINKS       = NO
 # exclude all test directories for example use the pattern */test/*
 
 EXCLUDE_PATTERNS       = */hardware_integration/*.md \
-                         */hardware_integration/lib/*
+                         */hardware_integration/lib/* \
+                         */hardware_integration/canlib.h \
+                         */hardware_integration/canstat.h \
+                         */hardware_integration/canevt.h \
+                         */hardware_integration/predef.h
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the

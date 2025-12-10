@@ -109,8 +109,8 @@
 #include <stdlib.h>
 
 #include <windows.h>
-#include "predef.h"
 #include "canevt.h"
+#include "predef.h"
 
 #include "canstat.h"
 
@@ -123,7 +123,7 @@ typedef int canHandle;
 #define CanHandle int
 
 /** Notify message sent to the application window */
-#define WM__CANLIB              (WM_USER+16354)
+#define WM__CANLIB (WM_USER + 16354)
 
 /**
  * \name canOPEN_xxx
@@ -133,7 +133,6 @@ typedef int canHandle;
  *
  * @{
  */
-
 
 /**
  * Don't allow sharing of this CANlib channel.
@@ -147,7 +146,7 @@ typedef int canHandle;
  *
  * This define is used in \ref canOpenChannel()
  */
-#define canOPEN_EXCLUSIVE               0x0008
+#define canOPEN_EXCLUSIVE 0x0008
 
 /**
  * This flag causes two things to happen:
@@ -160,7 +159,7 @@ typedef int canHandle;
  *
  * This define is used in \ref canOpenChannel().
  */
-#define canOPEN_REQUIRE_EXTENDED        0x0010
+#define canOPEN_REQUIRE_EXTENDED 0x0010
 
 /**
  * Allow opening of virtual channels as well as physical channels.
@@ -169,7 +168,7 @@ typedef int canHandle;
  *
  * \sa \ref section_user_guide_virtual
  */
-#define canOPEN_ACCEPT_VIRTUAL         0x0020
+#define canOPEN_ACCEPT_VIRTUAL 0x0020
 
 /**
  * Open the channel even if it is opened for exclusive
@@ -179,7 +178,7 @@ typedef int canHandle;
  *
  * This define is used in \ref canOpenChannel().
  */
-#define canOPEN_OVERRIDE_EXCLUSIVE     0x0040
+#define canOPEN_OVERRIDE_EXCLUSIVE 0x0040
 
 /**
  * Fail the call if the channel cannot be opened with init access.
@@ -197,7 +196,7 @@ typedef int canHandle;
  *
  * \sa \ref canOPEN_NO_INIT_ACCESS, \ref canIOCTL_SET_REPORT_ACCESS_ERRORS
  */
-#define canOPEN_REQUIRE_INIT_ACCESS    0x0080
+#define canOPEN_REQUIRE_INIT_ACCESS 0x0080
 
 /**
  * Don't open the handle with init access.
@@ -210,7 +209,7 @@ typedef int canHandle;
  *
  * \sa \ref canOPEN_REQUIRE_INIT_ACCESS
  */
-#define canOPEN_NO_INIT_ACCESS         0x0100
+#define canOPEN_NO_INIT_ACCESS 0x0100
 
 /**
  * The channel will accept messages with DLC (Data Length Code) greater than
@@ -223,7 +222,7 @@ typedef int canHandle;
  *
  * This define is used in \ref canOpenChannel().
  */
-#define canOPEN_ACCEPT_LARGE_DLC       0x0200 // DLC can be greater than 8
+#define canOPEN_ACCEPT_LARGE_DLC 0x0200 // DLC can be greater than 8
 
 /**
  * The channel will use the CAN FD protocol, ISO compliant. This also means that messages with
@@ -231,7 +230,7 @@ typedef int canHandle;
  *
  * This define is used in \ref canOpenChannel().
  */
-#define canOPEN_CAN_FD                 0x0400
+#define canOPEN_CAN_FD 0x0400
 
 /**
  * The channel will use the CAN FD NON-ISO protocol.
@@ -246,13 +245,12 @@ typedef int canHandle;
  *
  * This define is used in \ref canOpenChannel().
  */
-#define canOPEN_CAN_FD_NONISO          0x0800
-
+#define canOPEN_CAN_FD_NONISO 0x0800
 
 /**
  * This is for internal use ONLY.
  */
-#define canOPEN_INTERNAL_L                 0x1000
+#define canOPEN_INTERNAL_L 0x1000
 
 /** @} */
 
@@ -265,20 +263,19 @@ typedef int canHandle;
  *
  * @{
  */
-#define canFILTER_ACCEPT        1
-#define canFILTER_REJECT        2
+#define canFILTER_ACCEPT 1
+#define canFILTER_REJECT 2
 /** Sets the code for standard (11-bit) identifiers. */
-#define canFILTER_SET_CODE_STD  3
+#define canFILTER_SET_CODE_STD 3
 /** Sets the mask for standard (11-bit) identifiers. */
-#define canFILTER_SET_MASK_STD  4
+#define canFILTER_SET_MASK_STD 4
 /** Sets the code for extended (29-bit) identifiers. */
-#define canFILTER_SET_CODE_EXT  5
+#define canFILTER_SET_CODE_EXT 5
 /** Sets the mask for extended (29-bit) identifiers. */
-#define canFILTER_SET_MASK_EXT  6
+#define canFILTER_SET_MASK_EXT 6
 
-#define canFILTER_NULL_MASK     0L
+#define canFILTER_NULL_MASK 0L
 /** @} */
-
 
 /**
  * \ingroup CAN
@@ -293,7 +290,7 @@ typedef int canHandle;
 /**
  * The "normal" driver type (push-pull). This is the default.
  */
-#define canDRIVER_NORMAL           4
+#define canDRIVER_NORMAL 4
 
 /**
  * Sets the CAN controller in Silent Mode; that is, it doesn't send anything,
@@ -301,20 +298,19 @@ typedef int canHandle;
  *
  * \note The values 2,3,5,6,7 are reserved values for compatibility reasons.
  */
-#define canDRIVER_SILENT           1
+#define canDRIVER_SILENT 1
 
 /**
  * Self-reception. Not implemented.
  */
-#define canDRIVER_SELFRECEPTION    8
+#define canDRIVER_SELFRECEPTION 8
 
 /**
  * The driver is turned off. Not implemented in all types of hardware.
  */
-#define canDRIVER_OFF              0
+#define canDRIVER_OFF 0
 
 /** @} */
-
 
 /**
  * \ingroup CAN
@@ -333,78 +329,76 @@ typedef int canHandle;
  * @{
  */
 
-
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 1 Mbit/s. */
-#define canBITRATE_1M        (-1)
+#define canBITRATE_1M (-1)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 500 kbit/s. */
-#define canBITRATE_500K      (-2)
+#define canBITRATE_500K (-2)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 250 kbit/s. */
-#define canBITRATE_250K      (-3)
+#define canBITRATE_250K (-3)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 125 kbit/s. */
-#define canBITRATE_125K      (-4)
+#define canBITRATE_125K (-4)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 100 kbit/s. */
-#define canBITRATE_100K      (-5)
+#define canBITRATE_100K (-5)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 62 kbit/s. */
-#define canBITRATE_62K       (-6)
+#define canBITRATE_62K (-6)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 50 kbit/s. */
-#define canBITRATE_50K       (-7)
+#define canBITRATE_50K (-7)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 83 kbit/s. */
-#define canBITRATE_83K       (-8)
+#define canBITRATE_83K (-8)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsC200(). Indicate a bitrate of 10 kbit/s. */
-#define canBITRATE_10K       (-9)
+#define canBITRATE_10K (-9)
 
 // CAN FD Bit Rates
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 0.5 Mbit/s and sampling point at
     80%. */
-#define canFD_BITRATE_500K_80P     (-1000)
+#define canFD_BITRATE_500K_80P (-1000)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 1.0 Mbit/s and sampling point at
     80%. */
-#define canFD_BITRATE_1M_80P       (-1001)
+#define canFD_BITRATE_1M_80P (-1001)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 2.0 Mbit/s and sampling point at
     80%. */
-#define canFD_BITRATE_2M_80P       (-1002)
+#define canFD_BITRATE_2M_80P (-1002)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 2.0 Mbit/s and sampling point at
     60%. */
-#define canFD_BITRATE_2M_60P       (-1007)
+#define canFD_BITRATE_2M_60P (-1007)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 4.0 Mbit/s and sampling point at
     80%. */
-#define canFD_BITRATE_4M_80P       (-1003)
+#define canFD_BITRATE_4M_80P (-1003)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 8.0 Mbit/s and sampling point at
     60%. */
-#define canFD_BITRATE_8M_60P       (-1004)
+#define canFD_BITRATE_8M_60P (-1004)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 8.0 Mbit/s and sampling point at
     80%. */
-#define canFD_BITRATE_8M_80P       (-1005)
+#define canFD_BITRATE_8M_80P (-1005)
 /** Used in \ref canSetBusParams() and \ref canSetBusParamsFd() when using the
     CAN FD protocol. Indicates a bitrate of 8.0 Mbit/s and sampling point at
     70%. */
-#define canFD_BITRATE_8M_70P       (-1006)
+#define canFD_BITRATE_8M_70P (-1006)
 
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_1M instead. */
-#define BAUD_1M              (-1)
+#define BAUD_1M (-1)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_500K instead. */
-#define BAUD_500K            (-2)
+#define BAUD_500K (-2)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_250K instead. */
-#define BAUD_250K            (-3)
+#define BAUD_250K (-3)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_125K instead. */
-#define BAUD_125K            (-4)
+#define BAUD_125K (-4)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_100K instead. */
-#define BAUD_100K            (-5)
+#define BAUD_100K (-5)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_62K instead. */
-#define BAUD_62K             (-6)
+#define BAUD_62K (-6)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_50K instead. */
-#define BAUD_50K             (-7)
+#define BAUD_50K (-7)
 /** The \ref BAUD_xxx names are deprecated, use \ref canBITRATE_83K instead. */
-#define BAUD_83K             (-8)
+#define BAUD_83K (-8)
 /** @} */
-
 
 //
 // Define CANLIBAPI unless it's done already.
@@ -412,11 +406,10 @@ typedef int canHandle;
 // and DLLEXPORT before including this file.)
 //
 #ifndef CANLIBAPI
-#   define CANLIBAPI __stdcall
-#   define DLLIMPORT __declspec(dllimport)
-#   define DLLEXPORT __declspec(dllexport)
+#define CANLIBAPI __stdcall
+#define DLLIMPORT __declspec(dllimport)
+#define DLLEXPORT __declspec(dllexport)
 #endif /* CANLIBAPI */
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -628,13 +621,14 @@ canStatus CANLIBAPI canSetBusParams(const CanHandle hnd,
 *
 * Used in \ref canSetBusParamsTq, \ref canSetBusParamsFdTq, \ref canGetBusParamsTq and \ref canGetBusParamsTq
 */
-typedef struct kvBusParamsTq {
-    int tq;        /**< Total bit time, in number of time quanta. */
-    int phase1;    /**< Phase segment 1, in number of time quanta */
-    int phase2;    /**< Phase segment 2, in number of time quanta */
-    int sjw;       /**< Sync jump width, in number of time quanta */
-    int prop;      /**< Propagation segment, in number of time quanta */
-    int prescaler; /**< Prescaler */
+typedef struct kvBusParamsTq
+{
+	int tq; /**< Total bit time, in number of time quanta. */
+	int phase1; /**< Phase segment 1, in number of time quanta */
+	int phase2; /**< Phase segment 2, in number of time quanta */
+	int sjw; /**< Sync jump width, in number of time quanta */
+	int prop; /**< Propagation segment, in number of time quanta */
+	int prescaler; /**< Prescaler */
 } kvBusParamsTq;
 
 /**
@@ -662,8 +656,8 @@ typedef struct kvBusParamsTq {
  * return  canOK (zero)  if success
  * return  canERR_xxx    (negative) if failure
  */
- canStatus CANLIBAPI canSetBusParamsTq(const CanHandle hnd,
-                                       const kvBusParamsTq nominal);
+canStatus CANLIBAPI canSetBusParamsTq(const CanHandle hnd,
+                                      const kvBusParamsTq nominal);
 
 /**
  * \ingroup CAN
@@ -730,10 +724,9 @@ canStatus CANLIBAPI canSetBusParamsFd(const CanHandle hnd,
  * return  canOK (zero)  if success
  * return  canERR_xxx    (negative) if failure
  */
-canStatus CANLIBAPI canSetBusParamsFdTq(const CanHandle     hnd,
+canStatus CANLIBAPI canSetBusParamsFdTq(const CanHandle hnd,
                                         const kvBusParamsTq arbitration,
                                         const kvBusParamsTq data);
-
 
 /**
  * \ingroup CAN
@@ -767,7 +760,7 @@ canStatus CANLIBAPI canSetBusParamsFdTq(const CanHandle     hnd,
  *
  */
 canStatus CANLIBAPI canGetBusParams(const CanHandle hnd,
-                                    long  *freq,
+                                    long *freq,
                                     unsigned int *tseg1,
                                     unsigned int *tseg2,
                                     unsigned int *sjw,
@@ -819,7 +812,7 @@ canStatus CANLIBAPI canGetBusParamsTq(const CanHandle hnd,
  * \return \ref canERR_xxx (negative) if failure
  */
 canStatus CANLIBAPI canGetBusParamsFd(const CanHandle hnd,
-                                      long  *freq_brs,
+                                      long *freq_brs,
                                       unsigned int *tseg1_brs,
                                       unsigned int *tseg2_brs,
                                       unsigned int *sjw_brs);
@@ -1215,8 +1208,8 @@ canStatus CANLIBAPI canRead(const CanHandle hnd,
 canStatus CANLIBAPI canReadWait(const CanHandle hnd,
                                 long *id,
                                 void *msg,
-                                unsigned int  *dlc,
-                                unsigned int  *flag,
+                                unsigned int *dlc,
+                                unsigned int *flag,
                                 unsigned long *time,
                                 unsigned long timeout);
 
@@ -1271,9 +1264,7 @@ canStatus CANLIBAPI canReadWait(const CanHandle hnd,
  * \ref canReadWait()
  *
  */
-canStatus CANLIBAPI canReadSpecific(const CanHandle hnd, long id, void *msg,
-                                    unsigned int *dlc, unsigned int *flag,
-                                    unsigned long *time);
+canStatus CANLIBAPI canReadSpecific(const CanHandle hnd, long id, void *msg, unsigned int *dlc, unsigned int *flag, unsigned long *time);
 
 /**
  * \ingroup CAN
@@ -1394,7 +1385,6 @@ canStatus CANLIBAPI canReadSpecificSkip(const CanHandle hnd,
                                         unsigned int *flag,
                                         unsigned long *time);
 
-
 /**
  * \ingroup CAN
  *
@@ -1436,7 +1426,6 @@ canStatus CANLIBAPI canReadSpecificSkip(const CanHandle hnd,
 canStatus CANLIBAPI canSetNotify(const CanHandle hnd,
                                  HWND aHWnd,
                                  unsigned int aNotifyFlags);
-
 
 /**
  * \ingroup CAN
@@ -1625,7 +1614,6 @@ canStatus CANLIBAPI canIoCtl(const CanHandle hnd,
                              void *buf,
                              unsigned int buflen);
 
-
 /**
  * \ingroup Obsolete
  *
@@ -1710,7 +1698,6 @@ CanHandle CANLIBAPI canOpenChannel(int channel, int flags);
  */
 canStatus CANLIBAPI canGetNumberOfChannels(int *channelCount);
 
-
 /**
  * \name kvREMOTE_TYPExxx
  * \anchor kvREMOTE_TYPExxx
@@ -1718,9 +1705,9 @@ canStatus CANLIBAPI canGetNumberOfChannels(int *channelCount);
  * Remote type, returned when using \ref canCHANNELDATA_REMOTE_TYPE
  * @{
  */
-#define kvREMOTE_TYPE_NOT_REMOTE  0 ///<
-#define kvREMOTE_TYPE_WLAN        1 ///<
-#define kvREMOTE_TYPE_LAN         2 ///<
+#define kvREMOTE_TYPE_NOT_REMOTE 0 ///<
+#define kvREMOTE_TYPE_WLAN 1 ///<
+#define kvREMOTE_TYPE_LAN 2 ///<
 /** @} */
 
 /**
@@ -1730,11 +1717,10 @@ canStatus CANLIBAPI canGetNumberOfChannels(int *channelCount);
  * Logger type, returned when using \ref canCHANNELDATA_LOGGER_TYPE
  * @{
  */
-#define kvLOGGER_TYPE_NOT_A_LOGGER  0 ///<
-#define kvLOGGER_TYPE_V1            1 ///<
-#define kvLOGGER_TYPE_V2            2 ///<
+#define kvLOGGER_TYPE_NOT_A_LOGGER 0 ///<
+#define kvLOGGER_TYPE_V1 1 ///<
+#define kvLOGGER_TYPE_V2 2 ///<
 /** @} */
-
 
 /**
  * \ingroup can_general
@@ -1781,7 +1767,7 @@ canStatus CANLIBAPI canGetChannelData(int channel,
  *  @{
  */
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1789,9 +1775,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * capabilities of the CAN controller; this is a combination of the \ref
    * canCHANNEL_CAP_xxx flags.
    */
-#define canCHANNELDATA_CHANNEL_CAP                1
+#define canCHANNELDATA_CHANNEL_CAP 1
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1800,9 +1786,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \ref canDRIVER_CAP_xxx flags.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_TRANS_CAP                  2
+#define canCHANNELDATA_TRANS_CAP 2
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1810,9 +1796,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * a combination of \ref canCHANNEL_IS_xxx flags.
    *
    */
-#define canCHANNELDATA_CHANNEL_FLAGS              3   // available, etc
+#define canCHANNELDATA_CHANNEL_FLAGS 3 // available, etc
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1820,9 +1806,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * type of the card. This value is any one of the \ref canHWTYPE_xxx
    * constants.
    */
-#define canCHANNELDATA_CARD_TYPE                  4
+#define canCHANNELDATA_CARD_TYPE 4
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1831,18 +1817,18 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * example, the first LAPcan card in a machine will have number 0, the second
    * LAPcan number 1, etc.
    */
-#define canCHANNELDATA_CARD_NUMBER                5
+#define canCHANNELDATA_CARD_NUMBER 5
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
    * \a buffer points to a 32-bit unsigned integer which receives the channel
    * number on the card.
    */
-#define canCHANNELDATA_CHAN_NO_ON_CARD            6
+#define canCHANNELDATA_CHAN_NO_ON_CARD 6
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1851,9 +1837,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * returned. The serial number is an 8-byte unsigned integer. Currently, no
    * products are using all 8 bytes; at most 4 bytes are used.
    */
-#define canCHANNELDATA_CARD_SERIAL_NO             7
+#define canCHANNELDATA_CARD_SERIAL_NO 7
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1862,9 +1848,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * integer. If the transceiver doesn't have a serial number, 0 is returned.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_TRANS_SERIAL_NO            8
+#define canCHANNELDATA_TRANS_SERIAL_NO 8
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1874,9 +1860,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * number, listed in order from the most significant to the least
    * significant.
    */
-#define canCHANNELDATA_CARD_FIRMWARE_REV          9
+#define canCHANNELDATA_CARD_FIRMWARE_REV 9
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1886,9 +1872,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * the major revision and the minor revision, listed in order from the most
    * significant to the least significant.
    */
-#define canCHANNELDATA_CARD_HARDWARE_REV          10
+#define canCHANNELDATA_CARD_HARDWARE_REV 10
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1897,9 +1883,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * UPC (EAN) number is coded as a BCD string with the LSB first, so
    * e.g. 73-30130-00122-0 is coded as 0x30001220 0x00073301.
    */
-#define canCHANNELDATA_CARD_UPC_NO                11
+#define canCHANNELDATA_CARD_UPC_NO 11
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1909,9 +1895,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * so e.g. 73-30130-00122-0 is coded as 0x30001220 0x00073301.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_TRANS_UPC_NO               12
+#define canCHANNELDATA_TRANS_UPC_NO 12
 
-  /**
+/**
    * \deprecated Use \ref canCHANNELDATA_DEVDESCR_ASCII instead.
    *
    * This define is used in \ref canGetChannelData(), \a buffer
@@ -1928,9 +1914,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    *
    * \sa \ref canCHANNELDATA_DEVNAME_ASCII
    */
-#define canCHANNELDATA_CHANNEL_NAME               13
+#define canCHANNELDATA_CHANNEL_NAME 13
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1945,9 +1931,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \li 2: The minor revision number
    * \li 3: The major revision number
    */
-#define canCHANNELDATA_DLL_FILE_VERSION          14
+#define canCHANNELDATA_DLL_FILE_VERSION 14
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1962,9 +1948,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \li 2: The minor revision number
    * \li 3: The major revision number
    */
-#define canCHANNELDATA_DLL_PRODUCT_VERSION       15
+#define canCHANNELDATA_DLL_PRODUCT_VERSION 15
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1979,9 +1965,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \li 2: kvalapw2.dll - used with CANlib from 3.0 and on.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_DLL_FILETYPE              16
+#define canCHANNELDATA_DLL_FILETYPE 16
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -1989,9 +1975,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * transceiver type of the specified channel.  This value is one of the
    * \ref canTRANSCEIVER_TYPE_xxx
    */
-#define canCHANNELDATA_TRANS_TYPE                17
+#define canCHANNELDATA_TRANS_TYPE 17
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2014,9 +2000,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \li USB: The port number.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_DEVICE_PHYSICAL_POSITION  18
+#define canCHANNELDATA_DEVICE_PHYSICAL_POSITION 18
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2028,9 +2014,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * such convention, or when the UI number is unknown, 0xFFFFFFFF is returned.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_UI_NUMBER                 19
+#define canCHANNELDATA_UI_NUMBER 19
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2053,9 +2039,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \note Not implemented in linux.
    *
    */
-#define canCHANNELDATA_TIMESYNC_ENABLED          20
+#define canCHANNELDATA_TIMESYNC_ENABLED 20
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2069,9 +2055,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \li 2: The minor revision number
    * \li 3: The major revision number
    */
-#define canCHANNELDATA_DRIVER_FILE_VERSION       21
+#define canCHANNELDATA_DRIVER_FILE_VERSION 21
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2085,9 +2071,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \li 2: The minor revision number
    * \li 3: The major revision number
    */
-#define canCHANNELDATA_DRIVER_PRODUCT_VERSION    22
+#define canCHANNELDATA_DRIVER_PRODUCT_VERSION 22
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2095,18 +2081,18 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * as a zero-terminated Unicode string.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_MFGNAME_UNICODE           23
+#define canCHANNELDATA_MFGNAME_UNICODE 23
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
    * \a buffer points to a buffer which receives the device manufacturer's name
    * as a zero-terminated ASCII string.
    */
-#define canCHANNELDATA_MFGNAME_ASCII             24
+#define canCHANNELDATA_MFGNAME_ASCII 24
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2114,18 +2100,18 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * as a zero-terminated Unicode string.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_DEVDESCR_UNICODE          25
+#define canCHANNELDATA_DEVDESCR_UNICODE 25
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
    * \a buffer points to a buffer which receives the product name of the device
    * as a zero-terminated ASCII string.
    */
-#define canCHANNELDATA_DEVDESCR_ASCII            26
+#define canCHANNELDATA_DEVDESCR_ASCII 26
 
- /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2135,9 +2121,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \note The device driver names have no special meanings and may change
    * from a release to another.
    */
-#define canCHANNELDATA_DRIVER_NAME               27
+#define canCHANNELDATA_DRIVER_NAME 27
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2149,9 +2135,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * The quality is 100% for any directly connected channel (USB, PCI etc.).
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_CHANNEL_QUALITY           28
+#define canCHANNELDATA_CHANNEL_QUALITY 28
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2159,9 +2145,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * time which is measured in milliseconds.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_ROUNDTRIP_TIME            29
+#define canCHANNELDATA_ROUNDTRIP_TIME 29
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2169,9 +2155,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \ref kvBUSTYPE_GROUP_xxx bus type.
    * \note Not implemented in Linux.
    */
-#define canCHANNELDATA_BUS_TYPE                  30
+#define canCHANNELDATA_BUS_TYPE 30
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2183,9 +2169,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * functionality, an error will be returned.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_DEVNAME_ASCII             31
+#define canCHANNELDATA_DEVNAME_ASCII 31
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2195,9 +2181,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * For WLAN devices, this is the time since the last keep-alive message.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_TIME_SINCE_LAST_SEEN      32
+#define canCHANNELDATA_TIME_SINCE_LAST_SEEN 32
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2206,9 +2192,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * \ref canCHANNEL_OPMODE_xxx.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_REMOTE_OPERATIONAL_MODE   33
+#define canCHANNELDATA_REMOTE_OPERATIONAL_MODE 33
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2216,9 +2202,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * of the device as a zero-terminated ASCII string.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_REMOTE_PROFILE_NAME   34
+#define canCHANNELDATA_REMOTE_PROFILE_NAME 34
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2226,9 +2212,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * of the device as a zero-terminated ASCII string.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_REMOTE_HOST_NAME   35
+#define canCHANNELDATA_REMOTE_HOST_NAME 35
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2236,9 +2222,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * of the device as a zero-terminated ASCII string.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_REMOTE_MAC   36
+#define canCHANNELDATA_REMOTE_MAC 36
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2246,9 +2232,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * maximum bitrate of the device. Zero value means no limit on
    * bitrate.
    */
-#define canCHANNELDATA_MAX_BITRATE   37
+#define canCHANNELDATA_MAX_BITRATE 37
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2258,7 +2244,7 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * to support/not support at the moment, see \ref canCHANNEL_CAP_xxx
    * for info about flags.
    */
-#define canCHANNELDATA_CHANNEL_CAP_MASK  38
+#define canCHANNELDATA_CHANNEL_CAP_MASK 38
 
 /**
  * This define is used in \ref canGetChannelData(), \a buffer
@@ -2271,9 +2257,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
  * least one byte long) to which the null terminated UTF-8 coded
  * channel name will be placed.
  */
-#define canCHANNELDATA_CUST_CHANNEL_NAME  39
+#define canCHANNELDATA_CUST_CHANNEL_NAME 39
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2282,9 +2268,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * currently a remote device.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_IS_REMOTE  40
+#define canCHANNELDATA_IS_REMOTE 40
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2292,9 +2278,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * See \ref kvREMOTE_TYPExxx for returned values.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_REMOTE_TYPE  41
+#define canCHANNELDATA_REMOTE_TYPE 41
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2302,9 +2288,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    * See \ref kvLOGGER_TYPE_xxx for returned values.
    * \note Not implemented in linux.
    */
-#define canCHANNELDATA_LOGGER_TYPE  42
+#define canCHANNELDATA_LOGGER_TYPE 42
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2313,9 +2299,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    *
    * \note This is only intended for internal use.
    */
-#define canCHANNELDATA_HW_STATUS  43
+#define canCHANNELDATA_HW_STATUS 43
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -2324,23 +2310,23 @@ canStatus CANLIBAPI canGetChannelData(int channel,
    *
    * \note This is only intended for internal use.
    */
-#define canCHANNELDATA_FEATURE_EAN  44
+#define canCHANNELDATA_FEATURE_EAN 44
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
    * \a buffer is \ref kvBusParamLimits.
    */
-#define canCHANNELDATA_BUS_PARAM_LIMITS  45
+#define canCHANNELDATA_BUS_PARAM_LIMITS 45
 
-  /**
+/**
    * This define is used in \ref canGetChannelData(), \a buffer
    * mentioned below refers to this functions argument.
    *
    * \a buffer is \ref kvClockInfo.
    */
-#define canCHANNELDATA_CLOCK_INFO  46
+#define canCHANNELDATA_CLOCK_INFO 46
 
 /**
  * This define is used in \ref canGetChannelData(), \a buffer
@@ -2362,9 +2348,9 @@ canStatus CANLIBAPI canGetChannelData(int channel,
  * \li 0: value
  * \li 1: mask
  */
-#define canCHANNELDATA_CHANNEL_CAP_EX                47
+#define canCHANNELDATA_CHANNEL_CAP_EX 47
 
- /** @} */
+/** @} */
 
 /**
  * Returned when using \ref canCHANNELDATA_CLOCK_INFO
@@ -2376,13 +2362,14 @@ canStatus CANLIBAPI canGetChannelData(int channel,
  * double frequency = numerator/denominator * 10 ** power_of_ten;
 */
 
-typedef struct kvClockInfo {
-    int version;      /**< The version of this struct, currently 1 */
-    int numerator;    /**< The numerator part of the device clock frequency. */
-    int denominator;  /**< The denominator part of the device clock frequency. */
-    int power_of_ten; /**< The power_of_ten part of the device clock frequency. */
-    int accuracy_ppm; /**< The accuracy (in ppm) of the device clock. */
-}kvClockInfo;
+typedef struct kvClockInfo
+{
+	int version; /**< The version of this struct, currently 1 */
+	int numerator; /**< The numerator part of the device clock frequency. */
+	int denominator; /**< The denominator part of the device clock frequency. */
+	int power_of_ten; /**< The power_of_ten part of the device clock frequency. */
+	int accuracy_ppm; /**< The accuracy (in ppm) of the device clock. */
+} kvClockInfo;
 
 /**
  * Returned when using \ref canCHANNELDATA_BUS_PARAM_LIMITS
@@ -2398,13 +2385,14 @@ typedef struct kvClockInfo {
  *
  * \note  This is only intended for internal use.
 */
-typedef struct kvBusParamLimits {
-    int version;   /**< The version of this struct, currently 2 */
-    kvBusParamsTq arbitration_min;
-    kvBusParamsTq arbitration_max;
-    kvBusParamsTq data_min;
-    kvBusParamsTq data_max;
-}kvBusParamLimits;
+typedef struct kvBusParamLimits
+{
+	int version; /**< The version of this struct, currently 2 */
+	kvBusParamsTq arbitration_min;
+	kvBusParamsTq arbitration_max;
+	kvBusParamsTq data_min;
+	kvBusParamsTq data_max;
+} kvBusParamLimits;
 
 /**
  * \name canCHANNEL_IS_xxx
@@ -2416,32 +2404,30 @@ typedef struct kvBusParamLimits {
  */
 /** Used with \ref canCHANNELDATA_CHANNEL_FLAGS, indicates that the channel is
     opened exclusively. */
-#define canCHANNEL_IS_EXCLUSIVE         0x0001
+#define canCHANNEL_IS_EXCLUSIVE 0x0001
 /** Used with \ref canCHANNELDATA_CHANNEL_FLAGS, indicates that the channel is
     active (either opened in LIN mode or on-bus in CAN mode. */
-#define canCHANNEL_IS_OPEN              0x0002
+#define canCHANNEL_IS_OPEN 0x0002
 
 /** Used with \ref canCHANNELDATA_CHANNEL_FLAGS, indicates that the channel has
  *  been opened as CAN FD.  */
-#define canCHANNEL_IS_CANFD             0x0004
+#define canCHANNEL_IS_CANFD 0x0004
 
 //#define canCHANNEL_IS_CANFD_NON_ISO          0x0008 Reserved for when needed
 
 /** Used with \ref canCHANNELDATA_CHANNEL_FLAGS, indicates that the channel has
     been opened as LIN.  */
-#define canCHANNEL_IS_LIN               0x0010
+#define canCHANNEL_IS_LIN 0x0010
 
 /** Used with \ref canCHANNELDATA_CHANNEL_FLAGS, indicates that the channel has
     been opened as a LIN master.  */
-#define canCHANNEL_IS_LIN_MASTER        0x0020
+#define canCHANNEL_IS_LIN_MASTER 0x0020
 
 /** Used with \ref canCHANNELDATA_CHANNEL_FLAGS, indicates that the channel has
     been opened as a LIN slave.  */
-#define canCHANNEL_IS_LIN_SLAVE         0x0040
+#define canCHANNEL_IS_LIN_SLAVE 0x0040
 
-
- /** @} */
-
+/** @} */
 
 /**
  * \name canHWTYPE_xxx
@@ -2458,43 +2444,43 @@ typedef struct kvBusParamLimits {
  *
  *  @{
  */
-#define canHWTYPE_NONE                0 ///< Unknown or undefined
-#define canHWTYPE_VIRTUAL             1 ///< The virtual CAN bus
-#define canHWTYPE_LAPCAN              2 ///< LAPcan Family
-#define canHWTYPE_CANPARI             3 ///< CANpari (obsolete).
-#define canHWTYPE_PCCAN               8 ///< PCcan Family
-#define canHWTYPE_PCICAN              9 ///< PCIcan Family
-#define canHWTYPE_USBCAN             11 ///< USBcan (obsolete).
-#define canHWTYPE_PCICAN_II          40 ///< PCIcan II family
-#define canHWTYPE_USBCAN_II          42 ///< USBcan II, USBcan Rugged, Kvaser Memorator
-#define canHWTYPE_SIMULATED          44 ///< Simulated CAN bus for Kvaser Creator (obsolete).
-#define canHWTYPE_ACQUISITOR         46 ///< Kvaser Acquisitor (obsolete).
-#define canHWTYPE_LEAF               48 ///< Kvaser Leaf Family
-#define canHWTYPE_PC104_PLUS         50 ///< Kvaser PC104+
-#define canHWTYPE_PCICANX_II         52 ///< Kvaser PCIcanx II
-#define canHWTYPE_MEMORATOR_II       54 ///< Kvaser Memorator Professional family
-#define canHWTYPE_MEMORATOR_PRO      54 ///< Kvaser Memorator Professional family
-#define canHWTYPE_USBCAN_PRO         56 ///< Kvaser USBcan Professional
-#define canHWTYPE_IRIS               58 ///< Obsolete name, use canHWTYPE_BLACKBIRD instead
-#define canHWTYPE_BLACKBIRD          58 ///< Kvaser BlackBird
-#define canHWTYPE_MEMORATOR_LIGHT    60 ///< Kvaser Memorator Light
-#define canHWTYPE_MINIHYDRA          62 ///< Obsolete name, use canHWTYPE_EAGLE instead
-#define canHWTYPE_EAGLE              62 ///< Kvaser Eagle family
-#define canHWTYPE_BAGEL              64 ///< Obsolete name, use canHWTYPE_BLACKBIRD_V2 instead
-#define canHWTYPE_BLACKBIRD_V2       64 ///< Kvaser BlackBird v2
-#define canHWTYPE_MINIPCIE           66 ///< Kvaser Mini PCI Express
-#define canHWTYPE_USBCAN_KLINE       68 ///< USBcan Pro HS/K-Line
-#define canHWTYPE_ETHERCAN           70 ///< Kvaser Ethercan
-#define canHWTYPE_USBCAN_LIGHT       72 ///< Kvaser USBcan Light
-#define canHWTYPE_USBCAN_PRO2        74 ///< Kvaser USBcan Pro 5xHS and variants
-#define canHWTYPE_PCIE_V2            76 ///< Kvaser PCIEcan 4xHS and variants
-#define canHWTYPE_MEMORATOR_PRO2     78 ///< Kvaser Memorator Pro 5xHS and variants
-#define canHWTYPE_LEAF2              80 ///< Kvaser Leaf Pro HS v2 and variants
-#define canHWTYPE_MEMORATOR_V2       82 ///< Kvaser Memorator (2nd generation)
-#define canHWTYPE_CANLINHYBRID       84 ///< Kvaser Hybrid CAN/LIN
-#define canHWTYPE_DINRAIL            86 ///< Kvaser DIN Rail SE400S and variants
-#define canHWTYPE_U100               88 ///< Kvaser U100 and variants
-#define canHWTYPE_LEAF3              90 ///< Kvaser Kvaser Leaf v3 and variants
+#define canHWTYPE_NONE 0 ///< Unknown or undefined
+#define canHWTYPE_VIRTUAL 1 ///< The virtual CAN bus
+#define canHWTYPE_LAPCAN 2 ///< LAPcan Family
+#define canHWTYPE_CANPARI 3 ///< CANpari (obsolete).
+#define canHWTYPE_PCCAN 8 ///< PCcan Family
+#define canHWTYPE_PCICAN 9 ///< PCIcan Family
+#define canHWTYPE_USBCAN 11 ///< USBcan (obsolete).
+#define canHWTYPE_PCICAN_II 40 ///< PCIcan II family
+#define canHWTYPE_USBCAN_II 42 ///< USBcan II, USBcan Rugged, Kvaser Memorator
+#define canHWTYPE_SIMULATED 44 ///< Simulated CAN bus for Kvaser Creator (obsolete).
+#define canHWTYPE_ACQUISITOR 46 ///< Kvaser Acquisitor (obsolete).
+#define canHWTYPE_LEAF 48 ///< Kvaser Leaf Family
+#define canHWTYPE_PC104_PLUS 50 ///< Kvaser PC104+
+#define canHWTYPE_PCICANX_II 52 ///< Kvaser PCIcanx II
+#define canHWTYPE_MEMORATOR_II 54 ///< Kvaser Memorator Professional family
+#define canHWTYPE_MEMORATOR_PRO 54 ///< Kvaser Memorator Professional family
+#define canHWTYPE_USBCAN_PRO 56 ///< Kvaser USBcan Professional
+#define canHWTYPE_IRIS 58 ///< Obsolete name, use canHWTYPE_BLACKBIRD instead
+#define canHWTYPE_BLACKBIRD 58 ///< Kvaser BlackBird
+#define canHWTYPE_MEMORATOR_LIGHT 60 ///< Kvaser Memorator Light
+#define canHWTYPE_MINIHYDRA 62 ///< Obsolete name, use canHWTYPE_EAGLE instead
+#define canHWTYPE_EAGLE 62 ///< Kvaser Eagle family
+#define canHWTYPE_BAGEL 64 ///< Obsolete name, use canHWTYPE_BLACKBIRD_V2 instead
+#define canHWTYPE_BLACKBIRD_V2 64 ///< Kvaser BlackBird v2
+#define canHWTYPE_MINIPCIE 66 ///< Kvaser Mini PCI Express
+#define canHWTYPE_USBCAN_KLINE 68 ///< USBcan Pro HS/K-Line
+#define canHWTYPE_ETHERCAN 70 ///< Kvaser Ethercan
+#define canHWTYPE_USBCAN_LIGHT 72 ///< Kvaser USBcan Light
+#define canHWTYPE_USBCAN_PRO2 74 ///< Kvaser USBcan Pro 5xHS and variants
+#define canHWTYPE_PCIE_V2 76 ///< Kvaser PCIEcan 4xHS and variants
+#define canHWTYPE_MEMORATOR_PRO2 78 ///< Kvaser Memorator Pro 5xHS and variants
+#define canHWTYPE_LEAF2 80 ///< Kvaser Leaf Pro HS v2 and variants
+#define canHWTYPE_MEMORATOR_V2 82 ///< Kvaser Memorator (2nd generation)
+#define canHWTYPE_CANLINHYBRID 84 ///< Kvaser Hybrid CAN/LIN
+#define canHWTYPE_DINRAIL 86 ///< Kvaser DIN Rail SE400S and variants
+#define canHWTYPE_U100 88 ///< Kvaser U100 and variants
+#define canHWTYPE_LEAF3 90 ///< Kvaser Kvaser Leaf v3 and variants
 
 /** @} */
 
@@ -2504,27 +2490,27 @@ typedef struct kvBusParamLimits {
  *
  * Channel capabilities.
  */
-#define canCHANNEL_CAP_EXTENDED_CAN      0x00000001L ///< Used in \ref canGetChannelData(). Can use extended identifiers
-#define canCHANNEL_CAP_BUS_STATISTICS    0x00000002L ///< Used in \ref canGetChannelData(). Can report busload etc
-#define canCHANNEL_CAP_ERROR_COUNTERS    0x00000004L ///< Used in \ref canGetChannelData(). Can return error counters
-#define canCHANNEL_CAP_RESERVED_2        0x00000008L ///< Obsolete, only used by LAPcan driver
-#define canCHANNEL_CAP_GENERATE_ERROR    0x00000010L ///< Used in \ref canGetChannelData(). Can send error frames
+#define canCHANNEL_CAP_EXTENDED_CAN 0x00000001L ///< Used in \ref canGetChannelData(). Can use extended identifiers
+#define canCHANNEL_CAP_BUS_STATISTICS 0x00000002L ///< Used in \ref canGetChannelData(). Can report busload etc
+#define canCHANNEL_CAP_ERROR_COUNTERS 0x00000004L ///< Used in \ref canGetChannelData(). Can return error counters
+#define canCHANNEL_CAP_RESERVED_2 0x00000008L ///< Obsolete, only used by LAPcan driver
+#define canCHANNEL_CAP_GENERATE_ERROR 0x00000010L ///< Used in \ref canGetChannelData(). Can send error frames
 #define canCHANNEL_CAP_GENERATE_OVERLOAD 0x00000020L ///< Used in \ref canGetChannelData(). Can send CAN overload frame
-#define canCHANNEL_CAP_TXREQUEST         0x00000040L ///< Used in \ref canGetChannelData(). Can report when a CAN message transmission is initiated
-#define canCHANNEL_CAP_TXACKNOWLEDGE     0x00000080L ///< Used in \ref canGetChannelData(). Can report when a CAN messages has been transmitted
-#define canCHANNEL_CAP_VIRTUAL           0x00010000L ///< Used in \ref canGetChannelData(). Virtual CAN channel
-#define canCHANNEL_CAP_SIMULATED         0x00020000L ///< Used in \ref canGetChannelData(). Simulated CAN channel
-#define canCHANNEL_CAP_RESERVED_1        0x00040000L ///< Obsolete, use canCHANNEL_CAP_REMOTE_ACCESS or \ref canGetChannelData() instead.
-#define canCHANNEL_CAP_CAN_FD            0x00080000L ///< Used in \ref canGetChannelData(). CAN-FD ISO compliant channel
-#define canCHANNEL_CAP_CAN_FD_NONISO     0x00100000L ///< Used in \ref canGetChannelData(). CAN-FD NON-ISO compliant channel
-#define canCHANNEL_CAP_SILENT_MODE       0x00200000L ///< Used in \ref canGetChannelData(). Channel supports Silent mode
-#define canCHANNEL_CAP_SINGLE_SHOT       0x00400000L ///< Used in \ref canGetChannelData(). Channel supports Single Shot messages
-#define canCHANNEL_CAP_LOGGER            0x00800000L ///< Used in \ref canGetChannelData(). Channel has logger capabilities.
-#define canCHANNEL_CAP_REMOTE_ACCESS     0x01000000L ///< Used in \ref canGetChannelData(). Channel has remote capabilities
-#define canCHANNEL_CAP_SCRIPT            0x02000000L ///< Used in \ref canGetChannelData(). Channel has script capabilities.
-#define canCHANNEL_CAP_LIN_HYBRID        0x04000000L ///< Used in \ref canGetChannelData(). Channel has LIN capabilities.
-#define canCHANNEL_CAP_IO_API            0x08000000L ///< Used in \ref canGetChannelData(). Channel has IO API capabilities.
-#define canCHANNEL_CAP_CANTEGRITY        0x10000000L ///< Used in \ref canGetChannelData(). Channel has CANtegrity capabilities.
+#define canCHANNEL_CAP_TXREQUEST 0x00000040L ///< Used in \ref canGetChannelData(). Can report when a CAN message transmission is initiated
+#define canCHANNEL_CAP_TXACKNOWLEDGE 0x00000080L ///< Used in \ref canGetChannelData(). Can report when a CAN messages has been transmitted
+#define canCHANNEL_CAP_VIRTUAL 0x00010000L ///< Used in \ref canGetChannelData(). Virtual CAN channel
+#define canCHANNEL_CAP_SIMULATED 0x00020000L ///< Used in \ref canGetChannelData(). Simulated CAN channel
+#define canCHANNEL_CAP_RESERVED_1 0x00040000L ///< Obsolete, use canCHANNEL_CAP_REMOTE_ACCESS or \ref canGetChannelData() instead.
+#define canCHANNEL_CAP_CAN_FD 0x00080000L ///< Used in \ref canGetChannelData(). CAN-FD ISO compliant channel
+#define canCHANNEL_CAP_CAN_FD_NONISO 0x00100000L ///< Used in \ref canGetChannelData(). CAN-FD NON-ISO compliant channel
+#define canCHANNEL_CAP_SILENT_MODE 0x00200000L ///< Used in \ref canGetChannelData(). Channel supports Silent mode
+#define canCHANNEL_CAP_SINGLE_SHOT 0x00400000L ///< Used in \ref canGetChannelData(). Channel supports Single Shot messages
+#define canCHANNEL_CAP_LOGGER 0x00800000L ///< Used in \ref canGetChannelData(). Channel has logger capabilities.
+#define canCHANNEL_CAP_REMOTE_ACCESS 0x01000000L ///< Used in \ref canGetChannelData(). Channel has remote capabilities
+#define canCHANNEL_CAP_SCRIPT 0x02000000L ///< Used in \ref canGetChannelData(). Channel has script capabilities.
+#define canCHANNEL_CAP_LIN_HYBRID 0x04000000L ///< Used in \ref canGetChannelData(). Channel has LIN capabilities.
+#define canCHANNEL_CAP_IO_API 0x08000000L ///< Used in \ref canGetChannelData(). Channel has IO API capabilities.
+#define canCHANNEL_CAP_CANTEGRITY 0x10000000L ///< Used in \ref canGetChannelData(). Channel has CANtegrity capabilities.
 
 /**
  * \name canCHANNEL_CAP_EX_xxx
@@ -2532,7 +2518,7 @@ typedef struct kvBusParamLimits {
  *
  * Channel extended capabilities.
  */
-#define canCHANNEL_CAP_EX_BUSPARAMS_TQ      0x0000000000000001L ///< Used in \ref canGetChannelData() with \ref canCHANNELDATA_CHANNEL_CAP_EX as the item argument. Channel has BusParams TQ API
+#define canCHANNEL_CAP_EX_BUSPARAMS_TQ 0x0000000000000001L ///< Used in \ref canGetChannelData() with \ref canCHANNELDATA_CHANNEL_CAP_EX as the item argument. Channel has BusParams TQ API
 
 /**
  * \name canCHANNEL_OPMODE_xxx
@@ -2546,22 +2532,22 @@ typedef struct kvBusParamLimits {
 /**
  * Not applicable, or unknown
  */
-#define canCHANNEL_OPMODE_NONE                 1
+#define canCHANNEL_OPMODE_NONE 1
 
 /**
  * Infrastructure mode
  */
-#define canCHANNEL_OPMODE_INFRASTRUCTURE       2
+#define canCHANNEL_OPMODE_INFRASTRUCTURE 2
 
 /**
  * Reserved value, do not use
  */
-#define canCHANNEL_OPMODE_RESERVED             3
+#define canCHANNEL_OPMODE_RESERVED 3
 
 /**
  * Adhoc mode
  */
-#define canCHANNEL_OPMODE_ADHOC                4
+#define canCHANNEL_OPMODE_ADHOC 4
 /** @} */
 
 /**
@@ -2572,7 +2558,7 @@ typedef struct kvBusParamLimits {
  *  @{
  */
 /** Used with \ref canCHANNELDATA_TRANS_CAP */
-#define canDRIVER_CAP_HIGHSPEED             0x00000001L
+#define canDRIVER_CAP_HIGHSPEED 0x00000001L
 /** @} */
 
 /**
@@ -2585,8 +2571,7 @@ typedef struct kvBusParamLimits {
  * @{
  */
 
-
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf and \a buflen refers to this
    * functions arguments.
    *
@@ -2599,9 +2584,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_PREFER_EXT             1
+#define canIOCTL_PREFER_EXT 1
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf and \a buflen refers to this
    * functions arguments.
    *
@@ -2613,9 +2598,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_PREFER_STD             2
+#define canIOCTL_PREFER_STD 2
 
-  /**
+/**
    *
    * Note that CAN error counters are never updated on device and will be briefly
    * changed back to their original values after this call.
@@ -2631,9 +2616,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_CLEAR_ERROR_COUNTERS   5
+#define canIOCTL_CLEAR_ERROR_COUNTERS 5
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2646,9 +2631,9 @@ typedef struct kvBusParamLimits {
    *
    * \note The accuracy of the clock isn't affected.
    */
-#define canIOCTL_SET_TIMER_SCALE        6
+#define canIOCTL_SET_TIMER_SCALE 6
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2667,9 +2652,9 @@ typedef struct kvBusParamLimits {
    *
    * The default value is 0, Transmit Acknowledge is off.
    */
-#define canIOCTL_SET_TXACK              7
+#define canIOCTL_SET_TXACK 7
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2681,9 +2666,9 @@ typedef struct kvBusParamLimits {
    * traffic intensity, and consequently the value returned by the call to
    * \ref canIoCtl() might be a few milliseconds old.
    */
-#define canIOCTL_GET_RX_BUFFER_LEVEL              8
+#define canIOCTL_GET_RX_BUFFER_LEVEL 8
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2695,9 +2680,9 @@ typedef struct kvBusParamLimits {
    * traffic intensity, and consequently the value returned by the call to
    * \ref canIoCtl() might be a few milliseconds old.
    */
-#define canIOCTL_GET_TX_BUFFER_LEVEL              9
+#define canIOCTL_GET_TX_BUFFER_LEVEL 9
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf and \a buflen refers to this
    * functions arguments.
    *
@@ -2706,9 +2691,9 @@ typedef struct kvBusParamLimits {
    *
    * \note This is the same thing as calling \ref canFlushReceiveQueue()
    */
-#define canIOCTL_FLUSH_RX_BUFFER                  10
+#define canIOCTL_FLUSH_RX_BUFFER 10
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf and \a buflen refers to this
    * functions arguments.
    *
@@ -2717,9 +2702,9 @@ typedef struct kvBusParamLimits {
    *
    * \note This is the same thing as calling \ref canFlushTransmitQueue().
    */
-#define canIOCTL_FLUSH_TX_BUFFER                  11
+#define canIOCTL_FLUSH_TX_BUFFER 11
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2727,9 +2712,9 @@ typedef struct kvBusParamLimits {
    * resolution in microseconds. Note that the accuracy of the clock isn't
    * affected. The default value is 1000 microseconds, i.e. one millisecond.
    */
-#define canIOCTL_GET_TIMER_SCALE                  12
+#define canIOCTL_GET_TIMER_SCALE 12
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2744,9 +2729,9 @@ typedef struct kvBusParamLimits {
    *
    * Default value is \c 0, Transmit Requests off.
    */
-#define canIOCTL_SET_TXRQ                         13
+#define canIOCTL_SET_TXRQ 13
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2773,24 +2758,24 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_EVENTHANDLE                  14
+#define canIOCTL_GET_EVENTHANDLE 14
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
    * \note Not yet implemented.
    */
-#define canIOCTL_SET_BYPASS_MODE                  15
+#define canIOCTL_SET_BYPASS_MODE 15
 
-  /**
+/**
    * This define is used in \ref canIoCtl().
    *
    * \note This is only intended for internal use.
    */
-#define canIOCTL_SET_WAKEUP                       16
+#define canIOCTL_SET_WAKEUP 16
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2799,23 +2784,23 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_DRIVERHANDLE                17
+#define canIOCTL_GET_DRIVERHANDLE 17
 
-  /**
+/**
    * This define is used in \ref canIoCtl().
    *
    * \note This is only intended for internal use.
    */
-#define canIOCTL_MAP_RXQUEUE                     18
+#define canIOCTL_MAP_RXQUEUE 18
 
-  /**
+/**
    * This define is used in \ref canIoCtl().
    *
    *  \note This is only intended for internal use.
    */
-#define canIOCTL_GET_WAKEUP                      19
+#define canIOCTL_GET_WAKEUP 19
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2826,18 +2811,18 @@ typedef struct kvBusParamLimits {
    *
    * Default value is \c 0, access error reporting off.
    */
-#define canIOCTL_SET_REPORT_ACCESS_ERRORS        20
+#define canIOCTL_SET_REPORT_ACCESS_ERRORS 20
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
    * \a buf points to a unsigned char which receives the current setting of the access
    * error reporting (0 or 1.)
    */
-#define canIOCTL_GET_REPORT_ACCESS_ERRORS        21
+#define canIOCTL_GET_REPORT_ACCESS_ERRORS 21
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2846,9 +2831,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_CONNECT_TO_VIRTUAL_BUS          22
+#define canIOCTL_CONNECT_TO_VIRTUAL_BUS 22
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2857,9 +2842,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_DISCONNECT_FROM_VIRTUAL_BUS     23
+#define canIOCTL_DISCONNECT_FROM_VIRTUAL_BUS 23
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2868,9 +2853,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_SET_USER_IOPORT                 24
+#define canIOCTL_SET_USER_IOPORT 24
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2880,16 +2865,16 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_USER_IOPORT                 25
+#define canIOCTL_GET_USER_IOPORT 25
 
-  /**
+/**
    * This define is used in \ref canIoCtl().
    *
    * \note This is only intended for internal use.
    */
-#define canIOCTL_SET_BUFFER_WRAPAROUND_MODE      26
+#define canIOCTL_SET_BUFFER_WRAPAROUND_MODE 26
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2905,23 +2890,23 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_SET_RX_QUEUE_SIZE               27
+#define canIOCTL_SET_RX_QUEUE_SIZE 27
 
-  /**
+/**
    * This define is used in \ref canIoCtl().
    *
    * \note This is only intended for internal use.
    */
-#define canIOCTL_SET_USB_THROTTLE                28
+#define canIOCTL_SET_USB_THROTTLE 28
 
-  /**
+/**
    * This define is used in \ref canIoCtl().
    *
    * \note This is only intended for internal use.
    */
-#define canIOCTL_GET_USB_THROTTLE                29
+#define canIOCTL_GET_USB_THROTTLE 29
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to
    * this functions argument.
    *
@@ -2935,9 +2920,9 @@ typedef struct kvBusParamLimits {
    *
    * Default value is \c 1, the CAN clock will be reset at buson.
    */
-#define canIOCTL_SET_BUSON_TIME_AUTO_RESET       30
+#define canIOCTL_SET_BUSON_TIME_AUTO_RESET 30
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2948,9 +2933,9 @@ typedef struct kvBusParamLimits {
    * \li 2: Transmit Acknowledges is turned off, even for the driver's internal
    *        usage.
    */
-#define canIOCTL_GET_TXACK                       31
+#define canIOCTL_GET_TXACK 31
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2964,9 +2949,9 @@ typedef struct kvBusParamLimits {
    * on the second handle. Use the \ref canIOCTL_SET_LOCAL_TXECHO function code to
    * turn this function off, if it is not desired on a certain handle.
    */
-#define canIOCTL_SET_LOCAL_TXECHO                32
+#define canIOCTL_SET_LOCAL_TXECHO 32
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2981,9 +2966,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_SET_ERROR_FRAMES_REPORTING      33
+#define canIOCTL_SET_ERROR_FRAMES_REPORTING 33
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -2996,9 +2981,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_CHANNEL_QUALITY             34
+#define canIOCTL_GET_CHANNEL_QUALITY 34
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3009,9 +2994,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_ROUNDTRIP_TIME              35
+#define canIOCTL_GET_ROUNDTRIP_TIME 35
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3019,9 +3004,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_BUS_TYPE                    36
+#define canIOCTL_GET_BUS_TYPE 36
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3033,9 +3018,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_DEVNAME_ASCII               37
+#define canIOCTL_GET_DEVNAME_ASCII 37
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3046,9 +3031,9 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_TIME_SINCE_LAST_SEEN        38
+#define canIOCTL_GET_TIME_SINCE_LAST_SEEN 38
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3061,9 +3046,9 @@ typedef struct kvBusParamLimits {
    * \note This function is subject to change in future releases and is
    * not supported by Kvaser.
    */
-#define canIOCTL_GET_TREF_LIST                   39
+#define canIOCTL_GET_TREF_LIST 39
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3084,9 +3069,9 @@ typedef struct kvBusParamLimits {
    * is defined as the time from the successful completion of one transmit
    * to the beginning of the next one.
    */
-#define canIOCTL_TX_INTERVAL                     40
+#define canIOCTL_TX_INTERVAL 40
 
-   /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3097,16 +3082,16 @@ typedef struct kvBusParamLimits {
    * A value of 0 means that the device should use its own default bitrate limit.<br>
    * To find out which devices that have a bitrate limit, see \ref canCHANNELDATA_MAX_BITRATE.
    */
-#define canIOCTL_SET_BRLIMIT                            43
+#define canIOCTL_SET_BRLIMIT 43
 
-  /**
+/**
    * \deprecated Use \ref canIOCTL_SET_THROTTLE_SCALED instead.
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_SET_USB_THROTTLE_SCALED                41
+#define canIOCTL_SET_USB_THROTTLE_SCALED 41
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3120,16 +3105,16 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_SET_THROTTLE_SCALED                    41
+#define canIOCTL_SET_THROTTLE_SCALED 41
 
-  /**
+/**
    * \deprecated Use \ref canIOCTL_GET_THROTTLE_SCALED instead
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_USB_THROTTLE_SCALED                42
+#define canIOCTL_GET_USB_THROTTLE_SCALED 42
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
@@ -3143,18 +3128,18 @@ typedef struct kvBusParamLimits {
    *
    * \note Not implemented in linux.
    */
-#define canIOCTL_GET_THROTTLE_SCALED                    42
+#define canIOCTL_GET_THROTTLE_SCALED 42
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to this
    * functions argument.
    *
    * This ioctl resets overrun count and flags, \sa \ref canReadStatus \sa \ref canGetBusStatistics.
    * The contents of \a buf and \a buflen is ignored.
    */
-#define canIOCTL_RESET_OVERRUN_COUNT                          44
+#define canIOCTL_RESET_OVERRUN_COUNT 44
 
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to an
    * argument of that function.
    *
@@ -3162,10 +3147,9 @@ typedef struct kvBusParamLimits {
    *
    * \note This is only intended for internal use.
    */
-#define canIOCTL_LIN_MODE                               45
+#define canIOCTL_LIN_MODE 45
 
-
-  /**
+/**
    * This define is used in \ref canIoCtl(), \a buf mentioned below refers to an
    * argument of that function.
    *
@@ -3182,13 +3166,14 @@ typedef struct kvBusParamLimits {
    *
    * The default value is 0, Local Transmit Acknowledge is off.
    */
-#define canIOCTL_SET_LOCAL_TXACK                     46
- /** @} */
+#define canIOCTL_SET_LOCAL_TXACK 46
+/** @} */
 
 /** Used in \ref canIOCTL_SET_USER_IOPORT and \ref canIOCTL_GET_USER_IOPORT. */
-typedef struct {
-    unsigned int portNo;     ///< Port number used in e.g. \ref canIOCTL_SET_USER_IOPORT
-    unsigned int portValue;  ///< Port value used in e.g. \ref canIOCTL_SET_USER_IOPORT
+typedef struct
+{
+	unsigned int portNo; ///< Port number used in e.g. \ref canIOCTL_SET_USER_IOPORT
+	unsigned int portValue; ///< Port value used in e.g. \ref canIOCTL_SET_USER_IOPORT
 } canUserIoPortData;
 
 /**
@@ -3263,8 +3248,6 @@ canStatus CANLIBAPI canWaitForEvent(const CanHandle hnd, DWORD timeout);
  * \sa \ref canSetBusParamsTq()
  */
 canStatus CANLIBAPI canSetBusParamsC200(const CanHandle hnd, unsigned char btr0, unsigned char btr1);
-
-
 
 /**
  * \ingroup CAN
@@ -3348,7 +3331,7 @@ canStatus CANLIBAPI canGetDriverMode(const CanHandle hnd, int *lineMode, int *re
  * Item codes for canGetVersionEx().
  */
 
-  /**
+/**
    * This define is used in \ref canGetVersionEx() and controls which version number
    * that returned.
    *
@@ -3360,9 +3343,9 @@ canStatus CANLIBAPI canGetDriverMode(const CanHandle hnd, int *lineMode, int *re
    *
    * \note Linux returns version of libcanlib.so.
    */
-#define canVERSION_CANLIB32_VERSION     0
+#define canVERSION_CANLIB32_VERSION 0
 
-  /**
+/**
    * This define is used in \ref canGetVersionEx() and controls what type of version
    * number that is returned.
    *
@@ -3372,9 +3355,9 @@ canStatus CANLIBAPI canGetDriverMode(const CanHandle hnd, int *lineMode, int *re
    * version number of the whole CANlib. For example, CANlib 2.27 would return
    * 0x21B.
    */
-#define canVERSION_CANLIB32_PRODVER     1
+#define canVERSION_CANLIB32_PRODVER 1
 
-  /**
+/**
    * This define is used in \ref canGetVersionEx() and controls what type of version
    * number that is returned.
    *
@@ -3385,9 +3368,9 @@ canStatus CANLIBAPI canGetDriverMode(const CanHandle hnd, int *lineMode, int *re
    * letter, or 0 (zero) if no letter). For example, CANlib 3.8 would return
    * 0x00030800 and CANlib 3.8a would return 0x00030861.
    */
-#define canVERSION_CANLIB32_PRODVER32   2
+#define canVERSION_CANLIB32_PRODVER32 2
 
-  /**
+/**
    * This define is used in \ref canGetVersionEx() and controls what type of version
    * number that is returned.
    *
@@ -3397,11 +3380,9 @@ canStatus CANLIBAPI canGetDriverMode(const CanHandle hnd, int *lineMode, int *re
    * \note In Linux, this depends on the define CANLIB_BETA
    *
    */
-#define canVERSION_CANLIB32_BETA        3
-
+#define canVERSION_CANLIB32_BETA 3
 
 /** @} */
-
 
 /**
  * \ingroup can_general
@@ -3421,7 +3402,6 @@ canStatus CANLIBAPI canGetDriverMode(const CanHandle hnd, int *lineMode, int *re
  * \sa \ref page_user_guide_version
  */
 unsigned int CANLIBAPI canGetVersionEx(unsigned int itemCode);
-
 
 /**
  * \ingroup NamedParameterSettings
@@ -3782,7 +3762,7 @@ canStatus CANLIBAPI canObjBufFreeAll(const CanHandle hnd);
  */
 canStatus CANLIBAPI canObjBufAllocate(const CanHandle hnd, int type);
 
- /**
+/**
   * \name canOBJBUF_TYPE_xxx
   * \anchor canOBJBUF_TYPE_xxx
   *
@@ -3790,9 +3770,9 @@ canStatus CANLIBAPI canObjBufAllocate(const CanHandle hnd, int type);
   *
   * @{
   */
-#define canOBJBUF_TYPE_AUTO_RESPONSE            0x01 ///< The buffer is an auto-response buffer.
-#define canOBJBUF_TYPE_PERIODIC_TX              0x02 ///< The buffer is an auto-transmit buffer.
- /** @} */
+#define canOBJBUF_TYPE_AUTO_RESPONSE 0x01 ///< The buffer is an auto-response buffer.
+#define canOBJBUF_TYPE_PERIODIC_TX 0x02 ///< The buffer is an auto-transmit buffer.
+/** @} */
 
 /**
  * \ingroup ObjectBuffers
@@ -3912,7 +3892,7 @@ canStatus CANLIBAPI canObjBufSetFlags(const CanHandle hnd,
  *
  * @{
  */
- /**
+/**
   * This define is used in \ref canObjBufSetFlags().
   *
   * For auto-response buffers only. When this flag is in effect, the buffer
@@ -3921,8 +3901,8 @@ canStatus CANLIBAPI canObjBufSetFlags(const CanHandle hnd,
   * frames.
   *
   */
-#define canOBJBUF_AUTO_RESPONSE_RTR_ONLY        0x01
- /** @} */
+#define canOBJBUF_AUTO_RESPONSE_RTR_ONLY 0x01
+/** @} */
 
 /**
  * \ingroup ObjectBuffers
@@ -4049,7 +4029,7 @@ canStatus CANLIBAPI canObjBufSendBurst(const CanHandle hnd,
  *
  * @{
  */
-  /**
+/**
    * This define is used in \ref canProbeVersion(), \a major and \a minor refer to
    * this functions arguments.
    *
@@ -4057,16 +4037,16 @@ canStatus CANLIBAPI canObjBufSendBurst(const CanHandle hnd,
    * present. Earlier and later versions are not accepted. This flag does not
    * affect the acceptance of beta versions.
    */
-#define canVERSION_DONT_ACCEPT_LATER      0x01
-  /**
+#define canVERSION_DONT_ACCEPT_LATER 0x01
+/**
    * This define is used in \ref canProbeVersion(), \a major and \a minor refer to
    * this functions arguments.
    *
    * Return FALSE if a beta version (preview version) of CANlib is installed,
    * regardless of its version number.
    */
-#define canVERSION_DONT_ACCEPT_BETAS      0x02
- /** @} */
+#define canVERSION_DONT_ACCEPT_BETAS 0x02
+/** @} */
 
 /**
  * \ingroup can_general
@@ -4104,11 +4084,11 @@ canStatus CANLIBAPI canObjBufSendBurst(const CanHandle hnd,
  * \sa \ref page_user_guide_version
  * \sa \ref canGetVersion(), \ref canGetVersionEx(), \ref canGetChannelData()
  */
-BOOL CANLIBAPI canProbeVersion (const CanHandle hnd,
-                                int major,
-                                int minor,
-                                int oem_id,
-                                unsigned int flags);
+BOOL CANLIBAPI canProbeVersion(const CanHandle hnd,
+                               int major,
+                               int minor,
+                               int oem_id,
+                               unsigned int flags);
 
 /**
  * \ingroup CAN
@@ -4180,7 +4160,6 @@ canStatus CANLIBAPI canWriteWait(const CanHandle hnd,
                                  unsigned int dlc,
                                  unsigned int flag,
                                  unsigned long timeout);
-
 
 /**
  * \ingroup can_general
@@ -4399,7 +4378,7 @@ canStatus CANLIBAPI kvBeep(const CanHandle hnd,
  */
 canStatus CANLIBAPI kvSelfTest(const CanHandle hnd, unsigned long *presults);
 
-  /**
+/**
    * \anchor kvLED_ACTION_xxx
    * \name kvLED_ACTION_xxx
    *
@@ -4407,34 +4386,34 @@ canStatus CANLIBAPI kvSelfTest(const CanHandle hnd, unsigned long *presults);
    *
    * @{
    */
-#define kvLED_ACTION_ALL_LEDS_ON   0 ///< Turn all LEDs on.
-#define kvLED_ACTION_ALL_LEDS_OFF  1 ///< Turn all LEDs off.
-#define kvLED_ACTION_LED_0_ON      2 ///< Turn LED 0 on.
-#define kvLED_ACTION_LED_0_OFF     3 ///< Turn LED 0 off.
-#define kvLED_ACTION_LED_1_ON      4 ///< Turn LED 1 on.
-#define kvLED_ACTION_LED_1_OFF     5 ///< Turn LED 1 off.
-#define kvLED_ACTION_LED_2_ON      6 ///< Turn LED 2 on.
-#define kvLED_ACTION_LED_2_OFF     7 ///< Turn LED 2 off.
-#define kvLED_ACTION_LED_3_ON      8 ///< Turn LED 3 on.
-#define kvLED_ACTION_LED_3_OFF     9 ///< Turn LED 3 off.
-#define kvLED_ACTION_LED_4_ON     10 ///< Turn LED 4 on.
-#define kvLED_ACTION_LED_4_OFF    11 ///< Turn LED 4 off.
-#define kvLED_ACTION_LED_5_ON     12 ///< Turn LED 5 on.
-#define kvLED_ACTION_LED_5_OFF    13 ///< Turn LED 5 off.
-#define kvLED_ACTION_LED_6_ON     14 ///< Turn LED 6 on.
-#define kvLED_ACTION_LED_6_OFF    15 ///< Turn LED 6 off.
-#define kvLED_ACTION_LED_7_ON     16 ///< Turn LED 7 on.
-#define kvLED_ACTION_LED_7_OFF    17 ///< Turn LED 7 off.
-#define kvLED_ACTION_LED_8_ON     18 ///< Turn LED 8 on.
-#define kvLED_ACTION_LED_8_OFF    19 ///< Turn LED 8 off.
-#define kvLED_ACTION_LED_9_ON     20 ///< Turn LED 9 on.
-#define kvLED_ACTION_LED_9_OFF    21 ///< Turn LED 9 off.
-#define kvLED_ACTION_LED_10_ON    22 ///< Turn LED 10 on.
-#define kvLED_ACTION_LED_10_OFF   23 ///< Turn LED 10 off.
-#define kvLED_ACTION_LED_11_ON    24 ///< Turn LED 11 on.
-#define kvLED_ACTION_LED_11_OFF   25 ///< Turn LED 11 off.
+#define kvLED_ACTION_ALL_LEDS_ON 0 ///< Turn all LEDs on.
+#define kvLED_ACTION_ALL_LEDS_OFF 1 ///< Turn all LEDs off.
+#define kvLED_ACTION_LED_0_ON 2 ///< Turn LED 0 on.
+#define kvLED_ACTION_LED_0_OFF 3 ///< Turn LED 0 off.
+#define kvLED_ACTION_LED_1_ON 4 ///< Turn LED 1 on.
+#define kvLED_ACTION_LED_1_OFF 5 ///< Turn LED 1 off.
+#define kvLED_ACTION_LED_2_ON 6 ///< Turn LED 2 on.
+#define kvLED_ACTION_LED_2_OFF 7 ///< Turn LED 2 off.
+#define kvLED_ACTION_LED_3_ON 8 ///< Turn LED 3 on.
+#define kvLED_ACTION_LED_3_OFF 9 ///< Turn LED 3 off.
+#define kvLED_ACTION_LED_4_ON 10 ///< Turn LED 4 on.
+#define kvLED_ACTION_LED_4_OFF 11 ///< Turn LED 4 off.
+#define kvLED_ACTION_LED_5_ON 12 ///< Turn LED 5 on.
+#define kvLED_ACTION_LED_5_OFF 13 ///< Turn LED 5 off.
+#define kvLED_ACTION_LED_6_ON 14 ///< Turn LED 6 on.
+#define kvLED_ACTION_LED_6_OFF 15 ///< Turn LED 6 off.
+#define kvLED_ACTION_LED_7_ON 16 ///< Turn LED 7 on.
+#define kvLED_ACTION_LED_7_OFF 17 ///< Turn LED 7 off.
+#define kvLED_ACTION_LED_8_ON 18 ///< Turn LED 8 on.
+#define kvLED_ACTION_LED_8_OFF 19 ///< Turn LED 8 off.
+#define kvLED_ACTION_LED_9_ON 20 ///< Turn LED 9 on.
+#define kvLED_ACTION_LED_9_OFF 21 ///< Turn LED 9 off.
+#define kvLED_ACTION_LED_10_ON 22 ///< Turn LED 10 on.
+#define kvLED_ACTION_LED_10_OFF 23 ///< Turn LED 10 off.
+#define kvLED_ACTION_LED_11_ON 24 ///< Turn LED 11 on.
+#define kvLED_ACTION_LED_11_OFF 25 ///< Turn LED 11 off.
 
-  /** @} */
+/** @} */
 
 /**
  * \ingroup can_general
@@ -4457,7 +4436,7 @@ canStatus CANLIBAPI kvSelfTest(const CanHandle hnd, unsigned long *presults);
  * \return \ref canERR_xxx (negative) if failure
  *
  */
-canStatus CANLIBAPI kvFlashLeds (const CanHandle hnd, int action, int timeout);
+canStatus CANLIBAPI kvFlashLeds(const CanHandle hnd, int action, int timeout);
 
 /**
  * \ingroup CAN
@@ -4513,26 +4492,27 @@ canStatus CANLIBAPI canRequestChipStatus(const CanHandle hnd);
  *
  * \sa \ref canGetBusStatistics()
  */
-canStatus CANLIBAPI canRequestBusStatistics (const CanHandle hnd);
+canStatus CANLIBAPI canRequestBusStatistics(const CanHandle hnd);
 
-  /**
+/**
    * This struct is returned by \ref canGetBusStatistics()
    *
    * The values are cleared when the corresponding channel goes on bus.
    */
-typedef struct canBusStatistics_s {
-    unsigned long stdData;   ///< Number of received standard (11-bit identifiers) data frames.
-    unsigned long stdRemote; ///< Number of received standard (11-bit identifiers) remote frames.
-    unsigned long extData;   ///< Number of received extended (29-bit identifiers) data frames.
-    unsigned long extRemote; ///< Number of received extended (29-bit identifiers) remote frames.
-    unsigned long errFrame;  ///< Number of error frames
+typedef struct canBusStatistics_s
+{
+	unsigned long stdData; ///< Number of received standard (11-bit identifiers) data frames.
+	unsigned long stdRemote; ///< Number of received standard (11-bit identifiers) remote frames.
+	unsigned long extData; ///< Number of received extended (29-bit identifiers) data frames.
+	unsigned long extRemote; ///< Number of received extended (29-bit identifiers) remote frames.
+	unsigned long errFrame; ///< Number of error frames
 
-    /**
+	/**
      * The bus load, expressed as an integer in the interval 0 - 10000
      * representing 0.00% - 100.00% bus load.
      */
-    unsigned long busLoad;
-    unsigned long overruns;  ///< The number of overruns detected by the hardware, firmware or driver.
+	unsigned long busLoad;
+	unsigned long overruns; ///< The number of overruns detected by the hardware, firmware or driver.
 } canBusStatistics;
 
 /**
@@ -4604,7 +4584,7 @@ canStatus CANLIBAPI kvAnnounceIdentity(const CanHandle hnd,
                                        void *buf,
                                        size_t bufsiz);
 
- /**
+/**
  * \ingroup can_general
  *
  * \source_cs       <b>static Canlib.kvStatus kvAnnounceIdentityEx(CanHandle hnd, Int32 type, Byte[] data);</b>
@@ -4665,11 +4645,12 @@ typedef canStatus kvStatus;
  *
  * Used for time domain handling.
  */
-typedef struct kvTimeDomainData_s {
-    int nMagiSyncGroups;       ///< number of MagiSync&tm; groups
-    int nMagiSyncedMembers;    ///< number of MagiSync&tm; members
-    int nNonMagiSyncCards;     ///< number of non MagiSync&tm; interfaces
-    int nNonMagiSyncedMembers; ///< number of non MagiSync&tm; members
+typedef struct kvTimeDomainData_s
+{
+	int nMagiSyncGroups; ///< number of MagiSync&tm; groups
+	int nMagiSyncedMembers; ///< number of MagiSync&tm; members
+	int nNonMagiSyncCards; ///< number of non MagiSync&tm; interfaces
+	int nNonMagiSyncedMembers; ///< number of non MagiSync&tm; members
 } kvTimeDomainData;
 
 /**
@@ -4899,61 +4880,61 @@ kvStatus CANLIBAPI kvSetNotifyCallback(const CanHandle hnd,
 * Unknown bus type.
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_NONE          0
+#define kvBUSTYPE_NONE 0
 
 /**
 * Bus of type PCI.
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_PCI           1
+#define kvBUSTYPE_PCI 1
 
 /**
 * Bus of type PCMCIA
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_PCMCIA        2
+#define kvBUSTYPE_PCMCIA 2
 
 /**
 * Bus of type USB
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_USB           3
+#define kvBUSTYPE_USB 3
 
 /**
 * Bus of type WLAN
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_WLAN          4
+#define kvBUSTYPE_WLAN 4
 
 /**
 * Bus of type PCI Express
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_PCI_EXPRESS   5
+#define kvBUSTYPE_PCI_EXPRESS 5
 
 /**
 * Bus of type ISA
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_ISA           6
+#define kvBUSTYPE_ISA 6
 
 /**
 * Bus of type virtual
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_VIRTUAL       7
+#define kvBUSTYPE_VIRTUAL 7
 
 /**
 * Bus of type PC104+
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_PC104_PLUS    8
+#define kvBUSTYPE_PC104_PLUS 8
 
 /**
 * Bus of type LAN
 * \note Not inplemented in linux.
 */
-#define kvBUSTYPE_LAN           9
+#define kvBUSTYPE_LAN 9
 /** @} */
 
 /**
@@ -4970,19 +4951,19 @@ kvStatus CANLIBAPI kvSetNotifyCallback(const CanHandle hnd,
 * \ref kvBUSTYPE_VIRTUAL
 * \note Not implemented in linux.
 */
-#define kvBUSTYPE_GROUP_VIRTUAL  1
+#define kvBUSTYPE_GROUP_VIRTUAL 1
 
 /**
 * \ref kvBUSTYPE_USB
 * \note Not implemented in linux.
 */
-#define kvBUSTYPE_GROUP_LOCAL    2
+#define kvBUSTYPE_GROUP_LOCAL 2
 
 /**
 * \ref kvBUSTYPE_WLAN, \ref kvBUSTYPE_LAN
 * \note Not implemented in linux.
 */
-#define kvBUSTYPE_GROUP_REMOTE   3
+#define kvBUSTYPE_GROUP_REMOTE 3
 /**
 * \ref kvBUSTYPE_PCI, \ref kvBUSTYPE_PCMCIA, ...
 * \note Not implemented in linux.
@@ -5086,27 +5067,27 @@ kvStatus CANLIBAPI kvReadDeviceCustomerData(const CanHandle hnd,
  * These defines are used in \ref kvScriptEnvvarOpen().
  *  @{
  */
-  /**
+/**
    * This define is used in \ref kvScriptEnvvarOpen().
    *
    * It defines the type of the envvar as \c int.
    */
-#define kvENVVAR_TYPE_INT       1
+#define kvENVVAR_TYPE_INT 1
 
-  /**
+/**
    * This define is used in \ref kvScriptEnvvarOpen().
    *
    * It defines the type of the envvar as \c float.
    */
-#define kvENVVAR_TYPE_FLOAT     2
+#define kvENVVAR_TYPE_FLOAT 2
 
-  /**
+/**
    * This define is used in \ref kvScriptEnvvarOpen().
    *
    * It defines the type of the envvar as \c string.
    */
-#define kvENVVAR_TYPE_STRING    3
- /** @} */
+#define kvENVVAR_TYPE_STRING 3
+/** @} */
 
 /**
  * \ingroup tScript
@@ -5117,15 +5098,15 @@ kvStatus CANLIBAPI kvReadDeviceCustomerData(const CanHandle hnd,
  *  @{
  */
 
-  /**
+/**
    * This define is used in  \ref kvScriptSendEvent().
    *
    * It defines an event of type "key pressed".
    */
-#define kvEVENT_TYPE_KEY        1
- /** @} */
+#define kvEVENT_TYPE_KEY 1
+/** @} */
 
-  /**
+/**
    *
    * A handle to a t-script envvar.
    * Returned by the function \ref kvScriptEnvvarOpen().
@@ -5160,10 +5141,9 @@ kvStatus CANLIBAPI kvScriptStart(const CanHandle hnd, int slotNo);
  * \name kvSCRIPT_STOP_xxx
  * @{
  */
-#define kvSCRIPT_STOP_NORMAL         0 /**< Stop a running script */
-#define kvSCRIPT_STOP_FORCED        -9 /**< Request termination of a hanged script */
+#define kvSCRIPT_STOP_NORMAL 0 /**< Stop a running script */
+#define kvSCRIPT_STOP_FORCED -9 /**< Request termination of a hanged script */
 /** @} */
-
 
 /**
  * \ingroup tScript
@@ -5500,7 +5480,6 @@ kvStatus CANLIBAPI kvScriptLoadFile(const CanHandle hnd,
                                     int slotNo,
                                     char *filePathOnPC);
 
-
 /**
  * \ingroup can_general
  * \name kvSCRIPT_REQUEST_TEXT_xxx
@@ -5514,20 +5493,19 @@ kvStatus CANLIBAPI kvScriptLoadFile(const CanHandle hnd,
 /**
  *  Cancel subscription of printf messages from script slots.
  */
-#define kvSCRIPT_REQUEST_TEXT_UNSUBSCRIBE  1
+#define kvSCRIPT_REQUEST_TEXT_UNSUBSCRIBE 1
 
 /**
  *  Subscribe to printf messages from script slots.
  */
-#define kvSCRIPT_REQUEST_TEXT_SUBSCRIBE    2
+#define kvSCRIPT_REQUEST_TEXT_SUBSCRIBE 2
 
 /**
  *  Select all script slots.
  */
-#define kvSCRIPT_REQUEST_TEXT_ALL_SLOTS    255
+#define kvSCRIPT_REQUEST_TEXT_ALL_SLOTS 255
 
 /** @} */
-
 
 /**
  * \ingroup tScript
@@ -5553,8 +5531,6 @@ kvStatus CANLIBAPI kvScriptRequestText(const CanHandle hnd,
                                        unsigned int slot,
                                        unsigned int request);
 
-
-
 /**
  * \ingroup tScript
  *
@@ -5578,11 +5554,11 @@ kvStatus CANLIBAPI kvScriptRequestText(const CanHandle hnd,
  *
  */
 kvStatus CANLIBAPI kvScriptGetText(const CanHandle hnd,
-                                        int  *slot,
-                                        unsigned long *time,
-                                        unsigned int  *flags,
-                                        char *buf,
-                                        size_t bufsize);
+                                   int *slot,
+                                   unsigned long *time,
+                                   unsigned int *flags,
+                                   char *buf,
+                                   size_t bufsize);
 
 /**
  * Script status flag bits. Used by \ref kvScriptStatus().
@@ -5590,10 +5566,9 @@ kvStatus CANLIBAPI kvScriptGetText(const CanHandle hnd,
  * \name kvSCRIPT_STATUS_xxx
  * @{
  */
-#define kvSCRIPT_STATUS_LOADED      1 /**< The slot is loaded with a script */
-#define kvSCRIPT_STATUS_RUNNING     2 /**< The slot is running a script. */
+#define kvSCRIPT_STATUS_LOADED 1 /**< The slot is loaded with a script */
+#define kvSCRIPT_STATUS_RUNNING 2 /**< The slot is running a script. */
 /** @} */
-
 
 /**
  * \ingroup tScript
@@ -5613,9 +5588,8 @@ kvStatus CANLIBAPI kvScriptGetText(const CanHandle hnd,
  * \return \ref canERR_xxx (negative) if failure
  */
 kvStatus CANLIBAPI kvScriptStatus(const CanHandle hnd,
-                                  int  slot,
+                                  int slot,
                                   unsigned int *status);
-
 
 /**
  * \ingroup tScript
@@ -5682,7 +5656,7 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
  *  @{
  */
 
-  /**
+/**
    * This define is used in \ref kvScriptTxeGetData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -5697,9 +5671,9 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
    * \li 1: minor
    * \li 2: build
    */
-#define canTXEDATA_FILE_VERSION               1
+#define canTXEDATA_FILE_VERSION 1
 
-  /**
+/**
    * This define is used in \ref kvScriptTxeGetData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -5714,9 +5688,9 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
    * \li 1: minor
    * \li 2: build
    */
-#define canTXEDATA_COMPILER_VERSION      2
+#define canTXEDATA_COMPILER_VERSION 2
 
-  /**
+/**
    * This define is used in \ref kvScriptTxeGetData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -5734,9 +5708,9 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
    * \li 4: min
    * \li 5: sec
    */
-#define canTXEDATA_DATE                  3
+#define canTXEDATA_DATE 3
 
-  /**
+/**
    * This define is used in \ref kvScriptTxeGetData(), \a buffer
    * mentioned below refers to this functions argument.
    *
@@ -5746,7 +5720,7 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
    * description of the compiled script file (.txe).
    * If no description is available then bufsize is set to zero and no data is written into buffer.
    */
-#define canTXEDATA_DESCRIPTION           4
+#define canTXEDATA_DESCRIPTION 4
 
 /**
  * This define is used in \ref kvScriptTxeGetData(), \a buffer
@@ -5761,7 +5735,7 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
  *
  * If no source code is available or the container is encrypted, then bufsize is set to zero and no data is written into buffer.
  */
-#define canTXEDATA_SOURCE               5
+#define canTXEDATA_SOURCE 5
 
 /**
  * This define is used in \ref kvScriptTxeGetData(), \a buffer
@@ -5772,7 +5746,7 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
  * \a buffer points to a single unsigned integer which receives the size of the compiled code of the
  * compiled script file (.txe).
  */
-#define canTXEDATA_SIZE_OF_CODE          6
+#define canTXEDATA_SIZE_OF_CODE 6
 
 /**
  * This define is used in \ref kvScriptTxeGetData(), \a buffer
@@ -5783,11 +5757,9 @@ kvStatus CANLIBAPI kvScriptTxeGetData(const char *filePathOnPC,
  * \a buffer points to a single unsigned integer which will receive a non-zero value if the compiled script file (.txe) contents
  * is encrypted.
  */
-#define canTXEDATA_IS_ENCRYPTED           7
-
+#define canTXEDATA_IS_ENCRYPTED 7
 
 /** @} */
-
 
 /**
  * \ingroup grp_kvfile
@@ -5971,20 +5943,19 @@ kvStatus CANLIBAPI kvFileDiskFormat(const CanHandle hnd);
  *
  *  @{
  */
-   /**
+/**
    * This define is used in \ref kvDeviceSetMode() and \ref kvDeviceGetMode().
    *
    * Device is running or should be running in interface mode.
    */
-#define kvDEVICE_MODE_INTERFACE      0x00
-  /**
+#define kvDEVICE_MODE_INTERFACE 0x00
+/**
    * This define is used in \ref kvDeviceSetMode() and \ref kvDeviceGetMode().
    *
    * Device is running or should be running in logger mode.
    */
-#define kvDEVICE_MODE_LOGGER      0x01
- /** @} */
-
+#define kvDEVICE_MODE_LOGGER 0x01
+/** @} */
 
 /**
  * \ingroup can_general
@@ -6033,7 +6004,6 @@ kvStatus CANLIBAPI kvDeviceSetMode(const CanHandle hnd, int mode);
  * \sa \ref kvDeviceSetMode()
  */
 kvStatus CANLIBAPI kvDeviceGetMode(const CanHandle hnd, int *result);
-
 
 /**
  * \ingroup can_general
@@ -6104,9 +6074,9 @@ canStatus CANLIBAPI canSetTimer(const CanHandle hnd,
                                 DWORD interval,
                                 DWORD flags);
 /** This is reserved for \ref canSetTimer() but not implemented, do not use it. */
-#define canTIMER_CYCLIC             0x01
+#define canTIMER_CYCLIC 0x01
 /** This is reserved for \ref canSetTimer() but not implemented, do not use it. */
-#define canTIMER_EXPENSIVE          0x02
+#define canTIMER_EXPENSIVE 0x02
 /** This function is not implemented, do not use it. */
 int CANLIBAPI canSplitHandle(CanHandle hnd, int channel);
 /** This function is not implemented, do not use it. */
@@ -6184,35 +6154,35 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
  *
  *  @{
  */
-  /**
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer, see \ref kvIO_MODULE_TYPE_xxx.
    * Read-only.
    */
-#define kvIO_INFO_GET_MODULE_TYPE                1
-  /**
+#define kvIO_INFO_GET_MODULE_TYPE 1
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer, see \ref kvIO_PIN_DIRECTION_xxx.
    * Read-only.
    */
-#define kvIO_INFO_GET_DIRECTION                     2
-  /**
+#define kvIO_INFO_GET_DIRECTION 2
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer, see \ref kvIO_PIN_TYPE_xxx.
    * Read-only.
    */
-#define kvIO_INFO_GET_PIN_TYPE                      4
-  /**
+#define kvIO_INFO_GET_PIN_TYPE 4
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer that contains the resolution
    * in number of bits. Read-only.
    */
-#define kvIO_INFO_GET_NUMBER_OF_BITS                5
-  /**
+#define kvIO_INFO_GET_NUMBER_OF_BITS 5
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * A float that contains the lower range limit
@@ -6220,8 +6190,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is not applicable for relay pins.
    */
-#define kvIO_INFO_GET_RANGE_MIN                     6
-  /**
+#define kvIO_INFO_GET_RANGE_MIN 6
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * A float that contains the upper range limit
@@ -6229,8 +6199,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is not applicable for relay pins.
    */
-#define kvIO_INFO_GET_RANGE_MAX                     7
-  /**
+#define kvIO_INFO_GET_RANGE_MAX 7
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer that contains the filter time in micro
@@ -6238,8 +6208,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for digital input pins.
    */
-#define kvIO_INFO_GET_DI_LOW_HIGH_FILTER            8
-  /**
+#define kvIO_INFO_GET_DI_LOW_HIGH_FILTER 8
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer that contains the filter time in micro
@@ -6247,8 +6217,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for digital input pins.
    */
-#define kvIO_INFO_GET_DI_HIGH_LOW_FILTER            9
-  /**
+#define kvIO_INFO_GET_DI_HIGH_LOW_FILTER 9
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * An unsigned 32-bit integer that contains the low-pass filter
@@ -6256,8 +6226,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for analog input pins.
    */
-#define kvIO_INFO_GET_AI_LP_FILTER_ORDER           10
-  /**
+#define kvIO_INFO_GET_AI_LP_FILTER_ORDER 10
+/**
    * This define is used in \ref kvIoPinGetInfo().
    *
    * A float that contains the hysteresis in volt for an
@@ -6266,22 +6236,22 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for analog input pins.
    */
-#define kvIO_INFO_GET_AI_HYSTERESIS                11
-  /**
+#define kvIO_INFO_GET_AI_HYSTERESIS 11
+/**
    * This define is used in \ref kvIoPinGetInfo() to get the module number.
    *
    * An unsigned 32-bit integer that contains the module number
    * the pin belongs to. The number starts from 0. Read-only.
    */
-#define kvIO_INFO_GET_MODULE_NUMBER                14
-  /**
+#define kvIO_INFO_GET_MODULE_NUMBER 14
+/**
    * This define is used in \ref kvIoPinGetInfo() to get the serial number.
    *
    * An unsigned 32-bit integer that contains the serial number
    * of the submodule the pin belongs to. Read-only.
    */
-#define kvIO_INFO_GET_SERIAL_NUMBER                15
-  /**
+#define kvIO_INFO_GET_SERIAL_NUMBER 15
+/**
    * This define is used in \ref kvIoPinGetInfo() to get the FW version number.
    *
    * An unsigned 32-bit integer that contains the software version number
@@ -6289,9 +6259,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    * where the most significant word represents the major and the least significant
    * the minor software version number. Read-only.
    */
-#define kvIO_INFO_GET_FW_VERSION                   16
- /** @} */
-
+#define kvIO_INFO_GET_FW_VERSION 16
+/** @} */
 
 /**
  * \ingroup kv_io
@@ -6303,7 +6272,7 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
  *
  *  @{
  */
-  /**
+/**
    * This define is used in \ref kvIoPinSetInfo().
    *
    * An unsigned 32-bit integer that contains the filter time in micro
@@ -6311,8 +6280,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for digital input pins.
    */
-#define kvIO_INFO_SET_DI_LOW_HIGH_FILTER            8
-  /**
+#define kvIO_INFO_SET_DI_LOW_HIGH_FILTER 8
+/**
    * This define is used in \ref kvIoPinSetInfo().
    *
    * An unsigned 32-bit integer that contains the filter time in micro
@@ -6320,8 +6289,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for digital input pins.
    */
-#define kvIO_INFO_SET_DI_HIGH_LOW_FILTER            9
-  /**
+#define kvIO_INFO_SET_DI_HIGH_LOW_FILTER 9
+/**
    * This define is used in \ref kvIoPinSetInfo().
    *
    * An unsigned 32-bit integer that contains the low-pass filter
@@ -6329,8 +6298,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for analog input pins.
    */
-#define kvIO_INFO_SET_AI_LP_FILTER_ORDER           10
-  /**
+#define kvIO_INFO_SET_AI_LP_FILTER_ORDER 10
+/**
    * This define is used in \ref kvIoPinSetInfo().
    *
    * A float that contains the hysteresis in volt for an
@@ -6339,11 +6308,8 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
    *
    * \note This is only used for analog input pins.
    */
-#define kvIO_INFO_SET_AI_HYSTERESIS                11
- /** @} */
-
-
-
+#define kvIO_INFO_SET_AI_HYSTERESIS 11
+/** @} */
 
 /**
  * \ingroup kv_io
@@ -6354,27 +6320,26 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
  *
  *  @{
  */
-   /**
+/**
    * Kvaser Add-on module with digital inputs and digital outputs
    */
-#define kvIO_MODULE_TYPE_DIGITAL        1
-  /**
+#define kvIO_MODULE_TYPE_DIGITAL 1
+/**
    * Kvaser Add-on module with analog inputs and analog outputs
    *
    */
-#define kvIO_MODULE_TYPE_ANALOG         2
-  /**
+#define kvIO_MODULE_TYPE_ANALOG 2
+/**
    * Kvaser Add-on module with relays and digital inputs
    *
    */
-#define kvIO_MODULE_TYPE_RELAY          3
-  /**
+#define kvIO_MODULE_TYPE_RELAY 3
+/**
    * Kvaser built-in module with digital inputs and digital outputs
    *
    */
-#define kvIO_MODULE_TYPE_INTERNAL       4
- /** @} */
-
+#define kvIO_MODULE_TYPE_INTERNAL 4
+/** @} */
 
 /**
  * \ingroup kv_io
@@ -6385,22 +6350,21 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
  *
  *  @{
  */
-   /**
+/**
    * Digital
    */
-#define kvIO_PIN_TYPE_DIGITAL           1
-  /**
+#define kvIO_PIN_TYPE_DIGITAL 1
+/**
    * Analog
    *
    */
-#define kvIO_PIN_TYPE_ANALOG            2
-  /**
+#define kvIO_PIN_TYPE_ANALOG 2
+/**
    * Relay
    *
    */
-#define kvIO_PIN_TYPE_RELAY             3
- /** @} */
-
+#define kvIO_PIN_TYPE_RELAY 3
+/** @} */
 
 /**
  * \ingroup kv_io
@@ -6411,16 +6375,16 @@ kvStatus CANLIBAPI kvReadTimer64(const CanHandle hnd, KVINT64 *time);
  *
  *  @{
  */
-  /**
+/**
    * Input
    */
-#define kvIO_PIN_DIRECTION_IN           4
-  /**
+#define kvIO_PIN_DIRECTION_IN 4
+/**
    * Output
    *
    */
-#define kvIO_PIN_DIRECTION_OUT          8
- /** @} */
+#define kvIO_PIN_DIRECTION_OUT 8
+/** @} */
 
 /**
  * \ingroup kv_io
@@ -6671,54 +6635,54 @@ canStatus CANLIBAPI kvIoPinGetOutputAnalog(const CanHandle hnd, unsigned int pin
  *
  * This struct represents a digital add-on module.
  */
-typedef struct {
-    int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx. */
-    unsigned char DO1 : 1; /**< Digital Out */
-    unsigned char DO2 : 1; /**< Digital Out */
-    unsigned char DO3 : 1; /**< Digital Out */
-    unsigned char DO4 : 1; /**< Digital Out */
-    unsigned char DO5 : 1; /**< Digital Out */
-    unsigned char DO6 : 1; /**< Digital Out */
-    unsigned char DO7 : 1; /**< Digital Out */
-    unsigned char DO8 : 1; /**< Digital Out */
-    unsigned char DO9 : 1; /**< Digital Out */
-    unsigned char DO10: 1; /**< Digital Out */
-    unsigned char DO11: 1; /**< Digital Out */
-    unsigned char DO12: 1; /**< Digital Out */
-    unsigned char DO13: 1; /**< Digital Out */
-    unsigned char DO14: 1; /**< Digital Out */
-    unsigned char DO15: 1; /**< Digital Out */
-    unsigned char DO16: 1; /**< Digital Out */
-    unsigned char DI1 : 1; /**< Digital In */
-    unsigned char DI2 : 1; /**< Digital In */
-    unsigned char DI3 : 1; /**< Digital In */
-    unsigned char DI4 : 1; /**< Digital In */
-    unsigned char DI5 : 1; /**< Digital In */
-    unsigned char DI6 : 1; /**< Digital In */
-    unsigned char DI7 : 1; /**< Digital In */
-    unsigned char DI8 : 1; /**< Digital In */
-    unsigned char DI9 : 1; /**< Digital In */
-    unsigned char DI10: 1; /**< Digital In */
-    unsigned char DI11: 1; /**< Digital In */
-    unsigned char DI12: 1; /**< Digital In */
-    unsigned char DI13: 1; /**< Digital In */
-    unsigned char DI14: 1; /**< Digital In */
-    unsigned char DI15: 1; /**< Digital In */
-    unsigned char DI16: 1; /**< Digital In */
+typedef struct
+{
+	int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx. */
+	unsigned char DO1 : 1; /**< Digital Out */
+	unsigned char DO2 : 1; /**< Digital Out */
+	unsigned char DO3 : 1; /**< Digital Out */
+	unsigned char DO4 : 1; /**< Digital Out */
+	unsigned char DO5 : 1; /**< Digital Out */
+	unsigned char DO6 : 1; /**< Digital Out */
+	unsigned char DO7 : 1; /**< Digital Out */
+	unsigned char DO8 : 1; /**< Digital Out */
+	unsigned char DO9 : 1; /**< Digital Out */
+	unsigned char DO10 : 1; /**< Digital Out */
+	unsigned char DO11 : 1; /**< Digital Out */
+	unsigned char DO12 : 1; /**< Digital Out */
+	unsigned char DO13 : 1; /**< Digital Out */
+	unsigned char DO14 : 1; /**< Digital Out */
+	unsigned char DO15 : 1; /**< Digital Out */
+	unsigned char DO16 : 1; /**< Digital Out */
+	unsigned char DI1 : 1; /**< Digital In */
+	unsigned char DI2 : 1; /**< Digital In */
+	unsigned char DI3 : 1; /**< Digital In */
+	unsigned char DI4 : 1; /**< Digital In */
+	unsigned char DI5 : 1; /**< Digital In */
+	unsigned char DI6 : 1; /**< Digital In */
+	unsigned char DI7 : 1; /**< Digital In */
+	unsigned char DI8 : 1; /**< Digital In */
+	unsigned char DI9 : 1; /**< Digital In */
+	unsigned char DI10 : 1; /**< Digital In */
+	unsigned char DI11 : 1; /**< Digital In */
+	unsigned char DI12 : 1; /**< Digital In */
+	unsigned char DI13 : 1; /**< Digital In */
+	unsigned char DI14 : 1; /**< Digital In */
+	unsigned char DI15 : 1; /**< Digital In */
+	unsigned char DI16 : 1; /**< Digital In */
 } kvIoModuleDigital;
-
 
 /**
 * /struct
 * This define is used in \ref kvIoGetModulePins() and \ref kvIoSetModulePins().
 * This struct represents a digital internal module
 */
-typedef struct {
-    int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx.. */
-    unsigned char DO: 1; /**< Digital Out */
-    unsigned char DI: 1; /**< Digital In */
+typedef struct
+{
+	int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx.. */
+	unsigned char DO : 1; /**< Digital Out */
+	unsigned char DI : 1; /**< Digital In */
 } kvIoModuleInternal;
-
 
 /**
  * /struct
@@ -6726,24 +6690,25 @@ typedef struct {
  * This struct represents a relay add-on module.
  */
 
-typedef struct {
-    int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx.. */
-    unsigned char RO1 : 1; /**< Relay Out */
-    unsigned char RO2 : 1; /**< Relay Out */
-    unsigned char RO3 : 1; /**< Relay Out */
-    unsigned char RO4 : 1; /**< Relay Out */
-    unsigned char RO5 : 1; /**< Relay Out */
-    unsigned char RO6 : 1; /**< Relay Out */
-    unsigned char RO7 : 1; /**< Relay Out */
-    unsigned char RO8 : 1; /**< Relay Out */
-    unsigned char DI1 : 1; /**< Digital In */
-    unsigned char DI2 : 1; /**< Digital In */
-    unsigned char DI3 : 1; /**< Digital In */
-    unsigned char DI4 : 1; /**< Digital In */
-    unsigned char DI5 : 1; /**< Digital In */
-    unsigned char DI6 : 1; /**< Digital In */
-    unsigned char DI7 : 1; /**< Digital In */
-    unsigned char DI8 : 1; /**< Digital In */
+typedef struct
+{
+	int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx.. */
+	unsigned char RO1 : 1; /**< Relay Out */
+	unsigned char RO2 : 1; /**< Relay Out */
+	unsigned char RO3 : 1; /**< Relay Out */
+	unsigned char RO4 : 1; /**< Relay Out */
+	unsigned char RO5 : 1; /**< Relay Out */
+	unsigned char RO6 : 1; /**< Relay Out */
+	unsigned char RO7 : 1; /**< Relay Out */
+	unsigned char RO8 : 1; /**< Relay Out */
+	unsigned char DI1 : 1; /**< Digital In */
+	unsigned char DI2 : 1; /**< Digital In */
+	unsigned char DI3 : 1; /**< Digital In */
+	unsigned char DI4 : 1; /**< Digital In */
+	unsigned char DI5 : 1; /**< Digital In */
+	unsigned char DI6 : 1; /**< Digital In */
+	unsigned char DI7 : 1; /**< Digital In */
+	unsigned char DI8 : 1; /**< Digital In */
 } kvIoModuleRelay;
 
 /**
@@ -6752,18 +6717,18 @@ typedef struct {
  * This struct represents an analog add-on module.
  */
 
-typedef struct {
-    int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx.. */
-    float AO1; /**< Analog Out */
-    float AO2; /**< Analog Out */
-    float AO3; /**< Analog Out */
-    float AO4; /**< Analog Out */
-    float AI1; /**< Analog In */
-    float AI2; /**< Analog In */
-    float AI3; /**< Analog In */
-    float AI4; /**< Analog In */
+typedef struct
+{
+	int type; /**< The type of the module. See: \ref kvIO_MODULE_TYPE_xxx.. */
+	float AO1; /**< Analog Out */
+	float AO2; /**< Analog Out */
+	float AO3; /**< Analog Out */
+	float AO4; /**< Analog Out */
+	float AI1; /**< Analog In */
+	float AI2; /**< Analog In */
+	float AI3; /**< Analog In */
+	float AI4; /**< Analog In */
 } kvIoModuleAnalog;
-
 
 /**
  * \ingroup kv_io
@@ -6788,7 +6753,6 @@ typedef struct {
  * \note Not implemented in Linux.
  */
 canStatus CANLIBAPI kvIoGetModulePins(const CanHandle hnd, unsigned int module, void *buffer, const unsigned int bufsize);
-
 
 /**
  * \ingroup kv_io
@@ -6815,11 +6779,8 @@ canStatus CANLIBAPI kvIoGetModulePins(const CanHandle hnd, unsigned int module, 
  */
 canStatus CANLIBAPI kvIoSetModulePins(const CanHandle hnd, unsigned int module, const void *buffer, const unsigned int bufsize);
 
-
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-
-#include "obsolete.h"
 
 #endif /*  _CANLIB_H_ */
