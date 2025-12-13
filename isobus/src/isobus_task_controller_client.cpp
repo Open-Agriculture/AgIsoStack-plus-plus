@@ -429,14 +429,18 @@ namespace isobus
 			// Check all defined distance triggers to see if we need to send a value to the TC
 			for (auto &distanceTrigger : measurementDistanceIntervalCommands)
 			{
-				if (totalMachineDistance >= (distanceTrigger.lastValue + distanceTrigger.processDataValue))
+				// Ensures bit-wise correctness and prevents potential overflow.
+				std::uint32_t lastValueTemp = static_cast<std::uint32_t>(distanceTrigger.lastValue);
+				std::uint32_t processDataValueTemp = static_cast<std::uint32_t>(distanceTrigger.processDataValue);
+
+				if (totalMachineDistance >= (lastValueTemp + processDataValueTemp))
 				{
 					ProcessDataCallbackInfo requestData = { 0, 0, 0, 0, false, false };
 
 					requestData.elementNumber = distanceTrigger.elementNumber;
 					requestData.ddi = distanceTrigger.ddi;
 					queuedValueRequests.push_back(requestData);
-					distanceTrigger.lastValue = totalMachineDistance;
+					distanceTrigger.lastValue = static_cast<std::int32_t>(totalMachineDistance);
 				}
 			}
 		}
