@@ -13,7 +13,6 @@
 #define CAN_TRANSPORT_PROTOCOL_HPP
 
 #include <list>
-#include <mutex>
 
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"

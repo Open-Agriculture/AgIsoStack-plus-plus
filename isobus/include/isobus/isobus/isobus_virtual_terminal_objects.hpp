@@ -21,8 +21,6 @@
 
 namespace isobus
 {
-	class VirtualTerminalServerManagedWorkingSet;
-
 	/// @brief The types of objects in an object pool by object type byte value
 	enum class VirtualTerminalObjectType : std::uint8_t
 	{
@@ -1711,11 +1709,6 @@ namespace isobus
 		/// @brief Returns the value of the string, used only if the variable reference (a child var string) is NULL_OBJECT_ID
 		/// @returns The value of the string
 		std::string get_value() const;
-
-		/// @brief Returns the value of the variable (if referenced) otherwise the set value
-		/// @param[in] parentWorkingSet the working set of the given OutputString object
-		/// @returns The displayed value of the string
-		std::string displayed_value(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet) const;
 
 		/// @brief Sets the value of the string (only matters if it has no child string variable)
 		/// @param[in] value The new value for the string

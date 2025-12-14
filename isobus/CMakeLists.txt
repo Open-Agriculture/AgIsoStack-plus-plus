@@ -39,6 +39,7 @@ set(ISOBUS_SRC
     "isobus_guidance_interface.cpp"
     "isobus_speed_distance_messages.cpp"
     "isobus_maintain_power_interface.cpp"
+    "isobus_virtual_terminal_objects.cpp"
     "isobus_virtual_terminal_client_state_tracker.cpp"
     "isobus_virtual_terminal_client_update_helper.cpp"
     "isobus_heartbeat.cpp"
@@ -50,13 +51,9 @@ set(ISOBUS_SRC
     "can_message_data.cpp")
 
 if(NOT CAN_STACK_DISABLE_THREADS)
-  list(
-    APPEND
-    ISOBUS_SRC
-    "isobus_virtual_terminal_objects.cpp"
-    "isobus_virtual_terminal_server.cpp"
-    "isobus_virtual_terminal_working_set_base.cpp"
-    "isobus_virtual_terminal_server_managed_working_set.cpp")
+  list(APPEND ISOBUS_SRC "isobus_virtual_terminal_server.cpp"
+       "isobus_virtual_terminal_working_set_base.cpp"
+       "isobus_virtual_terminal_server_managed_working_set.cpp")
 endif()
 
 # Prepend the source directory path to all the source files
