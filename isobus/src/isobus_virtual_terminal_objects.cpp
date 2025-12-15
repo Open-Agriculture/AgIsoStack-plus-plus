@@ -8628,7 +8628,7 @@ namespace isobus
 		return VirtualTerminalObjectType::ScaledGraphic;
 	}
 
-	bool ScaledGraphicObject::get_attribute(uint8_t attributeID, uint32_t &returnedAttributeData) const
+	bool ScaledGraphicObject::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
 	{
 		switch (static_cast<AttributeName>(attributeID))
 		{
@@ -8670,12 +8670,12 @@ namespace isobus
 		}
 	}
 
-	void ScaledGraphicObject::set_options(uint8_t options)
+	void ScaledGraphicObject::set_options(std::uint8_t options)
 	{
 		optionsBitfield = options;
 	}
 
-	void ScaledGraphicObject::set_scale_type(uint8_t scale_type)
+	void ScaledGraphicObject::set_scale_type(std::uint8_t scale_type)
 	{
 		scaleType = scale_type;
 	}
@@ -8686,7 +8686,7 @@ namespace isobus
 		vjust = static_cast<VerticalJustification>((scaleType & VERTICAL_JUSTIFICATION_MASK) >> 5);
 	}
 
-	uint16_t ScaledGraphicObject::get_graphic_id() const
+	std::uint16_t ScaledGraphicObject::get_graphic_id() const
 	{
 		return graphicID;
 	}
@@ -8696,14 +8696,13 @@ namespace isobus
 		graphicID = newGraphicID;
 	}
 
-	uint8_t ScaledGraphicObject::get_scale_type() const
+	std::uint8_t ScaledGraphicObject::get_scale_type() const
 	{
 		return scaleType;
 	}
 
-	bool ScaledGraphicObject::set_attribute(uint8_t attributeID, uint32_t rawData, const std::map<uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool ScaledGraphicObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
-		(void)objectPool;
 		switch (static_cast<AttributeName>(attributeID))
 		{
 			case AttributeName::Width:
@@ -8735,7 +8734,7 @@ namespace isobus
 		}
 	}
 
-	bool ScaledGraphicObject::get_is_valid(const std::map<uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	bool ScaledGraphicObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		if (((scaleType & 0x07) >= 5) ||
 		    ((scaleType & VERTICAL_JUSTIFICATION_MASK) == VERTICAL_JUSTIFICATION_MASK) ||
@@ -8780,7 +8779,7 @@ namespace isobus
 		return true;
 	}
 
-	uint32_t ScaledGraphicObject::get_minumum_object_length() const
+	std::uint32_t ScaledGraphicObject::get_minumum_object_length() const
 	{
 		return 12;
 	}
