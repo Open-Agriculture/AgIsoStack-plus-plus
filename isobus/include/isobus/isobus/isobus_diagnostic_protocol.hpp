@@ -43,6 +43,7 @@
 #include <array>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace isobus
@@ -494,6 +495,7 @@ namespace isobus
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
+		mutable std::mutex m_dtc_mutex; ///< mutex to protect DTC data
 		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
 		std::vector<std::string> ecuIdentificationFields; ///< Stores the ECU ID fields so we can transmit them when ECU ID's PGN is requested
 		std::vector<std::string> softwareIdentificationFields; ///< Stores the Software ID fields so we can transmit them when the PGN is requested
