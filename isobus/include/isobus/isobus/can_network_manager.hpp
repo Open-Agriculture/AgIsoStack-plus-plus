@@ -94,10 +94,6 @@ namespace isobus
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
 		void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
-		/// @brief Returns the number of global PGN callbacks that have been registered with the network manager
-		/// @returns The number of global PGN callbacks that have been registered with the network manager
-		std::size_t get_number_global_parameter_group_number_callbacks() const;
-
 		/// @brief Registers a callback for ANY control function sending the associated PGN
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is received from any control function
@@ -176,11 +172,11 @@ namespace isobus
 
 		/// @brief Gets all the internal control functions that are currently registered in the network manager
 		/// @returns A list of all the internal control functions
-		const std::list<std::shared_ptr<InternalControlFunction>> &get_internal_control_functions() const;
+		std::list<std::shared_ptr<InternalControlFunction>> get_internal_control_functions() const;
 
 		/// @brief Gets all the partnered control functions that are currently registered in the network manager
 		/// @returns A list of all the partnered control functions
-		const std::list<std::shared_ptr<PartneredControlFunction>> &get_partnered_control_functions() const;
+		std::list<std::shared_ptr<PartneredControlFunction>> get_partnered_control_functions() const;
 
 		/// @brief Gets all the control functions that are known to the network manager
 		/// @param[in] includingOffline If true, all control functions are returned, otherwise only online control functions are returned
@@ -324,16 +320,6 @@ namespace isobus
 		                                const void *data,
 		                                std::uint32_t size) const;
 
-		/// @brief Get the next CAN message from the received message queue, and remove it from the queue.
-		/// @note This will only ever get an 8 byte message because they are directly translated from CAN frames.
-		/// @returns The message that was at the front of the queue, or an invalid message if the queue is empty
-		CANMessage get_next_can_message_from_rx_queue();
-
-		/// @brief Get the next CAN message from the received message queue, and remove it from the queue
-		/// @note This will only ever get an 8 byte message because they are directly translated from CAN frames.
-		/// @returns The message that was at the front of the queue, or an invalid message if the queue is empty
-		CANMessage get_next_can_message_from_tx_queue();
-
 		/// @brief Processes a can message for callbacks added with add_any_control_function_parameter_group_number_callback
 		/// @param[in] currentMessage The message to process
 		void process_any_control_function_pgn_callbacks(const CANMessage &currentMessage);
@@ -386,11 +372,6 @@ namespace isobus
 		                          const void *data,
 		                          std::uint32_t size) const;
 
-		/// @brief Gets a PGN callback for the global address by index
-		/// @param[in] index The index of the callback to get
-		/// @returns A structure containing the global PGN callback data
-		ParameterGroupNumberCallbackData get_global_parameter_group_number_callback(std::size_t index) const;
-
 		static constexpr std::uint32_t BUSLOAD_SAMPLE_WINDOW_MS = 1000; ///< Using a 1s window to average the bus load, otherwise it's very erratic
 		static constexpr std::uint32_t BUSLOAD_UPDATE_FREQUENCY_MS = 100; ///< Bus load bit accumulation happens over a 100ms window
 
@@ -407,23 +388,22 @@ namespace isobus
 		std::array<std::array<std::shared_ptr<ControlFunction>, NULL_CAN_ADDRESS>, CAN_PORT_MAXIMUM> controlFunctionTable; ///< Table to maintain address to NAME mappings
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
 		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctions; ///< A list of the internal control functions
-		Mutex internalControlFunctionsMutex; ///< A mutex for internal control functions thread safety
 		std::list<std::shared_ptr<PartneredControlFunction>> partneredControlFunctions; ///< A list of the partnered control functions
+		mutable Mutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions.
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
-		std::queue<CANMessage> receivedMessageQueue; ///< A queue of received messages to process
-		std::queue<CANMessage> transmittedMessageQueue; ///< A queue of transmitted messages to process (already sent, so changes to the message won't affect the bus)
+		Queue<std::shared_ptr<CANMessage>> receivedMessageQueue; ///< A queue of received messages to process
+		Queue<std::shared_ptr<CANMessage>> transmittedMessageQueue; ///< A queue of transmitted messages to process (already sent, so changes to the message won't affect the bus)
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		EventDispatcher<CANMessage> messageTransmittedEventDispatcher; ///< An event dispatcher for notifying consumers about transmitted messages by our application
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
-		Mutex receivedMessageQueueMutex; ///< A mutex for receive messages thread safety
 		Mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
+		mutable Mutex globalPGNCallbacksMutex; ///< Mutex to protect the global PGN callbacks
 		Mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
 		Mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
 		Mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
-		Mutex transmittedMessageQueueMutex; ///< A mutex for protecting the transmitted message queue
 		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
 		std::uint32_t updateTimestamp_ms = 0; ///< Keeps track of the last time the CAN stack was update in milliseconds
 		bool initialized = false; ///< True if the network manager has been initialized by the update function

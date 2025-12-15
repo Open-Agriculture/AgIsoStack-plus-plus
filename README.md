@@ -39,7 +39,7 @@
 - The complete backbone of the ISO11783 standard
 - NMEA 2000 Fast Packet Protocol
 - Common guidance and speed messages
-- Hardware drivers for many common CAN controllers
+- [Hardware drivers for many common CAN controllers](https://isobus-plus-plus.readthedocs.io/en/latest/api/hardware/index.html#choosing-a-can-driver-with-cmake)
 
 ## In Detail
 
