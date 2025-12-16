@@ -3225,6 +3225,20 @@ namespace isobus
 		return stringValue;
 	}
 
+	std::string OutputString::displayed_value(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		if (isobus::NULL_OBJECT_ID != get_variable_reference())
+		{
+			auto child = get_object_by_id(get_variable_reference(), objectPool);
+
+			if ((nullptr != child) && (isobus::VirtualTerminalObjectType::StringVariable == child->get_object_type()))
+			{
+				return std::static_pointer_cast<isobus::StringVariable>(child)->get_value();
+			}
+		}
+		return get_value();
+	}
+
 	void OutputString::set_value(const std::string &value)
 	{
 		stringValue = value;
