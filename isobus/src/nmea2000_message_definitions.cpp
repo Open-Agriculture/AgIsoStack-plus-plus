@@ -947,7 +947,6 @@ namespace isobus
 
 				referenceStations.clear();
 				retVal |= set_number_of_reference_stations(receivedMessage.get_uint8_at(42));
-				set_timestamp(SystemTiming::get_timestamp_ms());
 
 				for (std::uint8_t i = 0; i < get_number_of_reference_stations(); i++)
 				{
@@ -963,6 +962,8 @@ namespace isobus
 						break;
 					}
 				}
+
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{
