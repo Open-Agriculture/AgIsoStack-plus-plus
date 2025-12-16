@@ -204,7 +204,7 @@ namespace isobus
 
 	void DiagnosticProtocol::clear_active_diagnostic_trouble_codes()
 	{
-		std::lock_guard<std::mutex> lock(m_dtc_mutex);
+		LOCK_GUARD(Mutex, dtcMutex);
 		inactiveDTCList.insert(std::end(inactiveDTCList), std::begin(activeDTCList), std::end(activeDTCList));
 		activeDTCList.clear();
 
@@ -216,7 +216,7 @@ namespace isobus
 
 	void DiagnosticProtocol::clear_inactive_diagnostic_trouble_codes()
 	{
-		std::lock_guard<std::mutex> lock(m_dtc_mutex);
+		LOCK_GUARD(Mutex, dtcMutex);
 		inactiveDTCList.clear();
 	}
 
@@ -237,7 +237,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		std::lock_guard<std::mutex> lock(m_dtc_mutex);
+		LOCK_GUARD(Mutex, dtcMutex);
 		if (active)
 		{
 			// First check to see if it's already active
@@ -632,7 +632,7 @@ namespace isobus
 
 		if (nullptr != myControlFunction)
 		{
-			std::lock_guard<std::mutex> lock(m_dtc_mutex);
+			LOCK_GUARD(Mutex, dtcMutex);
 			std::uint16_t payloadSize = static_cast<std::uint16_t>(activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
@@ -721,7 +721,7 @@ namespace isobus
 
 		if (nullptr != myControlFunction)
 		{
-			std::lock_guard<std::mutex> lock(m_dtc_mutex);
+			LOCK_GUARD(Mutex, dtcMutex);
 			std::uint16_t payloadSize = static_cast<std::uint8_t>(inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 
 			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
