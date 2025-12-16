@@ -181,6 +181,10 @@ target_include_directories(
                 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::Utility)
+if(CAN_STACK_DISABLE_THREADS)
+  target_include_directories(
+    Isobus PRIVATE BEFORE $<BUILD_INTERFACE:${NO_STD_THREADS_DIR}>)
+endif()
 
 install(
   TARGETS Isobus

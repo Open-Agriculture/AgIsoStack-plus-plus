@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::atomic_bool running = { true };

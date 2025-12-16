@@ -102,7 +102,6 @@ jobs:
       - name: Configure (no threads)
         run: |
           cmake -S . -B build \
-            -DDISABLE_STD_THREADS=ON \
             -DCAN_STACK_DISABLE_THREADS=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 

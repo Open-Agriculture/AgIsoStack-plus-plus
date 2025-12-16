@@ -10,6 +10,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::atomic_bool running = { true };
