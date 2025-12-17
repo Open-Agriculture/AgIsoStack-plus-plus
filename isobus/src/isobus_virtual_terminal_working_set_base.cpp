@@ -67,7 +67,7 @@ namespace isobus
 		if (iopLength > 3)
 		{
 			// We at least have object ID and type
-			auto decodedID = static_cast<uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+			auto decodedID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
 			VirtualTerminalObjectType decodedType = static_cast<VirtualTerminalObjectType>(iopData[2]);
 
 			switch (decodedType)
@@ -151,7 +151,7 @@ namespace isobus
 									}
 
 									// Next, parse language list
-									if (iopLength >= static_cast<uint16_t>(numberOfLanguagesToFollow * 2))
+									if (iopLength >= static_cast<std::uint16_t>(numberOfLanguagesToFollow * 2))
 									{
 										for (std::uint_fast8_t i = 0; i < numberOfLanguagesToFollow; i++)
 										{

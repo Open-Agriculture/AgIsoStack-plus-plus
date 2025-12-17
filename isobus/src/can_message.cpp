@@ -344,22 +344,22 @@ namespace isobus
 			auto bit = (data.at(byteIndex) >> (indexOfFinalByteBit - bitIndexWithinByte)) & 1;
 			if (length - bitCounter < 8)
 			{
-				currentByte |= static_cast<uint8_t>(bit) << (length - 1 - bitCounter);
+				currentByte |= static_cast<std::uint8_t>(bit) << (length - 1 - bitCounter);
 			}
 			else
 			{
-				currentByte |= static_cast<uint8_t>(bit) << (indexOfFinalByteBit - bitIndexWithinByte);
+				currentByte |= static_cast<std::uint8_t>(bit) << (indexOfFinalByteBit - bitIndexWithinByte);
 			}
 
 			if ((bitCounter + 1) % 8 == 0 || i == endBitIndex)
 			{
 				if (ByteFormat::LittleEndian == format)
 				{
-					retVal |= (static_cast<uint64_t>(currentByte) << (startAmountOfBytes - amountOfBytesLeft) * 8);
+					retVal |= (static_cast<std::uint64_t>(currentByte) << (startAmountOfBytes - amountOfBytesLeft) * 8);
 				}
 				else
 				{
-					retVal |= (static_cast<uint64_t>(currentByte) << ((amountOfBytesLeft * 8) - 8));
+					retVal |= (static_cast<std::uint64_t>(currentByte) << ((amountOfBytesLeft * 8) - 8));
 				}
 				currentByte = 0;
 				amountOfBytesLeft--;

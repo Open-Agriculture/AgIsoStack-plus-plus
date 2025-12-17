@@ -14,8 +14,8 @@
 
 namespace isobus
 {
-	std::uint64_t SystemTiming::s_timestamp_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-	std::uint64_t SystemTiming::s_timestamp_us = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+	std::uint64_t SystemTiming::s_timestamp_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+	std::uint64_t SystemTiming::s_timestamp_us = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
 
 	std::uint32_t SystemTiming::get_timestamp_ms()
 	{
