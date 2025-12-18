@@ -107,9 +107,9 @@ int main()
 	auto &position_data_message = n2kInterface.get_gnss_position_data_transmit_message();
 	position_data_message.set_sequence_id(sequenceIdentifier);
 	auto daysSinceEpoch = std::chrono::duration_cast<std::chrono::hours>(std::chrono::system_clock::now().time_since_epoch()).count() / 24;
-	position_data_message.set_position_date(static_cast<uint16_t>(daysSinceEpoch));
+	position_data_message.set_position_date(static_cast<std::uint16_t>(daysSinceEpoch));
 	auto secondsSinceMidnight = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() % (24 * 60 * 60);
-	position_data_message.set_position_time(static_cast<uint32_t>(secondsSinceMidnight / 0.0001));
+	position_data_message.set_position_time(static_cast<std::uint32_t>(secondsSinceMidnight / 0.0001));
 	position_data_message.set_latitude(static_cast<int64_t>(51.69917 / 1E-16)); // 51.69917 degrees
 	position_data_message.set_longitude(static_cast<int64_t>(5.30417 / 1E-16)); // 5.30417 degrees
 	position_data_message.set_altitude(static_cast<int64_t>(1.23 / 1E-06)); // 1.23 meters
@@ -131,12 +131,12 @@ int main()
 	}
 
 	n2kInterface.set_enable_sending_position_rapid_update_cyclically(true);
-	n2kInterface.get_position_rapid_update_transmit_message().set_latitude(static_cast<int32_t>(51.69917 / 1E-07)); // 51.69917 degrees
-	n2kInterface.get_position_rapid_update_transmit_message().set_longitude(static_cast<int32_t>(5.30417 / 1E-07)); // 5.30417 degrees
+	n2kInterface.get_position_rapid_update_transmit_message().set_latitude(static_cast<std::int32_t>(51.69917 / 1E-07)); // 51.69917 degrees
+	n2kInterface.get_position_rapid_update_transmit_message().set_longitude(static_cast<std::int32_t>(5.30417 / 1E-07)); // 5.30417 degrees
 
 	n2kInterface.set_enable_sending_rate_of_turn_cyclically(true);
 	n2kInterface.get_rate_of_turn_transmit_message().set_sequence_id(sequenceIdentifier);
-	n2kInterface.get_rate_of_turn_transmit_message().set_rate_of_turn(static_cast<int32_t>(-1.234 / 3.125E-08)); // -1.234 radians/s = -70.7 degrees/s
+	n2kInterface.get_rate_of_turn_transmit_message().set_rate_of_turn(static_cast<std::int32_t>(-1.234 / 3.125E-08)); // -1.234 radians/s = -70.7 degrees/s
 
 	n2kInterface.set_enable_sending_vessel_heading_cyclically(true);
 	auto &vessel_heading_message = n2kInterface.get_vessel_heading_transmit_message();
