@@ -712,7 +712,7 @@ namespace isobus
 
 			std::uint64_t claimedNAME;
 			std::shared_ptr<ControlFunction> foundControlFunction = nullptr;
-			uint8_t claimedAddress = CANIdentifier(rxFrame.identifier).get_source_address();
+			std::uint8_t claimedAddress = CANIdentifier(rxFrame.identifier).get_source_address();
 
 			claimedNAME = rxFrame.data[0];
 			claimedNAME |= (static_cast<std::uint64_t>(rxFrame.data[1]) << 8);

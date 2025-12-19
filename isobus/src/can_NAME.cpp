@@ -138,7 +138,7 @@ namespace isobus
 		return (rawName & 0x001FFFFF);
 	}
 
-	void NAME::set_identity_number(uint32_t value)
+	void NAME::set_identity_number(std::uint32_t value)
 	{
 		if (value > 0x001FFFFF)
 		{
