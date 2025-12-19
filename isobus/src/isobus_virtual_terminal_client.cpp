@@ -419,7 +419,7 @@ namespace isobus
 		return queue_command(buffer, true);
 	}
 
-	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, uint16_t stringLength, const char *value)
+	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, std::uint16_t stringLength, const char *value)
 	{
 		bool retVal = false;
 

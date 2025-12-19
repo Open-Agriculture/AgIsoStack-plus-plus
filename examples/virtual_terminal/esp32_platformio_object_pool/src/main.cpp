@@ -92,8 +92,8 @@ void handle_button_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 	}
 }
 
-extern "C" const uint8_t object_pool_start[] asm("_binary_object_pool_iop_start");
-extern "C" const uint8_t object_pool_end[] asm("_binary_object_pool_iop_end");
+extern "C" const std::uint8_t object_pool_start[] asm("_binary_object_pool_iop_start");
+extern "C" const std::uint8_t object_pool_end[] asm("_binary_object_pool_iop_end");
 
 extern "C" void app_main()
 {
