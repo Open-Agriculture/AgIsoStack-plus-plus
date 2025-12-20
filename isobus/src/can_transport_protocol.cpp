@@ -179,7 +179,7 @@ namespace isobus
 				newSession->set_state(StateMachineState::WaitForDataTransferPacket);
 
 				{
-					std::lock_guard<std::mutex> lock(activeSessionsMutex);
+					LOCK_GUARD(Mutex, activeSessionsMutex);
 					activeSessions.push_back(newSession);
 				}
 
@@ -251,7 +251,7 @@ namespace isobus
 				newSession->set_state(StateMachineState::SendClearToSend);
 
 				{
-					std::lock_guard<std::mutex> lock(activeSessionsMutex);
+					LOCK_GUARD(Mutex, activeSessionsMutex);
 					activeSessions.push_back(newSession);
 				}
 
@@ -659,7 +659,7 @@ namespace isobus
 		}
 
 		{
-			std::lock_guard<std::mutex> lock(activeSessionsMutex);
+			LOCK_GUARD(Mutex, activeSessionsMutex);
 			activeSessions.push_back(session);
 		}
 
@@ -913,7 +913,7 @@ namespace isobus
 	{
 		session->complete(successful);
 
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
 		if (activeSessions.end() != sessionLocation)
 		{
@@ -1024,7 +1024,7 @@ namespace isobus
 
 	bool TransportProtocolManager::has_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
@@ -1033,7 +1033,7 @@ namespace isobus
 	std::shared_ptr<TransportProtocolManager::TransportProtocolSession> TransportProtocolManager::get_session(std::shared_ptr<ControlFunction> source,
 	                                                                                                          std::shared_ptr<ControlFunction> destination)
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
@@ -1042,13 +1042,13 @@ namespace isobus
 
 	std::size_t TransportProtocolManager::get_sessions_count() const
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions.size();
 	}
 
 	std::list<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions;
 	}
 }
