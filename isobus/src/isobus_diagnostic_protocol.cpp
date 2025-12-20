@@ -811,10 +811,15 @@ namespace isobus
 
 			buffer.fill(0xFF); // Reserved bytes
 			buffer[0] = SUPPORTED_DIAGNOSTIC_PROTOCOLS_BITFIELD;
+
+			auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification));
+			auto request = (it != pendingRequests.end() ? it->second : nullptr);
+
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
 			                                                        myControlFunction);
+			pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification));
 		}
 		return retVal;
 	}
@@ -908,7 +913,7 @@ namespace isobus
 			                                                        static_cast<std::uint32_t>(buffer.size()),
 			                                                        myControlFunction,
 																  request);
-																  
+
 			pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
 		}
 		return retVal;
@@ -1244,7 +1249,6 @@ namespace isobus
 
 		if (nullptr != requestingControlFunction)
 		{
-			pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 			switch (parameterGroupNumber)
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage1):
@@ -1281,6 +1285,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ProductIdentification));
 					retVal = true;
 				}
@@ -1288,6 +1293,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DiagnosticProtocolID));
 					retVal = true;
 				}
@@ -1295,6 +1301,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SoftwareIdentification));
 					retVal = true;
 				}
@@ -1302,6 +1309,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ECUIdentification));
 					retVal = true;
 				}
