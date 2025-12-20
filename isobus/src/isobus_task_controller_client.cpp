@@ -1534,7 +1534,7 @@ namespace isobus
 				}
 			}
 
-			std::int64_t lowerLimit = (static_cast<int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
+			std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
 			if (lowerLimit < 0)
 			{
 				lowerLimit = 0;
