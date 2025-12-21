@@ -1226,9 +1226,9 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 		/// @brief Returns the value of the variable (if referenced) otherwise the set value
-		/// @param[in] parentWorkingSet the working set of the given OutputString object
+		/// @param[in] objectPool the object pool to use to look up the variable reference
 		/// @returns The displayed value of the string
-        std::string displayed_value(const std::map<uint16_t, std::shared_ptr<VTObject> > &objectPool) const;
+		std::string displayed_value(const std::map<uint16_t, std::shared_ptr<VTObject>> &objectPool) const;
 
 		/// @brief Returns a copy of the stored string value. Used only when no string
 		/// variable objects are children of this object.
