@@ -823,7 +823,8 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction);
+			                                                        myControlFunction,
+			                                                        request);
 			pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification));
 		}
 		return retVal;
