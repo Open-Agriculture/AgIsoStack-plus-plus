@@ -859,10 +859,10 @@ namespace isobus
 		auto request = (it != pendingRequests.end() ? it->second : nullptr);
 
 		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
-		                                                      buffer.data(),
-		                                                      static_cast<std::uint32_t>(buffer.size()),
-		                                                      myControlFunction,
-															  request);
+		                                                        buffer.data(),
+		                                                        static_cast<std::uint32_t>(buffer.size()),
+		                                                        myControlFunction,
+		                                                        request);
 		pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation));
 
 		return retVal;
@@ -878,10 +878,10 @@ namespace isobus
 		auto request = (it != pendingRequests.end() ? it->second : nullptr);
 
 		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
-		                                                      buffer.data(),
-		                                                      static_cast<std::uint32_t>(buffer.size()),
-		                                                      myControlFunction,
-															  request);
+		                                                        buffer.data(),
+		                                                        static_cast<std::uint32_t>(buffer.size()),
+		                                                        myControlFunction,
+		                                                        request);
 
 		pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification));
 
@@ -912,7 +912,7 @@ namespace isobus
 			                                                        buffer.data(),
 			                                                        static_cast<std::uint32_t>(buffer.size()),
 			                                                        myControlFunction,
-																  request);
+			                                                        request);
 
 			pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
 		}
