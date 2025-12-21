@@ -203,9 +203,7 @@ private:
 
 #endif
 
-#include <mutex>
 #include <queue>
-
 template<typename T>
 class UnsafeQueue
 {
@@ -238,6 +236,13 @@ private:
 	std::queue<value_type> queue;
 };
 
+#if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
+template<typename T>
+using Queue = UnsafeQueue<T>;
+#else
+
+#include <mutex>
+
 template<typename T>
 class SafeQueue : private UnsafeQueue<T>
 {
@@ -268,11 +273,6 @@ public:
 private:
 	std::mutex mtx;
 };
-
-#if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
-template<typename T>
-using Queue = UnsafeQueue<T>;
-#else
 template<typename T>
 using Queue = SafeQueue<T>;
 #endif
