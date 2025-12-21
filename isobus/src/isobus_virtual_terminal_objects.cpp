@@ -2269,12 +2269,12 @@ namespace isobus
 		}
 	}
 
-	std::string InputString::get_value() const
+	std::string StringVTObject::get_value() const
 	{
 		return stringValue;
 	}
 
-	void InputString::set_value(const std::string &value)
+	void StringVTObject::set_value(const std::string &value)
 	{
 		stringValue = value;
 	}
@@ -3220,12 +3220,7 @@ namespace isobus
 		}
 	}
 
-	std::string OutputString::get_value() const
-	{
-		return stringValue;
-	}
-
-	std::string OutputString::displayed_value(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	std::string StringVTObject::displayed_value(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		if (isobus::NULL_OBJECT_ID != get_variable_reference())
 		{
@@ -3237,11 +3232,6 @@ namespace isobus
 			}
 		}
 		return get_value();
-	}
-
-	void OutputString::set_value(const std::string &value)
-	{
-		stringValue = value;
 	}
 
 	VirtualTerminalObjectType OutputNumber::get_object_type() const
