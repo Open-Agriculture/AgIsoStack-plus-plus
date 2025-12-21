@@ -38,6 +38,11 @@ target_include_directories(
   Utility PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
+if(CAN_STACK_DISABLE_THREADS)
+  target_include_directories(
+    Utility PRIVATE BEFORE $<BUILD_INTERFACE:${NO_STD_THREADS_DIR}>)
+endif()
+
 install(
   TARGETS Utility
   EXPORT isobusTargets
