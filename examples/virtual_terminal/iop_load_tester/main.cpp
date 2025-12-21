@@ -217,12 +217,6 @@ int main(int argc, char **argv)
 	if (consoleThread.joinable())
 		consoleThread.join();
 
-	while (running)
-	{
-		// CAN stack runs in other threads. Do nothing forever.
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-	}
-
 	virtualTerminalClient->terminate();
 	isobus::CANHardwareInterface::stop();
 	return 0;
