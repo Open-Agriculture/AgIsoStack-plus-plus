@@ -3220,7 +3220,7 @@ namespace isobus
 		}
 	}
 
-    std::string StringVTObject::displayed_value(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	std::string StringVTObject::displayed_value(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		if (isobus::NULL_OBJECT_ID != get_variable_reference())
 		{
