@@ -804,7 +804,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_protocol_identification() const
+	bool DiagnosticProtocol::send_diagnostic_protocol_identification()
 	{
 		bool retVal = false;
 
@@ -847,7 +847,7 @@ namespace isobus
 		                                                      myControlFunction);
 	}
 
-	bool DiagnosticProtocol::send_ecu_identification() const
+	bool DiagnosticProtocol::send_ecu_identification()
 	{
 		bool retVal = false;
 		std::string ecuIdString = "";
@@ -873,7 +873,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_product_identification() const
+	bool DiagnosticProtocol::send_product_identification()
 	{
 		bool retVal = false;
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
@@ -893,7 +893,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_software_identification() const
+	bool DiagnosticProtocol::send_software_identification()
 	{
 		bool retVal = false;
 
