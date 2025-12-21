@@ -231,9 +231,9 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.dataLength = 8;
 		testFrame.identifier = test_helpers::create_ext_can_id(6, 0xEC00, TestInternalECU, TestPartneredECU);
 		testFrame.data[0] = 0x13; // EOM Multiplexer
-		testFrame.data[1] = expectedLength & 0xFF; 
+		testFrame.data[1] = expectedLength & 0xFF;
 		testFrame.data[2] = (expectedLength >> 8) & 0xFF;
-		testFrame.data[3] = 0x08;	// Number of frames
+		testFrame.data[3] = 0x08; // Number of frames
 		testFrame.data[4] = 0xFF;
 		testFrame.data[5] = 0xC5;
 		testFrame.data[6] = 0xFD;
@@ -422,9 +422,9 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.dataLength = 8;
 		testFrame.identifier = test_helpers::create_ext_can_id(6, 0xEC00, TestInternalECU, TestPartneredECU);
 		testFrame.data[0] = 0x13; // EOM Multiplexer
-		testFrame.data[1] = expectedLength & 0xFF; 
+		testFrame.data[1] = expectedLength & 0xFF;
 		testFrame.data[2] = (expectedLength >> 8) & 0xFF;
-		testFrame.data[3] = 0x06;	// Number of frames
+		testFrame.data[3] = 0x06; // Number of frames
 		testFrame.data[4] = 0xFF;
 		testFrame.data[5] = 0xC5;
 		testFrame.data[6] = 0xFD;
@@ -568,14 +568,13 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[6]); // Padding
 		EXPECT_EQ(0xFF, testFrame.data[7]); // Padding
 
-
 		// Send EOM ACK
 		testFrame.dataLength = 8;
 		testFrame.identifier = test_helpers::create_ext_can_id(6, 0xEC00, TestInternalECU, TestPartneredECU);
 		testFrame.data[0] = 0x13; // EOM Multiplexer
-		testFrame.data[1] = expectedLength & 0xFF; 
+		testFrame.data[1] = expectedLength & 0xFF;
 		testFrame.data[2] = (expectedLength >> 8) & 0xFF;
-		testFrame.data[3] = 0x06;	// Number of frames
+		testFrame.data[3] = 0x06; // Number of frames
 		testFrame.data[4] = 0xFF;
 		testFrame.data[5] = 0xDA;
 		testFrame.data[6] = 0xFE;
@@ -761,9 +760,9 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		testFrame.dataLength = 8;
 		testFrame.identifier = test_helpers::create_ext_can_id(6, 0xEC00, TestInternalECU, TestPartneredECU);
 		testFrame.data[0] = 0x13; // EOM Multiplexer
-		testFrame.data[1] = expectedLength & 0xFF; 
+		testFrame.data[1] = expectedLength & 0xFF;
 		testFrame.data[2] = (expectedLength >> 8) & 0xFF;
-		testFrame.data[3] = 0x07;	// Number of frames
+		testFrame.data[3] = 0x07; // Number of frames
 		testFrame.data[4] = 0xFF;
 		testFrame.data[5] = 0x8D;
 		testFrame.data[6] = 0xFC;
