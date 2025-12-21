@@ -13,6 +13,7 @@
 #include <atomic>
 #include <csignal>
 #include <iostream>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> virtualTerminalClient = nullptr;

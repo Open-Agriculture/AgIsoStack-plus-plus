@@ -855,7 +855,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
 	ASSERT_FALSE(manager.has_session(originator, receiver));
 }
 
-void check_abort_message(const CANMessage &message, const std::uint8_t abortReason, const uint32_t parameterGroupNumber)
+void check_abort_message(const CANMessage &message, const std::uint8_t abortReason, const std::uint32_t parameterGroupNumber)
 {
 	ASSERT_EQ(message.get_identifier().get_parameter_group_number(), 0xEC00); // Transport Protocol Connection Management
 	ASSERT_EQ(message.get_data_length(), 8);

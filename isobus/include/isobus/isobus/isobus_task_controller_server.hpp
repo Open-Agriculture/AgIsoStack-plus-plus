@@ -16,7 +16,9 @@
 
 #include <deque>
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include <condition_variable>
+#endif
 
 namespace isobus
 {

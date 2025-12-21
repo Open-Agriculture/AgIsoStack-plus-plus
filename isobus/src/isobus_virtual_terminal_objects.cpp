@@ -7,7 +7,6 @@
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
-#include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
 namespace isobus
 {
@@ -2270,12 +2269,12 @@ namespace isobus
 		}
 	}
 
-	std::string InputString::get_value() const
+	std::string StringVTObject::get_value() const
 	{
 		return stringValue;
 	}
 
-	void InputString::set_value(const std::string &value)
+	void StringVTObject::set_value(const std::string &value)
 	{
 		stringValue = value;
 	}
@@ -3221,16 +3220,11 @@ namespace isobus
 		}
 	}
 
-	std::string OutputString::get_value() const
-	{
-		return stringValue;
-	}
-
-	std::string OutputString::displayed_value(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet) const
+	std::string StringVTObject::displayed_value(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		if (isobus::NULL_OBJECT_ID != get_variable_reference())
 		{
-			auto child = get_object_by_id(get_variable_reference(), parentWorkingSet->get_object_tree());
+			auto child = get_object_by_id(get_variable_reference(), objectPool);
 
 			if ((nullptr != child) && (isobus::VirtualTerminalObjectType::StringVariable == child->get_object_type()))
 			{
@@ -3238,11 +3232,6 @@ namespace isobus
 			}
 		}
 		return get_value();
-	}
-
-	void OutputString::set_value(const std::string &value)
-	{
-		stringValue = value;
 	}
 
 	VirtualTerminalObjectType OutputNumber::get_object_type() const

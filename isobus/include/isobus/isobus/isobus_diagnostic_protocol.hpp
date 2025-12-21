@@ -39,6 +39,7 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <array>
 #include <list>
@@ -494,6 +495,7 @@ namespace isobus
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
+		mutable Mutex dtcMutex; ///< mutex to protect DTC data
 		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
 		std::vector<std::string> ecuIdentificationFields; ///< Stores the ECU ID fields so we can transmit them when ECU ID's PGN is requested
 		std::vector<std::string> softwareIdentificationFields; ///< Stores the Software ID fields so we can transmit them when the PGN is requested

@@ -67,7 +67,7 @@ namespace isobus
 		if (iopLength > 3)
 		{
 			// We at least have object ID and type
-			auto decodedID = static_cast<uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+			auto decodedID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
 			VirtualTerminalObjectType decodedType = static_cast<VirtualTerminalObjectType>(iopData[2]);
 
 			switch (decodedType)
@@ -151,7 +151,7 @@ namespace isobus
 									}
 
 									// Next, parse language list
-									if (iopLength >= static_cast<uint16_t>(numberOfLanguagesToFollow * 2))
+									if (iopLength >= static_cast<std::uint16_t>(numberOfLanguagesToFollow * 2))
 									{
 										for (std::uint_fast8_t i = 0; i < numberOfLanguagesToFollow; i++)
 										{
@@ -995,7 +995,7 @@ namespace isobus
 						iopLength -= 9;
 						iopData += 9;
 
-						const int64_t iopLengthRemaining = (iopLength - (numberChildrenToFollow * 2));
+						const std::int64_t iopLengthRemaining = (iopLength - (numberChildrenToFollow * 2));
 
 						if (iopLength >= iopLengthRemaining)
 						{
@@ -1106,7 +1106,7 @@ namespace isobus
 						tempObject->set_justification_bitfield(iopData[15]);
 
 						const std::size_t lengthOfStringObject = iopData[16];
-						const int64_t iopLengthRemaining = (iopLength - 17); // Use larger signed int to detect negative rollover
+						const std::int64_t iopLengthRemaining = (iopLength - 17); // Use larger signed int to detect negative rollover
 
 						if (iopLengthRemaining > static_cast<std::uint16_t>((lengthOfStringObject + 2))) // +2 is for enabled byte and number of macros to follow
 						{
@@ -1317,7 +1317,7 @@ namespace isobus
 
 						if (iopLength >= stringLengthToFollow)
 						{
-							for (uint_fast16_t i = 0; i < stringLengthToFollow; i++)
+							for (std::uint_fast16_t i = 0; i < stringLengthToFollow; i++)
 							{
 								tempString.push_back(static_cast<char>(iopData[0]));
 								iopData++;
@@ -3002,7 +3002,7 @@ namespace isobus
 
 	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength)
 	{
-		uint32_t remainingLength = iopLength;
+		std::uint32_t remainingLength = iopLength;
 		std::uint8_t *currentIopPointer = iopData;
 		bool retVal = true;
 
@@ -3033,9 +3033,9 @@ namespace isobus
 
 	bool VirtualTerminalWorkingSetBase::parse_object_macro_reference(
 	  std::shared_ptr<VTObject> object,
-	  const uint8_t numberOfMacrosToFollow,
-	  uint8_t *&iopData,
-	  uint32_t &iopLength) const
+	  const std::uint8_t numberOfMacrosToFollow,
+	  std::uint8_t *&iopData,
+	  std::uint32_t &iopLength) const
 	{
 		bool retVal = true;
 		for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)

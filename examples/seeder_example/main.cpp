@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <thread>
 
 std::atomic_bool running = { true };
 

@@ -36,7 +36,7 @@ namespace isobus
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_total_bytes_transferred() const
 	{
-		uint32_t transferred = get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
+		std::uint32_t transferred = get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
 		if (transferred > get_message_length())
 		{
 			transferred = get_message_length();

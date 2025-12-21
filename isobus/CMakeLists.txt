@@ -48,10 +48,13 @@ set(ISOBUS_SRC
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp"
     "isobus_device_descriptor_object_pool_helpers.cpp"
-    "can_message_data.cpp"
-    "isobus_virtual_terminal_server.cpp"
-    "isobus_virtual_terminal_working_set_base.cpp"
-    "isobus_virtual_terminal_server_managed_working_set.cpp")
+    "can_message_data.cpp")
+
+if(NOT CAN_STACK_DISABLE_THREADS)
+  list(APPEND ISOBUS_SRC "isobus_virtual_terminal_server.cpp"
+       "isobus_virtual_terminal_working_set_base.cpp"
+       "isobus_virtual_terminal_server_managed_working_set.cpp")
+endif()
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
@@ -101,11 +104,18 @@ set(ISOBUS_INCLUDE
     "nmea2000_message_interface.hpp"
     "isobus_preferred_addresses.hpp"
     "isobus_device_descriptor_object_pool_helpers.hpp"
-    "can_message_data.hpp"
+    "can_message_data.hpp")
+
+# Conditionally add Virtual Terminal components
+if(NOT CAN_STACK_DISABLE_THREADS)
+  list(
+    APPEND
+    ISOBUS_INCLUDE
     "isobus_virtual_terminal_base.hpp"
     "isobus_virtual_terminal_server.hpp"
     "isobus_virtual_terminal_working_set_base.hpp"
     "isobus_virtual_terminal_server_managed_working_set.hpp")
+endif()
 
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
@@ -171,6 +181,10 @@ target_include_directories(
                 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 target_link_libraries(Isobus PRIVATE ${PROJECT_NAME}::Utility)
+if(CAN_STACK_DISABLE_THREADS)
+  target_include_directories(
+    Isobus PRIVATE BEFORE $<BUILD_INTERFACE:${NO_STD_THREADS_DIR}>)
+endif()
 
 install(
   TARGETS Isobus
