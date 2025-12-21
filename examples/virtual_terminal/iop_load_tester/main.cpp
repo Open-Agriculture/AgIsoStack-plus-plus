@@ -31,6 +31,11 @@ struct MaskInfo
 
 std::vector<MaskInfo> availableMasks;
 
+void signal_handler(int)
+{
+	running = false;
+}
+
 bool collect_masks(std::uint8_t *pool, std::uint32_t size)
 {
 	isobus::VirtualTerminalServerManagedWorkingSet vt;
@@ -129,6 +134,7 @@ void console_command_loop()
 
 int main(int argc, char **argv)
 {
+	std::signal(SIGINT, signal_handler);
 	if (argc < 2)
 	{
 		std::cout << "Least one argument needs to be passed!" << std::endl;
