@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 	canDriver = std::make_shared<isobus::SocketCANInterface>(interfaceName);
 #elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
 	int channel = interfaceName.empty() ? 0 : std::stoi(interfaceName);
-	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
+	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(channel);
 #elif (defined(ISOBUS_MACCANPCAN_AVAILABLE) || defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE))
 	int channel = interfaceName.empty() ? PCAN_USBBUS1 : (std::stoi(interfaceName) - 1 + PCAN_USBBUS1);
 #if defined(ISOBUS_MACCANPCAN_AVAILABLE)
