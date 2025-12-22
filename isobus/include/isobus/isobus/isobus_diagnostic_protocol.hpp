@@ -424,7 +424,7 @@ namespace isobus
 
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_protocol_identification();
+		bool send_diagnostic_protocol_identification() const;
 
 		/// @brief Sends the DM13 to alert network devices of impending suspended broadcasts
 		/// @param suspendTime_seconds The number of seconds that the broadcast will be suspended for

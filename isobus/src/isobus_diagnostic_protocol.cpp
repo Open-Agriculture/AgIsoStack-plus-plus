@@ -804,7 +804,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_protocol_identification()
+	bool DiagnosticProtocol::send_diagnostic_protocol_identification() const
 	{
 		bool retVal = false;
 
