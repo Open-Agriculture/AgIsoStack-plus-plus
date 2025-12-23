@@ -7,13 +7,14 @@
 #include "isobus/isobus/isobus_standard_data_description_indices.hpp"
 #include "isobus/isobus/isobus_task_controller_client.hpp"
 
-#include "console_logger.cpp"
+#include "../common/console_logger.cpp"
 #include "section_control_implement_sim.hpp"
 
 #include <atomic>
 #include <csignal>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::TaskControllerClient> TestTCClient = nullptr;

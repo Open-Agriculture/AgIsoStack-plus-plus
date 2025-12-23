@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <thread>
 
 std::atomic_bool running = { true };
 
@@ -19,13 +20,13 @@ void signal_handler(int)
 	running = false;
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	int retVal = 0;
 	Seeder seederExample;
 	std::signal(SIGINT, signal_handler);
 
-	if (seederExample.initialize())
+	if (seederExample.initialize(argc == 2 ? argv[1] : ""))
 	{
 		while (running)
 		{

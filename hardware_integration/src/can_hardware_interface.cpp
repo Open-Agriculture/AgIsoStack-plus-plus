@@ -280,6 +280,8 @@ namespace isobus
 		stop_threads();
 #endif
 
+		started = false;
+
 		LOCK_GUARD(Mutex, hardwareChannelsMutex);
 		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
 			channel->stop();

@@ -100,8 +100,8 @@ TEST(NMEA2000_TESTS, VesselHeadingDataInterface)
 	EXPECT_EQ(2, serializationBuffer.at(3)); // Deviation
 	EXPECT_EQ(0, serializationBuffer.at(4)); // Deviation
 
-	std::int16_t tempVariation = static_cast<int16_t>(serializationBuffer.at(5));
-	tempVariation |= (static_cast<int16_t>(serializationBuffer.at(6)) << 8);
+	std::int16_t tempVariation = static_cast<std::int16_t>(serializationBuffer.at(5));
+	tempVariation |= (static_cast<std::int16_t>(serializationBuffer.at(6)) << 8);
 	EXPECT_EQ(-3, tempVariation); // Variation
 	EXPECT_EQ(0, serializationBuffer.at(7) & 0x03); // True Reference Source
 }
@@ -130,10 +130,10 @@ TEST(NMEA2000_TESTS, RateOfTurnDataInterface)
 	ASSERT_EQ(CAN_DATA_LENGTH, serializationBuffer.size());
 	EXPECT_EQ(200, serializationBuffer.at(0));
 
-	std::int32_t rateOfTurn = static_cast<int32_t>(serializationBuffer.at(1));
-	rateOfTurn |= (static_cast<int32_t>(serializationBuffer.at(2)) << 8);
-	rateOfTurn |= (static_cast<int32_t>(serializationBuffer.at(3)) << 16);
-	rateOfTurn |= (static_cast<int32_t>(serializationBuffer.at(4)) << 24);
+	std::int32_t rateOfTurn = static_cast<std::int32_t>(serializationBuffer.at(1));
+	rateOfTurn |= (static_cast<std::int32_t>(serializationBuffer.at(2)) << 8);
+	rateOfTurn |= (static_cast<std::int32_t>(serializationBuffer.at(3)) << 16);
+	rateOfTurn |= (static_cast<std::int32_t>(serializationBuffer.at(4)) << 24);
 	EXPECT_EQ(rateOfTurn, 100);
 	EXPECT_EQ(0xFF, serializationBuffer.at(5));
 	EXPECT_EQ(0xFF, serializationBuffer.at(6));
@@ -261,7 +261,7 @@ TEST(NMEA2000_Tests, PositionDeltaHighPrecisionRapidUpdateDataInterface)
 	// Need to sign extend the value...
 	if (messageBuffer.at(4) & 0x80)
 	{
-		deltaLatitude |= static_cast<int32_t>(0xFF000000);
+		deltaLatitude |= static_cast<std::int32_t>(0xFF000000);
 	}
 	EXPECT_EQ(-5000, deltaLatitude);
 
@@ -272,7 +272,7 @@ TEST(NMEA2000_Tests, PositionDeltaHighPrecisionRapidUpdateDataInterface)
 	// Need to sign extend the value...
 	if (messageBuffer.at(7) & 0x80)
 	{
-		deltaLongitude |= static_cast<int32_t>(0xFF000000);
+		deltaLongitude |= static_cast<std::int32_t>(0xFF000000);
 	}
 	EXPECT_EQ(-9000, deltaLongitude);
 }
