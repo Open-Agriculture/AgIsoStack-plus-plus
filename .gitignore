@@ -32,7 +32,6 @@
 *.app
 
 # Cmake
-*.cmake
 Makefile
 *.dir
 *.marks

@@ -10,7 +10,7 @@ project(
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
-include(CheckIncludeFileCXX)
+include(cmake/CheckHasStdThreads.cmake)
 
 # Make CTest available and the BUILD_TESTING option (OFF by default)
 option(BUILD_TESTING "Set to ON to enable building of tests from top level" OFF)
@@ -35,12 +35,13 @@ option(
   "Set to ON to disable multi-threading, which removes the need for std::thread, std::mutex, and related libraries."
   OFF)
 
-# Disable threads if the header is not available
-check_include_file_cxx(thread HAS_STD_THREAD_HEADER)
-if(NOT HAS_STD_THREAD_HEADER)
+# Disable threads if the toolchain doesn't support them
+check_std_thread_support(STD_THREAD_SUPPORTED)
+if(NOT STD_THREAD_SUPPORTED)
   message(
     WARNING
-      "C++ <thread> header not found. Disabling CAN_STACK_DISABLE_THREADS.")
+      "C++ threading model is not supported. Setting CAN_STACK_DISABLE_THREADS to ON."
+  )
   set(CAN_STACK_DISABLE_THREADS ON)
 endif()
 
