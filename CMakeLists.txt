@@ -99,6 +99,12 @@ add_subdirectory("hardware_integration")
 
 option(BUILD_EXAMPLES "Set to ON to enable building of examples from top level"
        OFF)
+if(BUILD_EXAMPLES AND CAN_STACK_DISABLE_THREADS)
+  message(
+    WARNING
+      "You are trying to build examples while the isobus library is configured in single-threaded mode, examples cannot be built in this mode. The current build configuration is (BUILD_EXAMPLES == ON AND CAN_STACK_DISABLE_THREADS == ON), please change the configuration."
+  )
+endif()
 if(BUILD_EXAMPLES)
   add_subdirectory("examples/transport_layer")
   add_subdirectory("examples/diagnostic_protocol")
