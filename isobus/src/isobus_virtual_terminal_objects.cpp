@@ -7,6 +7,7 @@
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 
 namespace isobus
 {
@@ -7364,10 +7365,16 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (commandPackets.size() < 255)
+		// Macro Object IDs shall be in the range 0 to 255 for VT version 4 and prior.
+		// Macro Object IDs can be in the range of 0 to 65534 for VT version 5 and later.
+		if (commandPackets.size() <= 65534)
 		{
 			commandPackets.push_back(command);
 			retVal = true;
+		}
+		else
+		{
+			LOG_ERROR("Unable to add new command, because maximum command count (65534) reached for the Macro %u", objectID);
 		}
 		return retVal;
 	}
