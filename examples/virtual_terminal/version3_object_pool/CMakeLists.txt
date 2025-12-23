@@ -6,7 +6,7 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(VT3ExampleTarget main.cpp ../common/console_logger.cpp
+add_executable(VT3ExampleTarget main.cpp ../../common/console_logger.cpp
                                 objectPoolObjects.h)
 
 target_compile_features(VT3ExampleTarget PUBLIC cxx_std_11)

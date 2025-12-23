@@ -182,7 +182,7 @@ namespace isobus
 				std::ostringstream oss;
 				for (int i = 0; i < 16; i++) // 16 sections (32 bits / 2 bits per section)
 				{
-					uint8_t state = (value >> (i * 2)) & 0x03; // Extract 2 bits for the i-th section
+					std::uint8_t state = (value >> (i * 2)) & 0x03; // Extract 2 bits for the i-th section
 					oss << static_cast<int>(state);
 					if (i < 15)
 						oss << " "; // Space for better readability

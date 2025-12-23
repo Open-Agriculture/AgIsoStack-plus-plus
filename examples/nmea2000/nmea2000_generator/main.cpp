@@ -11,6 +11,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <thread>
 
 static std::atomic_bool running = { true };
 
@@ -107,12 +108,12 @@ int main()
 	auto &position_data_message = n2kInterface.get_gnss_position_data_transmit_message();
 	position_data_message.set_sequence_id(sequenceIdentifier);
 	auto daysSinceEpoch = std::chrono::duration_cast<std::chrono::hours>(std::chrono::system_clock::now().time_since_epoch()).count() / 24;
-	position_data_message.set_position_date(static_cast<uint16_t>(daysSinceEpoch));
+	position_data_message.set_position_date(static_cast<std::uint16_t>(daysSinceEpoch));
 	auto secondsSinceMidnight = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count() % (24 * 60 * 60);
-	position_data_message.set_position_time(static_cast<uint32_t>(secondsSinceMidnight / 0.0001));
-	position_data_message.set_latitude(static_cast<int64_t>(51.69917 / 1E-16)); // 51.69917 degrees
-	position_data_message.set_longitude(static_cast<int64_t>(5.30417 / 1E-16)); // 5.30417 degrees
-	position_data_message.set_altitude(static_cast<int64_t>(1.23 / 1E-06)); // 1.23 meters
+	position_data_message.set_position_time(static_cast<std::uint32_t>(secondsSinceMidnight / 0.0001));
+	position_data_message.set_latitude(static_cast<std::int64_t>(51.69917 / 1E-16)); // 51.69917 degrees
+	position_data_message.set_longitude(static_cast<std::int64_t>(5.30417 / 1E-16)); // 5.30417 degrees
+	position_data_message.set_altitude(static_cast<std::int64_t>(1.23 / 1E-06)); // 1.23 meters
 	position_data_message.set_type_of_system(isobus::NMEA2000Messages::GNSSPositionData::TypeOfSystem::GPSPlusSBASPlusGLONASS);
 	position_data_message.set_gnss_method(isobus::NMEA2000Messages::GNSSPositionData::GNSSMethod::RTKFixedInteger);
 	position_data_message.set_integrity(isobus::NMEA2000Messages::GNSSPositionData::Integrity::Caution);
@@ -121,7 +122,7 @@ int main()
 	position_data_message.set_positional_dilution_of_precision(-456); // -4.56
 	position_data_message.set_geoidal_separation(-789); // -7.89 meters
 	position_data_message.set_number_of_reference_stations(3);
-	for (uint8_t i = 0; i < 3; i++)
+	for (std::uint8_t i = 0; i < 3; i++)
 	{
 		position_data_message.set_reference_station(i, // Index
 		                                            i + 1, // Station ID
@@ -131,12 +132,12 @@ int main()
 	}
 
 	n2kInterface.set_enable_sending_position_rapid_update_cyclically(true);
-	n2kInterface.get_position_rapid_update_transmit_message().set_latitude(static_cast<int32_t>(51.69917 / 1E-07)); // 51.69917 degrees
-	n2kInterface.get_position_rapid_update_transmit_message().set_longitude(static_cast<int32_t>(5.30417 / 1E-07)); // 5.30417 degrees
+	n2kInterface.get_position_rapid_update_transmit_message().set_latitude(static_cast<std::int32_t>(51.69917 / 1E-07)); // 51.69917 degrees
+	n2kInterface.get_position_rapid_update_transmit_message().set_longitude(static_cast<std::int32_t>(5.30417 / 1E-07)); // 5.30417 degrees
 
 	n2kInterface.set_enable_sending_rate_of_turn_cyclically(true);
 	n2kInterface.get_rate_of_turn_transmit_message().set_sequence_id(sequenceIdentifier);
-	n2kInterface.get_rate_of_turn_transmit_message().set_rate_of_turn(static_cast<int32_t>(-1.234 / 3.125E-08)); // -1.234 radians/s = -70.7 degrees/s
+	n2kInterface.get_rate_of_turn_transmit_message().set_rate_of_turn(static_cast<std::int32_t>(-1.234 / 3.125E-08)); // -1.234 radians/s = -70.7 degrees/s
 
 	n2kInterface.set_enable_sending_vessel_heading_cyclically(true);
 	auto &vessel_heading_message = n2kInterface.get_vessel_heading_transmit_message();

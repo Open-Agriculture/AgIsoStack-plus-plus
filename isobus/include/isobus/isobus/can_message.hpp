@@ -82,10 +82,6 @@ namespace isobus
 		           std::shared_ptr<ControlFunction> destination,
 		           std::uint8_t CANPort);
 
-		/// @brief Factory method to construct an intentionally invalid CANMessage
-		/// @returns An invalid CANMessage
-		static CANMessage create_invalid_message();
-
 		/// @brief Returns the CAN message type
 		/// @returns The type of the CAN message
 		Type get_type() const;

@@ -20,6 +20,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 namespace isobus
 {
@@ -324,21 +325,40 @@ namespace isobus
 			}
 			else
 			{
-				// Correct sequence number, copy the data
+				// Correct sequence number, copy the data (hybrid optimization)
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
-				for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
+
+				// Defensive bounds check to prevent potential buffer overflow
+				if (session->numberOfBytesTransferred >= session->get_message_length())
 				{
-					if (session->numberOfBytesTransferred < session->get_message_length())
+					LOG_ERROR("[FP]: Protocol violation - bytes transferred %u exceeds message length %u",
+					          session->numberOfBytesTransferred,
+					          session->get_message_length());
+					close_session(session, false);
+					return;
+				}
+
+				std::size_t bytes_to_copy = std::min(
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
+				  static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred));
+
+				if (bytes_to_copy > 0)
+				{
+					if (bytes_to_copy <= 4)
 					{
-						data.set_byte(session->numberOfBytesTransferred, message.get_uint8_at(1 + i));
-						session->add_number_of_bytes_transferred(1);
+						// Use byte-by-byte for small copies (better for tiny data)
+						for (std::size_t i = 0; i < bytes_to_copy; i++)
+						{
+							data[session->numberOfBytesTransferred + i] = message.get_data().data()[1 + i];
+						}
 					}
 					else
 					{
-						// Reached the end of the message, no need to copy any more data
-						break;
+						// Use memcpy for larger copies (better for bulk data)
+						memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 1, bytes_to_copy);
 					}
+					session->add_number_of_bytes_transferred(static_cast<std::uint8_t>(bytes_to_copy));
 				}
 
 				if (session->numberOfBytesTransferred >= session->get_message_length())
@@ -402,13 +422,40 @@ namespace isobus
 				                                                      nullptr, // No callback
 				                                                      nullptr);
 
-				// Save the 6 bytes of payload in this first message
+				// Save the 6 bytes of payload in this first message (hybrid optimization)
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
-				for (std::uint8_t i = 0; i < (PROTOCOL_BYTES_PER_FRAME - 1); i++)
+
+				// Defensive bounds check to prevent potential buffer overflow
+				if (session->numberOfBytesTransferred >= session->get_message_length())
 				{
-					data.set_byte(session->numberOfBytesTransferred, message.get_uint8_at(2 + i));
-					session->add_number_of_bytes_transferred(1);
+					LOG_ERROR("[FP]: Protocol violation - bytes transferred %u exceeds message length %u",
+					          session->numberOfBytesTransferred,
+					          session->get_message_length());
+					close_session(session, false);
+					return;
+				}
+
+				std::size_t bytes_to_copy = std::min(
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME - 1),
+				  static_cast<std::size_t>(session->get_message_length() - session->numberOfBytesTransferred));
+
+				if (bytes_to_copy > 0)
+				{
+					if (bytes_to_copy <= 4)
+					{
+						// Use byte-by-byte for small copies (better for tiny data)
+						for (std::size_t i = 0; i < bytes_to_copy; i++)
+						{
+							data[session->numberOfBytesTransferred + i] = message.get_data().data()[2 + i];
+						}
+					}
+					else
+					{
+						// Use memcpy for larger copies (better for bulk data)
+						memcpy(&data[session->numberOfBytesTransferred], message.get_data().data() + 2, bytes_to_copy);
+					}
+					session->add_number_of_bytes_transferred(static_cast<std::uint8_t>(bytes_to_copy));
 				}
 
 				LOCK_GUARD(Mutex, sessionMutex);

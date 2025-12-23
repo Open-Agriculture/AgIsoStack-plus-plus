@@ -11,6 +11,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <thread>
 
 #define PI 3.141592653589793238463
 
@@ -61,7 +62,7 @@ void on_position_update(const std::shared_ptr<isobus::NMEA2000Messages::GNSSPosi
 	std::cout << "  PDOP: " << message->get_positional_dilution_of_precision() << std::endl;
 	std::cout << "  Geoidal separation: " << message->get_geoidal_separation() << " m" << std::endl;
 	std::cout << "  Number of reference stations: " << static_cast<int>(message->get_number_of_reference_stations()) << std::endl;
-	for (uint8_t i = 0; i < message->get_number_of_reference_stations(); i++)
+	for (std::uint8_t i = 0; i < message->get_number_of_reference_stations(); i++)
 	{
 		std::cout << "    Reference station " << static_cast<int>(i) << ":" << std::endl;
 		std::cout << "      Station ID: " << static_cast<int>(message->get_reference_station_id(i)) << std::endl;

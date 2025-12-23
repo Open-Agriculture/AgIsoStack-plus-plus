@@ -12,7 +12,7 @@ find_package(Threads REQUIRED)
 add_executable(
   SeederExample
   main.cpp
-  console_logger.cpp
+  ../common/console_logger.cpp
   vt_application.cpp
   vt_application.hpp
   seeder.cpp

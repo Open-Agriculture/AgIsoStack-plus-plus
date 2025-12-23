@@ -7,12 +7,13 @@
 #include "isobus/isobus/isobus_virtual_terminal_client_update_helper.hpp"
 #include "isobus/utility/iop_file_interface.hpp"
 
-#include "../common/console_logger.cpp"
+#include "../../common/console_logger.cpp"
 #include "objectPoolObjects.h"
 
 #include <atomic>
 #include <csignal>
 #include <iostream>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> virtualTerminalClient = nullptr;
