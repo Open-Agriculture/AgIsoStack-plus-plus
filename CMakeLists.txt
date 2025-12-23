@@ -111,6 +111,7 @@ if(BUILD_EXAMPLES)
   if(NOT CAN_STACK_DISABLE_THREADS)
     # Cannot build without threading as vt server is multi-threaded
     add_subdirectory("examples/virtual_terminal/iop_parser_tester")
+    add_subdirectory("examples/virtual_terminal/iop_load_tester")
   endif()
   add_subdirectory("examples/task_controller_client")
   add_subdirectory("examples/task_controller_server")
