@@ -330,6 +330,8 @@ namespace isobus
 			Disconnected, ///< VT is not connected, and is not trying to connect yet
 			WaitForPartnerVTStatusMessage, ///< VT client is initialized, waiting for a VT server to come online
 			SendWorkingSetMasterMessage, ///< Client is sending the working state master message
+			SendGetMemoryInitial, ///< We send an initial get memory message for 0 bytes to get the version of the VT server
+			WaitForGetMemoryInitialResponse, ///< Client is waiting for a response to the initial
 			ReadyForObjectPool, ///< Client needs an object pool before connection can continue
 			SendGetMemory, ///< Client is sending the "get memory" message to see if VT has enough memory available
 			WaitForGetMemoryResponse, ///< Client is waiting for a response to the "get memory" message
@@ -1234,6 +1236,10 @@ namespace isobus
 		                     const std::vector<std::uint8_t> *pool,
 		                     const std::string &version = "");
 
+		/// @brief Returns the number of object pools that have been assigned for upload
+		/// @returns The number of object pools that have been assigned for upload
+		std::size_t get_number_of_object_pools() const;
+
 		/// @brief Configures an object pool to be automatically scaled to match the target VT server
 		/// @param[in] poolIndex The index of the pool you want to auto-scale
 		/// @param[in] originalDataMaskDimensions_px The data mask width that your object pool was originally designed for
@@ -1251,6 +1257,15 @@ namespace isobus
 		/// @param[in] value The data callback that will be used to get object pool data to upload.
 		/// @param[in] version An optional version string. The stack will automatically store/load your pool from the VT if this is provided.
 		void register_object_pool_data_chunk_callback(std::uint8_t poolIndex, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version = "");
+
+		/// @brief Sets a callback that will be called when the client is ready for object pool upload. You should call this before initialize if you're planning to use it.
+		/// @details This will be called once the VT version of the server is known so that you can select which
+		/// object pools you want to upload based on that information. This is optional. If you want to use this mechanism,
+		/// simply set your object pools in the callback using set_object_pool or register_object_pool_data_chunk_callback.
+		/// If you fail to do this when the callback is called, no object pools will be uploaded until you call set_object_pool, though that
+		/// would not be particularly thread safe unless you passed false to the initialize function. You can also just set your object pools before connecting if you want to always upload the same pools.
+		/// @param[in] callback The callback to call when ready for object pool upload
+		void set_on_ready_for_object_pool_callback(std::function<void(VTVersion)> callback);
 
 		/// @brief Periodic Update Function (worker thread may call this)
 		/// @details This class can spawn a thread, or you can supply your own to run this function.
@@ -1676,6 +1691,7 @@ namespace isobus
 		EventDispatcher<AuxiliaryFunctionEvent> auxiliaryFunctionEventDispatcher; ///< A list of all auxiliary function callbacks
 
 		// Object Pool info
+		std::function<void(VTVersion)> onReadyForObjectPoolCallback; ///< The callback to get object pools for upload when the client is ready
 		DataChunkCallback objectPoolDataCallback = nullptr; ///< The callback to use to get pool data
 		std::uint32_t lastObjectPoolIndex = 0; ///< The last object pool index that was processed
 	};
