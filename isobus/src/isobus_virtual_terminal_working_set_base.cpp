@@ -222,7 +222,6 @@ namespace isobus
 								const std::uint8_t childrenToFollow = iopData[8];
 								const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 								const std::uint8_t numberOfMacrosToFollow = iopData[9];
-								const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 								iopLength -= 10; // Subtract the bytes we've processed so far.
 								iopData += 10; // Move the pointer
 
@@ -296,7 +295,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[8];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[9];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 10; // Subtract the bytes we've processed so far.
 						iopData += 10; // Move the pointer
 
@@ -379,7 +377,6 @@ namespace isobus
 							const std::uint8_t numberOfObjectReferences = iopData[14];
 							const std::uint8_t numberOfChildObjects = iopData[15];
 							const std::uint8_t numberOfMacrosToFollow = iopData[16];
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							const std::uint16_t sizeOfChildren = (numberOfChildObjects * 6); // ID, X, Y 2 bytes each
 
 							switch (tempObject->get_window_type())
@@ -497,7 +494,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[4];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 2); // ID 2 bytes
 						const std::uint8_t numberOfMacrosToFollow = iopData[5];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 6; // Subtract the bytes we've processed so far.
 						iopData += 6; // Move the pointer
 
@@ -546,7 +542,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[5];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[6];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 7; // Subtract the bytes we've processed so far.
 						iopData += 7; // Move the pointer
 
@@ -600,7 +595,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[11];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[12];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 13; // Subtract the bytes we've processed so far.
 						iopData += 13; // Move the pointer
 
