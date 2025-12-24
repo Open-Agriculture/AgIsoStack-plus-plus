@@ -11,6 +11,7 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::uint32_t propARepetitionRate_ms = 0xFFFFFFFF;

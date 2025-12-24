@@ -21,8 +21,6 @@
 
 namespace isobus
 {
-	class VirtualTerminalServerManagedWorkingSet;
-
 	/// @brief The types of objects in an object pool by object type byte value
 	enum class VirtualTerminalObjectType : std::uint8_t
 	{
@@ -1226,6 +1224,24 @@ namespace isobus
 		/// @param[in] option The option to set
 		/// @param[in] value The new value of the option bit
 		void set_option(Options option, bool value);
+
+		/// @brief Returns the value of the variable (if referenced) otherwise the set value
+		/// @param[in] objectPool the object pool to use to look up the variable reference
+		/// @returns The displayed value of the string
+		std::string displayed_value(const std::map<uint16_t, std::shared_ptr<VTObject>> &objectPool) const;
+
+		/// @brief Returns a copy of the stored string value. Used only when no string
+		/// variable objects are children of this object.
+		/// @returns The value of the string stored in this object
+		std::string get_value() const;
+
+		/// @brief Changes the stored string value. Use only when no
+		/// string variable objects are children of this object.
+		/// @param[in] value The new string value
+		void set_value(const std::string &value);
+
+	private:
+		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
 	};
 
 	/// @brief This object is used to input a character string from the operator
@@ -1305,16 +1321,6 @@ namespace isobus
 		/// @param[in] value The new value of the option bit
 		void set_option(Options option, bool value);
 
-		/// @brief Returns a copy of the stored string value. Used only when no string
-		/// variable objects are children of this object.
-		/// @returns The value of the string stored in this object
-		std::string get_value() const;
-
-		/// @brief Changes the stored string value. Use only when no
-		/// string variable objects are children of this object.
-		/// @param[in] value The new string value
-		void set_value(const std::string &value);
-
 		/// @brief Returns the object ID of a input attributes object that defines what can be input into the Input String object.
 		/// @returns The object ID of a input attributes object that defines the input attributes of the Input String object
 		std::uint16_t get_input_attributes() const;
@@ -1327,7 +1333,6 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 19; ///< The fewest bytes of IOP data that can represent this object
 
-		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
 		std::uint16_t inputAttributes = NULL_OBJECT_ID; ///< Stores the object ID of a input attributes object that will be used to determine what can be input into this object.
 		bool enabled = false; ///< If the string is interactable
 	};
@@ -1708,23 +1713,8 @@ namespace isobus
 		/// @param[in] value The new value of the option bit
 		void set_option(Options option, bool value);
 
-		/// @brief Returns the value of the string, used only if the variable reference (a child var string) is NULL_OBJECT_ID
-		/// @returns The value of the string
-		std::string get_value() const;
-
-		/// @brief Returns the value of the variable (if referenced) otherwise the set value
-		/// @param[in] parentWorkingSet the working set of the given OutputString object
-		/// @returns The displayed value of the string
-		std::string displayed_value(std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> parentWorkingSet) const;
-
-		/// @brief Sets the value of the string (only matters if it has no child string variable)
-		/// @param[in] value The new value for the string
-		void set_value(const std::string &value);
-
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
-
-		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.

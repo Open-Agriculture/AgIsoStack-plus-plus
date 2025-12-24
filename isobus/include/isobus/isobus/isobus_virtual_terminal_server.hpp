@@ -267,6 +267,11 @@ namespace isobus
 		/// @returns The background color on the softkey mask
 		virtual std::uint8_t get_user_layout_softkeymask_bg_color() const;
 
+		/// @brief Callback function which is called before the transferred IOP data parsing is started
+		/// Useful to save IOP data for debugging purposes in the case if the parsing would lead to a crash
+		/// @param[in] ws the working set which object pool processing is about to be started
+		virtual void transferred_object_pool_parse_start(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &ws) const;
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events

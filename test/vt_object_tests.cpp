@@ -109,7 +109,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, WorkingSetTests)
 	EXPECT_NEAR(white.b, 0.5f, 0.0001f);
 
 	// Test setting and getting all attributes
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 1234, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), testValue));
 	EXPECT_EQ(testValue, 1234);
@@ -190,7 +190,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, DataMaskTests)
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
 	// Test setting and getting all attributes
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(dataMask2->set_attribute(static_cast<std::uint8_t>(DataMask::AttributeName::BackgroundColour), 41, objects, error));
 	EXPECT_TRUE(dataMask2->get_attribute(static_cast<std::uint8_t>(DataMask::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 41);
@@ -260,7 +260,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ContainerTests)
 	container.add_child(dataMask->get_id(), 0, 0);
 	EXPECT_FALSE(container.get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(container.get_attribute(static_cast<std::uint8_t>(Container::AttributeName::Hidden), testValue));
 	EXPECT_EQ(testValue, 1);
 
@@ -350,7 +350,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AlarmMaskTests)
 	// Attempt to change the soft key mask to the other one, which is ID 100
 	EXPECT_TRUE(alarmMask2->change_soft_key_mask(100, objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(alarmMask2->get_attribute(static_cast<std::uint8_t>(AlarmMask::AttributeName::SoftKeyMask), testValue));
 	EXPECT_EQ(testValue, 100);
 
@@ -410,7 +410,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, SoftKeyMaskTests)
 	softKeyMask->add_child(key->get_id(), 0, 0);
 	EXPECT_TRUE(softKeyMask->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(softKeyMask->get_attribute(static_cast<std::uint8_t>(SoftKeyMask::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -465,7 +465,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, SoftKeyTests)
 	softKey->add_child(dataMask->get_id(), 0, 0);
 	EXPECT_FALSE(softKey->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(softKey->get_attribute(static_cast<std::uint8_t>(Key::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -541,7 +541,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ButtonTests)
 	button->add_child(dataMask->get_id(), 0, 0);
 	EXPECT_FALSE(button->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(button->get_attribute(static_cast<std::uint8_t>(Button::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -647,7 +647,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, KeyGroupTests)
 	EXPECT_FALSE(keyGroup->set_attribute(static_cast<std::uint8_t>(KeyGroup::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(keyGroup->get_attribute(static_cast<std::uint8_t>(KeyGroup::AttributeName::Options), testValue));
 	EXPECT_EQ(testValue, 1);
 
@@ -736,7 +736,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputBooleanTests)
 	EXPECT_EQ(300, inputBoolean->get_variable_reference());
 	EXPECT_FALSE(inputBoolean->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(inputBoolean->get_attribute(static_cast<std::uint8_t>(InputBoolean::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -853,7 +853,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputStringTests)
 	inputString->add_child(pictureGraphic->get_id(), 0, 0);
 	EXPECT_FALSE(inputString->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(inputString->get_attribute(static_cast<std::uint8_t>(InputString::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -1009,7 +1009,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputNumberTests)
 	inputNumber->add_child(fillAttributes->get_id(), 0, 0);
 	EXPECT_FALSE(inputNumber->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(inputNumber->get_attribute(static_cast<std::uint8_t>(InputNumber::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -1136,7 +1136,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputListTests)
 	inputList->add_child(softKeyMask->get_id(), 0, 0);
 	EXPECT_FALSE(inputList->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(inputList->get_attribute(static_cast<std::uint8_t>(InputList::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -1237,7 +1237,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputStringTests)
 	outputString->set_font_attributes(inputString->get_id());
 	EXPECT_FALSE(outputString->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputString->get_attribute(static_cast<std::uint8_t>(OutputString::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -1366,7 +1366,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputNumberTests)
 	outputNumber->set_font_attributes(inputAttributes->get_id());
 	EXPECT_FALSE(outputNumber->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputNumber->get_attribute(static_cast<std::uint8_t>(OutputNumber::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 20);
 
@@ -1497,7 +1497,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputListTests)
 	EXPECT_TRUE(outputList->set_attribute(static_cast<std::uint8_t>(OutputList::AttributeName::Value), 4, objects, error));
 	EXPECT_EQ(outputList->get_value(), 4);
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputList->get_attribute(static_cast<std::uint8_t>(OutputList::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -1575,7 +1575,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputLineTests)
 	outputLine->set_line_attributes(inputAttributes->get_id());
 	EXPECT_FALSE(outputLine->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputLine->get_attribute(static_cast<std::uint8_t>(OutputLine::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -1672,7 +1672,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputRectangleTests)
 	outputRectangle->set_fill_attributes(1234);
 	EXPECT_EQ(1234, outputRectangle->get_fill_attributes());
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputRectangle->get_attribute(static_cast<std::uint8_t>(OutputRectangle::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -1781,7 +1781,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputEllipseTests)
 	outputEllipse->set_ellipse_type(OutputEllipse::EllipseType::Closed);
 	EXPECT_EQ(outputEllipse->get_ellipse_type(), OutputEllipse::EllipseType::Closed);
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputEllipse->get_attribute(static_cast<std::uint8_t>(OutputEllipse::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -1875,7 +1875,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputPolygonTests)
 	// Test points
 	EXPECT_EQ(0, outputPolygon->get_number_of_points());
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputPolygon->get_attribute(static_cast<std::uint8_t>(OutputPolygon::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -1996,7 +1996,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputMeterTests)
 	outputMeter->add_child(container->get_id(), 0, 0);
 	EXPECT_FALSE(outputMeter->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputMeter->get_attribute(static_cast<std::uint8_t>(OutputMeter::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
 
@@ -2095,7 +2095,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputLinearBarGraphTests)
 	EXPECT_TRUE(outputLinearBarGraph.set_attribute(static_cast<std::uint8_t>(OutputLinearBarGraph::AttributeName::Value), 10, objects, error));
 	EXPECT_EQ(outputLinearBarGraph.get_value(), 10);
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 
 	EXPECT_TRUE(outputLinearBarGraph.get_attribute(static_cast<std::uint8_t>(OutputLinearBarGraph::AttributeName::Value), testValue));
 	EXPECT_EQ(testValue, 10);
@@ -2212,7 +2212,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputArchedBarGraphTests)
 	EXPECT_TRUE(outputArchedBarGraph.set_attribute(static_cast<std::uint8_t>(OutputArchedBarGraph::AttributeName::TargetValueVariableReference), 7, objects, error));
 	EXPECT_EQ(outputArchedBarGraph.get_target_value_reference(), 7);
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(outputArchedBarGraph.get_attribute(static_cast<std::uint8_t>(OutputArchedBarGraph::AttributeName::TargetValueVariableReference), testValue));
 	EXPECT_EQ(testValue, 7);
 
@@ -2332,7 +2332,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, PictureGraphicTests)
 	EXPECT_TRUE(pictureGraphic.set_attribute(static_cast<std::uint8_t>(PictureGraphic::AttributeName::TransparencyColour), 90, objects, error));
 	EXPECT_EQ(pictureGraphic.get_transparency_colour(), 90);
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	pictureGraphic.set_width(50);
 	EXPECT_TRUE(pictureGraphic.get_attribute(static_cast<std::uint8_t>(PictureGraphic::AttributeName::Width), testValue));
 	EXPECT_EQ(testValue, 50);
@@ -2384,7 +2384,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, NumberVariableTests)
 	numberVariable.set_value(2000000);
 	EXPECT_EQ(2000000, numberVariable.get_value());
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(numberVariable.get_attribute(static_cast<std::uint8_t>(NumberVariable::AttributeName::Value), testValue));
 	EXPECT_EQ(testValue, 2000000);
 
@@ -2419,7 +2419,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, StringVariableTests)
 	stringVariable.set_value("Hello World");
 	EXPECT_EQ("Hello World", stringVariable.get_value());
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(stringVariable.get_attribute(static_cast<std::uint8_t>(StringVariable::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::StringVariable));
 }
@@ -2524,7 +2524,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, FontAttributesTests)
 	EXPECT_TRUE(fontAttributes.set_attribute(static_cast<std::uint8_t>(FontAttributes::AttributeName::FontColour), 0, objects, error));
 	EXPECT_EQ(0, fontAttributes.get_colour());
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(fontAttributes.get_attribute(static_cast<std::uint8_t>(FontAttributes::AttributeName::FontColour), testValue));
 	EXPECT_EQ(testValue, 0);
 
@@ -2574,7 +2574,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, LineAttributesTests)
 	EXPECT_FALSE(lineAttributes.set_attribute(static_cast<std::uint8_t>(LineAttributes::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(lineAttributes.get_attribute(static_cast<std::uint8_t>(LineAttributes::AttributeName::LineArt), testValue));
 	EXPECT_EQ(testValue, 0);
 
@@ -2622,7 +2622,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, FillAttributesTests)
 	EXPECT_FALSE(fillAttributes.set_attribute(static_cast<std::uint8_t>(FillAttributes::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(fillAttributes.get_attribute(static_cast<std::uint8_t>(FillAttributes::AttributeName::FillPattern), testValue));
 	EXPECT_EQ(testValue, 3);
 
@@ -2666,7 +2666,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputAttributesTests)
 	EXPECT_FALSE(inputAttributes.set_attribute(static_cast<std::uint8_t>(InputAttributes::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(inputAttributes.get_attribute(static_cast<std::uint8_t>(InputAttributes::AttributeName::ValidationType), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(InputAttributes::ValidationType::ValidCharactersAreListed));
 
@@ -2698,7 +2698,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ExtendedInputAttributesTests)
 	EXPECT_FALSE(extendedInputAttributes.set_attribute(static_cast<std::uint8_t>(ExtendedInputAttributes::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(extendedInputAttributes.get_attribute(static_cast<std::uint8_t>(ExtendedInputAttributes::AttributeName::ValidationType), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(ExtendedInputAttributes::ValidationType::InvalidCharactersAreListed));
 
@@ -2742,7 +2742,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, MacroTests)
 	EXPECT_FALSE(macro.set_attribute(static_cast<std::uint8_t>(Macro::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(macro.get_attribute(static_cast<std::uint8_t>(Macro::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro));
 }
@@ -2778,7 +2778,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ColourMapTests)
 	EXPECT_TRUE(colourMap.set_colour_map_index(16, 32));
 	EXPECT_EQ(32, colourMap.get_colour_map_index(16));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(colourMap.get_attribute(static_cast<std::uint8_t>(ColourMap::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::ColourMap));
 }
@@ -2885,7 +2885,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, WindowMaskTests)
 	// Now it should be valid again
 	EXPECT_TRUE(windowMask->get_is_valid(objects));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(windowMask->get_attribute(static_cast<std::uint8_t>(WindowMask::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::WindowMask));
 
@@ -2941,7 +2941,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ExternalObjectPointerTests)
 	EXPECT_FALSE(externalObject->set_attribute(static_cast<std::uint8_t>(ExternalObjectPointer::AttributeName::NumberOfAttributes), 4, objects, error));
 	EXPECT_NE(0, static_cast<std::uint8_t>(error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(externalObject->get_attribute(static_cast<std::uint8_t>(ExternalObjectPointer::AttributeName::DefaultObjectID), testValue));
 	EXPECT_EQ(testValue, 0xFFFF);
 
@@ -2968,7 +2968,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ObjectPointerTests)
 	// Test all attributes are read only
 	EXPECT_FALSE(externalObject->set_attribute(static_cast<std::uint8_t>(ObjectPointer::AttributeName::Value), 0xFFFF, objects, error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	EXPECT_TRUE(externalObject->get_attribute(static_cast<std::uint8_t>(ObjectPointer::AttributeName::Value), testValue));
 	EXPECT_EQ(testValue, 0xFFFF);
 
@@ -2998,7 +2998,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryInputType1Tests)
 	// Test all attributes are read only
 	EXPECT_FALSE(auxiliaryInput->set_attribute(static_cast<std::uint8_t>(AuxiliaryInputType1::AttributeName::Type), 0xFFFF, objects, error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 
 	EXPECT_TRUE(auxiliaryInput->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType1::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryInputType1));
@@ -3038,7 +3038,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryInputType2Tests)
 	// Test all attributes are read only
 	EXPECT_FALSE(auxiliaryInput->set_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::Type), 0xFFFF, objects, error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 
 	EXPECT_TRUE(auxiliaryInput->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryInputType2));
@@ -3107,7 +3107,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType1Tests)
 	// Test all attributes are read only
 	EXPECT_FALSE(auxiliaryFunction->set_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType1::AttributeName::Type), 0xFFFF, objects, error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 
 	EXPECT_TRUE(auxiliaryFunction->get_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType1::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryFunctionType1));
@@ -3143,7 +3143,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryFunctionType2Tests)
 
 	EXPECT_FALSE(auxiliaryFunction->set_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::Type), 0xFFFF, objects, error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 
 	EXPECT_TRUE(auxiliaryFunction->get_attribute(static_cast<std::uint8_t>(AuxiliaryFunctionType2::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryFunctionType2));
@@ -3204,7 +3204,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AuxiliaryControlDesignatorType2Tests)
 
 	EXPECT_FALSE(auxiliaryControlDesignator->set_attribute(static_cast<std::uint8_t>(AuxiliaryControlDesignatorType2::AttributeName::Type), 0xFFFF, objects, error));
 
-	uint32_t testValue = 0;
+	std::uint32_t testValue = 0;
 	auxiliaryControlDesignator->set_id(10);
 	objects[auxiliaryControlDesignator->get_id()] = auxiliaryControlDesignator;
 

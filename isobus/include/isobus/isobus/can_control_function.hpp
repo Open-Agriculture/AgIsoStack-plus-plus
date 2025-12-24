@@ -68,7 +68,6 @@ namespace isobus
 
 	protected:
 		friend class CANNetworkManager; ///< The network manager needs access to the control function's internals
-		static Mutex controlFunctionProcessingMutex; ///< Protects the control function tables
 		const Type controlFunctionType; ///< The Type of the control function
 		NAME controlFunctionNAME; ///< The NAME of the control function
 		bool claimedAddressSinceLastAddressClaimRequest = false; ///< Used to mark CFs as stale if they don't claim within a certain time

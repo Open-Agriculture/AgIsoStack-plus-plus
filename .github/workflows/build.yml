@@ -89,3 +89,22 @@ jobs:
         run: |
           cd build
           ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
+
+  linux_no_threads_build:
+    name: Ubuntu Build (no std threads)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure (no threads)
+        run: |
+          cmake -S . -B build \
+            -DCAN_STACK_DISABLE_THREADS=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      - name: Build (no threads)
+        run: |
+          cmake --build build --config ${{ env.BUILD_TYPE }}

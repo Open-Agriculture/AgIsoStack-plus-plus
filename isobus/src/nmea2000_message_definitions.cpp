@@ -962,6 +962,8 @@ namespace isobus
 						break;
 					}
 				}
+
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{

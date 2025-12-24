@@ -3,7 +3,7 @@
 ///
 /// @brief This file contains the definition of an auto-generated lookup of all ISOBUS DDIs
 /// as defined in ISO11783-11, exported from isobus.net.
-/// This file was generated January 16, 2025.
+/// This file was generated October 28, 2025.
 ///
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
@@ -70,7 +70,7 @@ namespace isobus
 
 	private:
 #ifndef DISABLE_ISOBUS_DATA_DICTIONARY
-		static const Entry DDI_ENTRIES[724]; ///< A lookup table of all DDI entries in ISO11783-11
+		static const Entry DDI_ENTRIES[726]; ///< A lookup table of all DDI entries in ISO11783-11
 #endif
 		static const Entry DEFAULT_ENTRY; ///< A default "unknown" DDI to return if a DDI is not in the database
 	};

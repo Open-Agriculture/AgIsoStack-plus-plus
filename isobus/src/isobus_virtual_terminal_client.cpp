@@ -419,7 +419,7 @@ namespace isobus
 		return queue_command(buffer, true);
 	}
 
-	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, uint16_t stringLength, const char *value)
+	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, std::uint16_t stringLength, const char *value)
 	{
 		bool retVal = false;
 
@@ -4000,7 +4000,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::OutputString:
 			{
-				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[14]) | static_cast<uint16_t>(buffer[15] << 8));
+				const std::uint32_t sizeOfValue = (static_cast<std::uint16_t>(buffer[14]) | static_cast<std::uint16_t>(buffer[15] << 8));
 				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
 				retVal += (sizeOfMacros + sizeOfValue);
 			}
@@ -4095,7 +4095,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::StringVariable:
 			{
-				const std::uint32_t sizeOfValue = (static_cast<uint16_t>(buffer[3]) | static_cast<uint16_t>(buffer[4]) << 8);
+				const std::uint32_t sizeOfValue = (static_cast<std::uint16_t>(buffer[3]) | static_cast<std::uint16_t>(buffer[4]) << 8);
 				retVal += sizeOfValue;
 			}
 			break;
@@ -4157,7 +4157,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
-				const std::uint32_t sizeOfLabeledObjects = ((static_cast<uint16_t>(buffer[4]) | static_cast<uint16_t>(buffer[5]) << 8) * 7);
+				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[4]) | static_cast<std::uint16_t>(buffer[5]) << 8) * 7);
 				retVal += sizeOfLabeledObjects;
 			}
 			break;

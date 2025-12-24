@@ -6,7 +6,7 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(VTAuxFunctionsExample main.cpp console_logger.cpp
+add_executable(VTAuxFunctionsExample main.cpp ../../common/console_logger.cpp
                                      object_pool_ids.h)
 
 target_compile_features(VTAuxFunctionsExample PUBLIC cxx_std_11)
