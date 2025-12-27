@@ -10,7 +10,7 @@ project(
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
-include(CheckIncludeFileCXX)
+include(cmake/CheckHasStdThreads.cmake)
 
 # Make CTest available and the BUILD_TESTING option (OFF by default)
 option(BUILD_TESTING "Set to ON to enable building of tests from top level" OFF)
@@ -35,12 +35,13 @@ option(
   "Set to ON to disable multi-threading, which removes the need for std::thread, std::mutex, and related libraries."
   OFF)
 
-# Disable threads if the header is not available
-check_include_file_cxx(thread HAS_STD_THREAD_HEADER)
-if(NOT HAS_STD_THREAD_HEADER)
+# Disable threads if the toolchain doesn't support them
+check_std_thread_support(STD_THREAD_SUPPORTED)
+if(NOT STD_THREAD_SUPPORTED)
   message(
     WARNING
-      "C++ <thread> header not found. Disabling CAN_STACK_DISABLE_THREADS.")
+      "C++ threading model is not supported. Setting CAN_STACK_DISABLE_THREADS to ON."
+  )
   set(CAN_STACK_DISABLE_THREADS ON)
 endif()
 
@@ -98,6 +99,12 @@ add_subdirectory("hardware_integration")
 
 option(BUILD_EXAMPLES "Set to ON to enable building of examples from top level"
        OFF)
+if(BUILD_EXAMPLES AND CAN_STACK_DISABLE_THREADS)
+  message(
+    WARNING
+      "You are trying to build examples while the isobus library is configured in single-threaded mode, examples cannot be built in this mode. The current build configuration is (BUILD_EXAMPLES == ON AND CAN_STACK_DISABLE_THREADS == ON), please change the configuration."
+  )
+endif()
 if(BUILD_EXAMPLES)
   add_subdirectory("examples/transport_layer")
   add_subdirectory("examples/diagnostic_protocol")
