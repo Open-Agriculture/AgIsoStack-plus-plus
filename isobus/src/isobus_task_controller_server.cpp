@@ -692,19 +692,18 @@ namespace isobus
 				{
 					if (CAN_DATA_LENGTH == rxMessage.get_data_length())
 					{
-
 						std::uint8_t numberOfWorkingSetMembers = rxData[0];
 
 						if (numberOfWorkingSetMembers == 0)
 						{
-    						LOG_ERROR("[TC Server]: Working set master reported zero members – invalid!");
-    						return;
+							LOG_ERROR("[TC Server]: Working set master reported zero members – invalid!");
+							return;
 						}
 
 						// Continue normally even with 2,3,4,... members
 						if (nullptr == get_active_client(rxMessage.get_source_control_function()))
 						{
-						    activeClients.push_back(std::make_shared<ActiveClient>(rxMessage.get_source_control_function()));
+							activeClients.push_back(std::make_shared<ActiveClient>(rxMessage.get_source_control_function()));
 						}
 
 						if (numberOfWorkingSetMembers != 1)
