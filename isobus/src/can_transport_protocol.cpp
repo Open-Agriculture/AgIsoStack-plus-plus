@@ -19,6 +19,7 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 
 namespace isobus
@@ -47,7 +48,7 @@ namespace isobus
 
 	std::uint32_t TransportProtocolManager::TransportProtocolSession::get_total_bytes_transferred() const
 	{
-		uint32_t transferred = get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
+		std::uint32_t transferred = get_last_packet_number() * PROTOCOL_BYTES_PER_FRAME;
 		if (transferred > get_message_length())
 		{
 			transferred = get_message_length();
@@ -178,7 +179,7 @@ namespace isobus
 				newSession->set_state(StateMachineState::WaitForDataTransferPacket);
 
 				{
-					std::lock_guard<std::mutex> lock(activeSessionsMutex);
+					LOCK_GUARD(Mutex, activeSessionsMutex);
 					activeSessions.push_back(newSession);
 				}
 
@@ -250,7 +251,7 @@ namespace isobus
 				newSession->set_state(StateMachineState::SendClearToSend);
 
 				{
-					std::lock_guard<std::mutex> lock(activeSessionsMutex);
+					LOCK_GUARD(Mutex, activeSessionsMutex);
 					activeSessions.push_back(newSession);
 				}
 
@@ -506,18 +507,35 @@ namespace isobus
 				// Convert data type to a vector to allow for manipulation
 				auto &data = static_cast<CANMessageDataVector &>(session->get_data());
 
-				// Correct sequence number, copy the data
-				for (std::uint8_t i = 0; i < PROTOCOL_BYTES_PER_FRAME; i++)
+				// Correct sequence number, copy the data (hybrid optimization)
+				std::uint32_t currentDataIndex = PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number();
+
+				// Defensive bounds check to prevent potential buffer overflow
+				if (currentDataIndex >= session->get_message_length())
 				{
-					std::uint32_t currentDataIndex = (PROTOCOL_BYTES_PER_FRAME * session->get_last_packet_number()) + i;
-					if (currentDataIndex < session->get_message_length())
+					LOG_ERROR("[TP]: Protocol violation - packet index %u exceeds message length %u", currentDataIndex, session->get_message_length());
+					abort_session(session, ConnectionAbortReason::AnyOtherError);
+					return;
+				}
+
+				std::size_t bytes_to_copy = std::min(
+				  static_cast<std::size_t>(PROTOCOL_BYTES_PER_FRAME),
+				  static_cast<std::size_t>(session->get_message_length() - currentDataIndex));
+
+				if (bytes_to_copy > 0)
+				{
+					if (bytes_to_copy <= 4)
 					{
-						data.set_byte(currentDataIndex, message.get_uint8_at(1 + i));
+						// Use byte-by-byte for small copies (better for tiny data)
+						for (std::size_t i = 0; i < bytes_to_copy; i++)
+						{
+							data[currentDataIndex + i] = message.get_data().data()[1 + i];
+						}
 					}
 					else
 					{
-						// Reached the end of the message, no need to copy any more data
-						break;
+						// Use memcpy for larger copies (better for bulk data)
+						memcpy(&data[currentDataIndex], message.get_data().data() + 1, bytes_to_copy);
 					}
 				}
 
@@ -641,7 +659,7 @@ namespace isobus
 		}
 
 		{
-			std::lock_guard<std::mutex> lock(activeSessionsMutex);
+			LOCK_GUARD(Mutex, activeSessionsMutex);
 			activeSessions.push_back(session);
 		}
 
@@ -895,7 +913,7 @@ namespace isobus
 	{
 		session->complete(successful);
 
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
 		if (activeSessions.end() != sessionLocation)
 		{
@@ -1006,7 +1024,7 @@ namespace isobus
 
 	bool TransportProtocolManager::has_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
@@ -1015,7 +1033,7 @@ namespace isobus
 	std::shared_ptr<TransportProtocolManager::TransportProtocolSession> TransportProtocolManager::get_session(std::shared_ptr<ControlFunction> source,
 	                                                                                                          std::shared_ptr<ControlFunction> destination)
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<TransportProtocolManager::TransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
@@ -1024,13 +1042,13 @@ namespace isobus
 
 	std::size_t TransportProtocolManager::get_sessions_count() const
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions.size();
 	}
 
 	std::list<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
 	{
-		std::lock_guard<std::mutex> lock(activeSessionsMutex);
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions;
 	}
 }

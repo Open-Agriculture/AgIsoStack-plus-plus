@@ -90,11 +90,14 @@ namespace isobus
 		/// @param[in] value The object ID to set as the faulting object
 		void set_object_pool_faulting_object_id(std::uint16_t value);
 
-		/// @brief Parse the macro references of an IOP object
+		/// @brief Parses macro references from IOP data and updates the given object.
+		/// Advances iopData and decrements iopLength accordingly.
+		/// Note: On failure, iopData and iopLength may have been partially advanced.
 		/// @param[in] object The IOP object which is currently parsed
 		/// @param[in] numberOfMacrosToFollow The number of macro references deterined by parsing the IOP before the macros section.
-		/// @param[in] iopData Pointer to the raw IOP data pointing to the start of the macro references of the object.
-		/// @param[in] iopLength The remaining IOP data length to be parsed.
+		/// @param[in,out] iopData Pointer to the raw IOP data pointing to the start of the macro references of the object.
+		/// After the successful parsing the pointer will be set to the next byte after the macro list.
+		/// @param[in,out] iopLength The remaining IOP data length to be parsed, will be decremented with the parsed data count.
 		/// @returns True if the macro reference parsing is successful otherwise returns false
 		bool parse_object_macro_reference(std::shared_ptr<VTObject> object,
 		                                  const std::uint8_t numberOfMacrosToFollow,

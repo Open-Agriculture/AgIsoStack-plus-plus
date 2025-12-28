@@ -237,7 +237,7 @@ namespace isobus
 									{
 										if (CAN_DATA_LENGTH == rxMessage.get_data_length())
 										{
-											uint8_t version = rxData[1];
+											std::uint8_t version = rxData[1];
 
 											// We can store the reported version to use the proper DDOP parsing approach later on.
 											LOG_DEBUG("[TC Server]: Client reports that its version is %u", version);

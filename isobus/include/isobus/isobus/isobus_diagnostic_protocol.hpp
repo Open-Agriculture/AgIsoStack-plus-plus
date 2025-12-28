@@ -39,9 +39,11 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <array>
 #include <list>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -431,15 +433,15 @@ namespace isobus
 
 		/// @brief Sends the ECU ID message
 		/// @returns true if the message was sent
-		bool send_ecu_identification() const;
+		bool send_ecu_identification();
 
 		/// @brief Sends the product identification message (PGN 0xFC8D)
 		/// @returns true if the message was sent, otherwise false
-		bool send_product_identification() const;
+		bool send_product_identification();
 
 		/// @brief Sends the software ID message
 		/// @returns true if the message was sent, otherwise false
-		bool send_software_identification() const;
+		bool send_software_identification();
 
 		/// @brief Processes any DM22 responses from the queue
 		/// @details We queue responses so that we can do Tx retries if needed
@@ -490,10 +492,12 @@ namespace isobus
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
+		std::map<std::uint32_t, std::shared_ptr<isobus::ControlFunction>> pendingRequests; ///< Keeps track of pending PGN requests
 		EventCallbackHandle addressViolationEventHandle; ///< Stores the handle from registering for address violation events
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs
 		std::vector<DiagnosticTroubleCode> inactiveDTCList; ///< Keeps track of all the previously active DTCs
+		mutable Mutex dtcMutex; ///< mutex to protect DTC data
 		std::vector<DM22Data> dm22ResponseQueue; ///< Maintaining a list of DM22 responses we need to send to allow for retrying in case of Tx failures
 		std::vector<std::string> ecuIdentificationFields; ///< Stores the ECU ID fields so we can transmit them when ECU ID's PGN is requested
 		std::vector<std::string> softwareIdentificationFields; ///< Stores the Software ID fields so we can transmit them when the PGN is requested

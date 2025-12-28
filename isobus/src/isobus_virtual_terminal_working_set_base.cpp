@@ -67,7 +67,7 @@ namespace isobus
 		if (iopLength > 3)
 		{
 			// We at least have object ID and type
-			auto decodedID = static_cast<uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+			auto decodedID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
 			VirtualTerminalObjectType decodedType = static_cast<VirtualTerminalObjectType>(iopData[2]);
 
 			switch (decodedType)
@@ -92,7 +92,6 @@ namespace isobus
 							const std::uint8_t childrenToFollow = iopData[7];
 							const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 							const std::uint8_t numberOfMacrosToFollow = iopData[8];
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							const std::uint8_t numberOfLanguagesToFollow = iopData[9];
 							iopLength -= 10; // Subtract the bytes we've processed so far.
 							iopData += 10; // Move the pointer
@@ -110,48 +109,11 @@ namespace isobus
 								}
 
 								// Next, parse macro list
-								if (iopLength >= sizeOfMacros)
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
+								if (retVal)
 								{
-									for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-									{
-										// If the first byte is 255, then more bytes are used! 4.6.22.3
-										if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-										{
-											std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-											if (EventID::Reserved != get_event_from_byte(iopData[2]))
-											{
-												tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-												retVal = true;
-											}
-											else
-											{
-												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-												retVal = false;
-												break;
-											}
-										}
-										else
-										{
-											if (EventID::Reserved != get_event_from_byte(iopData[0]))
-											{
-												tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-												retVal = true;
-											}
-											else
-											{
-												LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-												retVal = false;
-												break;
-											}
-										}
-
-										iopLength -= 2;
-										iopData += 2;
-									}
-
 									// Next, parse language list
-									if (iopLength >= static_cast<uint16_t>(numberOfLanguagesToFollow * 2))
+									if (iopLength >= static_cast<std::uint16_t>(numberOfLanguagesToFollow * 2))
 									{
 										for (std::uint_fast8_t i = 0; i < numberOfLanguagesToFollow; i++)
 										{
@@ -162,16 +124,12 @@ namespace isobus
 											iopData += 2;
 											LOG_DEBUG("[WS]: IOP Language parsed: " + langCode);
 										}
+										retVal = true;
 									}
 									else
 									{
 										LOG_ERROR("[WS]: Not enough IOP data to parse working set language codes for object " + isobus::to_string(static_cast<int>(decodedID)));
 									}
-									retVal = true;
-								}
-								else
-								{
-									LOG_ERROR("[WS]: Not enough IOP data to parse working set macros for object " + isobus::to_string(static_cast<int>(decodedID)));
 								}
 							}
 							else
@@ -209,7 +167,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[6];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[7];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 8; // Subtract the bytes we've processed so far.
 						iopData += 8; // Move the pointer
 
@@ -226,55 +183,7 @@ namespace isobus
 							}
 
 							// Next, parse macro list
-							if (iopLength >= sizeOfMacros)
-							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse data mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -313,7 +222,6 @@ namespace isobus
 								const std::uint8_t childrenToFollow = iopData[8];
 								const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 								const std::uint8_t numberOfMacrosToFollow = iopData[9];
-								const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 								iopLength -= 10; // Subtract the bytes we've processed so far.
 								iopData += 10; // Move the pointer
 
@@ -330,55 +238,7 @@ namespace isobus
 									}
 
 									// Next, parse macro list
-									if (iopLength >= sizeOfMacros)
-									{
-										for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-										{
-											// If the first byte is 255, then more bytes are used! 4.6.22.3
-											if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-											{
-												std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-												if (EventID::Reserved != get_event_from_byte(iopData[2]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-													retVal = false;
-													break;
-												}
-											}
-											else
-											{
-												if (EventID::Reserved != get_event_from_byte(iopData[0]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-													retVal = false;
-													break;
-												}
-											}
-
-											iopLength -= 2;
-											iopData += 2;
-										}
-
-										if (0 == sizeOfMacros)
-										{
-											retVal = true;
-										}
-									}
-									else
-									{
-										LOG_ERROR("[WS]: Not enough IOP data to parse alarm mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
-									}
+									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 								}
 								else
 								{
@@ -435,7 +295,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[8];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[9];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 10; // Subtract the bytes we've processed so far.
 						iopData += 10; // Move the pointer
 
@@ -452,56 +311,7 @@ namespace isobus
 							}
 
 							// Next, parse macro list
-
-							if (iopLength >= sizeOfMacros)
-							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse container macros for object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -566,8 +376,7 @@ namespace isobus
 
 							const std::uint8_t numberOfObjectReferences = iopData[14];
 							const std::uint8_t numberOfChildObjects = iopData[15];
-							const std::uint8_t numberOfMacros = iopData[16];
-							const std::uint16_t sizeOfMacros = (numberOfMacros * 2);
+							const std::uint8_t numberOfMacrosToFollow = iopData[16];
 							const std::uint16_t sizeOfChildren = (numberOfChildObjects * 6); // ID, X, Y 2 bytes each
 
 							switch (tempObject->get_window_type())
@@ -645,57 +454,7 @@ namespace isobus
 									}
 
 									// Next, parse macro list
-
-									if (iopLength >= sizeOfMacros)
-									{
-										for (std::uint_fast8_t i = 0; i < numberOfMacros; i++)
-										{
-											// If the first byte is 255, then more bytes are used! 4.6.22.3
-											if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-											{
-												std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-												if (EventID::Reserved != get_event_from_byte(iopData[2]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-													retVal = false;
-													break;
-												}
-											}
-											else
-											{
-												if (EventID::Reserved != get_event_from_byte(iopData[0]))
-												{
-													tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-													retVal = true;
-												}
-												else
-												{
-													LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-													retVal = false;
-													break;
-												}
-											}
-
-											iopLength -= 2;
-											iopData += 2;
-										}
-
-										if (0 == sizeOfMacros)
-										{
-											retVal = true;
-										}
-									}
-									else
-									{
-										LOG_ERROR("[WS]: Not enough IOP data to parse macros for object " + isobus::to_string(static_cast<int>(decodedID)));
-										retVal = false;
-									}
+									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 								}
 								else
 								{
@@ -735,7 +494,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[4];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 2); // ID 2 bytes
 						const std::uint8_t numberOfMacrosToFollow = iopData[5];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 6; // Subtract the bytes we've processed so far.
 						iopData += 6; // Move the pointer
 
@@ -751,56 +509,7 @@ namespace isobus
 							}
 
 							// Next, parse macro list
-
-							if (iopLength >= sizeOfMacros)
-							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse soft key mask macros for object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -833,7 +542,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[5];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[6];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 7; // Subtract the bytes we've processed so far.
 						iopData += 7; // Move the pointer
 
@@ -850,56 +558,7 @@ namespace isobus
 							}
 
 							// Next, parse macro list
-
-							if (iopLength >= sizeOfMacros)
-							{
-								for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-								{
-									// If the first byte is 255, then more bytes are used! 4.6.22.3
-									if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-									{
-										std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-										if (EventID::Reserved != get_event_from_byte(iopData[2]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", macroID, decodedID);
-											retVal = false;
-											break;
-										}
-									}
-									else
-									{
-										if (EventID::Reserved != get_event_from_byte(iopData[0]))
-										{
-											tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-											retVal = true;
-										}
-										else
-										{
-											LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an invalid or unsupported event ID.", iopData[1], decodedID);
-											retVal = false;
-											break;
-										}
-									}
-
-									iopLength -= 2;
-									iopData += 2;
-								}
-
-								if (0 == sizeOfMacros)
-								{
-									retVal = true;
-								}
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for key object" + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -936,7 +595,6 @@ namespace isobus
 						const std::uint8_t childrenToFollow = iopData[11];
 						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[12];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 13; // Subtract the bytes we've processed so far.
 						iopData += 13; // Move the pointer
 
@@ -953,14 +611,7 @@ namespace isobus
 							}
 
 							// Next, parse macro list
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for button object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -995,7 +646,7 @@ namespace isobus
 						iopLength -= 9;
 						iopData += 9;
 
-						const int64_t iopLengthRemaining = (iopLength - (numberChildrenToFollow * 2));
+						const std::int64_t iopLengthRemaining = (iopLength - (numberChildrenToFollow * 2));
 
 						if (iopLength >= iopLengthRemaining)
 						{
@@ -1013,15 +664,7 @@ namespace isobus
 								iopData++;
 								iopLength--;
 
-								const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-								if (iopLength >= sizeOfMacros)
-								{
-									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-								}
-								else
-								{
-									LOG_ERROR("[WS]: Not enough IOP data to parse macros for key group object " + isobus::to_string(static_cast<int>(decodedID)));
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1064,18 +707,10 @@ namespace isobus
 
 						// Next, parse macro list
 						const std::uint8_t numberOfMacrosToFollow = iopData[12];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopData += 13;
 						iopLength -= 13;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for input boolean object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1106,7 +741,7 @@ namespace isobus
 						tempObject->set_justification_bitfield(iopData[15]);
 
 						const std::size_t lengthOfStringObject = iopData[16];
-						const int64_t iopLengthRemaining = (iopLength - 17); // Use larger signed int to detect negative rollover
+						const std::int64_t iopLengthRemaining = (iopLength - 17); // Use larger signed int to detect negative rollover
 
 						if (iopLengthRemaining > static_cast<std::uint16_t>((lengthOfStringObject + 2))) // +2 is for enabled byte and number of macros to follow
 						{
@@ -1129,15 +764,7 @@ namespace isobus
 							iopData++;
 							iopLength--;
 
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for input boolean object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1208,18 +835,10 @@ namespace isobus
 
 						// Parse macros
 						const std::uint8_t numberOfMacrosToFollow = iopData[37];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 38;
 						iopData += 38;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for input number object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1266,16 +885,7 @@ namespace isobus
 							}
 
 							// Next, parse macro list
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for input list object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1317,7 +927,7 @@ namespace isobus
 
 						if (iopLength >= stringLengthToFollow)
 						{
-							for (uint_fast16_t i = 0; i < stringLengthToFollow; i++)
+							for (std::uint_fast16_t i = 0; i < stringLengthToFollow; i++)
 							{
 								tempString.push_back(static_cast<char>(iopData[0]));
 								iopData++;
@@ -1330,16 +940,7 @@ namespace isobus
 							iopData++;
 							iopLength--;
 
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for output string object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1402,18 +1003,10 @@ namespace isobus
 
 						// Parse Macros
 						const std::uint8_t numberOfMacrosToFollow = iopData[28];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopLength -= 29;
 						iopData += 29;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output number object {}" + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1455,16 +1048,7 @@ namespace isobus
 								iopData += 2;
 							}
 
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for output list object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1511,16 +1095,7 @@ namespace isobus
 						iopData++;
 						iopLength--;
 
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output line object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1554,16 +1129,7 @@ namespace isobus
 						iopData++;
 						iopLength--;
 
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output rectangle object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1602,16 +1168,7 @@ namespace isobus
 							iopData++;
 							iopLength--;
 
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for output ellipse object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -1665,16 +1222,7 @@ namespace isobus
 									iopData += 4;
 								}
 
-								const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
-
-								if (iopLength >= sizeOfMacros)
-								{
-									retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-								}
-								else
-								{
-									LOG_ERROR("[WS]: Not enough IOP data to parse macros for output polygon object " + isobus::to_string(static_cast<int>(decodedID)));
-								}
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 							else
 							{
@@ -1719,18 +1267,10 @@ namespace isobus
 						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[16]) | (static_cast<std::uint16_t>(iopData[17]) << 8))); // Number Variable
 						tempObject->set_value((static_cast<std::uint16_t>(iopData[18]) | (static_cast<std::uint16_t>(iopData[19]) << 8)));
 						const std::uint8_t numberOfMacrosToFollow = iopData[20];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopData += 21;
 						iopLength -= 21;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output meter object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1764,18 +1304,10 @@ namespace isobus
 						tempObject->set_target_value_reference((static_cast<std::uint16_t>(iopData[19]) | (static_cast<std::uint16_t>(iopData[20]) << 8)));
 						tempObject->set_target_value((static_cast<std::uint16_t>(iopData[21]) | (static_cast<std::uint16_t>(iopData[22]) << 8)));
 						const std::uint8_t numberOfMacrosToFollow = iopData[23];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopData += 24;
 						iopLength -= 24;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output linear bar graph object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1811,18 +1343,10 @@ namespace isobus
 						tempObject->set_target_value_reference((static_cast<std::uint16_t>(iopData[22]) | (static_cast<std::uint16_t>(iopData[23]) << 8)));
 						tempObject->set_target_value((static_cast<std::uint16_t>(iopData[24]) | (static_cast<std::uint16_t>(iopData[25]) << 8)));
 						const std::uint8_t numberOfMacrosToFollow = iopData[26];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopData += 27;
 						iopLength -= 27;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for output arched bar graph object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -1870,7 +1394,6 @@ namespace isobus
 							                                            (static_cast<std::uint32_t>(iopData[14]) << 16) |
 							                                            (static_cast<std::uint32_t>(iopData[15]) << 24));
 							const std::uint8_t numberOfMacrosToFollow = iopData[16];
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							iopData += 17;
 							iopLength -= 17;
 
@@ -2025,22 +1548,15 @@ namespace isobus
 								}
 							}
 
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 
-								if (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height()))
-								{
-									retVal = true;
-								}
-								else
-								{
-									LOG_ERROR("[WS]: Picture graphic object has invalid dimensions compared to its data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
-								}
+							if (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height()))
+							{
+								retVal = true;
 							}
 							else
 							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for picture graphic object " + isobus::to_string(static_cast<int>(decodedID)));
+								LOG_ERROR("[WS]: Picture graphic object has invalid dimensions compared to its data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 							}
 						}
 						else
@@ -2148,18 +1664,10 @@ namespace isobus
 							tempObject->set_style(iopData[6]);
 
 							const std::uint8_t numberOfMacrosToFollow = iopData[7];
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							iopData += 8;
 							iopLength -= 8;
 
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for font attributes object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2190,18 +1698,10 @@ namespace isobus
 						tempObject->set_line_art_bit_pattern(static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8));
 
 						const std::uint8_t numberOfMacrosToFollow = iopData[7];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopData += 8;
 						iopLength -= 8;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse macros for line attributes object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
@@ -2230,18 +1730,10 @@ namespace isobus
 							tempObject->set_fill_pattern(static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)); // Object ID for a picture graphic
 
 							const std::uint8_t numberOfMacrosToFollow = iopData[7];
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							iopData += 8;
 							iopLength -= 8;
 
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for fill attributes object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2297,18 +1789,10 @@ namespace isobus
 							tempObject->set_validation_string(tempValidationString);
 
 							const std::uint8_t numberOfMacrosToFollow = iopData[0];
-							const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 							iopData++;
 							iopLength--;
 
-							if (iopLength >= sizeOfMacros)
-							{
-								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-							}
-							else
-							{
-								LOG_ERROR("[WS]: Not enough IOP data to parse macros for input attributes object " + isobus::to_string(static_cast<int>(decodedID)));
-							}
+							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 						}
 						else
 						{
@@ -2368,6 +1852,27 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
+						std::uint16_t numberOfIndexes = static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8);
+						if ((2 == numberOfIndexes) ||
+						    (16 == numberOfIndexes) ||
+						    (256 == numberOfIndexes))
+						{
+							tempObject->set_number_of_colour_indexes(numberOfIndexes);
+
+							for (std::uint_fast16_t i = 0; i < numberOfIndexes; i++)
+							{
+								tempObject->set_colour_map_index(static_cast<std::uint8_t>(i), iopData[5 + i]);
+							}
+
+							iopData += (5 + tempObject->get_number_of_colour_indexes());
+							iopLength -= (5 + tempObject->get_number_of_colour_indexes());
+
+							retVal = true;
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Colour map with invalid number of indexes: %d", numberOfIndexes);
+						}
 					}
 					else
 					{
@@ -2816,7 +2321,7 @@ namespace isobus
 
 				default:
 				{
-					LOG_ERROR("[WS]: Unsupported Object");
+					LOG_ERROR("[WS]: Unsupported Object (Type: %d)", decodedType);
 				}
 				break;
 			}
@@ -2901,7 +2406,7 @@ namespace isobus
 
 	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength)
 	{
-		uint32_t remainingLength = iopLength;
+		std::uint32_t remainingLength = iopLength;
 		std::uint8_t *currentIopPointer = iopData;
 		bool retVal = true;
 
@@ -2932,54 +2437,70 @@ namespace isobus
 
 	bool VirtualTerminalWorkingSetBase::parse_object_macro_reference(
 	  std::shared_ptr<VTObject> object,
-	  const uint8_t numberOfMacrosToFollow,
-	  uint8_t *&iopData,
-	  uint32_t &iopLength) const
+	  const std::uint8_t numberOfMacrosToFollow,
+	  std::uint8_t *&iopData,
+	  std::uint32_t &iopLength) const
 	{
-		bool retVal = true;
+		if (iopLength < (numberOfMacrosToFollow * 2))
+		{
+			LOG_ERROR("[WS]: Not enough IOP data to parse working set macros for object " + isobus::to_string(object->get_id()));
+			return false;
+		}
+
 		for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
 		{
 			// If the first byte is 255, then more bytes are used! 4.6.22.3
 			if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
 			{
-				std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-				if (EventID::Reserved != get_event_from_byte(iopData[2]))
+				if (iopLength < 4)
 				{
-					object->add_macro({ get_event_from_byte(iopData[2]), macroID });
-					retVal = true;
+					LOG_ERROR("[WS]: Not enough IOP data to parse extended macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
+					return false;
+				}
+
+				std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+				auto eventID = get_event_from_byte(iopData[2]);
+				if (EventID::Reserved != eventID)
+				{
+					object->add_macro({ eventID, macroID });
 				}
 				else
 				{
 					LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an "
-					          "invalid or unsupported event ID.",
+					          "invalid or unsupported event ID: %u",
 					          macroID,
-					          object->get_id());
-					retVal = false;
-					break;
+					          object->get_id(),
+					          iopData[2]);
+					return false;
 				}
+				iopLength -= 4;
+				iopData += 4;
 			}
 			else
 			{
+				if (iopLength < 2)
+				{
+					LOG_ERROR("[WS]: Not enough IOP data to parse macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
+					return false;
+				}
+
 				if (EventID::Reserved != get_event_from_byte(iopData[0]))
 				{
 					object->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-					retVal = true;
 				}
 				else
 				{
 					LOG_ERROR("[WS]: Macro with ID %u which is listed as part of object %u has an "
-					          "invalid or unsupported event ID.",
+					          "invalid or unsupported event ID: %u",
 					          iopData[1],
-					          object->get_id());
-					retVal = false;
-					break;
+					          object->get_id(),
+					          iopData[0]);
+					return false;
 				}
+				iopLength -= 2;
+				iopData += 2;
 			}
-
-			iopLength -= 2;
-			iopData += 2;
 		}
-		return retVal;
+		return true;
 	}
 } // namespace isobus

@@ -3,13 +3,14 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_guidance_interface.hpp"
 
-#include "console_logger.cpp"
+#include "../common/console_logger.cpp"
 
 #include <atomic>
 #include <csignal>
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::atomic_bool running = { true };

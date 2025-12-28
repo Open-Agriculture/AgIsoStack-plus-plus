@@ -716,7 +716,7 @@ namespace isobus
 		/// @param[in] stringLength The length of the string to be sent
 		/// @param[in] value The string to be sent
 		/// @returns true if the message is being sent successfully
-		bool send_change_string_value(std::uint16_t objectID, uint16_t stringLength, const char *value);
+		bool send_change_string_value(std::uint16_t objectID, std::uint16_t stringLength, const char *value);
 
 		/// @brief Sends the change string value command (with a c++ string instead of buffer + length)
 		/// @details The size of the object shall not be changed by this command. Only the object indicated in the
