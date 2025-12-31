@@ -372,6 +372,27 @@ namespace isobus
 			AuxiliaryTypeTwoFunctionType functionType; ///< The type of function
 		};
 
+		/// @brief Callback to load stored auxiliary function assignments for a device
+		/// @param[in] deviceName The NAME of the auxiliary input device
+		/// @param[in] modelIdentificationCode Model identification code of the device
+		/// @param[in] parentPointer Generic context pointer, usually the VirtualTerminalClient
+		/// @returns Vector of stored assignments for this device, empty if none stored
+		using AuxiliaryAssignmentLoadCallback = std::vector<AssignedAuxiliaryFunction> (*)(
+		  std::uint64_t deviceName,
+		  std::uint16_t modelIdentificationCode,
+		  void *parentPointer);
+
+		/// @brief Callback to store auxiliary function assignments for a device
+		/// @param[in] deviceName The NAME of the auxiliary input device
+		/// @param[in] modelIdentificationCode Model identification code of the device
+		/// @param[in] assignments Vector of assignments to store
+		/// @param[in] parentPointer Generic context pointer, usually the VirtualTerminalClient
+		using AuxiliaryAssignmentStoreCallback = void (*)(
+		  std::uint64_t deviceName,
+		  std::uint16_t modelIdentificationCode,
+		  const std::vector<AssignedAuxiliaryFunction> &assignments,
+		  void *parentPointer);
+
 		/// @brief The constructor for a VirtualTerminalClient
 		/// @param[in] partner The VT server control function
 		/// @param[in] clientSource The internal control function to communicate from
@@ -394,7 +415,7 @@ namespace isobus
 		bool get_is_initialized() const;
 
 		/// @brief Check whether the client is connected to the VT server
-		/// @returns true if cconnected, false otherwise
+		/// @returns true if connected, false otherwise
 		bool get_is_connected() const;
 
 		/// @brief Terminates the client and joins the worker thread if applicable
@@ -574,6 +595,14 @@ namespace isobus
 		/// is different, the preferred assignments are reset.
 		/// @param[in] modelIdentificationCode The model identification code
 		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
+
+		/// @brief Registers callbacks for loading and storing auxiliary function assignments
+		/// @param[in] loadCallback Callback function to load stored assignments (required)
+		/// @param[in] storeCallback Callback function to store assignments (required)
+		/// @param[in] context User context pointer passed to callbacks (optional)
+		void set_auxiliary_assignment_callbacks(AuxiliaryAssignmentLoadCallback loadCallback,
+		                                        AuxiliaryAssignmentStoreCallback storeCallback,
+		                                        void *context = nullptr);
 
 		/// @brief Get whether the VT has enabled the learn mode for the auxiliary input
 		/// @returns true if the VT has enabled the learn mode for the auxiliary input
@@ -1323,9 +1352,10 @@ namespace isobus
 		/// @brief A struct for storing information about an auxiliary input device
 		struct AssignedAuxiliaryInputDevice
 		{
-			const std::uint64_t name; ///< The NAME of the unit
-			const std::uint16_t modelIdentificationCode; ///< The model identification code
+			std::uint64_t name; ///< The NAME of the unit
+			std::uint16_t modelIdentificationCode; ///< The model identification code
 			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device (only applicable for listeners of input)
+			std::uint64_t lastMaintenanceMessageTimestamp; ///< The timestamp of the last received maintenance message, in milliseconds
 		};
 
 		/// @brief Struct for storing the state of an auxiliary input on our device
@@ -1436,8 +1466,9 @@ namespace isobus
 		bool send_working_set_master() const;
 
 		/// @brief Send the preferred auxiliary control type 2 assignment command
+		/// @param[in] devices the AssignedAuxiliaryInputDevices for which to send the preferred assignment
 		/// @returns true if the message was sent successfully
-		bool send_auxiliary_functions_preferred_assignment() const;
+		bool send_auxiliary_functions_preferred_assignment(const std::vector<AssignedAuxiliaryInputDevice> &devices);
 
 		/// @brief Send the auxiliary control type 2 assignment reponse message
 		/// @param[in] functionObjectID The object ID of the function
@@ -1602,6 +1633,7 @@ namespace isobus
 		static constexpr std::uint32_t VT_STATUS_TIMEOUT_MS = 3000; ///< The max allowable time between VT status messages before its considered offline
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The delay between working set maintenance messages
 		static constexpr std::uint32_t AUXILIARY_MAINTENANCE_TIMEOUT_MS = 100; ///< The delay between auxiliary maintenance messages
+		static constexpr std::uint32_t AUXILIARY_INPUT_DEVICE_TIMEOUT_MS = 300; ///< The max allowable time between auxiliary input maintenance messages before the device is considered offline (ISO 11783-6)
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
@@ -1674,6 +1706,9 @@ namespace isobus
 		EventDispatcher<VTUserLayoutHideShowEvent> userLayoutHideShowEventDispatcher; ///< A list of all user layout hide/show callbacks
 		EventDispatcher<VTAudioSignalTerminationEvent> audioSignalTerminationEventDispatcher; ///< A list of all control audio signal termination callbacks
 		EventDispatcher<AuxiliaryFunctionEvent> auxiliaryFunctionEventDispatcher; ///< A list of all auxiliary function callbacks
+		AuxiliaryAssignmentLoadCallback auxiliaryAssignmentLoadCallback = nullptr; ///< Callback to load stored assignments
+		AuxiliaryAssignmentStoreCallback auxiliaryAssignmentStoreCallback = nullptr; ///< Callback to store assignments
+		void *auxiliaryAssignmentCallbackContext = nullptr; ///< User context for storage callbacks
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback = nullptr; ///< The callback to use to get pool data
