@@ -348,6 +348,8 @@ namespace isobus
 			UploadObjectPool, ///< Client is uploading the object pool
 			SendEndOfObjectPool, ///< Client is sending the end of object pool message
 			WaitForEndOfObjectPoolResponse, ///< Client is waiting for the end of object pool response message
+			SendAuxiliaryPreferredAssignment, ///< Sending auxiliary functions preferred assignment
+			WaitForPreferredAssignmentResponse, ///< Waiting for Preferred Assignment OK response
 			Connected, ///< Client is connected to the VT server and the application layer is in control
 			Failed ///< Client could not connect to the VT due to an error
 		};
@@ -1634,6 +1636,7 @@ namespace isobus
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The delay between working set maintenance messages
 		static constexpr std::uint32_t AUXILIARY_MAINTENANCE_TIMEOUT_MS = 100; ///< The delay between auxiliary maintenance messages
 		static constexpr std::uint32_t AUXILIARY_INPUT_DEVICE_TIMEOUT_MS = 300; ///< The max allowable time between auxiliary input maintenance messages before the device is considered offline (ISO 11783-6)
+		static constexpr std::uint32_t AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS = 2000; ///< Timeout for Preferred Assignment OK response per ISO 11783
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
@@ -1671,6 +1674,7 @@ namespace isobus
 		StateMachineState state = StateMachineState::Disconnected; ///< The current client state machine state
 		CurrentObjectPoolUploadState currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized; ///< The current upload state of the object pool being processed
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp from the last state machine update
+		std::uint8_t auxiliaryAssignmentRetryCount = 0; ///< Retry counter for auxiliary preferred assignment (max 2 retries = 3 attempts)
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::uint32_t lastAuxiliaryMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface

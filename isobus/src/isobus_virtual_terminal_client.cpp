@@ -1676,6 +1676,49 @@ namespace isobus
 				}
 				break;
 
+				case StateMachineState::SendAuxiliaryPreferredAssignment:
+				{
+					if (assignedAuxiliaryInputDevices.size() > 0)
+					{
+						if (send_auxiliary_functions_preferred_assignment(assignedAuxiliaryInputDevices))
+						{
+							// Message queued successfully, now wait for response
+							LOG_DEBUG("[AUX-N]: Sent PreferredAssignmentCommand.");
+							set_state(StateMachineState::WaitForPreferredAssignmentResponse);
+						}
+						// If send fails (CAN buffer full), stay in this state and retry on next update cycle
+					}
+					else
+					{
+						// No devices (shouldn't happen, but handle gracefully)
+						set_state(StateMachineState::Connected);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForPreferredAssignmentResponse:
+				{
+					// Per ISO 11783: "If an acknowledgement is not received after 2 s,
+					// the Working Set shall send the command again"
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+					{
+						if (auxiliaryAssignmentRetryCount < 2) // Max 3 attempts (0, 1, 2)
+						{
+							auxiliaryAssignmentRetryCount++;
+							LOG_WARNING("[AUX-N]: Preferred Assignment OK response timeout (attempt " +
+							            isobus::to_string(static_cast<int>(auxiliaryAssignmentRetryCount)) +
+							            "/3). Retrying...");
+							set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+						}
+						else
+						{
+							LOG_WARNING("[AUX-N]: Preferred Assignment failed after 3 attempts. Auxiliary Function is not available.");
+							set_state(StateMachineState::Connected);
+						}
+					}
+				}
+				break;
+
 				case StateMachineState::Connected:
 				{
 					// Check for timeouts
@@ -2680,10 +2723,33 @@ namespace isobus
 							{
 								std::uint16_t faultyObjectID = message.get_uint16_at(2);
 								LOG_ERROR("[AUX-N]: Auxiliary Function Object ID of faulty assignment: " + isobus::to_string(faultyObjectID));
+
+								// Handle error response during state machine flow
+								if (StateMachineState::WaitForPreferredAssignmentResponse == parentVT->state)
+								{
+									if (parentVT->auxiliaryAssignmentRetryCount < 2)
+									{
+										parentVT->auxiliaryAssignmentRetryCount++;
+										LOG_WARNING("[AUX-N]: Retrying preferred assignment (attempt " +
+										            isobus::to_string(static_cast<int>(parentVT->auxiliaryAssignmentRetryCount)) + "/3)...");
+										parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+									}
+									else
+									{
+										LOG_WARNING("[AUX-N]: Auxiliary Function is not available after 3 attempts.");
+										parentVT->set_state(StateMachineState::Connected);
+									}
+								}
 							}
 							else
 							{
 								LOG_DEBUG("[AUX-N]: Preferred Assignment OK");
+
+								// Handle success response during state machine flow
+								if (StateMachineState::WaitForPreferredAssignmentResponse == parentVT->state)
+								{
+									parentVT->set_state(StateMachineState::Connected);
+								}
 							}
 						}
 						break;
@@ -3014,18 +3080,16 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									LOG_INFO("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
-									parentVT->set_state(StateMachineState::Connected);
 
+									// Reset retry counter and send auxiliary assignments if needed
+									parentVT->auxiliaryAssignmentRetryCount = 0;
 									if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
 									{
-										if (parentVT->send_auxiliary_functions_preferred_assignment(parentVT->assignedAuxiliaryInputDevices))
-										{
-											LOG_DEBUG("[AUX-N]: Sent preferred assignments after LoadVersionCommand.");
-										}
-										else
-										{
-											LOG_WARNING("[AUX-N]: Failed to send preferred assignments after LoadVersionCommand.");
-										}
+										parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+									}
+									else
+									{
+										parentVT->set_state(StateMachineState::Connected);
 									}
 								}
 								else
@@ -3063,8 +3127,18 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									// Stored with no error
-									parentVT->set_state(StateMachineState::Connected);
 									LOG_INFO("[VT]: Stored object pool with no error.");
+
+									// After successful store, send auxiliary assignments if needed
+									parentVT->auxiliaryAssignmentRetryCount = 0;
+									if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
+									{
+										parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+									}
+									else
+									{
+										parentVT->set_state(StateMachineState::Connected);
+									}
 								}
 								else
 								{
@@ -3135,18 +3209,15 @@ namespace isobus
 									}
 									else
 									{
-										parentVT->set_state(StateMachineState::Connected);
-									}
-									if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
-									{
-										if (parentVT->send_auxiliary_functions_preferred_assignment(parentVT->assignedAuxiliaryInputDevices))
+										// No version to store, check for auxiliary assignments
+										parentVT->auxiliaryAssignmentRetryCount = 0;
+										if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
 										{
-											LOG_DEBUG("[AUX-N]: Sent preferred assignments after EndOfObjectPoolMessage.");
+											parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
 										}
 										else
 										{
-											LOG_WARNING("[AUX-N]: Failed to send preferred assignments after EndOfObjectPoolMessage.");
-											//! @todo: add retry functionality through extra statemachine state
+											parentVT->set_state(StateMachineState::Connected);
 										}
 									}
 								}
