@@ -210,6 +210,15 @@ namespace isobus
 		ourModelIdentificationCode = modelIdentificationCode;
 	}
 
+	void VirtualTerminalClient::set_auxiliary_assignment_callbacks(AuxiliaryAssignmentLoadCallback loadCallback,
+	                                                               AuxiliaryAssignmentStoreCallback storeCallback,
+	                                                               void *context)
+	{
+		auxiliaryAssignmentLoadCallback = loadCallback;
+		auxiliaryAssignmentStoreCallback = storeCallback;
+		auxiliaryAssignmentCallbackContext = context;
+	}
+
 	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
 	{
 		return 0x40 == (busyCodesBitfield & 0x40);
@@ -1667,6 +1676,49 @@ namespace isobus
 				}
 				break;
 
+				case StateMachineState::SendAuxiliaryPreferredAssignment:
+				{
+					if (assignedAuxiliaryInputDevices.size() > 0)
+					{
+						if (send_auxiliary_functions_preferred_assignment(assignedAuxiliaryInputDevices))
+						{
+							// Message queued successfully, now wait for response
+							LOG_DEBUG("[AUX-N]: Sent PreferredAssignmentCommand.");
+							set_state(StateMachineState::WaitForPreferredAssignmentResponse);
+						}
+						// If send fails (CAN buffer full), stay in this state and retry on next update cycle
+					}
+					else
+					{
+						// No devices (shouldn't happen, but handle gracefully)
+						set_state(StateMachineState::Connected);
+					}
+				}
+				break;
+
+				case StateMachineState::WaitForPreferredAssignmentResponse:
+				{
+					// Per ISO 11783: "If an acknowledgement is not received after 2 s,
+					// the Working Set shall send the command again"
+					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+					{
+						if (auxiliaryAssignmentRetryCount < 2) // Max 3 attempts (0, 1, 2)
+						{
+							auxiliaryAssignmentRetryCount++;
+							LOG_WARNING("[AUX-N]: Preferred Assignment OK response timeout (attempt " +
+							            isobus::to_string(static_cast<int>(auxiliaryAssignmentRetryCount)) +
+							            "/3). Retrying...");
+							set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+						}
+						else
+						{
+							LOG_WARNING("[AUX-N]: Preferred Assignment failed after 3 attempts. Auxiliary Function is not available.");
+							set_state(StateMachineState::Connected);
+						}
+					}
+				}
+				break;
+
 				case StateMachineState::Connected:
 				{
 					// Check for timeouts
@@ -1717,6 +1769,25 @@ namespace isobus
 			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendAuxiliaryMaintenance));
 		}
+		// Check for auxiliary input device timeouts
+		for (auto it = assignedAuxiliaryInputDevices.begin(); it != assignedAuxiliaryInputDevices.end();)
+		{
+			if ((0 != it->lastMaintenanceMessageTimestamp) &&
+			    SystemTiming::time_expired_ms(it->lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
+			{
+				LOG_WARNING("[AUX-N]: Auxiliary input device with name: " +
+				            isobus::to_string(it->name) +
+				            " and model identification code: " +
+				            isobus::to_string(it->modelIdentificationCode) +
+				            " timed out. Removing device.");
+				it = assignedAuxiliaryInputDevices.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
+
 		txFlags.process_all_flags();
 		process_command_queue();
 
@@ -1977,10 +2048,48 @@ namespace isobus
 		                                                      CANIdentifier::CANPriority::Priority5);
 	}
 
-	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment() const
+	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment(const std::vector<AssignedAuxiliaryInputDevice> &devices)
 	{
-		//! @todo load preferred assignment from saved configuration
-		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
+		std::vector<std::uint8_t> buffer = {
+			static_cast<std::uint8_t>(Function::PreferredAssignmentCommand)
+		};
+
+		/// @todo make the load operation asynchronous
+		// Load stored assignments into pending storage if callback is registered
+		if (nullptr != auxiliaryAssignmentLoadCallback)
+		{
+			buffer.push_back(static_cast<std::uint8_t>(devices.size()));
+			for (const AssignedAuxiliaryInputDevice &device : devices)
+			{
+				buffer.push_back(static_cast<std::uint8_t>(device.name));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 8));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 16));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 24));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 32));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 40));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 48));
+				buffer.push_back(static_cast<std::uint8_t>(device.name >> 56));
+				buffer.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode));
+				buffer.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode >> 8));
+
+				auto loadedAssignments = auxiliaryAssignmentLoadCallback(device.name, device.modelIdentificationCode, auxiliaryAssignmentCallbackContext);
+				LOG_DEBUG("[AUX-N]: Loaded " + isobus::to_string(loadedAssignments.size()) + " stored assignments for device, awaiting VT confirmation.");
+
+				buffer.push_back(static_cast<std::uint8_t>(loadedAssignments.size()));
+				for (const AssignedAuxiliaryFunction &function : loadedAssignments)
+				{
+					buffer.push_back(static_cast<std::uint8_t>(function.functionObjectID));
+					buffer.push_back(static_cast<std::uint8_t>(function.functionObjectID >> 8));
+					buffer.push_back(static_cast<std::uint8_t>(function.inputObjectID));
+					buffer.push_back(static_cast<std::uint8_t>(function.inputObjectID >> 8));
+				}
+			}
+		}
+		else
+		{
+			buffer.push_back(0);
+			LOG_WARNING("[AUX-N] Sending preferred assignemnts, but no auxiliary assignment load callback registered.");
+		}
 		if (buffer.size() < CAN_DATA_LENGTH)
 		{
 			buffer.resize(CAN_DATA_LENGTH);
@@ -2614,11 +2723,33 @@ namespace isobus
 							{
 								std::uint16_t faultyObjectID = message.get_uint16_at(2);
 								LOG_ERROR("[AUX-N]: Auxiliary Function Object ID of faulty assignment: " + isobus::to_string(faultyObjectID));
+
+								// Handle error response during state machine flow
+								if (StateMachineState::WaitForPreferredAssignmentResponse == parentVT->state)
+								{
+									if (parentVT->auxiliaryAssignmentRetryCount < 2)
+									{
+										parentVT->auxiliaryAssignmentRetryCount++;
+										LOG_WARNING("[AUX-N]: Retrying preferred assignment (attempt " +
+										            isobus::to_string(static_cast<int>(parentVT->auxiliaryAssignmentRetryCount)) + "/3)...");
+										parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+									}
+									else
+									{
+										LOG_WARNING("[AUX-N]: Auxiliary Function is not available after 3 attempts.");
+										parentVT->set_state(StateMachineState::Connected);
+									}
+								}
 							}
 							else
 							{
 								LOG_DEBUG("[AUX-N]: Preferred Assignment OK");
-								//! @todo load the preferred assignment into parentVT->assignedAuxiliaryInputDevices
+
+								// Handle success response during state machine flow
+								if (StateMachineState::WaitForPreferredAssignmentResponse == parentVT->state)
+								{
+									parentVT->set_state(StateMachineState::Connected);
+								}
 							}
 						}
 						break;
@@ -2628,7 +2759,7 @@ namespace isobus
 							if (14 == message.get_data_length())
 							{
 								std::uint64_t isoName = message.get_uint64_at(1);
-								bool storeAsPreferred = message.get_bool_at(9, 7);
+								bool storeAsPreferred = !message.get_bool_at(9, 7);
 								std::uint8_t functionType = (message.get_uint8_at(9) & 0x1F);
 								std::uint16_t inputObjectID = message.get_uint16_at(10);
 								std::uint16_t functionObjectID = message.get_uint16_at(12);
@@ -2642,6 +2773,11 @@ namespace isobus
 										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
 										{
 											aux.functions.clear();
+											if (storeAsPreferred && (nullptr != parentVT->auxiliaryAssignmentStoreCallback))
+											{
+												parentVT->auxiliaryAssignmentStoreCallback(aux.name, aux.modelIdentificationCode, aux.functions, parentVT->auxiliaryAssignmentCallbackContext);
+												LOG_DEBUG("[AUX-N]: Stored preferred assignments after unassignment.");
+											}
 										}
 										LOG_INFO("[AUX-N] Unassigned all functions");
 									}
@@ -2654,9 +2790,10 @@ namespace isobus
 												if (iter->functionObjectID == functionObjectID)
 												{
 													aux.functions.erase(iter);
-													if (storeAsPreferred)
+													if (storeAsPreferred && (nullptr != parentVT->auxiliaryAssignmentStoreCallback))
 													{
-														//! @todo save preferred assignment to persistent configuration
+														parentVT->auxiliaryAssignmentStoreCallback(aux.name, aux.modelIdentificationCode, aux.functions, parentVT->auxiliaryAssignmentCallbackContext);
+														LOG_DEBUG("[AUX-N]: Stored preferred assignments after function unassignment.");
 													}
 													LOG_INFO("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
 												}
@@ -2682,9 +2819,10 @@ namespace isobus
 											if (location == std::end(result->functions))
 											{
 												result->functions.push_back(assignment);
-												if (storeAsPreferred)
+												if (storeAsPreferred && (nullptr != parentVT->auxiliaryAssignmentStoreCallback))
 												{
-													//! @todo save preferred assignment to persistent configuration
+													parentVT->auxiliaryAssignmentStoreCallback(result->name, result->modelIdentificationCode, result->functions, parentVT->auxiliaryAssignmentCallbackContext);
+													LOG_INFO("[AUX-N]: Stored preferred assignments after assignment.");
 												}
 												LOG_INFO("[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
 											}
@@ -2692,19 +2830,19 @@ namespace isobus
 											{
 												hasError = true;
 												isAlreadyAssigned = true;
-												LOG_WARNING("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+												LOG_WARNING("[AUX-N]: Unable to handle assignment due to function already assigned.");
 											}
 										}
 										else
 										{
 											hasError = true;
-											LOG_WARNING("[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
+											LOG_WARNING("[AUX-N]: Unable to to handle assignment due to unsupported function type: " + isobus::to_string(functionType));
 										}
 									}
 									else
 									{
 										hasError = true;
-										LOG_WARNING("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
+										LOG_WARNING("[AUX-N]: Unable to handle assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
 									}
 								}
 								parentVT->send_auxiliary_function_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
@@ -2942,19 +3080,16 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									LOG_INFO("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
-									parentVT->set_state(StateMachineState::Connected);
 
-									//! @todo maybe a better way available than relying on aux function callbacks registered?
-									if (parentVT->auxiliaryFunctionEventDispatcher.get_listener_count() > 0)
+									// Reset retry counter and send auxiliary assignments if needed
+									parentVT->auxiliaryAssignmentRetryCount = 0;
+									if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
 									{
-										if (parentVT->send_auxiliary_functions_preferred_assignment())
-										{
-											LOG_DEBUG("[AUX-N]: Sent preferred assignments after LoadVersionCommand.");
-										}
-										else
-										{
-											LOG_WARNING("[AUX-N]: Failed to send preferred assignments after LoadVersionCommand.");
-										}
+										parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+									}
+									else
+									{
+										parentVT->set_state(StateMachineState::Connected);
 									}
 								}
 								else
@@ -2992,8 +3127,18 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									// Stored with no error
-									parentVT->set_state(StateMachineState::Connected);
 									LOG_INFO("[VT]: Stored object pool with no error.");
+
+									// After successful store, send auxiliary assignments if needed
+									parentVT->auxiliaryAssignmentRetryCount = 0;
+									if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
+									{
+										parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
+									}
+									else
+									{
+										parentVT->set_state(StateMachineState::Connected);
+									}
 								}
 								else
 								{
@@ -3064,18 +3209,15 @@ namespace isobus
 									}
 									else
 									{
-										parentVT->set_state(StateMachineState::Connected);
-									}
-									//! @todo maybe a better way available than relying on aux function callbacks registered?
-									if (parentVT->auxiliaryFunctionEventDispatcher.get_listener_count() > 0)
-									{
-										if (parentVT->send_auxiliary_functions_preferred_assignment())
+										// No version to store, check for auxiliary assignments
+										parentVT->auxiliaryAssignmentRetryCount = 0;
+										if (parentVT->assignedAuxiliaryInputDevices.size() > 0)
 										{
-											LOG_DEBUG("[AUX-N]: Sent preferred assignments after EndOfObjectPoolMessage.");
+											parentVT->set_state(StateMachineState::SendAuxiliaryPreferredAssignment);
 										}
 										else
 										{
-											LOG_WARNING("[AUX-N]: Failed to send preferred assignments after EndOfObjectPoolMessage.");
+											parentVT->set_state(StateMachineState::Connected);
 										}
 									}
 								}
@@ -3184,12 +3326,32 @@ namespace isobus
 								});
 								if (result == std::end(parentVT->assignedAuxiliaryInputDevices))
 								{
-									AssignedAuxiliaryInputDevice inputDevice{ message.get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
+									std::uint64_t deviceName = message.get_source_control_function()->get_NAME().get_full_name();
+									AssignedAuxiliaryInputDevice inputDevice{ deviceName, modelIdentificationCode, {}, SystemTiming::get_timestamp_ms() };
+
 									parentVT->assignedAuxiliaryInputDevices.push_back(inputDevice);
 									LOG_INFO("[AUX-N]: New auxiliary input device with name: " +
 									         isobus::to_string(inputDevice.name) +
 									         " and model identification code: " +
 									         isobus::to_string(modelIdentificationCode));
+
+									if (parentVT->get_is_connected())
+									{
+										// Send preferred assignments to VT for confirmation
+										if (parentVT->send_auxiliary_functions_preferred_assignment({ inputDevice }))
+										{
+											LOG_DEBUG("[AUX-N]: Successfully sent preferred assignments for new device.");
+										}
+										else
+										{
+											LOG_WARNING("[AUX-N]: Failed to send preferred assignments for new device.");
+										}
+									}
+								}
+								else
+								{
+									// Update timestamp for existing device
+									result->lastMaintenanceMessageTimestamp = SystemTiming::get_timestamp_ms();
 								}
 							}
 						}
