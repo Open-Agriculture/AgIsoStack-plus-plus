@@ -37,6 +37,14 @@ namespace isobus
 		/// @param[in] iopData The object pool to hash and generate a version for
 		/// @returns A 7 character string that is probably somewhat unique for this pool
 		static std::string hash_object_pool_to_version(std::vector<std::uint8_t> &iopData);
+
+		/// @brief Reads an object pool raw data and generates a string version by hashing it
+		/// @details This function operates directly on a pointer to the object pool data
+		///          and its length. Useful for zero-copy hashing of large object pools.
+		/// @param[in] iopDataPtr Pointer to the object pool data
+		/// @param[in] length Number of bytes in the object pool
+		/// @returns A 7 character string that is probably somewhat unique for this pool
+		static std::string hash_object_pool_to_version(const std::uint8_t *iopDataPtr, std::size_t length);
 	};
 }
 
