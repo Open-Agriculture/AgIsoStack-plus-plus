@@ -26,7 +26,7 @@ namespace isobus
 	// [span.syn] 23.7.2.1 Header <span> synopsis
 	/// @brief Constant indicating dynamic extent in span template parameter.
 	/// Defined in [span.overview]/1: constant representing dynamic_extent in std::span.
-	static constexpr std::size_t DYNAMIC_EXTENT = std::numeric_limits<std::size_t>::max();
+	static constexpr std::size_t DYNAMIC_EXTENT = (std::numeric_limits<std::size_t>::max)();
 
 	namespace detail
 	{
