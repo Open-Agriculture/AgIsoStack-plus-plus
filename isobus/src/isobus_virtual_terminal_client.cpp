@@ -1266,12 +1266,12 @@ namespace isobus
 
 	void VirtualTerminalClient::set_object_pool_scaling(std::uint8_t poolIndex,
 	                                                    std::uint32_t originalDataMaskDimensions_px,
-	                                                    std::uint32_t originalSoftKyeDesignatorHeight_px)
+	                                                    std::uint32_t originalSoftKeyDesignatorHeight_px)
 	{
 		// You have to call set_object_pool or register_object_pool_data_chunk_callback before calling this function
 		assert(poolIndex < objectPools.size());
 		objectPools[poolIndex].autoScaleDataMaskOriginalDimension = originalDataMaskDimensions_px;
-		objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKyeDesignatorHeight_px;
+		objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKeyDesignatorHeight_px;
 	}
 
 	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version)
