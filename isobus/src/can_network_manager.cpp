@@ -49,9 +49,13 @@ namespace isobus
 
 	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
-		auto controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
-		partneredControlFunctions.push_back(controlFunction);
+		auto controlFunction = std::shared_ptr<PartneredControlFunction>{};
+		{
+			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
+			partneredControlFunctions.push_back(controlFunction);
+		}
+		update_new_partners();
 		return controlFunction;
 	}
 

@@ -301,6 +301,49 @@ TEST(CORE_TESTS, ControlFunctionAddressChangeTriggersStateCallback)
 	wasTestStateCallbackHit = false;
 }
 
+TEST(CORE_TESTS, PartnerCreatedAfterExternalClaimHasValidAddress)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t CLAIMED_ADDRESS = 0x96;
+
+	const isobus::NAME claimedName = test_helpers::find_available_name(TEST_CHANNEL);
+
+	isobus::CANMessageFrame addressClaim = {};
+	addressClaim.channel = TEST_CHANNEL;
+	addressClaim.identifier = 0x18EEFF00 | CLAIMED_ADDRESS;
+	addressClaim.isExtendedFrame = true;
+	addressClaim.dataLength = 8;
+
+	const std::uint64_t fullName = claimedName.get_full_name();
+	for (std::uint8_t byteIndex = 0; byteIndex < addressClaim.dataLength; byteIndex++)
+	{
+		addressClaim.data[byteIndex] = static_cast<std::uint8_t>(fullName >> (8 * byteIndex));
+	}
+
+	isobus::CANNetworkManager::CANNetwork.process_receive_can_message_frame(addressClaim);
+
+	std::vector<isobus::NAMEFilter> nameFilters{
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::IdentityNumber, claimedName.get_identity_number()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::ManufacturerCode, claimedName.get_manufacturer_code()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::FunctionCode, claimedName.get_function_code()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::FunctionInstance, claimedName.get_function_instance()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::EcuInstance, claimedName.get_ecu_instance()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::DeviceClass, claimedName.get_device_class()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::DeviceClassInstance, claimedName.get_device_class_instance()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::IndustryGroup, claimedName.get_industry_group()),
+		isobus::NAMEFilter(isobus::NAME::NAMEParameters::ArbitraryAddressCapable, claimedName.get_arbitrary_address_capable())
+	};
+
+	auto partner = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(TEST_CHANNEL, nameFilters);
+
+	ASSERT_NE(nullptr, partner);
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(CLAIMED_ADDRESS, partner->get_address());
+	EXPECT_EQ(claimedName.get_full_name(), partner->get_NAME().get_full_name());
+
+	isobus::CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
 TEST(CORE_TESTS, SimilarControlFunctions)
 {
 	CANNetworkManager::CANNetwork.update();

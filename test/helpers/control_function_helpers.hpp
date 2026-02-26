@@ -6,6 +6,8 @@
 
 namespace test_helpers
 {
+	isobus::NAME find_available_name(std::uint8_t canPort);
+
 	std::shared_ptr<isobus::InternalControlFunction> claim_internal_control_function(std::uint8_t address, std::uint8_t canPort);
 
 	std::shared_ptr<isobus::PartneredControlFunction> force_claim_partnered_control_function(std::uint8_t address, std::uint8_t canPort);
