@@ -66,9 +66,11 @@ namespace isobus
 		~SILKitPlugin() override;
 
 		/// @brief Returns the display name of the driver
+		/// @returns The name string identifying this SIL Kit participant and network
 		std::string get_name() const override;
 
 		/// @brief Returns whether the SIL Kit connection is active and valid
+		/// @returns `true` if the connection is active, otherwise `false`
 		bool get_is_valid() const override;
 
 		/// @brief Connects to the SIL Kit registry and starts the CAN controller
@@ -88,21 +90,21 @@ namespace isobus
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
 	private:
-		static constexpr std::size_t MAX_QUEUE_SIZE = 1000;
+		static constexpr std::size_t MAX_QUEUE_SIZE = 1000; ///< Maximum number of frames buffered in the receive queue
 
-		const std::string participantName;
-		const std::string networkName;
-		const std::string registryUri;
+		const std::string participantName; ///< Unique name for this SIL Kit participant
+		const std::string networkName; ///< Name of the virtual CAN network to join
+		const std::string registryUri; ///< URI of the SIL Kit registry
 
-		std::unique_ptr<SilKit::IParticipant> participant;
-		SilKit::Services::Can::ICanController *canController = nullptr;
-		SilKit::Services::Orchestration::ILifecycleService *lifecycleService = nullptr;
+		std::unique_ptr<SilKit::IParticipant> participant; ///< The SIL Kit participant instance
+		SilKit::Services::Can::ICanController *canController = nullptr; ///< The CAN controller created by the participant
+		SilKit::Services::Orchestration::ILifecycleService *lifecycleService = nullptr; ///< The lifecycle service for this participant
 
-		mutable std::mutex rxMutex;
-		std::condition_variable rxCondition;
-		std::deque<isobus::CANMessageFrame> rxQueue;
+		mutable std::mutex rxMutex; ///< Mutex protecting the receive queue
+		std::condition_variable rxCondition; ///< Condition variable to signal new frames in the receive queue
+		std::deque<isobus::CANMessageFrame> rxQueue; ///< Internal queue of received CAN frames
 
-		std::atomic_bool running{ false };
+		std::atomic_bool running{ false }; ///< Flag indicating whether the SIL Kit connection is active
 	};
 } // namespace isobus
 #endif // SIL_KIT_PLUGIN_HPP
