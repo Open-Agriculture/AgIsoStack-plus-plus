@@ -61,23 +61,23 @@ namespace isobus
 
 	std::size_t CANMessageDataView::size() const
 	{
-		return DataSpan::size();
+		return CANDataSpan::size();
 	}
 
 	std::uint8_t CANMessageDataView::get_byte(std::size_t index)
 	{
-		return DataSpan::operator[](index);
+		return CANDataSpan::operator[](index);
 	}
 
 	CANDataSpan CANMessageDataView::data() const
 	{
-		return CANDataSpan(DataSpan::begin(), DataSpan::size());
+		return CANDataSpan(CANDataSpan::begin(), CANDataSpan::size());
 	}
 
 	std::unique_ptr<CANMessageData> CANMessageDataView::copy_if_not_owned(std::unique_ptr<CANMessageData>) const
 	{
 		// A view doesn't own the data, so we need to make a copy.
-		return std::unique_ptr<CANMessageData>(new CANMessageDataVector(DataSpan::begin(), DataSpan::size()));
+		return std::unique_ptr<CANMessageData>(new CANMessageDataVector(CANDataSpan::begin(), CANDataSpan::size()));
 	}
 
 	CANMessageDataCallback::CANMessageDataCallback(std::size_t size,
