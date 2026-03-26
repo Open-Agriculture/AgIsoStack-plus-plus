@@ -2332,60 +2332,11 @@ namespace isobus
 						tempObject->set_options(iopData[8]);
 						tempObject->set_graphic_id((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
 						const std::uint8_t numberOfMacrosToFollow = iopData[11];
-						const std::uint16_t sizeOfMacros = (numberOfMacrosToFollow * 2);
 						iopData += 12;
 						iopLength -= 12;
 
-						if (iopLength >= sizeOfMacros)
-						{
-							for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
-							{
-								// If the first byte is 255, then more bytes are used! 4.6.22.3
-								if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
-								{
-									std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-
-									if (EventID::Reserved != get_event_from_byte(iopData[2]))
-									{
-										tempObject->add_macro({ get_event_from_byte(iopData[2]), macroID });
-										retVal = true;
-									}
-									else
-									{
-										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of scaled graphics object %u has an invalid or unsupported event ID: %u", macroID, decodedID, iopData[2]);
-										retVal = false;
-										break;
-									}
-									iopLength -= 4;
-									iopData += 4;
-								}
-								else
-								{
-									if (EventID::Reserved != get_event_from_byte(iopData[0]))
-									{
-										tempObject->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
-										retVal = true;
-									}
-									else
-									{
-										LOG_ERROR("[WS]: Macro with ID %u which is listed as part of a scaled graphics object %u has an invalid or unsupported event ID: %u", iopData[1], decodedID, iopData[0]);
-										retVal = false;
-										break;
-									}
-									iopLength -= 2;
-									iopData += 2;
-								}
-							}
-
-							if (0 == sizeOfMacros)
-							{
-								retVal = true;
-							}
-						}
-						else
-						{
-							LOG_ERROR("[WS]: Not enough IOP data to parse scaled graphics macros for object " + isobus::to_string(static_cast<int>(decodedID)));
-						}
+						// Next, parse macro list
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 					}
 					else
 					{
