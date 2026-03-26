@@ -43,6 +43,7 @@
 
 #include <array>
 #include <list>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -432,15 +433,15 @@ namespace isobus
 
 		/// @brief Sends the ECU ID message
 		/// @returns true if the message was sent
-		bool send_ecu_identification() const;
+		bool send_ecu_identification();
 
 		/// @brief Sends the product identification message (PGN 0xFC8D)
 		/// @returns true if the message was sent, otherwise false
-		bool send_product_identification() const;
+		bool send_product_identification();
 
 		/// @brief Sends the software ID message
 		/// @returns true if the message was sent, otherwise false
-		bool send_software_identification() const;
+		bool send_software_identification();
 
 		/// @brief Processes any DM22 responses from the queue
 		/// @details We queue responses so that we can do Tx retries if needed
@@ -491,6 +492,7 @@ namespace isobus
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
+		std::map<std::uint32_t, std::shared_ptr<isobus::ControlFunction>> pendingRequests; ///< Keeps track of pending PGN requests
 		EventCallbackHandle addressViolationEventHandle; ///< Stores the handle from registering for address violation events
 		NetworkType networkType; ///< The diagnostic network type that this protocol will use
 		std::vector<DiagnosticTroubleCode> activeDTCList; ///< Keeps track of all the active DTCs

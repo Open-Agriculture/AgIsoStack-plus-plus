@@ -301,6 +301,11 @@ namespace isobus
 			return elementType;
 		}
 
+		void DeviceElementObject::set_type(Type elementObjectType)
+		{
+			elementType = elementObjectType;
+		}
+
 		void DeviceElementObject::add_reference_to_child_object(std::uint16_t childID)
 		{
 			referenceList.push_back(childID);

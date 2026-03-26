@@ -816,6 +816,7 @@ namespace isobus
 
 			buffer.fill(0xFF); // Reserved bytes
 			buffer[0] = SUPPORTED_DIAGNOSTIC_PROTOCOLS_BITFIELD;
+
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
@@ -842,8 +843,9 @@ namespace isobus
 		                                                      myControlFunction);
 	}
 
-	bool DiagnosticProtocol::send_ecu_identification() const
+	bool DiagnosticProtocol::send_ecu_identification()
 	{
+		bool retVal = false;
 		std::string ecuIdString = "";
 		const std::size_t maxComponent = get_j1939_mode() ? static_cast<std::size_t>(ECUIdentificationFields::HardwareID) : static_cast<std::size_t>(ECUIdentificationFields::NumberOfFields);
 
@@ -853,24 +855,41 @@ namespace isobus
 		}
 
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
-		                                                      buffer.data(),
-		                                                      static_cast<std::uint32_t>(buffer.size()),
-		                                                      myControlFunction);
+
+		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation));
+		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
+
+		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation),
+		                                                        buffer.data(),
+		                                                        static_cast<std::uint32_t>(buffer.size()),
+		                                                        myControlFunction,
+		                                                        request);
+		pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation));
+
+		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_product_identification() const
+	bool DiagnosticProtocol::send_product_identification()
 	{
+		bool retVal = false;
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
 		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
-		                                                      buffer.data(),
-		                                                      static_cast<std::uint32_t>(buffer.size()),
-		                                                      myControlFunction);
+		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification));
+		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
+
+		retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification),
+		                                                        buffer.data(),
+		                                                        static_cast<std::uint32_t>(buffer.size()),
+		                                                        myControlFunction,
+		                                                        request);
+
+		pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification));
+
+		return retVal;
 	}
 
-	bool DiagnosticProtocol::send_software_identification() const
+	bool DiagnosticProtocol::send_software_identification()
 	{
 		bool retVal = false;
 
@@ -886,10 +905,17 @@ namespace isobus
 			              });
 
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
+
+			auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
+			auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
+
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification),
 			                                                        buffer.data(),
 			                                                        static_cast<std::uint32_t>(buffer.size()),
-			                                                        myControlFunction);
+			                                                        myControlFunction,
+			                                                        request);
+
+			pendingRequests.erase(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
 		}
 		return retVal;
 	}
@@ -1260,6 +1286,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ProductIdentification));
 					retVal = true;
 				}
@@ -1274,6 +1301,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SoftwareIdentification));
 					retVal = true;
 				}
@@ -1281,6 +1309,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation):
 				{
+					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ECUIdentification));
 					retVal = true;
 				}
