@@ -2415,7 +2415,7 @@ namespace isobus
 							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
 								// VT version is 6 or later
-								transactionNumber = message.get_uint8_at(7) >> 4;
+								transactionNumber = message.get_uint8_at(3) >> 4;
 							}
 
 							parentVT->changeNumericValueEventDispatcher.invoke({ parentVT, value, objectID });
