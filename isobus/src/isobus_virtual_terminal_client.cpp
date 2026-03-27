@@ -2552,8 +2552,8 @@ namespace isobus
 							// Make sure we comply with standard specifications
 							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
-								// VT version is 6 or later
-								buffer[7] |= 0x0F;
+								// VT version is 6 or later -> copy the TAN number from the command
+								buffer[7] |= static_cast<std::uint8_t>((message.get_uint8_at(7) & 0xF0) | 0x0F);
 							}
 							else
 							{
