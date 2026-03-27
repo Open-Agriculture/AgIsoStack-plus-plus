@@ -554,7 +554,8 @@ namespace isobus
 
 		/// @brief Processes a stateless CAN message from any VT client
 		/// @param[in] message The CAN message being received
-		void process_stateless_messages(const CANMessage &message);
+		/// @returns True if answer is being sent to the client, false if the message have not been processed/answered
+		bool process_stateless_messages(const CANMessage &message);
 
 		/// @brief Processes a connection-dependent CAN message from only VT clients
 		/// with whom we've established a working set master relationship
