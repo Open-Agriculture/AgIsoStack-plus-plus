@@ -167,12 +167,7 @@ namespace isobus
 					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
 				}
 				managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-			}
-			else
-			{
-				// Whomever this is has probably timed out. Send them a NACK
-				LOG_WARNING("[VT Server]: Received a non-status message from a client at address %u, but they are not connected to this VT.", message.get_identifier().get_source_address());
-				send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), serverInternalControlFunction, message.get_source_control_function());
+				retVal = true;
 			}
 		}
 		return retVal;
@@ -274,7 +269,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalServer::process_stateless_messages(const CANMessage &message)
+	bool VirtualTerminalServer::process_stateless_messages(const CANMessage &message)
 	{
 		auto &data = message.get_data();
 
@@ -310,6 +305,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
+				return true;
 			}
 			break;
 
@@ -331,6 +327,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
+				return true;
 			}
 			break;
 
@@ -351,6 +348,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
+				return true;
 			}
 			break;
 
@@ -371,6 +369,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
+				return true;
 			}
 			break;
 
@@ -403,18 +402,21 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
+				return true;
 			}
 			break;
 
 			case Function::GetWindowMaskDataMessage:
 			{
 				send_get_window_mask_data_response(message.get_source_control_function());
+				return true;
 			}
 			break;
 
 			default:
 				break;
 		}
+		return false;
 	}
 
 	void VirtualTerminalServer::process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet)
@@ -1833,9 +1835,15 @@ namespace isobus
 		{
 			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
 			{
-				parentServer->process_stateless_messages(message);
-
-				if ((parentServer->check_if_source_is_managed(message)))
+				bool responseSent = parentServer->process_stateless_messages(message);
+				bool isManaged = parentServer->check_if_source_is_managed(message);
+				if (!isManaged && !responseSent)
+				{
+					// Whomever this is has probably timed out. Send them a NACK
+					LOG_WARNING("[VT Server]: Received a non-status message from a client at address %u, but they are not connected to this VT.", message.get_identifier().get_source_address());
+					parentServer->send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), parentServer->get_internal_control_function(), message.get_source_control_function());
+				}
+				if (isManaged)
 				{
 					for (auto &cf : parentServer->managedWorkingSetList)
 					{
