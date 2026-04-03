@@ -723,13 +723,13 @@ namespace isobus
 				}
 				else
 				{
-					if ((ddopLocalizationLabel.empty()) ||
+					if ((ddopLocalizationLabel == std::array<std::uint8_t, 7>{}) ||
 					    (ddopStructureLabel.empty()))
 					{
 						LOG_DEBUG("[TC]: Beginning a search of pre-serialized DDOP for device structure and localization labels.");
 						process_labels_from_ddop();
-
-						if ((ddopLocalizationLabel.empty()) ||
+					
+						if ((ddopLocalizationLabel == std::array<std::uint8_t, 7>{}) ||
 						    (ddopStructureLabel.empty()))
 						{
 							LOG_ERROR("[TC]: Failed to parse the DDOP. Ensure you provided a valid device object. TC client will now terminate.");
