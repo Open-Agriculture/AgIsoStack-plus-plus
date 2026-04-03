@@ -50,4 +50,8 @@
 #include "isobus/hardware_integration/ntcan_plugin.hpp"
 #endif
 
+#ifdef ISOBUS_SILKIT_AVAILABLE
+#include "isobus/hardware_integration/sil_kit_plugin.hpp"
+#endif
+
 #endif // AVAILABLE_CAN_DRIVERS_HPP

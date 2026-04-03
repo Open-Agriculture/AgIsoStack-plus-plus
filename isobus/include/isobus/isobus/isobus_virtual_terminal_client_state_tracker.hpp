@@ -41,6 +41,20 @@ namespace isobus
 
 		//! TODO: void initialize_with_defaults(ObjectPool &objectPool);
 
+		/// @brief Adds a container hidden/shown to track.
+		/// @param[in] objectId The object id of the container to track.
+		/// @param[in] initialValue The initial value of the container shown to track.
+		void add_tracked_container_shown(std::uint16_t objectId, bool initialValue = false);
+
+		/// @brief Removes a container from tracking.
+		/// @param[in] objectId The object id of the container to remove from tracking.
+		void remove_tracked_container_shown(std::uint16_t objectId);
+
+		/// @brief Gets the current container shown state of a tracked object.
+		/// @param[in] objectId The object id of the container to get.
+		/// @return The current container shown state of the tracked object.
+		bool get_container_shown(std::uint16_t objectId) const;
+
 		/// @brief Adds a numeric value to track.
 		/// @param[in] objectId The object id of the numeric value to track.
 		/// @param[in] initialValue The initial value of the numeric value to track.
@@ -126,7 +140,7 @@ namespace isobus
 		std::shared_ptr<ControlFunction> client; ///< The control function of the virtual terminal client to track.
 		std::shared_ptr<ControlFunction> server; ///< The control function of the server the client is connected to.
 
-		//! TODO: std::map<std::uint16_t, bool> shownStates; ///< Holds the 'hide/show' state of tracked objects.
+		std::map<std::uint16_t, bool> shownStates; ///< Holds the 'hide/show' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, bool> enabledStates; ///< Holds the 'enable/disable' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, bool> selectedStates; ///< Holds the 'selected for input' state of tracked objects.
 		//! TODO: add current audio signal state
