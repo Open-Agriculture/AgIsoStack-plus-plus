@@ -728,7 +728,7 @@ namespace isobus
 					{
 						LOG_DEBUG("[TC]: Beginning a search of pre-serialized DDOP for device structure and localization labels.");
 						process_labels_from_ddop();
-					
+
 						if ((ddopLocalizationLabel == std::array<std::uint8_t, 7>{}) ||
 						    (ddopStructureLabel.empty()))
 						{
