@@ -5,6 +5,7 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,8 +15,13 @@
 
 using namespace isobus;
 
+class TransportProtocolTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
 // Test case for receiving a broadcast message
-TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageReceiving)
+TEST_F(TransportProtocolTest, BroadcastMessageReceiving)
 {
 	constexpr std::uint32_t pgnToReceive = 0xFEEC;
 	constexpr std::array<std::uint8_t, 17> dataToReceive = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
@@ -115,7 +121,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageReceiving)
 }
 
 // Test case for timeout when receiving broadcast message
-TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageTimeout)
+TEST_F(TransportProtocolTest, BroadcastMessageTimeout)
 {
 	auto originator = test_helpers::create_mock_control_function(0x01);
 
@@ -157,6 +163,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageTimeout)
 			sessionRemovalTime = SystemTiming::get_timestamp_ms();
 			break;
 		}
+		time_source.simulate_delay_ms(5);
 	}
 	EXPECT_EQ(messageCount, 0);
 	EXPECT_NEAR(sessionRemovalTime - sessionUpdateTime, 750, 5);
@@ -211,6 +218,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageTimeout)
 			sessionRemovalTime = SystemTiming::get_timestamp_ms();
 			break;
 		}
+		time_source.simulate_delay_ms(2);
 	}
 
 	EXPECT_EQ(messageCount, 0);
@@ -221,7 +229,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageTimeout)
 };
 
 // Test case for multiple concurrent broadcast messages
-TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastConcurrentMessaging)
+TEST_F(TransportProtocolTest, BroadcastConcurrentMessaging)
 {
 	// We setup five sources, two of them sending the same PGN and data, and the other three sending the different PGNs and data combinations
 	constexpr std::uint32_t pgn1ToReceive = 0xFEEC;
@@ -341,6 +349,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastConcurrentMessaging)
 	{
 		txManager.update();
 		rxManager.update();
+		time_source.simulate_delay_ms(5);
 	}
 
 	ASSERT_FALSE(rxManager.has_session(originator1, nullptr));
@@ -357,7 +366,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastConcurrentMessaging)
 }
 
 // Test case for sending a destination specific message
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageSending)
+TEST_F(TransportProtocolTest, DestinationSpecificMessageSending)
 {
 	constexpr std::array<std::uint8_t, 23> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
 
@@ -538,7 +547,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageSending)
 	ASSERT_FALSE(manager.has_session(originator, receiver));
 }
 // Test case for sending a broadcast message
-TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageSending)
+TEST_F(TransportProtocolTest, BroadcastMessageSending)
 {
 	constexpr std::uint32_t pgnToSent = 0xFEEC;
 	constexpr std::array<std::uint8_t, 17> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
@@ -643,6 +652,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageSending)
 	while ((frameCount < 4) && (SystemTiming::get_time_elapsed_ms(time) < 3 * 200))
 	{
 		manager.update();
+		time_source.simulate_delay_ms(5);
 	}
 	ASSERT_EQ(frameCount, 4);
 
@@ -654,7 +664,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, BroadcastMessageSending)
 }
 
 // Test case for receiving a destination specific message
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
+TEST_F(TransportProtocolTest, DestinationSpecificMessageReceiving)
 {
 	constexpr std::array<std::uint8_t, 23> dataToReceive = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
 
@@ -764,6 +774,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
 	while ((frameCount < 1) && (SystemTiming::get_time_elapsed_ms(time) < 1250)) // timeout T3=1250ms
 	{
 		manager.update();
+		time_source.simulate_delay_ms(5);
 	}
 	ASSERT_EQ(frameCount, 1);
 
@@ -804,6 +815,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
 	while ((frameCount < 2) && (SystemTiming::get_time_elapsed_ms(time) < 1250)) // timeout T3=1250ms
 	{
 		manager.update();
+		time_source.simulate_delay_ms(5);
 	}
 
 	ASSERT_EQ(frameCount, 2);
@@ -845,6 +857,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMessageReceiving)
 	while ((frameCount < 3) && (SystemTiming::get_time_elapsed_ms(time) < 1250)) // timeout T3=1250ms
 	{
 		manager.update();
+		time_source.simulate_delay_ms(5);
 	}
 	ASSERT_EQ(frameCount, 3);
 
@@ -870,7 +883,7 @@ void check_abort_message(const CANMessage &message, const std::uint8_t abortReas
 }
 
 // Test case for timeout when initiating destination specific message
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutInitiation)
+TEST_F(TransportProtocolTest, DestinationSpecificTimeoutInitiation)
 {
 	constexpr std::array<std::uint8_t, 17> dataToTransfer = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 
@@ -934,6 +947,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutInitiation)
 	// The receiver should respond with a clear to send (CTS) message
 	while (receiverQueue.empty() || SystemTiming::time_expired_ms(txSessionUpdateTime, 200)) // Receiver should respond within Tr=200ms
 	{
+		time_source.simulate_delay_ms(5);
 		rxManager.update();
 	}
 	std::uint32_t rxSessionUpdateTime = SystemTiming::get_timestamp_ms();
@@ -956,6 +970,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutInitiation)
 		{
 			rxSessionRemovalTime = SystemTiming::get_timestamp_ms();
 		}
+		time_source.simulate_delay_ms(5);
 	}
 
 	// For the originator side, a connection is established only when the first CTS is received, hence we expect no message to be sent
@@ -975,7 +990,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutInitiation)
 }
 
 // Test case for timeout of destination specific message completion
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
+TEST_F(TransportProtocolTest, DestinationSpecificTimeoutCompletion)
 {
 	constexpr std::array<std::uint8_t, 17> dataToTransfer = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 
@@ -1040,6 +1055,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
 	while (receiverQueue.empty() || SystemTiming::time_expired_ms(rxSessionUpdateTime, 200)) // Receiver should respond within Tr=200ms
 	{
 		rxManager.update();
+		time_source.simulate_delay_ms(5);
 	}
 	ASSERT_EQ(receiverQueue.size(), 1);
 	txManager.process_message(receiverQueue.front()); // Notify originator of clear to send (CTS) message
@@ -1050,6 +1066,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
 	while ((originatorQueue.size() != 3) || SystemTiming::time_expired_ms(txSessionUpdateTime, 600)) // Originator should respond with all 3 data frames within 3*(Tr=200ms)=600ms
 	{
 		txManager.update();
+		time_source.simulate_delay_ms(5);
 	}
 	ASSERT_EQ(originatorQueue.size(), 3);
 	rxManager.process_message(originatorQueue.front()); // Notify receiver of first data frame
@@ -1076,6 +1093,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
 		{
 			rxSessionRemovalTime = SystemTiming::get_timestamp_ms();
 		}
+		time_source.simulate_delay_ms(5);
 	}
 
 	// For both sides, a connection should've been established, hence we expect an abort message to be sent from both the originator and receiver
@@ -1094,7 +1112,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificTimeoutCompletion)
 }
 
 // Test case for concurrent destination specific messages
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificConcurrentMessaging)
+TEST_F(TransportProtocolTest, DestinationSpecificConcurrentMessaging)
 {
 	// We setup a total of 10 concurrent connections:
 	//
@@ -1357,7 +1375,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificConcurrentMessaging)
 }
 
 // Test case for concurrent destination specific and broadcast messages from same source
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAndBroadcastMessageConcurrent)
+TEST_F(TransportProtocolTest, DestinationSpecificAndBroadcastMessageConcurrent)
 {
 	constexpr std::uint32_t pgnToReceiveBroadcast = 0xFEEC;
 	constexpr std::uint32_t pgnToReceiveSpecific = 0xFEEB;
@@ -1480,6 +1498,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAndBroadcastMessageConcurrent)
 		}
 		txManager.update();
 		rxManager.update();
+		time_source.simulate_delay_ms(5);
 	}
 
 	// Check that both transmissions are completed
@@ -1494,7 +1513,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAndBroadcastMessageConcurrent)
 }
 
 // Test case for abortion of sending destination specific message during initialization
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAbortInitiation)
+TEST_F(TransportProtocolTest, DestinationSpecificAbortInitiation)
 {
 	constexpr std::array<std::uint8_t, 9> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09 };
 
@@ -1579,7 +1598,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificAbortInitiation)
 }
 
 // Test case for aborting when multiple CTS received by originator after a connection is already established
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMultipleCTS)
+TEST_F(TransportProtocolTest, DestinationSpecificMultipleCTS)
 {
 	constexpr std::array<std::uint8_t, 9> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09 };
 
@@ -1681,7 +1700,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificMultipleCTS)
 }
 
 // Test case for ignoring random CTS messages
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRandomCTS)
+TEST_F(TransportProtocolTest, DestinationSpecificRandomCTS)
 {
 	constexpr std::array<std::uint8_t, 23> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
 
@@ -1794,7 +1813,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRandomCTS)
 }
 
 // Test case for rejecting a RTS when exceeding the maximum number of sessions
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRejectForOutOfResources)
+TEST_F(TransportProtocolTest, DestinationSpecificRejectForOutOfResources)
 {
 	auto originator1 = test_helpers::create_mock_control_function(0x01);
 	auto originator2 = test_helpers::create_mock_control_function(0x02);
@@ -1901,7 +1920,7 @@ TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificRejectForOutOfResources)
 }
 
 // A test case for overwriting a session when a new RTS is received
-TEST(TRANSPORT_PROTOCOL_TESTS, DestinationSpecificOverwriteSession)
+TEST_F(TransportProtocolTest, DestinationSpecificOverwriteSession)
 {
 	auto originator = test_helpers::create_mock_control_function(0x01);
 	auto receiver = test_helpers::create_mock_internal_control_function(0x0B);

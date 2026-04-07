@@ -13,6 +13,7 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
@@ -26,7 +27,12 @@ void test_control_function_state_callback(std::shared_ptr<ControlFunction> contr
 	wasTestStateCallbackHit = true;
 }
 
-TEST(CORE_TESTS, TestCreateAndDestroyPartners)
+class CoreTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(CoreTest, TestCreateAndDestroyPartners)
 {
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
@@ -40,7 +46,7 @@ TEST(CORE_TESTS, TestCreateAndDestroyPartners)
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartner3);
 }
 
-TEST(CORE_TESTS, TestCreateAndDestroyICFs)
+TEST_F(CoreTest, TestCreateAndDestroyICFs)
 {
 	isobus::NAME TestDeviceNAME(0);
 	TestDeviceNAME.set_arbitrary_address_capable(true);
@@ -66,7 +72,7 @@ TEST(CORE_TESTS, TestCreateAndDestroyICFs)
 	CANNetworkManager::CANNetwork.deactivate_control_function(testICF3);
 }
 
-TEST(CORE_TESTS, BusloadTest)
+TEST_F(CoreTest, BusloadTest)
 {
 	EXPECT_EQ(0.0f, CANNetworkManager::CANNetwork.get_estimated_busload(200)); // Invalid channel should return zero load
 
@@ -90,7 +96,7 @@ TEST(CORE_TESTS, BusloadTest)
 	{
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame); // Send a bunch of junk messages
 	}
-	std::this_thread::sleep_for(std::chrono::milliseconds(101));
+	time_source.simulate_delay_ms(101);
 	CANNetworkManager::CANNetwork.update();
 
 	// Bus load should be non zero, and less than 100%
@@ -102,13 +108,13 @@ TEST(CORE_TESTS, BusloadTest)
 #endif
 }
 
-TEST(CORE_TESTS, CommandedAddress)
+TEST_F(CoreTest, CommandedAddress)
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
 	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
 
 	// Let's construct a short BAM session for commanded address
@@ -165,7 +171,7 @@ TEST(CORE_TESTS, CommandedAddress)
 	  }));
 	CANNetworkManager::CANNetwork.update();
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	time_source.update_for_ms(500);
 	EXPECT_EQ(0x04, internalECU->get_address());
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
@@ -173,11 +179,11 @@ TEST(CORE_TESTS, CommandedAddress)
 	CANHardwareInterface::stop();
 }
 
-TEST(CORE_TESTS, InvalidatingControlFunctions)
+TEST_F(CoreTest, InvalidatingControlFunctions)
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	// Request the address claim PGN to simulate a control function starting to claim an address
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
@@ -187,7 +193,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANNetworkManager::CANNetwork.update();
 
 	// Simulate waiting for some contention
-	std::this_thread::sleep_for(std::chrono::milliseconds(15));
+	time_source.update_for_ms(15);
 	CANNetworkManager::CANNetwork.update();
 
 	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
@@ -210,7 +216,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANNetworkManager::CANNetwork.update();
 
 	// Now, if we wait a while, that partner didn't claim again, so it should be invalid.
-	std::this_thread::sleep_for(std::chrono::seconds(2));
+	time_source.update_for_ms(2000);
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_FALSE(testPartner->get_address_valid());
@@ -224,7 +230,7 @@ TEST(CORE_TESTS, InvalidatingControlFunctions)
 	CANHardwareInterface::stop();
 }
 
-TEST(CORE_TESTS, NewExternalControlFunctionTriggersStateCallback)
+TEST_F(CoreTest, NewExternalControlFunctionTriggersStateCallback)
 {
 	wasTestStateCallbackHit = false;
 	testControlFunction.reset();
@@ -260,7 +266,7 @@ TEST(CORE_TESTS, NewExternalControlFunctionTriggersStateCallback)
 	wasTestStateCallbackHit = false;
 }
 
-TEST(CORE_TESTS, ControlFunctionAddressChangeTriggersStateCallback)
+TEST_F(CoreTest, ControlFunctionAddressChangeTriggersStateCallback)
 {
 	wasTestStateCallbackHit = false;
 	testControlFunction.reset();
@@ -301,7 +307,7 @@ TEST(CORE_TESTS, ControlFunctionAddressChangeTriggersStateCallback)
 	wasTestStateCallbackHit = false;
 }
 
-TEST(CORE_TESTS, PartnerCreatedAfterExternalClaimHasValidAddress)
+TEST_F(CoreTest, PartnerCreatedAfterExternalClaimHasValidAddress)
 {
 	constexpr std::uint8_t TEST_CHANNEL = 3;
 	constexpr std::uint8_t CLAIMED_ADDRESS = 0x96;
@@ -344,7 +350,7 @@ TEST(CORE_TESTS, PartnerCreatedAfterExternalClaimHasValidAddress)
 	isobus::CANNetworkManager::CANNetwork.deactivate_control_function(partner);
 }
 
-TEST(CORE_TESTS, SimilarControlFunctions)
+TEST_F(CoreTest, SimilarControlFunctions)
 {
 	CANNetworkManager::CANNetwork.update();
 

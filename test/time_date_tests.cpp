@@ -10,6 +10,7 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -25,14 +26,19 @@ void test_time_date_rx_callback(TimeDateInterface::TimeAndDateInformation timeDa
 	isRxCallbackCalled = true;
 }
 
-TEST(TIME_DATE_TESTS, ReceivingMessages)
+class TimeDateTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(TimeDateTest, ReceivingMessages)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	TimeDateInterface timeDateInterfaceUnderTest;
 
@@ -95,16 +101,16 @@ TEST(TIME_DATE_TESTS, ReceivingMessages)
 	CANHardwareInterface::stop();
 }
 
-TEST(TIME_DATE_TESTS, TransmitMessages)
+TEST_F(TimeDateTest, TransmitMessages)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto testInternalControlFunction = test_helpers::claim_internal_control_function(0x44, 0);
+	auto testInternalControlFunction = test_helpers::claim_internal_control_function(0x44, 0, time_source);
 	test_helpers::force_claim_partnered_control_function(0x25, 0);
 
 	// To test transmitting, we need to provide a callback that will populate the time and date information
@@ -148,6 +154,7 @@ TEST(TIME_DATE_TESTS, TransmitMessages)
 	testFrame.data[2] = 0x00;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
 
 	// This data should match the data we provided in the callback, and the one we processed in the other unit test
 	EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -165,6 +172,7 @@ TEST(TIME_DATE_TESTS, TransmitMessages)
 	// Test emitting a request for the time and date information
 	timeDateInterfaceUnderTest.request_time_and_date(testInternalControlFunction, nullptr);
 	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
 	EXPECT_TRUE(testPlugin.read_frame(testFrame));
 	EXPECT_EQ(0x18EAFF44, testFrame.identifier);
 	EXPECT_EQ(0x03, testFrame.dataLength);
@@ -176,7 +184,7 @@ TEST(TIME_DATE_TESTS, TransmitMessages)
 	CANHardwareInterface::stop();
 }
 
-TEST(TIME_DATE_TESTS, MiscTests)
+TEST_F(TimeDateTest, MiscTests)
 {
 	// Test rejection of invalid parameters
 	TimeDateInterface timeDateInterfaceUnderTest;
