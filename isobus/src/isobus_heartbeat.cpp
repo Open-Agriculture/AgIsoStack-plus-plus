@@ -231,7 +231,8 @@ namespace isobus
 
 				if (managedHeartbeat == interface->trackedHeartbeats.end())
 				{
-					interface->trackedHeartbeats.emplace_back(targetControlFunction); // Heartbeat will be sent on next update
+					interface->trackedHeartbeats.emplace_back(targetControlFunction);
+					interface->trackedHeartbeats.back().timestamp_ms = 0; // Heartbeat will be sent on next update
 				}
 			}
 		}
