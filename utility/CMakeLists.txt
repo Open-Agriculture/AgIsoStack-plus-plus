@@ -5,8 +5,9 @@ set(UTILITY_SRC_DIR "src")
 set(UTILITY_INCLUDE_DIR "include/isobus/utility")
 
 # Set source files
-set(UTILITY_SRC "system_timing.cpp" "processing_flags.cpp"
-                "iop_file_interface.cpp" "platform_endianness.cpp" "chrono_time_source.cpp")
+set(UTILITY_SRC
+    "system_timing.cpp" "processing_flags.cpp" "iop_file_interface.cpp"
+    "platform_endianness.cpp" "chrono_time_source.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(UTILITY_SRC ${UTILITY_SRC_DIR} ${UTILITY_SRC})
