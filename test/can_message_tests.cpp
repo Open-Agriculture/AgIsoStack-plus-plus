@@ -14,8 +14,11 @@ using namespace isobus;
 std::uint64_t value64;
 std::uint16_t value16;
 
+constexpr std::uint64_t EXPECTED_TIMESTAMP = 1000000;
+
 void callback(const CANMessage &message, void *)
 {
+	EXPECT_EQ(EXPECTED_TIMESTAMP, message.get_timestamp_us());
 	value16 = message.get_int16_at(0);
 	EXPECT_EQ(value16, 513);
 	value16 = message.get_int16_at(0, CANMessage::ByteFormat::BigEndian);
@@ -66,8 +69,75 @@ TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	testFrame.identifier = 0x18E1FFAA;
+	testFrame.timestamp_us = EXPECTED_TIMESTAMP;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(0xE100, callback, nullptr);
 	CANHardwareInterface::stop();
+}
+
+TEST(CAN_MESSAGE_TESTS, DefaultTimestampIsZero)
+{
+	{
+		const std::uint8_t data[] = { 0x01, 0x02 };
+
+		CANMessage message{
+			CANMessage::Type::Receive,
+			CANIdentifier{ 0x18E1FFAA },
+			data,
+			sizeof(data),
+			nullptr,
+			nullptr,
+			0,
+		};
+
+		EXPECT_EQ(0, message.get_timestamp_us());
+	}
+
+	{
+		const CANMessage message{
+			CANMessage::Type::Receive,
+			CANIdentifier{ 0x18E1FFAA },
+			std::vector<std::uint8_t>{ 0x01, 0x02 },
+			nullptr,
+			nullptr,
+			0,
+		};
+
+		EXPECT_EQ(0, message.get_timestamp_us());
+	}
+}
+
+TEST(CAN_MESSAGE_TESTS, ExplicitTimestampIsPreserved)
+{
+	{
+		const std::uint8_t data[] = { 0x01, 0x02 };
+
+		CANMessage message{
+			CANMessage::Type::Receive,
+			CANIdentifier{ 0x18E1FFAA },
+			data,
+			sizeof(data),
+			nullptr,
+			nullptr,
+			0,
+			EXPECTED_TIMESTAMP,
+		};
+
+		EXPECT_EQ(EXPECTED_TIMESTAMP, message.get_timestamp_us());
+	}
+
+	{
+		CANMessage message{
+			CANMessage::Type::Receive,
+			CANIdentifier{ 0x18FEFFFE },
+			std::vector<std::uint8_t>{ 0x01, 0x02 },
+			nullptr,
+			nullptr,
+			0,
+			EXPECTED_TIMESTAMP,
+		};
+
+		EXPECT_EQ(EXPECTED_TIMESTAMP, message.get_timestamp_us());
+	}
 }
