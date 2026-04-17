@@ -25,6 +25,7 @@ TEST_F(TransportProtocolTest, BroadcastMessageReceiving)
 {
 	constexpr std::uint32_t pgnToReceive = 0xFEEC;
 	constexpr std::array<std::uint8_t, 17> dataToReceive = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
+	constexpr std::uint64_t lastDTTimestamp = 1000000;
 
 	auto originator = test_helpers::create_mock_control_function(0x01);
 
@@ -40,6 +41,7 @@ TEST_F(TransportProtocolTest, BroadcastMessageReceiving)
 		{
 			EXPECT_EQ(message.get_data()[i], dataToReceive[i]);
 		}
+		EXPECT_EQ(lastDTTimestamp, message.get_timestamp_us());
 		messageCount++;
 	};
 
@@ -111,7 +113,8 @@ TEST_F(TransportProtocolTest, BroadcastMessageReceiving)
 	    0xFF,
 	    0xFF,
 	    0xFF,
-	  }));
+	  },
+	  lastDTTimestamp));
 
 	// We now expect the message to be received
 	ASSERT_EQ(messageCount, 1);
