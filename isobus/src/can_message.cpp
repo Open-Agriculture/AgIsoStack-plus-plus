@@ -20,13 +20,15 @@ namespace isobus
 	                       std::uint32_t length,
 	                       std::shared_ptr<ControlFunction> source,
 	                       std::shared_ptr<ControlFunction> destination,
-	                       std::uint8_t CANPort) :
+	                       std::uint8_t CANPort,
+	                       std::uint64_t timestamp_us) :
 	  messageType(type),
 	  identifier(identifier),
 	  data(dataBuffer, dataBuffer + length),
 	  source(source),
 	  destination(destination),
-	  CANPortIndex(CANPort)
+	  CANPortIndex(CANPort),
+	  timestamp_us(timestamp_us)
 	{
 	}
 
@@ -35,13 +37,15 @@ namespace isobus
 	                       std::vector<std::uint8_t> data,
 	                       std::shared_ptr<ControlFunction> source,
 	                       std::shared_ptr<ControlFunction> destination,
-	                       std::uint8_t CANPort) :
+	                       std::uint8_t CANPort,
+	                       std::uint64_t timestamp_us) :
 	  messageType(type),
 	  identifier(identifier),
 	  data(std::move(data)),
 	  source(source),
 	  destination(destination),
-	  CANPortIndex(CANPort)
+	  CANPortIndex(CANPort),
+	  timestamp_us(timestamp_us)
 	{
 	}
 
@@ -113,6 +117,11 @@ namespace isobus
 	std::uint8_t CANMessage::get_can_port_index() const
 	{
 		return CANPortIndex;
+	}
+
+	std::uint64_t CANMessage::get_timestamp_us() const
+	{
+		return timestamp_us;
 	}
 
 	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::uint32_t length)
