@@ -97,10 +97,17 @@ namespace isobus
 		class Section
 		{
 		public:
+			/// @brief Gets the width value with priority order: Actual > Maximum > Default
+			/// @returns The width value with the highest priority, or an empty ObjectPoolValue if none are set
+			ObjectPoolValue get_width_with_priority() const;
+
 			ObjectPoolValue xOffset_mm; ///< The x offset of the section in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the section in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the section in mm. Z offsets are up+/down-.
-			ObjectPoolValue width_mm; ///< The width of the section in mm.
+			ObjectPoolValue actualWorkingWidth_mm; ///< The actual working width of the section in mm.
+			ObjectPoolValue maximumWorkingWidth_mm; ///< The maximum working width of the section in mm.
+			ObjectPoolValue defaultWorkingWidth_mm; ///< The default working width of the section in mm.
+			ObjectPoolValue width_mm; ///< The width of the section in mm (set based on priority: Actual > Maximum > Default).
 			std::vector<ProductControlInformation> rates; ///< If the section has rates, this will contain the associated data needed to control the product.
 			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the section, which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
