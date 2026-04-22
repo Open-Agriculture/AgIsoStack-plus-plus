@@ -50,6 +50,34 @@ namespace isobus
 		state = value;
 	}
 
+	std::uint8_t InternalControlFunction::get_end_arbitration_address_for_industry_group(NAME::IndustryGroup industryGroup)
+	{
+		// Search the range of available dynamic addresses based on industry group
+		// Ref: https://www.isobus.net/isobus/sourceAddress
+		std::uint8_t endAddress = ARBITRATION_STARTING_ADDRESS;
+		switch (static_cast<NAME::IndustryGroup>(industryGroup))
+		{
+			case NAME::IndustryGroup::Global:
+				endAddress = 247;
+				break;
+			case NAME::IndustryGroup::OnHighwayEquipment:
+				endAddress = 158;
+				break;
+			case NAME::IndustryGroup::AgriculturalAndForestryEquipment:
+				endAddress = 235;
+				break;
+			case NAME::IndustryGroup::ConstructionEquipment:
+			case NAME::IndustryGroup::Marine:
+			case NAME::IndustryGroup::IndustrialOrProcessControl:
+				endAddress = 207;
+				break;
+
+			default:
+				break;
+		}
+		return endAddress;
+	}
+
 	void InternalControlFunction::process_rx_message_for_address_claiming(const CANMessage &message)
 	{
 		if (message.get_can_port_index() != canPortIndex)
@@ -134,23 +162,27 @@ namespace isobus
 						deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(get_can_port(), preferredAddress);
 					}
 
+					const std::uint8_t arbitrationRangeEnd = get_end_arbitration_address_for_industry_group(static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()));
+
 					// Time to find a free address
 					if ((nullptr == deviceAtOurPreferredAddress) && (NULL_CAN_ADDRESS != preferredAddress))
 					{
 						// Our address is free. This is the best outcome. Claim it.
 						set_current_state(State::SendPreferredAddressClaim);
 					}
-					else if (get_NAME().get_arbitrary_address_capable())
-					{
-						// Our address is not free, but we can tolerate an arbitrary address
-						set_current_state(State::SendArbitraryAddressClaim);
-					}
-					else if ((!get_NAME().get_arbitrary_address_capable()) &&
-					         (nullptr != deviceAtOurPreferredAddress) &&
+					else if ((nullptr != deviceAtOurPreferredAddress) &&
 					         (deviceAtOurPreferredAddress->get_NAME().get_full_name() > get_NAME().get_full_name()))
 					{
-						// Our address is not free, we cannot be at an arbitrary address, but address is contendable
+						// The device at our preferred address loses contention to us. This is the second best outcome, as we get our preferred address.
+						// It is possible for this to cause issues with some devices that don't properly implement address claiming, especially
+						// low quality J1939 devices. If you experience issues with devices that don't properly implement address claiming,
+						// you may want to set your preferred address to NULL_CAN_ADDRESS and allow for arbitrary address claiming instead.
 						set_current_state(State::ContendForPreferredAddress);
+					}
+					else if (get_NAME().get_arbitrary_address_capable())
+					{
+						// Our address is not free, and we lose contention, but we can tolerate an arbitrary address
+						set_current_state(State::SendArbitraryAddressClaim);
 					}
 					else
 					{
@@ -186,32 +218,9 @@ namespace isobus
 
 			case State::SendArbitraryAddressClaim:
 			{
-				// Search the range of available dynamic addresses based on industry group
-				// Ref: https://www.isobus.net/isobus/sourceAddress
-				static constexpr std::uint8_t START_ADDRESS = 128;
-				std::uint8_t endAddress = START_ADDRESS;
-				switch (static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()))
-				{
-					case NAME::IndustryGroup::Global:
-						endAddress = 247;
-						break;
-					case NAME::IndustryGroup::OnHighwayEquipment:
-						endAddress = 158;
-						break;
-					case NAME::IndustryGroup::AgriculturalAndForestryEquipment:
-						endAddress = 235;
-						break;
-					case NAME::IndustryGroup::ConstructionEquipment:
-					case NAME::IndustryGroup::Marine:
-					case NAME::IndustryGroup::IndustrialOrProcessControl:
-						endAddress = 207;
-						break;
+				const std::uint8_t endAddress = get_end_arbitration_address_for_industry_group(static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()));
 
-					default:
-						break;
-				}
-
-				for (std::uint8_t i = START_ADDRESS; i <= endAddress; i++)
+				for (std::uint8_t i = ARBITRATION_STARTING_ADDRESS; i <= endAddress; i++)
 				{
 					if ((nullptr == CANNetworkManager::CANNetwork.get_control_function(get_can_port(), i)) && (send_address_claim(i)))
 					{
