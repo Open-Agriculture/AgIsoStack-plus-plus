@@ -202,7 +202,7 @@ namespace isobus
 		}
 		else
 		{
-			retVal = static_cast<std::uint32_t>(data.at(index + 2)) << 16;
+			retVal = static_cast<std::uint32_t>(data.at(index)) << 16;
 			retVal |= static_cast<std::uint32_t>(data.at(index + 1)) << 8;
 			retVal |= data.at(index + 2);
 		}
@@ -220,7 +220,7 @@ namespace isobus
 		}
 		else
 		{
-			retVal = static_cast<std::int32_t>(data.at(index + 2)) << 16;
+			retVal = static_cast<std::int32_t>(data.at(index)) << 16;
 			retVal |= static_cast<std::int32_t>(data.at(index + 1)) << 8;
 			retVal |= static_cast<std::int32_t>(data.at(index + 2));
 		}
