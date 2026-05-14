@@ -12,6 +12,7 @@
 using namespace isobus;
 
 std::uint64_t value64;
+std::uint32_t value32;
 std::uint16_t value16;
 
 constexpr std::uint64_t EXPECTED_TIMESTAMP = 1000000;
@@ -23,6 +24,22 @@ void callback(const CANMessage &message, void *)
 	EXPECT_EQ(value16, 513);
 	value16 = message.get_int16_at(0, CANMessage::ByteFormat::BigEndian);
 	EXPECT_EQ(value16, 258);
+	value32 = message.get_uint24_at(0);
+	EXPECT_EQ(value32, 197121);
+	value32 = message.get_uint24_at(0, CANMessage::ByteFormat::BigEndian);
+	EXPECT_EQ(value32, 66051);
+	value32 = message.get_int24_at(0);
+	EXPECT_EQ(value32, 197121);
+	value32 = message.get_int24_at(0, CANMessage::ByteFormat::BigEndian);
+	EXPECT_EQ(value32, 66051);
+	value32 = message.get_uint32_at(0);
+	EXPECT_EQ(value32, 67305985);
+	value32 = message.get_uint32_at(0, CANMessage::ByteFormat::BigEndian);
+	EXPECT_EQ(value32, 16909060);
+	value32 = message.get_int32_at(0);
+	EXPECT_EQ(value32, 67305985);
+	value32 = message.get_int32_at(0, CANMessage::ByteFormat::BigEndian);
+	EXPECT_EQ(value32, 16909060);
 	value64 = message.get_int64_at(0);
 	EXPECT_EQ(value64, 578437695752307201);
 	value64 = message.get_int64_at(0, CANMessage::ByteFormat::BigEndian);
