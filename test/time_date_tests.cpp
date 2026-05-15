@@ -8,6 +8,8 @@
 //================================================================================================
 #include <gtest/gtest.h>
 
+#include <array>
+
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
@@ -18,33 +20,75 @@
 
 using namespace isobus;
 
-static TimeDateInterface::TimeAndDateInformation testTimeDateInformation;
-static bool isRxCallbackCalled = false;
-void test_time_date_rx_callback(TimeDateInterface::TimeAndDateInformation timeDate)
-{
-	testTimeDateInformation = timeDate;
-	isRxCallbackCalled = true;
-}
-
 class TimeDateTest : public AgIsoStackTestFixture
 {
-	// Wrapper to give tests a more meaningful name - no content.
+protected:
+	struct DaySPN962TestCase
+	{
+		std::uint8_t rawDay;
+		std::uint8_t day;
+		std::uint8_t quarterDays;
+	};
+
+	static constexpr std::array<DaySPN962TestCase, 4> daySPN962TestCases = {
+		{ { 37, 10, 0 },
+		  { 38, 10, 1 },
+		  { 39, 10, 2 },
+		  { 40, 10, 3 } }
+	};
+
+	void SetUp() override
+	{
+		AgIsoStackTestFixture::SetUp();
+
+		isRxCallbackCalled = false;
+		testPlugin.open();
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+		CANHardwareInterface::start(false);
+	}
+
+	void TearDown() override
+	{
+		CANHardwareInterface::stop();
+		AgIsoStackTestFixture::TearDown();
+	}
+
+	void initialize_time_date_interface(TimeDateInterface &timeDateInterfaceUnderTest)
+	{
+		EXPECT_FALSE(timeDateInterfaceUnderTest.is_initialized());
+		timeDateInterfaceUnderTest.initialize();
+		EXPECT_TRUE(timeDateInterfaceUnderTest.is_initialized());
+	}
+
+	void add_time_date_rx_listener(TimeDateInterface &timeDateInterfaceUnderTest)
+	{
+		timeDateInterfaceUnderTest.get_event_dispatcher().add_listener([this](TimeDateInterface::TimeAndDateInformation timeDate) {
+			testTimeDateInformation = timeDate;
+			isRxCallbackCalled = true;
+		});
+	}
+
+	void clear_test_plugin_queue()
+	{
+		CANMessageFrame testFrame;
+		while (!testPlugin.get_queue_empty())
+		{
+			testPlugin.read_frame(testFrame);
+		}
+		ASSERT_TRUE(testPlugin.get_queue_empty());
+	}
+
+	VirtualCANPlugin testPlugin;
+	TimeDateInterface::TimeAndDateInformation testTimeDateInformation;
+	bool isRxCallbackCalled = false;
 };
 
 TEST_F(TimeDateTest, ReceivingMessages)
 {
-	VirtualCANPlugin testPlugin;
-	testPlugin.open();
-
-	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start(false);
-
 	TimeDateInterface timeDateInterfaceUnderTest;
 
-	EXPECT_FALSE(timeDateInterfaceUnderTest.is_initialized());
-	timeDateInterfaceUnderTest.initialize();
-	EXPECT_TRUE(timeDateInterfaceUnderTest.is_initialized());
+	initialize_time_date_interface(timeDateInterfaceUnderTest);
 
 	// Test receiving a time and date message
 	auto partner = test_helpers::force_claim_partnered_control_function(0x47, 0);
@@ -54,7 +98,7 @@ TEST_F(TimeDateTest, ReceivingMessages)
 	testFrame.isExtendedFrame = true;
 
 	// Register with the event dispatcher
-	timeDateInterfaceUnderTest.get_event_dispatcher().add_listener(test_time_date_rx_callback);
+	add_time_date_rx_listener(timeDateInterfaceUnderTest);
 	CANNetworkManager::CANNetwork.update(); // Extra update to help when running under ctest
 
 	// Construct a message that says the following:
@@ -83,7 +127,7 @@ TEST_F(TimeDateTest, ReceivingMessages)
 	EXPECT_EQ(testTimeDateInformation.timeAndDate.year, 2023);
 	EXPECT_EQ(testTimeDateInformation.timeAndDate.month, 8);
 	EXPECT_EQ(testTimeDateInformation.timeAndDate.day, 7);
-	EXPECT_EQ(testTimeDateInformation.timeAndDate.quarterDays, 0);
+	EXPECT_EQ(testTimeDateInformation.timeAndDate.quarterDays, 3);
 	EXPECT_EQ(testTimeDateInformation.timeAndDate.hours, 22);
 	EXPECT_EQ(testTimeDateInformation.timeAndDate.minutes, 49);
 	EXPECT_EQ(testTimeDateInformation.timeAndDate.seconds, 41);
@@ -97,19 +141,49 @@ TEST_F(TimeDateTest, ReceivingMessages)
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_FALSE(isRxCallbackCalled);
+}
 
-	CANHardwareInterface::stop();
+TEST_F(TimeDateTest, ReceivesDaySPN962WithQuarterDayScaling)
+{
+	TimeDateInterface timeDateInterfaceUnderTest;
+
+	initialize_time_date_interface(timeDateInterfaceUnderTest);
+
+	test_helpers::force_claim_partnered_control_function(0x47, 0);
+
+	add_time_date_rx_listener(timeDateInterfaceUnderTest);
+	CANNetworkManager::CANNetwork.update();
+
+	for (const auto &testCase : daySPN962TestCases)
+	{
+		SCOPED_TRACE(::testing::Message() << "SPN 962 raw value: " << static_cast<int>(testCase.rawDay));
+
+		CANMessageFrame testFrame;
+		memset(&testFrame, 0, sizeof(testFrame));
+		testFrame.isExtendedFrame = true;
+		testFrame.identifier = 0x18FEE647;
+		testFrame.dataLength = 8;
+		testFrame.data[0] = 0x00;
+		testFrame.data[1] = 0x00;
+		testFrame.data[2] = 0x00;
+		testFrame.data[3] = 0x08;
+		testFrame.data[4] = testCase.rawDay;
+		testFrame.data[5] = 0x28;
+		testFrame.data[6] = 0x7D;
+		testFrame.data[7] = 0x7D;
+
+		isRxCallbackCalled = false;
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+		CANNetworkManager::CANNetwork.update();
+
+		EXPECT_TRUE(isRxCallbackCalled);
+		EXPECT_EQ(testTimeDateInformation.timeAndDate.day, testCase.day);
+		EXPECT_EQ(testTimeDateInformation.timeAndDate.quarterDays, testCase.quarterDays);
+	}
 }
 
 TEST_F(TimeDateTest, TransmitMessages)
 {
-	VirtualCANPlugin testPlugin;
-	testPlugin.open();
-
-	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start(false);
-
 	auto testInternalControlFunction = test_helpers::claim_internal_control_function(0x44, 0, time_source);
 	test_helpers::force_claim_partnered_control_function(0x25, 0);
 
@@ -130,19 +204,13 @@ TEST_F(TimeDateTest, TransmitMessages)
 		return true;
 	});
 
-	EXPECT_FALSE(timeDateInterfaceUnderTest.is_initialized());
-	timeDateInterfaceUnderTest.initialize();
-	EXPECT_TRUE(timeDateInterfaceUnderTest.is_initialized());
+	initialize_time_date_interface(timeDateInterfaceUnderTest);
 
 	EXPECT_EQ(timeDateInterfaceUnderTest.get_control_function(), testInternalControlFunction);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame;
-	while (!testPlugin.get_queue_empty())
-	{
-		testPlugin.read_frame(testFrame);
-	}
-	ASSERT_TRUE(testPlugin.get_queue_empty());
+	clear_test_plugin_queue();
 
 	// Now, we can see if it works by receiving a PGN request for the time and date information PGN
 	testFrame.isExtendedFrame = true;
@@ -164,7 +232,7 @@ TEST_F(TimeDateTest, TransmitMessages)
 	EXPECT_EQ(0x31, testFrame.data[1]);
 	EXPECT_EQ(0x16, testFrame.data[2]);
 	EXPECT_EQ(0x08, testFrame.data[3]);
-	EXPECT_EQ(0x1C, testFrame.data[4]);
+	EXPECT_EQ(0x19, testFrame.data[4]);
 	EXPECT_EQ(0x26, testFrame.data[5]);
 	EXPECT_EQ(0x7D, testFrame.data[6]);
 	EXPECT_EQ(0x78, testFrame.data[7]);
@@ -181,11 +249,51 @@ TEST_F(TimeDateTest, TransmitMessages)
 	EXPECT_EQ(0x00, testFrame.data[2]);
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(testInternalControlFunction);
-	CANHardwareInterface::stop();
+}
+
+TEST_F(TimeDateTest, SendsDaySPN962WithQuarterDayScaling)
+{
+	auto testInternalControlFunction = test_helpers::claim_internal_control_function(0x44, 0, time_source);
+
+	TimeDateInterface timeDateInterfaceUnderTest(testInternalControlFunction, [](TimeDateInterface::TimeAndDate &) -> bool {
+		return true;
+	});
+
+	initialize_time_date_interface(timeDateInterfaceUnderTest);
+
+	CANMessageFrame testFrame;
+	clear_test_plugin_queue();
+
+	TimeDateInterface::TimeAndDate timeAndDateToSend;
+	timeAndDateToSend.year = 2025;
+	timeAndDateToSend.month = 12;
+	timeAndDateToSend.hours = 22;
+	timeAndDateToSend.minutes = 49;
+	timeAndDateToSend.seconds = 41;
+	timeAndDateToSend.milliseconds = 0;
+	timeAndDateToSend.localHourOffset = -5;
+	timeAndDateToSend.localMinuteOffset = 0;
+
+	for (const auto &testCase : daySPN962TestCases)
+	{
+		SCOPED_TRACE(::testing::Message() << "day: " << static_cast<int>(testCase.day) << ", quarter days: " << static_cast<int>(testCase.quarterDays));
+
+		timeAndDateToSend.day = testCase.day;
+		timeAndDateToSend.quarterDays = testCase.quarterDays;
+
+		EXPECT_TRUE(timeDateInterfaceUnderTest.send_time_and_date(timeAndDateToSend));
+		CANHardwareInterface::update();
+		EXPECT_TRUE(testPlugin.read_frame(testFrame));
+		EXPECT_EQ(testCase.rawDay, testFrame.data[4]);
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(testInternalControlFunction);
 }
 
 TEST_F(TimeDateTest, MiscTests)
 {
+	CANHardwareInterface::stop();
+
 	// Test rejection of invalid parameters
 	TimeDateInterface timeDateInterfaceUnderTest;
 
