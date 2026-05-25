@@ -83,7 +83,7 @@ namespace isobus
 
 	bool VirtualCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
-		return read_frame(canFrame, 1000);
+		return read_frame(canFrame, 100);
 	}
 
 	bool VirtualCANPlugin::read_frame(isobus::CANMessageFrame &canFrame, std::uint32_t timeout) const

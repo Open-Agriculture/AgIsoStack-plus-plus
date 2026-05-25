@@ -8,13 +8,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Run clang-format style check for C/C++/Protobuf programs.
-        uses: jidicula/clang-format-action@v4.11.0
+        uses: jidicula/clang-format-action@v4.18.0
         with:
-          clang-format-version: 16
+          clang-format-version: 19
           # Some files can be excluded from the clang-format style check, like 3rd party driver files,
           # as their licenses may not allow us to modify them, such as if they are LGPL licensed.
           # The exclude-regex option can be used to exclude these files from the style check:
-          exclude-regex: ^.*(PCANBasic\.h|libusb\.h|InnoMakerUsb2CanLib\.h|arduino_example\.ino)$
+          exclude-regex: ^.*(PCANBasic\.h|libusb\.h|InnoMakerUsb2CanLib\.h|arduino_example\.ino|imxrt_flexcan\.hpp|kinetis_flexcan\.hpp)$
   cmake-format:
     name: cmake-format style
     runs-on: ubuntu-latest

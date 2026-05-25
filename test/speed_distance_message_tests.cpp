@@ -7,6 +7,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 #include <cmath>
 
@@ -16,7 +17,7 @@ class TestSpeedInterface : public SpeedMessagesInterface
 {
 public:
 	TestSpeedInterface(std::shared_ptr<InternalControlFunction> source) :
-	  SpeedMessagesInterface(source){
+	  SpeedMessagesInterface(source) {
 
 	  };
 
@@ -25,7 +26,7 @@ public:
 	                   bool sendWheelBasedSpeedPeriodically,
 	                   bool sendMachineSelectedSpeedPeriodically,
 	                   bool sendMachineSelectedSpeedCommandPeriodically) :
-	  SpeedMessagesInterface(source, sendGroundBasedSpeedPeriodically, sendWheelBasedSpeedPeriodically, sendMachineSelectedSpeedPeriodically, sendMachineSelectedSpeedCommandPeriodically){
+	  SpeedMessagesInterface(source, sendGroundBasedSpeedPeriodically, sendWheelBasedSpeedPeriodically, sendMachineSelectedSpeedPeriodically, sendMachineSelectedSpeedCommandPeriodically) {
 
 	  };
 
@@ -85,7 +86,12 @@ bool TestSpeedInterface::wasWBSCallbackHit = false;
 bool TestSpeedInterface::wasGBSCallbackHit = false;
 bool TestSpeedInterface::wasCommandCallbackHit = false;
 
-TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
+class SpeedMessageTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(SpeedMessageTest, SpeedMessages)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
@@ -94,7 +100,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start();
 
-	auto testECU = test_helpers::claim_internal_control_function(0x45, 0);
+	auto testECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
 	ASSERT_TRUE(testECU->get_address_valid());
 
 	// Get the virtual CAN plugin back to a known state
@@ -330,7 +336,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 		interfaceUnderTest.initialize();
 		interfaceUnderTest.update();
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(105));
+		time_source.update_for_ms(105);
 		interfaceUnderTest.update();
 
 		// Should get 4 messages every 100ms
@@ -344,7 +350,7 @@ TEST(SPEED_MESSAGE_TESTS, SpeedMessages)
 	CANHardwareInterface::stop();
 }
 
-TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
+TEST_F(SpeedMessageTest, ListenOnlyModeAndDecoding)
 {
 	TestSpeedInterface interfaceUnderTest(nullptr);
 	CANMessageFrame testFrame = {};
@@ -355,7 +361,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 	ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
 	ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed());
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Sleep a bit for ctest to get a non zero timestamp
+	time_source.simulate_delay_ms(5); // So that ctest gets a non zero timestamp
 
 	CANNetworkManager::CANNetwork.update();
 
@@ -545,7 +551,7 @@ TEST(SPEED_MESSAGE_TESTS, ListenOnlyModeAndDecoding)
 		interfaceUnderTest.initialize();
 		interfaceUnderTest.update();
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(305));
+		time_source.update_for_ms(305);
 		interfaceUnderTest.update();
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_machine_selected_speed_sources());
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_wheel_based_speed_sources());

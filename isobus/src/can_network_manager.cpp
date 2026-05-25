@@ -296,7 +296,8 @@ namespace isobus
 		                                            rxFrame.dataLength,
 		                                            get_control_function(rxFrame.channel, identifier.get_source_address()),
 		                                            get_control_function(rxFrame.channel, identifier.get_destination_address()),
-		                                            rxFrame.channel);
+		                                            rxFrame.channel,
+		                                            rxFrame.timestamp_us);
 
 		update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
 
@@ -317,7 +318,8 @@ namespace isobus
 		                                            txFrame.dataLength,
 		                                            get_control_function(txFrame.channel, identifier.get_source_address()),
 		                                            get_control_function(txFrame.channel, identifier.get_destination_address()),
-		                                            txFrame.channel);
+		                                            txFrame.channel,
+		                                            txFrame.timestamp_us);
 
 		if (initialized)
 		{
@@ -536,7 +538,8 @@ namespace isobus
 				                       message.get_data(),
 				                       message.get_source_control_function(),
 				                       message.get_destination_control_function(),
-				                       i);
+				                       i,
+				                       message.get_timestamp_us());
 				this->protocol_message_callback(message);
 			};
 			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));

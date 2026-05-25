@@ -69,8 +69,12 @@ namespace isobus
 		static std::shared_ptr<CANHardwarePlugin> get_assigned_can_channel_frame_handler(std::uint8_t channelIndex);
 
 		/// @brief Starts the threads for managing the CAN stack and CAN drivers
+		/// @param[in] start_thread If building with threading enabled, this parameter controls whether
+		/// the worker thread for the hardware layer is started. Typically you'll want to leave this as true.
+		/// However, if you want to drive the hardware layer yourself by calling update manually, you can
+		/// pass this in as false to not spawn the worker thread.
 		/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
-		static bool start();
+		static bool start(bool start_thread = true);
 
 		/// @brief Stops all CAN management threads and discards all remaining messages in the Tx and Rx queues.
 		/// @returns `true` if the threads were stopped, otherwise `false`

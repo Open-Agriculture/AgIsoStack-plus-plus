@@ -9,22 +9,21 @@
 
 #include "isobus/utility/system_timing.hpp"
 
-#include <chrono>
-#include <limits>
+#include "isobus/utility/chrono_time_source.hpp"
 
 namespace isobus
 {
-	std::uint64_t SystemTiming::s_timestamp_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-	std::uint64_t SystemTiming::s_timestamp_us = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+	TimeSource *SystemTiming::s_custom_timesource = nullptr;
+	static ChronoTimeSource default_time_source;
 
 	std::uint32_t SystemTiming::get_timestamp_ms()
 	{
-		return incrementing_difference(static_cast<std::uint32_t>(static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()) & std::numeric_limits<std::uint32_t>::max()), static_cast<std::uint32_t>(s_timestamp_ms));
+		return get_active_time_source()->get_current_time_ms();
 	}
 
 	std::uint64_t SystemTiming::get_timestamp_us()
 	{
-		return incrementing_difference(static_cast<std::uint64_t>(static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()) & std::numeric_limits<std::uint64_t>::max()), s_timestamp_us);
+		return get_active_time_source()->get_current_time_us();
 	}
 
 	std::uint32_t SystemTiming::get_time_elapsed_ms(std::uint32_t timestamp_ms)
@@ -47,34 +46,18 @@ namespace isobus
 		return (get_time_elapsed_us(timestamp_us) >= timeout_us);
 	}
 
-	std::uint32_t SystemTiming::incrementing_difference(std::uint32_t currentValue, std::uint32_t previousValue)
+	void SystemTiming::override_time_source(TimeSource *source)
 	{
-		std::uint32_t retVal;
-
-		if (currentValue >= previousValue)
-		{
-			retVal = currentValue - previousValue;
-		}
-		else
-		{
-			retVal = (std::numeric_limits<std::uint32_t>::max() - previousValue) + currentValue + 1;
-		}
-		return retVal;
+		s_custom_timesource = source;
 	}
 
-	std::uint64_t SystemTiming::incrementing_difference(std::uint64_t currentValue, std::uint64_t previousValue)
+	const TimeSource *SystemTiming::get_active_time_source()
 	{
-		std::uint64_t retVal;
-
-		if (currentValue >= previousValue)
+		if (nullptr != s_custom_timesource)
 		{
-			retVal = currentValue - previousValue;
+			return s_custom_timesource;
 		}
-		else
-		{
-			retVal = (std::numeric_limits<std::uint64_t>::max() - previousValue) + currentValue + 1;
-		}
-		return retVal;
+		return &default_time_source;
 	}
 
 }
