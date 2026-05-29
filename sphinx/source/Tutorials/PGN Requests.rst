@@ -22,7 +22,7 @@ It is assumed you have completed the basic tutorials, as this tutorial covers ap
 What is a PGN request?
 -----------------------
 
-Basically if someone requests a PGN from you, they are politely asking you to either send them a message with that PGN, or perform some action. .
+Basically if someone requests a PGN from you, they are politely asking you to either send them a message with that PGN, or perform some action.
 You have a choice to either respond with the data they want, send the Acknowledgement PGN (this is called ACK or NACK depending on if the acknowledgement is positive or negative), or do nothing.
 
 Using the Parameter Group Number Request Protocol

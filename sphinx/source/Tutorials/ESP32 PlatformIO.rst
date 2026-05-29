@@ -126,7 +126,7 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
 
 #.  Set up the ESP32's TWAI
 
-    he ESP32 has what is essentially a built-in classic CAN 2.0 controller. Because of this, you can use the TWAI interface on your ESP32 instead of having to add a serial CAN controller like the MCP2515.
+    The ESP32 has what is essentially a built-in classic CAN 2.0 controller. Because of this, you can use the TWAI interface on your ESP32 instead of having to add a serial CAN controller like the MCP2515.
 
     .. note::
 		
