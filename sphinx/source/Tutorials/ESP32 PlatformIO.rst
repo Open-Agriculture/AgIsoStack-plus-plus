@@ -61,7 +61,7 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
 
 #.  Rename your :code:`main.c` file to :code:`main.cpp`.
 #.  Change the definition for :code:`app_main` to be :code:`extern "C" void app_main()`.
-#.  Add the following line to your :code:`platformio.ini` file: ::code:`lib_deps = https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git`
+#.  Add the following line to your :code:`platformio.ini` file: :code:`lib_deps = https://github.com/Open-Agriculture/AgIsoStack-plus-plus.git`
    
     This will tell PlatformIO to reach out to GitHub, download the library, and automatically integrate it via CMake.
 
@@ -255,7 +255,7 @@ To build and run a minimal, but interactive project that will load an ISOBUS obj
 .. note::
 
     To embed a binary file, like an object pool, into your project, you should use the :code:`target_add_binary_data` function in your :code:`CMakeLists.txt` file, as shown in the example `here <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/255fd580925e1d7d9baea1b16ad4ffcedf1fc974/examples/virtual_terminal/esp32_platformio_object_pool/src/CMakeLists.txt#L7>`_.
-    Furthermore, in the :code:`platformio.ini` file, you should specify the file under :code:`board_build.embed_txtfiles` to embed the object pool into your binary, as shown in the example `here <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/255fd580925e1d7d9baea1b16ad4ffcedf1fc974/examples/virtual_terminal/esp32_platformio_object_pool/platformio.ini#L16`_.
+    Furthermore, in the :code:`platformio.ini` file, you should specify the file under :code:`board_build.embed_txtfiles` to embed the object pool into your binary, as shown in the example `here <https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/255fd580925e1d7d9baea1b16ad4ffcedf1fc974/examples/virtual_terminal/esp32_platformio_object_pool/platformio.ini#L16>`__.
 
     For more details about embedding files with ESP32 in combination with PlatformIO, see their documentation on `embedding binary data <https://docs.platformio.org/en/latest/platforms/espressif32.html#embedding-binary-data>`_.
 
