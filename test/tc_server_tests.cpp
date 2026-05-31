@@ -1385,3 +1385,154 @@ TEST_F(TaskControllerServerTest, DDOPHelper_NoFunctions)
 	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
 	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
 }
+
+TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBoomWidthPriority)
+{
+	// Test that SubBoom applies the same width priority logic as Section:
+	// Actual > Maximum > Default
+
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("SubBoom1", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 2);
+	ddop.add_device_element("SubBoom2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 3);
+	ddop.add_device_element("SubBoom3", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 4);
+	ddop.add_device_element("Section1", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Section, 10);
+
+	// SubBoom1: Has all three width types - should use Actual (highest priority)
+	ddop.add_device_property("SB1_ActualWidth", 1000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 20);
+	ddop.add_device_property("SB1_MaxWidth", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 21);
+	ddop.add_device_property("SB1_DefaultWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 22);
+
+	// SubBoom2: Has only Maximum and Default - should use Maximum
+	ddop.add_device_property("SB2_MaxWidth", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 30);
+	ddop.add_device_property("SB2_DefaultWidth", 5000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 31);
+
+	// SubBoom3: Has only Default - should use Default
+	ddop.add_device_property("SB3_DefaultWidth", 6000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 40);
+
+	// Add references
+	auto subBoom1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	auto subBoom2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(3));
+	auto subBoom3 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(10));
+
+	ASSERT_NE(nullptr, subBoom1);
+	ASSERT_NE(nullptr, subBoom2);
+	ASSERT_NE(nullptr, subBoom3);
+	ASSERT_NE(nullptr, section1);
+
+	subBoom1->add_reference_to_child_object(20);
+	subBoom1->add_reference_to_child_object(21);
+	subBoom1->add_reference_to_child_object(22);
+
+	subBoom2->add_reference_to_child_object(30);
+	subBoom2->add_reference_to_child_object(31);
+
+	subBoom3->add_reference_to_child_object(40);
+
+	section1->add_reference_to_child_object(20); // Section references parent's width
+
+	// Add a section to SubBoom1
+	ddop.add_device_property("Sec1_Width", 7000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 50);
+	section1->add_reference_to_child_object(50);
+
+	// Parse the DDOP
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	// Validate structure
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(3, implement.booms.at(0).subBooms.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(0).sections.size());
+
+	// Test SubBoom1: Should use ActualWorkingWidth (1000) - highest priority
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).width_mm);
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.get());
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).width_mm.get()); // Should be Actual
+
+	// Test SubBoom2: Should use MaximumWorkingWidth (4000) - second priority
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(1).actualWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).maximumWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).defaultWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).width_mm);
+	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(1).maximumWorkingWidth_mm.get());
+	EXPECT_EQ(5000, implement.booms.at(0).subBooms.at(1).defaultWorkingWidth_mm.get());
+	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(1).width_mm.get()); // Should be Maximum
+
+	// Test SubBoom3: Should use DefaultWorkingWidth (6000) - third priority
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(2).actualWorkingWidth_mm);
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(2).maximumWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(2).defaultWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(2).width_mm);
+	EXPECT_EQ(6000, implement.booms.at(0).subBooms.at(2).defaultWorkingWidth_mm.get());
+	EXPECT_EQ(6000, implement.booms.at(0).subBooms.at(2).width_mm.get()); // Should be Default
+
+	// Test Section width priority still works
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).width_mm);
+	EXPECT_EQ(7000, implement.booms.at(0).subBooms.at(0).sections.at(0).width_mm.get());
+}
+
+TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBoomWidthPriorityWithProcessData)
+{
+	// Test that SubBoom width priority works with DeviceProcessData (settable values)
+	// When both DeviceProperty and DeviceProcessData are present, the value comes from
+	// DeviceProperty and the settable flag comes from DeviceProcessData
+
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("SubBoom", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 2);
+	ddop.add_device_element("Section1", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Section, 10);
+
+	// Add width as DeviceProperty (provides the value)
+	ddop.add_device_property("SB_ActualWidth", 1000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 20);
+	ddop.add_device_property("SB_MaxWidth", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 21);
+	ddop.add_device_property("SB_DefaultWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 22);
+
+	// Add width as DeviceProcessData (marks as settable)
+	ddop.add_device_process_data("SB_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 0, 0, 30);
+	ddop.add_device_process_data("SB_MaxWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 31);
+	ddop.add_device_process_data("SB_DefaultWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 32);
+
+	auto subBoom = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	ASSERT_NE(nullptr, subBoom);
+
+	// Add references to both properties and process data
+	subBoom->add_reference_to_child_object(20);
+	subBoom->add_reference_to_child_object(21);
+	subBoom->add_reference_to_child_object(22);
+	subBoom->add_reference_to_child_object(30);
+	subBoom->add_reference_to_child_object(31);
+	subBoom->add_reference_to_child_object(32);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.size());
+
+	// All three width types should be present with values from DeviceProperty
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).width_mm.exists());
+
+	// Values should come from DeviceProperty
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.get());
+
+	// Width should use Actual (highest priority)
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).width_mm.get());
+
+	// Check editable flags from DeviceProcessData
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.editable()); // Not settable in DPD
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.editable()); // Settable in DPD
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.editable()); // Settable in DPD
+}
