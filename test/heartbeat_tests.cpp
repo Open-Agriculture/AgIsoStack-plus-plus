@@ -11,6 +11,7 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -32,20 +33,29 @@ void new_callback(std::shared_ptr<ControlFunction>)
 	new_heartbeat_callback_called = true;
 }
 
-TEST(HEARTBEAT_TESTS, HeartBeat)
+class HeartbeatTest : public AgIsoStackTestFixture
+{
+	void TearDown() override
+	{
+		isobus::CANNetworkManager::CANNetwork.get_heartbeat_interface(0).set_enabled(false);
+		AgIsoStackTestFixture::TearDown();
+	}
+};
+
+TEST_F(HeartbeatTest, HeartBeat)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_device_class(4);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::EnduranceBraking));
-	auto internalECU = test_helpers::claim_internal_control_function(0x41, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x41, 0, time_source);
 	auto partner = test_helpers::force_claim_partnered_control_function(0xF4, 0);
 
 	// Get the virtual CAN plugin back to a known state
@@ -69,6 +79,7 @@ TEST(HEARTBEAT_TESTS, HeartBeat)
 
 	heartbeatInterface.request_heartbeat(internalECU, partner);
 	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
 
 	// Check that the heartbeat request was sent
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
@@ -87,6 +98,8 @@ TEST(HEARTBEAT_TESTS, HeartBeat)
 	testFrame.identifier = 0x18CC41F4;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
 
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	EXPECT_EQ(testFrame.identifier, 0x0CF0E441);
@@ -94,7 +107,9 @@ TEST(HEARTBEAT_TESTS, HeartBeat)
 	EXPECT_EQ(testFrame.data[0], 251);
 
 	// Wait for the next one. Sequence should now be 0
-	std::this_thread::sleep_for(std::chrono::milliseconds(80));
+	time_source.update_for_ms(101);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	EXPECT_EQ(testFrame.identifier, 0x0CF0E441);
 	EXPECT_EQ(testFrame.dataLength, 1);
@@ -112,7 +127,7 @@ TEST(HEARTBEAT_TESTS, HeartBeat)
 
 	// Wait to ensure that the heartbeat times out
 	EXPECT_FALSE(heartbeat_error_callback_called);
-	std::this_thread::sleep_for(std::chrono::milliseconds(400));
+	time_source.update_for_ms(400);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_TRUE(heartbeat_error_callback_called);
 	EXPECT_EQ(error_type, HeartbeatInterface::HeartBeatError::TimedOut);
@@ -127,6 +142,7 @@ TEST(HEARTBEAT_TESTS, HeartBeat)
 	// Disable the heartbeat interface
 	heartbeatInterface.set_enabled(false);
 	EXPECT_FALSE(heartbeatInterface.is_enabled());
+	time_source.update_for_ms(5);
 
 	// No message should be sent
 	EXPECT_FALSE(testPlugin.read_frame(testFrame));

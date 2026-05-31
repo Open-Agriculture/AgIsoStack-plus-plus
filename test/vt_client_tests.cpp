@@ -9,6 +9,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
@@ -16,7 +17,9 @@ class DerivedTestVTClient : public VirtualTerminalClient
 {
 public:
 	DerivedTestVTClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
-	  VirtualTerminalClient(partner, clientSource){};
+	  VirtualTerminalClient(partner, clientSource) {
+		  // Does nothing
+	  };
 
 	void test_wrapper_process_rx_message(const CANMessage &message, void *parentPointer)
 	{
@@ -94,7 +97,12 @@ public:
 
 std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
 
-TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
+class VirtualTerminalTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(VirtualTerminalTest, InitializeAndInitialState)
 {
 	NAME clientNAME(0);
 	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
@@ -135,7 +143,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, InitializeAndInitialState)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
+TEST_F(VirtualTerminalTest, VTStatusMessage)
 {
 	NAME clientNAME(0);
 	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
@@ -182,7 +190,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, VTStatusMessage)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
+TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithVector)
 {
 	NAME clientNAME(0);
 	clientNAME.set_arbitrary_address_capable(true);
@@ -237,7 +245,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithVector)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
+TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithDataChunkCallbacks)
 {
 	NAME clientNAME(0);
 	clientNAME.set_arbitrary_address_capable(true);
@@ -285,7 +293,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithDataChunkCallbacks)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
+TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithPointer)
 {
 	NAME clientNAME(0);
 	clientNAME.set_arbitrary_address_capable(true);
@@ -345,7 +353,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FullPoolAutoscalingWithPointer)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
+TEST_F(VirtualTerminalTest, ObjectMetadataTests)
 {
 	NAME clientNAME(0);
 	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
@@ -407,7 +415,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ObjectMetadataTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
+TEST_F(VirtualTerminalTest, FontRemapping)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
@@ -523,7 +531,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, FontRemapping)
 	}
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputArchedBarGraph)
+TEST_F(VirtualTerminalTest, ResizeOutputArchedBarGraph)
 {
 	constexpr std::uint16_t testWidth = 200;
 	constexpr std::uint16_t testHeight = 100;
@@ -568,7 +576,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputArchedBarGraph)
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLinearBarGraph)
+TEST_F(VirtualTerminalTest, ResizeOutputLinearBarGraph)
 {
 	constexpr std::uint16_t testWidth = 200;
 	constexpr std::uint16_t testHeight = 100;
@@ -610,7 +618,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLinearBarGraph)
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputMeter)
+TEST_F(VirtualTerminalTest, ResizeOutputMeter)
 {
 	constexpr std::uint16_t testWidth = 200;
 	std::uint8_t testObject[] = {
@@ -646,7 +654,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputMeter)
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputPolygon)
+TEST_F(VirtualTerminalTest, ResizeOutputPolygon)
 {
 	constexpr std::uint16_t testWidth = 200;
 	constexpr std::uint16_t testHeight = 100;
@@ -678,7 +686,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputPolygon)
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputEllipse)
+TEST_F(VirtualTerminalTest, ResizeOutputEllipse)
 {
 	constexpr std::uint16_t testWidth = 200;
 	constexpr std::uint16_t testHeight = 100;
@@ -711,7 +719,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputEllipse)
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[7]) | (static_cast<std::uint16_t>(testObject[8]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLine)
+TEST_F(VirtualTerminalTest, ResizeOutputLine)
 {
 	constexpr std::uint16_t testWidth = 200;
 	constexpr std::uint16_t testHeight = 100;
@@ -740,7 +748,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputLine)
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[7]) | (static_cast<std::uint16_t>(testObject[8]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputList)
+TEST_F(VirtualTerminalTest, ResizeOutputList)
 {
 	constexpr std::uint16_t testWidth = 200;
 	constexpr std::uint16_t testHeight = 100;
@@ -783,7 +791,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeOutputList)
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, ResizeInputBoolean)
+TEST_F(VirtualTerminalTest, ResizeInputBoolean)
 {
 	constexpr std::uint16_t testWidth = 50;
 	std::uint8_t testObject[] = {
@@ -818,7 +826,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, ResizeInputBoolean)
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, TestNumberBytesInInvalidObjects)
+TEST_F(VirtualTerminalTest, TestNumberBytesInInvalidObjects)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
@@ -834,22 +842,22 @@ TEST(VIRTUAL_TERMINAL_TESTS, TestNumberBytesInInvalidObjects)
 	}
 }
 
-TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
+TEST_F(VirtualTerminalTest, MessageConstruction)
 {
 	VirtualCANPlugin serverVT;
 	serverVT.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0, time_source);
 	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x26, 0);
 
 	DerivedTestVTClient interfaceUnderTest(vtPartner, internalECU);
 	interfaceUnderTest.initialize(false);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame = {};
@@ -864,6 +872,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	ASSERT_TRUE(serverVT.get_queue_empty());
 	interfaceUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 	interfaceUnderTest.test_wrapper_process_command_queue();
+	time_source.update_for_ms(5);
 
 	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
@@ -883,6 +892,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	ASSERT_TRUE(interfaceUnderTest.send_hide_show_object(1234, VirtualTerminalClient::HideShowObjectCommand::HideObject));
 	ASSERT_TRUE(serverVT.get_queue_empty());
 	interfaceUnderTest.test_wrapper_process_command_queue();
+	time_source.update_for_ms(5);
 	ASSERT_FALSE(serverVT.read_frame(testFrame));
 
 	// Send a response to the change active mask command
@@ -899,6 +909,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	CANNetworkManager::CANNetwork.update();
 
 	interfaceUnderTest.test_wrapper_process_command_queue();
+	time_source.update_for_ms(5);
 
 	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
@@ -930,6 +941,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 
 	ASSERT_TRUE(serverVT.get_queue_empty());
 	ASSERT_TRUE(interfaceUnderTest.send_enable_disable_object(1234, VirtualTerminalClient::EnableDisableObjectCommand::DisableObject));
+	time_source.update_for_ms(5);
 	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
@@ -957,6 +969,7 @@ TEST(VIRTUAL_TERMINAL_TESTS, MessageConstruction)
 	const std::string testString = "a";
 	ASSERT_TRUE(serverVT.get_queue_empty());
 	ASSERT_TRUE(interfaceUnderTest.send_draw_text(123, true, 1, testString.data()));
+	time_source.update_for_ms(5);
 	ASSERT_TRUE(serverVT.read_frame(testFrame));
 	EXPECT_EQ(0, testFrame.channel);
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);

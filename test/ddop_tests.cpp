@@ -368,6 +368,8 @@ TEST(DDOP_TESTS, DeviceElementDesignatorTests)
 	EXPECT_EQ(3500, objectUnderTest->get_object_id());
 	objectUnderTest->set_parent_object(4444);
 	EXPECT_EQ(4444, objectUnderTest->get_parent_object());
+	objectUnderTest->set_type(task_controller_object::DeviceElementObject::Type::Function);
+	EXPECT_EQ(task_controller_object::DeviceElementObject::Type::Function, objectUnderTest->get_type());
 
 	objectUnderTest->add_reference_to_child_object(111);
 	EXPECT_EQ(1, objectUnderTest->get_number_child_objects());

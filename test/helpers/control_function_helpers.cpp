@@ -7,6 +7,7 @@
 
 #include "control_function_helpers.hpp"
 #include "gtest/gtest.h"
+#include "test_time_source.hpp"
 
 namespace test_helpers
 {
@@ -59,7 +60,7 @@ namespace test_helpers
 		return addressOccupied;
 	}
 
-	std::shared_ptr<InternalControlFunction> claim_internal_control_function(std::uint8_t address, std::uint8_t canPort)
+	std::shared_ptr<InternalControlFunction> claim_internal_control_function(std::uint8_t address, std::uint8_t canPort, TestTimeSource &time_source)
 	{
 		EXPECT_FALSE(is_address_occupied(address, canPort));
 
@@ -67,9 +68,9 @@ namespace test_helpers
 		auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(name, canPort, address);
 
 		// Make sure address claiming is done before we return
-		auto addressClaimedFuture = std::async(std::launch::async, [&internalECU]() {
+		auto addressClaimedFuture = std::async(std::launch::async, [&internalECU, &time_source]() {
 			while (!internalECU->get_address_valid())
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				time_source.update_for_ms(100);
 		});
 
 		// If this fails, probably the update thread is not started

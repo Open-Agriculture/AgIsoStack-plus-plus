@@ -104,6 +104,10 @@ if("NTCAN" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "ntcan_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "ntcan_plugin.hpp")
 endif()
+if("SILKit" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "sil_kit_plugin.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "sil_kit_plugin.hpp")
+endif()
 
 # Prepend the source directory path to all the source files
 prepend(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR}
@@ -350,6 +354,11 @@ if("NTCAN" IN_LIST CAN_DRIVER)
         "NTCAN Selected but no supported OS was detected. Only Windows is supported currently."
     )
   endif()
+endif()
+
+if("SILKit" IN_LIST CAN_DRIVER)
+  find_package(SilKit REQUIRED)
+  target_link_libraries(HardwareIntegration PUBLIC SilKit::SilKit)
 endif()
 
 # Mark the compiled CAN drivers available to other modules. In the form:
