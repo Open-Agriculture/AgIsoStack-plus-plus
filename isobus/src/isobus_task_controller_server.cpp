@@ -242,6 +242,12 @@ namespace isobus
 											// We can store the reported version to use the proper DDOP parsing approach later on.
 											LOG_DEBUG("[TC Server]: Client reports that its version is %u", version);
 											get_active_client(rxMessage.get_source_control_function())->reportedVersion = version;
+
+											// Notify the application that we received version information
+											LOG_INFO("[TC Server]: Client 0x%02X reported Task Controller version %u",
+											         rxMessage.get_source_control_function()->get_address(),
+											         version);
+											on_client_version_received(rxMessage.get_source_control_function(), version);
 										}
 									}
 									break;
@@ -699,6 +705,11 @@ namespace isobus
 							if (nullptr == get_active_client(rxMessage.get_source_control_function()))
 							{
 								activeClients.push_back(std::make_shared<ActiveClient>(rxMessage.get_source_control_function()));
+								LOG_INFO("[TC Server]: New client 0x%02X detected via WorkingSetMaster. Requesting version.",
+								         rxMessage.get_source_control_function()->get_address());
+								// Proactively request version information from the new client
+								send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
+								                                          rxMessage.get_source_control_function());
 							}
 						}
 						else
@@ -812,6 +823,28 @@ namespace isobus
 		return send_process_data_to_client(clientControlFunction,
 		                                   payload.data(),
 		                                   payload.size());
+	}
+
+	std::uint8_t TaskControllerServer::get_client_version(std::shared_ptr<ControlFunction> clientControlFunction) const
+	{
+		auto activeClient = get_active_client(clientControlFunction);
+		if (nullptr != activeClient)
+		{
+			return activeClient->reportedVersion;
+		}
+		return 0xFF; // Return unknown if client not found
+	}
+
+	bool TaskControllerServer::request_client_version(std::shared_ptr<ControlFunction> clientControlFunction) const
+	{
+		if (nullptr == clientControlFunction)
+		{
+			return false;
+		}
+
+		LOG_INFO("[TC Server]: Requesting version from client 0x%02X", clientControlFunction->get_address());
+		return send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
+		                                                 clientControlFunction);
 	}
 
 	std::shared_ptr<TaskControllerServer::ActiveClient> TaskControllerServer::get_active_client(std::shared_ptr<ControlFunction> clientControlFunction) const

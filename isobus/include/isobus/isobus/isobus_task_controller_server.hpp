@@ -226,6 +226,16 @@ namespace isobus
 		/// @param[in] processDataCommand The process data command that was acknowledged.
 		virtual void on_process_data_acknowledge(std::shared_ptr<ControlFunction> clientControlFunction, std::uint16_t dataDescriptionIndex, std::uint16_t elementNumber, std::uint8_t errorCodesFromClient, ProcessDataCommands processDataCommand) = 0;
 
+		/// @brief This function will be called by the server when a client's version information is received.
+		/// This happens when the client sends its version in response to a RequestVersion command, or
+		/// when the client spontaneously sends its version information.
+		/// @note Per the standard, version exchange is OPTIONAL in V3 (SecondEditionDraft) but the callback
+		/// will fire whenever version info is available. In V4+ (SecondPublishedEdition), version exchange
+		/// is more standardized and this callback will fire more predictably.
+		/// @param[in] clientControlFunction The control function whose version was received.
+		/// @param[in] version The Task Controller version reported by the client (see TaskControllerVersion enum).
+		virtual void on_client_version_received(std::shared_ptr<ControlFunction> clientControlFunction, std::uint8_t version) = 0;
+
 		/// @brief This function will be called by the server when a client sends a value command to the TC.
 		/// You should implement this function to do whatever you want to do when a client sends a value command.
 		/// This could be anything from setting a value in your program, to sending a command to a connected implement.
@@ -343,6 +353,17 @@ namespace isobus
 		/// @brief Returns whether a task is currently active or not.
 		/// @returns Whether a task is currently active or not.
 		bool get_task_totals_active() const;
+
+		/// @brief Returns the version reported by a specific client.
+		/// @param[in] clientControlFunction The control function to get the version for.
+		/// @returns The Task Controller version reported by the client, or 0xFF if no version has been received yet.
+		std::uint8_t get_client_version(std::shared_ptr<ControlFunction> clientControlFunction) const;
+
+		/// @brief Requests version information from a client.
+		/// This sends a RequestVersion command to learn the client's Task Controller version.
+		/// @param[in] clientControlFunction The control function to request version information from.
+		/// @returns true if the message was sent, otherwise false.
+		bool request_client_version(std::shared_ptr<ControlFunction> clientControlFunction) const;
 
 		/// @brief Returns the language command interface used to communicate with the client which language/units are in use.
 		/// The language command is very important for the TC to function correctly, so it is recommended that you call this
