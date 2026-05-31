@@ -116,12 +116,19 @@ namespace isobus
 		class SubBoom
 		{
 		public:
+			/// @brief Gets the width value with priority order: Actual > Maximum > Default
+			/// @returns The width value with the highest priority, or an empty ObjectPoolValue if none are set
+			ObjectPoolValue get_width_with_priority() const;
+
 			std::vector<Section> sections; ///< The sections of the sub boom
 			std::vector<ProductControlInformation> rates; ///< If the sub-boom has rates, this will contain the associated data needed to control the product.
 			ObjectPoolValue xOffset_mm; ///< The x offset of the sub boom in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the sub boom in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the sub boom in mm. Z offsets are up+/down-.
-			ObjectPoolValue width_mm; ///< The width of the sub boom in mm
+			ObjectPoolValue actualWorkingWidth_mm; ///< The actual working width of the sub boom in mm.
+			ObjectPoolValue maximumWorkingWidth_mm; ///< The maximum working width of the sub boom in mm.
+			ObjectPoolValue defaultWorkingWidth_mm; ///< The default working width of the sub boom in mm.
+			ObjectPoolValue width_mm; ///< The width of the sub boom in mm (set based on priority: Actual > Maximum > Default).
 			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the sub boom , which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 

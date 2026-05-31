@@ -31,6 +31,25 @@ namespace isobus
 		return ObjectPoolValue(); // Return empty if none are set or all are zero
 	}
 
+	DeviceDescriptorObjectPoolHelper::ObjectPoolValue DeviceDescriptorObjectPoolHelper::SubBoom::get_width_with_priority() const
+	{
+		// Priority order: Actual > Maximum > Default
+		// Only return values that are present (have been set) and are not zero
+		if (actualWorkingWidth_mm.exists() && 0 != actualWorkingWidth_mm.get())
+		{
+			return actualWorkingWidth_mm;
+		}
+		if (maximumWorkingWidth_mm.exists() && 0 != maximumWorkingWidth_mm.get())
+		{
+			return maximumWorkingWidth_mm;
+		}
+		if (defaultWorkingWidth_mm.exists() && 0 != defaultWorkingWidth_mm.get())
+		{
+			return defaultWorkingWidth_mm;
+		}
+		return ObjectPoolValue(); // Return empty if none are set or all are zero
+	}
+
 	DeviceDescriptorObjectPoolHelper::ObjectPoolValue::operator bool() const
 	{
 		return exists();
@@ -322,7 +341,9 @@ namespace isobus
 					set_value_from_property(retVal.xOffset_mm, property, DataDescriptionIndex::DeviceElementOffsetX);
 					set_value_from_property(retVal.yOffset_mm, property, DataDescriptionIndex::DeviceElementOffsetY);
 					set_value_from_property(retVal.zOffset_mm, property, DataDescriptionIndex::DeviceElementOffsetZ);
-					set_value_from_property(retVal.width_mm, property, DataDescriptionIndex::ActualWorkingWidth);
+					set_value_from_property(retVal.actualWorkingWidth_mm, property, DataDescriptionIndex::ActualWorkingWidth);
+					set_value_from_property(retVal.maximumWorkingWidth_mm, property, DataDescriptionIndex::MaximumWorkingWidth);
+					set_value_from_property(retVal.defaultWorkingWidth_mm, property, DataDescriptionIndex::DefaultWorkingWidth);
 				}
 				else if (task_controller_object::ObjectTypes::DeviceProcessData == childObject->get_object_type())
 				{
@@ -330,7 +351,9 @@ namespace isobus
 					set_editable_from_process_data(retVal.xOffset_mm, processData, DataDescriptionIndex::DeviceElementOffsetX);
 					set_editable_from_process_data(retVal.yOffset_mm, processData, DataDescriptionIndex::DeviceElementOffsetY);
 					set_editable_from_process_data(retVal.zOffset_mm, processData, DataDescriptionIndex::DeviceElementOffsetZ);
-					set_editable_from_process_data(retVal.width_mm, processData, DataDescriptionIndex::ActualWorkingWidth);
+					set_editable_from_process_data(retVal.actualWorkingWidth_mm, processData, DataDescriptionIndex::ActualWorkingWidth);
+					set_editable_from_process_data(retVal.maximumWorkingWidth_mm, processData, DataDescriptionIndex::MaximumWorkingWidth);
+					set_editable_from_process_data(retVal.defaultWorkingWidth_mm, processData, DataDescriptionIndex::DefaultWorkingWidth);
 				}
 				else if ((task_controller_object::ObjectTypes::DeviceElement == childObject->get_object_type()) &&
 				         (task_controller_object::DeviceElementObject::Type::Bin == std::static_pointer_cast<task_controller_object::DeviceElementObject>(childObject)->get_type()))
@@ -344,6 +367,10 @@ namespace isobus
 				}
 			}
 		}
+
+		// Set width_mm based on priority: Actual > Maximum > Default
+		retVal.width_mm = retVal.get_width_with_priority();
+
 		return retVal;
 	}
 
