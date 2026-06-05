@@ -42,7 +42,7 @@ namespace isobus
 		CANStackLogger() = default;
 
 		/// @brief The destructor for a CANStackLogger
-		~CANStackLogger() = default;
+		virtual ~CANStackLogger() = default;
 
 #ifndef DISABLE_CAN_STACK_LOGGER
 

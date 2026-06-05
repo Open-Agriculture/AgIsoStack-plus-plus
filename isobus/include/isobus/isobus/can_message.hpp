@@ -60,13 +60,15 @@ namespace isobus
 		/// @param[in] source The source control function of the message
 		/// @param[in] destination The destination control function of the message
 		/// @param[in] CANPort The CAN channel index associated with the message
+		/// @param[in] timestamp_us The microsecond timestamp of the originating CAN frame, or 0 if unknown
 		CANMessage(Type type,
 		           CANIdentifier identifier,
 		           const std::uint8_t *dataBuffer,
 		           std::uint32_t length,
 		           std::shared_ptr<ControlFunction> source,
 		           std::shared_ptr<ControlFunction> destination,
-		           std::uint8_t CANPort);
+		           std::uint8_t CANPort,
+		           std::uint64_t timestamp_us = 0);
 
 		/// @brief Construct a CAN message from the parameters supplied
 		/// @param[in] type The type of the CAN message
@@ -75,12 +77,14 @@ namespace isobus
 		/// @param[in] source The source control function of the message
 		/// @param[in] destination The destination control function of the message
 		/// @param[in] CANPort The CAN channel index associated with the message
+		/// @param[in] timestamp_us The microsecond timestamp of the originating CAN frame, or 0 if unknown
 		CANMessage(Type type,
 		           CANIdentifier identifier,
 		           std::vector<std::uint8_t> data,
 		           std::shared_ptr<ControlFunction> source,
 		           std::shared_ptr<ControlFunction> destination,
-		           std::uint8_t CANPort);
+		           std::uint8_t CANPort,
+		           std::uint64_t timestamp_us = 0);
 
 		/// @brief Returns the CAN message type
 		/// @returns The type of the CAN message
@@ -140,6 +144,12 @@ namespace isobus
 		/// @brief Returns the CAN channel index associated with the message
 		/// @returns The CAN channel index associated with the message
 		std::uint8_t get_can_port_index() const;
+
+		/// @brief Returns the microsecond timestamp of the message.
+		/// @details For single-frame messages, this is the timestamp of the originating CAN frame.
+		/// For multi-frame messages, this is the timestamp of the last data-transfer frame.
+		/// @returns The microsecond timestamp of the message, or 0 if unset.
+		std::uint64_t get_timestamp_us() const;
 
 		/// @brief Sets the message data to the value supplied. Creates a copy.
 		/// @param[in] dataBuffer The data payload
@@ -262,6 +272,7 @@ namespace isobus
 		std::shared_ptr<ControlFunction> source; ///< The source control function of the message
 		std::shared_ptr<ControlFunction> destination; ///< The destination control function of the message
 		std::uint8_t CANPortIndex; ///< The CAN channel index associated with the message
+		std::uint64_t timestamp_us; ///< The microsecond timestamp of the originating frame
 	};
 
 } // namespace isobus

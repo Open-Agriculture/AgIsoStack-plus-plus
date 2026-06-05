@@ -8,6 +8,7 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
@@ -25,21 +26,26 @@ public:
 	}
 };
 
-TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
+class ControlFunctionFunctionalitiesTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 {
 	VirtualCANPlugin requesterPlugin;
 	requesterPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0, time_source);
 	auto otherECU = test_helpers::force_claim_partnered_control_function(0x12, 0);
 
 	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	EXPECT_EQ(true, cfFunctionalitiesUnderTest.get_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction));
 	EXPECT_EQ(false, cfFunctionalitiesUnderTest.get_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::UniversalTerminalServer));
@@ -516,6 +522,7 @@ TEST(CONTROL_FUNCTION_FUNCTIONALITIES_TESTS, CFFunctionalitiesTest)
 	CANNetworkManager::CANNetwork.update();
 
 	cfFunctionalitiesUnderTest.update(); // Updating manually since we're not integrated with the diagnostic protocol inside this test
+	time_source.update_for_ms(5);
 
 	ASSERT_TRUE(requesterPlugin.read_frame(testFrame));
 	ASSERT_TRUE(testFrame.isExtendedFrame);

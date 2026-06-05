@@ -115,7 +115,7 @@ On a self-propelled rear-mounted implement, it would be the center of the rear a
 .. warning::
 
 	Make sure you understand the link between a DDI and the DPT or DPD using it! If you are looking at an ISOBUS CAN trace, and are looking at the various DDIs being sent across the bus, you MUST know the entire structure of the DDOP to understand what the data means.
-    For example, if you have an implement with 10 sections, each section may have a DPT with DDI 134, and each will likely have a different value. This means, in order to know what section any DDI 134 value is referring to, you must know the section's element number number, and other context from the DDOP.
+    For example, if you have an implement with 10 sections, each section may have a DPT with DDI 134, and each will likely have a different value. This means, in order to know what section any DDI 134 value is referring to, you must know the section's element number and other context from the DDOP.
     This means it is very difficult to sniff another devices' connection with the TC with any confidence in what the data means, unless you have the DDOP that was uploaded to the TC!
 
 
@@ -162,7 +162,7 @@ The device element object has a designator of "My Implement", an element number 
 
 The device process data object has a designator of "Total Time", a DDI of 119, a presentation object ID of 0xFFFF (which means it has no associated DVP object), no special properties (0), a trigger method of Total, and a unique object ID of 2.
 
-In theory, you could now provide this DDOP to the AgIsoStack TC client, and it would upload it to the TC, and the TC would all this information about our fictional implement!
+In theory, you could now provide this DDOP to the AgIsoStack TC client, and it would upload it to the TC, and the TC would have all this information about our fictional implement!
 
 We'll cover use of the TC client in a later tutorial, but knowing how to create a DDOP is the first step to using it.
 

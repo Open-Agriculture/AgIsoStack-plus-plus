@@ -7,10 +7,16 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
-TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
+class DiagnosticProtocolTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(DiagnosticProtocolTest, CreateAndDestroyProtocolObjects)
 {
 	NAME TestDeviceNAME(0);
 	auto TestInternalECU = CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0, 0x1C);
@@ -34,16 +40,16 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, CreateAndDestroyProtocolObjects)
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
 }
 
-TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
+TEST_F(DiagnosticProtocolTest, MessageEncoding)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto TestInternalECU = test_helpers::claim_internal_control_function(0xAA, 0);
+	auto TestInternalECU = test_helpers::claim_internal_control_function(0xAA, 0, time_source);
 	auto TestPartneredECU = test_helpers::force_claim_partnered_control_function(0xAB, 0);
 	DiagnosticProtocol protocolUnderTest(TestInternalECU, DiagnosticProtocol::NetworkType::SAEJ1939Network1PrimaryVehicleNetwork);
 
@@ -81,6 +87,9 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		// Simulate some time
+		time_source.update_for_ms(5);
+
 		// Make sure we're using ISO mode for this parsing to work
 		ASSERT_FALSE(protocolUnderTest.get_j1939_mode());
 
@@ -115,6 +124,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// CM DATA Payload Frame 1
@@ -128,6 +139,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('*', testFrame.data[5]); // Delimiter
 		EXPECT_EQ('9', testFrame.data[6]); // Serial number index 0
 		EXPECT_EQ('8', testFrame.data[7]); // Serial number index 1
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -143,6 +156,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('e', testFrame.data[6]); // Location index 2
 		EXPECT_EQ(' ', testFrame.data[7]); // Location index 3
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// CM DATA Payload Frame 3
@@ -156,6 +171,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('r', testFrame.data[5]); // Location index 8
 		EXPECT_EQ('n', testFrame.data[6]); // Location index 9
 		EXPECT_EQ('e', testFrame.data[7]); // Location index 10
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -171,6 +188,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('S', testFrame.data[6]); // Type Index 3
 		EXPECT_EQ('O', testFrame.data[7]); // Type Index 4
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// CM DATA Payload Frame 5
@@ -184,6 +203,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('k', testFrame.data[5]); // Type Index 9
 		EXPECT_EQ('*', testFrame.data[6]); // Delimiter
 		EXPECT_EQ('N', testFrame.data[7]); // Manufacturer index 0
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -199,6 +220,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('o', testFrame.data[6]); // Hardware ID Index 1
 		EXPECT_EQ('m', testFrame.data[7]); // Hardware ID Index 2
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// CM DATA Payload Frame 7
@@ -212,6 +235,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('r', testFrame.data[5]); // Hardware ID Index 7
 		EXPECT_EQ('d', testFrame.data[6]); // Hardware ID Index 8
 		EXPECT_EQ('w', testFrame.data[7]); // Hardware ID Index 9
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -261,6 +286,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		// Make sure we're using ISO mode for this parsing to work
 		ASSERT_TRUE(protocolUnderTest.get_j1939_mode());
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// DM1 might be sent in j1939 mode, need to screen it out
@@ -298,6 +325,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// DM1 might be sent in j1939 mode, need to screen it out
@@ -317,6 +346,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('*', testFrame.data[5]); // Delimiter
 		EXPECT_EQ('9', testFrame.data[6]); // Serial number index 0
 		EXPECT_EQ('8', testFrame.data[7]); // Serial number index 1
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -338,6 +369,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('e', testFrame.data[6]); // Location index 2
 		EXPECT_EQ(' ', testFrame.data[7]); // Location index 3
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// DM1 might be sent in j1939 mode, need to screen it out
@@ -357,6 +390,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('r', testFrame.data[5]); // Location index 8
 		EXPECT_EQ('n', testFrame.data[6]); // Location index 9
 		EXPECT_EQ('e', testFrame.data[7]); // Location index 10
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -378,6 +413,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('S', testFrame.data[6]); // Type Index 3
 		EXPECT_EQ('O', testFrame.data[7]); // Type Index 4
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// DM1 might be sent in j1939 mode, need to screen it out
@@ -397,6 +434,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('k', testFrame.data[5]); // Type Index 9
 		EXPECT_EQ('*', testFrame.data[6]); // Delimiter
 		EXPECT_EQ('N', testFrame.data[7]); // Manufacturer index 0
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -435,6 +474,13 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		protocolUnderTest.set_j1939_mode(false);
 		EXPECT_FALSE(protocolUnderTest.get_j1939_mode());
+
+		// Clear any remaining DM1s
+		time_source.update_for_ms(101);
+		while (!testPlugin.get_queue_empty())
+		{
+			testPlugin.read_frame(testFrame);
+		}
 	}
 
 	{
@@ -452,6 +498,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
+
+		time_source.update_for_ms(5);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -484,6 +532,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 1
@@ -497,6 +547,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(' ', testFrame.data[5]); // Version 0, index 4
 		EXPECT_EQ('T', testFrame.data[6]); // Version 0, index 5
 		EXPECT_EQ('e', testFrame.data[7]); // Version 0, index 6
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -512,6 +564,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('0', testFrame.data[6]); // Version 0, index 12
 		EXPECT_EQ('.', testFrame.data[7]); // Version 0, index 13
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 3
@@ -525,6 +579,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('o', testFrame.data[5]); // Version 1, index 2
 		EXPECT_EQ('t', testFrame.data[6]); // Version 1, index 3
 		EXPECT_EQ('h', testFrame.data[7]); // Version 1, index 4
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -540,6 +596,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('r', testFrame.data[6]); // Version 1, index 8
 		EXPECT_EQ('s', testFrame.data[7]); // Version 1, index 9
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 5
@@ -553,6 +611,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('x', testFrame.data[5]); // Version 1, index 7
 		EXPECT_EQ('.', testFrame.data[6]); // Version 1, index 8
 		EXPECT_EQ('x', testFrame.data[7]); // Version 1, index 9
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -597,6 +657,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
@@ -626,6 +688,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
+
+		time_source.update_for_ms(5);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -658,6 +722,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 1
@@ -671,6 +737,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('5', testFrame.data[5]); // ID Code index 4
 		EXPECT_EQ('6', testFrame.data[6]); // ID Code index 5
 		EXPECT_EQ('7', testFrame.data[7]); // ID Code index 6
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -686,6 +754,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('C', testFrame.data[6]); // ID Code index 12
 		EXPECT_EQ('*', testFrame.data[7]); // Delimiter
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 3
@@ -699,6 +769,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('-', testFrame.data[5]); // Brand index 4
 		EXPECT_EQ('A', testFrame.data[6]); // Brand index 5
 		EXPECT_EQ('g', testFrame.data[7]); // Brand index 6
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -714,6 +786,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('t', testFrame.data[6]); // Brand index 12
 		EXPECT_EQ('u', testFrame.data[7]); // Brand index 13
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 5
@@ -728,6 +802,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('I', testFrame.data[6]); // Model index 2
 		EXPECT_EQ('s', testFrame.data[7]); // Model index 3
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 6
@@ -741,6 +817,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ('c', testFrame.data[5]); // Model index 8
 		EXPECT_EQ('k', testFrame.data[6]); // Model index 9
 		EXPECT_EQ('+', testFrame.data[7]); // Model index 10
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -792,6 +870,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// A single DTC is 1 frame
@@ -818,6 +898,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+
+		time_source.update_for_ms(5);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -849,6 +931,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		std::uint16_t expectedBAMLength = 14; // This is 2 + 4 * number of DTCs
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// Broadcast Announce Message
@@ -863,6 +947,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(0xFE, testFrame.data[6]); // PGN
 		EXPECT_EQ(0x00, testFrame.data[7]); // PGN MSB
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 1
@@ -876,6 +962,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(31, testFrame.data[5]); // FMI 1
 		EXPECT_EQ(1, testFrame.data[6]); // Count 1
 		EXPECT_EQ(0x37, testFrame.data[7]); // SPN2
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -907,6 +995,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 		std::uint16_t expectedBAMLength = 14; // This is 2 + 4 * number of DTCs
 
@@ -922,6 +1012,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(0xFE, testFrame.data[6]); // PGN
 		EXPECT_EQ(0x00, testFrame.data[7]); // PGN MSB
 
+		time_source.update_for_ms(51);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 1
@@ -935,6 +1027,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_EQ(31, testFrame.data[5]); // FMI 1
 		EXPECT_EQ(1, testFrame.data[6]); // Count 1
 		EXPECT_EQ(0x37, testFrame.data[7]); // SPN2
+
+		time_source.update_for_ms(51);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -961,6 +1055,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+
+		time_source.update_for_ms(5);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -990,6 +1086,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
@@ -1012,6 +1110,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_TRUE(protocolUnderTest.get_broadcast_state());
 		EXPECT_TRUE(protocolUnderTest.suspend_broadcasts(5));
 
+		time_source.update_for_ms(5);
+
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// When we are announcing a suspension, we're supposed to set
@@ -1030,7 +1130,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		EXPECT_FALSE(protocolUnderTest.get_broadcast_state());
 
 		// Wait suspension to be lifted
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		time_source.update_for_ms(10);
 		protocolUnderTest.update();
 		EXPECT_TRUE(protocolUnderTest.get_broadcast_state());
 
@@ -1102,6 +1202,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		protocolUnderTest.set_diagnostic_trouble_code_active(testDTC1, true);
 		protocolUnderTest.set_diagnostic_trouble_code_active(testDTC2, true);
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		testFrame.dataLength = 8;
@@ -1117,6 +1218,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// Check for a positive acknowledge that the DTC was cleared
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -1145,6 +1247,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// Check for a negative acknowledge that the DTC was cleared
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -1173,6 +1276,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// Check for a positive acknowledge that the DTC was cleared
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -1201,6 +1305,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// Check for a negative acknowledge that the DTC was cleared
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -1231,6 +1336,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
@@ -1274,6 +1380,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// The stack will have sent an ACK since we sent it as destination specific
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -1328,6 +1435,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// The stack will have sent an ACK since we sent it as destination specific
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
@@ -1358,6 +1466,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		protocolUnderTest.update();
+		time_source.update_for_ms(5);
 
 		// Parse DM2 response
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));

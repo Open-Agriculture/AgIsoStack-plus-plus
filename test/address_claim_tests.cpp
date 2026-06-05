@@ -8,21 +8,28 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 
+#include "helpers/test_fixture.hpp"
+
 #include <chrono>
 #include <thread>
 
 using namespace isobus;
 
-TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
+class AddressClaimTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(AddressClaimTest, AddressClaim_PartneredClaim)
 {
 	auto firstDevice = std::make_shared<VirtualCANPlugin>();
 	auto secondDevice = std::make_shared<VirtualCANPlugin>();
 	CANHardwareInterface::set_number_of_can_channels(2);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, firstDevice);
 	CANHardwareInterface::assign_can_channel_frame_handler(1, secondDevice);
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(250));
+	time_source.update_for_ms(250);
 
 	NAME firstName(0);
 	firstName.set_arbitrary_address_capable(true);
@@ -53,7 +60,7 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	const isobus::NAMEFilter filterFirst(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::CabClimateControl));
 	auto secondPartneredFirstEcu = CANNetworkManager::CANNetwork.create_partnered_control_function(1, { filterFirst });
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	time_source.update_for_ms(500);
 	EXPECT_TRUE(firstInternalECU->get_address_valid());
 	EXPECT_TRUE(secondInternalECU2->get_address_valid());
 	EXPECT_TRUE(firstPartneredSecondECU->get_address_valid());
@@ -69,16 +76,16 @@ TEST(ADDRESS_CLAIM_TESTS, PartneredClaim)
 	CANNetworkManager::CANNetwork.deactivate_control_function(secondInternalECU2);
 }
 
-TEST(ADDRESS_CLAIM_TESTS, CannotClaim)
+TEST_F(AddressClaimTest, CannotClaim)
 {
 	VirtualCANPlugin plugin;
 	plugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(250));
+	time_source.update_for_ms(250);
 
 	// Claim a very low name on every address
 	NAME firstName(0);
@@ -138,7 +145,7 @@ TEST(ADDRESS_CLAIM_TESTS, CannotClaim)
 
 	auto secondInternalECU2 = CANNetworkManager::CANNetwork.create_internal_control_function(secondName, 0);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+	time_source.update_for_ms(1500);
 
 	bool cannot_claim_message_seen = false;
 	while (!plugin.get_queue_empty())
