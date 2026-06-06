@@ -2319,6 +2319,37 @@ namespace isobus
 				}
 				break;
 
+				case VirtualTerminalObjectType::ScaledGraphic:
+				{
+					auto tempObject = std::make_shared<ScaledGraphicObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
+						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_scale_type(iopData[7]);
+						tempObject->set_options(iopData[8]);
+						tempObject->set_graphic_id((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
+						const std::uint8_t numberOfMacrosToFollow = iopData[11];
+						iopData += 12;
+						iopLength -= 12;
+
+						// Next, parse macro list
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse scaled graphics object");
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+					}
+				}
+				break;
+
 				default:
 				{
 					LOG_ERROR("[WS]: Unsupported Object (Type: %d)", decodedType);
