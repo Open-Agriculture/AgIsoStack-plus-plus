@@ -19,31 +19,51 @@
 
 namespace isobus
 {
+	/// @brief Extracts the low byte from a 16-bit value.
+	/// @param value The value to extract the low byte from.
+	/// @returns The low byte of the value.
 	static constexpr std::uint8_t get_low_byte(std::uint16_t value) noexcept
 	{
 		return static_cast<std::uint8_t>(value & 0xFFU);
 	}
 
+	/// @brief Extracts the high byte from a 16-bit value.
+	/// @param value The value to extract the high byte from.
+	/// @returns The high byte of the value.
 	static constexpr std::uint8_t get_high_byte(std::uint16_t value) noexcept
 	{
 		return static_cast<std::uint8_t>((value >> 8) & 0xFFU);
 	}
 
+	/// @brief Creates a mask for a bit in an 8-bit value.
+	/// @param bitIndex The zero-based bit index.
+	/// @returns A mask with the requested bit set, or zero if the index is invalid.
 	static constexpr std::uint8_t get_bit(std::uint8_t bitIndex) noexcept
 	{
 		return (bitIndex < 8U) ? static_cast<std::uint8_t>(1U << bitIndex) : static_cast<std::uint8_t>(0U);
 	}
 
+	/// @brief Extracts a byte from a 32-bit value.
+	/// @param value The value to extract the byte from.
+	/// @param byteIndex The zero-based byte index.
+	/// @returns The requested byte, or zero if the index is invalid.
 	static constexpr std::uint8_t get_byte(std::uint32_t value, std::uint8_t byteIndex) noexcept
 	{
 		return (byteIndex < 4U) ? static_cast<std::uint8_t>((value >> (byteIndex * 8U)) & 0xFFU) : static_cast<std::uint8_t>(0U);
 	}
 
+	/// @brief Extracts the low 16 bits from a 32-bit value.
+	/// @param value The value to extract the low bits from.
+	/// @returns The low 16 bits of the value.
 	static constexpr std::uint16_t get_low_16_bits(std::uint32_t value) noexcept
 	{
 		return static_cast<std::uint16_t>(value & 0xFFFFU);
 	}
 
+	/// @brief Reads a little-endian 16-bit value from a byte vector.
+	/// @param data The vector containing the encoded value.
+	/// @param index The index of the first byte. The vector must contain at least two bytes beginning at this index.
+	/// @returns The decoded 16-bit value.
 	static std::uint16_t get_little_endian_uint16(const std::vector<std::uint8_t> &data, std::size_t index)
 	{
 		const auto lowByte = static_cast<std::uint16_t>(data[index]);
@@ -52,6 +72,10 @@ namespace isobus
 		return static_cast<std::uint16_t>(lowByte | static_cast<std::uint16_t>(highByte << 8));
 	}
 
+	/// @brief Reads a little-endian 32-bit value from a byte vector.
+	/// @param data The vector containing the encoded value.
+	/// @param index The index of the first byte. The vector must contain at least four bytes beginning at this index.
+	/// @returns The decoded 32-bit value.
 	static std::uint32_t get_little_endian_uint32(const std::vector<std::uint8_t> &data, std::size_t index)
 	{
 		return static_cast<std::uint32_t>(data[index]) |
