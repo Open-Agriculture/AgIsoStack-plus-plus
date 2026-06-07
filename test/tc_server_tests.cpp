@@ -1187,9 +1187,9 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x01, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 
 		// Disable task active
 		server.set_task_totals_active(false);
@@ -1203,9 +1203,9 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x00, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 	}
 	CANHardwareInterface::stop();
 }
