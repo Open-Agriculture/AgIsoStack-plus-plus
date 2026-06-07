@@ -19,6 +19,47 @@
 
 namespace isobus
 {
+	static constexpr std::uint8_t get_low_byte(std::uint16_t value) noexcept
+	{
+		return static_cast<std::uint8_t>(value & 0xFFU);
+	}
+
+	static constexpr std::uint8_t get_high_byte(std::uint16_t value) noexcept
+	{
+		return static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+	}
+
+	static constexpr std::uint8_t get_bit(std::uint8_t bitIndex) noexcept
+	{
+		return (bitIndex < 8U) ? static_cast<std::uint8_t>(1U << bitIndex) : static_cast<std::uint8_t>(0U);
+	}
+
+	static constexpr std::uint8_t get_byte(std::uint32_t value, std::uint8_t byteIndex) noexcept
+	{
+		return (byteIndex < 4U) ? static_cast<std::uint8_t>((value >> (byteIndex * 8U)) & 0xFFU) : static_cast<std::uint8_t>(0U);
+	}
+
+	static constexpr std::uint16_t get_low_16_bits(std::uint32_t value) noexcept
+	{
+		return static_cast<std::uint16_t>(value & 0xFFFFU);
+	}
+
+	static std::uint16_t get_little_endian_uint16(const std::vector<std::uint8_t> &data, std::size_t index)
+	{
+		const auto lowByte = static_cast<std::uint16_t>(data[index]);
+		const auto highByte = static_cast<std::uint16_t>(data[index + 1]);
+
+		return static_cast<std::uint16_t>(lowByte | static_cast<std::uint16_t>(highByte << 8));
+	}
+
+	static std::uint32_t get_little_endian_uint32(const std::vector<std::uint8_t> &data, std::size_t index)
+	{
+		return static_cast<std::uint32_t>(data[index]) |
+		  (static_cast<std::uint32_t>(data[index + 1]) << 8) |
+		  (static_cast<std::uint32_t>(data[index + 2]) << 16) |
+		  (static_cast<std::uint32_t>(data[index + 3]) << 24);
+	}
+
 	VirtualTerminalServer::VirtualTerminalServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse) :
 	  languageCommandInterface(controlFunctionToUse, true),
 	  serverInternalControlFunction(controlFunctionToUse)
@@ -154,12 +195,12 @@ namespace isobus
 
 		if (!retVal)
 		{
-			if ((message.get_data()[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
-			    (message.get_data()[1] & 0x01)) // Init bit is set
+			const auto &data = message.get_data();
+			if ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
+			    (data[1] & 0x01)) // Init bit is set
 			{
 				// This CF is probably trying to initiate communication with us.
 				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
-				auto &data = message.get_data();
 
 				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
 				if (data[2] > get_vt_version_byte(get_version()))
@@ -220,14 +261,7 @@ namespace isobus
 
 	CANIdentifier::CANPriority VirtualTerminalServer::get_priority() const
 	{
-		if (VTVersion::Version6 == get_version())
-		{
-			return CANIdentifier::CANPriority::Priority5;
-		}
-		else
-		{
-			return CANIdentifier::CANPriority::PriorityLowest7;
-		}
+		return (VTVersion::Version6 == get_version()) ? CANIdentifier::CANPriority::Priority5 : CANIdentifier::CANPriority::PriorityLowest7;
 	}
 
 	std::uint8_t VirtualTerminalServer::get_vt_version_byte(VTVersion version)
@@ -271,13 +305,13 @@ namespace isobus
 
 	bool VirtualTerminalServer::process_stateless_messages(const CANMessage &message)
 	{
-		auto &data = message.get_data();
-
+		bool retVal = false;
+		const auto &data = message.get_data();
 		switch (static_cast<Function>(data.at(0)))
 		{
 			case Function::GetMemoryMessage:
 			{
-				std::uint32_t requiredMemory = (data[2] | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16) | (static_cast<std::uint32_t>(data[5]) << 24));
+				const auto requiredMemory = get_little_endian_uint32(data, 2);
 				bool isEnoughMemory = get_is_enough_memory(requiredMemory);
 				LOG_INFO("[VT Server]: An ecu requested %u bytes of memory.", requiredMemory);
 
@@ -292,7 +326,7 @@ namespace isobus
 
 				std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 				buffer[0] = static_cast<std::uint8_t>(Function::GetMemoryMessage);
-				buffer[1] = static_cast<std::uint8_t>(get_vt_version_byte(get_version()));
+				buffer[1] = get_vt_version_byte(get_version());
 				buffer[2] = static_cast<std::uint8_t>(!isEnoughMemory);
 				buffer[3] = 0xFF; // Reserved
 				buffer[4] = 0xFF; // Reserved
@@ -305,7 +339,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
-				return true;
+				retVal = true;
 			}
 			break;
 
@@ -327,7 +361,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
-				return true;
+				retVal = true;
 			}
 			break;
 
@@ -348,7 +382,7 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
-				return true;
+				retVal = true;
 			}
 			break;
 
@@ -359,17 +393,17 @@ namespace isobus
 				buffer[1] = get_powerup_time();
 				buffer[2] = static_cast<std::uint8_t>(get_graphic_mode()); // 256 Colour Mode by default
 				buffer[3] = 0x0F; // Support pointing event message
-				buffer[4] = (get_data_mask_area_size_x_pixels() & 0xFF); // X Pixels LSB
-				buffer[5] = (get_data_mask_area_size_x_pixels() >> 8); // X Pixels MSB
-				buffer[6] = (get_data_mask_area_size_y_pixels() & 0xFF); // Y Pixels LSB
-				buffer[7] = (get_data_mask_area_size_y_pixels() >> 8); // Y Pixels MSB
+				buffer[4] = get_low_byte(get_data_mask_area_size_x_pixels()); // X Pixels LSB
+				buffer[5] = get_high_byte(get_data_mask_area_size_x_pixels()); // X Pixels MSB
+				buffer[6] = get_low_byte(get_data_mask_area_size_y_pixels()); // Y Pixels LSB
+				buffer[7] = get_high_byte(get_data_mask_area_size_y_pixels()); // Y Pixels MSB
 				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
-				return true;
+				retVal = true;
 			}
 			break;
 
@@ -378,17 +412,17 @@ namespace isobus
 				std::vector<std::uint8_t> wideCharRangeArray;
 				std::uint8_t numberOfRanges = 0;
 				std::uint8_t codePlane = data.at(1);
-				std::uint16_t firstWideCharInInquiryRange = static_cast<std::uint16_t>(data.at(2)) | (static_cast<std::uint16_t>(data.at(3)) << 8);
-				std::uint16_t lastWideCharInInquiryRange = static_cast<std::uint16_t>(data.at(4)) | (static_cast<std::uint16_t>(data.at(5)) << 8);
+				std::uint16_t firstWideCharInInquiryRange = get_little_endian_uint16(data, 2);
+				std::uint16_t lastWideCharInInquiryRange = get_little_endian_uint16(data, 4);
 				auto errorCode = get_supported_wide_chars(codePlane, firstWideCharInInquiryRange, lastWideCharInInquiryRange, numberOfRanges, wideCharRangeArray);
 
 				std::vector<std::uint8_t> buffer;
 				buffer.push_back(static_cast<std::uint8_t>(Function::GetSupportedWidecharsMessage));
 				buffer.push_back(codePlane);
-				buffer.push_back(static_cast<std::uint8_t>(firstWideCharInInquiryRange & 0xFF));
-				buffer.push_back(static_cast<std::uint8_t>((firstWideCharInInquiryRange >> 8) & 0xFF));
-				buffer.push_back(static_cast<std::uint8_t>(lastWideCharInInquiryRange & 0xFF));
-				buffer.push_back(static_cast<std::uint8_t>((lastWideCharInInquiryRange >> 8) & 0xFF));
+				buffer.push_back(get_low_byte(firstWideCharInInquiryRange));
+				buffer.push_back(get_high_byte(firstWideCharInInquiryRange));
+				buffer.push_back(get_low_byte(lastWideCharInInquiryRange));
+				buffer.push_back(get_high_byte(lastWideCharInInquiryRange));
 				buffer.push_back(static_cast<std::uint8_t>(errorCode));
 				buffer.push_back(numberOfRanges);
 
@@ -402,34 +436,33 @@ namespace isobus
 				                                               serverInternalControlFunction,
 				                                               message.get_source_control_function(),
 				                                               get_priority());
-				return true;
+				retVal = true;
 			}
 			break;
 
 			case Function::GetWindowMaskDataMessage:
 			{
 				send_get_window_mask_data_response(message.get_source_control_function());
-				return true;
+				retVal = true;
 			}
 			break;
 
 			default:
 				break;
 		}
-		return false;
+		return retVal;
 	}
 
 	void VirtualTerminalServer::process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet)
 	{
-		auto &data = message.get_data();
-
+		const auto &data = message.get_data();
 		switch (static_cast<Function>(data.at(0)))
 		{
 			case Function::GetMemoryMessage:
 			{
 				// The response is handled in process_stateless_messages
 				// but save the size requested for later use if we have a connected working set
-				std::uint32_t requiredMemory = (data[2] | (static_cast<std::uint32_t>(data[3]) << 8) | (static_cast<std::uint32_t>(data[4]) << 16) | (static_cast<std::uint32_t>(data[5]) << 24));
+				const auto requiredMemory = get_little_endian_uint32(data, 2);
 				managedWorkingSet->set_iop_size(requiredMemory);
 			}
 			break;
@@ -448,7 +481,7 @@ namespace isobus
 				auto versions = get_versions(message.get_source_control_function()->get_NAME());
 
 				std::vector<std::uint8_t> buffer;
-				buffer.push_back(static_cast<std::uint32_t>(Function::GetVersionsResponse));
+				buffer.push_back(static_cast<std::uint8_t>(Function::GetVersionsResponse));
 
 				LOG_DEBUG("[VT Server]: Client %u requests stored versions", message.get_source_control_function()->get_address());
 
@@ -482,7 +515,6 @@ namespace isobus
 
 			case Function::LoadVersionCommand:
 			{
-				constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
 				std::vector<std::uint8_t> versionLabel;
 
 				versionLabel.reserve(VERSION_LABEL_LENGTH);
@@ -495,7 +527,7 @@ namespace isobus
 				auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
 				if (!loadedVersion.empty())
 				{
-					managedWorkingSet->set_iop_size(loadedVersion.size());
+					managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
 					managedWorkingSet->add_iop_raw_data(loadedVersion);
 				}
 				else
@@ -525,7 +557,7 @@ namespace isobus
 
 					for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
 					{
-						versionLabel.push_back(static_cast<char>(data[i + 1]));
+						versionLabel.push_back(data[i + 1]);
 					}
 
 					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
@@ -597,7 +629,7 @@ namespace isobus
 				else
 				{
 					LOG_WARNING("[VT Server]: Delete version failed for client NAME %s", nameString.str().c_str());
-					send_delete_version_response((1 << static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+					send_delete_version_response(get_bit(static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
 				}
 			}
 			break;
@@ -626,8 +658,8 @@ namespace isobus
 
 			case Function::ChangeNumericValueCommand:
 			{
-				std::uint32_t value = (static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
-				auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				const auto value = get_little_endian_uint32(data, 4);
+				auto objectId = get_little_endian_uint16(data, 1);
 				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
 				bool logSuccess = true;
 
@@ -637,7 +669,7 @@ namespace isobus
 					{
 						case VirtualTerminalObjectType::InputBoolean:
 						{
-							std::static_pointer_cast<InputBoolean>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<InputBoolean>(lTargetObject)->set_value(get_byte(value, 0));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -653,7 +685,7 @@ namespace isobus
 
 						case VirtualTerminalObjectType::InputList:
 						{
-							std::static_pointer_cast<InputList>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<InputList>(lTargetObject)->set_value(get_byte(value, 0));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -669,7 +701,7 @@ namespace isobus
 
 						case VirtualTerminalObjectType::OutputList:
 						{
-							std::static_pointer_cast<OutputList>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<OutputList>(lTargetObject)->set_value(get_byte(value, 0));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -677,7 +709,7 @@ namespace isobus
 
 						case VirtualTerminalObjectType::OutputMeter:
 						{
-							std::static_pointer_cast<OutputMeter>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<OutputMeter>(lTargetObject)->set_value(get_low_16_bits(value));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -685,7 +717,7 @@ namespace isobus
 
 						case VirtualTerminalObjectType::OutputLinearBarGraph:
 						{
-							std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject)->set_value(get_low_16_bits(value));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -693,7 +725,7 @@ namespace isobus
 
 						case VirtualTerminalObjectType::OutputArchedBarGraph:
 						{
-							std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject)->set_value(get_low_16_bits(value));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -709,7 +741,7 @@ namespace isobus
 
 						case VirtualTerminalObjectType::ObjectPointer:
 						{
-							std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(value);
+							std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(get_low_16_bits(value));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
@@ -717,8 +749,8 @@ namespace isobus
 
 						case VirtualTerminalObjectType::ExternalObjectPointer:
 						{
-							std::uint16_t externalReferenceNAMEObjectIdD = (static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
-							std::uint16_t referencedObjectID = (static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
+							std::uint16_t externalReferenceNAMEObjectIdD = get_little_endian_uint16(data, 4);
+							std::uint16_t referencedObjectID = get_little_endian_uint16(data, 6);
 							std::static_pointer_cast<ExternalObjectPointer>(lTargetObject)->set_external_reference_name_id(externalReferenceNAMEObjectIdD);
 							std::static_pointer_cast<ExternalObjectPointer>(lTargetObject)->set_external_object_id(referencedObjectID);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
@@ -730,7 +762,7 @@ namespace isobus
 						{
 							// Todo std::static_pointer_cast<Animation>(lTargetObject)->set_value(value);
 							// onChangeNumericValueEventDispatcher.call(objectId, value);
-							send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::AnyOtherError)), value, managedWorkingSet->get_control_function());
+							send_change_numeric_value_response(objectId, get_bit(static_cast<std::uint8_t>(ChangeNumericValueErrorBit::AnyOtherError)), value, managedWorkingSet->get_control_function());
 							LOG_WARNING("[VT Server]: Client %u change numeric value for animation not implemented yet", managedWorkingSet->get_control_function()->get_address());
 							logSuccess = false;
 						}
@@ -738,7 +770,7 @@ namespace isobus
 
 						default:
 						{
-							send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, managedWorkingSet->get_control_function());
+							send_change_numeric_value_response(objectId, get_bit(static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, managedWorkingSet->get_control_function());
 							LOG_WARNING("[VT Server]: Client %u change numeric value invalid object type. ID: %u", managedWorkingSet->get_control_function()->get_address(), objectId);
 							logSuccess = false;
 						}
@@ -753,7 +785,7 @@ namespace isobus
 				}
 				else
 				{
-					send_change_numeric_value_response(objectId, (1 << static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, managedWorkingSet->get_control_function());
+					send_change_numeric_value_response(objectId, get_bit(static_cast<std::uint8_t>(ChangeNumericValueErrorBit::InvalidObjectID)), value, managedWorkingSet->get_control_function());
 					LOG_WARNING("[VT Server]: Client %u change numeric value invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectId);
 				}
 			}
@@ -761,7 +793,7 @@ namespace isobus
 
 			case Function::HideShowObjectCommand:
 			{
-				auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectId = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectId);
 
 				if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
@@ -783,7 +815,7 @@ namespace isobus
 				}
 				else
 				{
-					send_hide_show_object_response(objectId, (1 << static_cast<std::uint8_t>(HideShowObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+					send_hide_show_object_response(objectId, get_bit(static_cast<std::uint8_t>(HideShowObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
 					LOG_WARNING("[VT Server]: Client %u hide/show object command failed. It can only affect containers! ID: %u", managedWorkingSet->get_control_function()->get_address(), objectId);
 				}
 			}
@@ -791,7 +823,7 @@ namespace isobus
 
 			case Function::EnableDisableObjectCommand:
 			{
-				auto objectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectId = get_little_endian_uint16(data, 1);
 				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
 
 				if (nullptr != lTargetObject)
@@ -842,27 +874,27 @@ namespace isobus
 
 							default:
 							{
-								send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+								send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
 							}
 							break;
 						}
 					}
 					else
 					{
-						send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidEnableDisableCommandValue)), (0 != data[3]), managedWorkingSet->get_control_function());
+						send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidEnableDisableCommandValue)), (0 != data[3]), managedWorkingSet->get_control_function());
 					}
 				}
 				else
 				{
-					send_enable_disable_object_response(objectId, (1 << static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+					send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeChildLocationCommand:
 			{
-				auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto parentObjectId = get_little_endian_uint16(data, 1);
+				auto objectID = get_little_endian_uint16(data, 3);
 				auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
 
 				if (nullptr != parentObject)
@@ -885,19 +917,19 @@ namespace isobus
 						}
 						else
 						{
-							send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
+							send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
 							LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u isn't applicable", managedWorkingSet->get_control_function()->get_address(), objectID);
 						}
 					}
 					else
 					{
-						send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
+						send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
 						LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u doesn't exist", managedWorkingSet->get_control_function()->get_address(), objectID);
 					}
 				}
 				else
 				{
-					send_change_child_location_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
+					send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
 					LOG_WARNING("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
 				}
 			}
@@ -905,8 +937,8 @@ namespace isobus
 
 			case Function::ChangeActiveMaskCommand:
 			{
-				auto workingSetObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto newActiveMaskObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto workingSetObjectId = get_little_endian_uint16(data, 1);
+				auto newActiveMaskObjectId = get_little_endian_uint16(data, 3);
 				auto workingSetObject = managedWorkingSet->get_object_by_id(workingSetObjectId);
 
 				if (nullptr != workingSetObject)
@@ -920,13 +952,13 @@ namespace isobus
 					}
 					else
 					{
-						send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), managedWorkingSet->get_control_function());
+						send_change_active_mask_response(newActiveMaskObjectId, get_bit(static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidMaskObjectID)), managedWorkingSet->get_control_function());
 						LOG_WARNING("[VT Server]: Client %u change active mask failed because the new mask object ID %u was not valid.", managedWorkingSet->get_control_function()->get_address(), newActiveMaskObjectId);
 					}
 				}
 				else
 				{
-					send_change_active_mask_response(newActiveMaskObjectId, (1 << static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), managedWorkingSet->get_control_function());
+					send_change_active_mask_response(newActiveMaskObjectId, get_bit(static_cast<std::uint8_t>(ChangeActiveMaskErrorBit::InvalidWorkingSetObjectID)), managedWorkingSet->get_control_function());
 					LOG_WARNING("[VT Server]: Client %u change active mask failed because the working set object ID %u was not valid.", managedWorkingSet->get_control_function()->get_address(), workingSetObjectId);
 				}
 			}
@@ -941,8 +973,8 @@ namespace isobus
 
 			case Function::ChangeStringValueCommand:
 			{
-				auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto numberOfBytesInString = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto objectIdToChange = get_little_endian_uint16(data, 1);
+				auto numberOfBytesInString = get_little_endian_uint16(data, 3);
 				auto stringObject = managedWorkingSet->get_object_by_id(objectIdToChange);
 
 				if (message.get_data_length() >= static_cast<std::uint32_t>(numberOfBytesInString + 5))
@@ -1011,7 +1043,7 @@ namespace isobus
 
 							default:
 							{
-								send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+								send_change_string_value_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
 								LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because the object ID was for an object that isn't a string.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
 							}
 							break;
@@ -1019,13 +1051,13 @@ namespace isobus
 					}
 					else
 					{
-						send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
+						send_change_string_value_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeStringValueErrorBit::InvalidObjectID)), message.get_source_control_function());
 						LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because the object ID was invalid.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
 					}
 				}
 				else
 				{
-					send_change_string_value_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeStringValueErrorBit::AnyOtherError)), message.get_source_control_function());
+					send_change_string_value_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeStringValueErrorBit::AnyOtherError)), message.get_source_control_function());
 					LOG_WARNING("[VT Server]: Client %u change string value command for object %u failed because data length is not valid when compared to the amount sent.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
 				}
 			}
@@ -1033,8 +1065,8 @@ namespace isobus
 
 			case Function::ChangeFillAttributesCommand:
 			{
-				auto objectIdToChange = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto fillPatternID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+				auto objectIdToChange = get_little_endian_uint16(data, 1);
+				auto fillPatternID = get_little_endian_uint16(data, 5);
 				auto object = managedWorkingSet->get_object_by_id(objectIdToChange);
 				auto fillPatternObject = managedWorkingSet->get_object_by_id(fillPatternID);
 
@@ -1055,19 +1087,19 @@ namespace isobus
 						}
 						else
 						{
-							send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidType)), message.get_source_control_function());
+							send_change_fill_attributes_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidType)), message.get_source_control_function());
 							LOG_WARNING("[VT Server]: Client %u change fill attributes of object %u invalid fill object type. Must be a picture graphic.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
 						}
 					}
 					else
 					{
-						send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidPatternObjectID)), message.get_source_control_function());
+						send_change_fill_attributes_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidPatternObjectID)), message.get_source_control_function());
 						LOG_WARNING("[VT Server]: Client %u change fill attributes invalid pattern object ID of %u for object %u", managedWorkingSet->get_control_function()->get_address(), fillPatternID, objectIdToChange);
 					}
 				}
 				else
 				{
-					send_change_fill_attributes_response(objectIdToChange, (1 << static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+					send_change_fill_attributes_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeFillAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
 					LOG_WARNING("[VT Server]: Client %u change fill attributes invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
 				}
 			}
@@ -1075,12 +1107,12 @@ namespace isobus
 
 			case Function::ChangeChildPositionCommand:
 			{
-				auto parentObjectId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
+				auto parentObjectId = get_little_endian_uint16(data, 1);
+				auto objectID = get_little_endian_uint16(data, 3);
 				if (message.get_data_length() > CAN_DATA_LENGTH) // Must be at least 9 bytes
 				{
-					std::uint16_t newXPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
-					std::uint16_t newYPosition = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[7]) | (static_cast<std::uint16_t>(data[8]) << 8));
+					std::uint16_t newXPosition = get_little_endian_uint16(data, 5);
+					std::uint16_t newYPosition = get_little_endian_uint16(data, 7);
 					auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
 					auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
@@ -1122,7 +1154,7 @@ namespace isobus
 									else
 									{
 										LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-										send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
+										send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
 									}
 								}
 								break;
@@ -1130,7 +1162,7 @@ namespace isobus
 								default:
 								{
 									LOG_WARNING("[VT Server]: Client %u change child position error. Parent object type cannot be targeted by this command: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-									send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
 								}
 								break;
 							}
@@ -1138,29 +1170,29 @@ namespace isobus
 						else
 						{
 							LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-							send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
+							send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
 						}
 					}
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change child position error. Parent object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-						send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
+						send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change child position error. DLC must be 9 bytes for the message to be valid.");
-					send_change_child_position_response(parentObjectId, objectID, (1 << static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
+					send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeAttributeCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				std::uint8_t attributeID = data[3];
-				std::uint32_t attributeData = static_cast<std::uint32_t>(static_cast<std::uint32_t>(data[4]) | (static_cast<std::uint32_t>(data[5]) << 8) | (static_cast<std::uint32_t>(data[6]) << 16) | (static_cast<std::uint32_t>(data[7]) << 24));
+				const auto attributeData = get_little_endian_uint32(data, 4);
 				VTObject::AttributeError errorCode = VTObject::AttributeError::AnyOtherError;
 
 				if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
@@ -1174,13 +1206,13 @@ namespace isobus
 					}
 					else
 					{
-						send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(errorCode)), data.at(3), message.get_source_control_function());
+						send_change_attribute_response(objectID, get_bit(static_cast<std::uint8_t>(errorCode)), data.at(3), message.get_source_control_function());
 						LOG_WARNING("[VT Server]: Client %u change object %u attribute %u to %ul error %u", managedWorkingSet->get_control_function()->get_address(), objectID, attributeID, attributeData, static_cast<std::uint8_t>(errorCode));
 					}
 				}
 				else
 				{
-					send_change_attribute_response(objectID, (1 << static_cast<std::uint8_t>(VTObject::AttributeError::InvalidObjectID)), data.at(3), message.get_source_control_function());
+					send_change_attribute_response(objectID, get_bit(static_cast<std::uint8_t>(VTObject::AttributeError::InvalidObjectID)), data.at(3), message.get_source_control_function());
 					LOG_WARNING("[VT Server]: Client %u change attribute %u invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), attributeID, objectID);
 				}
 			}
@@ -1188,9 +1220,9 @@ namespace isobus
 
 			case Function::ChangeSizeCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto newWidth = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[3]) | (static_cast<std::uint16_t>(data[4]) << 8));
-				auto newHeight = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
+				auto newWidth = get_little_endian_uint16(data, 3);
+				auto newHeight = get_little_endian_uint16(data, 5);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
 				if (nullptr != targetObject)
@@ -1212,7 +1244,7 @@ namespace isobus
 							else
 							{
 								LOG_WARNING("[VT Server]: Client %u change size command: invalid new size. Meter must be square! Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
+								send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError)), message.get_source_control_function());
 							}
 						}
 						break;
@@ -1245,7 +1277,7 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u change size command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError))), message.get_source_control_function());
+							send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError)), message.get_source_control_function());
 						}
 						break;
 					}
@@ -1259,15 +1291,15 @@ namespace isobus
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change size command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_change_size_response(objectID, (1 << (static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID))), message.get_source_control_function());
+					send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID)), message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeListItemCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
-				auto newObjectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
+				auto newObjectID = get_little_endian_uint16(data, 4);
 				auto listIndex = data[3];
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				auto newObject = managedWorkingSet->get_object_by_id(newObjectID);
@@ -1288,7 +1320,7 @@ namespace isobus
 								}
 								else
 								{
-									send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
 									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 								}
 							}
@@ -1298,7 +1330,7 @@ namespace isobus
 							case VirtualTerminalObjectType::ExternalObjectDefinition:
 							{
 								// @todo
-								send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+								send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
 								LOG_WARNING("[VT Server]: Client %u change list item command: TODO object type", managedWorkingSet->get_control_function()->get_address());
 							}
 							break;
@@ -1313,7 +1345,7 @@ namespace isobus
 								}
 								else
 								{
-									send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
 									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 								}
 							}
@@ -1322,7 +1354,7 @@ namespace isobus
 							default:
 							{
 								LOG_WARNING("[VT Server]: Client %u change list item command: invalid object type. Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+								send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
 							}
 							break;
 						}
@@ -1330,20 +1362,20 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change list item command: invalid new object ID of %u", managedWorkingSet->get_control_function()->get_address(), newObjectID);
-						send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidNewListItemObjectID)), listIndex, message.get_source_control_function());
+						send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidNewListItemObjectID)), listIndex, message.get_source_control_function());
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change list item command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_change_list_item_response(objectID, newObjectID, (1 << static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
+					send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeFontAttributesCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				std::uint8_t fontColour = data[3];
 				std::uint8_t fontSize = data[4];
@@ -1367,24 +1399,24 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid font size %u. ObjectID: %u", managedWorkingSet->get_control_function()->get_address(), fontSize, objectID);
-						send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidSize)), message.get_source_control_function());
+						send_change_font_attributes_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidSize)), message.get_source_control_function());
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change font attributes command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_change_font_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+					send_change_font_attributes_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeLineAttributesCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				std::uint8_t lineColour = data[3];
 				std::uint8_t lineWidth = data[4];
-				std::uint16_t lineArt = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[5]) | (static_cast<std::uint16_t>(data[6]) << 8));
+				std::uint16_t lineArt = get_little_endian_uint16(data, 5);
 
 				if ((nullptr != targetObject) &&
 				    (VirtualTerminalObjectType::LineAttributes == targetObject->get_object_type()))
@@ -1400,15 +1432,15 @@ namespace isobus
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change line attributes command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_change_line_attributes_response(objectID, (1 << static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
+					send_change_line_attributes_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeFontAttributesErrorBit::InvalidObjectID)), message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeSoftKeyMaskCommand:
 			{
-				auto dataOrAlarmMaskId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[2]) | (static_cast<std::uint16_t>(data[3]) << 8));
-				auto newSoftKeyMaskId = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
+				auto dataOrAlarmMaskId = get_little_endian_uint16(data, 2);
+				auto newSoftKeyMaskId = get_little_endian_uint16(data, 4);
 				auto targetMask = managedWorkingSet->get_object_by_id(dataOrAlarmMaskId);
 				auto newSoftKeyMask = managedWorkingSet->get_object_by_id(newSoftKeyMaskId);
 
@@ -1430,7 +1462,7 @@ namespace isobus
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
 								}
 							}
 							break;
@@ -1447,7 +1479,7 @@ namespace isobus
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
 								}
 							}
 							break;
@@ -1455,7 +1487,7 @@ namespace isobus
 							default:
 							{
 								LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId);
-								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
 							}
 							break;
 						}
@@ -1463,20 +1495,20 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid soft key object ID of %u", managedWorkingSet->get_control_function()->get_address(), newSoftKeyMaskId);
-						send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
+						send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid data mask or alarm mask object ID of %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId);
-					send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, (1 << static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
+					send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangeBackgroundColourCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				std::uint8_t backgroundColour = data[3];
 
@@ -1510,7 +1542,7 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
+							send_change_background_colour_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
 						}
 						break;
 					}
@@ -1518,14 +1550,14 @@ namespace isobus
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_change_background_colour_response(objectID, (1 << static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
+					send_change_background_colour_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangePriorityCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				std::uint8_t newPriority = data[3];
 
@@ -1541,19 +1573,19 @@ namespace isobus
 						}
 						else
 						{
-							send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidPriority)), newPriority, message.get_source_control_function());
+							send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidPriority)), newPriority, message.get_source_control_function());
 							LOG_WARNING("[VT Server]: Client %u change priority command: Invalid Priority %u. Must be 2 or less.", managedWorkingSet->get_control_function()->get_address(), newPriority);
 						}
 					}
 					else
 					{
-						send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
+						send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
 						LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u - the object must be an alarm mask.", managedWorkingSet->get_control_function()->get_address(), objectID);
 					}
 				}
 				else
 				{
-					send_change_priority_response(objectID, (1 << static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
+					send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
 					LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
 				}
 			}
@@ -1561,7 +1593,7 @@ namespace isobus
 
 			case Function::SelectInputObjectCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
 				if (nullptr != targetObject)
@@ -1594,12 +1626,12 @@ namespace isobus
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
-									send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+									send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
 								}
 							}
 							else
 							{
-								send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+								send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
 								LOG_WARNING("[VT Server]: Client %u select input object command: buttons and keys can only be selected when the server is version 4 or higher.", managedWorkingSet->get_control_function()->get_address(), objectID);
 							}
 						}
@@ -1630,7 +1662,7 @@ namespace isobus
 							else
 							{
 								LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+								send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
 							}
 						}
 						break;
@@ -1638,14 +1670,14 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u select input object command: invalid object type", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+							send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
 						}
 						break;
 					}
 				}
 				else
 				{
-					send_select_input_object_response(objectID, (1 << static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+					send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
 					LOG_WARNING("[VT Server]: Client %u select input object command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
 				}
 			}
@@ -1661,7 +1693,7 @@ namespace isobus
 
 			case Function::ExecuteMacroCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]));
+				auto objectID = static_cast<std::uint16_t>(data[1]);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
 				if (nullptr != targetObject)
@@ -1676,26 +1708,26 @@ namespace isobus
 						else
 						{
 							LOG_ERROR("[VT Server]: Client %u execute macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), false);
+							send_execute_macro_or_extended_macro_response(objectID, get_bit(static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), false);
 						}
 					}
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u execute macro command: object ID %u is not a macro!", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), false);
+						send_execute_macro_or_extended_macro_response(objectID, get_bit(static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), false);
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u execute macro command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), false);
+					send_execute_macro_or_extended_macro_response(objectID, get_bit(static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), false);
 				}
 			}
 			break;
 
 			case Function::ExecuteExtendedMacroCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
 				if (nullptr != targetObject)
@@ -1710,19 +1742,19 @@ namespace isobus
 						else
 						{
 							LOG_ERROR("[VT Server]: Client %u execute extended macro command: failed. Macro probably contains invalid commands. Object pool state may now be undefined!", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), true);
+							send_execute_macro_or_extended_macro_response(objectID, get_bit(static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::AnyOtherError)), message.get_source_control_function(), true);
 						}
 					}
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u execute extended macro command: object ID %u is not a macro!", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), true);
+						send_execute_macro_or_extended_macro_response(objectID, get_bit(static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectIsNotAMacro)), message.get_source_control_function(), true);
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u execute extended macro command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_execute_macro_or_extended_macro_response(objectID, (1 << static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), true);
+					send_execute_macro_or_extended_macro_response(objectID, get_bit(static_cast<std::uint8_t>(ExecuteMacroResponseErrorBit::ObjectDoesntExist)), message.get_source_control_function(), true);
 				}
 			}
 			break;
@@ -1738,17 +1770,17 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[VT Server]: Client %u object pool failed to be deactivated.", managedWorkingSet->get_control_function()->get_address());
-					send_delete_object_pool_response((1 << static_cast<std::uint8_t>(DeleteObjectPoolErrorBit::DeletionError)), message.get_source_control_function());
+					send_delete_object_pool_response(get_bit(static_cast<std::uint8_t>(DeleteObjectPoolErrorBit::DeletionError)), message.get_source_control_function());
 				}
 			}
 			break;
 
 			case Function::ChangePolygonPointCommand:
 			{
-				auto objectID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
+				auto objectID = get_little_endian_uint16(data, 1);
 				const std::uint8_t polygonPointIndex = data[3];
-				const std::uint16_t newXValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[4]) | (static_cast<std::uint16_t>(data[5]) << 8));
-				const std::uint16_t newYValue = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[6]) | (static_cast<std::uint16_t>(data[7]) << 8));
+				const std::uint16_t newXValue = get_little_endian_uint16(data, 4);
+				const std::uint16_t newYValue = get_little_endian_uint16(data, 6);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
 				if (nullptr != targetObject)
@@ -1765,19 +1797,19 @@ namespace isobus
 						else
 						{
 							LOG_WARNING("[VT Server]: Client %u change polygon point: the point index of %u is not valid for object %u", managedWorkingSet->get_control_function()->get_address(), polygonPointIndex, objectID);
-							send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidPointIndex)), message.get_source_control_function());
+							send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidPointIndex)), message.get_source_control_function());
 						}
 					}
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change polygon point: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
+						send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
 					}
 				}
 				else
 				{
 					LOG_WARNING("[VT Server]: Client %u change polygon point: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-					send_change_polygon_point_response(objectID, (1 << static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
+					send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
 				}
 			}
 			break;
@@ -1845,7 +1877,7 @@ namespace isobus
 				}
 				if (isManaged)
 				{
-					for (auto &cf : parentServer->managedWorkingSetList)
+					for (const auto &cf : parentServer->managedWorkingSetList)
 					{
 						if (cf->get_control_function() == message.get_source_control_function())
 						{
@@ -1870,9 +1902,9 @@ namespace isobus
 			buffer[2] = 0xFF;
 			buffer[3] = 0xFF;
 			buffer[4] = destination->get_address();
-			buffer[5] = static_cast<std::uint8_t>(parameterGroupNumber & 0xFF);
-			buffer[6] = static_cast<std::uint8_t>((parameterGroupNumber >> 8) & 0xFF);
-			buffer[7] = static_cast<std::uint8_t>((parameterGroupNumber >> 16) & 0xFF);
+			buffer[5] = get_byte(parameterGroupNumber, 0);
+			buffer[6] = get_byte(parameterGroupNumber, 1);
+			buffer[7] = get_byte(parameterGroupNumber, 2);
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
@@ -1892,8 +1924,8 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeActiveMaskCommand),
-				static_cast<std::uint8_t>(newMaskObjectID & 0xFF),
-				static_cast<std::uint8_t>((newMaskObjectID >> 8) & 0xFF),
+				get_low_byte(newMaskObjectID),
+				get_high_byte(newMaskObjectID),
 				errorBitfield,
 				0xFF,
 				0xFF,
@@ -1919,8 +1951,8 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeAttributeCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>((objectID >> 8) & 0xFF),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				attributeID,
 				errorBitfield,
 				0xFF,
@@ -1946,8 +1978,8 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeBackgroundColourCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>((objectID >> 8) & 0xFF),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				colour,
 				errorBitfield,
 				0xFF,
@@ -1974,10 +2006,10 @@ namespace isobus
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
 			buffer[0] = static_cast<std::uint8_t>(Function::ChangeChildLocationCommand);
-			buffer[1] = static_cast<std::uint8_t>(parentObjectID & 0xFF);
-			buffer[2] = static_cast<std::uint8_t>(parentObjectID >> 8);
-			buffer[3] = static_cast<std::uint8_t>(objectID & 0xFF);
-			buffer[4] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[1] = get_low_byte(parentObjectID);
+			buffer[2] = get_high_byte(parentObjectID);
+			buffer[3] = get_low_byte(objectID);
+			buffer[4] = get_high_byte(objectID);
 			buffer[5] = errorBitfield;
 			buffer[6] = 0xFF;
 			buffer[7] = 0xFF;
@@ -2000,10 +2032,10 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
-				static_cast<std::uint8_t>(parentObjectID & 0xFF),
-				static_cast<std::uint8_t>(parentObjectID >> 8),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(parentObjectID),
+				get_high_byte(parentObjectID),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				errorBitfield,
 				0xFF,
 				0xFF
@@ -2027,8 +2059,8 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFillAttributesCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				errorBitfield,
 				0xFF,
 				0xFF,
@@ -2053,8 +2085,8 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				errorBitfield,
 				0xFF,
 				0xFF,
@@ -2079,8 +2111,8 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeLineAttributesCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				errorBitfield,
 				0xFF,
 				0xFF,
@@ -2105,11 +2137,11 @@ namespace isobus
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeListItemCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				listIndex,
-				static_cast<std::uint8_t>(newObjectID & 0xFF),
-				static_cast<std::uint8_t>(newObjectID >> 8),
+				get_low_byte(newObjectID),
+				get_high_byte(newObjectID),
 				errorBitfield,
 				0xFF
 			};
@@ -2133,10 +2165,10 @@ namespace isobus
 
 			buffer[0] = static_cast<std::uint8_t>(Function::ButtonActivationMessage);
 			buffer[1] = static_cast<std::uint8_t>(activationCode);
-			buffer[2] = static_cast<std::uint8_t>(objectId & 0xFF);
-			buffer[3] = static_cast<std::uint8_t>(objectId >> 8);
-			buffer[4] = static_cast<std::uint8_t>(parentObjectId & 0xFF);
-			buffer[5] = static_cast<std::uint8_t>(parentObjectId >> 8);
+			buffer[2] = get_low_byte(objectId);
+			buffer[3] = get_high_byte(objectId);
+			buffer[4] = get_low_byte(parentObjectId);
+			buffer[5] = get_high_byte(parentObjectId);
 			buffer[6] = keyNumber;
 			buffer[7] = 0xFF; // Reserved TODO: TAN
 
@@ -2157,15 +2189,14 @@ namespace isobus
 		if (nullptr != destination)
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
-
 				static_cast<std::uint8_t>(Function::VTChangeNumericValueMessage),
-				static_cast<std::uint8_t>(objectId & 0xFF),
-				static_cast<std::uint8_t>((objectId >> 8) & 0xFF),
+				get_low_byte(objectId),
+				get_high_byte(objectId),
 				0xFF, // TODO: TAN, version 6
-				static_cast<std::uint8_t>(value & 0xFF),
-				static_cast<std::uint8_t>((value >> 8) & 0xFF),
-				static_cast<std::uint8_t>((value >> 16) & 0xFF),
-				static_cast<std::uint8_t>((value >> 24) & 0xFF)
+				get_byte(value, 0),
+				get_byte(value, 1),
+				get_byte(value, 2),
+				get_byte(value, 3)
 			};
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -2185,10 +2216,9 @@ namespace isobus
 		if (nullptr != destination)
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
-
 				static_cast<std::uint8_t>(Function::VTSelectInputObjectMessage),
-				static_cast<std::uint8_t>(objectId & 0xFF),
-				static_cast<std::uint8_t>((objectId >> 8) & 0xFF),
+				get_low_byte(objectId),
+				get_high_byte(objectId),
 				static_cast<std::uint8_t>(isObjectSelected),
 				static_cast<std::uint8_t>(isObjectOpenForInput),
 				0xFF,
@@ -2213,13 +2243,12 @@ namespace isobus
 		if (nullptr != destination)
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
-
 				static_cast<std::uint8_t>(Function::SoftKeyActivationMessage),
 				static_cast<std::uint8_t>(activationCode),
-				static_cast<std::uint8_t>(objectId & 0xFF),
-				static_cast<std::uint8_t>(objectId >> 8),
-				static_cast<std::uint8_t>(parentObjectId & 0xFF),
-				static_cast<std::uint8_t>(parentObjectId >> 8),
+				get_low_byte(objectId),
+				get_high_byte(objectId),
+				get_low_byte(parentObjectId),
+				get_high_byte(parentObjectId),
 				keyNumber,
 				0xFF // Reserved TODO: TAN
 			};
@@ -2246,10 +2275,9 @@ namespace isobus
 			}
 
 			std::vector<std::uint8_t> buffer = {
-
 				static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
-				static_cast<std::uint8_t>(objectId & 0xFF),
-				static_cast<std::uint8_t>(objectId >> 8),
+				get_low_byte(objectId),
+				get_high_byte(objectId),
 				static_cast<std::uint8_t>(value.length() > 255 ? 255 : value.length())
 			};
 
@@ -2265,7 +2293,7 @@ namespace isobus
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
-			                                                        buffer.size(),
+			                                                        static_cast<std::uint32_t>(buffer.size()),
 			                                                        serverInternalControlFunction,
 			                                                        destination,
 			                                                        get_priority());
@@ -2301,17 +2329,14 @@ namespace isobus
 
 	void VirtualTerminalServer::process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset)
 	{
-		if (nullptr != object)
+		if (nullptr != object && targetObjectType == object->get_object_type())
 		{
-			if (targetObjectType == object->get_object_type())
+			for (std::uint8_t i = 0; i < object->get_number_macros(); i++)
 			{
-				for (std::uint8_t i = 0; i < object->get_number_macros(); i++)
+				auto macroMetadata = object->get_macro(i);
+				if (macroMetadata.event == macroEvent)
 				{
-					auto macroMetadata = object->get_macro(i);
-					if (macroMetadata.event == macroEvent)
-					{
-						execute_macro(macroMetadata.macroID, workingset);
-					}
+					execute_macro(macroMetadata.macroID, workingset);
 				}
 			}
 		}
@@ -2326,13 +2351,13 @@ namespace isobus
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
 			buffer[0] = static_cast<std::uint8_t>(Function::ChangeNumericValueCommand);
-			buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
-			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[1] = get_low_byte(objectID);
+			buffer[2] = get_high_byte(objectID);
 			buffer[3] = errorBitfield;
-			buffer[4] = static_cast<std::uint8_t>(value & 0xFF);
-			buffer[5] = static_cast<std::uint8_t>(value >> 8);
-			buffer[6] = static_cast<std::uint8_t>(value >> 16);
-			buffer[7] = static_cast<std::uint8_t>(value >> 24);
+			buffer[4] = get_byte(value, 0);
+			buffer[5] = get_byte(value, 1);
+			buffer[6] = get_byte(value, 2);
+			buffer[7] = get_byte(value, 3);
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
@@ -2353,8 +2378,8 @@ namespace isobus
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
 			buffer[0] = static_cast<std::uint8_t>(Function::ChangePolygonPointCommand);
-			buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
-			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[1] = get_low_byte(objectID);
+			buffer[2] = get_high_byte(objectID);
 			buffer[3] = errorBitfield;
 			buffer[4] = 0xFF;
 			buffer[5] = 0xFF;
@@ -2379,8 +2404,8 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeSizeCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				errorBitfield,
 				0xFF,
 				0xFF,
@@ -2406,10 +2431,10 @@ namespace isobus
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeSoftKeyMaskCommand),
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
-				static_cast<std::uint8_t>(newObjectID & 0xFF),
-				static_cast<std::uint8_t>(newObjectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
+				get_low_byte(newObjectID),
+				get_high_byte(newObjectID),
 				errorBitfield,
 				0xFF,
 				0xFF
@@ -2435,8 +2460,8 @@ namespace isobus
 				static_cast<std::uint8_t>(Function::ChangeStringValueCommand),
 				0xFF,
 				0xFF,
-				static_cast<std::uint8_t>(objectID & 0xFF),
-				static_cast<std::uint8_t>(objectID >> 8),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
 				errorBitfield,
 				0xFF,
 				0xFF
@@ -2503,7 +2528,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
@@ -2512,8 +2537,8 @@ namespace isobus
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
 			buffer[0] = static_cast<std::uint8_t>(Function::EnableDisableObjectCommand);
-			buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
-			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[1] = get_low_byte(objectID);
+			buffer[2] = get_high_byte(objectID);
 			buffer[3] = value;
 			buffer[4] = errorBitfield;
 			buffer[5] = 0xFF;
@@ -2534,16 +2559,16 @@ namespace isobus
 	                                                             std::uint16_t parentIDOfFaultingObject,
 	                                                             std::uint16_t faultingObjectID,
 	                                                             std::uint8_t errorCodes,
-	                                                             std::shared_ptr<ControlFunction> destination)
+	                                                             std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::EndOfObjectPoolMessage);
 		buffer[1] = (success ? 0x00 : 0x01); // Error in object pool is 0x01, no error is 0x00
-		buffer[2] = (parentIDOfFaultingObject & 0xFF);
-		buffer[3] = (parentIDOfFaultingObject >> 8);
-		buffer[4] = (faultingObjectID & 0xFF);
-		buffer[5] = (faultingObjectID >> 8);
+		buffer[2] = get_low_byte(parentIDOfFaultingObject);
+		buffer[3] = get_high_byte(parentIDOfFaultingObject);
+		buffer[4] = get_low_byte(faultingObjectID);
+		buffer[5] = get_high_byte(faultingObjectID);
 		buffer[6] = errorCodes;
 		buffer[7] = 0xFF; // Reserved
 
@@ -2555,7 +2580,7 @@ namespace isobus
 		                                                      get_priority());
 	}
 
-	bool VirtualTerminalServer::send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro)
+	bool VirtualTerminalServer::send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
@@ -2568,11 +2593,11 @@ namespace isobus
 			buffer[0] = static_cast<std::uint8_t>(Function::ExecuteMacroCommand);
 		}
 
-		buffer[1] = static_cast<std::uint8_t>(objectID & 0xFF);
+		buffer[1] = get_low_byte(objectID);
 
 		if (extendedMacro)
 		{
-			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
+			buffer[2] = get_high_byte(objectID);
 		}
 		else
 		{
@@ -2593,13 +2618,13 @@ namespace isobus
 		                                                      get_priority());
 	}
 
-	bool VirtualTerminalServer::send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::HideShowObjectCommand);
-		buffer[1] = (objectID & 0xFF);
-		buffer[2] = ((objectID >> 8) & 0xFF);
+		buffer[1] = get_low_byte(objectID);
+		buffer[2] = get_high_byte(objectID);
 		buffer[3] = static_cast<std::uint8_t>(value);
 		buffer[4] = errorBitfield;
 		buffer[5] = 0xFF; // Reserved
@@ -2614,13 +2639,13 @@ namespace isobus
 		                                                      get_priority());
 	}
 
-	bool VirtualTerminalServer::send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::ChangePriorityCommand);
-		buffer[1] = (objectID & 0xFF);
-		buffer[2] = ((objectID >> 8) & 0xFF);
+		buffer[1] = get_low_byte(objectID);
+		buffer[2] = get_high_byte(objectID);
 		buffer[3] = priority;
 		buffer[4] = errorBitfield;
 		buffer[5] = 0xFF; // Reserved
@@ -2635,13 +2660,13 @@ namespace isobus
 		                                                      get_priority());
 	}
 
-	bool VirtualTerminalServer::send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination)
+	bool VirtualTerminalServer::send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::SelectInputObjectCommand);
-		buffer[1] = (objectID & 0xFF);
-		buffer[2] = ((objectID >> 8) & 0xFF);
+		buffer[1] = get_low_byte(objectID);
+		buffer[2] = get_high_byte(objectID);
 		buffer[3] = static_cast<std::uint8_t>(response);
 		buffer[4] = errorBitfield;
 		buffer[5] = 0xFF; // Reserved
@@ -2656,16 +2681,16 @@ namespace isobus
 		                                                      get_priority());
 	}
 
-	bool VirtualTerminalServer::send_status_message()
+	bool VirtualTerminalServer::send_status_message() const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::VTStatusMessage);
 		buffer[1] = activeWorkingSetMasterAddress;
-		buffer[2] = (activeWorkingSetDataMaskObjectID & 0xFF);
-		buffer[3] = ((activeWorkingSetDataMaskObjectID >> 8) & 0xFF);
-		buffer[4] = (activeWorkingSetSoftkeyMaskObjectID & 0xFF);
-		buffer[5] = ((activeWorkingSetSoftkeyMaskObjectID >> 8) & 0xFF);
+		buffer[2] = get_low_byte(activeWorkingSetDataMaskObjectID);
+		buffer[3] = get_high_byte(activeWorkingSetDataMaskObjectID);
+		buffer[4] = get_low_byte(activeWorkingSetSoftkeyMaskObjectID);
+		buffer[5] = get_high_byte(activeWorkingSetSoftkeyMaskObjectID);
 		buffer[6] = busyCodesBitfield;
 		buffer[7] = currentCommandFunctionCode;
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -2745,8 +2770,8 @@ namespace isobus
 		buffer[1] = item;
 		buffer[2] = path;
 		buffer[3] = errorCode;
-		buffer[4] = static_cast<std::uint8_t>(imageId & 0xFF);
-		buffer[5] = static_cast<std::uint8_t>((imageId >> 8) & 0xFF);
+		buffer[4] = get_low_byte(imageId);
+		buffer[5] = get_high_byte(imageId);
 		buffer[6] = 0xFF;
 		buffer[7] = 0xFF;
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -2765,7 +2790,7 @@ namespace isobus
 			statusMessageTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 		}
 
-		for (auto &ws : managedWorkingSetList)
+		for (const auto &ws : managedWorkingSetList)
 		{
 			if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == ws->get_object_pool_processing_state())
 			{
