@@ -1187,9 +1187,9 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x01, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 
 		// Disable task active
 		server.set_task_totals_active(false);
@@ -1203,9 +1203,9 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x00, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 	}
 	CANHardwareInterface::stop();
 }
@@ -1513,4 +1513,210 @@ TEST_F(TaskControllerServerTest, DDOPHelper_NoFunctions)
 	EXPECT_EQ(2000, implement.booms.at(0).sections.at(0).xOffset_mm.get());
 	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
 	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyStateTracking)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x92, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Initially not busy - verify status message shows cleared state
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear
+	EXPECT_EQ(0x00, testFrame.data[5]); // currentCommandSourceAddress (not busy)
+	EXPECT_EQ(0x00, testFrame.data[6]); // currentCommandByte (not busy)
+
+	// Set busy state with specific client and command
+	server.set_command_busy(true, 0x88, 0x60);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set
+	EXPECT_EQ(0x88, testFrame.data[5]); // currentCommandSourceAddress = client 0x88
+	EXPECT_EQ(0x60, testFrame.data[6]); // currentCommandByte = ObjectPoolTransfer
+
+	// Clear the busy state
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear
+	EXPECT_EQ(0x00, testFrame.data[5]); // currentCommandSourceAddress (cleared)
+	EXPECT_EQ(0x00, testFrame.data[6]); // currentCommandByte (cleared)
+
+	// Test with ObjectPoolActivateDeactivate command
+	server.set_command_busy(true, 0x77, 0x80);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set
+	EXPECT_EQ(0x77, testFrame.data[5]); // currentCommandSourceAddress = client 0x77
+	EXPECT_EQ(0x80, testFrame.data[6]); // currentCommandByte = ObjectPoolActivateDeactivate
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolTransfer)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x94, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Simulate ObjectPoolTransfer processing (command byte 0x60)
+	server.set_command_busy(true, 0x88, 0x60);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set during busy
+	EXPECT_EQ(0x88, testFrame.data[5]); // Client address 0x88
+	EXPECT_EQ(0x60, testFrame.data[6]); // ObjectPoolTransfer command
+
+	// Clear the busy state after processing
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
+	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
+	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolActivateDeactivate)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x95, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Simulate ObjectPoolActivateDeactivate processing (command byte 0x80)
+	server.set_command_busy(true, 0x88, 0x80);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set during busy
+	EXPECT_EQ(0x88, testFrame.data[5]); // Client address 0x88
+	EXPECT_EQ(0x80, testFrame.data[6]); // ObjectPoolActivateDeactivate command
+
+	// Clear the busy state after processing
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
+	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
+	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
 }
