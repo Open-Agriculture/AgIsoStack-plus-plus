@@ -122,11 +122,13 @@ namespace isobus
 		{
 			currentCommandSourceAddress = clientAddress;
 			currentCommandByte = commandByte;
+			currentStatusByte |= static_cast<std::uint8_t>(ServerStatusBit::BusyExecutingACommand);
 		}
 		else
 		{
 			currentCommandSourceAddress = 0x00;
 			currentCommandByte = 0x00;
+			currentStatusByte &= ~static_cast<std::uint8_t>(ServerStatusBit::BusyExecutingACommand);
 		}
 		statusUpdatePending = true; // Request immediate status update
 	}
