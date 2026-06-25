@@ -164,3 +164,70 @@ TEST_F(AddressClaimTest, CannotClaim)
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(secondInternalECU2);
 }
+
+TEST_F(AddressClaimTest, PreferredAddressContention)
+{
+	constexpr std::uint8_t addressToTest = 0xF7;
+	VirtualCANPlugin plugin;
+	plugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	time_source.update_for_ms(250);
+
+	// Claim a very high name on address F7
+	NAME firstName(0);
+	firstName.set_arbitrary_address_capable(true);
+	firstName.set_industry_group(6);
+	firstName.set_device_class(4);
+	firstName.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::PropulsionSensorsAndGateway));
+	firstName.set_identity_number(5000);
+	firstName.set_ecu_instance(5);
+	firstName.set_function_instance(5);
+	firstName.set_device_class_instance(2);
+	firstName.set_manufacturer_code(500);
+
+	// Force claim message
+	CANMessageFrame testFrame = {};
+	testFrame.channel = 0;
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+
+	std::uint64_t fullName = firstName.get_full_name();
+	testFrame.identifier = 0x18EEFF00 | addressToTest;
+	testFrame.isExtendedFrame = true;
+	testFrame.dataLength = 8;
+	testFrame.data[0] = static_cast<std::uint8_t>(fullName);
+	testFrame.data[1] = static_cast<std::uint8_t>(fullName >> 8);
+	testFrame.data[2] = static_cast<std::uint8_t>(fullName >> 16);
+	testFrame.data[3] = static_cast<std::uint8_t>(fullName >> 24);
+	testFrame.data[4] = static_cast<std::uint8_t>(fullName >> 32);
+	testFrame.data[5] = static_cast<std::uint8_t>(fullName >> 40);
+	testFrame.data[6] = static_cast<std::uint8_t>(fullName >> 48);
+	testFrame.data[7] = static_cast<std::uint8_t>(fullName >> 56);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+
+	// Verify an internal control function with lower name wins its address
+	isobus::NAME secondName(0);
+	secondName.set_arbitrary_address_capable(true);
+	secondName.set_industry_group(0);
+	secondName.set_device_class(0);
+	secondName.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::Engine));
+	secondName.set_identity_number(1);
+	secondName.set_ecu_instance(0);
+	secondName.set_function_instance(0);
+	secondName.set_device_class_instance(0);
+	secondName.set_manufacturer_code(1);
+
+	auto secondInternalECU2 = CANNetworkManager::CANNetwork.create_internal_control_function(secondName, 0, addressToTest);
+
+	time_source.update_for_ms(1500);
+
+	EXPECT_TRUE(secondInternalECU2->get_address_valid());
+	EXPECT_EQ(addressToTest, secondInternalECU2->get_address());
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(secondInternalECU2);
+}
