@@ -96,12 +96,13 @@ namespace isobus
 		assert(timeAndDateToSend.localHourOffset >= -23 && timeAndDateToSend.localHourOffset <= 23); // The local hour offset must be between -23 and 23
 		assert(timeAndDateToSend.localMinuteOffset >= -59 && timeAndDateToSend.localMinuteOffset <= 59); // The local minute offset must be between -59 and 59
 
+		const auto rawDay = static_cast<std::uint8_t>((0 == timeAndDateToSend.day) ? 0 : (((timeAndDateToSend.day - 1) * 4) + timeAndDateToSend.quarterDays + 1));
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 			static_cast<std::uint8_t>(timeAndDateToSend.seconds * 4 + (timeAndDateToSend.milliseconds / 250)),
 			timeAndDateToSend.minutes,
 			timeAndDateToSend.hours,
 			timeAndDateToSend.month,
-			static_cast<std::uint8_t>(timeAndDateToSend.day * 4 + timeAndDateToSend.quarterDays),
+			rawDay,
 			static_cast<std::uint8_t>(timeAndDateToSend.year - 1985),
 			static_cast<std::uint8_t>(timeAndDateToSend.localMinuteOffset + 125),
 			static_cast<std::uint8_t>(timeAndDateToSend.localHourOffset + 125)
@@ -150,8 +151,9 @@ namespace isobus
 				timeAndDateInformation.timeAndDate.minutes = message.get_uint8_at(1); // This is SPN 960
 				timeAndDateInformation.timeAndDate.hours = message.get_uint8_at(2); // This is SPN 961
 				timeAndDateInformation.timeAndDate.month = message.get_uint8_at(3); // This is SPN 963
-				timeAndDateInformation.timeAndDate.day = message.get_uint8_at(4) / 4; // This is SPN 962
-				timeAndDateInformation.timeAndDate.quarterDays = message.get_uint8_at(4) % 4; // This is also part of SPN 962
+				const auto rawDay = message.get_uint8_at(4); // This is SPN 962
+				timeAndDateInformation.timeAndDate.day = (0 == rawDay) ? 0 : static_cast<std::uint8_t>(((rawDay - 1) / 4) + 1);
+				timeAndDateInformation.timeAndDate.quarterDays = (0 == rawDay) ? 0 : static_cast<std::uint8_t>((rawDay - 1) % 4); // This is also part of SPN 962
 				timeAndDateInformation.timeAndDate.year = static_cast<std::uint16_t>(message.get_uint8_at(5) + 1985); // This is SPN 964
 				timeAndDateInformation.timeAndDate.localMinuteOffset = static_cast<std::int8_t>(message.get_uint8_at(6) - 125); // This is SPN 1601
 				timeAndDateInformation.timeAndDate.localHourOffset = static_cast<std::int8_t>(message.get_int8_at(7) - 125); // This is SPN 1602

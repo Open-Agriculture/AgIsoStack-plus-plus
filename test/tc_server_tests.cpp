@@ -248,6 +248,12 @@ public:
 	{
 	}
 
+	void on_client_version_received(std::shared_ptr<ControlFunction> clientCF, std::uint8_t version) override
+	{
+		lastClientVersion = version;
+		lastClientVersionReceived = true;
+	}
+
 	bool on_value_command(std::shared_ptr<ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &) override
 	{
 		return true;
@@ -285,6 +291,8 @@ public:
 	std::uint8_t identifyTC = 0xFF;
 	bool failActivations = false;
 	bool enoughMemory = true;
+	std::uint8_t lastClientVersion = 0xFF;
+	bool lastClientVersionReceived = false;
 };
 
 void isNack(const CANMessageFrame &frame)
@@ -496,6 +504,19 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	                                                                                                             }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
+
+	// After working set master, server should now proactively request version from client
+	// Skip the automatic version request message
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
+	EXPECT_EQ(0x00, testFrame.data[0]); // RequestVersion command
+	EXPECT_EQ(0xFF, testFrame.data[1]);
+	EXPECT_EQ(0xFF, testFrame.data[2]);
+	EXPECT_EQ(0xFF, testFrame.data[3]);
+	EXPECT_EQ(0xFF, testFrame.data[4]);
+	EXPECT_EQ(0xFF, testFrame.data[5]);
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
 
 	// Request structure label
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
@@ -1166,9 +1187,9 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x01, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 
 		// Disable task active
 		server.set_task_totals_active(false);
@@ -1182,10 +1203,118 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x00, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 	}
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, ClientVersionTracking)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	// Use different addresses to avoid conflicts with previous tests
+	auto internalECU = test_helpers::claim_internal_control_function(0x90, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x91, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control()
+	                         .with_tc_geo_with_position_based_control());
+	server.initialize();
+
+	testPlugin.clear_queue();
+
+	// First, send a WorkingSetMaster to register the client
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6,
+	                                                                                                             0xFE0D,
+	                                                                                                             partnerClient,
+	                                                                                                             {
+	                                                                                                               0x01,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                             }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	// Skip the automatic version request that gets sent
+	time_source.update_for_ms(5);
+	CANMessageFrame testFrame = {};
+	testPlugin.read_frame(testFrame);
+
+	// Initially, client version should be 0 (default before receiving version info)
+	EXPECT_EQ(0x00, server.get_client_version(partnerClient));
+	EXPECT_FALSE(server.lastClientVersionReceived);
+
+	// Simulate client sending version response (ParameterVersion command)
+	// This happens after server requests version from client
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
+	                                                                                                   0xCB00,
+	                                                                                                   internalECU,
+	                                                                                                   partnerClient,
+	                                                                                                   {
+	                                                                                                     0x10, // ParameterVersion command
+	                                                                                                     0x04, // Version 4 (SecondPublishedEdition)
+	                                                                                                     0xFF, // Boot time (not available)
+	                                                                                                     0x1F, // Options byte 1
+	                                                                                                     0x00, // Options byte 2
+	                                                                                                     0x01, // Booms
+	                                                                                                     0x20, // Sections
+	                                                                                                     0x10, // Channels
+	                                                                                                   }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	// Verify the callback was triggered and version was stored
+	EXPECT_TRUE(server.lastClientVersionReceived);
+	EXPECT_EQ(0x04, server.lastClientVersion);
+	EXPECT_EQ(0x04, server.get_client_version(partnerClient));
+
+	// Test that we can also request version from client proactively
+	server.lastClientVersionReceived = false;
+	server.lastClientVersion = 0xFF;
+
+	bool requestSent = server.request_client_version(partnerClient);
+	EXPECT_TRUE(requestSent);
+
+	// Simulate client responding with version 3 (SecondEditionDraft)
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
+	                                                                                                   0xCB00,
+	                                                                                                   internalECU,
+	                                                                                                   partnerClient,
+	                                                                                                   {
+	                                                                                                     0x10, // ParameterVersion command
+	                                                                                                     0x03, // Version 3 (SecondEditionDraft)
+	                                                                                                     0xFF,
+	                                                                                                     0x1F,
+	                                                                                                     0x00,
+	                                                                                                     0x01,
+	                                                                                                     0x20,
+	                                                                                                     0x10,
+	                                                                                                   }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	// Verify updated version
+	EXPECT_TRUE(server.lastClientVersionReceived);
+	EXPECT_EQ(0x03, server.lastClientVersion);
+	EXPECT_EQ(0x03, server.get_client_version(partnerClient));
+
 	CANHardwareInterface::stop();
 }
 
@@ -1384,4 +1513,210 @@ TEST_F(TaskControllerServerTest, DDOPHelper_NoFunctions)
 	EXPECT_EQ(2000, implement.booms.at(0).sections.at(0).xOffset_mm.get());
 	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
 	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyStateTracking)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x92, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Initially not busy - verify status message shows cleared state
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear
+	EXPECT_EQ(0x00, testFrame.data[5]); // currentCommandSourceAddress (not busy)
+	EXPECT_EQ(0x00, testFrame.data[6]); // currentCommandByte (not busy)
+
+	// Set busy state with specific client and command
+	server.set_command_busy(true, 0x88, 0x60);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set
+	EXPECT_EQ(0x88, testFrame.data[5]); // currentCommandSourceAddress = client 0x88
+	EXPECT_EQ(0x60, testFrame.data[6]); // currentCommandByte = ObjectPoolTransfer
+
+	// Clear the busy state
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear
+	EXPECT_EQ(0x00, testFrame.data[5]); // currentCommandSourceAddress (cleared)
+	EXPECT_EQ(0x00, testFrame.data[6]); // currentCommandByte (cleared)
+
+	// Test with ObjectPoolActivateDeactivate command
+	server.set_command_busy(true, 0x77, 0x80);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set
+	EXPECT_EQ(0x77, testFrame.data[5]); // currentCommandSourceAddress = client 0x77
+	EXPECT_EQ(0x80, testFrame.data[6]); // currentCommandByte = ObjectPoolActivateDeactivate
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolTransfer)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x94, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Simulate ObjectPoolTransfer processing (command byte 0x60)
+	server.set_command_busy(true, 0x88, 0x60);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set during busy
+	EXPECT_EQ(0x88, testFrame.data[5]); // Client address 0x88
+	EXPECT_EQ(0x60, testFrame.data[6]); // ObjectPoolTransfer command
+
+	// Clear the busy state after processing
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
+	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
+	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolActivateDeactivate)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x95, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Simulate ObjectPoolActivateDeactivate processing (command byte 0x80)
+	server.set_command_busy(true, 0x88, 0x80);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set during busy
+	EXPECT_EQ(0x88, testFrame.data[5]); // Client address 0x88
+	EXPECT_EQ(0x80, testFrame.data[6]); // ObjectPoolActivateDeactivate command
+
+	// Clear the busy state after processing
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
+	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
+	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
 }
