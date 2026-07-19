@@ -60,6 +60,10 @@ void callback(const CANMessage &message, void *)
 	EXPECT_EQ(value64, 0);
 	value64 = message.get_data_custom_length(65748321, 1);
 	EXPECT_EQ(value64, 0);
+	value64 = message.get_data_custom_length(56, 8);
+	EXPECT_EQ(value64, 8);
+	value64 = message.get_data_custom_length(57, 8);
+	EXPECT_EQ(value64, 0);
 }
 
 TEST(CAN_MESSAGE_TESTS, DataCorrectnessTest)
