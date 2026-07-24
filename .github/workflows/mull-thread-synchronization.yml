@@ -110,17 +110,14 @@ jobs:
           echo "=== GoogleTest executable ==="
           file build/test/unit_tests
 
-          echo
-          echo "=== Selected test ==="
-          build/test/unit_tests \
-            --gtest_list_tests \
-            | grep -A 20 "CORE_TESTS"
-
-      - name: Run selected test without mutation
+      - name: Run thread synchronization test without mutation
         shell: bash
         run: |
+          echo "=== Baseline test ==="
+
           build/test/unit_tests \
-            --gtest_filter=CORE_TESTS.TestCreateAndDestroyPartners
+            --gtest_filter='*CreateAndDestroyPartners*' \
+            --gtest_fail_if_no_test_selected
 
       - name: Run Mull on thread_synchronization
         shell: bash
@@ -140,7 +137,8 @@ jobs:
             --report-dir mull-results \
             --report-name thread-synchronization \
             build/test/unit_tests \
-            --gtest_filter=CORE_TESTS.TestCreateAndDestroyPartners \
+            --gtest_filter='*CreateAndDestroyPartners*' \
+            --gtest_fail_if_no_test_selected \
             2>&1 | tee mull-results/mull-console.log
 
       - name: Display generated reports
@@ -160,3 +158,4 @@ jobs:
             mull-thread-synchronization.yml
           if-no-files-found: warn
           retention-days: 30
+     
