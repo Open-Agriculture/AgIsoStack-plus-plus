@@ -65,3 +65,5 @@ CMakeFiles
 *.orig
 *.rej
 
+# AI
+.claude
