@@ -3,6 +3,12 @@ name: Mull - Thread Synchronization
 on:
   workflow_dispatch:
 
+  push:
+    branches:
+      - quality/mull-mutation-testing-poc
+    paths:
+      - .github/workflows/mull-thread-synchronization.yml
+
 permissions:
   contents: read
 
