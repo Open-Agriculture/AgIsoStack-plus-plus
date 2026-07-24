@@ -1,9 +1,6 @@
 name: Identify GoogleTest executables
 
 on:
-  push:
-    branches:
-      - quality/mull-mutation-testing-poc
   workflow_dispatch:
 
 jobs:
