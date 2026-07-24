@@ -1,9 +1,7 @@
 name: Check mutation testing tool versions
 
 on:  
-  push:    
-    branches:      
-      - quality/mull-mutation-testing-poc
+  workflow_dispatch:
 
 jobs:
   check-versions:
