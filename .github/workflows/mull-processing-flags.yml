@@ -1,0 +1,210 @@
+name: Mull - Processing Flags
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - quality/mull-mutation-testing-poc
+    paths:
+      - .github/workflows/mull-processing-flags.yml
+      - utility/include/isobus/utility/processing_flags.hpp
+      - utility/src/processing_flags.cpp
+      - test/**
+
+permissions:
+  contents: read
+
+jobs:
+  processing-flags:
+    name: Mutation testing - processing_flags
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Clang 19 and build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-19 \
+            llvm-19 \
+            build-essential \
+            cmake \
+            ninja-build \
+            curl
+
+      - name: Install Mull for LLVM 19
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -1sLf \
+            "https://dl.cloudsmith.io/public/mull-project/mull-stable/setup.deb.sh" \
+            | sudo -E bash
+
+          sudo apt-get update
+          sudo apt-get install -y mull-19
+
+      - name: Verify tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Clang ==="
+          clang-19 --version
+
+          echo
+          echo "=== LLVM ==="
+          llvm-config-19 --version
+
+          echo
+          echo "=== Mull ==="
+          mull-runner-19 --version
+
+          echo
+          echo "=== Mull compiler plugin ==="
+          test -f /usr/lib/mull-ir-frontend-19
+          ls -l /usr/lib/mull-ir-frontend-19
+
+      - name: Create reduced Mull configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > mull-processing-flags.yml <<'EOF'
+          includePaths:
+            - ".*utility/src/processing_flags\\.cpp$"
+          excludePaths:
+            - ".*googletest.*"
+            - ".*googlemock.*"
+            - ".*gtest.*"
+            - ".*gmock.*"
+          quiet: false
+          EOF
+
+          echo "=== Mull configuration ==="
+          cat mull-processing-flags.yml
+
+      - name: Configure tests for Mull
+        shell: bash
+        env:
+          CC: clang-19
+          CXX: clang++-19
+          MULL_CONFIG: ${{ github.workspace }}/mull-processing-flags.yml
+        run: |
+          set -euo pipefail
+
+          cmake -S . -B build \
+            -G Ninja \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19" \
+            -DCMAKE_CXX_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19"
+
+      - name: Compile GoogleTest executable
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmake --build build --parallel
+
+      - name: Verify GoogleTest executable
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -x build/test/unit_tests
+
+          echo "=== GoogleTest executable ==="
+          file build/test/unit_tests
+
+      - name: Verify target GoogleTest exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Registered GoogleTest tests ==="
+          build/test/unit_tests \
+            --gtest_list_tests \
+            --gtest_color=no \
+            | tee gtest-list.txt
+
+          grep -Fq "MessageEncoding" gtest-list.txt
+
+          echo
+          echo "Target test was found."
+
+      - name: Run processing flags test without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Baseline test ==="
+
+          build/test/unit_tests \
+            --gtest_filter=DiagnosticProtocolTest.MessageEncoding \
+            --gtest_color=no \
+            2>&1 | tee baseline-test.log
+
+          grep -Fq \
+            "[ RUN      ] DiagnosticProtocolTest.MessageEncoding" \
+            baseline-test.log
+
+          grep -Fq \
+            "[       OK ] DiagnosticProtocolTest.MessageEncoding" \
+            baseline-test.log
+
+          echo
+          echo "The target GoogleTest was executed and passed."
+
+      - name: Run Mull on processing_flags
+        shell: bash
+        env:
+          MULL_CONFIG: ${{ github.workspace }}/mull-processing-flags.yml
+        run: |
+          set -euo pipefail
+
+          mkdir -p mull-results
+
+          mull-runner-19 \
+            --allow-surviving \
+            --include-not-covered \
+            --minimum-timeout 10000 \
+            --reporters IDE \
+            --reporters Elements \
+            --report-dir mull-results \
+            --report-name processing-flags \
+            build/test/unit_tests \
+            --gtest_filter=DiagnosticProtocolTest.MessageEncoding \
+            --gtest_color=no \
+            2>&1 | tee mull-results/mull-console.log
+
+      - name: Display generated reports
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Generated Mull reports ==="
+          find mull-results -maxdepth 2 -type f -print 2>/dev/null || true
+
+          echo
+          echo "=== Mull console output ==="
+          cat mull-results/mull-console.log 2>/dev/null || true
+
+      - name: Upload Mull results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mull-processing-flags-results
+          path: |
+            mull-results/
+            mull-processing-flags.yml
+            baseline-test.log
+            gtest-list.txt
+          if-no-files-found: warn
+          retention-days: 30
