@@ -1,23 +1,22 @@
-name: Mull - Processing Flags
+name: Mull - Processing Flags - All Tests
 
 on:
   workflow_dispatch:
 
+  # Le workflow n'étant pas encore présent sur main, ce déclencheur permet
+  # de l'exécuter lorsque son propre fichier est créé ou modifié.
   push:
     branches:
-      - quality/mull-mutation-testing-poc
+      - quality/mull-processing-flags
     paths:
       - .github/workflows/mull-processing-flags.yml
-      - utility/include/isobus/utility/processing_flags.hpp
-      - utility/src/processing_flags.cpp
-      - test/**
 
 permissions:
   contents: read
 
 jobs:
   processing-flags:
-    name: Mutation testing - processing_flags
+    name: Mutation testing - processing_flags - all tests
     runs-on: ubuntu-24.04
 
     steps:
@@ -50,28 +49,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mull-19
 
-      - name: Verify tool versions
+      - name: Verify tools
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "=== Clang ==="
           clang-19 --version
-
-          echo
-          echo "=== LLVM ==="
-          llvm-config-19 --version
-
-          echo
-          echo "=== Mull ==="
+          llvm-profdata-19 --version
+          llvm-cov-19 --version
           mull-runner-19 --version
 
-          echo
-          echo "=== Mull compiler plugin ==="
           test -f /usr/lib/mull-ir-frontend-19
-          ls -l /usr/lib/mull-ir-frontend-19
 
-      - name: Create reduced Mull configuration
+      - name: Create Mull configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -90,7 +80,7 @@ jobs:
           echo "=== Mull configuration ==="
           cat mull-processing-flags.yml
 
-      - name: Configure tests for Mull
+      - name: Configure tests for Mull and LLVM coverage
         shell: bash
         env:
           CC: clang-19
@@ -104,107 +94,100 @@ jobs:
             -DBUILD_TESTING=ON \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DCMAKE_C_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19" \
-            -DCMAKE_CXX_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19"
+            -DCMAKE_C_FLAGS="-O0 -g -grecord-command-line -fprofile-instr-generate -fcoverage-mapping -fpass-plugin=/usr/lib/mull-ir-frontend-19" \
+            -DCMAKE_CXX_FLAGS="-O0 -g -grecord-command-line -fprofile-instr-generate -fcoverage-mapping -fpass-plugin=/usr/lib/mull-ir-frontend-19" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate"
 
-      - name: Compile GoogleTest executable
+      - name: Compile unit tests
         shell: bash
         run: |
           set -euo pipefail
 
           cmake --build build --parallel
-
-      - name: Verify GoogleTest executable
-        shell: bash
-        run: |
-          set -euo pipefail
-
           test -x build/test/unit_tests
 
-          echo "=== GoogleTest executable ==="
-          file build/test/unit_tests
+      - name: Run all unit tests and generate coverage
+        shell: bash
+        env:
+          LLVM_PROFILE_FILE: ${{ github.workspace }}/all-tests.profraw
+        run: |
+          set -euo pipefail
 
-      - name: Verify target GoogleTest exists
+          rm -f all-tests.profraw all-tests.profdata
+
+          cd build/test
+
+          ./unit_tests \
+            --gtest_color=no \
+            2>&1 | tee "${GITHUB_WORKSPACE}/all-tests-baseline.log"
+
+          cd "${GITHUB_WORKSPACE}"
+
+          test -s all-tests.profraw
+
+          llvm-profdata-19 merge \
+            -sparse \
+            all-tests.profraw \
+            -o all-tests.profdata
+
+          test -s all-tests.profdata
+
+      - name: Generate readable coverage report
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "=== Registered GoogleTest tests ==="
-          build/test/unit_tests \
-            --gtest_list_tests \
-            --gtest_color=no \
-            | tee gtest-list.txt
+          llvm-cov-19 show \
+            build/test/unit_tests \
+            -instr-profile=all-tests.profdata \
+            utility/src/processing_flags.cpp \
+            | tee processing-flags-coverage.txt
 
-          grep -Fq "MessageEncoding" gtest-list.txt
-
-          echo
-          echo "Target test was found."
-
-      - name: Run processing flags test without mutation
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "=== Baseline test ==="
-
-          build/test/unit_tests \
-            --gtest_filter=DiagnosticProtocolTest.MessageEncoding \
-            --gtest_color=no \
-            2>&1 | tee baseline-test.log
-
-          grep -Fq \
-            "[ RUN      ] DiagnosticProtocolTest.MessageEncoding" \
-            baseline-test.log
-
-          grep -Fq \
-            "[       OK ] DiagnosticProtocolTest.MessageEncoding" \
-            baseline-test.log
-
-          echo
-          echo "The target GoogleTest was executed and passed."
-
-      - name: Run Mull on processing_flags
+      - name: Run Mull with all unit tests
         shell: bash
         env:
           MULL_CONFIG: ${{ github.workspace }}/mull-processing-flags.yml
         run: |
           set -euo pipefail
 
-          mkdir -p mull-results
+          mkdir -p "${GITHUB_WORKSPACE}/mull-results"
+
+          cd build/test
 
           mull-runner-19 \
             --allow-surviving \
-            --include-not-covered \
-            --minimum-timeout 10000 \
+            --debug \
+            --timeout 120000 \
+            --coverage-info "${GITHUB_WORKSPACE}/all-tests.profdata" \
             --reporters IDE \
             --reporters Elements \
-            --report-dir mull-results \
-            --report-name processing-flags \
-            build/test/unit_tests \
-            --gtest_filter=DiagnosticProtocolTest.MessageEncoding \
+            --report-dir "${GITHUB_WORKSPACE}/mull-results" \
+            --report-name processing-flags-all-tests \
+            ./unit_tests \
             --gtest_color=no \
-            2>&1 | tee mull-results/mull-console.log
+            2>&1 | tee "${GITHUB_WORKSPACE}/mull-results/mull-console.log"
 
-      - name: Display generated reports
+      - name: Display Mull results
         if: always()
         shell: bash
         run: |
-          echo "=== Generated Mull reports ==="
+          echo "=== Generated Mull files ==="
           find mull-results -maxdepth 2 -type f -print 2>/dev/null || true
 
           echo
           echo "=== Mull console output ==="
           cat mull-results/mull-console.log 2>/dev/null || true
 
-      - name: Upload Mull results
+      - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mull-processing-flags-results
+          name: mull-processing-flags-all-unit-tests
           path: |
             mull-results/
             mull-processing-flags.yml
-            baseline-test.log
-            gtest-list.txt
+            all-tests-baseline.log
+            all-tests.profdata
+            processing-flags-coverage.txt
           if-no-files-found: warn
           retention-days: 30
