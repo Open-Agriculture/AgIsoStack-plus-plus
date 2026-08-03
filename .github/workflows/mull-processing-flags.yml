@@ -7,7 +7,7 @@ on:
   # de l'exécuter lorsque son propre fichier est créé ou modifié.
   push:
     branches:
-      - quality/mull-processing-flags
+      - mutation/procssecing-flegs
     paths:
       - .github/workflows/mull-processing-flags.yml
 
