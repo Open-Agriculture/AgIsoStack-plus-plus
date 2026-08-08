@@ -20,11 +20,46 @@ using namespace isobus;
 static std::shared_ptr<ControlFunction> testControlFunction = nullptr;
 static ControlFunctionState testControlFunctionState = ControlFunctionState::Offline;
 static bool wasTestStateCallbackHit = false;
+static bool wasAnyControlFunctionCallbackHit = false;
+
 void test_control_function_state_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
 {
 	testControlFunction = controlFunction;
 	testControlFunctionState = state;
 	wasTestStateCallbackHit = true;
+}
+
+static void test_any_control_function_callback(const CANMessage &, void *)
+{
+	wasAnyControlFunctionCallbackHit = true;
+}
+
+static std::uint32_t sniffedMessageCount = 0;
+static std::shared_ptr<ControlFunction> sniffedMessageSource = nullptr;
+static std::shared_ptr<ControlFunction> sniffedMessageDestination = nullptr;
+
+static void test_sniffed_message_callback(const CANMessage &message, void *)
+{
+	sniffedMessageCount++;
+	sniffedMessageSource = message.get_source_control_function();
+	sniffedMessageDestination = message.get_destination_control_function();
+}
+
+static std::uint32_t sniffedPayloadLength = 0;
+
+static void test_sniffed_payload_callback(const CANMessage &message, void *)
+{
+	sniffedMessageCount++;
+	sniffedPayloadLength = message.get_data_length();
+	sniffedMessageSource = message.get_source_control_function();
+}
+
+static void test_reentrant_sniffed_message_callback(const CANMessage &message, void *)
+{
+	sniffedMessageCount++;
+	// Calling back into the registry from inside a callback must not deadlock
+	CANNetworkManager::CANNetwork.is_sniffed_parameter_group_number_of_interest(message.get_identifier().get_parameter_group_number());
+	CANNetworkManager::CANNetwork.remove_sniffed_message_callback(message.get_identifier().get_parameter_group_number(), test_reentrant_sniffed_message_callback, nullptr);
 }
 
 class CoreTest : public AgIsoStackTestFixture
@@ -423,4 +458,162 @@ TEST_F(CoreTest, SimilarControlFunctions)
 	// Partner should never change
 	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), 0xa0000F000425e9f8);
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartner);
+}
+
+TEST_F(CoreTest, SniffedMessageCallbacksSeeExternalToExternalTraffic)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	// The network manager discards received frames until update() has initialized it
+	CANNetworkManager::CANNetwork.update();
+
+	auto talker = test_helpers::force_claim_partnered_control_function(0x7A, 0);
+	auto listener = test_helpers::force_claim_partnered_control_function(0x7B, 0);
+	CANNetworkManager::CANNetwork.update();
+
+	sniffedMessageCount = 0;
+	sniffedMessageSource = nullptr;
+	sniffedMessageDestination = nullptr;
+	wasAnyControlFunctionCallbackHit = false;
+
+	EXPECT_FALSE(CANNetworkManager::CANNetwork.is_sniffed_parameter_group_number_of_interest(0xEF00));
+	CANNetworkManager::CANNetwork.add_sniffed_message_callback(0xEF00, test_sniffed_message_callback, nullptr);
+	EXPECT_TRUE(CANNetworkManager::CANNetwork.is_sniffed_parameter_group_number_of_interest(0xEF00));
+	EXPECT_FALSE(CANNetworkManager::CANNetwork.is_sniffed_parameter_group_number_of_interest(0xFE00));
+
+	// The legacy any-control-function callbacks must keep ignoring traffic that isn't addressed to us
+	CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(0xEF00, test_any_control_function_callback, nullptr);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6,
+	  0xEF00, // Proprietary A, addressed from one external control function to another
+	  listener,
+	  talker,
+	  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(1, sniffedMessageCount);
+	EXPECT_EQ(talker, sniffedMessageSource);
+	EXPECT_EQ(listener, sniffedMessageDestination);
+	EXPECT_FALSE(wasAnyControlFunctionCallbackHit);
+
+	// A PGN nobody registered for must not reach the sniffing callback
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6,
+	  0x9F00, // A destination specific PGN that no sniffing callback asked for
+	  listener,
+	  talker,
+	  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(1, sniffedMessageCount);
+
+	CANNetworkManager::CANNetwork.remove_sniffed_message_callback(0xEF00, test_sniffed_message_callback, nullptr);
+	EXPECT_FALSE(CANNetworkManager::CANNetwork.is_sniffed_parameter_group_number_of_interest(0xEF00));
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6,
+	  0xEF00,
+	  listener,
+	  talker,
+	  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(1, sniffedMessageCount);
+
+	CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(0xEF00, test_any_control_function_callback, nullptr);
+	CANNetworkManager::CANNetwork.deactivate_control_function(talker);
+	CANNetworkManager::CANNetwork.deactivate_control_function(listener);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, SniffedMessageCallbackCanMutateTheRegistryFromInsideTheCallback)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	CANNetworkManager::CANNetwork.update();
+
+	auto talker = test_helpers::force_claim_partnered_control_function(0x7C, 0);
+	auto listener = test_helpers::force_claim_partnered_control_function(0x7D, 0);
+	CANNetworkManager::CANNetwork.update();
+
+	sniffedMessageCount = 0;
+	CANNetworkManager::CANNetwork.add_sniffed_message_callback(0xEF00, test_reentrant_sniffed_message_callback, nullptr);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6,
+	  0xEF00,
+	  listener,
+	  talker,
+	  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(1, sniffedMessageCount);
+	// The callback removed itself, so a second identical message must not reach it
+	EXPECT_FALSE(CANNetworkManager::CANNetwork.is_sniffed_parameter_group_number_of_interest(0xEF00));
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6,
+	  0xEF00,
+	  listener,
+	  talker,
+	  { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(1, sniffedMessageCount);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(talker);
+	CANNetworkManager::CANNetwork.deactivate_control_function(listener);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, SniffedMessageCallbacksSeeAssembledBroadcastMessages)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	CANNetworkManager::CANNetwork.update();
+
+	auto talker = test_helpers::force_claim_partnered_control_function(0x7E, 0);
+	CANNetworkManager::CANNetwork.update();
+
+	sniffedMessageCount = 0;
+	sniffedPayloadLength = 0;
+	sniffedMessageSource = nullptr;
+	CANNetworkManager::CANNetwork.add_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
+
+	// Broadcast announce message for a 17 byte payload sent as 3 data frames
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+	  7,
+	  0xEC00, // Transport Protocol Connection Management
+	  talker,
+	  {
+	    32, // BAM Mux
+	    17, // Data Length
+	    0, // Data Length MSB
+	    3, // Packet count
+	    0xFF, // Reserved
+	    0xEC, // PGN LSB
+	    0xFE, // PGN middle byte
+	    0x00, // PGN MSB
+	  }));
+	CANNetworkManager::CANNetwork.update();
+
+	for (std::uint8_t sequenceNumber = 1; sequenceNumber <= 3; sequenceNumber++)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+		  7,
+		  0xEB00, // Transport Protocol Data Transfer
+		  talker,
+		  { sequenceNumber, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 }));
+		CANNetworkManager::CANNetwork.update();
+	}
+
+	EXPECT_EQ(1, sniffedMessageCount);
+	EXPECT_EQ(17, sniffedPayloadLength);
+	EXPECT_EQ(talker, sniffedMessageSource);
+
+	CANNetworkManager::CANNetwork.remove_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
+	CANNetworkManager::CANNetwork.deactivate_control_function(talker);
+	CANHardwareInterface::stop();
 }

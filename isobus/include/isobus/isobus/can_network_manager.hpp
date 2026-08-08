@@ -111,6 +111,27 @@ namespace isobus
 		/// @returns An event dispatcher which can be used to get notified about transmitted messages
 		EventDispatcher<CANMessage> &get_transmitted_message_event_dispatcher();
 
+		/// @brief Registers a callback for sniffing the associated PGN, regardless of who the message was addressed to
+		/// @details Unlike add_any_control_function_parameter_group_number_callback, this callback is not filtered
+		/// by destination, so it also reports traffic exchanged between two external control functions.
+		/// @param[in] parameterGroupNumber The PGN you want to register for
+		/// @param[in] callback The callback that will be called when parameterGroupNumber is observed on the bus
+		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.
+		void add_sniffed_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+
+		/// @brief This is how you remove a callback added with add_sniffed_message_callback
+		/// @param[in] parameterGroupNumber The PGN of the callback to remove
+		/// @param[in] callback The callback that will be removed
+		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		void remove_sniffed_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
+
+		/// @brief Returns if any sniffing callback has been registered for the specified PGN
+		/// @details The transport protocols use this to decide whether it is worth assembling a message
+		/// that is being transferred between two external control functions.
+		/// @param[in] parameterGroupNumber The PGN to check for
+		/// @returns true if at least one sniffing callback wants the specified PGN
+		bool is_sniffed_parameter_group_number_of_interest(std::uint32_t parameterGroupNumber);
+
 		/// @brief Returns an internal control function if the passed-in control function is an internal type
 		/// @param[in] controlFunction The control function to get the internal control function from
 		/// @returns An internal control function casted from the passed in control function
@@ -324,6 +345,10 @@ namespace isobus
 		/// @param[in] currentMessage The message to process
 		void process_any_control_function_pgn_callbacks(const CANMessage &currentMessage);
 
+		/// @brief Processes a can message for callbacks added with add_sniffed_message_callback
+		/// @param[in] currentMessage The message to process
+		void process_sniffed_message_callbacks(const CANMessage &currentMessage);
+
 		/// @brief Validates that a CAN message has not caused an address violation.
 		/// If a violation is found, the network manager will notify the affected address claim state machine
 		/// to re-claim as is required by ISO 11783-5, and will attempt to activate a DTC that is defined in ISO 11783-5.
@@ -397,11 +422,13 @@ namespace isobus
 		std::list<ControlFunctionStateCallback> controlFunctionStateCallbacks; ///< List of all control function state callbacks
 		std::vector<ParameterGroupNumberCallbackData> globalParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
 		std::vector<ParameterGroupNumberCallbackData> anyControlFunctionParameterGroupNumberCallbacks; ///< A list of all global PGN callbacks
+		std::vector<ParameterGroupNumberCallbackData> sniffedMessageCallbacks; ///< A list of all sniffing PGN callbacks, which are not filtered by destination
 		EventDispatcher<CANMessage> messageTransmittedEventDispatcher; ///< An event dispatcher for notifying consumers about transmitted messages by our application
 		EventDispatcher<std::shared_ptr<InternalControlFunction>> addressViolationEventDispatcher; ///< An event dispatcher for notifying consumers about address violations
 		Mutex protocolPGNCallbacksMutex; ///< A mutex for PGN callback thread safety
 		mutable Mutex globalPGNCallbacksMutex; ///< Mutex to protect the global PGN callbacks
 		Mutex anyControlFunctionCallbacksMutex; ///< Mutex to protect the "any CF" callbacks
+		Mutex sniffedMessageCallbacksMutex; ///< Mutex to protect the sniffing callbacks
 		Mutex busloadUpdateMutex; ///< A mutex that protects the busload metrics since we calculate it on our own thread
 		Mutex controlFunctionStatusCallbacksMutex; ///< A Mutex that protects access to the control function status callback list
 		std::uint32_t busloadUpdateTimestamp_ms = 0; ///< Tracks a time window for determining approximate busload
