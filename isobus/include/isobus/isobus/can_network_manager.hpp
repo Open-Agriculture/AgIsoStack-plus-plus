@@ -24,6 +24,7 @@
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_transport_protocol.hpp"
+#include "isobus/isobus/can_transport_protocol_sniffer.hpp"
 #include "isobus/isobus/isobus_heartbeat.hpp"
 #include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
@@ -403,6 +404,7 @@ namespace isobus
 		CANNetworkConfiguration configuration; ///< The configuration for this network manager
 		std::array<std::unique_ptr<TransportProtocolManager>, CAN_PORT_MAXIMUM> transportProtocols; ///< One instance of the transport protocol manager for each channel
 		std::array<std::unique_ptr<ExtendedTransportProtocolManager>, CAN_PORT_MAXIMUM> extendedTransportProtocols; ///< One instance of the extended transport protocol manager for each channel
+		std::array<std::unique_ptr<TransportProtocolSniffer>, CAN_PORT_MAXIMUM> transportProtocolSniffers; ///< Reassembles transport protocol messages between other control functions, one per channel
 		std::array<std::unique_ptr<FastPacketProtocol>, CAN_PORT_MAXIMUM> fastPacketProtocol; ///< One instance of the fast packet protocol for each channel
 		std::array<std::unique_ptr<HeartbeatInterface>, CAN_PORT_MAXIMUM> heartBeatInterfaces; ///< Manages ISOBUS heartbeat requests, one per channel
 

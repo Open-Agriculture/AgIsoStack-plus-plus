@@ -282,6 +282,7 @@ namespace isobus
 		{
 			transportProtocols[i]->update();
 			extendedTransportProtocols[i]->update();
+			transportProtocolSniffers[i]->update();
 			fastPacketProtocol[i]->update();
 		}
 		update_busload_history();
@@ -576,6 +577,15 @@ namespace isobus
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
 			heartBeatInterfaces.at(i).reset(new HeartbeatInterface(send_frame_callback));
+
+			auto sniffed_parameter_group_number_filter = [this](std::uint32_t parameterGroupNumber) {
+				return this->is_sniffed_parameter_group_number_of_interest(parameterGroupNumber);
+			};
+
+			auto sniffed_message_callback = [this](const CANMessage &message) {
+				this->process_sniffed_message_callbacks(message);
+			};
+			transportProtocolSniffers.at(i).reset(new TransportProtocolSniffer(sniffed_parameter_group_number_filter, sniffed_message_callback, &configuration));
 		}
 	}
 
@@ -1145,6 +1155,7 @@ namespace isobus
 			// Update Special Callbacks, like protocols and non-cf specific ones
 			transportProtocols.at(message->get_can_port_index())->process_message(*message);
 			extendedTransportProtocols.at(message->get_can_port_index())->process_message(*message);
+			transportProtocolSniffers.at(message->get_can_port_index())->process_message(*message);
 			fastPacketProtocol.at(message->get_can_port_index())->process_message(*message);
 			heartBeatInterfaces.at(message->get_can_port_index())->process_rx_message(*message);
 			process_protocol_pgn_callbacks(*message);
