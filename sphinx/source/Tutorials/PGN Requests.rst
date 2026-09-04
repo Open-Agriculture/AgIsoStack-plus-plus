@@ -22,7 +22,7 @@ It is assumed you have completed the basic tutorials, as this tutorial covers ap
 What is a PGN request?
 -----------------------
 
-Basically if someone requests a PGN from you, they are politely asking you to either send them a message with that PGN, or perform some action. .
+Basically if someone requests a PGN from you, they are politely asking you to either send them a message with that PGN, or perform some action.
 You have a choice to either respond with the data they want, send the Acknowledgement PGN (this is called ACK or NACK depending on if the acknowledgement is positive or negative), or do nothing.
 
 Using the Parameter Group Number Request Protocol
@@ -39,21 +39,22 @@ This library provides a class that makes handling these requests simpler than ha
 Configuring
 ^^^^^^^^^^^^
 
-Before you can use the library to send and receive PGN requests, you'll need to have an Internal Control Function and assign the protocol to it. 
-This tells the library that you want to process PGN requests on a particular CAN channel, and tells the library what control function to use when responding to requests on the bus that are sent to you.
+Before you can use the library to send and receive PGN requests, you'll need to have an Internal Control Function.
+The PGN request protocol is associated with the internal control function and can be accessed with :code:`get_pgn_request_protocol()`.
+No separate setup call is needed.
 
 .. code-block:: c++
 
     #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 
-    isobus::ParameterGroupNumberRequestProtocol::assign_pgn_request_protocol_to_internal_control_function(<your internal control function goes here>);
+    auto pgnRequestProtocol = internalECU->get_pgn_request_protocol().lock();
 
-This may create an instance of the protocol if needed, and the library will begin handling requests on your behalf. By default, it will NACK all requests until you explicitly handle a PGN. Then, requests that match that PGN will be forwarded to your application via a callback.
+The library will begin handling requests on your behalf. By default, it will NACK all destination-specific requests until you explicitly handle a PGN. Then, requests that match that PGN will be forwarded to your application via a callback.
 
 Sending a PGN Request
 ^^^^^^^^^^^^^^^^^^^^^^
 
-To send a PGN request, after you have assigned an internal control function, simply call :code:`isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number` and pass in the PGN you want to request, and a control function to request it from.
+To send a PGN request, after you have created an internal control function, simply call :code:`isobus::ParameterGroupNumberRequestProtocol::request_parameter_group_number` and pass in the PGN you want to request, and a control function to request it from.
 
 Passing in :code:`nullptr` will request it as a broadcast from all CFs. This is generally not a great idea to do, but is allowed.
 
@@ -69,11 +70,19 @@ To do this, create a function that matches the type :code:`PGNRequestCallback`.
 .. code-block:: c++
 
     bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumber,
-                                               isobus::std::shared_ptr<ControlFunction> ,
-                                               bool &acknowledge,
-                                               isobus::AcknowledgementType &acknowledgeType,
-                                               void *)
+                                                   std::shared_ptr<isobus::ControlFunction> requestingControlFunction,
+                                                   bool &acknowledge,
+                                                   isobus::AcknowledgementType &acknowledgeType,
+                                                   void *)
     {
+        if (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA) == parameterGroupNumber)
+        {
+            acknowledge = true;
+            acknowledgeType = isobus::AcknowledgementType::Positive;
+            return true;
+        }
+
+        return false;
     }
 
 Then, register this function with the protocol. This tells the library that you want it call this function when the specified PGN is requested. In this case, we'll specify the ProprietaryA (PROPA) PGN.
@@ -81,10 +90,12 @@ Then, register this function with the protocol. This tells the library that you 
 .. code-block:: c++
 
     // Get a pointer to the protocol instance
-    isobus::ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(<your internal control function>);
+    auto pgnRequestProtocol = internalECU->get_pgn_request_protocol().lock();
 
-
-    pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_pgn_request_handler, nullptr);
+    if (pgnRequestProtocol)
+    {
+        pgnRequestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_pgn_request_handler, nullptr);
+    }
 
 Sending a Request for Repetition Rate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -112,10 +123,17 @@ To do this, create a function that matches the type :code:`PGNRequestForRepetiti
 .. code-block:: c++
 
     bool example_proprietary_a_request_for_repetition_rate_handler(std::uint32_t parameterGroupNumber,
-                                                               isobus::std::shared_ptr<ControlFunction> requestingControlFunction,
-                                                               std::uint32_t repetitionRate,
-                                                               void *)
+                                                                   std::shared_ptr<isobus::ControlFunction> requestingControlFunction,
+                                                                   std::shared_ptr<isobus::ControlFunction> targetControlFunction,
+                                                                   std::uint32_t repetitionRate,
+                                                                   void *)
     {
+        if (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA) == parameterGroupNumber)
+        {
+            return true;
+        }
+
+        return false;
     }
 
 Then, register your callback with the protocol, and you will begin to receive callbacks when that PGN is requested from you.
@@ -123,12 +141,15 @@ Then, register your callback with the protocol, and you will begin to receive ca
 .. code-block:: c++
 
     // Get a pointer to the protocol instance
-    isobus::ParameterGroupNumberRequestProtocol *pgnRequestProtocol = isobus::ParameterGroupNumberRequestProtocol::get_pgn_request_protocol_by_internal_control_function(<your internal control function>);
+    auto pgnRequestProtocol = internalECU->get_pgn_request_protocol().lock();
 
     // Now we'll set up a callback to handle requests for repetition rate for the PROPA PGN in this example
-    pgnRequestProtocol->register_request_for_repetition_rate_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_request_for_repetition_rate_handler, nullptr);
+    if (pgnRequestProtocol)
+    {
+        pgnRequestProtocol->register_request_for_repetition_rate_callback(static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::ProprietaryA), example_proprietary_a_request_for_repetition_rate_handler, nullptr);
+    }
 
-Above, you can see we're asking the CAN stack for the protocol instance we created earlier, and we're telling the stack to call our callback whenever it receives a request for repetition rate specifically for the PROPA PGN in this case.
+Above, you can see we're asking the CAN stack for the protocol instance associated with our internal control function, and we're telling the stack to call our callback whenever it receives a request for repetition rate specifically for the PROPA PGN in this case.
 
 Check out the full example here for more on what you can put inside that callback to tell the stack how to respond to the request: https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/examples/pgn_requests/main.cpp
 
@@ -138,5 +159,5 @@ Check out the full example here for more on what you can put inside that callbac
 
     * If the request or applicable PGN is sent to the global address, then the response is sent to the global address. This library will currently always send ACK/NACK responses to the broadcast address, but you can send any response you want from your application in response to these requests. Using the CAN stack's ACK/NACK functionality is completely optional.
     * A NACK is not desired as a response to a global request. The CAN stack will not send them in response to a global request.
-    * A NACK is required if the PGN is not supported. It is highly recommended you assign an instance of the PGN request protocol to every internal control function you make if you wish to be in compliance with this rule. As long as you tell the stack to handle these requests, it will NACK any unhandled request.
+    * A NACK is required if the PGN is not supported. It is highly recommended you use the PGN request protocol for every internal control function you make if you wish to be in compliance with this rule. As long as you tell the stack to handle these requests, it will NACK any unhandled request.
     * You can pass in a callback to this protocol that handles ALL PGNs sent to that internal control function if you want by using the meta PGN called :code:`isobus::CANLibParameterGroupNumber::Any`

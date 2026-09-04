@@ -144,12 +144,12 @@ In this example, I'll use a shared_ptr to store my InternalControlFunction, but 
     myNAME.set_manufacturer_code(1407);
 
     // Create our InternalControlFunction
-    myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
+    myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0, 0x1C);
 
     return 0;
    }
 
-In this example, I created my control function with a preferred address of 0x1C, and assigned it to CAN channel 0.
+In this example, I created my control function with a preferred address of 0x1C, and assigned it to CAN channel 0. If the preferred address is omitted, the API default is 0xFE (the NULL CAN address), which tells the stack to choose an arbitrary address from the valid dynamic range instead of trying to claim 0xFE.
 
 Now, we've got a little problem... What is CAN channel 0?
 
@@ -244,7 +244,7 @@ Let's see what we've got so far:
       myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
-      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
+      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0, 0x1C);
 
       return 0;
    }
@@ -311,7 +311,7 @@ Make sure to include the `csignal` and `atomic` headers. `csignal` is for handli
       myNAME.set_manufacturer_code(1407);
 
       // Create our InternalControlFunction
-      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
+      myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0, 0x1C);
 
       // Clean up the threads
       isobus::CANHardwareInterface::stop();
@@ -381,7 +381,7 @@ The total result:
     myNAME.set_manufacturer_code(1407);
 
     // Create our InternalControlFunction
-    myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0);
+    myECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(myNAME, 0, 0x1C);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

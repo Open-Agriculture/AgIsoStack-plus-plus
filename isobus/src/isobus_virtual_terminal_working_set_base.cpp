@@ -16,6 +16,65 @@
 
 namespace isobus
 {
+	/// @brief Creates an 8-bit mask for the requested bit.
+	/// @param bitIndex The zero-based bit index.
+	/// @returns The requested bit mask, or zero if the bit index is invalid.
+	static constexpr std::uint8_t get_bit_mask(std::uint_fast8_t bitIndex) noexcept
+	{
+		return (bitIndex < 8U) ? static_cast<std::uint8_t>(1U << bitIndex) : static_cast<std::uint8_t>(0U);
+	}
+
+	/// @brief Applies a mask to an 8-bit value.
+	/// @param value The value to mask.
+	/// @param mask The mask to apply.
+	/// @returns The masked 8-bit value.
+	static constexpr std::uint8_t get_masked_value(std::uint8_t value, std::uint_fast16_t mask) noexcept
+	{
+		return static_cast<std::uint8_t>(value & mask);
+	}
+
+	/// @brief Determines whether any bit selected by a mask is set.
+	/// @param value The value to inspect.
+	/// @param mask The mask selecting the bits to inspect.
+	/// @returns true if any selected bit is set, otherwise false.
+	static constexpr bool is_bit_set(std::uint8_t value, std::uint_fast16_t mask) noexcept
+	{
+		return 0 != get_masked_value(value, mask);
+	}
+
+	/// @brief Decodes an unsigned 16-bit little-endian value from a byte buffer.
+	/// @param data The byte buffer containing the value.
+	/// @param index The index of the least-significant byte.
+	/// @returns The decoded unsigned 16-bit value.
+	static std::uint16_t get_little_endian_uint16(const std::uint8_t *data, std::size_t index) noexcept
+	{
+		const auto lowByte = static_cast<std::uint16_t>(data[index]);
+		const auto highByte = static_cast<std::uint16_t>(data[index + 1]);
+
+		return static_cast<std::uint16_t>(lowByte | static_cast<std::uint16_t>(highByte << 8));
+	}
+
+	/// @brief Decodes a signed 16-bit little-endian value from a byte buffer.
+	/// @param data The byte buffer containing the value.
+	/// @param index The index of the least-significant byte.
+	/// @returns The decoded signed 16-bit value.
+	static std::int16_t get_little_endian_int16(const std::uint8_t *data, std::size_t index) noexcept
+	{
+		return static_cast<std::int16_t>(get_little_endian_uint16(data, index));
+	}
+
+	/// @brief Decodes an unsigned 32-bit little-endian value from a byte buffer.
+	/// @param data The byte buffer containing the value.
+	/// @param index The index of the least-significant byte.
+	/// @returns The decoded unsigned 32-bit value.
+	static std::uint32_t get_little_endian_uint32(const std::uint8_t *data, std::size_t index) noexcept
+	{
+		return static_cast<std::uint32_t>(data[index]) |
+		  (static_cast<std::uint32_t>(data[index + 1]) << 8) |
+		  (static_cast<std::uint32_t>(data[index + 2]) << 16) |
+		  (static_cast<std::uint32_t>(data[index + 3]) << 24);
+	}
+
 	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_object_id()
 	{
 		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
@@ -67,8 +126,8 @@ namespace isobus
 		if (iopLength > 3)
 		{
 			// We at least have object ID and type
-			auto decodedID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-			VirtualTerminalObjectType decodedType = static_cast<VirtualTerminalObjectType>(iopData[2]);
+			auto decodedID = get_little_endian_uint16(iopData, 0);
+			auto decodedType = static_cast<VirtualTerminalObjectType>(iopData[2]);
 
 			switch (decodedType)
 			{
@@ -86,11 +145,11 @@ namespace isobus
 							tempObject->set_id(decodedID);
 							tempObject->set_background_color(iopData[3]);
 							tempObject->set_selectable(iopData[4]);
-							tempObject->set_active_mask(static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8));
+							tempObject->set_active_mask(get_little_endian_uint16(iopData, 5));
 
 							// Now add child objects
 							const std::uint8_t childrenToFollow = iopData[7];
-							const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
+							const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
 							const std::uint8_t numberOfMacrosToFollow = iopData[8];
 							const std::uint8_t numberOfLanguagesToFollow = iopData[9];
 							iopLength -= 10; // Subtract the bytes we've processed so far.
@@ -100,9 +159,9 @@ namespace isobus
 							{
 								for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 								{
-									std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-									auto childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-									auto childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+									auto childID = get_little_endian_uint16(iopData, 0);
+									auto childX = get_little_endian_int16(iopData, 2);
+									auto childY = get_little_endian_int16(iopData, 4);
 									tempObject->add_child(childID, childX, childY);
 									iopLength -= 6;
 									iopData += 6;
@@ -162,10 +221,10 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 						tempObject->set_background_color(iopData[3]);
-						tempObject->set_soft_key_mask(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+						tempObject->set_soft_key_mask(get_little_endian_uint16(iopData, 4));
 						// Now add child objects
 						const std::uint8_t childrenToFollow = iopData[6];
-						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
+						const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[7];
 						iopLength -= 8; // Subtract the bytes we've processed so far.
 						iopData += 8; // Move the pointer
@@ -174,9 +233,9 @@ namespace isobus
 						{
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-								std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-								std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
+								std::int16_t childX = get_little_endian_int16(iopData, 2);
+								std::int16_t childY = get_little_endian_int16(iopData, 4);
 								tempObject->add_child(childID, childX, childY);
 								iopLength -= 6;
 								iopData += 6;
@@ -210,7 +269,7 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 						tempObject->set_background_color(iopData[3]);
-						tempObject->set_soft_key_mask(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+						tempObject->set_soft_key_mask(get_little_endian_uint16(iopData, 4));
 
 						if (iopData[6] <= static_cast<std::uint8_t>(AlarmMask::Priority::Low))
 						{
@@ -220,7 +279,7 @@ namespace isobus
 							{
 								// Now add child objects
 								const std::uint8_t childrenToFollow = iopData[8];
-								const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
+								const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
 								const std::uint8_t numberOfMacrosToFollow = iopData[9];
 								iopLength -= 10; // Subtract the bytes we've processed so far.
 								iopData += 10; // Move the pointer
@@ -229,9 +288,9 @@ namespace isobus
 								{
 									for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 									{
-										std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-										std::int16_t childX = (static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-										std::int16_t childY = (static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+										auto childID = get_little_endian_uint16(iopData, 0);
+										auto childX = get_little_endian_int16(iopData, 2);
+										auto childY = get_little_endian_int16(iopData, 4);
 										tempObject->add_child(childID, childX, childY);
 										iopLength -= 6;
 										iopData += 6;
@@ -280,8 +339,8 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_hidden(0 != iopData[7]);
 
 						if (iopData[7] > 1)
@@ -293,7 +352,7 @@ namespace isobus
 
 						// Now add child objects
 						const std::uint8_t childrenToFollow = iopData[8];
-						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
+						const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[9];
 						iopLength -= 10; // Subtract the bytes we've processed so far.
 						iopData += 10; // Move the pointer
@@ -302,9 +361,9 @@ namespace isobus
 						{
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-								auto childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-								auto childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
+								auto childX = get_little_endian_int16(iopData, 2);
+								auto childY = get_little_endian_int16(iopData, 4);
 								tempObject->add_child(childID, childX, childY);
 								iopLength -= 6;
 								iopData += 6;
@@ -366,9 +425,9 @@ namespace isobus
 							tempObject->set_background_color(iopData[6]);
 							tempObject->set_options(iopData[7]);
 
-							const std::uint16_t name = (static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8));
-							const std::uint16_t title = (static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8));
-							const std::uint16_t icon = (static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8));
+							const auto name = get_little_endian_uint16(iopData, 8);
+							const auto title = get_little_endian_uint16(iopData, 10);
+							const auto icon = get_little_endian_uint16(iopData, 12);
 
 							tempObject->set_name_object_id(name);
 							tempObject->set_title_object_id(title);
@@ -377,7 +436,7 @@ namespace isobus
 							const std::uint8_t numberOfObjectReferences = iopData[14];
 							const std::uint8_t numberOfChildObjects = iopData[15];
 							const std::uint8_t numberOfMacrosToFollow = iopData[16];
-							const std::uint16_t sizeOfChildren = (numberOfChildObjects * 6); // ID, X, Y 2 bytes each
+							const auto sizeOfChildren = static_cast<std::uint16_t>(numberOfChildObjects * 6); // ID, X, Y 2 bytes each
 
 							switch (tempObject->get_window_type())
 							{
@@ -396,7 +455,6 @@ namespace isobus
 								{
 									if (1 != numberOfObjectReferences)
 									{
-										retVal = false;
 										LOG_ERROR("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 1.", decodedID);
 									}
 								}
@@ -411,7 +469,6 @@ namespace isobus
 								{
 									if (2 != numberOfObjectReferences)
 									{
-										retVal = false;
 										LOG_ERROR("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 2.", decodedID);
 									}
 								}
@@ -421,7 +478,6 @@ namespace isobus
 								{
 									if (0 != numberOfObjectReferences)
 									{
-										retVal = false;
 										LOG_ERROR("[WS]: Window mask %u has an invalid number of object references. Value must be exactly 0.", decodedID);
 									}
 								}
@@ -435,7 +491,7 @@ namespace isobus
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfObjectReferences; i++)
 								{
-									std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+									auto childID = get_little_endian_uint16(iopData, 0);
 									tempObject->add_child(childID, 0, 0);
 									iopLength -= 2;
 									iopData += 2;
@@ -445,9 +501,9 @@ namespace isobus
 								{
 									for (std::uint_fast8_t i = 0; i < numberOfChildObjects; i++)
 									{
-										std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-										std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-										std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+										auto childID = get_little_endian_uint16(iopData, 0);
+										std::int16_t childX = get_little_endian_int16(iopData, 2);
+										std::int16_t childY = get_little_endian_int16(iopData, 4);
 										tempObject->add_child(childID, childX, childY);
 										iopLength -= 6;
 										iopData += 6;
@@ -492,7 +548,7 @@ namespace isobus
 
 						// Now add child objects
 						const std::uint8_t childrenToFollow = iopData[4];
-						const std::uint16_t sizeOfChildren = (childrenToFollow * 2); // ID 2 bytes
+						const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 2); // ID 2 bytes
 						const std::uint8_t numberOfMacrosToFollow = iopData[5];
 						iopLength -= 6; // Subtract the bytes we've processed so far.
 						iopData += 6; // Move the pointer
@@ -502,7 +558,7 @@ namespace isobus
 							// For soft key masks, no x,y positions are included
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
 								tempObject->add_child(childID, 0, 0);
 								iopLength -= 2;
 								iopData += 2;
@@ -540,7 +596,7 @@ namespace isobus
 
 						// Now add child objects
 						const std::uint8_t childrenToFollow = iopData[5];
-						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
+						const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[6];
 						iopLength -= 7; // Subtract the bytes we've processed so far.
 						iopData += 7; // Move the pointer
@@ -549,9 +605,9 @@ namespace isobus
 						{
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-								auto childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-								auto childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
+								auto childX = get_little_endian_int16(iopData, 2);
+								auto childY = get_little_endian_int16(iopData, 4);
 								tempObject->add_child(childID, childX, childY);
 								iopLength -= 6;
 								iopData += 6;
@@ -584,8 +640,8 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_background_color(iopData[7]);
 						tempObject->set_border_colour(iopData[8]);
 						tempObject->set_key_code(iopData[9]);
@@ -593,7 +649,7 @@ namespace isobus
 
 						// Now add child objects
 						const std::uint8_t childrenToFollow = iopData[11];
-						const std::uint16_t sizeOfChildren = (childrenToFollow * 6); // ID, X, Y 2 bytes each
+						const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
 						const std::uint8_t numberOfMacrosToFollow = iopData[12];
 						iopLength -= 13; // Subtract the bytes we've processed so far.
 						iopData += 13; // Move the pointer
@@ -602,9 +658,9 @@ namespace isobus
 						{
 							for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-								std::int16_t childX = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[2]) | (static_cast<std::int16_t>(iopData[3]) << 8));
-								std::int16_t childY = static_cast<std::int16_t>(static_cast<std::int16_t>(iopData[4]) | (static_cast<std::int16_t>(iopData[5]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
+								std::int16_t childX = get_little_endian_int16(iopData, 2);
+								std::int16_t childY = get_little_endian_int16(iopData, 4);
 								tempObject->add_child(childID, childX, childY);
 								iopLength -= 6;
 								iopData += 6;
@@ -638,15 +694,15 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 						tempObject->set_options(iopData[3]);
-						tempObject->set_name_object_id(static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)); // Output string for the object's name/label
-						tempObject->set_key_group_icon(static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8));
+						tempObject->set_name_object_id(get_little_endian_uint16(iopData, 4)); // Output string for the object's name/label
+						tempObject->set_key_group_icon(get_little_endian_uint16(iopData, 6));
 
 						// Parse children
 						const std::uint8_t numberChildrenToFollow = iopData[8];
 						iopLength -= 9;
 						iopData += 9;
 
-						const std::int64_t iopLengthRemaining = (iopLength - (numberChildrenToFollow * 2));
+						const std::int64_t iopLengthRemaining = iopLength - numberChildrenToFollow * 2;
 
 						if (iopLength >= iopLengthRemaining)
 						{
@@ -654,7 +710,7 @@ namespace isobus
 							{
 								for (std::uint_fast8_t i = 0; i < numberChildrenToFollow; i++)
 								{
-									tempObject->add_child(static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8), 0, 0);
+									tempObject->add_child(get_little_endian_uint16(iopData, 0), 0, 0);
 									iopLength -= 2;
 									iopData += 2;
 								}
@@ -696,10 +752,10 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 						tempObject->set_background_color(iopData[3]);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
-						tempObject->set_foreground_colour_object_id((static_cast<std::uint16_t>(iopData[6]) | (static_cast<std::uint16_t>(iopData[7]) << 8))); // Child Font Attribute
-						tempObject->set_variable_reference(static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)); // Add variable reference
+						tempObject->set_width(get_little_endian_uint16(iopData, 4));
+						tempObject->set_height(get_little_endian_uint16(iopData, 4));
+						tempObject->set_foreground_colour_object_id(get_little_endian_uint16(iopData, 6)); // Child Font Attribute
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 8)); // Add variable reference
 						tempObject->set_value(iopData[10]);
 						tempObject->set_enabled(iopData[11]);
 
@@ -731,19 +787,19 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_background_color(iopData[7]);
-						tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
-						tempObject->set_input_attributes((static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8)));
+						tempObject->set_font_attributes(get_little_endian_uint16(iopData, 8));
+						tempObject->set_input_attributes(get_little_endian_uint16(iopData, 10));
 						tempObject->set_options(iopData[12]);
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[13]) | (static_cast<std::uint16_t>(iopData[14]) << 8))); // Number variable
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 13)); // Number variable
 						tempObject->set_justification_bitfield(iopData[15]);
 
 						const std::size_t lengthOfStringObject = iopData[16];
-						const std::int64_t iopLengthRemaining = (iopLength - 17); // Use larger signed int to detect negative rollover
+						const std::int64_t iopLengthRemaining = iopLength - 17; // Use larger signed int to detect negative rollover
 
-						if (iopLengthRemaining > static_cast<std::uint16_t>((lengthOfStringObject + 2))) // +2 is for enabled byte and number of macros to follow
+						if (iopLengthRemaining > static_cast<std::uint16_t>(lengthOfStringObject + 2)) // +2 is for enabled byte and number of macros to follow
 						{
 							std::string tempString;
 							tempString.reserve(lengthOfStringObject);
@@ -755,8 +811,8 @@ namespace isobus
 							tempObject->set_value(tempString);
 
 							tempObject->set_enabled(iopData[17 + lengthOfStringObject]);
-							iopData += (18 + lengthOfStringObject);
-							iopLength -= (18 + static_cast<std::uint32_t>(lengthOfStringObject));
+							iopData += 18 + lengthOfStringObject;
+							iopLength -= 18 + static_cast<std::uint32_t>(lengthOfStringObject);
 
 							// Next, parse macro list
 							const std::uint8_t numberOfMacrosToFollow = iopData[0];
@@ -790,28 +846,16 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_background_color(iopData[7]);
-						tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
+						tempObject->set_font_attributes(get_little_endian_uint16(iopData, 8));
 						tempObject->set_options(iopData[10]);
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8))); // Number variable
-						tempObject->set_value(static_cast<std::uint32_t>(iopData[13]) |
-						                      (static_cast<std::uint32_t>(iopData[14]) << 8) |
-						                      (static_cast<std::uint32_t>(iopData[15]) << 16) |
-						                      (static_cast<std::uint32_t>(iopData[16]) << 24));
-						tempObject->set_minimum_value(static_cast<std::uint32_t>(iopData[17]) |
-						                              (static_cast<std::uint32_t>(iopData[18]) << 8) |
-						                              (static_cast<std::uint32_t>(iopData[19]) << 16) |
-						                              (static_cast<std::uint32_t>(iopData[20]) << 24));
-						tempObject->set_maximum_value(static_cast<std::uint32_t>(iopData[21]) |
-						                              (static_cast<std::uint32_t>(iopData[22]) << 8) |
-						                              (static_cast<std::uint32_t>(iopData[23]) << 16) |
-						                              (static_cast<std::uint32_t>(iopData[24]) << 24));
-						tempObject->set_offset(static_cast<std::uint32_t>(iopData[25]) |
-						                       (static_cast<std::uint32_t>(iopData[26]) << 8) |
-						                       (static_cast<std::uint32_t>(iopData[27]) << 16) |
-						                       (static_cast<std::uint32_t>(iopData[28]) << 24));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 11)); // Number variable
+						tempObject->set_value(get_little_endian_uint32(iopData, 13));
+						tempObject->set_minimum_value(get_little_endian_uint32(iopData, 17));
+						tempObject->set_maximum_value(get_little_endian_uint32(iopData, 21));
+						tempObject->set_offset(get_little_endian_uint32(iopData, 25));
 						float tempFloat = 0;
 						std::uint8_t floatBuffer[4] = {
 							iopData[29],
@@ -859,9 +903,9 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8))); // Number variable
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 7)); // Number variable
 						tempObject->set_value(iopData[9]);
 						tempObject->set_options(iopData[11]);
 
@@ -874,11 +918,11 @@ namespace isobus
 						iopData++;
 						iopLength--;
 
-						if (iopLength >= static_cast<std::uint16_t>((2 * numberOfListItems)))
+						if (iopLength >= static_cast<std::uint16_t>(2 * numberOfListItems))
 						{
 							for (std::uint_fast8_t i = 0; i < numberOfListItems; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
 								tempObject->add_child(childID, 0, 0);
 								iopLength -= 2;
 								iopData += 2;
@@ -911,15 +955,15 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_background_color(iopData[7]);
-						tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
+						tempObject->set_font_attributes(get_little_endian_uint16(iopData, 8));
 						tempObject->set_options(iopData[10]);
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8))); // String Variable
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 11)); // String Variable
 						tempObject->set_justification_bitfield(iopData[13]);
 
-						const std::uint16_t stringLengthToFollow = (static_cast<std::uint16_t>(iopData[14]) | (static_cast<std::uint16_t>(iopData[15]) << 8));
+						const auto stringLengthToFollow = get_little_endian_uint16(iopData, 14);
 						std::string tempString;
 						tempString.reserve(stringLengthToFollow);
 						iopData += 16;
@@ -966,20 +1010,14 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_background_color(iopData[7]);
-						tempObject->set_font_attributes((static_cast<std::uint16_t>(iopData[8]) | (static_cast<std::uint16_t>(iopData[9]) << 8)));
+						tempObject->set_font_attributes(get_little_endian_uint16(iopData, 8));
 						tempObject->set_options(iopData[10]);
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8))); // Number Variable
-						tempObject->set_value(static_cast<std::uint32_t>(iopData[13]) |
-						                      (static_cast<std::uint32_t>(iopData[14]) << 8) |
-						                      (static_cast<std::uint32_t>(iopData[15]) << 16) |
-						                      (static_cast<std::uint32_t>(iopData[16]) << 24));
-						tempObject->set_offset(static_cast<std::uint32_t>(iopData[17]) |
-						                       (static_cast<std::uint32_t>(iopData[18]) << 8) |
-						                       (static_cast<std::uint32_t>(iopData[19]) << 16) |
-						                       (static_cast<std::uint32_t>(iopData[20]) << 24));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 11)); // Number Variable
+						tempObject->set_value(get_little_endian_uint32(iopData, 13));
+						tempObject->set_offset(get_little_endian_uint32(iopData, 17));
 						float tempFloat = 0;
 						std::uint8_t floatBuffer[4] = {
 							iopData[21],
@@ -1027,9 +1065,9 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 7));
 						tempObject->set_value(iopData[9]);
 
 						// Parse children
@@ -1038,11 +1076,11 @@ namespace isobus
 						iopData += 12;
 						iopLength -= 12;
 
-						if (iopLength >= static_cast<std::uint16_t>((2 * numberOfListItems)))
+						if (iopLength >= static_cast<std::uint16_t>(2 * numberOfListItems))
 						{
 							for (std::uint_fast8_t i = 0; i < numberOfListItems; i++)
 							{
-								std::uint16_t childID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
+								auto childID = get_little_endian_uint16(iopData, 0);
 								tempObject->add_child(childID, 0, 0);
 								iopLength -= 2;
 								iopData += 2;
@@ -1074,9 +1112,9 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+						tempObject->set_line_attributes(get_little_endian_uint16(iopData, 3));
+						tempObject->set_width(get_little_endian_uint16(iopData, 5));
+						tempObject->set_height(get_little_endian_uint16(iopData, 7));
 
 						if (iopData[9] <= 1)
 						{
@@ -1116,11 +1154,11 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+						tempObject->set_line_attributes(get_little_endian_uint16(iopData, 3));
+						tempObject->set_width(get_little_endian_uint16(iopData, 5));
+						tempObject->set_height(get_little_endian_uint16(iopData, 7));
 						tempObject->set_line_suppression_bitfield(iopData[9]);
-						tempObject->set_fill_attributes((static_cast<std::uint16_t>(iopData[10]) | (static_cast<std::uint16_t>(iopData[11]) << 8)));
+						tempObject->set_fill_attributes(get_little_endian_uint16(iopData, 10));
 						iopData += 12;
 						iopLength -= 12;
 
@@ -1150,16 +1188,16 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+						tempObject->set_line_attributes(get_little_endian_uint16(iopData, 3));
+						tempObject->set_width(get_little_endian_uint16(iopData, 5));
+						tempObject->set_height(get_little_endian_uint16(iopData, 7));
 
 						if (iopData[9] <= static_cast<std::uint8_t>(OutputEllipse::EllipseType::ClosedEllipseSection))
 						{
 							tempObject->set_ellipse_type(static_cast<OutputEllipse::EllipseType>(iopData[9]));
 							tempObject->set_start_angle(iopData[10]);
 							tempObject->set_end_angle(iopData[11]);
-							tempObject->set_fill_attributes((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)));
+							tempObject->set_fill_attributes(get_little_endian_uint16(iopData, 12));
 							iopData += 14;
 							iopLength -= 14;
 
@@ -1194,10 +1232,10 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_line_attributes((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
-						tempObject->set_fill_attributes((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
+						tempObject->set_line_attributes(get_little_endian_uint16(iopData, 7));
+						tempObject->set_fill_attributes(get_little_endian_uint16(iopData, 9));
 
 						if (iopData[11] <= 3)
 						{
@@ -1213,11 +1251,11 @@ namespace isobus
 								LOG_WARNING("[WS]: Output Polygon must have at least 3 points. Polygon %u will not be drawable.", decodedID);
 							}
 
-							if (iopLength >= static_cast<std::uint16_t>((numberOfPoints * 4)))
+							if (iopLength >= static_cast<std::uint16_t>(numberOfPoints * 4))
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfPoints; i++)
 								{
-									tempObject->add_point((static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8)), (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8)));
+									tempObject->add_point(get_little_endian_uint16(iopData, 0), get_little_endian_uint16(iopData, 2));
 									iopLength -= 4;
 									iopData += 4;
 								}
@@ -1253,7 +1291,7 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
 						tempObject->set_height(tempObject->get_width());
 						tempObject->set_needle_colour(iopData[5]);
 						tempObject->set_border_colour(iopData[6]);
@@ -1262,10 +1300,10 @@ namespace isobus
 						tempObject->set_number_of_ticks(iopData[9]);
 						tempObject->set_start_angle(iopData[10]);
 						tempObject->set_end_angle(iopData[11]);
-						tempObject->set_min_value((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)));
-						tempObject->set_max_value((static_cast<std::uint16_t>(iopData[14]) | (static_cast<std::uint16_t>(iopData[15]) << 8)));
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[16]) | (static_cast<std::uint16_t>(iopData[17]) << 8))); // Number Variable
-						tempObject->set_value((static_cast<std::uint16_t>(iopData[18]) | (static_cast<std::uint16_t>(iopData[19]) << 8)));
+						tempObject->set_min_value(get_little_endian_uint16(iopData, 12));
+						tempObject->set_max_value(get_little_endian_uint16(iopData, 14));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 16)); // Number Variable
+						tempObject->set_value(get_little_endian_uint16(iopData, 18));
 						const std::uint8_t numberOfMacrosToFollow = iopData[20];
 						iopData += 21;
 						iopLength -= 21;
@@ -1291,18 +1329,18 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_colour(iopData[7]);
 						tempObject->set_target_line_colour(iopData[8]);
 						tempObject->set_options(iopData[9]);
 						tempObject->set_number_of_ticks(iopData[10]);
-						tempObject->set_min_value((static_cast<std::uint16_t>(iopData[11]) | (static_cast<std::uint16_t>(iopData[12]) << 8)));
-						tempObject->set_max_value((static_cast<std::uint16_t>(iopData[13]) | (static_cast<std::uint16_t>(iopData[14]) << 8)));
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[15]) | (static_cast<std::uint16_t>(iopData[16]) << 8))); // Number Variable
-						tempObject->set_value((static_cast<std::uint16_t>(iopData[17]) | (static_cast<std::uint16_t>(iopData[18]) << 8)));
-						tempObject->set_target_value_reference((static_cast<std::uint16_t>(iopData[19]) | (static_cast<std::uint16_t>(iopData[20]) << 8)));
-						tempObject->set_target_value((static_cast<std::uint16_t>(iopData[21]) | (static_cast<std::uint16_t>(iopData[22]) << 8)));
+						tempObject->set_min_value(get_little_endian_uint16(iopData, 11));
+						tempObject->set_max_value(get_little_endian_uint16(iopData, 13));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 15)); // Number Variable
+						tempObject->set_value(get_little_endian_uint16(iopData, 17));
+						tempObject->set_target_value_reference(get_little_endian_uint16(iopData, 19));
+						tempObject->set_target_value(get_little_endian_uint16(iopData, 21));
 						const std::uint8_t numberOfMacrosToFollow = iopData[23];
 						iopData += 24;
 						iopLength -= 24;
@@ -1328,20 +1366,20 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_height(get_little_endian_uint16(iopData, 5));
 						tempObject->set_colour(iopData[7]);
 						tempObject->set_target_line_colour(iopData[8]);
 						tempObject->set_options(iopData[9]);
 						tempObject->set_start_angle(iopData[10]);
 						tempObject->set_end_angle(iopData[11]);
-						tempObject->set_bar_graph_width((static_cast<std::uint16_t>(iopData[12]) | (static_cast<std::uint16_t>(iopData[13]) << 8)));
-						tempObject->set_min_value((static_cast<std::uint16_t>(iopData[14]) | (static_cast<std::uint16_t>(iopData[15]) << 8)));
-						tempObject->set_max_value((static_cast<std::uint16_t>(iopData[16]) | (static_cast<std::uint16_t>(iopData[17]) << 8)));
-						tempObject->set_variable_reference((static_cast<std::uint16_t>(iopData[18]) | (static_cast<std::uint16_t>(iopData[19]) << 8))); // Number Variable
-						tempObject->set_value((static_cast<std::uint16_t>(iopData[20]) | (static_cast<std::uint16_t>(iopData[21]) << 8)));
-						tempObject->set_target_value_reference((static_cast<std::uint16_t>(iopData[22]) | (static_cast<std::uint16_t>(iopData[23]) << 8)));
-						tempObject->set_target_value((static_cast<std::uint16_t>(iopData[24]) | (static_cast<std::uint16_t>(iopData[25]) << 8)));
+						tempObject->set_bar_graph_width(get_little_endian_uint16(iopData, 12));
+						tempObject->set_min_value(get_little_endian_uint16(iopData, 14));
+						tempObject->set_max_value(get_little_endian_uint16(iopData, 16));
+						tempObject->set_variable_reference(get_little_endian_uint16(iopData, 18)); // Number Variable
+						tempObject->set_value(get_little_endian_uint16(iopData, 20));
+						tempObject->set_target_value_reference(get_little_endian_uint16(iopData, 22));
+						tempObject->set_target_value(get_little_endian_uint16(iopData, 24));
 						const std::uint8_t numberOfMacrosToFollow = iopData[26];
 						iopData += 27;
 						iopLength -= 27;
@@ -1379,9 +1417,9 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
-						tempObject->set_actual_width((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
-						tempObject->set_actual_height((static_cast<std::uint16_t>(iopData[7]) | (static_cast<std::uint16_t>(iopData[8]) << 8)));
+						tempObject->set_width(get_little_endian_uint16(iopData, 3));
+						tempObject->set_actual_width(get_little_endian_uint16(iopData, 5));
+						tempObject->set_actual_height(get_little_endian_uint16(iopData, 7));
 						tempObject->set_height(static_cast<std::uint16_t>(tempObject->get_actual_height() * (static_cast<float>(tempObject->get_width()) / static_cast<float>(tempObject->get_actual_width()))));
 
 						if (iopData[9] <= static_cast<std::uint8_t>(PictureGraphic::Format::EightBitColour))
@@ -1389,17 +1427,14 @@ namespace isobus
 							tempObject->set_format(static_cast<PictureGraphic::Format>(iopData[9]));
 							tempObject->set_options(iopData[10]);
 							tempObject->set_transparency_colour(iopData[11]);
-							tempObject->set_number_of_bytes_in_raw_data(static_cast<std::uint32_t>(iopData[12]) |
-							                                            (static_cast<std::uint32_t>(iopData[13]) << 8) |
-							                                            (static_cast<std::uint32_t>(iopData[14]) << 16) |
-							                                            (static_cast<std::uint32_t>(iopData[15]) << 24));
+							tempObject->set_number_of_bytes_in_raw_data(get_little_endian_uint32(iopData, 12));
 							const std::uint8_t numberOfMacrosToFollow = iopData[16];
 							iopData += 17;
 							iopLength -= 17;
 
 							if (tempObject->get_option(PictureGraphic::Options::RunLengthEncoded))
 							{
-								if (0 != (tempObject->get_number_of_bytes_in_raw_data() % 2))
+								if (0 != tempObject->get_number_of_bytes_in_raw_data() % 2)
 								{
 									LOG_ERROR("[WS]: Picture graphic has RLE but an odd number of data bytes. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 								}
@@ -1427,7 +1462,7 @@ namespace isobus
 													if (lineAmountLeft > 0)
 													{
 														//Unused bits at the end of a line are ignored.
-														tempObject->add_raw_data(iopData[1] & 0x0F);
+														tempObject->add_raw_data(get_masked_value(iopData[1], 0x0FU));
 														lineAmountLeft--;
 
 														if (0 == lineAmountLeft)
@@ -1446,7 +1481,7 @@ namespace isobus
 												{
 													for (std::uint_fast8_t k = 0; k < 8U; k++)
 													{
-														tempObject->add_raw_data(static_cast<std::uint8_t>(0 != ((iopData[1]) & (1 << (7 - k)))));
+														tempObject->add_raw_data(static_cast<std::uint8_t>(is_bit_set(iopData[1], get_bit_mask(7 - k))));
 														lineAmountLeft--;
 
 														if (0 == lineAmountLeft)
@@ -1496,7 +1531,7 @@ namespace isobus
 
 												if (lineAmountLeft > 0)
 												{
-													tempObject->add_raw_data(iopData[0] & 0x0F);
+													tempObject->add_raw_data(get_masked_value(iopData[0], 0x0FU));
 													lineAmountLeft--;
 
 													if (0 == lineAmountLeft)
@@ -1522,7 +1557,7 @@ namespace isobus
 											{
 												for (std::uint_fast8_t j = 0; j < 8U; j++)
 												{
-													tempObject->add_raw_data(static_cast<std::uint8_t>(0 != ((iopData[0]) & (1 << (7 - j)))));
+													tempObject->add_raw_data(static_cast<std::uint8_t>(is_bit_set(iopData[0], get_bit_mask(7 - j))));
 													lineAmountLeft--;
 
 													if (0 == lineAmountLeft)
@@ -1550,7 +1585,7 @@ namespace isobus
 
 							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 
-							if (tempObject->get_raw_data().size() == (tempObject->get_actual_width() * tempObject->get_actual_height()))
+							if (tempObject->get_raw_data().size() == tempObject->get_actual_width() * tempObject->get_actual_height())
 							{
 								retVal = true;
 							}
@@ -1583,10 +1618,7 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_value(static_cast<std::uint32_t>(iopData[3]) |
-						                      (static_cast<std::uint32_t>(iopData[4]) << 8) |
-						                      (static_cast<std::uint32_t>(iopData[5]) << 16) |
-						                      (static_cast<std::uint32_t>(iopData[6]) << 24));
+						tempObject->set_value(get_little_endian_uint32(iopData, 3));
 						iopLength -= 7;
 						iopData += 7;
 						retVal = true;
@@ -1611,7 +1643,7 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 
-						const std::uint16_t length = (static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
+						const auto length = get_little_endian_uint16(iopData, 3);
 						iopLength -= 5;
 						iopData += 5;
 
@@ -1695,7 +1727,7 @@ namespace isobus
 						tempObject->set_id(decodedID);
 						tempObject->set_background_color(iopData[3]);
 						tempObject->set_width(iopData[4]);
-						tempObject->set_line_art_bit_pattern(static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8));
+						tempObject->set_line_art_bit_pattern(get_little_endian_uint16(iopData, 5));
 
 						const std::uint8_t numberOfMacrosToFollow = iopData[7];
 						iopData += 8;
@@ -1727,7 +1759,7 @@ namespace isobus
 						{
 							tempObject->set_type(static_cast<FillAttributes::FillType>(iopData[3]));
 							tempObject->set_background_color(iopData[4]);
-							tempObject->set_fill_pattern(static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)); // Object ID for a picture graphic
+							tempObject->set_fill_pattern(get_little_endian_uint16(iopData, 5)); // Object ID for a picture graphic
 
 							const std::uint8_t numberOfMacrosToFollow = iopData[7];
 							iopData += 8;
@@ -1762,11 +1794,11 @@ namespace isobus
 
 						if (iopData[3] <= static_cast<std::uint8_t>(InputAttributes::ValidationType::InvalidCharactersAreListed))
 						{
-							tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(iopData[3] & 0x01));
+							tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(get_masked_value(iopData[3], 0x01U)));
 						}
 						else
 						{
-							tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(iopData[3] & 0x01));
+							tempObject->set_validation_type(static_cast<InputAttributes::ValidationType>(get_masked_value(iopData[3], 0x01U)));
 							LOG_WARNING("[WS]: Invalid input attributes validation type. Validation type must be < 2");
 						}
 
@@ -1821,11 +1853,11 @@ namespace isobus
 
 						if (iopData[3] <= static_cast<std::uint8_t>(ExtendedInputAttributes::ValidationType::InvalidCharactersAreListed))
 						{
-							tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(iopData[3] & 0x01));
+							tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(get_masked_value(iopData[3], 0x01U)));
 						}
 						else
 						{
-							tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(iopData[3] & 0x01));
+							tempObject->set_validation_type(static_cast<ExtendedInputAttributes::ValidationType>(get_masked_value(iopData[3], 0x01U)));
 							LOG_WARNING("[WS]: Invalid extended input attributes validation type. Validation type must be < 2");
 						}
 
@@ -1852,7 +1884,7 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						std::uint16_t numberOfIndexes = static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8);
+						auto numberOfIndexes = get_little_endian_uint16(iopData, 3);
 						if ((2 == numberOfIndexes) ||
 						    (16 == numberOfIndexes) ||
 						    (256 == numberOfIndexes))
@@ -1864,8 +1896,8 @@ namespace isobus
 								tempObject->set_colour_map_index(static_cast<std::uint8_t>(i), iopData[5 + i]);
 							}
 
-							iopData += (5 + tempObject->get_number_of_colour_indexes());
-							iopLength -= (5 + tempObject->get_number_of_colour_indexes());
+							iopData += 5 + tempObject->get_number_of_colour_indexes();
+							iopLength -= 5 + tempObject->get_number_of_colour_indexes();
 
 							retVal = true;
 						}
@@ -1899,7 +1931,7 @@ namespace isobus
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
 						tempObject->set_id(decodedID);
-						tempObject->set_value((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
+						tempObject->set_value(get_little_endian_uint16(iopData, 3));
 						iopLength -= 5;
 						iopData += 5;
 						retVal = true;
@@ -1942,7 +1974,7 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 
-						auto numberBytesToFollow = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
+						auto numberBytesToFollow = get_little_endian_uint16(iopData, 3);
 						std::uint16_t numberBytesProcessed = 0;
 						iopLength -= 5;
 						iopData += 5;
@@ -1978,7 +2010,7 @@ namespace isobus
 									{
 										// Change string value has variable length
 										std::vector<std::uint8_t> command;
-										auto stringLength = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8));
+										auto stringLength = get_little_endian_uint16(iopData, 3);
 										for (int i = 0; i < (stringLength + 5); i++)
 										{
 											command.push_back(iopData[i]);
@@ -2064,9 +2096,9 @@ namespace isobus
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
 								{
-									const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-									const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-									const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+									const auto objectID = get_little_endian_uint16(iopData, 0);
+									const auto xPosition = get_little_endian_uint16(iopData, 2);
+									const auto yPosition = get_little_endian_uint16(iopData, 4);
 
 									tempObject->add_child(objectID, xPosition, yPosition);
 									iopData += 6;
@@ -2124,9 +2156,9 @@ namespace isobus
 								{
 									for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
 									{
-										const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-										const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-										const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+										const auto objectID = get_little_endian_uint16(iopData, 0);
+										const auto xPosition = get_little_endian_uint16(iopData, 2);
+										const auto yPosition = get_little_endian_uint16(iopData, 4);
 
 										tempObject->add_child(objectID, xPosition, yPosition);
 										iopData += 6;
@@ -2170,20 +2202,22 @@ namespace isobus
 						tempObject->set_id(decodedID);
 						tempObject->set_background_color(iopData[3]);
 
-						if ((iopData[4] & 0x1F) >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
+						const auto functionType = get_masked_value(iopData[4], 0x1FU);
+
+						if (functionType >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
 						{
 							LOG_ERROR("[WS]: Auxiliary function type 2 with object ID %u has a reserved function type.", decodedID);
 						}
-						else if ((iopData[4] & 0x1F) == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
+						else if (functionType == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
 						{
 							LOG_ERROR("[WS]: Auxiliary function type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
 						}
 						else
 						{
-							tempObject->set_function_type(static_cast<AuxiliaryFunctionType2::FunctionType>(iopData[4] & 0x1F));
-							tempObject->set_function_attribute(AuxiliaryFunctionType2::CriticalControl, 0 != (iopData[4] & 0x20));
-							tempObject->set_function_attribute(AuxiliaryFunctionType2::AssignmentRestriction, 0 != (iopData[4] & 0x40));
-							tempObject->set_function_attribute(AuxiliaryFunctionType2::SingleAssignment, 0 != (iopData[4] & 0x80));
+							tempObject->set_function_type(static_cast<AuxiliaryFunctionType2::FunctionType>(functionType));
+							tempObject->set_function_attribute(AuxiliaryFunctionType2::CriticalControl, is_bit_set(iopData[4], 0x20U));
+							tempObject->set_function_attribute(AuxiliaryFunctionType2::AssignmentRestriction, is_bit_set(iopData[4], 0x40U));
+							tempObject->set_function_attribute(AuxiliaryFunctionType2::SingleAssignment, is_bit_set(iopData[4], 0x80U));
 
 							const std::uint8_t numberOfObjectsToFollow = iopData[5];
 							const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
@@ -2194,9 +2228,9 @@ namespace isobus
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
 								{
-									const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-									const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-									const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+									const auto objectID = get_little_endian_uint16(iopData, 0);
+									const auto xPosition = get_little_endian_uint16(iopData, 2);
+									const auto yPosition = get_little_endian_uint16(iopData, 4);
 
 									tempObject->add_child(objectID, xPosition, yPosition);
 									iopData += 6;
@@ -2231,21 +2265,23 @@ namespace isobus
 						tempObject->set_id(decodedID);
 						tempObject->set_background_color(iopData[3]);
 
-						if ((iopData[4] & 0x1F) >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
+						const auto functionType = get_masked_value(iopData[4], 0x1FU);
+
+						if (functionType >= static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeStart))
 						{
 							LOG_ERROR("[WS]: Auxiliary input type 2 with object ID %u has a reserved function type.", decodedID);
 						}
-						else if ((iopData[4] & 0x1F) == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
+						else if (functionType == static_cast<std::uint8_t>(AuxiliaryFunctionType2::FunctionType::ReservedRangeEnd))
 						{
 							LOG_ERROR("[WS]: Auxiliary input type 2 with object ID %u is using the remove assignment command function type, which is not allowed.", decodedID);
 						}
 						else
 						{
-							tempObject->set_function_type(static_cast<AuxiliaryFunctionType2::FunctionType>(iopData[4] & 0x1F));
-							tempObject->set_function_attribute(AuxiliaryInputType2::CriticalControl, 0 != (iopData[4] & 0x20));
-							tempObject->set_function_attribute(AuxiliaryInputType2::SingleAssignment, 0 != (iopData[4] & 0x80));
+							tempObject->set_function_type(static_cast<AuxiliaryFunctionType2::FunctionType>(functionType));
+							tempObject->set_function_attribute(AuxiliaryInputType2::CriticalControl, is_bit_set(iopData[4], 0x20U));
+							tempObject->set_function_attribute(AuxiliaryInputType2::SingleAssignment, is_bit_set(iopData[4], 0x80U));
 
-							if (0 != (iopData[4] & 0x40))
+							if (is_bit_set(iopData[4], 0x40U))
 							{
 								LOG_WARNING("[WS]: Auxiliary input type 2 with object ID %u is using the assignment restriction attribute, which is reserved and should be zero.", decodedID);
 							}
@@ -2259,9 +2295,9 @@ namespace isobus
 							{
 								for (std::uint_fast8_t i = 0; i < numberOfObjectsToFollow; i++)
 								{
-									const std::uint16_t objectID = (static_cast<std::uint16_t>(iopData[0]) | (static_cast<std::uint16_t>(iopData[1]) << 8));
-									const std::uint16_t xPosition = (static_cast<std::uint16_t>(iopData[2]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
-									const std::uint16_t yPosition = (static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8));
+									const auto objectID = get_little_endian_uint16(iopData, 0);
+									const auto xPosition = get_little_endian_uint16(iopData, 2);
+									const auto yPosition = get_little_endian_uint16(iopData, 4);
 									tempObject->add_child(objectID, xPosition, yPosition);
 									iopData += 6;
 									iopLength -= 6;
@@ -2297,7 +2333,7 @@ namespace isobus
 						if (iopData[3] <= 3)
 						{
 							tempObject->set_pointer_type(iopData[3]);
-							tempObject->set_auxiliary_object_id((static_cast<std::uint16_t>(iopData[4]) | (static_cast<std::uint16_t>(iopData[5]) << 8)));
+							tempObject->set_auxiliary_object_id(get_little_endian_uint16(iopData, 4));
 							iopData += 6;
 							iopLength -= 6;
 							retVal = true;
@@ -2354,13 +2390,15 @@ namespace isobus
 		}
 		else
 		{
-			retVal = (nullptr != vtObjectTree[objectID]);
+			retVal = nullptr != vtObjectTree[objectID];
 		}
 		return retVal;
 	}
 
 	EventID VirtualTerminalWorkingSetBase::get_event_from_byte(std::uint8_t eventByte)
 	{
+		EventID retVal = EventID::Reserved;
+
 		switch (eventByte)
 		{
 			case static_cast<std::uint8_t>(EventID::OnActivate):
@@ -2392,16 +2430,16 @@ namespace isobus
 			case static_cast<std::uint8_t>(EventID::OnPointingEventPress):
 			case static_cast<std::uint8_t>(EventID::OnPointingEventRelease):
 			{
-				return static_cast<EventID>(eventByte);
+				retVal = static_cast<EventID>(eventByte);
+				break;
 			}
-			break;
 
 			default:
 			{
-				return EventID::Reserved;
+				break;
 			}
-			break;
 		}
+		return retVal;
 	}
 
 	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength)
@@ -2458,7 +2496,7 @@ namespace isobus
 					return false;
 				}
 
-				std::uint16_t macroID = (static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
+				auto macroID = static_cast<std::uint16_t>(static_cast<std::uint16_t>(iopData[1]) | (static_cast<std::uint16_t>(iopData[3]) << 8));
 				auto eventID = get_event_from_byte(iopData[2]);
 				if (EventID::Reserved != eventID)
 				{

@@ -93,6 +93,12 @@ public:
 		// This callback lets you know when a client sends a process data acknowledge (PDACK) message to you
 	}
 
+	void on_client_version_received(std::shared_ptr<isobus::ControlFunction> clientControlFunction, std::uint8_t version) override
+	{
+		// This callback is called when a client's Task Controller version is received
+		// You can use this to know what version the connected implement supports
+	}
+
 	bool on_value_command(std::shared_ptr<isobus::ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &) override
 	{
 		return true;
