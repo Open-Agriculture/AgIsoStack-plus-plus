@@ -1,0 +1,60 @@
+name: Identify GoogleTest executables
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compile-and-identify:
+    name: Compile tests and identify executables
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build
+
+      - name: Configure tests
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DBUILD_TESTING=ON
+
+      - name: Compile tests
+        run: |
+          cmake --build build --parallel
+
+      - name: Identify GoogleTest executables
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "CTest configuration files"
+          echo "========================================"
+
+          find build -type f -name "CTestTestfile.cmake" -print
+
+          echo
+          echo "========================================"
+          echo "Tests and commands registered in CTest"
+          echo "========================================"
+
+          ctest \
+            --test-dir build \
+            --show-only=human \
+            --verbose
+
+          echo
+          echo "========================================"
+          echo "Executable files found in build"
+          echo "========================================"
+
+          find build \
+            -type f \
+            -executable \
+            -print

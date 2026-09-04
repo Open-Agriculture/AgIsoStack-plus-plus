@@ -1,0 +1,261 @@
+name: Identify Tests Covering Surviving Processing Flags Mutants
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - mutation/procssecing-flegs
+    paths:
+      - .github/workflows/identify-processing-flags-covering-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  identify-tests:
+    name: Identify unit tests covering lines 22, 35, 45 and 49
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Clang 19 and build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-19 \
+            llvm-19 \
+            build-essential \
+            cmake \
+            ninja-build
+
+      - name: Configure tests with LLVM coverage
+        shell: bash
+        env:
+          CC: clang-19
+          CXX: clang++-19
+        run: |
+          set -euo pipefail
+
+          cmake -S . -B build \
+            -G Ninja \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-O0 -g -fprofile-instr-generate -fcoverage-mapping" \
+            -DCMAKE_CXX_FLAGS="-O0 -g -fprofile-instr-generate -fcoverage-mapping" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate"
+
+      - name: Compile unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmake --build build --parallel
+          test -x build/test/unit_tests
+
+      - name: List selected unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd build/test
+
+          ./unit_tests \
+            --gtest_list_tests \
+            --gtest_color=no \
+            > "${GITHUB_WORKSPACE}/gtest-list.txt"
+
+          awk '
+            /^[^[:space:]]/ {
+              suite = $1
+              sub(/\.$/, "", suite)
+              next
+            }
+            /^[[:space:]]+/ {
+              test = $1
+              sub(/#.*/, "", test)
+              if (suite != "" && test != "") {
+                print suite "." test
+              }
+            }
+          ' "${GITHUB_WORKSPACE}/gtest-list.txt" \
+            > "${GITHUB_WORKSPACE}/selected-tests.txt"
+
+          test -s "${GITHUB_WORKSPACE}/selected-tests.txt"
+
+          echo "Selected tests: $(wc -l < "${GITHUB_WORKSPACE}/selected-tests.txt")"
+
+      - name: Identify tests covering surviving mutants
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SOURCE_FILE="${GITHUB_WORKSPACE}/utility/src/processing_flags.cpp"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/per-test-coverage"
+          REPORT_FILE="${GITHUB_WORKSPACE}/tests-covering-processing-flags-mutants.txt"
+          FAILED_FILE="${GITHUB_WORKSPACE}/tests-not-analysed.txt"
+
+          test -f "${SOURCE_FILE}"
+          mkdir -p "${RESULTS_DIR}"
+
+          : > "${RESULTS_DIR}/line-22-tests.txt"
+          : > "${RESULTS_DIR}/line-35-tests.txt"
+          : > "${RESULTS_DIR}/line-45-tests.txt"
+          : > "${RESULTS_DIR}/line-49-tests.txt"
+          : > "${FAILED_FILE}"
+
+          cd build/test
+
+          index=0
+          while IFS= read -r test_name; do
+            index=$((index + 1))
+
+            profile_raw="${RESULTS_DIR}/test-${index}.profraw"
+            profile_data="${RESULTS_DIR}/test-${index}.profdata"
+            coverage_text="${RESULTS_DIR}/test-${index}.txt"
+
+            echo "[${index}] ${test_name}"
+
+            if ! LLVM_PROFILE_FILE="${profile_raw}" \
+              ./unit_tests \
+                --gtest_filter="${test_name}" \
+                --gtest_color=no \
+                > /dev/null 2>&1; then
+              echo "${test_name}" >> "${FAILED_FILE}"
+              rm -f "${profile_raw}" "${profile_data}" "${coverage_text}"
+              continue
+            fi
+
+            if [ ! -s "${profile_raw}" ]; then
+              echo "${test_name}" >> "${FAILED_FILE}"
+              rm -f "${profile_raw}" "${profile_data}" "${coverage_text}"
+              continue
+            fi
+
+            llvm-profdata-19 merge \
+              -sparse \
+              "${profile_raw}" \
+              -o "${profile_data}"
+
+            llvm-cov-19 show \
+              ./unit_tests \
+              -instr-profile="${profile_data}" \
+              "${SOURCE_FILE}" \
+              > "${coverage_text}"
+
+            for line in 22 35 45 49; do
+              if awk -F'|' -v target="${line}" '
+                {
+                  line = $1
+                  count = $2
+                  gsub(/[[:space:]]/, "", line)
+                  gsub(/[[:space:]]/, "", count)
+                  if (line == target && count != "" && count != "0") {
+                    found = 1
+                  }
+                }
+                END { exit(found ? 0 : 1) }
+              ' "${coverage_text}"; then
+                echo "${test_name}" >> "${RESULTS_DIR}/line-${line}-tests.txt"
+              fi
+            done
+
+            rm -f "${profile_raw}" "${profile_data}" "${coverage_text}"
+          done < "${GITHUB_WORKSPACE}/selected-tests.txt"
+
+          for line in 22 35 45 49; do
+            sort -u "${RESULTS_DIR}/line-${line}-tests.txt" \
+              -o "${RESULTS_DIR}/line-${line}-tests.txt"
+          done
+
+          {
+            echo "Surviving mutants in processing_flags.cpp"
+            echo
+            echo "Line 22 - Byte count computed from the requested flag count"
+            echo "Mutant 1: Replaced / with * at column 52 [cxx_div_to_mul]"
+            echo "Mutant 2: Replaced + with - at column 57 [cxx_add_to_sub]"
+            echo
+            echo "Tests covering line 22:"
+            if [ -s "${RESULTS_DIR}/line-22-tests.txt" ]; then
+              cat "${RESULTS_DIR}/line-22-tests.txt"
+            else
+              echo "No individual test found"
+            fi
+
+            echo
+            echo "Line 35 - set_flag() upper boundary check"
+            echo "Mutant 3: Replaced <= with < at column 12 [cxx_le_to_lt]"
+            echo
+            echo "Tests covering line 35:"
+            if [ -s "${RESULTS_DIR}/line-35-tests.txt" ]; then
+              cat "${RESULTS_DIR}/line-35-tests.txt"
+            else
+              echo "No individual test found"
+            fi
+
+            echo
+            echo "Line 45 - Outer byte loop bound and increment"
+            echo "Mutant 4: Replaced < with <= at column 31 [cxx_lt_to_le]"
+            echo "Mutant 5: Replaced i++ with i-- at column 47 [cxx_post_inc_to_post_dec]"
+            echo
+            echo "Tests covering line 45:"
+            if [ -s "${RESULTS_DIR}/line-45-tests.txt" ]; then
+              cat "${RESULTS_DIR}/line-45-tests.txt"
+            else
+              echo "No individual test found"
+            fi
+
+            echo
+            echo "Line 49 - Inner bit loop bound"
+            echo "Mutant 6: Replaced < with <= at column 32 [cxx_lt_to_le]"
+            echo
+            echo "Tests covering line 49:"
+            if [ -s "${RESULTS_DIR}/line-49-tests.txt" ]; then
+              cat "${RESULTS_DIR}/line-49-tests.txt"
+            else
+              echo "No individual test found"
+            fi
+
+            echo
+            echo "Tests not analysed successfully"
+            if [ -s "${FAILED_FILE}" ]; then
+              cat "${FAILED_FILE}"
+            else
+              echo "None"
+            fi
+          } | tee "${REPORT_FILE}"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Tests covering surviving Processing Flags mutants"
+            echo
+            echo '```text'
+            cat tests-covering-processing-flags-mutants.txt 2>/dev/null || \
+              echo "The identification report was not generated."
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload identification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: processing-flags-covering-tests
+          path: |
+            tests-covering-processing-flags-mutants.txt
+            tests-not-analysed.txt
+            selected-tests.txt
+            gtest-list.txt
+            per-test-coverage/line-22-tests.txt
+            per-test-coverage/line-35-tests.txt
+            per-test-coverage/line-45-tests.txt
+            per-test-coverage/line-49-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
