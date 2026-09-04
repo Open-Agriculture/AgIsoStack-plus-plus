@@ -265,7 +265,11 @@ namespace isobus
 					{
 						case ProcessDataCommands::TechnicalCapabilities:
 						{
-							if ((rxData[0] >> 4) <= static_cast<std::uint8_t>(TechnicalDataCommandParameters::IdentifyTaskController))
+							if (nullptr == rxMessage.get_source_control_function())
+							{
+								LOG_WARNING("[TC Server]: Received a Technical Capabilities message with no valid source control function.");
+							}
+							else if ((rxData[0] >> 4) <= static_cast<std::uint8_t>(TechnicalDataCommandParameters::IdentifyTaskController))
 							{
 								switch (static_cast<TechnicalDataCommandParameters>(rxData[0] >> 4))
 								{
@@ -284,16 +288,20 @@ namespace isobus
 										if (CAN_DATA_LENGTH == rxMessage.get_data_length())
 										{
 											std::uint8_t version = rxData[1];
+											auto activeClient = get_active_client(rxMessage.get_source_control_function());
 
-											// We can store the reported version to use the proper DDOP parsing approach later on.
-											LOG_DEBUG("[TC Server]: Client reports that its version is %u", version);
-											get_active_client(rxMessage.get_source_control_function())->reportedVersion = version;
+											if (nullptr != activeClient)
+											{
+												// We can store the reported version to use the proper DDOP parsing approach later on.
+												LOG_DEBUG("[TC Server]: Client reports that its version is %u", version);
+												activeClient->reportedVersion = version;
 
-											// Notify the application that we received version information
-											LOG_INFO("[TC Server]: Client 0x%02X reported Task Controller version %u",
-											         rxMessage.get_source_control_function()->get_address(),
-											         version);
-											on_client_version_received(rxMessage.get_source_control_function(), version);
+												// Notify the application that we received version information
+												LOG_INFO("[TC Server]: Client 0x%02X reported Task Controller version %u",
+												         rxMessage.get_source_control_function()->get_address(),
+												         version);
+												on_client_version_received(rxMessage.get_source_control_function(), version);
+											}
 										}
 									}
 									break;
