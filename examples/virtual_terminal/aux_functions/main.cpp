@@ -1,4 +1,4 @@
-#include "isobus/hardware_integration/available_can_drivers.hpp"
+#include "../../common/create_can_driver.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -35,18 +35,7 @@ int main()
 {
 	std::signal(SIGINT, signal_handler);
 
-	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
-#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
-#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
-#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
-#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
-	canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
-#endif
+	auto canDriver = CANDriverFactory::create();
 	if (nullptr == canDriver)
 	{
 		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
