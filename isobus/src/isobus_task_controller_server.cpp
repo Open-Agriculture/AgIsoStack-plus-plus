@@ -761,21 +761,26 @@ namespace isobus
 					{
 						std::uint8_t numberOfWorkingSetMembers = rxData[0];
 
-						if (1 <= numberOfWorkingSetMembers)
+						if (numberOfWorkingSetMembers == 0)
 						{
-							if (nullptr == get_active_client(rxMessage.get_source_control_function()))
-							{
-								activeClients.push_back(std::make_shared<ActiveClient>(rxMessage.get_source_control_function()));
-								LOG_INFO("[TC Server]: New client 0x%02X detected via WorkingSetMaster. Requesting version.",
-								         rxMessage.get_source_control_function()->get_address());
-								// Proactively request version information from the new client
-								send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
-								                                          rxMessage.get_source_control_function());
-							}
+							LOG_ERROR("[TC Server]: Working set master reported zero members – invalid!");
+							break;
 						}
-						else
+
+						// Continue normally even with 2,3,4,... members
+						if (nullptr == get_active_client(rxMessage.get_source_control_function()))
 						{
-							LOG_ERROR("[TC Server]: Working set master message received with unsupported number of working set members: %u", numberOfWorkingSetMembers);
+							activeClients.push_back(std::make_shared<ActiveClient>(rxMessage.get_source_control_function()));
+							LOG_INFO("[TC Server]: New client 0x%02X detected via WorkingSetMaster. Requesting version.",
+							         rxMessage.get_source_control_function()->get_address());
+							// Proactively request version information from the new client
+							send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
+							                                          rxMessage.get_source_control_function());
+						}
+
+						if (numberOfWorkingSetMembers != 1)
+						{
+							LOG_WARNING("[TC Server]: Working set master message received with unsupported number of working set members: %u", numberOfWorkingSetMembers);
 						}
 					}
 					else
