@@ -91,15 +91,15 @@ private:
 
 	/// @brief A callback for handling machine selected speed events, used to set appropriate VT flags
 	/// @param[in] event The event data to process
-	void handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed);
+	void handle_machine_selected_speed(const std::shared_ptr<isobus::MachineSelectedSpeedData> mssData, bool changed);
 
 	/// @brief A callback for handling ground based speed events, used to set appropriate VT flags
 	/// @param[in] event The event data to process
-	void handle_ground_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> mssData, bool changed);
+	void handle_ground_based_speed(const std::shared_ptr<isobus::GroundBasedSpeedData> mssData, bool changed);
 
 	/// @brief A callback for handling wheel based speed events, used to set appropriate VT flags
 	/// @param[in] event The event data to process
-	void handle_wheel_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> mssData, bool changed);
+	void handle_wheel_based_speed(const std::shared_ptr<isobus::WheelBasedMachineSpeedData> mssData, bool changed);
 
 	/// @brief Aggregates speeds and decides which speed to use
 	void process_new_speed(SpeedSources source, std::uint32_t speed);
