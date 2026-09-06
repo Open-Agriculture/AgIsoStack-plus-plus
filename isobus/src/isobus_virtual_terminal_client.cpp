@@ -1330,6 +1330,19 @@ namespace isobus
 					{
 						set_state(StateMachineState::SendWorkingSetMasterMessage);
 					}
+					else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						// ISO 11783-6:2014, 4.6.9 "Connection management": the VT transmits its
+						// status message once per second, and a Working Set that doesn't see one
+						// within 3 s is to treat the VT as shut down and may re-establish the
+						// connection by restarting the initialization procedure. Every other wait
+						// state in this machine already times out this way (via Failed, which
+						// retries back to Disconnected); this one didn't, so a VT that dropped off
+						// the bus (or never resumed broadcasting after a prior disconnect) left the
+						// client stuck here permanently with no error and no retry.
+						set_state(StateMachineState::Failed);
+						LOG_ERROR("[VT]: Timed out waiting for the VT Status message.");
+					}
 				}
 				break;
 
