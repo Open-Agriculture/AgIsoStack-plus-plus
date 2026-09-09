@@ -8,5 +8,8 @@
 class CANDriverFactory
 {
 public:
-	static std::shared_ptr<isobus::CANHardwarePlugin> create(const std::string &interfaceName = "");
+	static std::shared_ptr<isobus::CANHardwarePlugin> create(const std::string &interfaceName = "", const std::string &driver = "");
+
+private:
+	static void printAvailableDriverList();
 };
