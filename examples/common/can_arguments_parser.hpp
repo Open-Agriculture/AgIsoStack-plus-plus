@@ -1,3 +1,13 @@
+//================================================================================================
+/// @file can_arguments_parser.hpp
+///
+/// @brief A class that extracts the --interface and --driver parameters
+/// @author Miklos Marton
+///
+/// @copyright 2026 The Open-Agriculture Developers
+//================================================================================================
+#pragma once
+
 #include <string>
 
 struct CanParameters
