@@ -66,3 +66,4 @@ CMakeFiles
 *.rej
 
 *.cmake
+!cmake/*.cmake
