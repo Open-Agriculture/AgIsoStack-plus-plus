@@ -1,4 +1,4 @@
-#include "isobus/hardware_integration/available_can_drivers.hpp"
+#include "../../common/create_can_driver.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
@@ -142,21 +142,8 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	std::string interfaceName = argc <= 2 ? "vcan0" : argv[2];
-	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>(interfaceName);
-#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-	int channel = interfaceName.empty() ? 0 : std::stoi(interfaceName);
-	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(channel);
-#elif (defined(ISOBUS_MACCANPCAN_AVAILABLE) || defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE))
-	int channel = interfaceName.empty() ? PCAN_USBBUS1 : (std::stoi(interfaceName) - 1 + PCAN_USBBUS1);
-#if defined(ISOBUS_MACCANPCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(channel);
-#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(channel);
-#endif
-#endif
+	std::string interfaceName = argc <= 2 ? "" : argv[2];
+	auto canDriver = CANDriverFactory::create(interfaceName);
 	if (nullptr == canDriver)
 	{
 		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;

@@ -369,7 +369,8 @@ namespace isobus
 					                            std::move(data),
 					                            message.get_source_control_function(),
 					                            message.get_destination_control_function(),
-					                            message.get_can_port_index());
+					                            message.get_can_port_index(),
+					                            message.get_timestamp_us());
 
 					// Find the appropriate callback and let them know
 					for (const auto &callback : parameterGroupNumberCallbacks)

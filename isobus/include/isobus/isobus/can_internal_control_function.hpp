@@ -117,7 +117,14 @@ namespace isobus
 		/// @param[in] value The new state
 		void set_current_state(State value);
 
+		/// @brief Gets the end arbitration address for a given industry group. This is the last address that can be claimed
+		/// by a device in the specified industry group during address claiming arbitration.
+		/// @param[in] industryGroup The industry group to get the end arbitration address for
+		/// @returns The end arbitration address for the specified industry group
+		static std::uint8_t get_end_arbitration_address_for_industry_group(NAME::IndustryGroup industryGroup);
+
 		static constexpr std::uint32_t ADDRESS_CONTENTION_TIME_MS = 250; ///< The time in milliseconds to wait for address contention
+		static constexpr std::uint8_t ARBITRATION_STARTING_ADDRESS = 128; ///< The starting address for claim arbitration as defined by ISO 11783-5
 
 		State state = State::None; ///< The current state of the internal control function
 		std::uint32_t stateChangeTimestamp_ms = 0; ///< A timestamp in milliseconds used for timing the address claiming process

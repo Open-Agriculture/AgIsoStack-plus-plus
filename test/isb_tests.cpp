@@ -7,6 +7,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
@@ -17,13 +18,18 @@ static void testCallback(ShortcutButtonInterface::StopAllImplementOperationsStat
 	lastCallbackValue = testState;
 }
 
-TEST(ISB_TESTS, ShortcutButtonRxTests)
+class IsobusShortcutButtonTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonRxTests)
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x97, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x97, 0, time_source);
 	test_helpers::force_claim_partnered_control_function(0x74, 0);
 	// End boilerplate **********************************
 
@@ -185,7 +191,7 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, lastCallbackValue);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(3100));
+	time_source.simulate_delay_ms(3100);
 	interfaceUnderTest.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
 	CANHardwareInterface::stop();
@@ -193,19 +199,19 @@ TEST(ISB_TESTS, ShortcutButtonRxTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(ISB_TESTS, ShortcutButtonTxTests)
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonTxTests)
 {
 	VirtualCANPlugin serverPlugin;
 	serverPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
 	test_helpers::force_claim_partnered_control_function(0x74, 0);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame = {};
@@ -224,6 +230,7 @@ TEST(ISB_TESTS, ShortcutButtonTxTests)
 
 	interfaceUnderTest.set_stop_all_implement_operations_state(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations);
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 	EXPECT_TRUE(serverPlugin.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);

@@ -7,6 +7,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 #include <cmath>
 
@@ -16,7 +17,7 @@ class TestMaintainPowerInterface : public MaintainPowerInterface
 {
 public:
 	TestMaintainPowerInterface(std::shared_ptr<InternalControlFunction> source) :
-	  MaintainPowerInterface(source){
+	  MaintainPowerInterface(source) {
 
 	  };
 
@@ -47,16 +48,21 @@ public:
 bool TestMaintainPowerInterface::wasCallbackHit = false;
 bool TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit = false;
 
-TEST(MAINTAIN_POWER_TESTS, MessageParsing)
+class MaintainPowerTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(MaintainPowerTest, MessageParsing)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto testECU = test_helpers::claim_internal_control_function(0x82, 0);
+	auto testECU = test_helpers::claim_internal_control_function(0x82, 0, time_source);
 	TestMaintainPowerInterface interfaceUnderTest(testECU);
 
 	EXPECT_FALSE(interfaceUnderTest.get_initialized());
@@ -161,6 +167,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	EXPECT_TRUE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
 	TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit = false;
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 
 	testPlugin.read_frame(testFrame); // This one is our wheel based speed, so discard that
 	testPlugin.read_frame(testFrame);
@@ -169,8 +176,9 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	EXPECT_EQ(0x18FE4782, testFrame.identifier);
 
 	// If we wait for 1-ish second, we should get another
-	std::this_thread::sleep_for(std::chrono::milliseconds(1060));
+	time_source.update_for_ms(1060);
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 
 	EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
@@ -178,8 +186,11 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	EXPECT_TRUE(testPlugin.get_queue_empty());
 
 	// If we wait for 1-ish second, we should get third
-	std::this_thread::sleep_for(std::chrono::milliseconds(1060));
+	time_source.update_for_ms(1060);
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+
+	EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 	EXPECT_EQ(0x18FE4782, testFrame.identifier);
 	EXPECT_TRUE(testPlugin.get_queue_empty());
@@ -196,6 +207,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	testFrame.data[7] = 0xAA; // All parameters set to 0
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
 
 	EXPECT_FALSE(TestMaintainPowerInterface::wasKeySwitchTransitionCallbackHit);
 
@@ -211,14 +223,14 @@ TEST(MAINTAIN_POWER_TESTS, MessageParsing)
 	CANHardwareInterface::stop();
 }
 
-TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
+TEST_F(MaintainPowerTest, MessageEncoding)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	isobus::NAME TestDeviceNAME(0);
 	TestDeviceNAME.set_arbitrary_address_capable(true);
@@ -231,7 +243,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 	TestDeviceNAME.set_device_class_instance(0);
 	TestDeviceNAME.set_manufacturer_code(1407);
 
-	auto testECU = test_helpers::claim_internal_control_function(0x48, 0);
+	auto testECU = test_helpers::claim_internal_control_function(0x48, 0, time_source);
 
 	CANMessageFrame testFrame;
 	memset(&testFrame, 0, sizeof(testFrame));
@@ -279,6 +291,7 @@ TEST(MAINTAIN_POWER_TESTS, MessageEncoding)
 
 	interfaceUnderTest.test_wrapper_set_flag(0);
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 	testPlugin.read_frame(testFrame);
 
 	EXPECT_EQ(8, testFrame.dataLength);
