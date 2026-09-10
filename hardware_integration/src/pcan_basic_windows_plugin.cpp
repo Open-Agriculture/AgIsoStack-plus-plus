@@ -18,7 +18,7 @@ namespace isobus
 {
 	PCANBasicWindowsPlugin::PCANBasicWindowsPlugin(WORD channel) :
 	  handle(channel),
-	  openResult(PCAN_ERROR_OK)
+	  openResult(PCAN_ERROR_INITIALIZE)
 	{
 	}
 
@@ -38,7 +38,12 @@ namespace isobus
 
 	void PCANBasicWindowsPlugin::close()
 	{
-		CAN_Uninitialize(handle);
+		// The handle is the channel number, not something this object owns, so only the plugin that opened it may uninitialize it
+		if (PCAN_ERROR_OK == openResult)
+		{
+			CAN_Uninitialize(handle);
+			openResult = PCAN_ERROR_INITIALIZE;
+		}
 	}
 
 	void PCANBasicWindowsPlugin::open()
