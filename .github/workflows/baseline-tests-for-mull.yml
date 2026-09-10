@@ -1,0 +1,99 @@
+name: Verify baseline tests for Mull
+
+on:
+  push:
+    branches:
+      - quality/mull-mutation-testing-poc
+    paths:
+      - .github/workflows/baseline-tests-for-mull.yml
+  workflow_dispatch:
+
+jobs:
+  baseline-tests:
+    name: Build and run all tests without mutation
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Clang 19 and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-19 \
+            llvm-19 \
+            build-essential \
+            cmake \
+            ninja-build \
+            curl
+
+      - name: Install Mull for LLVM 19
+        run: |
+          curl -1sLf \
+            'https://dl.cloudsmith.io/public/mull-project/mull-stable/setup.deb.sh' \
+            | sudo -E bash
+
+          sudo apt-get update
+          sudo apt-get install -y mull-19
+
+      - name: Verify tool versions and Mull plugin
+        shell: bash
+        run: |
+          echo "=== Clang ==="
+          clang-19 --version
+
+          echo
+          echo "=== LLVM ==="
+          llvm-config-19 --version
+
+          echo
+          echo "=== Mull ==="
+          mull-runner-19 --version
+
+          echo
+          echo "=== Mull compiler plugin ==="
+          test -f /usr/lib/mull-ir-frontend-19
+          ls -l /usr/lib/mull-ir-frontend-19
+
+      - name: Configure tests for Mull
+        env:
+          CC: clang-19
+          CXX: clang++-19
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19" \
+            -DCMAKE_CXX_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19"
+
+      - name: Compile GoogleTest executable
+        run: |
+          cmake --build build --parallel
+
+      - name: Verify GoogleTest executable
+        shell: bash
+        run: |
+          test -x build/test/unit_tests
+
+          echo "GoogleTest executable:"
+          file build/test/unit_tests
+
+          echo
+          echo "Number of tests registered in CTest:"
+          ctest --test-dir build --show-only=json-v1 \
+            | python3 -c "import json, sys; print(len(json.load(sys.stdin)['tests']))"
+
+      - name: Run all GoogleTest tests without mutation
+        shell: bash
+        run: |
+          echo "=== Baseline execution without active mutants ==="
+
+          ctest \
+            --test-dir build \
+            --output-on-failure
+
+          echo
+          echo "All GoogleTest tests passed without mutation."
