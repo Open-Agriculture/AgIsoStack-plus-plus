@@ -3,23 +3,29 @@
 ///
 /// @brief Contains common types and functions for working with an arbitrary amount of items.
 /// @author Daan Steenbergen
+/// @author Nik Vzdornov
 ///
 /// @copyright 2023 Open Agriculture
 //================================================================================================
 #ifndef DATA_SPAN_HPP
 #define DATA_SPAN_HPP
 
+#include "span.hpp"
+
+#if 0
 #include <array>
 #include <cstddef>
 #include <vector>
+#endif
 
 namespace isobus
 {
-	//================================================================================================
-	/// @class DataSpan
-	///
-	/// @brief A class that represents a span of data of arbitrary length.
-	//================================================================================================
+//================================================================================================
+/// @class DataSpan
+///
+/// @brief A class that represents a span of data of arbitrary length.
+//================================================================================================
+#if 0
 	template<typename T>
 	class DataSpan
 	{
@@ -75,5 +81,12 @@ namespace isobus
 		std::size_t _size;
 		bool _isConst;
 	};
+#endif
+
+#if 1
+	template<typename T, std::size_t Extent = DYNAMIC_EXTENT>
+	using DataSpan = Span<T, Extent>;
+#endif
+
 }
 #endif // DATA_SPAN_HPP
