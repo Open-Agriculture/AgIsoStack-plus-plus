@@ -35,6 +35,32 @@ namespace isobus
 		}
 	}
 
+	bool VirtualTerminalClientUpdateHelper::set_container_shown(std::uint16_t objectId, bool shown)
+	{
+		if (nullptr == client)
+		{
+			LOG_ERROR("[VTStateHelper] set_container_shown: client is nullptr");
+			return false;
+		}
+		if (shownStates.find(objectId) == shownStates.end())
+		{
+			LOG_WARNING("[VTStateHelper] set_container_shown: objectId %hu not tracked", objectId);
+			return false;
+		}
+		if (shownStates.at(objectId) == shown)
+		{
+			return true;
+		}
+
+		auto command = shown ? VirtualTerminalClient::HideShowObjectCommand::ShowObject : VirtualTerminalClient::HideShowObjectCommand::HideObject;
+		bool success = vtClient->send_hide_show_object(objectId, command);
+		if (success)
+		{
+			shownStates[objectId] = shown;
+		}
+		return success;
+	}
+
 	bool VirtualTerminalClientUpdateHelper::set_numeric_value(std::uint16_t object_id, std::uint32_t value)
 	{
 		if (nullptr == client)

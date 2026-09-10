@@ -7,6 +7,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 #include <cmath>
 
@@ -16,12 +17,12 @@ class TestGuidanceInterface : public AgriculturalGuidanceInterface
 {
 public:
 	TestGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination) :
-	  AgriculturalGuidanceInterface(source, destination){
+	  AgriculturalGuidanceInterface(source, destination) {
 
 	  };
 
 	TestGuidanceInterface(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination, bool sendSystemCommandPeriodically, bool sendMachineInfoPeriodically) :
-	  AgriculturalGuidanceInterface(source, destination, sendSystemCommandPeriodically, sendMachineInfoPeriodically){
+	  AgriculturalGuidanceInterface(source, destination, sendSystemCommandPeriodically, sendMachineInfoPeriodically) {
 
 	  };
 
@@ -57,16 +58,21 @@ public:
 bool TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit = false;
 bool TestGuidanceInterface::wasGuidanceMachineInfoCallbackHit = false;
 
-TEST(GUIDANCE_TESTS, GuidanceMessages)
+class GuidanceTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(GuidanceTest, GuidanceMessages)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto testECU = test_helpers::claim_internal_control_function(0x44, 0);
+	auto testECU = test_helpers::claim_internal_control_function(0x44, 0, time_source);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame = {};
@@ -129,6 +135,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_machine_info());
+		time_source.update_for_ms(5);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
 		// Validate message encoding
@@ -162,6 +169,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_guidance_machine_info());
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
+		time_source.update_for_ms(5);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
 		std::uint16_t decodedCurvature = static_cast<std::uint16_t>(testFrame.data[0]) | (static_cast<std::uint16_t>(testFrame.data[1]) << 8);
@@ -173,8 +181,10 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	{
 		TestGuidanceInterface interfaceUnderTest(testECU, nullptr, true, true); // Configured for broadcasts, and both guidance system command and guidance machine info are sent periodically
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_machine_info());
+		time_source.update_for_ms(5);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_guidance_system_command());
+		time_source.update_for_ms(5);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 		EXPECT_NE(nullptr, interfaceUnderTest.guidanceMachineInfoTransmitData.get_sender_control_function());
 		EXPECT_NE(nullptr, interfaceUnderTest.guidanceSystemCommandTransmitData.get_sender_control_function());
@@ -184,8 +194,9 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 		interfaceUnderTest.initialize();
 		EXPECT_TRUE(interfaceUnderTest.get_initialized());
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(105));
+		time_source.update_for_ms(105);
 		interfaceUnderTest.update();
+		time_source.update_for_ms(5);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame)); // Message should get sent on a 100ms interval
 
 		CANHardwareInterface::stop();
@@ -196,7 +207,7 @@ TEST(GUIDANCE_TESTS, GuidanceMessages)
 	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 }
 
-TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
+TEST_F(GuidanceTest, ListenOnlyModeAndDecoding)
 {
 	TestGuidanceInterface interfaceUnderTest(nullptr, nullptr);
 
@@ -326,7 +337,7 @@ TEST(GUIDANCE_TESTS, ListenOnlyModeAndDecoding)
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
 
 	// Test timeouts
-	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	time_source.simulate_delay_ms(200);
 	interfaceUnderTest.update();
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());

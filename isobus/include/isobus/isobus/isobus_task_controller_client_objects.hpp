@@ -264,6 +264,10 @@ namespace isobus
 			/// @returns The type of the element object
 			Type get_type() const;
 
+			/// @brief Updates the element object type
+			/// @param[in] elementObjectType The element object tpye to set for this element
+			void set_type(Type elementObjectType);
+
 			/// @brief This function can be called to add an object as a child of this object.
 			/// @note You should only add Device or Device Element objects as children of this object
 			/// @param[in] childID The object ID of the child to reference from this object

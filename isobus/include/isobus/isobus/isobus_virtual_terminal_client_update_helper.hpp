@@ -26,6 +26,12 @@ namespace isobus
 		/// @brief The destructor of class to unregister event listeners.
 		~VirtualTerminalClientUpdateHelper();
 
+		/// @brief Sets the container hidden/shown state of a tracked object.
+		/// @param[in] objectId The object id of the container to set.
+		/// @param[in] shown The value to set the container shown state to.
+		/// @return True if the value was set successfully, false otherwise.
+		bool set_container_shown(std::uint16_t objectId, bool shown);
+
 		/// @brief Sets the numeric value of a tracked object.
 		/// @param[in] objectId The object id of the numeric value to set.
 		/// @param[in] value The value to set the numeric value to.
