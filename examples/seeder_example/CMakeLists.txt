@@ -13,6 +13,7 @@ add_executable(
   SeederExample
   main.cpp
   ../common/console_logger.cpp
+  ../common/create_can_driver.cpp
   vt_application.cpp
   vt_application.hpp
   seeder.cpp

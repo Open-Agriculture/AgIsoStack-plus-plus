@@ -250,13 +250,18 @@ namespace isobus
 		return retVal;
 	}
 
-	bool CANHardwareInterface::start()
+	bool CANHardwareInterface::start(bool start_thread)
 	{
 		LOCK_GUARD(Mutex, hardwareChannelsMutex);
 
+		if (start_thread)
+		{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		start_threads();
+			start_threads();
+#else
+			// Ignored
 #endif
+		}
 		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
 			channel->start();
 		});

@@ -17,6 +17,7 @@
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
@@ -247,6 +248,12 @@ public:
 	{
 	}
 
+	void on_client_version_received(std::shared_ptr<ControlFunction> clientCF, std::uint8_t version) override
+	{
+		lastClientVersion = version;
+		lastClientVersionReceived = true;
+	}
+
 	bool on_value_command(std::shared_ptr<ControlFunction>, std::uint16_t, std::uint16_t, std::int32_t, std::uint8_t &) override
 	{
 		return true;
@@ -284,6 +291,8 @@ public:
 	std::uint8_t identifyTC = 0xFF;
 	bool failActivations = false;
 	bool enoughMemory = true;
+	std::uint8_t lastClientVersion = 0xFF;
+	bool lastClientVersionReceived = false;
 };
 
 void isNack(const CANMessageFrame &frame)
@@ -306,8 +315,9 @@ void isPDNack(const CANMessageFrame &frame)
 	EXPECT_EQ(static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), (frame.data[0] & 0x0F));
 }
 
-bool readFrameFilterStatus(VirtualCANPlugin &plugin, CANMessageFrame &frame)
+bool readFrameFilterStatus(VirtualCANPlugin &plugin, CANMessageFrame &frame, test_helpers::TestTimeSource &time_source)
 {
+	time_source.update_for_ms(5);
 	bool retVal = plugin.read_frame(frame);
 
 	if (frame.data[0] == 0xFE) // Filter out status messages
@@ -323,7 +333,8 @@ void testNackWrapper(VirtualCANPlugin &plugin,
                      CANMessageFrame &frame,
                      std::uint8_t mux,
                      std::shared_ptr<InternalControlFunction> icf,
-                     std::shared_ptr<PartneredControlFunction> partner)
+                     std::shared_ptr<PartneredControlFunction> partner,
+                     test_helpers::TestTimeSource &time_source)
 {
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
 	                                                                                                   0xCB00,
@@ -342,7 +353,7 @@ void testNackWrapper(VirtualCANPlugin &plugin,
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-	EXPECT_TRUE(readFrameFilterStatus(plugin, frame));
+	EXPECT_TRUE(readFrameFilterStatus(plugin, frame, time_source));
 	isNack(frame);
 }
 
@@ -351,7 +362,8 @@ void testPDNackWrapper(VirtualCANPlugin &plugin,
                        CANMessageFrame &frame,
                        std::uint8_t mux,
                        std::shared_ptr<InternalControlFunction> icf,
-                       std::shared_ptr<PartneredControlFunction> partner)
+                       std::shared_ptr<PartneredControlFunction> partner,
+                       test_helpers::TestTimeSource &time_source)
 {
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
 	                                                                                                   0xCB00,
@@ -370,23 +382,28 @@ void testPDNackWrapper(VirtualCANPlugin &plugin,
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-	EXPECT_TRUE(readFrameFilterStatus(plugin, frame));
+	EXPECT_TRUE(readFrameFilterStatus(plugin, frame, time_source));
 	isPDNack(frame);
 }
 
-TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
+class TaskControllerServerTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(TaskControllerServerTest, MessageEncoding)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::TaskController));
-	auto internalECU = test_helpers::claim_internal_control_function(0x87, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x87, 0, time_source);
 	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x88, 0);
 
 	DerivedTcServer server(internalECU,
@@ -424,8 +441,9 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
+	time_source.update_for_ms(1000);
 	CANMessageFrame testFrame = {};
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
 	EXPECT_EQ(0x10, testFrame.data[0]);
@@ -438,7 +456,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	EXPECT_EQ(0x10, testFrame.data[7]); // channels
 
 	// Test that the server also sent a version request to the client
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
 	EXPECT_EQ(0x00, testFrame.data[0]);
 	EXPECT_EQ(0xFF, testFrame.data[1]);
@@ -450,25 +468,25 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	EXPECT_EQ(0xFF, testFrame.data[7]);
 
 	// Try to test all messages that the server should respond to with a NACK at this stage of connection
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // request structure label
-	testNackWrapper(testPlugin, server, testFrame, 0x20 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // request localization label
-	testNackWrapper(testPlugin, server, testFrame, 0x80 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // activate pool
-	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), internalECU, partnerClient);
-	testNackWrapper(testPlugin, server, testFrame, 0x0A, internalECU, partnerClient); // set and ack
-	testNackWrapper(testPlugin, server, testFrame, 0x10 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
-	testNackWrapper(testPlugin, server, testFrame, 0x30 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
-	testNackWrapper(testPlugin, server, testFrame, 0x50 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
-	testNackWrapper(testPlugin, server, testFrame, 0x70 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
-	testNackWrapper(testPlugin, server, testFrame, 0x90 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
-	testNackWrapper(testPlugin, server, testFrame, 0xB0 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
-	testNackWrapper(testPlugin, server, testFrame, 0xD0 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient); // Server message
+	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // request structure label
+	testNackWrapper(testPlugin, server, testFrame, 0x20 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // request localization label
+	testNackWrapper(testPlugin, server, testFrame, 0x80 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // activate pool
+	testNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), internalECU, partnerClient, time_source);
+	testNackWrapper(testPlugin, server, testFrame, 0x0A, internalECU, partnerClient, time_source); // set and ack
+	testNackWrapper(testPlugin, server, testFrame, 0x10 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
+	testNackWrapper(testPlugin, server, testFrame, 0x30 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
+	testNackWrapper(testPlugin, server, testFrame, 0x50 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
+	testNackWrapper(testPlugin, server, testFrame, 0x70 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
+	testNackWrapper(testPlugin, server, testFrame, 0x90 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
+	testNackWrapper(testPlugin, server, testFrame, 0xB0 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
+	testNackWrapper(testPlugin, server, testFrame, 0xD0 | static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::DeviceDescriptor), internalECU, partnerClient, time_source); // Server message
 
 	// Test PDNACKs
-	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementTimeInterval), internalECU, partnerClient);
-	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementDistanceInterval), internalECU, partnerClient);
-	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMinimumWithinThreshold), internalECU, partnerClient);
-	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMaximumWithinThreshold), internalECU, partnerClient);
-	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementChangeThreshold), internalECU, partnerClient);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementTimeInterval), internalECU, partnerClient, time_source);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementDistanceInterval), internalECU, partnerClient, time_source);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMinimumWithinThreshold), internalECU, partnerClient, time_source);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementMaximumWithinThreshold), internalECU, partnerClient, time_source);
+	testPDNackWrapper(testPlugin, server, testFrame, static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::MeasurementChangeThreshold), internalECU, partnerClient, time_source);
 
 	// Send working set master
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6,
@@ -487,6 +505,19 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	CANNetworkManager::CANNetwork.update();
 	server.update();
 
+	// After working set master, server should now proactively request version from client
+	// Skip the automatic version request message
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
+	EXPECT_EQ(0x00, testFrame.data[0]); // RequestVersion command
+	EXPECT_EQ(0xFF, testFrame.data[1]);
+	EXPECT_EQ(0xFF, testFrame.data[2]);
+	EXPECT_EQ(0xFF, testFrame.data[3]);
+	EXPECT_EQ(0xFF, testFrame.data[4]);
+	EXPECT_EQ(0xFF, testFrame.data[5]);
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
+
 	// Request structure label
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
 	                                                                                                   0xCB00,
@@ -504,7 +535,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
 	EXPECT_EQ(0x11, testFrame.data[0]);
@@ -534,7 +565,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
 	EXPECT_EQ(0x11, testFrame.data[0]);
@@ -561,7 +592,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	                                                                                                     0xFF }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
 	EXPECT_EQ(0x31, testFrame.data[0]);
@@ -589,7 +620,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	                                                                                                     0x07 }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
 	EXPECT_EQ(0x31, testFrame.data[0]);
@@ -614,7 +645,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		server.test_receive_message(message, &server);
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 		EXPECT_EQ(8, testFrame.dataLength);
 		EXPECT_EQ(0x71, testFrame.data[0]);
@@ -630,7 +661,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		server.test_receive_message(message, nullptr);
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	}
 
 	// Request to transfer object pool
@@ -649,7 +680,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 		EXPECT_EQ(8, testFrame.dataLength);
 		EXPECT_EQ(0x51, testFrame.data[0]); // Request to transfer object pool response
@@ -677,7 +708,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 		EXPECT_EQ(8, testFrame.dataLength);
 		EXPECT_EQ(0x51, testFrame.data[0]); // Request to transfer object pool response
@@ -704,7 +735,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		server.test_receive_message(message, &server);
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 		EXPECT_EQ(8, testFrame.dataLength);
 		EXPECT_EQ(0x71, testFrame.data[0]);
@@ -721,7 +752,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_request_value(partnerClient, 1234, 456));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(2, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(456 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -740,7 +771,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_time_interval_measurement_command(partnerClient, 6, 99, 1000));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(4, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(99 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -759,7 +790,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_distance_interval_measurement_command(partnerClient, 654, 999, 65534));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(5, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(999 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -778,7 +809,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_minimum_threshold_measurement_command(partnerClient, 445, 0, 0x00FFFFFF));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(6, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(0 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -797,7 +828,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_maximum_threshold_measurement_command(partnerClient, 445, 0, 0xFFFFFFFF));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(7, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(0 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -816,7 +847,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_change_threshold_measurement_command(partnerClient, 14, 0, 1));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(8, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(0 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -835,7 +866,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_set_value_and_acknowledge(partnerClient, 14, 0, 600));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(10, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(0 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -854,7 +885,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	{
 		EXPECT_TRUE(server.send_set_value(partnerClient, 2455, 0, 800));
 		CANNetworkManager::CANNetwork.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(3, testFrame.data[0] & 0x0F); // Command
 		EXPECT_EQ(0 & 0x0F, testFrame.data[0] >> 4); // Element
@@ -892,7 +923,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		EXPECT_EQ(8, testFrame.dataLength);
 		EXPECT_EQ(0x20, testFrame.data[0]); // Response to identify TC
@@ -940,12 +971,12 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		if (0xEE == ((testFrame.identifier >> 16) & 0xFF))
 		{
 			// Filter out address violations
-			EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+			EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		}
 
 		EXPECT_EQ(0x91, testFrame.data[0]); // Response to activate object pool
@@ -973,7 +1004,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(0x91, testFrame.data[0]); // Response to activate object pool
 		EXPECT_EQ(0x01, testFrame.data[1]); // Errors in DDOP
 		EXPECT_EQ(1234 & 0xFF, testFrame.data[2]); // Parent Object
@@ -999,7 +1030,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(0x91, testFrame.data[0]); // Response to deactivate object pool
 		EXPECT_EQ(0x00, testFrame.data[1]); // No errors
 		EXPECT_EQ(0xFF, testFrame.data[2]); // Parent object
@@ -1026,7 +1057,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(0xB1, testFrame.data[0]); // Response to deactivate object pool
 		EXPECT_EQ(0x00, testFrame.data[1]); // No errors
 		EXPECT_EQ(0xFF, testFrame.data[2]); // Error details not available
@@ -1053,7 +1084,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame)); // We'd ignore this message ideally
+		EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source)); // We'd ignore this message ideally
 
 		// Now try with the pool activated
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
@@ -1082,8 +1113,8 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0xFF }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 		EXPECT_EQ(8, testFrame.dataLength);
 		EXPECT_EQ(0xD1, testFrame.data[0]); // Response to change designator
 		EXPECT_EQ(0x01, testFrame.data[1]); // ID
@@ -1111,7 +1142,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		                                                                                                     0x04 }));
 		CANNetworkManager::CANNetwork.update();
 		server.update();
-		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame));
+		EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 		// Expect PDACK
 		EXPECT_EQ(8, testFrame.dataLength);
@@ -1147,6 +1178,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 	// Test status message
 	{
 		EXPECT_TRUE(server.send_status());
+		time_source.update_for_ms(5);
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		EXPECT_EQ(8, testFrame.dataLength);
@@ -1155,13 +1187,14 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x01, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 
 		// Disable task active
 		server.set_task_totals_active(false);
 		EXPECT_TRUE(server.send_status());
+		time_source.update_for_ms(5);
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		EXPECT_EQ(8, testFrame.dataLength);
@@ -1170,14 +1203,122 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, MessageEncoding)
 		EXPECT_EQ(0xFF, testFrame.data[2]);
 		EXPECT_EQ(0xFF, testFrame.data[3]);
 		EXPECT_EQ(0x00, testFrame.data[4]); // Task active bit
-		EXPECT_EQ(0xFE, testFrame.data[5]); // Address of client with executing command
-		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command
-		EXPECT_EQ(0xFF, testFrame.data[7]); // Address of client with executing command
+		EXPECT_EQ(0x00, testFrame.data[5]); // Address of client with executing command (none)
+		EXPECT_EQ(0x00, testFrame.data[6]); // Executing command (none)
+		EXPECT_EQ(0xFF, testFrame.data[7]); // Reserved
 	}
 	CANHardwareInterface::stop();
 }
 
-TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SeederExample)
+TEST_F(TaskControllerServerTest, ClientVersionTracking)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	// Use different addresses to avoid conflicts with previous tests
+	auto internalECU = test_helpers::claim_internal_control_function(0x90, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x91, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control()
+	                         .with_tc_geo_with_position_based_control());
+	server.initialize();
+
+	testPlugin.clear_queue();
+
+	// First, send a WorkingSetMaster to register the client
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6,
+	                                                                                                             0xFE0D,
+	                                                                                                             partnerClient,
+	                                                                                                             {
+	                                                                                                               0x01,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                               0xFF,
+	                                                                                                             }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	// Skip the automatic version request that gets sent
+	time_source.update_for_ms(5);
+	CANMessageFrame testFrame = {};
+	testPlugin.read_frame(testFrame);
+
+	// Initially, client version should be 0 (default before receiving version info)
+	EXPECT_EQ(0x00, server.get_client_version(partnerClient));
+	EXPECT_FALSE(server.lastClientVersionReceived);
+
+	// Simulate client sending version response (ParameterVersion command)
+	// This happens after server requests version from client
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
+	                                                                                                   0xCB00,
+	                                                                                                   internalECU,
+	                                                                                                   partnerClient,
+	                                                                                                   {
+	                                                                                                     0x10, // ParameterVersion command
+	                                                                                                     0x04, // Version 4 (SecondPublishedEdition)
+	                                                                                                     0xFF, // Boot time (not available)
+	                                                                                                     0x1F, // Options byte 1
+	                                                                                                     0x00, // Options byte 2
+	                                                                                                     0x01, // Booms
+	                                                                                                     0x20, // Sections
+	                                                                                                     0x10, // Channels
+	                                                                                                   }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	// Verify the callback was triggered and version was stored
+	EXPECT_TRUE(server.lastClientVersionReceived);
+	EXPECT_EQ(0x04, server.lastClientVersion);
+	EXPECT_EQ(0x04, server.get_client_version(partnerClient));
+
+	// Test that we can also request version from client proactively
+	server.lastClientVersionReceived = false;
+	server.lastClientVersion = 0xFF;
+
+	bool requestSent = server.request_client_version(partnerClient);
+	EXPECT_TRUE(requestSent);
+
+	// Simulate client responding with version 3 (SecondEditionDraft)
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
+	                                                                                                   0xCB00,
+	                                                                                                   internalECU,
+	                                                                                                   partnerClient,
+	                                                                                                   {
+	                                                                                                     0x10, // ParameterVersion command
+	                                                                                                     0x03, // Version 3 (SecondEditionDraft)
+	                                                                                                     0xFF,
+	                                                                                                     0x1F,
+	                                                                                                     0x00,
+	                                                                                                     0x01,
+	                                                                                                     0x20,
+	                                                                                                     0x10,
+	                                                                                                   }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	// Verify updated version
+	EXPECT_TRUE(server.lastClientVersionReceived);
+	EXPECT_EQ(0x03, server.lastClientVersion);
+	EXPECT_EQ(0x03, server.get_client_version(partnerClient));
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, DDOPHelper_SeederExample)
 {
 	DeviceDescriptorObjectPool ddop(3);
 	ddop.deserialize_binary_object_pool(testDDOP, sizeof(testDDOP));
@@ -1210,7 +1351,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SeederExample)
 	}
 }
 
-TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
+TEST_F(TaskControllerServerTest, DDOPHelper_SubBooms)
 {
 	DeviceDescriptorObjectPool ddop(3);
 	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
@@ -1289,7 +1430,7 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_SubBooms)
 	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(1).sections.at(0).zOffset_mm.get());
 }
 
-TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
+TEST_F(TaskControllerServerTest, DDOPHelper_NoFunctions)
 {
 	DeviceDescriptorObjectPool ddop(3);
 
@@ -1372,4 +1513,210 @@ TEST(TASK_CONTROLLER_SERVER_TESTS, DDOPHelper_NoFunctions)
 	EXPECT_EQ(2000, implement.booms.at(0).sections.at(0).xOffset_mm.get());
 	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
 	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyStateTracking)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x92, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Initially not busy - verify status message shows cleared state
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear
+	EXPECT_EQ(0x00, testFrame.data[5]); // currentCommandSourceAddress (not busy)
+	EXPECT_EQ(0x00, testFrame.data[6]); // currentCommandByte (not busy)
+
+	// Set busy state with specific client and command
+	server.set_command_busy(true, 0x88, 0x60);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set
+	EXPECT_EQ(0x88, testFrame.data[5]); // currentCommandSourceAddress = client 0x88
+	EXPECT_EQ(0x60, testFrame.data[6]); // currentCommandByte = ObjectPoolTransfer
+
+	// Clear the busy state
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear
+	EXPECT_EQ(0x00, testFrame.data[5]); // currentCommandSourceAddress (cleared)
+	EXPECT_EQ(0x00, testFrame.data[6]); // currentCommandByte (cleared)
+
+	// Test with ObjectPoolActivateDeactivate command
+	server.set_command_busy(true, 0x77, 0x80);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set
+	EXPECT_EQ(0x77, testFrame.data[5]); // currentCommandSourceAddress = client 0x77
+	EXPECT_EQ(0x80, testFrame.data[6]); // currentCommandByte = ObjectPoolActivateDeactivate
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolTransfer)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x94, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Simulate ObjectPoolTransfer processing (command byte 0x60)
+	server.set_command_busy(true, 0x88, 0x60);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set during busy
+	EXPECT_EQ(0x88, testFrame.data[5]); // Client address 0x88
+	EXPECT_EQ(0x60, testFrame.data[6]); // ObjectPoolTransfer command
+
+	// Clear the busy state after processing
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
+	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
+	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolActivateDeactivate)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x95, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANMessageFrame testFrame;
+
+	// Simulate ObjectPoolActivateDeactivate processing (command byte 0x80)
+	server.set_command_busy(true, 0x88, 0x80);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_NE(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit must be set during busy
+	EXPECT_EQ(0x88, testFrame.data[5]); // Client address 0x88
+	EXPECT_EQ(0x80, testFrame.data[6]); // ObjectPoolActivateDeactivate command
+
+	// Clear the busy state after processing
+	server.set_command_busy(false);
+	EXPECT_TRUE(server.send_status());
+	time_source.update_for_ms(5);
+
+	while (testPlugin.read_frame(testFrame))
+	{
+		if (testFrame.data[0] == 0xFE)
+			break;
+	}
+
+	EXPECT_EQ(8, testFrame.dataLength);
+	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
+	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
+	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
 }
