@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 
 	const auto canParameters = CanParametersParser(argc, argv).parameters();
 
-	if (seederExample.initialize(canParameters.interface))
+	if (seederExample.initialize(canParameters.interface, canParameters.driver))
 	{
 		while (running)
 		{

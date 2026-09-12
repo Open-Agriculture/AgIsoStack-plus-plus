@@ -7,29 +7,43 @@ std::shared_ptr<isobus::CANHardwarePlugin> CANDriverFactory::create(const std::s
 {
 	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
 
+	std::string driverToOpen = driver;
 #if defined(_WIN32)
+	if (driver.empty())
+	{
+#if defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
+		driverToOpen = "peak";
+#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
+		driverToOpen = "innomaker";
+#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
+		driverToOpen = "systec";
+#elif defined(ISOBUS_TOUCAN_AVAILABLE)
+		driverToOpen = "toucan";
+#endif
+	}
+
 	// Windows
-	if ("peak" == driver || driver.empty())
+	if ("peak" == driverToOpen)
 	{
 #if defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
 		const int channel = interfaceName.empty() ? PCAN_USBBUS1 : (std::stoi(interfaceName) - 1 + PCAN_USBBUS1);
 		canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(channel);
 #endif
 	}
-	else if ("innomaker" == driver)
+	else if ("innomaker" == driverToOpen)
 	{
 #if defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
 		const int channel = interfaceName.empty() ? 0 : std::stoi(interfaceName);
 		canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(channel);
 #endif
 	}
-	else if ("systec" == driver)
+	else if ("systec" == driverToOpen)
 	{
 #if defined(ISOBUS_SYS_TEC_AVAILABLE)
 		canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
 #endif
 	}
-	else if ("toucan" == driver)
+	else if ("toucan" == driverToOpen)
 	{
 #if defined(ISOBUS_TOUCAN_AVAILABLE)
 		canDriver = std::make_shared<isobus::TouCANPlugin>();
@@ -37,11 +51,13 @@ std::shared_ptr<isobus::CANHardwarePlugin> CANDriverFactory::create(const std::s
 	}
 #elif defined(__APPLE__)
 	// OSX
+#ifdef ISOBUS_MACCANPCAN_AVAILABLE
 	if (driver.empty() || driver == "peak")
 	{
 		const int channel = interfaceName.empty() ? PCAN_USBBUS1 : (std::stoi(interfaceName) - 1 + PCAN_USBBUS1);
 		canDriver = std::make_shared<isobus::MacCANPCANPlugin>(channel);
 	}
+#endif
 
 #elif defined(__linux__)
 	// Linux and BSDs
@@ -75,9 +91,9 @@ std::shared_ptr<isobus::CANHardwarePlugin> CANDriverFactory::create(const std::s
 			std::string driverName = driver;
 			if (driverName.empty())
 			{
-#if defined(WIN32)
+#if defined(_WIN32)
 				driverName = "peak";
-#elif defined(APPLE)
+#elif defined(__APPLE__)
 				// OSX
 				driverName = "peak";
 #else

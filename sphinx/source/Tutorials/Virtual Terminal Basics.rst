@@ -35,8 +35,8 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 .. code-block:: c++
 
-	#include "../common/can_arguments_parser.hpp"
-	#include "../common/create_can_driver.hpp"
+	#include "can_arguments_parser.hpp"
+	#include "create_can_driver.hpp"
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
@@ -393,6 +393,8 @@ Here's the final code for this example:
 
 .. code-block:: c++
 
+	#include "can_arguments_parser.hpp"
+	#include "create_can_driver.hpp"
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
@@ -588,7 +590,16 @@ We'll start off like we did in "ISOBUS Hello World".
 
 	add_subdirectory("AgIsoStack-plus-plus")
 
-	add_executable(vt_example main.cpp)
+	add_executable(
+	  vt_example
+	  main.cpp
+	  AgIsoStack-plus-plus/examples/common/create_can_driver.cpp)
+
+	target_include_directories(
+	  vt_example
+	  PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/AgIsoStack-plus-plus/examples/common"
+	)
 
 Looking at "ISOBUS Hello World", we had this next:
 
