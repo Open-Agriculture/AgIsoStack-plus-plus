@@ -9,6 +9,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
@@ -16,7 +17,9 @@ class DerivedTestTCClient : public TaskControllerClient
 {
 public:
 	DerivedTestTCClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<PartneredControlFunction> primaryVT = nullptr) :
-	  TaskControllerClient(partner, clientSource, primaryVT){};
+	  TaskControllerClient(partner, clientSource, primaryVT) {
+		  // Does nothing
+	  };
 
 	bool test_wrapper_send_working_set_master() const
 	{
@@ -103,6 +106,11 @@ public:
 	}
 
 	static const std::uint8_t testBinaryDDOP[];
+};
+
+class TaskControllerClientTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
 };
 
 // clang-format off
@@ -261,7 +269,7 @@ const std::uint8_t DerivedTestTCClient::testBinaryDDOP[]  = {
 
 // clang-format on
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
+TEST_F(TaskControllerClientTest, MessageEncoding)
 {
 	VirtualCANPlugin serverTC;
 	serverTC.open();
@@ -269,12 +277,12 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
 	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
-	auto internalECU = test_helpers::claim_internal_control_function(0x84, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x84, 0, time_source);
 
 	CANMessageFrame testFrame;
 
@@ -283,7 +291,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	while ((!internalECU->get_address_valid()) &&
 	       (!SystemTiming::time_expired_ms(waitingTimestamp_ms, 2000)))
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		time_source.update_for_ms(50);
 	}
 
 	ASSERT_TRUE(internalECU->get_address_valid());
@@ -301,7 +309,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	EXPECT_EQ(tcPartner, interfaceUnderTest.get_partner_control_function());
 	EXPECT_EQ(internalECU, interfaceUnderTest.get_internal_control_function());
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	// Get the virtual CAN plugin back to a known state
 	while (!serverTC.get_queue_empty())
@@ -314,6 +322,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	// Test Working Set Master Message
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_working_set_master());
 
+	time_source.update_for_ms(5);
 	ASSERT_TRUE(serverTC.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
@@ -330,6 +339,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	// Test Version Request Message
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_version_request());
 
+	time_source.update_for_ms(5);
 	ASSERT_TRUE(serverTC.read_frame(testFrame));
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
@@ -347,6 +357,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendStatusMessage);
 	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::SendStatusMessage);
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 
 	serverTC.read_frame(testFrame);
 
@@ -364,6 +375,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test version response
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -380,6 +392,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Disconnected);
 	interfaceUnderTest.configure(blankDDOP, 1, 2, 3, true, true, true, true, true);
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_version_response());
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 
 	ASSERT_TRUE(testFrame.isExtendedFrame);
@@ -396,6 +409,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test Request structure label
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_structure_label());
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -408,6 +422,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test Request localization label
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_request_localization_label());
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -420,6 +435,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test Delete Object Pool
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_delete_object_pool());
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -432,6 +448,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test PDACK
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_pdack(47, 29));
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -443,6 +460,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test Value Command
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_value_command(1234, 567, 8910));
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -458,6 +476,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 
 	// Test identify TC
 	ASSERT_TRUE(interfaceUnderTest.test_wrapper_request_task_controller_identification());
+	time_source.update_for_ms(5);
 	serverTC.read_frame(testFrame);
 	ASSERT_TRUE(testFrame.isExtendedFrame);
 	ASSERT_EQ(testFrame.dataLength, 8);
@@ -478,7 +497,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, MessageEncoding)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
+TEST_F(TaskControllerClientTest, BadPartnerDeathTest)
 {
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
@@ -491,7 +510,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadPartnerDeathTest)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
+TEST_F(TaskControllerClientTest, BadICFDeathTest)
 {
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
@@ -504,25 +523,25 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, BadICFDeathTest)
 	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPDeathTest)
+TEST_F(TaskControllerClientTest, BadBinaryPointerDDOPDeathTest)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
 	EXPECT_DEATH(interfaceUnderTest.configure(nullptr, 0, 6, 64, 32, false, false, false, false, false), "");
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryPointerDDOPSizeDeathTest)
+TEST_F(TaskControllerClientTest, BadBinaryPointerDDOPSizeDeathTest)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
 	EXPECT_DEATH(interfaceUnderTest.configure(DerivedTestTCClient::testBinaryDDOP, 0, 6, 64, 32, false, false, false, false, false), "");
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, BadBinaryVectorDDOPSDeathTest)
+TEST_F(TaskControllerClientTest, BadBinaryVectorDDOPSDeathTest)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
 	EXPECT_DEATH(interfaceUnderTest.configure(std::shared_ptr<std::vector<std::uint8_t>>(), 6, 64, 32, false, false, false, false, false), "");
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
+TEST_F(TaskControllerClientTest, StateMachineTests)
 {
 	// Boilerplate...
 	VirtualCANPlugin serverTC;
@@ -530,15 +549,15 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x83, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x83, 0, time_source);
 	auto tcPartner = test_helpers::force_claim_partnered_control_function(0xF7, 0);
 
 	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
 	interfaceUnderTest.initialize(false);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame = {};
@@ -1113,7 +1132,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
+TEST_F(TaskControllerClientTest, ClientSettings)
 {
 	DerivedTestTCClient interfaceUnderTest(nullptr, nullptr);
 	auto blankDDOP = std::make_shared<DeviceDescriptorObjectPool>();
@@ -1139,7 +1158,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)
 	EXPECT_EQ(true, interfaceUnderTest.get_supports_tcgeo_with_position_based_control());
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
+TEST_F(TaskControllerClientTest, TimeoutTests)
 {
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
@@ -1161,10 +1180,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	interfaceUnderTest.initialize(false);
 
 	// Wait a while to build up some run time for testing timeouts later
-	while (SystemTiming::get_timestamp_ms() < 6000)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
-	}
+	time_source.simulate_delay_ms(6000);
 
 	// Test disconnecting from trying to send working set master
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::SendWorkingSetMaster, 0);
@@ -1338,7 +1354,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, TimeoutTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, WorkerThread)
+TEST_F(TaskControllerClientTest, WorkerThread)
 {
 	NAME clientNAME(0);
 	clientNAME.set_industry_group(2);
@@ -1392,22 +1408,22 @@ bool value_command_callback(std::uint16_t element,
 	return true;
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
+TEST_F(TaskControllerClientTest, CallbackTests)
 {
 	VirtualCANPlugin serverTC;
 	serverTC.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x86, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x86, 0, time_source);
 	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF7, 0);
 
 	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
 	interfaceUnderTest.initialize(false);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame = {};
@@ -1592,7 +1608,7 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	time_source.update_for_ms(2);
 
 	interfaceUnderTest.update();
 	EXPECT_EQ(true, valueRequested);
@@ -1734,23 +1750,23 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, CallbackTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, LanguageCommandFallback)
+TEST_F(TaskControllerClientTest, LanguageCommandFallback)
 {
 	VirtualCANPlugin serverTC;
 	serverTC.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0xFC, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0xFC, 0, time_source);
 	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xFB, 0);
 	auto TestPartnerVT = test_helpers::force_claim_partnered_control_function(0xFA, 0);
 
 	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU, TestPartnerVT);
 	interfaceUnderTest.initialize(false);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 
 	// Get the virtual CAN plugin back to a known state
 	CANMessageFrame testFrame = {};
@@ -1779,22 +1795,24 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, LanguageCommandFallback)
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::RequestLanguage);
 	ASSERT_EQ(interfaceUnderTest.test_wrapper_get_state(), TaskControllerClient::StateMachineState::RequestLanguage);
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 
 	serverTC.read_frame(testFrame);
 
 	EXPECT_EQ(testFrame.identifier, 0x18EAFBFC); // Make sure we got the request for language, target the TC
 
 	// Now just sit here and wait for the timeout to occur, 2s
-	std::this_thread::sleep_for(std::chrono::milliseconds(2001));
+	time_source.simulate_delay_ms(2001);
 	interfaceUnderTest.update();
 	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
 
 	// Now we should see another request, this time to the VT
 	serverTC.read_frame(testFrame);
 	EXPECT_EQ(testFrame.identifier, 0x18EAFAFC); // Make sure we got the request for language, target the VT
 
 	// Now get really crazy and don't respond to that
-	std::this_thread::sleep_for(std::chrono::milliseconds(6001));
+	time_source.simulate_delay_ms(6001);
 	interfaceUnderTest.update();
 
 	// Test that we didn't get stuck in the request language state
@@ -1836,7 +1854,7 @@ static bool default_process_data_callback(std::uint16_t elementNumber,
 	return false;
 }
 
-TEST(TASK_CONTROLLER_CLIENT_TESTS, DefaultProcessDataTest)
+TEST_F(TaskControllerClientTest, DefaultProcessDataTest)
 {
 	auto ddop = std::make_shared<DeviceDescriptorObjectPool>();
 	ddop->set_task_controller_compatibility_level(3);
@@ -1847,14 +1865,14 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, DefaultProcessDataTest)
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x80, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x80, 0, time_source);
 	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xDF, 0);
 
 	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	time_source.update_for_ms(50);
 	interfaceUnderTest.update();
 
 	CANMessageFrame testFrame = {};

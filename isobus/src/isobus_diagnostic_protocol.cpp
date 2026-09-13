@@ -904,6 +904,7 @@ namespace isobus
 				              softIDString.append("*");
 			              });
 
+			softIDString = char(softwareIdentificationFields.size()) + softIDString;
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
 
 			auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));

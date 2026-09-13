@@ -82,7 +82,7 @@ Check out the documentation for it `here <https://delgrossoengineering.com/isobu
 
 You may also want to add some delay if your program would otherwise exit immediately, to ensure the message is sent before your program exits.
 
-.. code-block c++
+.. code-block:: c++
 
    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 

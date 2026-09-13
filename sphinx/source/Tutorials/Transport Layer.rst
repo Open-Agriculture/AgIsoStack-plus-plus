@@ -69,7 +69,7 @@ This example would send a 100 byte message from `someInternalControlFunction` to
 
 To receive messages sent via Fast Packet, you have to tell the CAN stack that it should interpret a certain PGN using that protocol rather than treating it as regular 8 byte frames with the same PGN.
 
-You can do this by calling :code:`isobus::FastPacketProtocol::Protocol.register_multipacket_message_callback`. You can vew the API docs for this function `in the doxygen <https://delgrossoengineering.com/isobus-docs/classisobus_1_1FastPacketProtocol.html#a97f39f3272dfa9133abaab26592b1f50>`_.
+You can do this by calling :code:`isobus::FastPacketProtocol::Protocol.register_multipacket_message_callback`. You can view the API docs for this function `in the doxygen <https://delgrossoengineering.com/isobus-docs/classisobus_1_1FastPacketProtocol.html#a97f39f3272dfa9133abaab26592b1f50>`_.
 
 .. note::
 

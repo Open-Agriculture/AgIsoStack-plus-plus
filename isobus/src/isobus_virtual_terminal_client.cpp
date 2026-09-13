@@ -2314,15 +2314,18 @@ namespace isobus
 								0xFF,
 								0xFF,
 							};
-							if (parentVT->is_vt_version_supported(VTVersion::Version6))
-							{
-								// VT version is 6 or later
-								buffer[5] = static_cast<std::uint8_t>((transactionNumber << 4) | touchState);
-							}
+
 							if (parentVT->is_vt_version_supported(VTVersion::Version4))
 							{
 								// VT version is either 4 or 5
 								buffer[5] = touchState;
+							}
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								// VT version is 6 or later
+								buffer[5] = static_cast<std::uint8_t>((transactionNumber << 4) | touchState);
+								buffer[6] = static_cast<std::uint8_t>(parentMaskObjectID);
+								buffer[7] = static_cast<std::uint8_t>(parentMaskObjectID >> 8);
 							}
 							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
@@ -2412,7 +2415,7 @@ namespace isobus
 							if (parentVT->is_vt_version_supported(VTVersion::Version6))
 							{
 								// VT version is 6 or later
-								transactionNumber = message.get_uint8_at(7) >> 4;
+								transactionNumber = message.get_uint8_at(3) >> 4;
 							}
 
 							parentVT->changeNumericValueEventDispatcher.invoke({ parentVT, value, objectID });
