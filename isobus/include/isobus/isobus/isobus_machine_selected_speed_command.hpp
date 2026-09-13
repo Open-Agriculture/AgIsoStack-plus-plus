@@ -59,7 +59,7 @@ namespace isobus
 		/// the stack will be updated to return a shared or weak pointer instead, but for now please be aware of that limitation.
 		/// Eventually though the message will time-out normally and you can get a new pointer for
 		/// the external CF that replaces the deleted partner.
-		/// @returns The control function sending this instance of the guidance system command message
+		/// @returns The control function sending this instance of the machine selected speed command message
 		std::shared_ptr<ControlFunction> get_sender_control_function() const;
 
 		/// @brief Sets the timestamp for when the message was received or sent
