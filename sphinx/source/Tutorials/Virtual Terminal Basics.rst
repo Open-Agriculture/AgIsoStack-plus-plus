@@ -615,13 +615,13 @@ Looking at "ISOBUS Hello World", we had this next:
 
 .. code-block:: cmake
 
-	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
+	target_link_libraries(vt_example PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
 
 But like we mentioned earlier, we're now using a function (the IOP file reader) in the isobus utility library called "Utility", so we need to link that too:
 
 .. code-block:: cmake
 
-	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
+	target_link_libraries(vt_example PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 We also want to move our IOP file to be in the same folder as the executable after it's built, so that it can locate it.
 We can do that with this little handy bit of CMake:
