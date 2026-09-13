@@ -84,7 +84,7 @@ namespace isobus
 	void VirtualTerminalWorkingSetBase::add_iop_raw_data(const std::vector<std::uint8_t> &dataToAdd)
 	{
 		transferredIopSize += dataToAdd.size();
-		iopFilesRawData.push_back(dataToAdd);
+		iopFilesRawData.push_back(IopDataComponent(dataToAdd));
 	}
 
 	std::size_t VirtualTerminalWorkingSetBase::get_number_iop_files() const
@@ -94,7 +94,7 @@ namespace isobus
 
 	std::vector<std::uint8_t> &VirtualTerminalWorkingSetBase::get_iop_raw_data(std::size_t index)
 	{
-		return iopFilesRawData.at(index);
+		return iopFilesRawData.at(index).data;
 	}
 
 	VTColourVector VirtualTerminalWorkingSetBase::get_colour(std::uint8_t colourIndex) const
