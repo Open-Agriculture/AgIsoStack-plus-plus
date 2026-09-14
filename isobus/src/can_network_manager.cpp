@@ -870,6 +870,19 @@ namespace isobus
 					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
 				}
 			}
+
+			// A control function that just claimed an address has, by definition, claimed
+			// since the last address claim request -- record that, or prune_inactive_control_functions()
+			// will drop it 755ms later for "not having claimed", even though its claim is what
+			// got us here. Without this, a CF first seen (or re-seen) inside the 755ms window
+			// after any global request for address claim is immediately pruned, and a
+			// PartneredControlFunction bound to it is then dead permanently, because
+			// update_new_partners() only ever binds partners whose `initialized` flag is
+			// false and nothing ever resets that flag.
+			if (nullptr != foundControlFunction)
+			{
+				foundControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
+			}
 		}
 	}
 
@@ -903,6 +916,15 @@ namespace isobus
 						partner->address = currentActiveControlFunction->get_address();
 						partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
 						partner->initialized = true;
+						// Carry over whether the CF we're replacing in the table had claimed since the
+						// last address claim request. Without this the partner enters the table with the
+						// default `false`, so if the binding happens inside the 755ms window after any
+						// global request for address claim, prune_inactive_control_functions() drops the
+						// partner for "not having claimed" -- even though the claim it just processed is
+						// exactly what caused this binding. That leaves the partner permanently dead,
+						// since it keeps address == NULL_CAN_ADDRESS while `initialized` stays true, and
+						// this function only ever binds partners whose `initialized` is false.
+						partner->claimedAddressSinceLastAddressClaimRequest = currentActiveControlFunction->claimedAddressSinceLastAddressClaimRequest;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
 						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
 
