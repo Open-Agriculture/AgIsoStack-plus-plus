@@ -1,0 +1,11 @@
+# PlatformIO / ESP-IDF build artifacts (generated, do not commit).
+.pio/
+build/
+
+# Generated SDK configuration snapshots. sdkconfig.defaults IS committed and is
+# the source of truth; the per-environment files below are regenerated from it
+# on every build (e.g. sdkconfig.local_agisostack, sdkconfig.esp32-s3-devkitc-1).
+sdkconfig
+sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
