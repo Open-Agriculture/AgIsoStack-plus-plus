@@ -137,7 +137,8 @@ namespace isobus
 	bool HeartbeatInterface::Heartbeat::send(const HeartbeatInterface &parent)
 	{
 		bool retVal = false;
-		const std::array<std::uint8_t, 1> buffer = { sequenceCounter };
+		// pad unused bytes with 1s
+		const std::array<std::uint8_t, 8> buffer = { sequenceCounter, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 		retVal = parent.sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
 		                                     CANDataSpan(buffer.data(), buffer.size()),

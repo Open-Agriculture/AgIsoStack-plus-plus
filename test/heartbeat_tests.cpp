@@ -103,8 +103,15 @@ TEST_F(HeartbeatTest, HeartBeat)
 
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	EXPECT_EQ(testFrame.identifier, 0x0CF0E441);
-	EXPECT_EQ(testFrame.dataLength, 1);
+	EXPECT_EQ(testFrame.dataLength, 8);
 	EXPECT_EQ(testFrame.data[0], 251);
+	EXPECT_EQ(testFrame.data[1], 0xFF);
+	EXPECT_EQ(testFrame.data[2], 0xFF);
+	EXPECT_EQ(testFrame.data[3], 0xFF);
+	EXPECT_EQ(testFrame.data[4], 0xFF);
+	EXPECT_EQ(testFrame.data[5], 0xFF);
+	EXPECT_EQ(testFrame.data[6], 0xFF);
+	EXPECT_EQ(testFrame.data[7], 0xFF);
 
 	// Wait for the next one. Sequence should now be 0
 	time_source.update_for_ms(101);
@@ -112,7 +119,7 @@ TEST_F(HeartbeatTest, HeartBeat)
 	time_source.update_for_ms(5);
 	ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	EXPECT_EQ(testFrame.identifier, 0x0CF0E441);
-	EXPECT_EQ(testFrame.dataLength, 1);
+	EXPECT_EQ(testFrame.dataLength, 8);
 	EXPECT_EQ(testFrame.data[0], 0);
 
 	// Supply a heartbeat
