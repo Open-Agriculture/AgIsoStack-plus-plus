@@ -1,3 +1,4 @@
+#include "../../common/can_arguments_parser.hpp"
 #include "../../common/create_can_driver.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -138,16 +139,14 @@ int main(int argc, char **argv)
 	if (argc < 2)
 	{
 		std::cout << "Least one argument needs to be passed!" << std::endl;
-		std::cout << "Usage: iop_loader <iop file name> [CAN interface name]" << std::endl;
+		std::cout << "Usage: iop_loader <iop file name> [--interface <CAN interface name>]" << std::endl;
 		return -1;
 	}
 
-	std::string interfaceName = argc <= 2 ? "" : argv[2];
-	auto canDriver = CANDriverFactory::create(interfaceName);
+	const auto canParameters = CanParametersParser(argc, argv).parameters();
+	auto canDriver = CANDriverFactory::create(canParameters.interface, canParameters.driver);
 	if (nullptr == canDriver)
 	{
-		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 		return -1;
 	}
 
