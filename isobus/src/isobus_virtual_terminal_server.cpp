@@ -211,17 +211,22 @@ namespace isobus
 
 		// This is the static callback for the instance.
 		// See if this source is a working set we're already managing, or one that we were managing
-		// but stopped hearing from.
+		// but stopped hearing from. A control function instance for a given NAME can be replaced
+		// (e.g. after an address claim), so fall back to matching by NAME to avoid losing track of
+		// a working set master that never actually left the bus.
 		for (const auto &ws : managedWorkingSetList)
 		{
-			if (ws->get_control_function() == sourceControlFunction)
+			const bool sameControlFunction = (ws->get_control_function() == sourceControlFunction);
+
+			if (sameControlFunction || (ws->get_control_function()->get_NAME() == sourceControlFunction->get_NAME()))
 			{
 				const bool hasTimedOut = SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS);
 
-				if (hasTimedOut && !isWorkingSetMasterInitMessage)
+				if (hasTimedOut && !isWorkingSetMasterInitMessage && sameControlFunction)
 				{
-					// This working set has timed out, and this message is not a re-announcement, so
-					// it stays unmanaged until it re-announces itself. See ISO 11783-6:2014 4.6.9.
+					// This working set has timed out, and this message is neither a re-announcement
+					// nor evidence that its NAME has re-claimed its address, so it stays unmanaged
+					// until then. See ISO 11783-6:2014 4.6.9.
 					break;
 				}
 
@@ -229,6 +234,10 @@ namespace isobus
 				{
 					LOG_INFO("[VT Server]: Client %u re-established its working set after a maintenance timeout", sourceControlFunction->get_address());
 				}
+
+				// Keep tracking the working set under whichever control function instance is
+				// currently reporting for this NAME.
+				ws->set_control_function(sourceControlFunction);
 
 				// Any ECU->VT message is evidence that this working set is still alive, not just the
 				// Working Set Maintenance message.

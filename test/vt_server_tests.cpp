@@ -129,6 +129,11 @@ public:
 		return managedWorkingSetList.size();
 	}
 
+	std::shared_ptr<ControlFunction> test_wrapper_get_managed_working_set_control_function(std::size_t index) const
+	{
+		return managedWorkingSetList.at(index)->get_control_function();
+	}
+
 	static constexpr std::uint32_t TIMEOUT_MS = VirtualTerminalServer::WORKING_SET_MAINTENANCE_TIMEOUT_MS;
 };
 
@@ -231,4 +236,27 @@ TEST_F(VirtualTerminalServerTest, ObjectPoolTransferFromTimedOutClientIsNotProce
 	// A timed-out client is not managed, so its Object Pool Transfer must be rejected rather than
 	// handed to process_connection_dependent_messages() to be reassembled and stored.
 	EXPECT_FALSE(serverUnderTest.test_wrapper_check_if_source_is_managed(objectPoolTransfer));
+}
+
+TEST_F(VirtualTerminalServerTest, TimedOutClientIsReacceptedWhenSameNameClaimsItsAddressAgain)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto originalClientNAME = test_helpers::find_available_name(0);
+	auto client = std::make_shared<isobus::ControlFunction>(originalClientNAME, 0x81, 0);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS + 1);
+
+	// Simulate the network manager replacing the control function instance for the same NAME,
+	// such as after an address-claim roll call evicts and restores it (a different object, same identity).
+	auto reclaimedClient = std::make_shared<isobus::ControlFunction>(originalClientNAME, 0x81, 0);
+	ASSERT_NE(reclaimedClient, client);
+
+	// Even though this is not a Working Set Master message, the matching NAME is evidence that
+	// this working set master is still on the bus, so it should be re-accepted.
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(reclaimedClient, internalECU)));
+	ASSERT_EQ(1U, serverUnderTest.test_wrapper_get_number_of_managed_working_sets());
+	EXPECT_EQ(reclaimedClient, serverUnderTest.test_wrapper_get_managed_working_set_control_function(0));
 }
