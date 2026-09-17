@@ -1,0 +1,234 @@
+//================================================================================================
+/// @file vt_server_tests.cpp
+///
+/// @brief Unit tests for the VirtualTerminalServer class, focused on working-set maintenance
+/// timeout tracking.
+/// @author Open-Agriculture
+///
+/// @copyright 2026 The Open-Agriculture Developers
+//================================================================================================
+#include <gtest/gtest.h>
+
+#include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_server.hpp"
+#include "isobus/utility/system_timing.hpp"
+
+#include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
+
+using namespace isobus;
+
+class DerivedTestVTServer : public VirtualTerminalServer
+{
+public:
+	explicit DerivedTestVTServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse) :
+	  VirtualTerminalServer(controlFunctionToUse)
+	{
+	}
+
+	bool get_is_enough_memory(std::uint32_t) const override
+	{
+		return true;
+	}
+
+	VTVersion get_version() const override
+	{
+		return VTVersion::Version3;
+	}
+
+	std::uint8_t get_number_of_navigation_soft_keys() const override
+	{
+		return 0;
+	}
+
+	std::uint8_t get_soft_key_descriptor_x_pixel_width() const override
+	{
+		return 0;
+	}
+
+	std::uint8_t get_soft_key_descriptor_y_pixel_height() const override
+	{
+		return 0;
+	}
+
+	std::uint8_t get_number_of_possible_virtual_soft_keys_in_soft_key_mask() const override
+	{
+		return 0;
+	}
+
+	std::uint8_t get_number_of_physical_soft_keys() const override
+	{
+		return 0;
+	}
+
+	std::uint16_t get_data_mask_area_size_x_pixels() const override
+	{
+		return 0;
+	}
+
+	std::uint16_t get_data_mask_area_size_y_pixels() const override
+	{
+		return 0;
+	}
+
+	void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) override
+	{
+	}
+
+	SupportedWideCharsErrorCode get_supported_wide_chars(std::uint8_t, std::uint16_t, std::uint16_t, std::uint8_t &numberOfRanges, std::vector<std::uint8_t> &) override
+	{
+		numberOfRanges = 0;
+		return static_cast<SupportedWideCharsErrorCode>(0);
+	}
+
+	std::vector<std::array<std::uint8_t, 7>> get_versions(NAME) override
+	{
+		return {};
+	}
+
+	std::vector<std::uint8_t> get_supported_objects() const override
+	{
+		return {};
+	}
+
+	std::vector<std::uint8_t> load_version(const std::vector<std::uint8_t> &, NAME) override
+	{
+		return {};
+	}
+
+	bool save_version(const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &, NAME) override
+	{
+		return true;
+	}
+
+	bool delete_version(const std::vector<std::uint8_t> &, NAME) override
+	{
+		return true;
+	}
+
+	bool delete_all_versions(NAME) override
+	{
+		return true;
+	}
+
+	bool delete_object_pool(NAME) override
+	{
+		return true;
+	}
+
+	// ----------- Test wrappers into protected behavior -----------------------
+
+	bool test_wrapper_check_if_source_is_managed(const CANMessage &message)
+	{
+		return check_if_source_is_managed(message);
+	}
+
+	std::size_t test_wrapper_get_number_of_managed_working_sets() const
+	{
+		return managedWorkingSetList.size();
+	}
+
+	static constexpr std::uint32_t TIMEOUT_MS = VirtualTerminalServer::WORKING_SET_MAINTENANCE_TIMEOUT_MS;
+};
+
+/// @brief Builds a Working Set Maintenance message with the initiating flag set as requested.
+static CANMessage make_working_set_maintenance_message(bool initiating, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
+{
+	const std::array<std::uint8_t, CAN_DATA_LENGTH> data = {
+		0xFF, // WorkingSetMaintenanceMessage mux
+		static_cast<std::uint8_t>(initiating ? 0x01 : 0x00),
+		3, // VT version byte
+		0xFF,
+		0xFF,
+		0xFF,
+		0xFF,
+		0xFF
+	};
+	return CANMessage(CANMessage::Type::Receive,
+	                  CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), CANIdentifier::CANPriority::PriorityLowest7, destination->get_address(), source->get_address()),
+	                  data.data(),
+	                  static_cast<std::uint32_t>(data.size()),
+	                  source,
+	                  destination,
+	                  0);
+}
+
+/// @brief Builds an End of Object Pool message, a connection-dependent ECU->VT message that is not the maintenance message.
+static CANMessage make_end_of_object_pool_message(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
+{
+	const std::array<std::uint8_t, CAN_DATA_LENGTH> data = { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	return CANMessage(CANMessage::Type::Receive,
+	                  CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), CANIdentifier::CANPriority::PriorityLowest7, destination->get_address(), source->get_address()),
+	                  data.data(),
+	                  static_cast<std::uint32_t>(data.size()),
+	                  source,
+	                  destination,
+	                  0);
+}
+
+class VirtualTerminalServerTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(VirtualTerminalServerTest, TimeoutIsRefreshedByAnyMessageNotJustMaintenance)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto client = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+	ASSERT_EQ(1U, serverUnderTest.test_wrapper_get_number_of_managed_working_sets());
+
+	// Advance almost to the timeout, then refresh via a non-maintenance message.
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS - 500);
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+
+	// If the non-maintenance message had not refreshed the timeout, this would now be considered timed out.
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS - 500);
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+}
+
+TEST_F(VirtualTerminalServerTest, ClientIsNotManagedAfterTimeoutUntilItReAnnounces)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto client = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS + 1);
+
+	// A non-maintenance message from a timed-out client must not be treated as managed.
+	EXPECT_FALSE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+
+	// Re-announcing with a new Working Set Master message re-accepts the client.
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+}
+
+TEST_F(VirtualTerminalServerTest, ObjectPoolTransferFromTimedOutClientIsNotProcessed)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto client = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+
+	// Let the working set time out without ever tearing it down.
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS + 1);
+
+	const std::array<std::uint8_t, CAN_DATA_LENGTH> objectPoolTransferData = { 0x11, 0, 0, 0, 0, 0, 0, 0 };
+	CANMessage objectPoolTransfer(CANMessage::Type::Receive,
+	                              CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), CANIdentifier::CANPriority::PriorityLowest7, internalECU->get_address(), client->get_address()),
+	                              objectPoolTransferData.data(),
+	                              static_cast<std::uint32_t>(objectPoolTransferData.size()),
+	                              client,
+	                              internalECU,
+	                              0);
+
+	// A timed-out client is not managed, so its Object Pool Transfer must be rejected rather than
+	// handed to process_connection_dependent_messages() to be reassembled and stored.
+	EXPECT_FALSE(serverUnderTest.test_wrapper_check_if_source_is_managed(objectPoolTransfer));
+}
