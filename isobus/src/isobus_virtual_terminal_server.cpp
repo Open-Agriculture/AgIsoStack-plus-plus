@@ -204,36 +204,56 @@ namespace isobus
 	{
 		// Check if we're managing this CF
 		bool retVal = false;
+		const auto &data = message.get_data();
+		const auto &sourceControlFunction = message.get_source_control_function();
+		const bool isWorkingSetMasterInitMessage = ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
+		                                            (0 != (data[1] & 0x01))); // Init bit is set
 
 		// This is the static callback for the instance.
-		// See if we need to set up a new managed working set.
-		for (const auto &cf : managedWorkingSetList)
+		// See if this source is a working set we're already managing, or one that we were managing
+		// but stopped hearing from. A control function instance for a given NAME can be replaced
+		// (e.g. after an address claim), so fall back to matching by NAME to avoid losing track of
+		// a working set master that never actually left the bus.
+		for (const auto &ws : managedWorkingSetList)
 		{
-			if (cf->get_control_function() == message.get_source_control_function())
+			const bool sameControlFunction = (ws->get_control_function() == sourceControlFunction);
+
+			if (sameControlFunction || (ws->get_control_function()->get_NAME() == sourceControlFunction->get_NAME()))
 			{
-				// Found a match
+				const bool hasTimedOut = SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS);
+
+				if (hasTimedOut && !isWorkingSetMasterInitMessage && sameControlFunction)
+				{
+					// This working set has timed out, and this message is neither a re-announcement nor
+					// evidence that its NAME has re-claimed its address, so it stays unmanaged until then.
+					// See ISO 11783-6:2014 4.6.9.
+					break;
+				}
+
+				if (hasTimedOut)
+				{
+					LOG_INFO("[VT Server]: Client %u re-established its working set after a maintenance timeout", sourceControlFunction->get_address());
+				}
+
+				ws->set_control_function(sourceControlFunction);
+				ws->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 				retVal = true;
 				break;
 			}
 		}
 
-		if (!retVal)
+		if (!retVal && isWorkingSetMasterInitMessage)
 		{
-			const auto &data = message.get_data();
-			if ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
-			    (data[1] & 0x01)) // Init bit is set
-			{
-				// This CF is probably trying to initiate communication with us.
-				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
+			// This CF is probably trying to initiate communication with us.
+			managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(sourceControlFunction));
 
-				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
-				if (data[2] > get_vt_version_byte(get_version()))
-				{
-					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
-				}
-				managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				retVal = true;
+			LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
+			if (data[2] > get_vt_version_byte(get_version()))
+			{
+				LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
 			}
+			managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+			retVal = true;
 		}
 		return retVal;
 	}
@@ -673,10 +693,8 @@ namespace isobus
 
 			case Function::WorkingSetMaintenanceMessage:
 			{
-				if (0 != managedWorkingSet->get_working_set_maintenance_message_timestamp_ms())
-				{
-					managedWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				}
+				// The maintenance timestamp is refreshed for any ECU->VT message in check_if_source_is_managed(),
+				// so there is nothing further to do here.
 			}
 			break;
 
@@ -1930,11 +1948,12 @@ namespace isobus
 			buffer[6] = get_byte(parameterGroupNumber, 1);
 			buffer[7] = get_byte(parameterGroupNumber, 2);
 
+			// ISO 11783-6:2014 4.6.9: the NACK is sent to the working set master, not broadcast globally.
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
 			                                                        source,
-			                                                        nullptr,
+			                                                        destination,
 			                                                        get_priority());
 		}
 		return retVal;
