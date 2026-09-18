@@ -110,7 +110,7 @@ namespace isobus
 		public:
 			///< Constructor where the IOP data can be passed
 			/// @param[in] d A pointer to the object pool data
-			IopDataComponent(const std::vector<std::uint8_t> &d) :
+			explicit IopDataComponent(const std::vector<std::uint8_t> &d) :
 			  data(d) {}
 			bool processed = false; ///< This variable is set to true after this IOP section is being parset
 			std::vector<std::uint8_t> data; ///< Stores the raw IOP data
