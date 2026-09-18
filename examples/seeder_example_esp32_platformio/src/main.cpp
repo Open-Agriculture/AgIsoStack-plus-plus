@@ -10,7 +10,7 @@
 ///          FreeRTOS loop in `app_main` instead of a std::thread + signal
 ///          handler.
 ///
-/// @copyright 2024 The Open-Agriculture Developers
+/// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #include "board_config.hpp"
 #include "input_driver.hpp"

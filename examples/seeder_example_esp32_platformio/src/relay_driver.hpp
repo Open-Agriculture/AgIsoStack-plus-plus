@@ -8,7 +8,7 @@
 ///          channels 1 to 6. init() probes the expander, so on a board without it (or when
 ///          board_config::HAS_RELAY_EXPANDER is false) the driver becomes a safe no-op.
 ///
-/// @copyright 2024 The Open-Agriculture Developers
+/// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #ifndef RELAY_DRIVER_HPP
 #define RELAY_DRIVER_HPP

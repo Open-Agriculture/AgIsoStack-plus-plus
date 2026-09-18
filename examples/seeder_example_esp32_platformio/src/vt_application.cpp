@@ -5,7 +5,7 @@
 /// @author Adrian Del Grosso
 /// @author Daan Steenbergen
 ///
-/// @copyright 2024 The Open-Agriculture Developers
+/// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #include "vt_application.hpp"
 

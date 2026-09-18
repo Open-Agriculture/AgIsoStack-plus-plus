@@ -13,7 +13,7 @@
 ///          probed at runtime, so even with HAS_RELAY_EXPANDER true, a missing or unpowered IC just
 ///          makes relay control a no-op instead of faulting the application.
 ///
-/// @copyright 2024 The Open-Agriculture Developers
+/// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #ifndef BOARD_CONFIG_HPP
 #define BOARD_CONFIG_HPP

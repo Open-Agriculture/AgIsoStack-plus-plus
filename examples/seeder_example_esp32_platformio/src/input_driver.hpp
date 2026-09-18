@@ -11,7 +11,7 @@
 ///          reporting a fault, so it reads "not working" while its commanded output (and thus
 ///          its relay) is left unchanged (see SeederVtApplication::set_section_fault).
 ///
-/// @copyright 2024 The Open-Agriculture Developers
+/// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #ifndef INPUT_DRIVER_HPP
 #define INPUT_DRIVER_HPP

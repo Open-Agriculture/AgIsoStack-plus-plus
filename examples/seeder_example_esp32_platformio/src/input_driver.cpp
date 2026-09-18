@@ -3,7 +3,7 @@
 ///
 /// @brief Implements the opto-isolated digital input driver for this example.
 ///
-/// @copyright 2024 The Open-Agriculture Developers
+/// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #include "input_driver.hpp"
 
