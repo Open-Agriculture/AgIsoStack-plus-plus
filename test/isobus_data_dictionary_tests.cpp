@@ -57,3 +57,24 @@ TEST(DATA_DICTIONARY_TESTS, DDI_Lookups)
 	EXPECT_EQ(0.0f, testEntry6.displayRange.first);
 	EXPECT_EQ(0.0f, testEntry6.displayRange.second);
 }
+
+TEST(DATA_DICTIONARY_TESTS, TrackControlLevelFormatting)
+{
+	EXPECT_EQ("No levels supported", DataDictionary::format_value_with_ddi(505, 0x00));
+	EXPECT_EQ("Level 1", DataDictionary::format_value_with_ddi(505, 0x01));
+	EXPECT_EQ("Level 2", DataDictionary::format_value_with_ddi(505, 0x02));
+	EXPECT_EQ("Level 1, Level 2", DataDictionary::format_value_with_ddi(505, 0x03));
+	EXPECT_EQ("Level 3", DataDictionary::format_value_with_ddi(505, 0x04));
+	EXPECT_EQ("Level 1, Level 3", DataDictionary::format_value_with_ddi(505, 0x05));
+	EXPECT_EQ("Level 2, Level 3", DataDictionary::format_value_with_ddi(505, 0x06));
+	EXPECT_EQ("Level 1, Level 2, Level 3", DataDictionary::format_value_with_ddi(505, 0x07));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(505, 0x08));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(505, -1));
+
+	EXPECT_EQ("No common level", DataDictionary::format_value_with_ddi(506, 0x00));
+	EXPECT_EQ("Level 1", DataDictionary::format_value_with_ddi(506, 0x01));
+	EXPECT_EQ("Level 2", DataDictionary::format_value_with_ddi(506, 0x02));
+	EXPECT_EQ("Level 3", DataDictionary::format_value_with_ddi(506, 0x03));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(506, 0x04));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(506, -1));
+}
