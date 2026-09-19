@@ -120,12 +120,12 @@ public:
 	}
 };
 
-class VirtualTerminalServerTest : public AgIsoStackTestFixture
+class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
 {
 	// Wrapper to give tests a more meaningful name - no content.
 };
 
-TEST_F(VirtualTerminalServerTest, NackForUnmanagedWorkingSetIsSentToTheWorkingSetMasterNotGlobally)
+TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToTheWorkingSetMasterNotGlobally)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
