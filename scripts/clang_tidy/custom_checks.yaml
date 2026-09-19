@@ -1,0 +1,75 @@
+# Project specific clang-tidy checks for the style rules described in CONTRIBUTING.md
+# that are not covered by the built-in clang-tidy checks.
+#
+# These are clang-query based custom checks, which require clang-tidy 22 or newer and the
+# --experimental-custom-checks flag. This file is appended to the .clang-tidy file in the root
+# of the repository by scripts/clang_tidy/run_clang_tidy.sh.
+ExcludeHeaderFilterRegex: '(kinetis_flexcan|imxrt_flexcan|FlexCAN_T4|circular_buffer)'
+CustomChecks:
+  # if (5 == value) instead of if (value == 5)
+  - Name: constant-on-left-comparison
+    Query: |
+      match expr(anyOf(
+          binaryOperator(hasAnyOperatorName("==", "!="),
+            hasRHS(ignoringParenImpCasts(anyOf(integerLiteral(), floatLiteral(), characterLiteral(), cxxNullPtrLiteralExpr(), gnuNullExpr(), cxxBoolLiteral(), unaryOperator(hasOperatorName("-"), hasUnaryOperand(integerLiteral())), declRefExpr(to(enumConstantDecl())), declRefExpr(to(varDecl(hasType(isConstQualified()), anyOf(isConstexpr(), hasGlobalStorage()))))))),
+            unless(hasLHS(ignoringParenImpCasts(anyOf(integerLiteral(), floatLiteral(), characterLiteral(), cxxNullPtrLiteralExpr(), gnuNullExpr(), cxxBoolLiteral(), unaryOperator(hasOperatorName("-"), hasUnaryOperand(integerLiteral())), declRefExpr(to(enumConstantDecl())), declRefExpr(to(varDecl(hasType(isConstQualified()), anyOf(isConstexpr(), hasGlobalStorage()))))))))),
+          cxxOperatorCallExpr(hasAnyOverloadedOperatorName("==", "!="),
+            hasArgument(1, ignoringParenImpCasts(anyOf(integerLiteral(), floatLiteral(), characterLiteral(), cxxNullPtrLiteralExpr(), gnuNullExpr(), cxxBoolLiteral(), unaryOperator(hasOperatorName("-"), hasUnaryOperand(integerLiteral())), declRefExpr(to(enumConstantDecl())), declRefExpr(to(varDecl(hasType(isConstQualified()), anyOf(isConstexpr(), hasGlobalStorage()))))))),
+            unless(hasArgument(0, ignoringParenImpCasts(anyOf(integerLiteral(), floatLiteral(), characterLiteral(), cxxNullPtrLiteralExpr(), gnuNullExpr(), cxxBoolLiteral(), unaryOperator(hasOperatorName("-"), hasUnaryOperand(integerLiteral())), declRefExpr(to(enumConstantDecl())), declRefExpr(to(varDecl(hasType(isConstQualified()), anyOf(isConstexpr(), hasGlobalStorage())))))))))),
+        unless(isExpansionInSystemHeader())).bind("comparison")
+    Diagnostic:
+      - BindName: comparison
+        Message: "put the constant on the left side of == and != comparisons"
+        Level: Warning
+
+  # std::uint8_t and std::size_t instead of uint8_t and size_t
+  - Name: std-qualified-type
+    Query: |
+      match typeLoc(loc(qualType(hasDeclaration(typedefNameDecl(matchesName("^::(u?int(8|16|32|64)_t|size_t)$")))))).bind("type")
+    Diagnostic:
+      - BindName: type
+        Message: "use the std:: qualified type"
+        Level: Warning
+
+  # std::find(...) instead of find(...) resolved through argument dependent lookup
+  - Name: std-qualified-function-call
+    Query: |
+      match callExpr(unless(cxxOperatorCallExpr()), unless(cxxMemberCallExpr()), unless(userDefinedLiteral()),
+        callee(functionDecl(isInStdNamespace())),
+        callee(expr(ignoringImpCasts(declRefExpr(unless(has(nestedNameSpecifierLoc()))).bind("callee")))),
+        unless(isExpansionInSystemHeader()))
+    Diagnostic:
+      - BindName: callee
+        Message: "call standard library functions with an explicit std:: qualifier"
+        Level: Warning
+
+  # if ((5 == value) && (nullptr != pointer)) instead of if (5 == value && nullptr != pointer)
+  - Name: parenthesize-sub-conditions
+    Query: |
+      match binaryOperator(hasAnyOperatorName("&&", "||"),
+        hasEitherOperand(ignoringImpCasts(binaryOperator(isComparisonOperator()).bind("operand"))),
+        unless(isExpansionInSystemHeader()))
+    Diagnostic:
+      - BindName: operand
+        Message: "wrap comparisons inside && and || conditions in parentheses"
+        Level: Warning
+
+  # No using namespace directives in header files
+  - Name: no-using-namespace-in-headers
+    Query: |
+      match usingDirectiveDecl(isExpansionInFileMatching("[.](h|hpp)$"), unless(isExpansionInSystemHeader())).bind("using")
+    Diagnostic:
+      - BindName: using
+        Message: "using namespace directives are not allowed in header files"
+        Level: Warning
+
+  # LOG_ERROR(...) instead of CANStackLogger::error(...), otherwise the build with a disabled CAN stack logger fails
+  - Name: use-logging-macros
+    Query: |
+      match callExpr(callee(functionDecl(hasAnyName("::isobus::CANStackLogger::debug", "::isobus::CANStackLogger::info", "::isobus::CANStackLogger::warn", "::isobus::CANStackLogger::error", "::isobus::CANStackLogger::critical"))),
+        unless(anyOf(isExpandedFromMacro("LOG_DEBUG"), isExpandedFromMacro("LOG_INFO"), isExpandedFromMacro("LOG_WARNING"), isExpandedFromMacro("LOG_ERROR"), isExpandedFromMacro("LOG_CRITICAL"))),
+        unless(isExpansionInSystemHeader())).bind("call")
+    Diagnostic:
+      - BindName: call
+        Message: "use the LOG_DEBUG/INFO/WARNING/ERROR/CRITICAL macros instead of calling CANStackLogger directly"
+        Level: Warning
