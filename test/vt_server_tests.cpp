@@ -1,20 +1,23 @@
 //================================================================================================
 /// @file vt_server_tests.cpp
 ///
-/// @brief Unit tests for the VirtualTerminalServer class, focused on working-set maintenance
-/// timeout tracking.
+/// @brief Unit tests for the VirtualTerminalServer class, covering working-set maintenance
+/// timeout tracking and NACK routing.
 /// @author Open-Agriculture
 ///
 /// @copyright 2026 The Open-Agriculture Developers
 //================================================================================================
 #include <gtest/gtest.h>
 
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
 using namespace isobus;
@@ -172,12 +175,17 @@ static CANMessage make_end_of_object_pool_message(std::shared_ptr<ControlFunctio
 	                  0);
 }
 
-class VirtualTerminalServerTest : public AgIsoStackTestFixture
+class VirtualTerminalServerWorkingSetTimeoutTest : public AgIsoStackTestFixture
 {
 	// Wrapper to give tests a more meaningful name - no content.
 };
 
-TEST_F(VirtualTerminalServerTest, TimeoutIsRefreshedByAnyMessageNotJustMaintenance)
+class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, TimeoutIsRefreshedByAnyMessageNotJustMaintenance)
 {
 	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
 	auto client = test_helpers::create_mock_control_function(0x81);
@@ -195,7 +203,7 @@ TEST_F(VirtualTerminalServerTest, TimeoutIsRefreshedByAnyMessageNotJustMaintenan
 	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
 }
 
-TEST_F(VirtualTerminalServerTest, ClientIsNotManagedAfterTimeoutUntilItReAnnounces)
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, ClientIsNotManagedAfterTimeoutUntilItReAnnounces)
 {
 	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
 	auto client = test_helpers::create_mock_control_function(0x81);
@@ -213,7 +221,7 @@ TEST_F(VirtualTerminalServerTest, ClientIsNotManagedAfterTimeoutUntilItReAnnounc
 	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
 }
 
-TEST_F(VirtualTerminalServerTest, ObjectPoolTransferFromTimedOutClientIsNotProcessed)
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, ObjectPoolTransferFromTimedOutClientIsNotProcessed)
 {
 	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
 	auto client = test_helpers::create_mock_control_function(0x81);
@@ -238,7 +246,7 @@ TEST_F(VirtualTerminalServerTest, ObjectPoolTransferFromTimedOutClientIsNotProce
 	EXPECT_FALSE(serverUnderTest.test_wrapper_check_if_source_is_managed(objectPoolTransfer));
 }
 
-TEST_F(VirtualTerminalServerTest, TimedOutClientIsReacceptedWhenSameNameClaimsItsAddressAgain)
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, TimedOutClientIsReacceptedWhenSameNameClaimsItsAddressAgain)
 {
 	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
 	auto originalClientNAME = test_helpers::find_available_name(0);
@@ -259,4 +267,45 @@ TEST_F(VirtualTerminalServerTest, TimedOutClientIsReacceptedWhenSameNameClaimsIt
 	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(reclaimedClient, internalECU)));
 	ASSERT_EQ(1U, serverUnderTest.test_wrapper_get_number_of_managed_working_sets());
 	EXPECT_EQ(reclaimedClient, serverUnderTest.test_wrapper_get_managed_working_set_control_function(0));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToTheWorkingSetMasterNotGlobally)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x26, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x81, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	testPlugin.clear_queue();
+
+	// An End of Object Pool message from a client that never registered with the server should be
+	// NACKed (it is connection-dependent, unlike the stateless Get Memory/Hardware/etc. messages),
+	// and per ISO 11783-6:2014 4.6.9 that NACK must be sent to the working set master, not broadcast.
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
+	                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+	                                                                                                   internalECU,
+	                                                                                                   client,
+	                                                                                                   { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+
+	CANMessageFrame nackFrame = {};
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(nackFrame));
+
+	const std::uint32_t expectedUnicastIdentifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityLowest7),
+	                                                                                static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
+	                                                                                client,
+	                                                                                internalECU);
+	EXPECT_EQ(expectedUnicastIdentifier, nackFrame.identifier);
+	EXPECT_EQ(0x01, nackFrame.data[0]); // Negative Acknowledgement
+	EXPECT_EQ(client->get_address(), nackFrame.data[4]); // Address of the CF the NACK is about
+
+	CANHardwareInterface::stop();
 }
