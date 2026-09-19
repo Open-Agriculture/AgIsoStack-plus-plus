@@ -21,10 +21,12 @@
 
 namespace isobus
 {
-	TWAIPlugin::TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig) :
+	TWAIPlugin::TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig, std::uint32_t receiveTimeoutMs, std::uint32_t transmitTimeoutMs) :
 	  generalConfig(generalConfig),
 	  timingConfig(timingConfig),
-	  filterConfig(filterConfig)
+	  filterConfig(filterConfig),
+	  receiveTimeoutMs(receiveTimeoutMs),
+	  transmitTimeoutMs(transmitTimeoutMs)
 	{
 	}
 
@@ -87,7 +89,7 @@ namespace isobus
 
 		//Wait for message to be received
 		twai_message_t message = {};
-		esp_err_t error = twai_receive(&message, pdMS_TO_TICKS(100));
+		esp_err_t error = twai_receive(&message, pdMS_TO_TICKS(receiveTimeoutMs));
 		if (ESP_OK == error)
 		{
 			// Process received message
@@ -122,7 +124,7 @@ namespace isobus
 		message.data_length_code = canFrame.dataLength;
 		memcpy(message.data, canFrame.data, canFrame.dataLength);
 
-		esp_err_t error = twai_transmit(&message, pdMS_TO_TICKS(100));
+		esp_err_t error = twai_transmit(&message, pdMS_TO_TICKS(transmitTimeoutMs));
 		if (ESP_OK == error)
 		{
 			retVal = true;

@@ -6,8 +6,9 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(VTAuxInputsExample main.cpp ../../common/console_logger.cpp
-                                  object_pool_ids.h)
+add_executable(
+  VTAuxInputsExample main.cpp ../../common/console_logger.cpp
+                     ../../common/create_can_driver.cpp object_pool_ids.h)
 
 target_compile_features(VTAuxInputsExample PUBLIC cxx_std_11)
 set_target_properties(VTAuxInputsExample PROPERTIES CXX_EXTENSIONS OFF)

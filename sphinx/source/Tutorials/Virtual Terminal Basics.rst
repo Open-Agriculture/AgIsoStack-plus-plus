@@ -35,6 +35,8 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 
 .. code-block:: c++
 
+	#include "can_arguments_parser.hpp"
+	#include "create_can_driver.hpp"
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
@@ -52,29 +54,16 @@ Create the file `main.cpp` as shown below inside that folder with the requisite 
 		running = false;
 	}
 
-	int main()
+	int main(int argc, char **argv)
 	{
 		std::signal(SIGINT, signal_handler);
-
-		// Automatically load the desired CAN driver based on the available drivers
-		std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-	#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-		canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
-	#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-		canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
-	#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-		canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
-	#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
-		canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
-	#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
-		canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
-	#endif
+		const auto canParameters = CanParametersParser(argc, argv).parameters();
+		auto canDriver = CANDriverFactory::create(canParameters.interface, canParameters.driver);
 		if (nullptr == canDriver)
 		{
-			std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-			std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 			return -1;
 		}
+
 		isobus::CANHardwareInterface::set_number_of_can_channels(1);
 		isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
@@ -132,7 +121,7 @@ With those notes in mind, let's create our VT client. We also introduce a helper
 	static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 	static std::shared_ptr<isobus::VirtualTerminalClientUpdateHelper> virtualTerminalUpdateHelper = nullptr;
 
-	int main()
+	int main(int argc, char **argv)
 	{
 		...
 
@@ -186,7 +175,7 @@ Now, let's add some code to our example to read in this IOP file, and give it to
 	#include "isobus/utility/iop_file_interface.hpp"
 
 
-	int main() 
+	int main(int argc, char **argv)
 	{
 		...
 
@@ -404,6 +393,8 @@ Here's the final code for this example:
 
 .. code-block:: c++
 
+	#include "can_arguments_parser.hpp"
+	#include "create_can_driver.hpp"
 	#include "isobus/hardware_integration/available_can_drivers.hpp"
 	#include "isobus/hardware_integration/can_hardware_interface.hpp"
 	#include "isobus/isobus/can_network_manager.hpp"
@@ -499,23 +490,13 @@ Here's the final code for this example:
 		}
 	}
 
-	int main()
+	int main(int argc, char **argv)
 	{
 		std::signal(SIGINT, signal_handler);
 
-		// Automatically load the desired CAN driver based on the available drivers
-		std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-	#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-		canDriver = std::make_shared<isobus::SocketCANInterface>("can0");
-	#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-		canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
-	#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-		canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
-	#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
-		canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
-	#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
-		canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
-	#endif
+		const auto canParameters = CanParametersParser(argc, argv).parameters();
+		auto canDriver = CANDriverFactory::create(canParameters.interface, canParameters.driver);
+
 		if (nullptr == canDriver)
 		{
 			std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
@@ -609,19 +590,28 @@ We'll start off like we did in "ISOBUS Hello World".
 
 	add_subdirectory("AgIsoStack-plus-plus")
 
-	add_executable(vt_example main.cpp)
+	add_executable(
+	  vt_example
+	  main.cpp
+	  AgIsoStack-plus-plus/examples/common/create_can_driver.cpp)
+
+	target_include_directories(
+	  vt_example
+	  PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/AgIsoStack-plus-plus/examples/common"
+	)
 
 Looking at "ISOBUS Hello World", we had this next:
 
 .. code-block:: cmake
 
-	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
+	target_link_libraries(vt_example PRIVATE isobus::Isobus isobus::HardwareIntegration Threads::Threads)
 
 But like we mentioned earlier, we're now using a function (the IOP file reader) in the isobus utility library called "Utility", so we need to link that too:
 
 .. code-block:: cmake
 
-	target_link_libraries(isobus_hello_world PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
+	target_link_libraries(vt_example PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 
 We also want to move our IOP file to be in the same folder as the executable after it's built, so that it can locate it.
 We can do that with this little handy bit of CMake:

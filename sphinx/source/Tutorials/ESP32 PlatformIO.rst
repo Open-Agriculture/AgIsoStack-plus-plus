@@ -151,6 +151,19 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
 
     You do not need to choose these same GPIO pins, but these are known to work well.
 
+    The plugin blocks for up to 100ms while waiting for a frame to be received, and for up to 100ms while waiting for a free transmit slot.
+    If those defaults do not suit your application, you can pass your own values to the constructor.
+
+    .. code-block:: c++
+
+        // Use a 20ms receive timeout and a 50ms transmit timeout instead of the 100ms defaults
+        auto canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter, 20, 50);
+
+    .. note::
+
+        These timeouts are converted to FreeRTOS ticks, so they are rounded down to a multiple of the tick period, which is 10ms at the default ESP32 tick rate of 100Hz.
+        Anything shorter than one tick period results in a non-blocking call, which will make the receive thread busy-poll the bus, and will make writes fail whenever the transmit queue is full.
+
 #.  Set up our device's NAME, and start the CAN stack.
 
     This is boilerplate code that can be found in nearly every AgIsoStack project that sets up your device and starts the CAN stack, with slight modifications for ESP32.

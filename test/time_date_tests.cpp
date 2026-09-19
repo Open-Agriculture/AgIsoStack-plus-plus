@@ -84,6 +84,8 @@ protected:
 	bool isRxCallbackCalled = false;
 };
 
+constexpr std::array<TimeDateTest::DaySPN962TestCase, 4> TimeDateTest::daySPN962TestCases;
+
 TEST_F(TimeDateTest, ReceivingMessages)
 {
 	TimeDateInterface timeDateInterfaceUnderTest;

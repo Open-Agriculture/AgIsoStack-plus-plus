@@ -1,4 +1,5 @@
-#include "isobus/hardware_integration/available_can_drivers.hpp"
+#include "../../common/can_arguments_parser.hpp"
+#include "../../common/create_can_driver.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
@@ -96,27 +97,13 @@ void handle_button_event(const isobus::VirtualTerminalClient::VTKeyEvent &event)
 	}
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	std::signal(SIGINT, signal_handler);
-
-	// Automatically load the desired CAN driver based on the available drivers
-	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>("vcan0");
-#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(PCAN_USBBUS1);
-#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(0); // CAN0
-#elif defined(ISOBUS_MACCANPCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(PCAN_USBBUS1);
-#elif defined(ISOBUS_SYS_TEC_AVAILABLE)
-	canDriver = std::make_shared<isobus::SysTecWindowsPlugin>();
-#endif
+	const auto canParameters = CanParametersParser(argc, argv).parameters();
+	auto canDriver = CANDriverFactory::create(canParameters.interface, canParameters.driver);
 	if (nullptr == canDriver)
 	{
-		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 		return -1;
 	}
 
