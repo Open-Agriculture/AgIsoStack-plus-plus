@@ -1,0 +1,12 @@
+# Custom partition table for the ESP32 seeder example.
+#
+# A single large factory app slot is plenty for the full Virtual Terminal +
+# Task Controller + diagnostics firmware (roughly 1.5-2 MB), and shipping our
+# own table avoids relying on PlatformIO resolving a built-in one by name.
+# Sized for the 16 MB flash of the Waveshare ESP32-S3-WROOM-1U-N16R8; it also
+# fits an 8 MB part with room to spare.
+#
+# Name,     Type, SubType, Offset,   Size,  Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+factory,    app,  factory, 0x10000,  4M,
