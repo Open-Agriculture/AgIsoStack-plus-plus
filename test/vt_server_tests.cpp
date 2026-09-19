@@ -1,7 +1,8 @@
 //================================================================================================
 /// @file vt_server_tests.cpp
 ///
-/// @brief Unit tests for the VirtualTerminalServer class.
+/// @brief Unit tests for the VirtualTerminalServer class, covering working-set maintenance
+/// timeout tracking and NACK routing.
 /// @author Open-Agriculture
 ///
 /// @copyright 2026 The Open-Agriculture Developers
@@ -118,12 +119,155 @@ public:
 	{
 		return true;
 	}
+
+	// ----------- Test wrappers into protected behavior -----------------------
+
+	bool test_wrapper_check_if_source_is_managed(const CANMessage &message)
+	{
+		return check_if_source_is_managed(message);
+	}
+
+	std::size_t test_wrapper_get_number_of_managed_working_sets() const
+	{
+		return managedWorkingSetList.size();
+	}
+
+	std::shared_ptr<ControlFunction> test_wrapper_get_managed_working_set_control_function(std::size_t index) const
+	{
+		return managedWorkingSetList.at(index)->get_control_function();
+	}
+
+	static constexpr std::uint32_t TIMEOUT_MS = VirtualTerminalServer::WORKING_SET_MAINTENANCE_TIMEOUT_MS;
+};
+
+/// @brief Builds a Working Set Maintenance message with the initiating flag set as requested.
+static CANMessage make_working_set_maintenance_message(bool initiating, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
+{
+	const std::array<std::uint8_t, CAN_DATA_LENGTH> data = {
+		0xFF, // WorkingSetMaintenanceMessage mux
+		static_cast<std::uint8_t>(initiating ? 0x01 : 0x00),
+		3, // VT version byte
+		0xFF,
+		0xFF,
+		0xFF,
+		0xFF,
+		0xFF
+	};
+	return CANMessage(CANMessage::Type::Receive,
+	                  CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), CANIdentifier::CANPriority::PriorityLowest7, destination->get_address(), source->get_address()),
+	                  data.data(),
+	                  static_cast<std::uint32_t>(data.size()),
+	                  source,
+	                  destination,
+	                  0);
+}
+
+/// @brief Builds an End of Object Pool message, a connection-dependent ECU->VT message that is not the maintenance message.
+static CANMessage make_end_of_object_pool_message(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
+{
+	const std::array<std::uint8_t, CAN_DATA_LENGTH> data = { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	return CANMessage(CANMessage::Type::Receive,
+	                  CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), CANIdentifier::CANPriority::PriorityLowest7, destination->get_address(), source->get_address()),
+	                  data.data(),
+	                  static_cast<std::uint32_t>(data.size()),
+	                  source,
+	                  destination,
+	                  0);
+}
+
+class VirtualTerminalServerWorkingSetTimeoutTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
 {
 	// Wrapper to give tests a more meaningful name - no content.
 };
+
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, TimeoutIsRefreshedByAnyMessageNotJustMaintenance)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto client = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+	ASSERT_EQ(1U, serverUnderTest.test_wrapper_get_number_of_managed_working_sets());
+
+	// Advance almost to the timeout, then refresh via a non-maintenance message.
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS - 500);
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+
+	// If the non-maintenance message had not refreshed the timeout, this would now be considered timed out.
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS - 500);
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+}
+
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, ClientIsNotManagedAfterTimeoutUntilItReAnnounces)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto client = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS + 1);
+
+	// A non-maintenance message from a timed-out client must not be treated as managed.
+	EXPECT_FALSE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+
+	// Re-announcing with a new Working Set Master message re-accepts the client.
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(client, internalECU)));
+}
+
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, ObjectPoolTransferFromTimedOutClientIsNotProcessed)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto client = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+
+	// Let the working set time out without ever tearing it down.
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS + 1);
+
+	const std::array<std::uint8_t, CAN_DATA_LENGTH> objectPoolTransferData = { 0x11, 0, 0, 0, 0, 0, 0, 0 };
+	CANMessage objectPoolTransfer(CANMessage::Type::Receive,
+	                              CANIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), CANIdentifier::CANPriority::PriorityLowest7, internalECU->get_address(), client->get_address()),
+	                              objectPoolTransferData.data(),
+	                              static_cast<std::uint32_t>(objectPoolTransferData.size()),
+	                              client,
+	                              internalECU,
+	                              0);
+
+	// A timed-out client is not managed, so its Object Pool Transfer must be rejected rather than
+	// handed to process_connection_dependent_messages() to be reassembled and stored.
+	EXPECT_FALSE(serverUnderTest.test_wrapper_check_if_source_is_managed(objectPoolTransfer));
+}
+
+TEST_F(VirtualTerminalServerWorkingSetTimeoutTest, TimedOutClientIsReacceptedWhenSameNameClaimsItsAddressAgain)
+{
+	auto internalECU = test_helpers::create_mock_internal_control_function(0x26);
+	auto originalClientNAME = test_helpers::find_available_name(0);
+	auto client = std::make_shared<isobus::ControlFunction>(originalClientNAME, 0x81, 0);
+	DerivedTestVTServer serverUnderTest(internalECU);
+
+	ASSERT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_working_set_maintenance_message(true, client, internalECU)));
+
+	time_source.update_for_ms(DerivedTestVTServer::TIMEOUT_MS + 1);
+
+	// Simulate the network manager replacing the control function instance for the same NAME,
+	// such as after an address-claim roll call evicts and restores it (a different object, same identity).
+	auto reclaimedClient = std::make_shared<isobus::ControlFunction>(originalClientNAME, 0x81, 0);
+	ASSERT_NE(reclaimedClient, client);
+
+	// Even though this is not a Working Set Master message, the matching NAME is evidence that
+	// this working set master is still on the bus, so it should be re-accepted.
+	EXPECT_TRUE(serverUnderTest.test_wrapper_check_if_source_is_managed(make_end_of_object_pool_message(reclaimedClient, internalECU)));
+	ASSERT_EQ(1U, serverUnderTest.test_wrapper_get_number_of_managed_working_sets());
+	EXPECT_EQ(reclaimedClient, serverUnderTest.test_wrapper_get_managed_working_set_control_function(0));
+}
 
 TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToTheWorkingSetMasterNotGlobally)
 {
