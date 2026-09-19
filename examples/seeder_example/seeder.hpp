@@ -17,7 +17,7 @@ class Seeder
 public:
 	Seeder() = default;
 
-	bool initialize(const std::string &interfaceName = "");
+	bool initialize(const std::string &interfaceName = "", const std::string &driver = "");
 
 	void terminate();
 
