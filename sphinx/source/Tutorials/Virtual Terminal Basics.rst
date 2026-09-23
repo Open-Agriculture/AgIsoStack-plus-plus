@@ -499,8 +499,6 @@ Here's the final code for this example:
 
 		if (nullptr == canDriver)
 		{
-			std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-			std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 			return -1;
 		}
 
@@ -631,7 +629,12 @@ Now you should be able to build and run the program!
 	cmake -S . -B build
 	cmake --build build
 	cd build
-	./vt_example
+	./vt_example --interface can0
+
+.. note::
+
+	Without :code:`--interface`, the SocketCAN driver opens :code:`vcan0`, not the :code:`can0` we set up in "ISOBUS Hello World".
+	On Windows and macOS, :code:`--driver` selects the plugin, for example :code:`--driver peak`. What :code:`--interface` means there depends on the plugin — some take a channel number, some ignore it.
 
 That's it for this Tutorial. You should be able to run it as long as you have a VT and a supported CAN driver, see the test pool be uploaded, and be able to interact with all buttons on screen!
 

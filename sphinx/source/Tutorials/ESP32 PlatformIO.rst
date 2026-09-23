@@ -212,7 +212,7 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
             isobus::CANHardwareInterface::stop();
         }
 
-	This is the absolute minimum for the stack to address claim for you, and for it to be ready to accept your messages.
+    This is the absolute minimum for the stack to address claim for you, and for it to be ready to accept your messages.
 
 #.  Set up your ESP32's OS and PThread options
 
@@ -245,7 +245,7 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
         :width: 500
         :alt: Running menuconfig
 
-    For decreasing the update rate of the stack, set the update period to your desired value in your init/main function: :code:`isobus::CANHardwareInterface::set_can_driver_update_period(10)` for 10ms update period. This matches the default FreeRTOS tick rate of 100Hz.
+    For decreasing the update rate of the stack, set the update period to your desired value in your init/main function: :code:`isobus::CANHardwareInterface::set_periodic_update_interval(10)` for 10ms update period. This matches the default FreeRTOS tick rate of 100Hz.
 
 #.  Close the menuconfig by pressing :code:`Q` on your keyboard, followed by :code:`Y` to save your changes.
 #.  Add your application code and build your project using the PlatformIO extension. That's it! You should now have a working AgIsoStack project on your ESP32.
