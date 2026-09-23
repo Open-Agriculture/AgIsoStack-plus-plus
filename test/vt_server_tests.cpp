@@ -118,7 +118,45 @@ public:
 	{
 		return true;
 	}
+
+	void run_update()
+	{
+		update();
+	}
 };
+
+static void receive_from_client(std::shared_ptr<InternalControlFunction> server,
+                                std::shared_ptr<ControlFunction> client,
+                                std::initializer_list<std::uint8_t> data)
+{
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
+	                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+	                                                                                                   server,
+	                                                                                                   client,
+	                                                                                                   data));
+	CANNetworkManager::CANNetwork.update();
+}
+
+static bool poll_for_end_of_object_pool_response(DerivedTestVTServer &server,
+                                                 VirtualCANPlugin &plugin,
+                                                 test_helpers::TestTimeSource &timeSource,
+                                                 CANMessageFrame &responseFrame)
+{
+	bool foundResponse = false;
+
+	// The pool is parsed on a worker thread, so the response only goes out once that thread finishes
+	for (std::uint_fast8_t attempt = 0; (attempt < 50) && (!foundResponse); attempt++)
+	{
+		server.run_update();
+		timeSource.update_for_ms(5);
+
+		while ((!foundResponse) && plugin.read_frame(responseFrame, 10))
+		{
+			foundResponse = (0x12 == responseFrame.data[0]);
+		}
+	}
+	return foundResponse;
+}
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
 {
@@ -139,17 +177,13 @@ TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToThe
 
 	DerivedTestVTServer serverUnderTest(internalECU);
 	serverUnderTest.initialize();
+	EXPECT_TRUE(serverUnderTest.get_initialized());
 	testPlugin.clear_queue();
 
 	// An End of Object Pool message from a client that never registered with the server should be
 	// NACKed (it is connection-dependent, unlike the stateless Get Memory/Hardware/etc. messages),
 	// and per ISO 11783-6:2014 4.6.9 that NACK must be sent to the working set master, not broadcast.
-	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
-	                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-	                                                                                                   internalECU,
-	                                                                                                   client,
-	                                                                                                   { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
-	CANNetworkManager::CANNetwork.update();
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 
 	CANMessageFrame nackFrame = {};
 	time_source.update_for_ms(5);
@@ -164,4 +198,69 @@ TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToThe
 	EXPECT_EQ(client->get_address(), nackFrame.data[4]); // Address of the CF the NACK is about
 
 	CANHardwareInterface::stop();
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolFailsToParse)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x27, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x82, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	// A working set maintenance message with the initiate bit set connects this client to the server
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	// Object pool data that cannot be parsed into any object
+	receive_from_client(internalECU, client, { 0x11, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA });
+
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_end_of_object_pool_response(serverUnderTest, testPlugin, time_source, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
+	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolHasNoWorkingSetObject)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x28, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x83, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	// A single number variable object, which parses without error but leaves the pool with no working set object
+	receive_from_client(internalECU, client, { 0x11, 0x01, 0x00, 0x15, 0x00, 0x00, 0x00, 0x00 });
+
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_end_of_object_pool_response(serverUnderTest, testPlugin, time_source, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
+	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
 }
