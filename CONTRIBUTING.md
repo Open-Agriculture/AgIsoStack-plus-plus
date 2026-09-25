@@ -12,10 +12,15 @@ Our code style rules and PR reviews are based loosely on Autosar's `Guidelines f
 * It is recommended to call the docs/pre-commit-hook.sh as a git pre-commit hook.
   * ```ln -s $PWD/docs/pre-commit-hook.sh $PWD/.git/hooks/pre-commit; chmod +x docs/pre-commit-hook.sh``` will do this trick for you
 * Contributions should follow these additional style requirements, which will be checked in code reviews.
+  * Many of them are also checked by clang-tidy on the changed lines of each PR, using the checks in `.clang-tidy` and `scripts/clang_tidy/custom_checks.yaml`. You can run the same check locally before submitting your PR:
+    * Install clang-tidy 22 or newer, for example with `pip install clang-tidy==22.1.8`
+    * Generate a compilation database: `cmake -S . -B build -DBUILD_TESTING=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
+    * Run `scripts/clang_tidy/run_clang_tidy.sh -p build` to check the lines changed compared to `origin/main`, or add `--all` to check everything
   * Function names `snake_case`
   * Variables `camelCase`
   * Constant values `CAPITALIZED_SNAKE`
   * Constants on the left in `==` and `!=` checks. Like this: `if (5 == value)` NOT `if (value == 5)`. This is to prevent accidentally omitting an `=` in the operator and creating a runtime bug.
+  * Comparisons that are part of a `&&` or `||` condition are wrapped in parentheses. Like this: `if ((5 == value) && (nullptr != pointer))`
   * Copyright notice must be included in each file.
   * `NULL` should not be used when `nullptr` can be used
   * Explicit namespacing should be used for accessing namespaces outside of our namespace `isobus`, especially for the standard library `std::`
