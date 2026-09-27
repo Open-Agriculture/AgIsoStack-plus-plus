@@ -1930,11 +1930,12 @@ namespace isobus
 			buffer[6] = get_byte(parameterGroupNumber, 1);
 			buffer[7] = get_byte(parameterGroupNumber, 2);
 
+			// ISO 11783-6:2014 4.6.9: the NACK is sent to the working set master, not broadcast globally.
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
 			                                                        source,
-			                                                        nullptr,
+			                                                        destination,
 			                                                        get_priority());
 		}
 		return retVal;

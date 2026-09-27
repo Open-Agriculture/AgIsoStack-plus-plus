@@ -503,7 +503,7 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
-		std::uint16_t expectedLength = 40; // This is all strings lengths plus delimiters
+		std::uint16_t expectedLength = 41; // This is all strings lengths plus delimiters and number of versions field
 
 		// RTS Message
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
@@ -540,13 +540,13 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x1CEBABAA, testFrame.identifier); // BAM from address AA
 		EXPECT_EQ(0x01, testFrame.data[0]); // Sequence 1
-		EXPECT_EQ('U', testFrame.data[1]); // Version 0, index 0
-		EXPECT_EQ('n', testFrame.data[2]); // Version 0, index 1
-		EXPECT_EQ('i', testFrame.data[3]); // Version 0, index 2
-		EXPECT_EQ('t', testFrame.data[4]); // Version 0, index 3
-		EXPECT_EQ(' ', testFrame.data[5]); // Version 0, index 4
-		EXPECT_EQ('T', testFrame.data[6]); // Version 0, index 5
-		EXPECT_EQ('e', testFrame.data[7]); // Version 0, index 6
+		EXPECT_EQ(0x02, testFrame.data[1]); // Number of Software Identification Fields
+		EXPECT_EQ('U', testFrame.data[2]); // Version 0, index 0
+		EXPECT_EQ('n', testFrame.data[3]); // Version 0, index 1
+		EXPECT_EQ('i', testFrame.data[4]); // Version 0, index 2
+		EXPECT_EQ('t', testFrame.data[5]); // Version 0, index 3
+		EXPECT_EQ(' ', testFrame.data[6]); // Version 0, index 4
+		EXPECT_EQ('T', testFrame.data[7]); // Version 0, index 5
 
 		time_source.update_for_ms(51);
 
@@ -556,13 +556,13 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x1CEBABAA, testFrame.identifier); // BAM from address AA
 		EXPECT_EQ(0x02, testFrame.data[0]); // Sequence 2
-		EXPECT_EQ('s', testFrame.data[1]); // Version 0, index 7
-		EXPECT_EQ('t', testFrame.data[2]); // Version 0, index 8
-		EXPECT_EQ(' ', testFrame.data[3]); // Version 0, index 9
-		EXPECT_EQ('1', testFrame.data[4]); // Version 0, index 10
-		EXPECT_EQ('.', testFrame.data[5]); // Version 0, index 11
-		EXPECT_EQ('0', testFrame.data[6]); // Version 0, index 12
-		EXPECT_EQ('.', testFrame.data[7]); // Version 0, index 13
+		EXPECT_EQ('e', testFrame.data[1]); // Version 0, index 6
+		EXPECT_EQ('s', testFrame.data[2]); // Version 0, index 7
+		EXPECT_EQ('t', testFrame.data[3]); // Version 0, index 8
+		EXPECT_EQ(' ', testFrame.data[4]); // Version 0, index 9
+		EXPECT_EQ('1', testFrame.data[5]); // Version 0, index 10
+		EXPECT_EQ('.', testFrame.data[6]); // Version 0, index 11
+		EXPECT_EQ('0', testFrame.data[7]); // Version 0, index 12
 
 		time_source.update_for_ms(51);
 
@@ -572,13 +572,13 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x1CEBABAA, testFrame.identifier); // BAM from address AA
 		EXPECT_EQ(0x03, testFrame.data[0]); // Sequence 3
-		EXPECT_EQ('0', testFrame.data[1]); // Version 0, index 7
-		EXPECT_EQ('*', testFrame.data[2]); // Delimiter
-		EXPECT_EQ('A', testFrame.data[3]); // Version 1, index 0
-		EXPECT_EQ('n', testFrame.data[4]); // Version 1, index 1
-		EXPECT_EQ('o', testFrame.data[5]); // Version 1, index 2
-		EXPECT_EQ('t', testFrame.data[6]); // Version 1, index 3
-		EXPECT_EQ('h', testFrame.data[7]); // Version 1, index 4
+		EXPECT_EQ('.', testFrame.data[1]); // Version 0, index 13
+		EXPECT_EQ('0', testFrame.data[2]); // Delimiter
+		EXPECT_EQ('*', testFrame.data[3]); // Version 1, index 0
+		EXPECT_EQ('A', testFrame.data[4]); // Version 1, index 1
+		EXPECT_EQ('n', testFrame.data[5]); // Version 1, index 2
+		EXPECT_EQ('o', testFrame.data[6]); // Version 1, index 3
+		EXPECT_EQ('t', testFrame.data[7]); // Version 1, index 4
 
 		time_source.update_for_ms(51);
 
@@ -588,13 +588,13 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x1CEBABAA, testFrame.identifier); // BAM from address AA
 		EXPECT_EQ(0x04, testFrame.data[0]); // Sequence 4
-		EXPECT_EQ('e', testFrame.data[1]); // Version 0, index 7
-		EXPECT_EQ('r', testFrame.data[2]); // Delimiter
-		EXPECT_EQ(' ', testFrame.data[3]); // Version 1, index 5
-		EXPECT_EQ('v', testFrame.data[4]); // Version 1, index 6
-		EXPECT_EQ('e', testFrame.data[5]); // Version 1, index 7
-		EXPECT_EQ('r', testFrame.data[6]); // Version 1, index 8
-		EXPECT_EQ('s', testFrame.data[7]); // Version 1, index 9
+		EXPECT_EQ('h', testFrame.data[1]); // Version 1, index 5
+		EXPECT_EQ('e', testFrame.data[2]); // Version 1, index 6
+		EXPECT_EQ('r', testFrame.data[3]); // Version 1, index 7
+		EXPECT_EQ(' ', testFrame.data[4]); // Version 1, index 8
+		EXPECT_EQ('v', testFrame.data[5]); // Version 1, index 9
+		EXPECT_EQ('e', testFrame.data[6]); // Version 1, index 10
+		EXPECT_EQ('r', testFrame.data[7]); // Version 1, index 11
 
 		time_source.update_for_ms(51);
 
@@ -604,28 +604,25 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x1CEBABAA, testFrame.identifier); // BAM from address AA
 		EXPECT_EQ(0x05, testFrame.data[0]); // Sequence 5
-		EXPECT_EQ('i', testFrame.data[1]); // Version 0, index 7
-		EXPECT_EQ('o', testFrame.data[2]); // Delimiter
-		EXPECT_EQ('n', testFrame.data[3]); // Version 1, index 5
-		EXPECT_EQ(' ', testFrame.data[4]); // Version 1, index 6
-		EXPECT_EQ('x', testFrame.data[5]); // Version 1, index 7
-		EXPECT_EQ('.', testFrame.data[6]); // Version 1, index 8
-		EXPECT_EQ('x', testFrame.data[7]); // Version 1, index 9
-
-		time_source.update_for_ms(51);
-
+		EXPECT_EQ('s', testFrame.data[1]); // Version 1, index 12
+		EXPECT_EQ('i', testFrame.data[2]); // Version 1, index 13
+		EXPECT_EQ('o', testFrame.data[3]); // Version 1, index 14
+		EXPECT_EQ('n', testFrame.data[4]); // Version 1, index 15
+		EXPECT_EQ(' ', testFrame.data[5]); // Version 1, index 16
+		EXPECT_EQ('x', testFrame.data[6]); // Version 1, index 17
+		EXPECT_EQ('.', testFrame.data[7]); // Version 1, index 18
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// BAM Payload Frame 6
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x1CEBABAA, testFrame.identifier); // BAM from address AA
 		EXPECT_EQ(0x06, testFrame.data[0]); // Sequence 6
-		EXPECT_EQ('.', testFrame.data[1]); // Version 0, index 10
-		EXPECT_EQ('x', testFrame.data[2]); // Version 0, index 11
-		EXPECT_EQ('.', testFrame.data[3]); // Version 1, index 12
-		EXPECT_EQ('x', testFrame.data[4]); // Version 1, index 13
-		EXPECT_EQ('*', testFrame.data[5]); // Delimiter
-		EXPECT_EQ(0xFF, testFrame.data[6]); // Padding
+		EXPECT_EQ('x', testFrame.data[1]); // Version 1, index 19
+		EXPECT_EQ('.', testFrame.data[2]); // Version 1, index 20
+		EXPECT_EQ('x', testFrame.data[3]); // Version 1, index 21
+		EXPECT_EQ('.', testFrame.data[4]); // Version 1, index 22
+		EXPECT_EQ('x', testFrame.data[5]); // Version 1, index 23
+		EXPECT_EQ('*', testFrame.data[6]); // Delimiter
 		EXPECT_EQ(0xFF, testFrame.data[7]); // Padding
 
 		// Send EOM ACK

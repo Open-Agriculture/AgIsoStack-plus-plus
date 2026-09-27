@@ -7,6 +7,7 @@
 ///
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
+#include "../common/can_arguments_parser.hpp"
 #include "seeder.hpp"
 
 #include <atomic>
@@ -26,7 +27,9 @@ int main(int argc, char **argv)
 	Seeder seederExample;
 	std::signal(SIGINT, signal_handler);
 
-	if (seederExample.initialize(argc == 2 ? argv[1] : ""))
+	const auto canParameters = CanParametersParser(argc, argv).parameters();
+
+	if (seederExample.initialize(canParameters.interface, canParameters.driver))
 	{
 		while (running)
 		{

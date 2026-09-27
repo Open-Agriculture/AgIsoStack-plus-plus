@@ -27,7 +27,6 @@ TEST(DATA_DICTIONARY_TESTS, DDI_Lookups)
 	EXPECT_NEAR(0.0f, testEntry2.displayRange.first, 0.001);
 	EXPECT_NEAR(2147483647.0f, testEntry2.displayRange.second, 0.001);
 
-	// Test a DDI published since the previous snapshot
 	auto testEntry3 = DataDictionary::get_entry(695);
 	EXPECT_EQ(695, testEntry3.ddi);
 	EXPECT_EQ("Mesh Total Used", testEntry3.name);
@@ -37,7 +36,6 @@ TEST(DATA_DICTIONARY_TESTS, DDI_Lookups)
 	EXPECT_NEAR(0.0f, testEntry3.displayRange.first, 0.001);
 	EXPECT_NEAR(2147483647.0f, testEntry3.displayRange.second, 0.001);
 
-	// Test a DDI renamed in the latest ISO database revision
 	auto testEntry4 = DataDictionary::get_entry(505);
 	EXPECT_EQ(505, testEntry4.ddi);
 	EXPECT_EQ("Supported Track Control Levels", testEntry4.name);
@@ -47,13 +45,55 @@ TEST(DATA_DICTIONARY_TESTS, DDI_Lookups)
 	EXPECT_EQ(730, testEntry5.ddi);
 	EXPECT_EQ("Actual Tare Weight", testEntry5.name);
 
+	auto testEntry6 = DataDictionary::get_entry(740);
+	EXPECT_EQ(740, testEntry6.ddi);
+	EXPECT_EQ("Maximum Mechanical Power", testEntry6.name);
+	EXPECT_NEAR(0.1f, testEntry6.resolution, 0.001);
+	EXPECT_EQ("W", testEntry6.unitSymbol);
+	EXPECT_EQ("Mechanical Power", testEntry6.unitDescription);
+	EXPECT_NEAR(-214748364.8f, testEntry6.displayRange.first, 0.001);
+	EXPECT_NEAR(214748364.7f, testEntry6.displayRange.second, 0.001);
+
 	// Test an invalid, random ddi
-	auto testEntry6 = DataDictionary::get_entry(1957);
-	EXPECT_EQ(65535, testEntry6.ddi);
-	EXPECT_EQ("Unknown", testEntry6.name);
-	EXPECT_EQ(0, testEntry6.resolution);
-	EXPECT_EQ("Unknown", testEntry6.unitSymbol);
-	EXPECT_EQ("Unknown", testEntry6.unitDescription);
-	EXPECT_EQ(0.0f, testEntry6.displayRange.first);
-	EXPECT_EQ(0.0f, testEntry6.displayRange.second);
+	auto testEntry7 = DataDictionary::get_entry(1957);
+	EXPECT_EQ(65535, testEntry7.ddi);
+	EXPECT_EQ("Unknown", testEntry7.name);
+	EXPECT_EQ(0, testEntry7.resolution);
+	EXPECT_EQ("Unknown", testEntry7.unitSymbol);
+	EXPECT_EQ("Unknown", testEntry7.unitDescription);
+	EXPECT_EQ(0.0f, testEntry7.displayRange.first);
+	EXPECT_EQ(0.0f, testEntry7.displayRange.second);
+}
+
+TEST(DATA_DICTIONARY_TESTS, TrackControlLevelFormatting)
+{
+	EXPECT_EQ("No levels supported", DataDictionary::format_value_with_ddi(505, 0x00));
+	EXPECT_EQ("Level 1", DataDictionary::format_value_with_ddi(505, 0x01));
+	EXPECT_EQ("Level 2", DataDictionary::format_value_with_ddi(505, 0x02));
+	EXPECT_EQ("Level 1, Level 2", DataDictionary::format_value_with_ddi(505, 0x03));
+	EXPECT_EQ("Level 3", DataDictionary::format_value_with_ddi(505, 0x04));
+	EXPECT_EQ("Level 1, Level 3", DataDictionary::format_value_with_ddi(505, 0x05));
+	EXPECT_EQ("Level 2, Level 3", DataDictionary::format_value_with_ddi(505, 0x06));
+	EXPECT_EQ("Level 1, Level 2, Level 3", DataDictionary::format_value_with_ddi(505, 0x07));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(505, 0x08));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(505, -1));
+
+	EXPECT_EQ("No common level", DataDictionary::format_value_with_ddi(506, 0x00));
+	EXPECT_EQ("Level 1", DataDictionary::format_value_with_ddi(506, 0x01));
+	EXPECT_EQ("Level 2", DataDictionary::format_value_with_ddi(506, 0x02));
+	EXPECT_EQ("Level 3", DataDictionary::format_value_with_ddi(506, 0x03));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(506, 0x04));
+	EXPECT_EQ("Reserved", DataDictionary::format_value_with_ddi(506, -1));
+}
+
+TEST(DATA_DICTIONARY_TESTS, EnumeratedValueFormatting)
+{
+	EXPECT_EQ("Auto/on", DataDictionary::format_value_with_ddi(160, 0x01));
+	EXPECT_EQ("Clear", DataDictionary::format_value_with_ddi(210, 0x20524C43));
+	EXPECT_EQ("Function: Unknown, SubType: 0 (N/A)", DataDictionary::format_value_with_ddi(350, 0));
+	EXPECT_EQ("Slightly moist", DataDictionary::format_value_with_ddi(469, 0x02));
+	EXPECT_EQ("Not supported", DataDictionary::format_value_with_ddi(515, 0x03));
+	EXPECT_EQ("no rain in the last week", DataDictionary::format_value_with_ddi(587, 0x02));
+	EXPECT_EQ("Very fine", DataDictionary::format_value_with_ddi(36864, 0x02));
+	EXPECT_EQ("No droplet size available", DataDictionary::format_value_with_ddi(36864, 0xFF));
 }

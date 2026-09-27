@@ -185,10 +185,19 @@ namespace isobus
 			         " IOP components.");
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
-				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
+				if (iopFilesRawData[i].processed)
+				{
+					continue;
+				}
+
+				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size())))
 				{
 					lSuccess = false;
 					break;
+				}
+				else
+				{
+					iopFilesRawData[i].processed = true;
 				}
 			}
 
