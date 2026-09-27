@@ -792,6 +792,7 @@ namespace isobus
 		void update();
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
+		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 3000; ///< A working set master is considered to have unexpectedly shut down after this long without a message (ISO 11783-6:2014 4.6.9)
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher; ///< Event dispatcher for active data/alarm mask change events

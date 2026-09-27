@@ -204,36 +204,52 @@ namespace isobus
 	{
 		// Check if we're managing this CF
 		bool retVal = false;
+		const auto &data = message.get_data();
+		const auto &sourceControlFunction = message.get_source_control_function();
+		const bool isWorkingSetMasterInitMessage = ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
+		                                            (0 != (data[1] & 0x01))); // Init bit is set
 
 		// This is the static callback for the instance.
-		// See if we need to set up a new managed working set.
-		for (const auto &cf : managedWorkingSetList)
+		// See if this source is a working set we're already managing, or one that we were managing
+		// but stopped hearing from.
+		for (const auto &ws : managedWorkingSetList)
 		{
-			if (cf->get_control_function() == message.get_source_control_function())
+			if (ws->get_control_function() == sourceControlFunction)
 			{
-				// Found a match
+				const bool hasTimedOut = SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS);
+
+				if (hasTimedOut && !isWorkingSetMasterInitMessage)
+				{
+					// This working set has timed out, and this message is not a re-announcement, so
+					// it stays unmanaged until it re-announces itself. See ISO 11783-6:2014 4.6.9.
+					break;
+				}
+
+				if (hasTimedOut)
+				{
+					LOG_INFO("[VT Server]: Client %u re-established its working set after a maintenance timeout", sourceControlFunction->get_address());
+				}
+
+				// Any ECU->VT message is evidence that this working set is still alive, not just the
+				// Working Set Maintenance message.
+				ws->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 				retVal = true;
 				break;
 			}
 		}
 
-		if (!retVal)
+		if (!retVal && isWorkingSetMasterInitMessage)
 		{
-			const auto &data = message.get_data();
-			if ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
-			    (data[1] & 0x01)) // Init bit is set
-			{
-				// This CF is probably trying to initiate communication with us.
-				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
+			// This CF is probably trying to initiate communication with us.
+			managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(sourceControlFunction));
 
-				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
-				if (data[2] > get_vt_version_byte(get_version()))
-				{
-					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
-				}
-				managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				retVal = true;
+			LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
+			if (data[2] > get_vt_version_byte(get_version()))
+			{
+				LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
 			}
+			managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+			retVal = true;
 		}
 		return retVal;
 	}
@@ -673,10 +689,8 @@ namespace isobus
 
 			case Function::WorkingSetMaintenanceMessage:
 			{
-				if (0 != managedWorkingSet->get_working_set_maintenance_message_timestamp_ms())
-				{
-					managedWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				}
+				// The maintenance timestamp is refreshed for any ECU->VT message in check_if_source_is_managed(),
+				// so there is nothing further to do here.
 			}
 			break;
 
