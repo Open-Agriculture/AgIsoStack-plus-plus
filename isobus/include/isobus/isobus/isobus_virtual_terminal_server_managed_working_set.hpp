@@ -69,6 +69,12 @@ namespace isobus
 		/// @returns The control function that is the working set master
 		std::shared_ptr<ControlFunction> get_control_function() const;
 
+		/// @brief Re-associates this working set with a different control function instance for the
+		/// same working set master, such as when that NAME has re-claimed its address with a new
+		/// control function object after a timeout.
+		/// @param[in] value The control function to associate with this working set
+		void set_control_function(std::shared_ptr<ControlFunction> value);
+
 		/// @brief Returns the working set maintenance message timestamp
 		/// @returns The working set maintenance message timestamp in milliseconds
 		std::uint32_t get_working_set_maintenance_message_timestamp_ms() const;

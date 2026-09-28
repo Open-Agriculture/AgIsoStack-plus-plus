@@ -68,6 +68,11 @@ namespace isobus
 		return workingSetControlFunction;
 	}
 
+	void VirtualTerminalServerManagedWorkingSet::set_control_function(std::shared_ptr<ControlFunction> value)
+	{
+		workingSetControlFunction = value;
+	}
+
 	std::uint32_t VirtualTerminalServerManagedWorkingSet::get_working_set_maintenance_message_timestamp_ms() const
 	{
 		return workingSetMaintenanceMessageTimestamp_ms;
