@@ -232,7 +232,7 @@ namespace isobus
 					retVal = true;
 				}
 			}
-			else if (errno == ENETDOWN)
+			else if ((ENETDOWN == errno) || (ENODEV == errno))
 			{
 				close_because_down();
 			}
