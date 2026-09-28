@@ -83,6 +83,10 @@ namespace isobus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
+		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
+		/// @returns Always an empty string, because this driver does not report its failures
+		std::string get_last_error() const override;
+
 	private:
 		/// @brief Returns this object's device from the shared driver, or `nullptr` if the driver is not loaded
 		/// @returns The device for this object's channel, or `nullptr` if it is unavailable

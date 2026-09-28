@@ -15,6 +15,7 @@
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 struct sockaddr_can; ///< Forward declare the linux sockaddr_can struct
 
@@ -68,9 +69,26 @@ namespace isobus
 		/// @returns `true` if the name was changed, otherwise `false` (if the device is open this will return false)
 		bool set_name(const std::string &newName);
 
+		/// @brief Returns why the socket last failed to open, or why it was closed because the interface went down
+		/// @returns A description of the failure, or an empty string if nothing has failed since the last open()
+		std::string get_last_error() const override;
+
 	private:
+		/// @brief Closes the socket, then stores and logs why opening it failed
+		/// @param[in] reason Why the interface could not be opened
+		void fail_open(const std::string &reason);
+
+		/// @brief Stores and logs that the interface went down, then closes the socket
+		void close_because_down();
+
+		/// @brief Replaces the stored reason for the last failure
+		/// @param[in] error The new reason, or an empty string to clear it
+		void set_last_error(const std::string &error);
+
 		struct sockaddr_can *pCANDevice; ///< The structure for CAN sockets
 		std::string name; ///< The device name
+		std::string lastError; ///< Why the socket last failed, read by other threads
+		mutable Mutex lastErrorMutex; ///< Protects `lastError`
 		int fileDescriptor; ///< File descriptor for the socket
 	};
 }

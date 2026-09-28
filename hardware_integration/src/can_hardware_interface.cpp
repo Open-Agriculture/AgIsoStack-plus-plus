@@ -270,12 +270,18 @@ namespace isobus
 			// Ignored
 #endif
 		}
-		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
-			channel->start();
-		});
+		bool retVal = true;
+		for (std::uint8_t i = 0; i < hardwareChannels.size(); i++)
+		{
+			if ((nullptr != hardwareChannels[i]->frameHandler) && (!hardwareChannels[i]->start()))
+			{
+				LOG_ERROR("[HardwareInterface] Channel " + to_string(static_cast<unsigned int>(i)) + " failed to start, its driver is not valid after opening.");
+				retVal = false;
+			}
+		}
 
 		started = true;
-		return true;
+		return retVal;
 	}
 
 	bool CANHardwareInterface::stop()

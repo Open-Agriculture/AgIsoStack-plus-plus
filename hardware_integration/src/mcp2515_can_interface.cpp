@@ -417,4 +417,9 @@ namespace isobus
 		}
 		return retVal;
 	}
+
+	std::string MCP2515CANInterface::get_last_error() const
+	{
+		return "";
+	}
 }

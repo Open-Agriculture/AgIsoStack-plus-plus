@@ -99,4 +99,9 @@ namespace isobus
 
 		return (PCAN_ERROR_OK == result);
 	}
+
+	std::string PCANBasicWindowsPlugin::get_last_error() const
+	{
+		return "";
+	}
 }

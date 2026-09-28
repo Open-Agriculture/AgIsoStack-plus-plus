@@ -99,6 +99,11 @@ namespace isobus
 		return (CANAL_ERROR_SUCCESS == result);
 	}
 
+	std::string TouCANPlugin::get_last_error() const
+	{
+		return "";
+	}
+
 	bool TouCANPlugin::reconfigure(std::int16_t deviceID, std::uint32_t serialNumber, std::uint16_t baudRate)
 	{
 		bool retVal = false;

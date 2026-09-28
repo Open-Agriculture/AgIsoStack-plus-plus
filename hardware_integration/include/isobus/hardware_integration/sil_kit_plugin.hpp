@@ -89,6 +89,10 @@ namespace isobus
 		/// @returns `true` if the frame was sent, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
+		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
+		/// @returns Always an empty string, because this driver does not report its failures
+		std::string get_last_error() const override;
+
 	private:
 		static constexpr std::size_t MAX_QUEUE_SIZE = 1000; ///< Maximum number of frames buffered in the receive queue
 

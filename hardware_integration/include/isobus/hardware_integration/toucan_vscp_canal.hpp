@@ -67,6 +67,10 @@ namespace isobus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
+		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
+		/// @returns Always an empty string, because this driver does not report its failures
+		std::string get_last_error() const override;
+
 		/// @brief Changes previously set configuration parameters. Only works if the device is not open.
 		/// @param[in] deviceID The id to use for this device
 		/// @param[in] serialNumber The serial number of the CAN adapter to connect with

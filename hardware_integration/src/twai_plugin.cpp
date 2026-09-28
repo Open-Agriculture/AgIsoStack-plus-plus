@@ -135,5 +135,10 @@ namespace isobus
 		}
 		return retVal;
 	}
+
+	std::string TWAIPlugin::get_last_error() const
+	{
+		return "";
+	}
 }
 #endif // ESP_PLATFORM
