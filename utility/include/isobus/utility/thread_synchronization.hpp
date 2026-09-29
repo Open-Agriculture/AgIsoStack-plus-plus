@@ -33,9 +33,17 @@ namespace isobus
 	{
 	public:
 		template<typename Function>
-		explicit Thread(Function &&) {}
-		bool joinable() const { return false; }
-		bool is_current_thread() const { return false; }
+		explicit Thread(Function &&)
+		{
+		}
+		bool joinable() const
+		{
+			return false;
+		}
+		bool is_current_thread() const
+		{
+			return false;
+		}
 		void join() {}
 	};
 }
@@ -121,7 +129,7 @@ private:
 
 namespace isobus
 {
-	#if defined USE_CMSIS_RTOS2_THREADING
+#if defined USE_CMSIS_RTOS2_THREADING
 	/// @brief Creates an RTOS object on first use, allowing static wrapper construction.
 	template<typename Id>
 	class CMSISHandle
@@ -460,7 +468,7 @@ namespace isobus
 			std::abort();
 		}
 	}
-	#else
+#else
 	using Mutex = std::mutex;
 	using RecursiveMutex = std::recursive_mutex;
 	template<typename MutexType>
@@ -509,7 +517,7 @@ namespace isobus
 	{
 		std::this_thread::yield();
 	}
-	#endif
+#endif
 }
 /// @brief A macro to automatically lock a mutex and unlock it when the scope ends.
 /// @param type The type of the mutex.

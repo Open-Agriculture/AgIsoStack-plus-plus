@@ -122,7 +122,8 @@ add_library(HardwareIntegration ${HARDWARE_INTEGRATION_SRC}
                                 ${HARDWARE_INTEGRATION_INCLUDE})
 add_library(${PROJECT_NAME}::HardwareIntegration ALIAS HardwareIntegration)
 if(USE_CMSIS_RTOS2_THREADING)
-  target_compile_definitions(HardwareIntegration PUBLIC USE_CMSIS_RTOS2_THREADING)
+  target_compile_definitions(HardwareIntegration
+                             PUBLIC USE_CMSIS_RTOS2_THREADING)
 endif()
 
 target_compile_features(HardwareIntegration PUBLIC cxx_std_11)
