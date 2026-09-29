@@ -53,7 +53,8 @@ namespace isobus
 		/// @brief Assigns a CAN driver to a channel
 		/// @param[in] channelIndex The channel to assign to
 		/// @param[in] canDriver The driver to assign to the channel
-		/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
+		/// @note The function will fail if the channel is already assigned to a driver, if the driver is
+		/// already assigned to a different channel, or if the interface is already started
 		/// @returns `true` if the driver was assigned to the channel, otherwise `false`
 		static bool assign_can_channel_frame_handler(std::uint8_t channelIndex, std::shared_ptr<CANHardwarePlugin> canDriver);
 
