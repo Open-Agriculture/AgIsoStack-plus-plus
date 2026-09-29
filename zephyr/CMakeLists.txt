@@ -2,12 +2,15 @@ cmake_minimum_required(VERSION 3.20.0)
 
 set(CMAKE_INSTALL_INCLUDEDIR include)
 
+# Prefix source files with their directory for the existing library CMake files.
 function(prepend var prefix)
   set(listVar "")
   foreach(arg ${ARGN})
     list(APPEND listVar "${prefix}/${arg}")
   endforeach()
-  set(${var} "${listVar}" PARENT_SCOPE)
+  set(${var}
+      "${listVar}"
+      PARENT_SCOPE)
 endfunction()
 
 if(NOT CONFIG_AGISOSTACK_CMSIS_RTOS2_THREADING)
