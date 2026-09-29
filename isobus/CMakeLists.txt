@@ -155,6 +155,9 @@ if(NOT CAN_PORT_MAXIMUM_VALUE STREQUAL "4")
 endif()
 target_compile_definitions(
   Isobus PUBLIC CAN_PORT_MAXIMUM_VALUE=${CAN_PORT_MAXIMUM_VALUE})
+if(USE_CMSIS_RTOS2_THREADING)
+  target_compile_definitions(Isobus PUBLIC USE_CMSIS_RTOS2_THREADING)
+endif()
 
 target_compile_features(Isobus PUBLIC cxx_std_11)
 set_target_properties(Isobus PROPERTIES CXX_EXTENSIONS OFF)

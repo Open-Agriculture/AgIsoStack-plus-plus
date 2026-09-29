@@ -34,18 +34,31 @@ option(
   CAN_STACK_DISABLE_THREADS
   "Set to ON to disable multi-threading, which removes the need for std::thread, std::mutex, and related libraries."
   OFF)
+option(USE_CMSIS_RTOS2_THREADING
+       "Use CMSIS-RTOS2 for the CAN stack's threading primitives." OFF)
 
-# Disable threads if the toolchain doesn't support them
-check_std_thread_support(STD_THREAD_SUPPORTED)
-if(NOT STD_THREAD_SUPPORTED)
-  message(
-    WARNING
-      "C++ threading model is not supported. Setting CAN_STACK_DISABLE_THREADS to ON."
-  )
-  set(CAN_STACK_DISABLE_THREADS ON)
+if(USE_CMSIS_RTOS2_THREADING AND CAN_STACK_DISABLE_THREADS)
+  message(FATAL_ERROR "USE_CMSIS_RTOS2_THREADING and CAN_STACK_DISABLE_THREADS cannot both be enabled.")
 endif()
 
-if(NOT CAN_STACK_DISABLE_THREADS AND NOT ARDUINO)
+if(USE_CMSIS_RTOS2_THREADING AND ARDUINO)
+  message(FATAL_ERROR "USE_CMSIS_RTOS2_THREADING cannot be used with ARDUINO.")
+endif()
+
+# Fall back to no-thread mode when the toolchain lacks std::thread, unless
+# CMSIS-RTOS2 was explicitly selected as the threading backend.
+if(NOT CAN_STACK_DISABLE_THREADS AND NOT USE_CMSIS_RTOS2_THREADING)
+  check_std_thread_support(STD_THREAD_SUPPORTED)
+  if(NOT STD_THREAD_SUPPORTED)
+    message(
+      WARNING
+        "C++ threading model is not supported. Setting CAN_STACK_DISABLE_THREADS to ON."
+    )
+    set(CAN_STACK_DISABLE_THREADS ON)
+  endif()
+endif()
+
+if(NOT CAN_STACK_DISABLE_THREADS AND NOT ARDUINO AND NOT USE_CMSIS_RTOS2_THREADING)
   # Find packages required for Threading
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   # ESP-IDF doesn't implement find_package(Threads) correctly (dec 2022)
