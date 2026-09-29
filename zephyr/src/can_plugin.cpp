@@ -43,7 +43,7 @@ namespace isobus
 			return;
 		}
 
-		struct can_filter standardFilter {};
+		struct can_filter standardFilter{};
 		standardFilter.id = 0;
 		standardFilter.mask = 0;
 		standardFilter.flags = 0;
@@ -54,7 +54,7 @@ namespace isobus
 			return;
 		}
 
-		struct can_filter extendedFilter {};
+		struct can_filter extendedFilter{};
 		extendedFilter.id = 0;
 		extendedFilter.mask = 0;
 		extendedFilter.flags = CAN_FILTER_IDE;
@@ -142,7 +142,7 @@ namespace isobus
 			return false;
 		}
 
-		struct can_frame frame {};
+		struct can_frame frame{};
 		frame.id = canFrame.identifier;
 		frame.dlc = canFrame.dataLength;
 		frame.flags = canFrame.isExtendedFrame ? CAN_FRAME_IDE : 0;
@@ -173,10 +173,9 @@ namespace isobus
 			return;
 		}
 
-		isobus::CANMessageFrame convertedFrame {};
+		isobus::CANMessageFrame convertedFrame{};
 		convertedFrame.timestamp_us = k_ticks_to_us_floor64(k_uptime_ticks());
 		convertedFrame.identifier = frame.id;
-		convertedFrame.channel = 0;
 		convertedFrame.dataLength = frame.dlc;
 		convertedFrame.isExtendedFrame = (frame.flags & CAN_FRAME_IDE) != 0;
 		std::copy_n(frame.data, frame.dlc, convertedFrame.data);

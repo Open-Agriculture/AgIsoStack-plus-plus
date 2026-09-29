@@ -82,7 +82,7 @@ int main()
 	extendedFrame.identifier = 0x1ABCDE;
 	extendedFrame.isExtendedFrame = true;
 	const bool sent = isobus::CANHardwareInterface::transmit_can_frame(standardFrame) &&
-	                  isobus::CANHardwareInterface::transmit_can_frame(extendedFrame);
+	  isobus::CANHardwareInterface::transmit_can_frame(extendedFrame);
 	const int64_t deadline = k_uptime_get() + 1000;
 	while (sent && (receivedFrames.load() != 3) && (k_uptime_get() < deadline))
 	{

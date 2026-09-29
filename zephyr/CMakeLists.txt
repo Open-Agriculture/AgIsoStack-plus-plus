@@ -28,8 +28,10 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../isobus
                  ${CMAKE_CURRENT_BINARY_DIR}/agisostack_isobus)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../hardware_integration
                  ${CMAKE_CURRENT_BINARY_DIR}/agisostack_hardware_integration)
-target_sources(HardwareIntegration PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/can_plugin.cpp)
-target_include_directories(HardwareIntegration PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+target_sources(HardwareIntegration
+               PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/can_plugin.cpp)
+target_include_directories(HardwareIntegration
+                           PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
 foreach(target Utility Isobus HardwareIntegration)
   target_link_libraries(${target} PUBLIC zephyr_interface)

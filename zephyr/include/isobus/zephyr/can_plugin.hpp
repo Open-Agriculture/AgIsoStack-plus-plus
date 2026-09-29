@@ -43,7 +43,7 @@ namespace isobus
 		std::array<isobus::CANMessageFrame, RX_QUEUE_SIZE> receiveQueue{};
 		std::size_t receiveHead = 0;
 		std::size_t receiveCount = 0;
-		struct k_spinlock receiveLock {};
+		struct k_spinlock receiveLock{};
 	};
 } // namespace isobus
 
