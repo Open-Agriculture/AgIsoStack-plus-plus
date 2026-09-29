@@ -61,7 +61,7 @@ namespace isobus
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			if (spawnThread)
 			{
-				workerThread = new Thread([this]() { worker_thread_function(); });
+				workerThread.reset(new Thread([this]() { worker_thread_function(); }));
 			}
 #endif
 			initialized = true;
@@ -268,8 +268,7 @@ namespace isobus
 			if ((nullptr != workerThread) && !workerThread->is_current_thread())
 			{
 				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
+				workerThread.reset();
 			}
 #endif
 		}

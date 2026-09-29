@@ -17,6 +17,7 @@
 #include "isobus/utility/thread_synchronization.hpp"
 
 #include <list>
+#include <memory>
 
 namespace isobus
 {
@@ -718,7 +719,7 @@ namespace isobus
 		std::list<ProcessDataCallbackInfo> measurementOnChangeThresholdCommands; ///< A list of measurement commands that will be processed when the value changes by the specified amount
 		Mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		Thread *workerThread = nullptr; ///< The worker thread that updates this interface
+		std::unique_ptr<Thread> workerThread; ///< The worker thread that updates this interface
 #endif
 		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback
 		std::string previousStructureLabel; ///< Stores the last structure label we used, helps to warn the user if they aren't updating the label properly
