@@ -77,7 +77,7 @@ namespace isobus
 
 	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_object_id()
 	{
-		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		LockGuard<Mutex> lock(managedWorkingSetMutex);
 		return faultingObjectID;
 	}
 
@@ -2469,7 +2469,7 @@ namespace isobus
 
 	void VirtualTerminalWorkingSetBase::set_object_pool_faulting_object_id(std::uint16_t value)
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		faultingObjectID = value;
 	}
 

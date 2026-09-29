@@ -23,10 +23,6 @@
 #include <string>
 #include <vector>
 
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <thread>
-#endif
-
 namespace isobus
 {
 	//================================================================================================
@@ -1647,7 +1643,7 @@ namespace isobus
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
+		Thread *workerThread = nullptr; ///< The worker thread that updates this interface
 #endif
 		bool firstTimeInState = false; ///< Stores if the current update cycle is the first time a state machine state has been processed
 		bool initialized = false; ///< Stores the client initialization state
