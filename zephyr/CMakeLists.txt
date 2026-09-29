@@ -33,5 +33,5 @@ foreach(target Utility Isobus HardwareIntegration)
   target_link_libraries(${target} PUBLIC zephyr_interface)
 endforeach()
 
-# Applications can use the standard AgIsoStack++ component headers directly.
-target_include_directories(Isobus INTERFACE ${CMAKE_CURRENT_LIST_DIR}/include)
+# Applications can use the Zephyr time source through the utility target.
+target_include_directories(Utility INTERFACE ${CMAKE_CURRENT_LIST_DIR}/include)
