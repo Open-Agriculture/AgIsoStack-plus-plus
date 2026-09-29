@@ -18,8 +18,8 @@
 namespace isobus
 {
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-	std::unique_ptr<std::thread> CANHardwareInterface::updateThread;
-	std::condition_variable CANHardwareInterface::updateThreadWakeupCondition;
+	std::unique_ptr<Thread> CANHardwareInterface::updateThread;
+	ConditionVariable CANHardwareInterface::updateThreadWakeupCondition;
 #endif
 	std::uint32_t CANHardwareInterface::periodicUpdateInterval = PERIODIC_UPDATE_INTERVAL;
 	std::uint32_t CANHardwareInterface::lastUpdateTimestamp;
@@ -113,7 +113,7 @@ namespace isobus
 		receiveThreadRunning = true;
 		if (nullptr == receiveMessageThread)
 		{
-			receiveMessageThread.reset(new std::thread([this]() { receive_thread_function(); }));
+			receiveMessageThread.reset(new Thread([this]() { receive_thread_function(); }));
 		}
 	}
 
@@ -139,7 +139,7 @@ namespace isobus
 				if (!receive_can_frame())
 				{
 					// There was no frame to receive, so if any other thread wants to do something, let it.
-					std::this_thread::yield();
+					yield();
 				}
 				else
 				{
@@ -148,7 +148,7 @@ namespace isobus
 			}
 			else
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Arbitrary, but don't want to infinite loop on the validity check.
+				sleep_for(std::chrono::milliseconds(1000)); // Arbitrary, but don't want to infinite loop on the validity check.
 			}
 		}
 	}
@@ -424,13 +424,13 @@ namespace isobus
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 	void CANHardwareInterface::update_thread_function()
 	{
-		std::unique_lock<std::mutex> hardwareLock(hardwareChannelsMutex);
+		UniqueLock<Mutex> hardwareLock(hardwareChannelsMutex);
 		// Wait until everything is running
 		hardwareLock.unlock();
 
 		while (started)
 		{
-			std::unique_lock<std::mutex> threadLock(updateMutex);
+			UniqueLock<Mutex> threadLock(updateMutex);
 			updateThreadWakeupCondition.wait_for(threadLock, std::chrono::milliseconds(periodicUpdateInterval)); // Update with at least the periodic interval
 			update();
 		}
@@ -441,7 +441,7 @@ namespace isobus
 		started = true;
 		if (nullptr == updateThread)
 		{
-			updateThread.reset(new std::thread(update_thread_function));
+			updateThread.reset(new Thread(update_thread_function));
 		}
 	}
 

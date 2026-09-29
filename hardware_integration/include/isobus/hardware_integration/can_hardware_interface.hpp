@@ -14,17 +14,13 @@
 #include "isobus/isobus/can_hardware_abstraction.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <deque>
 #include <vector>
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <condition_variable>
-#include <thread>
-#endif
 
 namespace isobus
 {
@@ -153,7 +149,7 @@ namespace isobus
 			/// @brief The receiving thread loop for this CAN channel
 			void receive_thread_function();
 
-			std::unique_ptr<std::thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
+			std::unique_ptr<Thread> receiveMessageThread; ///< Thread to manage getting messages from a CAN channel
 			std::atomic_bool receiveThreadRunning = { false }; ///< Flag to indicate if the receive thread is running
 #endif
 
@@ -183,8 +179,8 @@ namespace isobus
 		/// @brief Stops all threads related to the hardware interface
 		static void stop_threads();
 
-		static std::unique_ptr<std::thread> updateThread; ///< The main thread
-		static std::condition_variable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
+		static std::unique_ptr<Thread> updateThread; ///< The main thread
+		static ConditionVariable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
 #endif
 		static std::uint32_t lastUpdateTimestamp; ///< The last time the network manager was updated
 		static std::uint32_t periodicUpdateInterval; ///< The period between calls to the network manager update function in milliseconds
