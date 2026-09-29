@@ -120,7 +120,11 @@ private:
 
 #if defined USE_CMSIS_RTOS2_THREADING
 #include <functional>
+#if defined __ZEPHYR__
+#include <zephyr/portability/cmsis_os2.h>
+#else
 #include "cmsis_os2.h"
+#endif
 #else
 #include <condition_variable>
 #include <mutex>
@@ -218,7 +222,7 @@ namespace isobus
 		static osMutexId_t create()
 		{
 			osMutexAttr_t attributes = {};
-			attributes.attr_bits = Recursive ? osMutexRecursive : 0U;
+			attributes.attr_bits = osMutexPrioInherit | (Recursive ? osMutexRecursive : 0U);
 			return osMutexNew(&attributes);
 		}
 
