@@ -122,6 +122,7 @@ private:
 namespace isobus
 {
 	#if defined USE_CMSIS_RTOS2_THREADING
+	/// @brief Creates an RTOS object on first use, allowing static wrapper construction.
 	template<typename Id>
 	class CMSISHandle
 	{
@@ -137,11 +138,6 @@ namespace isobus
 			{
 				return nullptr;
 			}
-			if (osKernelInactive == osKernelGetState())
-			{
-				return nullptr;
-			}
-
 			unsigned int uninitialized = 0U;
 			if (status.compare_exchange_strong(uninitialized, 1U, std::memory_order_acq_rel))
 			{
@@ -153,11 +149,6 @@ namespace isobus
 			state = uninitialized;
 			while (1U == state)
 			{
-				// Static synchronization objects may first be used after osKernelInitialize().
-				if (osKernelRunning != osKernelGetState())
-				{
-					return nullptr;
-				}
 				osDelay(1U);
 				state = status.load(std::memory_order_acquire);
 			}
@@ -335,7 +326,13 @@ namespace isobus
 
 		void join()
 		{
-			if (!joinable() || is_current_thread() || (osOK != osThreadJoin(thread)))
+			if (!joinable() || is_current_thread())
+			{
+				std::abort();
+			}
+			const auto result = osThreadJoin(thread);
+			// Zephyr reports osErrorResource if the joinable thread already exited.
+			if ((osOK != result) && !((osErrorResource == result) && (osThreadTerminated == osThreadGetState(thread))))
 			{
 				std::abort();
 			}
@@ -374,6 +371,7 @@ namespace isobus
 	}
 
 	/// @brief CMSIS event flag wait for one waiting thread per instance.
+	/// @note notify_all() wakes that one waiter; sharing this instance among waiters is unsupported.
 	class ConditionVariable
 	{
 	public:
