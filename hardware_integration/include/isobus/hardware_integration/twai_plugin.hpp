@@ -67,10 +67,6 @@ namespace isobus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
-		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
-		/// @returns Always an empty string, because this driver does not report its failures
-		std::string get_last_error() const override;
-
 	private:
 		const twai_general_config_t *generalConfig;
 		const twai_timing_config_t *timingConfig;

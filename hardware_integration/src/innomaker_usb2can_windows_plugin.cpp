@@ -352,9 +352,4 @@ namespace isobus
 		}
 		return success;
 	}
-
-	std::string InnoMakerUSB2CANWindowsPlugin::get_last_error() const
-	{
-		return "";
-	}
 }

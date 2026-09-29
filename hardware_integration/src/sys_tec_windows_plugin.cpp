@@ -164,9 +164,4 @@ namespace isobus
 		}
 		return retVal;
 	}
-
-	std::string SysTecWindowsPlugin::get_last_error() const
-	{
-		return "";
-	}
 }

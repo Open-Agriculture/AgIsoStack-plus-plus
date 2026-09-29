@@ -65,10 +65,6 @@ namespace isobus
 		/// @returns `true` if the frame was written, otherwise `false`
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
-		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
-		/// @returns Always an empty string, because this driver does not report its failures
-		std::string get_last_error() const override;
-
 	private:
 		std::uint32_t serialNumber = 0; ///< The serial number to connect to, or 0 if not used
 		std::uint16_t baudrateConstant = USBCAN_BAUD_250kBit; ///< The constant used to configure the adapter's baudrate

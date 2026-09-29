@@ -245,8 +245,4 @@ namespace isobus
 		}
 	}
 
-	std::string SILKitPlugin::get_last_error() const
-	{
-		return "";
-	}
 } // namespace isobus

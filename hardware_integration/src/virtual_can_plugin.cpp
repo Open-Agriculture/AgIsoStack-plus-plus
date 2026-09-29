@@ -74,11 +74,6 @@ namespace isobus
 		return retVal;
 	}
 
-	std::string VirtualCANPlugin::get_last_error() const
-	{
-		return "";
-	}
-
 	void VirtualCANPlugin::write_frame_as_if_received(const isobus::CANMessageFrame &canFrame) const
 	{
 		const std::lock_guard<std::mutex> lock(mutex);

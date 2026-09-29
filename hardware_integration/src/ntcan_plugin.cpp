@@ -156,11 +156,6 @@ namespace isobus
 		return (NTCAN_SUCCESS == result && 1 == count);
 	}
 
-	std::string NTCANPlugin::get_last_error() const
-	{
-		return "";
-	}
-
 	bool NTCANPlugin::reconfigure(int channel, int baudrate)
 	{
 		bool retVal = false;

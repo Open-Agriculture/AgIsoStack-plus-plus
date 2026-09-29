@@ -54,7 +54,11 @@ namespace isobus
 
 		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
 		/// @returns A description of the last failure, or an empty string if there is none
-		virtual std::string get_last_error() const = 0;
+		/// @details The default implementation always returns an empty string, for drivers which don't report failure reasons
+		virtual std::string get_last_error() const
+		{
+			return {};
+		}
 	};
 }
 #endif // CAN_HARDEWARE_PLUGIN_HPP

@@ -94,9 +94,4 @@ namespace isobus
 
 		return (PCAN_ERROR_OK == result);
 	}
-
-	std::string MacCANPCANPlugin::get_last_error() const
-	{
-		return "";
-	}
 }

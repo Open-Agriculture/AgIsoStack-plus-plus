@@ -128,9 +128,4 @@ namespace isobus
 #endif
 		return retVal;
 	}
-
-	std::string FlexCANT4Plugin::get_last_error() const
-	{
-		return "";
-	}
 }
