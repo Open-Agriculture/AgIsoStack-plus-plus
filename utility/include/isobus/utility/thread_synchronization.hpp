@@ -478,7 +478,7 @@ namespace isobus
 	class Thread
 	{
 	public:
-		template<typename Function>
+		template<typename Function, typename = typename std::enable_if<!std::is_same<typename std::decay<Function>::type, Thread>::value>::type>
 		explicit Thread(Function &&function) :
 		  thread(std::forward<Function>(function))
 		{
