@@ -14,6 +14,7 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 
 #include <chrono>
+#include <cstring>
 #include <thread>
 
 namespace isobus
@@ -46,11 +47,11 @@ namespace isobus
 	{
 		if (NTCAN_NO_HANDLE != handle)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Attempting to open a connection that is already open");
+			LOG_ERROR("[NTCAN]: Attempting to open a connection that is already open");
 		}
 		std::uint32_t mode = 0;
-		std::int32_t txQueueSize = min( NTCAN_MAX_TX_QUEUESIZE, 256 );
-		std::int32_t rxQueueSize = min( NTCAN_MAX_RX_QUEUESIZE, 256 );
+		std::int32_t txQueueSize = 256;
+		std::int32_t rxQueueSize = 256;
 		std::int32_t txTimeOut = 1000;
 		std::int32_t rxTimeOut = 1000;
 
@@ -58,7 +59,7 @@ namespace isobus
 
 		if (NTCAN_SUCCESS != openResult)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to open the connection");
+			LOG_ERROR("[NTCAN]: Error trying to open the connection");
 			return;
 		}
 
@@ -67,7 +68,7 @@ namespace isobus
 		openResult = canSetBaudrate(handle, baudrate);
 		if (NTCAN_SUCCESS != openResult)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to set the baudrate");
+			LOG_ERROR("[NTCAN]: Error trying to set the baudrate");
 			close();
 			return;
 		}
@@ -75,24 +76,27 @@ namespace isobus
 		openResult = canStatus(handle, &status);
 		if (NTCAN_SUCCESS != openResult)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to get the status");
+			LOG_ERROR("[NTCAN]: Error trying to get the status");
 			close();
 			return;
 		}
 
 		if (NTCAN_FEATURE_TIMESTAMP == (status.features & NTCAN_FEATURE_TIMESTAMP))
 		{
-			isobus::CANStackLogger::debug("[NTCAN]: have timestamp feature");
+			LOG_DEBUG("[NTCAN]: have timestamp feature");
 			std::uint64_t timestamp = 0;
 			openResult = canIoctl(handle, NTCAN_IOCTL_GET_TIMESTAMP_FREQ, &timestampFreq);
 			if (NTCAN_SUCCESS == openResult)
 			{
 				openResult = canIoctl(handle, NTCAN_IOCTL_GET_TIMESTAMP, &timestamp);
-				if (NTCAN_SUCCESS != openResult) {
-					isobus::CANStackLogger::error("[NTCAN]: Error NTCAN_IOCTL_GET_TIMESTAMP failed");
+				if (NTCAN_SUCCESS != openResult)
+				{
+					LOG_ERROR("[NTCAN]: Error NTCAN_IOCTL_GET_TIMESTAMP failed");
 				}
-			} else {
-				isobus::CANStackLogger::error("[NTCAN]: Error NTCAN_IOCTL_GET_TIMESTAMP_FREQ failed");
+			}
+			else
+			{
+				LOG_ERROR("[NTCAN]: Error NTCAN_IOCTL_GET_TIMESTAMP_FREQ failed");
 			}
 			if (NTCAN_SUCCESS == openResult)
 			{
@@ -103,67 +107,61 @@ namespace isobus
 			}
 		}
 
-		bool smart_filt = true;
-		if (NTCAN_FEATURE_SMART_ID_FILTER != (status.features & NTCAN_FEATURE_SMART_ID_FILTER))
+		if (NTCAN_FEATURE_SMART_ID_FILTER == (status.features & NTCAN_FEATURE_SMART_ID_FILTER))
 		{
-			isobus::CANStackLogger::debug("[NTCAN]: do not have Smart ID Filter feature");
-			smart_filt = false;
-		}
-		 
-		if (smart_filt) {
 			std::int32_t ids = (1 << 11);
 			openResult = canIdRegionAdd(handle, 0, &ids);
-			if (NTCAN_SUCCESS != openResult || (NTCAN_SUCCESS == openResult && ids != (1 << 11)))
+			if ((NTCAN_SUCCESS != openResult) || ((1 << 11) != ids))
 			{
 				openResult = NTCAN_INSUFFICIENT_RESOURCES;
-				isobus::CANStackLogger::error("[NTCAN]: Error trying to add the standard ID region");
-				close();
-				return;
-			}
-			ids = (1 << 29);
-			openResult = canIdRegionAdd(handle, NTCAN_20B_BASE, &ids);
-			if (NTCAN_SUCCESS != openResult || (NTCAN_SUCCESS == openResult && ids != (1 << 29)))
-			{
-				openResult = NTCAN_INSUFFICIENT_RESOURCES;
-				isobus::CANStackLogger::error("[NTCAN]: Error trying to add the extended ID region");
+				LOG_ERROR("[NTCAN]: Error trying to add the standard ID region");
 				close();
 				return;
 			}
 
-		} else {
-			// cannot use canIdRegionAdd() with old esd devices/drivers like "CAN-USB" first gen
-			std::int32_t id;
-			for (id = 0; id < 0x7FF; id++) {
+			ids = (1 << 29);
+			openResult = canIdRegionAdd(handle, NTCAN_20B_BASE, &ids);
+			if ((NTCAN_SUCCESS != openResult) || ((1 << 29) != ids))
+			{
+				openResult = NTCAN_INSUFFICIENT_RESOURCES;
+				LOG_ERROR("[NTCAN]: Error trying to add the extended ID region");
+				close();
+				return;
+			}
+		}
+		else
+		{
+			// Older devices such as the first generation CAN-USB don't support canIdRegionAdd()
+			LOG_DEBUG("[NTCAN]: do not have Smart ID Filter feature");
+			for (std::int32_t id = 0; id < (1 << 11); id++)
+			{
 				openResult = canIdAdd(handle, id);
-				if(openResult != NTCAN_SUCCESS) {
+				if (NTCAN_SUCCESS != openResult)
+				{
 					openResult = NTCAN_INSUFFICIENT_RESOURCES;
-					isobus::CANStackLogger::error("[NTCAN]: Error trying to add the standard ID region (no SmartId filter)");
+					LOG_ERROR("[NTCAN]: Error trying to add the standard ID region (no SmartId filter)");
 					close();
 					return;
 				}
 			}
-			// Without SmartId filter: As soon as an arbitrary 29-bit CAN-ID is enabled with canIdAdd()
-			// all 29-bit CAN-IDs will pass the first filter stage, bcs. AMR register is default initialized 
-			// to 0x1FFFFFFF.
-			id = NTCAN_20B_BASE;
-			openResult = canIdAdd(handle, id);
-			if(openResult != NTCAN_SUCCESS) {
+
+			// Without the SmartId filter, enabling any one 29-bit ID lets all 29-bit IDs through,
+			// because the AMR register defaults to 0x1FFFFFFF
+			openResult = canIdAdd(handle, NTCAN_20B_BASE);
+			if (NTCAN_SUCCESS != openResult)
+			{
 				openResult = NTCAN_INSUFFICIENT_RESOURCES;
-				isobus::CANStackLogger::error("[NTCAN]: Error trying to add the extended ID region (no SmartId filter)");
+				LOG_ERROR("[NTCAN]: Error trying to add the extended ID region (no SmartId filter)");
 				close();
 				return;
 			}
 		}
-		
-		if(1) {
-			std::int32_t id = NTCAN_EV_CAN_ERROR;	// canReadT() will report error events
-			NTCAN_RESULT res = canIdAdd(handle, id);
-			if(res != NTCAN_SUCCESS) {
-				isobus::CANStackLogger::warn("[NTCAN]: failed to enable CAN error event reporting");
-			}
-		}
-		//#define NTCAN_IS_EVENT(id)
 
+		// Makes canReadT() also return CAN error events, which read_frame() logs
+		if (NTCAN_SUCCESS != canIdAdd(handle, NTCAN_EV_CAN_ERROR))
+		{
+			LOG_WARNING("[NTCAN]: failed to enable CAN error event reporting");
+		}
 	}
 
 	bool NTCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)
@@ -175,51 +173,32 @@ namespace isobus
 
 		result = canReadT(handle, &msgCanMessage, &count, nullptr);
 
-		if (NTCAN_SUCCESS != result || 1 != count) {
+		if ((NTCAN_SUCCESS != result) || (1 != count))
+		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			return false;
 		}
-		
-		if ( NTCAN_IS_EVENT(msgCanMessage.id) ) {
-			// got a an event frame
-			EVMSG_T *msgCanEvent = (EVMSG_T*)&msgCanMessage;
-			std::uint32_t evt_len = msgCanEvent->len & 0x0F;
-			switch (msgCanEvent->evid) {
-			case NTCAN_EV_CAN_ERROR:
-				{
-					const EV_CAN_ERROR &err(msgCanEvent->evdata.error);
-					// uint8_t err.can_status;     // CAN controller status
-					// uint8_t err.dma_stall;      // DMA stall counter (HW dependent)
-					// uint8_t err.ctrl_overrun;   // Controller overruns
-					// uint8_t err.fifo_overrun;   // Driver FIFO overruns
-				}
-				break;
-			default:
-				;  // ignore
+		else if (NTCAN_IS_EVENT(msgCanMessage.id))
+		{
+			NTCAN_FORMATEVENT_PARAMS par = { 0 };
+			par.timestamp = msgCanMessage.timestamp;
+			par.timestamp_freq = timestampFreq;
+			char eventText[128] = { 0 };
+			// canReadT() returns events in a CMSG_T, whose leading fields have the EVMSG layout
+			if (NTCAN_SUCCESS == canFormatEvent(reinterpret_cast<EVMSG *>(&msgCanMessage), &par, eventText, sizeof(eventText)))
+			{
+				eventText[sizeof(eventText) - 1] = '\0';
+				LOG_WARNING("[NTCAN EVT]: %s", eventText);
 			}
-			if (1) {	// print EVT message
-				NTCAN_FORMATEVENT_PARAMS par = { 0 };
-				par.timestamp = msgCanEvent->timestamp;
-				par.timestamp_freq = timestampFreq;
-				par.num_baudrate = baudrate; // ???
-				char evt_msg[128];
-				evt_msg[0] = '\0';
-				result = canFormatEvent( (EVMSG*)msgCanEvent, &par, evt_msg, sizeof evt_msg);
-				if (NTCAN_SUCCESS == result) {
-					evt_msg[sizeof evt_msg -1] ='\0';
-					isobus::CANStackLogger::warn("[NTCAN EVT]: %s", evt_msg);
-				}
-			}
-			// no sleep here!
-			return false;
-		} else {
-			// got a data frame, might be CC or FD
+		}
+		else
+		{
 			canFrame.dataLength = NTCAN_LEN_TO_DATASIZE(msgCanMessage.len);
-			memcpy(canFrame.data, msgCanMessage.data, canFrame.dataLength);
-			canFrame.identifier = NTCAN_ID(msgCanMessage.id);  // lower 29 bits
+			std::memcpy(canFrame.data, msgCanMessage.data, canFrame.dataLength);
+			canFrame.identifier = NTCAN_ID(msgCanMessage.id);
 			canFrame.isExtendedFrame = NTCAN_IS_EFF(msgCanMessage.id) ? 1 : 0;
 			canFrame.timestamp_us = msgCanMessage.timestamp * 1000000 / timestampFreq + timestampOffset;
-			if (msgCanMessage.msg_lost > 0) {
+			if (msgCanMessage.msg_lost > 0)
+			{
 				numLostMsgs += msgCanMessage.msg_lost;
 			}
 			retVal = true;
@@ -235,7 +214,7 @@ namespace isobus
 
 		msgCanMessage.id = canFrame.isExtendedFrame ? (canFrame.identifier | NTCAN_20B_BASE) : canFrame.identifier;
 		msgCanMessage.len = canFrame.dataLength;
-		memcpy(msgCanMessage.data, canFrame.data, canFrame.dataLength);
+		std::memcpy(msgCanMessage.data, canFrame.data, canFrame.dataLength);
 
 		// we won't use canWriteT() here bcs. we do not need scheduled transmits: AND THERE IS A BUG IN
 		// current NTCAN driver: 'count' is returned 0 always while the CAN message has been send out
