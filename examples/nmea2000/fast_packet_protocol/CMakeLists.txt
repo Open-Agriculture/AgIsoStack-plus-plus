@@ -6,7 +6,8 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(NMEA2KFastPacketTarget main.cpp)
+add_executable(NMEA2KFastPacketTarget main.cpp
+                                      ../../common/create_can_driver.cpp)
 
 target_compile_features(NMEA2KFastPacketTarget PUBLIC cxx_std_11)
 set_target_properties(NMEA2KFastPacketTarget PROPERTIES CXX_EXTENSIONS OFF)

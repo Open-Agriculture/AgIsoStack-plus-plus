@@ -71,6 +71,7 @@ namespace isobus
 #endif
 		if (nullptr != frameHandler)
 		{
+			frameHandler->close();
 			frameHandler = nullptr;
 		}
 		messagesToBeTransmittedQueue.clear();
@@ -203,6 +204,13 @@ namespace isobus
 			return false;
 		}
 
+		// Each channel opens and closes its handler independently, so two channels sharing one would tear down hardware underneath each other
+		if ((nullptr != driver) && std::any_of(hardwareChannels.begin(), hardwareChannels.end(), [&driver](const std::unique_ptr<CANHardware> &channel) { return driver == channel->frameHandler; }))
+		{
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(static_cast<int>(channelIndex)) + ", because that driver is already assigned to another channel.");
+			return false;
+		}
+
 		hardwareChannels[channelIndex]->frameHandler = driver;
 		return true;
 	}
@@ -250,13 +258,18 @@ namespace isobus
 		return retVal;
 	}
 
-	bool CANHardwareInterface::start()
+	bool CANHardwareInterface::start(bool start_thread)
 	{
 		LOCK_GUARD(Mutex, hardwareChannelsMutex);
 
+		if (start_thread)
+		{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		start_threads();
+			start_threads();
+#else
+			// Ignored
 #endif
+		}
 		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
 			channel->start();
 		});

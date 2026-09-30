@@ -552,6 +552,17 @@ namespace isobus
 		/// @returns The VT version byte associated to the specified version
 		static std::uint8_t get_vt_version_byte(VTVersion version);
 
+		/// @brief Processes a stateless CAN message from any VT client
+		/// @param[in] message The CAN message being received
+		/// @returns True if answer is being sent to the client, false if the message have not been processed/answered
+		bool process_stateless_messages(const CANMessage &message);
+
+		/// @brief Processes a connection-dependent CAN message from only VT clients
+		/// with whom we've established a working set master relationship
+		/// @param[in] message The CAN message being received
+		/// @param[in] managedWorkingSet The working set that is associated to the client sending the message
+		void process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet);
+
 		/// @brief Processes a CAN message from any VT client
 		/// @param[in] message The CAN message being received
 		/// @param[in] parent A context variable to find the relevant VT server class
@@ -689,7 +700,7 @@ namespace isobus
 		/// @param[in] value The enable/disable state that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
+		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief This message is sent by the VT to a Working Set Master to acknowledge the End of Object Pool message.
 		/// @details When the VT replies with an error of any type
@@ -707,7 +718,7 @@ namespace isobus
 		                                      std::uint16_t parentIDOfFaultingObject,
 		                                      std::uint16_t faultingObjectID,
 		                                      std::uint8_t errorCodes,
-		                                      std::shared_ptr<ControlFunction> destination);
+		                                      std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the execute macro or extended macro command
 		/// @param[in] objectID The object ID for the macro
@@ -715,7 +726,7 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @param[in] extendedMacro True if the macro is an extended macro, otherwise false
 		/// @returns true if the message was sent, otherwise false
-		bool send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro);
+		bool send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro) const;
 
 		/// @brief Sends a response to the hide/show object command
 		/// @param[in] objectID The object ID for the object
@@ -723,7 +734,7 @@ namespace isobus
 		/// @param[in] value The hide/show state that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
+		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the change priority command
 		/// @param[in] objectID The object ID for the object
@@ -731,7 +742,7 @@ namespace isobus
 		/// @param[in] priority The priority that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination);
+		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the select input object command
 		/// @param[in] objectID The object ID for the object
@@ -739,13 +750,13 @@ namespace isobus
 		/// @param[in] response The response to the select input object command
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination);
+		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends the VT status message broadcast. The status message
 		/// contains information such as which working set is the active one, and information about
 		/// what the VT server is doing, such as busy flags. This message should be sent at 1 Hz.
 		/// @returns true if the message was sent, otherwise false
-		bool send_status_message();
+		bool send_status_message() const;
 
 		/// @brief Sends the list of objects that the server supports to a client, usually in
 		/// response to a "get supported objects" message, which is used by a client.

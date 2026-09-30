@@ -6,8 +6,9 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(VT3ExampleTarget main.cpp ../../common/console_logger.cpp
-                                objectPoolObjects.h)
+add_executable(
+  VT3ExampleTarget main.cpp ../../common/console_logger.cpp
+                   ../../common/create_can_driver.cpp objectPoolObjects.h)
 
 target_compile_features(VT3ExampleTarget PUBLIC cxx_std_11)
 set_target_properties(VT3ExampleTarget PROPERTIES CXX_EXTENSIONS OFF)

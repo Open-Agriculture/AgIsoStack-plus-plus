@@ -20,13 +20,15 @@ namespace isobus
 	                       std::uint32_t length,
 	                       std::shared_ptr<ControlFunction> source,
 	                       std::shared_ptr<ControlFunction> destination,
-	                       std::uint8_t CANPort) :
+	                       std::uint8_t CANPort,
+	                       std::uint64_t timestamp_us) :
 	  messageType(type),
 	  identifier(identifier),
 	  data(dataBuffer, dataBuffer + length),
 	  source(source),
 	  destination(destination),
-	  CANPortIndex(CANPort)
+	  CANPortIndex(CANPort),
+	  timestamp_us(timestamp_us)
 	{
 	}
 
@@ -35,13 +37,15 @@ namespace isobus
 	                       std::vector<std::uint8_t> data,
 	                       std::shared_ptr<ControlFunction> source,
 	                       std::shared_ptr<ControlFunction> destination,
-	                       std::uint8_t CANPort) :
+	                       std::uint8_t CANPort,
+	                       std::uint64_t timestamp_us) :
 	  messageType(type),
 	  identifier(identifier),
 	  data(std::move(data)),
 	  source(source),
 	  destination(destination),
-	  CANPortIndex(CANPort)
+	  CANPortIndex(CANPort),
+	  timestamp_us(timestamp_us)
 	{
 	}
 
@@ -113,6 +117,11 @@ namespace isobus
 	std::uint8_t CANMessage::get_can_port_index() const
 	{
 		return CANPortIndex;
+	}
+
+	std::uint64_t CANMessage::get_timestamp_us() const
+	{
+		return timestamp_us;
 	}
 
 	void CANMessage::set_data(const std::uint8_t *dataBuffer, std::uint32_t length)
@@ -193,7 +202,7 @@ namespace isobus
 		}
 		else
 		{
-			retVal = static_cast<std::uint32_t>(data.at(index + 2)) << 16;
+			retVal = static_cast<std::uint32_t>(data.at(index)) << 16;
 			retVal |= static_cast<std::uint32_t>(data.at(index + 1)) << 8;
 			retVal |= data.at(index + 2);
 		}
@@ -211,7 +220,7 @@ namespace isobus
 		}
 		else
 		{
-			retVal = static_cast<std::int32_t>(data.at(index + 2)) << 16;
+			retVal = static_cast<std::int32_t>(data.at(index)) << 16;
 			retVal |= static_cast<std::int32_t>(data.at(index + 1)) << 8;
 			retVal |= static_cast<std::int32_t>(data.at(index + 2));
 		}
@@ -331,9 +340,11 @@ namespace isobus
 		std::uint32_t startAmountOfBytes = amountOfBytesLeft;
 		std::uint8_t indexOfFinalByteBit = 7;
 
-		if (endBitIndex > 8 * data.size() || length < 1 || startBitIndex >= 8 * data.size())
+		if (endBitIndex >= 8 * data.size() || length < 1 || startBitIndex >= 8 * data.size())
 		{
-			LOG_ERROR("End bit index is greater than length or startBitIndex is wrong or startBitIndex is greater than endBitIndex");
+			LOG_ERROR(
+			  "End bit index is greater than or equal to length or startBitIndex is wrong "
+			  "or startBitIndex is greater than or equal to endBitIndex");
 			return retVal;
 		}
 

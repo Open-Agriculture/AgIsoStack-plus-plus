@@ -559,7 +559,8 @@ namespace isobus
 					                            std::move(data),
 					                            source,
 					                            destination,
-					                            0);
+					                            0,
+					                            message.get_timestamp_us());
 
 					canMessageReceivedCallback(completedMessage);
 					close_session(session, true);

@@ -16,6 +16,7 @@
 
 #include "driver/twai.h"
 
+#include <cstdint>
 #include <string>
 
 namespace isobus
@@ -28,11 +29,16 @@ namespace isobus
 	class TWAIPlugin : public CANHardwarePlugin
 	{
 	public:
+		/// @brief The default timeout used when waiting for a frame to be received or transmitted, in milliseconds
+		static constexpr std::uint32_t DEFAULT_TIMEOUT_MS = 100;
+
 		/// @brief Constructor for the socket CAN driver
 		/// @param[in] filterConfig A reference to the filter configuration for the TWAI driver
 		/// @param[in] timingConfig A reference to the timing configuration for the TWAI driver
 		/// @param[in] generalConfig A reference to the general configuration for the TWAI driver
-		explicit TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig);
+		/// @param[in] receiveTimeoutMs How long read_frame will block while waiting for a frame, in milliseconds
+		/// @param[in] transmitTimeoutMs How long write_frame will block while waiting for a free transmit slot, in milliseconds
+		explicit TWAIPlugin(const twai_general_config_t *generalConfig, const twai_timing_config_t *timingConfig, const twai_filter_config_t *filterConfig, std::uint32_t receiveTimeoutMs = DEFAULT_TIMEOUT_MS, std::uint32_t transmitTimeoutMs = DEFAULT_TIMEOUT_MS);
 
 		/// @brief The destructor for TWAIPlugin
 		virtual ~TWAIPlugin();
@@ -65,6 +71,8 @@ namespace isobus
 		const twai_general_config_t *generalConfig;
 		const twai_timing_config_t *timingConfig;
 		const twai_filter_config_t *filterConfig;
+		std::uint32_t receiveTimeoutMs;
+		std::uint32_t transmitTimeoutMs;
 	};
 }
 #endif // ESP_PLATFORM

@@ -41,11 +41,17 @@ namespace isobus
 
 	std::string IOPFileInterface::hash_object_pool_to_version(std::vector<std::uint8_t> &iopData)
 	{
-		std::size_t seed = iopData.size();
+		return IOPFileInterface::hash_object_pool_to_version(iopData.data(), iopData.size());
+	}
+
+	std::string IOPFileInterface::hash_object_pool_to_version(const std::uint8_t *iopData, std::size_t length)
+	{
+		std::size_t seed = length;
 		std::stringstream stream;
 
-		for (std::uint32_t x : iopData)
+		for (; length > 0; --length, ++iopData)
 		{
+			std::uint32_t x = *iopData;
 			x = ((x >> 16) ^ x) * 0x45d9f3b;
 			x = ((x >> 16) ^ x) * 0x45d9f3b;
 			x = (x >> 16) ^ x;

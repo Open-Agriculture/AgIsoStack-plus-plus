@@ -6,7 +6,7 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(PGNRequestExampleTarget main.cpp)
+add_executable(PGNRequestExampleTarget main.cpp ../common/create_can_driver.cpp)
 
 target_compile_features(PGNRequestExampleTarget PUBLIC cxx_std_11)
 set_target_properties(PGNRequestExampleTarget PROPERTIES CXX_EXTENSIONS OFF)

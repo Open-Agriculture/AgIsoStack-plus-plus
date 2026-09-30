@@ -19,11 +19,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
       - name: Set up Python 3.8 for gcovr
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: 3.8
           cache: "pip"
@@ -31,7 +31,7 @@ jobs:
         run: |
           pip install gcovr
       - name: Install sonar-scanner and build-wrapper
-        uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v4
+        uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v8
       - name: Run build-wrapper
         run: |
           mkdir build
@@ -44,22 +44,22 @@ jobs:
         run: |
           gcovr --sonarqube --exclude-throw-branches --gcov-ignore-parse-errors=negative_hits.warn_once_per_file > coverage.xml
       - name: Run sonar-scanner
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         if: "${{ env.SONAR_TOKEN != '' }}"
         with:
           args: >
-            --define sonar.cfamily.compile-commands="${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"
-            --define sonar.coverageReportPaths=coverage.xml
+            -Dsonar.cfamily.compile-commands=build-wrapper-output/compile_commands.json
+            -Dsonar.coverageReportPaths=coverage.xml
 
   windows_build:
     name: Windows Build, Test
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
       - name: Compile
@@ -77,7 +77,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR head
       - name: Compile
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
