@@ -108,6 +108,10 @@ if("SILKit" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "sil_kit_plugin.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "sil_kit_plugin.hpp")
 endif()
+if("proemion" IN_LIST CAN_DRIVER)
+  list(APPEND HARDWARE_INTEGRATION_SRC "proemion_canlink_interface.cpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "proemion_canlink_interface.hpp")
+endif()
 
 # Prepend the source directory path to all the source files
 prepend(HARDWARE_INTEGRATION_SRC ${HARDWARE_INTEGRATION_SRC_DIR}
