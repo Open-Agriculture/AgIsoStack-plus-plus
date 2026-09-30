@@ -1,0 +1,93 @@
+name: Build tests for Mull
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-for-mull:
+    name: Build GoogleTest executable with Mull
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Clang 19 and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-19 \
+            llvm-19 \
+            build-essential \
+            cmake \
+            ninja-build \
+            curl
+
+      - name: Install Mull for LLVM 19
+        run: |
+          curl -1sLf \
+            'https://dl.cloudsmith.io/public/mull-project/mull-stable/setup.deb.sh' \
+            | sudo -E bash
+
+          sudo apt-get update
+          sudo apt-get install -y mull-19
+
+      - name: Verify tool versions and Mull plugin
+        shell: bash
+        run: |
+          echo "=== Clang ==="
+          clang-19 --version
+
+          echo
+          echo "=== Clang++ ==="
+          clang++-19 --version
+
+          echo
+          echo "=== LLVM ==="
+          llvm-config-19 --version
+
+          echo
+          echo "=== Mull ==="
+          mull-runner-19 --version
+
+          echo
+          echo "=== Mull compiler plugin ==="
+          test -f /usr/lib/mull-ir-frontend-19
+          ls -l /usr/lib/mull-ir-frontend-19
+
+      - name: Configure tests for Mull
+        env:
+          CC: clang-19
+          CXX: clang++-19
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19" \
+            -DCMAKE_CXX_FLAGS="-O0 -g -grecord-command-line -fpass-plugin=/usr/lib/mull-ir-frontend-19"
+
+      - name: Compile GoogleTest executable for Mull
+        run: |
+          cmake --build build --parallel
+
+      - name: Verify Mull-compatible executable
+        shell: bash
+        run: |
+          echo "=== Compiler selected by CMake ==="
+          grep "CMAKE_CXX_COMPILER:" build/CMakeCache.txt
+
+          echo
+          echo "=== Mull option in compilation database ==="
+          grep -m 1 "mull-ir-frontend-19" build/compile_commands.json
+
+          echo
+          echo "=== GoogleTest executable ==="
+          test -x build/test/unit_tests
+          file build/test/unit_tests
+          ls -lh build/test/unit_tests
+
+          echo
+          echo "Mull-compatible executable successfully built:"
+          echo "build/test/unit_tests"
