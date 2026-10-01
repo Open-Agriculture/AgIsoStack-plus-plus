@@ -421,6 +421,10 @@ namespace isobus
 		/// @returns true if connected, false otherwise
 		bool get_is_connected() const;
 
+		/// @brief Returns the current state machine state
+		/// @returns The current internal state machine state
+		StateMachineState get_state() const;
+
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
 

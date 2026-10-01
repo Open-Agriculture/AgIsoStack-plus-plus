@@ -133,6 +133,11 @@ namespace isobus
 		return (StateMachineState::Connected == state);
 	}
 
+	VirtualTerminalClient::StateMachineState VirtualTerminalClient::get_state() const
+	{
+		return state;
+	}
+
 	void VirtualTerminalClient::terminate()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
