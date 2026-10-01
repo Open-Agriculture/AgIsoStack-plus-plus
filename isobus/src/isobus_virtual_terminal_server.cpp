@@ -241,8 +241,7 @@ namespace isobus
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
 	{
 		if ((message.get_destination_control_function() == serverInternalControlFunction) &&
-		    (message.get_source_control_function() != nullptr) &&
-		    (CAN_DATA_LENGTH == message.get_data_length()))
+		    (message.get_source_control_function() != nullptr))
 		{
 			process_rx_message(message, this);
 		}

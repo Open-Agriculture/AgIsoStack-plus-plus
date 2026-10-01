@@ -118,6 +118,17 @@ public:
 	{
 		return true;
 	}
+
+	void add_managed_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		managedWorkingSetList.push_back(workingSet);
+	}
+
+	// helpers to get access to protected stuff
+	bool execute_macro_for_test(std::uint16_t objectID, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		return execute_macro(objectID, workingSet);
+	}
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -164,4 +175,60 @@ TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToThe
 	EXPECT_EQ(client->get_address(), nackFrame.data[4]); // Address of the CF the NACK is about
 
 	CANHardwareInterface::stop();
+}
+
+class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet
+{
+public:
+	explicit TestWorkingSet(std::shared_ptr<ControlFunction> controlFunction) :
+	  VirtualTerminalServerManagedWorkingSet(controlFunction)
+	{
+	}
+
+	bool add_object(std::shared_ptr<VTObject> object)
+	{
+		return add_or_replace_object(object);
+	}
+};
+
+TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
+{
+	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
+	auto clientControlFunction = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer server(serverControlFunction);
+	auto workingSet = std::make_shared<TestWorkingSet>(clientControlFunction);
+
+	auto stringVariable = std::make_shared<StringVariable>();
+	stringVariable->set_id(0x1234);
+	stringVariable->set_value("Open-Agriculture");
+	ASSERT_TRUE(workingSet->add_object(stringVariable));
+
+	auto macro = std::make_shared<Macro>();
+	macro->set_id(0x5678);
+	ASSERT_TRUE(macro->add_command_packet({ static_cast<std::uint8_t>(isobus::Macro::Command::ChangeStringValue),
+	                                        0x34,
+	                                        0x12,
+	                                        0x10,
+	                                        0x00,
+	                                        'S',
+	                                        'u',
+	                                        'c',
+	                                        'c',
+	                                        'e',
+	                                        's',
+	                                        's',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ',
+	                                        ' ' }));
+	ASSERT_TRUE(workingSet->add_object(macro));
+	server.add_managed_working_set(workingSet);
+
+	EXPECT_TRUE(server.execute_macro_for_test(macro->get_id(), workingSet));
+	EXPECT_EQ("Success         ", stringVariable->get_value());
 }
