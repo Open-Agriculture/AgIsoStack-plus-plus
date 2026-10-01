@@ -468,6 +468,15 @@ namespace isobus
 			AnyOtherError = 8
 		};
 
+		/// @brief Enumerates the bit indices of the Object Pool Error Codes field in an end of object pool response
+		enum class ObjectPoolErrorBit : std::uint8_t
+		{
+			MethodOrAttributeNotSupported = 0,
+			UnknownObjectReference = 1,
+			AnyOtherError = 2,
+			ObjectPoolWasDeletedFromVolatileMemory = 3
+		};
+
 		/// @brief Enumerates the possible values of the Screen Capture command Item Requested field
 		enum class ScreenCaptureItem
 		{
@@ -711,13 +720,13 @@ namespace isobus
 		/// @param[in] success Indicates if the pool was error free
 		/// @param[in] parentIDOfFaultingObject The parent object ID for the faulty object, or NULL_OBJECT_ID
 		/// @param[in] faultingObjectID The faulty object's ID or the NULL_OBJECT_ID
-		/// @param[in] errorCodes A bitfield of error codes that describe the issues with the pool
+		/// @param[in] objectPoolErrorCodes A bitfield of ObjectPoolErrorBit describing the issues with the pool
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,
 		                                      std::uint16_t faultingObjectID,
-		                                      std::uint8_t errorCodes,
+		                                      std::uint8_t objectPoolErrorCodes,
 		                                      std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the execute macro or extended macro command
