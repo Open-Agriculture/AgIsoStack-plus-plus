@@ -625,14 +625,9 @@ namespace isobus
 			{
 				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = SystemTiming::get_timestamp_ms();
 
-				// Reset the claimedAddressSinceLastAddressClaimRequest flag for all control functions on the port
-				auto result = std::find_if(inactiveControlFunctions.begin(), inactiveControlFunctions.end(), [channelIndex](std::shared_ptr<ControlFunction> controlFunction) {
-					return (channelIndex == controlFunction->get_can_port());
-				});
-				if (result != inactiveControlFunctions.end())
-				{
-					(*result)->claimedAddressSinceLastAddressClaimRequest = true;
-				}
+				// Reset the claimedAddressSinceLastAddressClaimRequest flag for all control functions in the table on the port.
+				// Inactive CFs are left alone: the prune only looks at the table, and an inactive CF is credited when
+				// its own address claim restores it to the table.
 				std::for_each(controlFunctionTable[channelIndex].begin(), controlFunctionTable[channelIndex].end(), [](std::shared_ptr<ControlFunction> controlFunction) {
 					if (nullptr != controlFunction)
 					{
