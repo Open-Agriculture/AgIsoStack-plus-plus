@@ -7,6 +7,7 @@
 ///
 /// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include "isobus/isobus/isobus_virtual_terminal_working_set_base.hpp"
 
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -2738,3 +2739,4 @@ namespace isobus
 		return true;
 	}
 } // namespace isobus
+#endif // !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO

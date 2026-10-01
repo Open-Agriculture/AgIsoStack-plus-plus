@@ -6,6 +6,7 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
 #include "isobus/isobus/can_network_manager.hpp"
@@ -250,3 +251,4 @@ namespace isobus
 	}
 
 } // namespace isobus
+#endif // !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
