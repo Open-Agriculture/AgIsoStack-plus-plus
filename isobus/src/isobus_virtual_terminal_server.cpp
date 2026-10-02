@@ -224,14 +224,15 @@ namespace isobus
 			    (data[1] & 0x01)) // Init bit is set
 			{
 				// This CF is probably trying to initiate communication with us.
-				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
+				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
+				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+				managedWorkingSetList.emplace_back(newWorkingSet);
 
-				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
+				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), data[2]);
 				if (data[2] > get_vt_version_byte(get_version()))
 				{
-					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
+					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
 				}
-				managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 				retVal = true;
 			}
 		}
