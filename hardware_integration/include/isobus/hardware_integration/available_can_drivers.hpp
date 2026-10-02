@@ -54,4 +54,8 @@
 #include "isobus/hardware_integration/sil_kit_plugin.hpp"
 #endif
 
+#ifdef ISOBUS_PROEMION_AVAILABLE
+#include "isobus/hardware_integration/proemion_canlink_interface.hpp"
+#endif
+
 #endif // AVAILABLE_CAN_DRIVERS_HPP
