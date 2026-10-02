@@ -273,7 +273,7 @@ namespace isobus
 						                           workingSet->get_control_function(),
 						                           get_internal_control_function(),
 						                           workingSet->get_control_function()->get_can_port());
-						LOG_DEBUG("[VT Server]: Executing macro command %u", j);
+						LOG_DEBUG("[VT Server]: Executing macro #%u command code %u, len %u", j, commandPacket.size() > 0 ? commandPacket.at(0) : 'X', message.get_data_length());
 						execute_macro_as_rx_message(message);
 					}
 				}
