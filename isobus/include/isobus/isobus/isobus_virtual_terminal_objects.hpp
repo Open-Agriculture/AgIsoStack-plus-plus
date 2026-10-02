@@ -51,6 +51,7 @@ namespace isobus
 		Animation = 44, ///< The Animation object is used to display simple animations
 		PictureGraphic = 20, ///< Used to output a picture graphic (bitmap).
 		GraphicData = 46, ///< Used to define the data for a graphic image
+		WorkingSetSpecialControls = 47, ///< Used to define the initial Colour Map object and/or the initial Colour Palette object to use for the Working Set
 		ScaledGraphic = 48, ///< Used to display a scaled representation of a graphic object
 		NumberVariable = 21, ///< Used to store a 32-bit unsigned integer value.
 		StringVariable = 22, ///< Used to store a fixed length string value.
@@ -4684,6 +4685,183 @@ namespace isobus
 		std::uint8_t optionsBitfield = 0;
 
 		std::uint16_t graphicID = NULL_OBJECT_ID; ///< Object ID of a referenced Graphics Data, Picture Graphic or object pointer or NULL_OBJECT_ID
+	};
+
+	/// @brief Defines an Graphic Data object.
+	/// Available in VT version 6 and later, this contains the raw data for a graphic
+	/// presentation. This object contains its full colour palette within the object itself, therefore,
+	/// unlike other objects, this one is not affected by either the Colour Map object or the Colour Palette object.
+	class GraphicDataObject : public VTObject
+	{
+	public:
+		/// @brief Constructor for a graphic data object
+		GraphicDataObject() = default;
+
+		/// @brief Virtual destructor for a graphic data object
+		~GraphicDataObject() override = default;
+
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Format = 1,
+
+			NumberOfAttributes = 2
+		};
+
+		/// @brief As of version 6, the only supported graphic format is PNG
+		enum class Format : std::uint8_t
+		{
+			PNG = 0 // 32 bit RGBA max PNG
+		};
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived objec
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the format of graphic data contained in this object
+		/// @returns The format of graphic data contained in this object
+		Format get_format() const;
+
+		/// @brief Sets the format of graphic data contained in this object.
+		/// PNG is the only format supported in version 6, but this function allows for future expansion.
+		/// @param[in] type The format of graphic data contained in this object
+		void set_format(Format type);
+
+		/// @brief Sets the raw data of the graphic, in the format specified by the Format attribute.
+		/// @param[in] data The raw data of the graphic, in the format specified by the Format attribute
+		void set_raw_data(std::vector<std::uint8_t> data);
+
+		/// @brief Returns the raw data of the graphic, in the format specified by the Format attribute
+		/// @returns The raw data of the graphic, in the format specified by the Format attribute
+		const std::vector<std::uint8_t> &get_raw_data() const;
+
+	private:
+		Format format = Format::PNG; ///< The format/type of graphic data contained in this object
+		std::vector<std::uint8_t> rawData; ///< The raw data of the graphic, in the format specified by the Format attribute
+	};
+
+	/// @brief The Working Set Special Controls object, available in VT version 6 and later, can be used to define the
+	// initial Colour Map object and/or the initial Colour Palette object to use for the Working Set, and to define
+	// a list of language and country code pairs that supercede the list of languages in the Working Set object.
+	// The object pool can contain zero or one Working Set Special Controls object. If this object, or one
+	// or more of its attributes (AID 2 and higher) do not exist, as determined by the Number of Bytes to
+	// follow attribute, the VT shall use the equivalent to the NULL values for the corresponding attribute(s)
+	class WorkingSetSpecialControlsObject : public VTObject
+	{
+	public:
+		/// @brief Constructor for a working set special controls object
+		WorkingSetSpecialControlsObject() = default;
+
+		/// @brief Virtual destructor for a working set special controls object
+		~WorkingSetSpecialControlsObject() override = default;
+
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			NumberOfBytesToFollow = 1,
+			ObjectIDOfColourMapObject = 2,
+			ObjectIDOfColourPaletteObject = 3,
+
+			NumberOfAttributes = 4
+		};
+
+		/// @brief A struct to hold a language code and country code pair
+		struct LanguageCountryCodePair
+		{
+			std::string languageCode; ///< The ISO 639-1 language code
+			std::string countryCode; ///< The ISO 3166-1 country code (or 0x20, 0x20 if N/A)
+		};
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived objec
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the object ID of the referenced Colour Map object or the null object ID.
+		/// @returns The object ID of the referenced Colour Map object or the null object ID
+		std::uint16_t get_colour_map_object_id() const;
+
+		/// @brief Sets the object ID of the referenced Colour Map object
+		/// @param[in] id The object ID of the referenced Colour Map object or the null object ID
+		void set_colour_map_object_id(std::uint16_t id);
+
+		/// @brief Returns the object ID of the referenced Colour Palette object or the null object ID.
+		/// @returns The object ID of the referenced Colour Palette object or the null object ID
+		std::uint16_t get_colour_palette_object_id() const;
+
+		/// @brief Sets the object ID of the referenced Colour Palette object
+		/// @param[in] id The object ID of the referenced Colour Palette object or the null object ID
+		void set_colour_palette_object_id(std::uint16_t id);
+
+		/// @brief Returns the language and country codes
+		/// @returns A constant reference to the vector of LanguageCountryCodePair
+		const std::vector<LanguageCountryCodePair> &get_language_codes() const;
+
+		/// @brief Sets the language and country codes
+		/// @param[in] codes A vector of LanguageCountryCodePair to set
+		void set_language_codes(std::vector<LanguageCountryCodePair> codes);
+
+	private:
+		std::uint16_t colourMapObjectID = NULL_OBJECT_ID; ///< Object ID of a referenced Colour Map object or NULL_OBJECT_ID
+		std::uint16_t colourPaletteObjectID = NULL_OBJECT_ID; ///< Object ID of a referenced Colour Palette object or NULL_OBJECT_ID
+		std::vector<LanguageCountryCodePair> languageCodes; ///< A vector of LanguageCountryCodePair representing the language and country codes to override in the working set object
 	};
 
 	template<typename T>

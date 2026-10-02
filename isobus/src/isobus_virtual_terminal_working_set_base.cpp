@@ -2386,6 +2386,144 @@ namespace isobus
 				}
 				break;
 
+				case VirtualTerminalObjectType::GraphicData:
+				{
+					auto tempObject = std::make_shared<GraphicDataObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+
+						if (0 == iopData[3])
+						{
+							tempObject->set_format(static_cast<GraphicDataObject::Format>(iopData[3]));
+							std::uint32_t graphicDataLength = get_little_endian_uint32(iopData, 4);
+							iopLength -= 8;
+							iopData += 8;
+
+							if (iopLength >= graphicDataLength)
+							{
+								std::vector<std::uint8_t> graphicData(iopData, iopData + graphicDataLength);
+								iopData += graphicDataLength;
+								iopLength -= graphicDataLength;
+								tempObject->set_raw_data(std::move(graphicData));
+								retVal = true;
+							}
+							else
+							{
+								LOG_ERROR("[WS]: Not enough IOP data to parse graphic data object raw data");
+							}
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Graphic data object %u has an unsupported format type. Only format type 0 (PNG) is allowed.", decodedID);
+						}
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse graphic data object");
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::WorkingSetSpecialControls:
+				{
+					auto tempObject = std::make_shared<WorkingSetSpecialControlsObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+					}
+
+					constexpr std::uint16_t minimumBytesToFollow = 5;
+					std::uint16_t numberOfBytesToFollow = get_little_endian_uint16(iopData, 3);
+					const std::uint16_t colourMapObjectID = get_little_endian_uint16(iopData, 5);
+					const std::uint16_t colourMapPaletteObjectID = get_little_endian_uint16(iopData, 7);
+					const std::uint8_t numberOfLanguagePairs = iopData[9];
+
+					tempObject->set_colour_map_object_id(colourMapObjectID);
+					tempObject->set_colour_palette_object_id(colourMapPaletteObjectID);
+
+					if (numberOfBytesToFollow < (minimumBytesToFollow + (numberOfLanguagePairs * 4)))
+					{
+						LOG_ERROR("[WS]: Working set special controls object has too few bytes to follow.");
+					}
+					else
+					{
+						if (numberOfBytesToFollow > (minimumBytesToFollow + (numberOfLanguagePairs * 4)))
+						{
+							LOG_WARNING("[WS]: Working set special controls object has too many bytes to follow. Technically this is allowed, but it may indicate a problem.");
+						}
+
+						iopLength -= tempObject->get_minumum_object_length();
+						iopData += tempObject->get_minumum_object_length();
+						numberOfBytesToFollow -= minimumBytesToFollow;
+
+						if (iopLength >= (numberOfLanguagePairs * 4))
+						{
+							std::vector<WorkingSetSpecialControlsObject::LanguageCountryCodePair> languageCountryCodePairs;
+
+							for (std::uint_fast8_t i = 0; i < numberOfLanguagePairs; i++)
+							{
+								WorkingSetSpecialControlsObject::LanguageCountryCodePair pair;
+
+								pair.languageCode.resize(2);
+								pair.countryCode.resize(2);
+
+								for (std::uint_fast8_t j = 0; j < numberOfLanguagePairs; j++)
+								{
+									pair.languageCode[0] = iopData[0];
+									pair.languageCode[1] = iopData[1];
+									pair.countryCode[0] = iopData[2];
+									pair.countryCode[1] = iopData[3];
+									iopData += 4;
+									iopLength -= 4;
+									numberOfBytesToFollow -= 4;
+									languageCountryCodePairs.push_back(pair);
+								}
+							}
+							tempObject->set_language_codes(std::move(languageCountryCodePairs));
+						}
+						retVal = true;
+					}
+
+					// Skip ahead any remaining bytes
+					if (0 != numberOfBytesToFollow)
+					{
+						LOG_WARNING("[WS]: Working set special controls object has %u extra bytes to follow. Skipping ahead.", numberOfBytesToFollow);
+						iopData += numberOfBytesToFollow;
+						iopLength -= numberOfBytesToFollow;
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+						// Iterate over all objects and ensure there are at most 1
+						// of the working set special controls
+						std::uint16_t numberOfWorkingSetSpecialControlsObjects = 0;
+						for (const auto &objectPair : vtObjectTree)
+						{
+							if (objectPair.second->get_object_type() == VirtualTerminalObjectType::WorkingSetSpecialControls)
+							{
+								numberOfWorkingSetSpecialControlsObjects++;
+
+								if (numberOfWorkingSetSpecialControlsObjects > 1)
+								{
+									LOG_ERROR("[WS]: Too many Working Set Special Controls Objects. Only 0 or 1 are allowed in ISO11783-6.");
+									retVal = false;
+									break;
+								}
+							}
+						}
+					}
+				}
+				break;
+
 				default:
 				{
 					LOG_ERROR("[WS]: Unsupported Object (Type: %d)", decodedType);

@@ -8786,9 +8786,174 @@ namespace isobus
 		return true;
 	}
 
+	VirtualTerminalObjectType GraphicDataObject::get_object_type() const
+	{
+		return VirtualTerminalObjectType::GraphicData;
+	}
+
+	std::uint32_t GraphicDataObject::get_minumum_object_length() const
+	{
+		return 8;
+	}
+
+	bool GraphicDataObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		return (format == Format::PNG);
+	}
+
+	bool GraphicDataObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
+	}
+
+	bool GraphicDataObject::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (attributeID)
+			{
+				case static_cast<std::uint8_t>(AttributeName::Type):
+				{
+					returnedAttributeData = static_cast<std::uint8_t>(get_object_type());
+					retVal = true;
+				}
+				break;
+
+				case static_cast<std::uint8_t>(AttributeName::Format):
+				{
+					returnedAttributeData = static_cast<std::uint8_t>(get_format());
+					retVal = true;
+				}
+				break;
+			}
+		}
+		return retVal;
+	}
+
+	GraphicDataObject::Format GraphicDataObject::get_format() const
+	{
+		return format;
+	}
+
+	void GraphicDataObject::set_format(Format type)
+	{
+		format = type;
+	}
+
+	void GraphicDataObject::set_raw_data(std::vector<std::uint8_t> data)
+	{
+		rawData = std::move(data);
+	}
+
+	const std::vector<std::uint8_t> &GraphicDataObject::get_raw_data() const
+	{
+		return rawData;
+	}
+
 	std::uint32_t ScaledGraphicObject::get_minumum_object_length() const
 	{
 		return 12;
+	}
+
+	VirtualTerminalObjectType WorkingSetSpecialControlsObject::get_object_type() const
+	{
+		return VirtualTerminalObjectType::WorkingSetSpecialControls;
+	}
+
+	std::uint32_t WorkingSetSpecialControlsObject::get_minumum_object_length() const
+	{
+		return 10;
+	}
+
+	bool WorkingSetSpecialControlsObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	{
+		return true;
+	}
+
+	bool WorkingSetSpecialControlsObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
+	}
+
+	bool WorkingSetSpecialControlsObject::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (attributeID)
+			{
+				case static_cast<std::uint8_t>(AttributeName::Type):
+				{
+					returnedAttributeData = static_cast<std::uint8_t>(get_object_type());
+					retVal = true;
+				}
+				break;
+
+				case static_cast<std::uint8_t>(AttributeName::NumberOfBytesToFollow):
+				{
+					std::uint32_t numberBytes = 0;
+
+					for (const auto &languagePair : languageCodes)
+					{
+						numberBytes += static_cast<std::uint32_t>(languagePair.countryCode.size());
+						numberBytes += static_cast<std::uint32_t>(languagePair.languageCode.size());
+					}
+					returnedAttributeData = static_cast<std::uint32_t>(numberBytes);
+					retVal = true;
+				}
+				break;
+
+				case static_cast<std::uint8_t>(AttributeName::ObjectIDOfColourMapObject):
+				{
+					returnedAttributeData = get_colour_map_object_id();
+					retVal = true;
+				}
+				break;
+
+				case static_cast<std::uint8_t>(AttributeName::ObjectIDOfColourPaletteObject):
+				{
+					returnedAttributeData = get_colour_palette_object_id();
+					retVal = true;
+				}
+				break;
+			}
+		}
+		return retVal;
+	}
+
+	std::uint16_t WorkingSetSpecialControlsObject::get_colour_map_object_id() const
+	{
+		return colourMapObjectID;
+	}
+
+	void WorkingSetSpecialControlsObject::set_colour_map_object_id(std::uint16_t id)
+	{
+		colourMapObjectID = id;
+	}
+
+	std::uint16_t WorkingSetSpecialControlsObject::get_colour_palette_object_id() const
+	{
+		return colourPaletteObjectID;
+	}
+
+	void WorkingSetSpecialControlsObject::set_colour_palette_object_id(std::uint16_t id)
+	{
+		colourPaletteObjectID = id;
+	}
+
+	const std::vector<WorkingSetSpecialControlsObject::LanguageCountryCodePair> &WorkingSetSpecialControlsObject::get_language_codes() const
+	{
+		return languageCodes;
+	}
+
+	void WorkingSetSpecialControlsObject::set_language_codes(std::vector<LanguageCountryCodePair> codes)
+	{
+		languageCodes = std::move(codes);
 	}
 
 } // namespace isobus
