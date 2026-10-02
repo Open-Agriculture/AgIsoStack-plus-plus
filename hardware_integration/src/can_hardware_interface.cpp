@@ -192,7 +192,7 @@ namespace isobus
 
 		if (channelIndex >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
-			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(channelIndex) +
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(static_cast<int>(channelIndex)) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set. " +
 			          "Use set_number_of_can_channels() to increase the number of channels before assigning frame handlers.");
 			return false;
@@ -200,7 +200,7 @@ namespace isobus
 
 		if (nullptr != hardwareChannels[channelIndex]->frameHandler)
 		{
-			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(channelIndex) + ", because it is already assigned.");
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(static_cast<int>(channelIndex)) + ", because it is already assigned.");
 			return false;
 		}
 
@@ -232,14 +232,14 @@ namespace isobus
 
 		if (channelIndex >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
-			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(channelIndex) +
+			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(static_cast<int>(channelIndex)) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set.");
 			return false;
 		}
 
 		if (nullptr == hardwareChannels[channelIndex]->frameHandler)
 		{
-			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(channelIndex) + ", because it is not assigned.");
+			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(static_cast<int>(channelIndex)) + ", because it is not assigned.");
 			return false;
 		}
 
