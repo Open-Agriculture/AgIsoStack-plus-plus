@@ -2386,6 +2386,51 @@ namespace isobus
 				}
 				break;
 
+				case VirtualTerminalObjectType::GraphicData:
+				{
+					auto tempObject = std::make_shared<GraphicDataObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+
+						if (0 == iopData[3])
+						{
+							tempObject->set_format(static_cast<GraphicDataObject::Format>(iopData[3]));
+							std::uint32_t graphicDataLength = get_little_endian_uint32(iopData, 4);
+							iopLength -= 8;
+							iopData += 8;
+
+							if (iopLength >= graphicDataLength)
+							{
+								std::vector<std::uint8_t> graphicData(iopData, iopData + graphicDataLength);
+								iopData += graphicDataLength;
+								iopLength -= graphicDataLength;
+								tempObject->set_raw_data(std::move(graphicData));
+								retVal = true;
+							}
+							else
+							{
+								LOG_ERROR("[WS]: Not enough IOP data to parse graphic data object raw data");
+							}
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Graphic data object %u has an unsupported format type. Only format type 0 (PNG) is allowed.", decodedID);
+						}
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse graphic data object");
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+					}
+				}
+				break;
+
 				default:
 				{
 					LOG_ERROR("[WS]: Unsupported Object (Type: %d)", decodedType);
