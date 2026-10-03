@@ -1,0 +1,5 @@
+config AGISOSTACK_CMSIS_RTOS2_THREADING
+	bool "Use CMSIS-RTOS2 for AgIsoStack++ threading"
+	depends on CMSIS_RTOS_V2 && CPP
+	help
+	  Select the CMSIS-RTOS2 threading backend used by AgIsoStack++.
