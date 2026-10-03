@@ -81,6 +81,8 @@ namespace isobus
 
 	void InnoMakerUSB2CANWindowsPlugin::open()
 	{
+		lastError.clear();
+
 		// close() destroys the driver once the last channel closes, so it cannot only be created in the constructor
 		if (nullptr == driverInstance)
 		{
@@ -252,18 +254,29 @@ namespace isobus
 
 				default:
 				{
-					LOG_ERROR("[InnoMaker-Windows] Unsupported baudrate with index " + isobus::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
+					lastError = "Unable to open InnoMaker channel " + isobus::to_string(channel) + ", the configured baud rate is not supported (index " + isobus::to_string(baudrate) + ")";
+					LOG_ERROR("[InnoMaker-Windows] " + lastError);
 					return;
 				}
 				break;
 			}
-			driverInstance->urbSetupDevice(device, CAN_MODE, bitTiming);
-			driverInstance->openInnoMakerDevice(device);
+			if (!driverInstance->urbSetupDevice(device, CAN_MODE, bitTiming))
+			{
+				driverInstance->closeInnoMakerDevice(device);
+				lastError = "Unable to open InnoMaker channel " + isobus::to_string(channel) + ", the adapter was found but could not be opened or configured. It may be in use by another program.";
+				LOG_ERROR("[InnoMaker-Windows] " + lastError);
+			}
 		}
 		else
 		{
-			LOG_ERROR("[InnoMaker-Windows] No device found on channel " + isobus::to_string(channel));
+			lastError = "Unable to open InnoMaker channel " + isobus::to_string(channel) + ", no adapter on that channel (found " + isobus::to_string(driverInstance->getInnoMakerDeviceCount()) + " InnoMaker USB2CAN adapters)";
+			LOG_ERROR("[InnoMaker-Windows] " + lastError);
 		}
+	}
+
+	std::string InnoMakerUSB2CANWindowsPlugin::get_last_error() const
+	{
+		return lastError;
 	}
 
 	bool InnoMakerUSB2CANWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)
