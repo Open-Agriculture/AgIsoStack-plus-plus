@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        example: [examples/virtual_terminal/esp32_platformio_object_pool]
+        example: [examples/virtual_terminal/esp32_platformio_object_pool, examples/seeder_example_esp32_platformio]
 
     steps:
       - uses: actions/checkout@v7
