@@ -38,7 +38,7 @@ namespace isobus
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
-			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
+			objectPoolProcessingThread.reset(new Thread([this]() { worker_thread_function(); }));
 		}
 	}
 
@@ -59,7 +59,7 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState VirtualTerminalServerManagedWorkingSet::get_object_pool_processing_state()
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		return processingState;
 	}
 
@@ -130,7 +130,7 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::set_iop_size(std::uint32_t newIopSize)
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		iopSize = newIopSize;
 	}
 
@@ -169,7 +169,7 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		processingState = value;
 	}
 
