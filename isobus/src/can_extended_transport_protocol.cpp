@@ -486,7 +486,7 @@ namespace isobus
 					                            std::move(data),
 					                            source,
 					                            destination,
-					                            0,
+					                            message.get_can_port_index(),
 					                            message.get_timestamp_us());
 
 					canMessageReceivedCallback(completedMessage);
