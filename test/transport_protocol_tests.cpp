@@ -123,6 +123,41 @@ TEST_F(TransportProtocolTest, BroadcastMessageReceiving)
 	ASSERT_FALSE(manager.has_session(originator, nullptr));
 }
 
+TEST_F(TransportProtocolTest, BroadcastMessageReceivingKeepsCANPort)
+{
+	constexpr std::uint8_t canPort = 1;
+
+	auto originator = test_helpers::create_mock_control_function(0x01);
+
+	std::uint8_t messageCount = 0;
+	std::uint8_t receivedPort = 0;
+	auto receiveMessageCallback = [&](const CANMessage &message) {
+		receivedPort = message.get_can_port_index();
+		messageCount++;
+	};
+
+	CANNetworkConfiguration defaultConfiguration;
+	TransportProtocolManager manager(nullptr, receiveMessageCallback, &defaultConfiguration);
+
+	auto createFrameOnPort = [&](std::uint32_t parameterGroupNumber, std::initializer_list<std::uint8_t> data) {
+		return CANMessage(CANMessage::Type::Receive,
+		                  CANIdentifier(test_helpers::create_ext_can_id_broadcast(7, parameterGroupNumber, originator)),
+		                  data.begin(),
+		                  static_cast<std::uint32_t>(data.size()),
+		                  originator,
+		                  nullptr,
+		                  canPort,
+		                  0);
+	};
+
+	manager.process_message(createFrameOnPort(0xEC00, { 32, 9, 0, 2, 0xFF, 0xEC, 0xFE, 0x00 }));
+	manager.process_message(createFrameOnPort(0xEB00, { 1, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 }));
+	manager.process_message(createFrameOnPort(0xEB00, { 2, 0x08, 0x09, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+
+	ASSERT_EQ(messageCount, 1);
+	EXPECT_EQ(receivedPort, canPort);
+}
+
 // Test case for timeout when receiving broadcast message
 TEST_F(TransportProtocolTest, BroadcastMessageTimeout)
 {

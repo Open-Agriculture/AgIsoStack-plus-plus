@@ -4,6 +4,10 @@
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#ifdef ISOBUS_SOCKETCAN_AVAILABLE
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#endif
+
 #include <chrono>
 #include <future>
 #include <thread>
@@ -262,3 +266,138 @@ TEST(HARDWARE_INTERFACE_TESTS, VerifyStartedFlagBehaviorInNonThreadingMode)
 	// Clean up
 	CANHardwareInterface::stop();
 }
+
+TEST(HARDWARE_INTERFACE_TESTS, StopClosesTheDriver)
+{
+	auto device = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+	CANHardwareInterface::start();
+	CANHardwareInterface::stop();
+
+	EXPECT_FALSE(device->get_is_valid());
+
+	// Closing on stop is what lets a user switch hardware or recover a bad connection without restarting the application
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+	CANHardwareInterface::start();
+
+	EXPECT_TRUE(device->get_is_valid());
+
+	CANHardwareInterface::stop();
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, OneDriverCannotBeAssignedToTwoChannels)
+{
+	auto device = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(2);
+
+	// Both channels would close it, so stopping channel 0 would take down the hardware channel 1 is still reading
+	EXPECT_TRUE(CANHardwareInterface::assign_can_channel_frame_handler(0, device));
+	EXPECT_FALSE(CANHardwareInterface::assign_can_channel_frame_handler(1, device));
+
+	CANHardwareInterface::unassign_can_channel_frame_handler(0);
+	CANHardwareInterface::set_number_of_can_channels(1);
+}
+
+class NeverValidPlugin : public CANHardwarePlugin
+{
+public:
+	std::string get_name() const override
+	{
+		return "NeverValid";
+	}
+	bool get_is_valid() const override
+	{
+		return false;
+	}
+	void close() override
+	{
+	}
+	void open() override
+	{
+	}
+	bool read_frame(CANMessageFrame &) override
+	{
+		return false;
+	}
+	bool write_frame(const CANMessageFrame &) override
+	{
+		return false;
+	}
+	std::string get_last_error() const override
+	{
+		return "";
+	}
+};
+
+TEST(HARDWARE_INTERFACE_TESTS, StartFailsWhenADriverDoesNotOpen)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<NeverValidPlugin>());
+
+	EXPECT_FALSE(CANHardwareInterface::start());
+
+	// Nothing is rolled back, the caller decides whether to stop
+	EXPECT_TRUE(CANHardwareInterface::is_running());
+
+	CANHardwareInterface::stop();
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, OpenChannelKeepsWorkingWhenAnotherFailsToStart)
+{
+	auto device = std::make_shared<VirtualCANPlugin>("partial-start");
+	auto peer = std::make_shared<VirtualCANPlugin>("partial-start");
+	peer->open();
+	CANHardwareInterface::set_number_of_can_channels(2);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<NeverValidPlugin>());
+	CANHardwareInterface::assign_can_channel_frame_handler(1, device);
+
+	EXPECT_FALSE(CANHardwareInterface::start());
+	EXPECT_TRUE(device->get_is_valid());
+
+	CANMessageFrame frame;
+	memset(&frame, 0, sizeof(CANMessageFrame));
+	frame.identifier = 0x612;
+	frame.dataLength = 1;
+	frame.channel = 1;
+	EXPECT_TRUE(isobus::send_can_message_frame_to_hardware(frame));
+
+	CANMessageFrame peerFrame;
+	memset(&peerFrame, 0, sizeof(CANMessageFrame));
+	EXPECT_TRUE(peer->read_frame(peerFrame, 1000));
+	EXPECT_EQ(0x612u, peerFrame.identifier);
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, ChannelWithoutADriverIsNotAStartFailure)
+{
+	CANHardwareInterface::set_number_of_can_channels(2);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+
+	EXPECT_TRUE(CANHardwareInterface::start());
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+}
+
+#ifdef ISOBUS_SOCKETCAN_AVAILABLE
+TEST(HARDWARE_INTERFACE_TESTS, SocketCANMissingInterfaceIsNotValid)
+{
+	SocketCANInterface missing("agisonotreal0");
+	missing.open();
+
+	EXPECT_FALSE(missing.get_is_valid());
+	EXPECT_NE(std::string::npos, missing.get_last_error().find("agisonotreal0"));
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, SocketCANNameOver15CharactersIsRefused)
+{
+	SocketCANInterface tooLong("agisonotreal0123");
+	tooLong.open();
+
+	EXPECT_FALSE(tooLong.get_is_valid());
+	EXPECT_NE(std::string::npos, tooLong.get_last_error().find("longer than 15 characters"));
+}
+#endif
