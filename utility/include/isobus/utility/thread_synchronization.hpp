@@ -28,6 +28,15 @@ namespace isobus
 	class RecursiveMutex
 	{
 	};
+	/// @brief A no-op lock guard when threading is disabled.
+	template<typename MutexType>
+	class LockGuard
+	{
+	public:
+		explicit LockGuard(MutexType &) {}
+		LockGuard(const LockGuard &) = delete;
+		LockGuard &operator=(const LockGuard &) = delete;
+	};
 	/// @brief A no-op thread wrapper when threading is disabled.
 	class Thread
 	{

@@ -24,6 +24,8 @@ TEST(VirtualTerminalServerTest, AlreadyParsedIOPSegmentIsNotReparsed)
 
 	workingSet.start_parsing_thread();
 	workingSet.join_parsing_thread();
+	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined,
+	          workingSet.get_object_pool_processing_state());
 
 	auto firstObject = workingSet.get_object_by_id(0x1234);
 	ASSERT_NE(nullptr, firstObject);
@@ -48,6 +50,8 @@ TEST(VirtualTerminalServerTest, AlreadyParsedIOPSegmentIsNotReparsed)
 
 	workingSet.start_parsing_thread();
 	workingSet.join_parsing_thread();
+	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined,
+	          workingSet.get_object_pool_processing_state());
 
 	// The new segment must have been parsed.
 	auto secondObject = workingSet.get_object_by_id(0x5678);

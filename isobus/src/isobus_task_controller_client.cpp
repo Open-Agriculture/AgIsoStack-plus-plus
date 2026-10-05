@@ -41,6 +41,14 @@ namespace isobus
 		assert(nullptr != myControlFunction);
 		assert(nullptr != partnerControlFunction);
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if ((nullptr != workerThread) && workerThread->is_current_thread())
+		{
+			LOG_ERROR("[TC]: Cannot reinitialize TC client from its worker thread!");
+			return;
+		}
+#endif
+
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
@@ -49,6 +57,17 @@ namespace isobus
 		{
 			languageCommandInterface.initialize();
 		}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		// A previous worker may have exited without being joined (for example,
+		// terminate() was called from that worker). Reap it before clearing the
+		// termination flag or replacing the Thread wrapper.
+		if ((shouldTerminate || !initialized) && (nullptr != workerThread))
+		{
+			workerThread->join();
+			workerThread.reset();
+		}
+#endif
 
 		if (shouldTerminate)
 		{
