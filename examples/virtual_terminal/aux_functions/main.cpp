@@ -14,12 +14,19 @@
 #include <atomic>
 #include <csignal>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
 static std::atomic_bool running = { true };
+
+// In-memory storage for auxiliary function assignments for demonstration purposes
+// Production applications should use nonvolatile storage to restore preferences after power cycles.
+static std::mutex assignmentStorageMutex;
+static std::map<std::pair<std::uint64_t, std::uint16_t>, std::vector<isobus::VirtualTerminalClient::AssignedAuxiliaryFunction>> assignmentStorage;
 
 void signal_handler(int)
 {
@@ -30,6 +37,68 @@ void signal_handler(int)
 void handle_aux_function_input(const isobus::VirtualTerminalClient::AuxiliaryFunctionEvent &event)
 {
 	std::cout << "Auxiliary function event received: (" << event.function.functionObjectID << ", " << event.function.inputObjectID << ", " << static_cast<int>(event.function.functionType) << "), value1: " << event.value1 << ", value2: " << event.value2 << std::endl;
+}
+
+void handle_aux_assignment_failure(const isobus::VirtualTerminalClient::AuxiliaryAssignmentFailureEvent &event)
+{
+	// Present this alert on the operator interface (for example, an Alarm Mask) in a production application.
+	std::cerr << "Operator alert: Auxiliary function assignments are unavailable after "
+	          << static_cast<int>(event.attempts) << " transmission attempt(s). Check the auxiliary controls and assignments."
+	          << std::endl;
+}
+
+// Callback to load stored auxiliary function assignments
+static std::vector<isobus::VirtualTerminalClient::AssignedAuxiliaryFunction> load_assignments(
+  std::uint64_t deviceName,
+  std::uint16_t modelIdentificationCode,
+  void *)
+{
+	std::vector<isobus::VirtualTerminalClient::AssignedAuxiliaryFunction> assignments;
+	{
+		std::lock_guard<std::mutex> lock(assignmentStorageMutex);
+		auto it = assignmentStorage.find(std::make_pair(deviceName, modelIdentificationCode));
+		if (assignmentStorage.end() != it)
+		{
+			assignments = it->second;
+		}
+	}
+	if (!assignments.empty())
+	{
+		std::cout << "Loading " << assignments.size() << " stored assignment(s) for device "
+		          << std::hex << deviceName << std::dec
+		          << " (model ID: " << modelIdentificationCode << ")" << std::endl;
+		return assignments;
+	}
+
+	std::cout << "No stored assignments found for device "
+	          << std::hex << deviceName << std::dec
+	          << " (model ID: " << modelIdentificationCode << ")" << std::endl;
+	return {}; // Return empty vector if no stored assignments
+}
+
+// Callback to store auxiliary function assignments
+static void store_assignments(
+  std::uint64_t deviceName,
+  std::uint16_t modelIdentificationCode,
+  const std::vector<isobus::VirtualTerminalClient::AssignedAuxiliaryFunction> &assignments,
+  void *)
+{
+	{
+		std::lock_guard<std::mutex> lock(assignmentStorageMutex);
+		assignmentStorage[std::make_pair(deviceName, modelIdentificationCode)] = assignments;
+	}
+
+	std::cout << "Stored " << assignments.size() << " assignment(s) for device "
+	          << std::hex << deviceName << std::dec
+	          << " (model ID: " << modelIdentificationCode << ")" << std::endl;
+
+	// Optionally print details of each assignment
+	for (const auto &assignment : assignments)
+	{
+		std::cout << "  - Function ID: " << assignment.functionObjectID
+		          << ", Input ID: " << assignment.inputObjectID
+		          << ", Type: " << static_cast<int>(assignment.functionType) << std::endl;
+	}
 }
 
 int main(int argc, char **argv)
@@ -44,7 +113,9 @@ int main(int argc, char **argv)
 	}
 
 	isobus::CANStackLogger::set_can_stack_logger_sink(&logger);
-	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info); // Change this to Debug to see more information
+	// Debug logging shows preferred assignment exchanges and retries in this example.
+	// Use Info for less verbose application logging.
+	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Debug);
 	isobus::CANHardwareInterface::set_number_of_can_channels(1);
 	isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
 
@@ -91,7 +162,14 @@ int main(int argc, char **argv)
 
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
+
 	TestVirtualTerminalClient->get_auxiliary_function_event_dispatcher().add_listener(handle_aux_function_input);
+	TestVirtualTerminalClient->get_auxiliary_assignment_failure_event_dispatcher().add_listener(handle_aux_assignment_failure);
+	std::cout << "Registered auxiliary function input event listener." << std::endl;
+
+	TestVirtualTerminalClient->set_auxiliary_assignment_callbacks(load_assignments, store_assignments, nullptr);
+	std::cout << "Registered auxiliary assignment storage callbacks (in-memory)" << std::endl;
+
 	TestVirtualTerminalClient->initialize(true);
 
 	while (running)
