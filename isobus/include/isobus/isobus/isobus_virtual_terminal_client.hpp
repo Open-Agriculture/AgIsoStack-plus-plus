@@ -17,6 +17,7 @@
 #include "isobus/utility/processing_flags.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -637,16 +638,22 @@ namespace isobus
 		/// and will receive updates using update_auxiliary_input().
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		void add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
+		/// @brief Add a typed auxiliary input for held Boolean status timing.
+		/// @param[in] auxiliaryInputID The ID of the auxiliary input
+		/// @param[in] functionType Function type associated with the input object
+		void add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID, AuxiliaryTypeTwoFunctionType functionType);
+
 		/// @brief Remove an auxiliary input from the pool of managed auxiliary inputs.
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		void remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
 
 		/// @brief Update the state of an auxiliary input. This should be called when
-		/// the value of an auxiliary input changes.
+		/// the value or lock state of an auxiliary input changes.
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		/// @param[in] value1 The first value of the auxiliary input. See Table J.5 of Part 6 of the standard for details.
 		/// @param[in] value2 The second value of the auxiliary input. See Table J.5 of Part 6 of the standard for details.
-		/// @param[in] controlLocked Whether the auxiliary input is locked
+		/// @param[in] controlLocked Whether the auxiliary input is locked (VT version 6 and later).
+		/// While locked, continue supplying physical values; transmitted values remain frozen until unlock.
 		void update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked = false);
 
 		// Command Messages
@@ -1388,16 +1395,29 @@ namespace isobus
 		/// @brief Struct for storing the state of an auxiliary input on our device
 		struct AuxiliaryInputState
 		{
-			std::uint64_t lastStatusUpdate; ///< The time of the last status update, in milliseconds
+			std::uint32_t lastStatusUpdate; ///< The time of the last status update, in milliseconds
 			bool enabled; ///< Whether the auxiliary input is enabled by the VT
 			bool hasInteraction; ///< Whether the auxiliary input is currently interacted with
 			bool controlLocked; ///< Whether the auxiliary input is currently locked
 			std::uint16_t value1; ///< The first value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
 			std::uint16_t value2; ///< The second value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
+			AuxiliaryTypeTwoFunctionType functionType = AuxiliaryTypeTwoFunctionType::AnalogueLatching; ///< Function type used to identify held Boolean status encodings
+			std::uint16_t lockedValue1 = 0; ///< First value captured when the input becomes locked
+			std::uint16_t lockedValue2 = 0; ///< Second value captured when the input becomes locked
+			bool interactionDetectedWhileLocked = false; ///< Interaction latched until the input is unlocked
+		};
+
+		/// @brief Stores the latest assigned input status for auxiliary function timeout handling
+		struct AuxiliaryFunctionStatus
+		{
+			std::uint32_t lastStatusTimestamp_ms; ///< Time of the last received input status, in milliseconds
+			std::uint16_t value1; ///< First input status value, as defined in Table J.5 of Part 6
+			std::uint16_t value2; ///< Second input status value, as defined in Table J.5 of Part 6
 		};
 
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY = 1000; ///< The delay between the auxiliary input status messages, in milliseconds
 		static constexpr std::uint64_t AUXILIARY_INPUT_STATUS_DELAY_INTERACTION = 50; ///< The delay between the auxiliary input status messages when the input is interacted with, in milliseconds
+		static constexpr std::uint64_t AUXILIARY_INPUT_HELD_STATUS_DELAY = 200; ///< The delay between repeated status messages for a held Boolean input, in milliseconds
 
 		/// @brief Sends a message to the VT server
 		/// @param[in] dataBuffer A pointer to the data buffer to send
@@ -1558,6 +1578,24 @@ namespace isobus
 		/// @param[in] updatePreferred true to remove the function from stored preferences
 		void erase_auxiliary_function_assignment(AssignedAuxiliaryInputDevice &device, std::uint16_t functionObjectID, bool updatePreferred);
 
+		/// @brief Releases held non-latching Boolean functions after 300 ms without an input status message
+		/// @details Dispatches each synthesized release once, preserving the transition count. Leaves latched and
+		/// error values unchanged and suppresses releases during learn mode. Events run outside the device state lock.
+		void process_auxiliary_function_status_timeouts();
+
+		/// @brief Finds a function's current active assignment
+		/// @details The caller must hold auxiliaryAssignmentMutex. Only ready input devices are searched.
+		/// @param[in] functionObjectID Function object ID to find
+		/// @returns The active assignment, or nullptr if it is not currently assigned
+		AssignedAuxiliaryFunction *find_active_auxiliary_function(std::uint16_t functionObjectID);
+
+		/// @brief Converts a timed-out auxiliary function status to its released value
+		/// @details Only held encodings for momentary Boolean types are released. Other values are preserved.
+		/// @param[in] functionType Type of the assigned auxiliary function
+		/// @param[in] value1 Most recently received first status value
+		/// @returns Status value after releasing supported held bits
+		static std::uint16_t get_auxiliary_function_released_value(AuxiliaryTypeTwoFunctionType functionType, std::uint16_t value1);
+
 		/// @brief Send the auxiliary control type 2 assignment reponse message
 		/// @param[in] functionObjectID The object ID of the function
 		/// @param[in] hasError true if the assignment failed
@@ -1568,6 +1606,9 @@ namespace isobus
 		/// @brief Send the auxiliary control type 2 maintenance message
 		/// @returns true if the message was sent successfully
 		bool send_auxiliary_input_maintenance() const;
+		/// @brief Clears Auxiliary Input readiness and VT enable state
+		void clear_auxiliary_input_object_pool_ready();
+
 		/// @brief Send the auxiliary input status type 2 enable response
 		/// @param[in] objectID The object ID of the input
 		/// @param[in] isEnabled true if the input is enabled
@@ -1768,6 +1809,7 @@ namespace isobus
 		bool auxiliaryAssignmentDirty = false; ///< Whether the current known device set needs a preferred assignment
 		bool auxiliaryAssignmentForceSync = false; ///< A removal with active mappings requires a complete-set update, even when empty
 		bool auxiliaryFunctionsEnabled = false; ///< Whether AUX-N function handling is enabled
+		mutable std::atomic<bool> auxiliaryInputObjectPoolReady{ false }; ///< Whether this device's auxiliary input object pool is available to the VT
 		Mutex auxiliaryAssignmentMutex; ///< Protects assigned device state and preferred assignment transaction state
 		Mutex auxiliaryPreferenceOperationMutex; ///< Serializes load, mutation, and store operations
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
@@ -1777,6 +1819,7 @@ namespace isobus
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
+		std::map<std::uint16_t, AuxiliaryFunctionStatus> auxiliaryFunctionStatuses; ///< Last status used to release held non-latching functions
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
 #endif

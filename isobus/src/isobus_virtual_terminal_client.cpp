@@ -261,6 +261,7 @@ namespace isobus
 			auxiliaryAssignmentDirty = false;
 			auxiliaryAssignmentTransactionInFlight = false;
 			auxiliaryAssignmentTransactionDevices.clear();
+			auxiliaryFunctionStatuses.clear();
 		}
 	}
 
@@ -276,13 +277,20 @@ namespace isobus
 
 	void VirtualTerminalClient::add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
-		ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
+		add_auxiliary_input_object_id(auxiliaryInputID, AuxiliaryTypeTwoFunctionType::AnalogueLatching);
+	}
+
+	void VirtualTerminalClient::add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID, AuxiliaryTypeTwoFunctionType functionType)
+	{
+		clear_auxiliary_input_object_pool_ready();
+		ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0, functionType };
 	}
 
 	void VirtualTerminalClient::remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
 		if (ourAuxiliaryInputs.count(auxiliaryInputID))
 		{
+			clear_auxiliary_input_object_pool_ready();
 			ourAuxiliaryInputs.erase(auxiliaryInputID);
 			LOG_DEBUG("[AUX-N] Removed auxiliary input with ID: " +
 			          isobus::to_string(static_cast<int>(auxiliaryInputID)));
@@ -291,24 +299,38 @@ namespace isobus
 
 	void VirtualTerminalClient::update_auxiliary_input(const std::uint16_t auxiliaryInputID, const std::uint16_t value1, const std::uint16_t value2, const bool controlLocked)
 	{
-		if (!ourAuxiliaryInputs.count(auxiliaryInputID))
+		auto input = ourAuxiliaryInputs.find(auxiliaryInputID);
+		if (ourAuxiliaryInputs.end() == input)
 		{
 			LOG_WARNING("[AUX-N] Auxiliary input with ID '" +
 			            isobus::to_string(static_cast<int>(auxiliaryInputID)) +
 			            "' has not been registered. Ignoring update");
 			return;
 		}
-
-		if (state == StateMachineState::Connected)
+		auto &inputState = input->second;
+		const bool locked = controlLocked && is_vt_version_supported(VTVersion::Version6);
+		const bool valueChanged = (value1 != inputState.value1) || (value2 != inputState.value2);
+		const bool lockChanged = locked != inputState.controlLocked;
+		if (valueChanged || lockChanged)
 		{
-			if ((value1 != ourAuxiliaryInputs.at(auxiliaryInputID).value1) || (value2 != ourAuxiliaryInputs.at(auxiliaryInputID).value2))
+			if (lockChanged)
 			{
-				ourAuxiliaryInputs.at(auxiliaryInputID).value1 = value1;
-				ourAuxiliaryInputs.at(auxiliaryInputID).value2 = value2;
-				ourAuxiliaryInputs.at(auxiliaryInputID).controlLocked = controlLocked;
-				ourAuxiliaryInputs.at(auxiliaryInputID).hasInteraction = true;
-				update_auxiliary_input_status(auxiliaryInputID);
+				inputState.interactionDetectedWhileLocked = false;
+				if (locked)
+				{
+					inputState.lockedValue1 = value1;
+					inputState.lockedValue2 = value2;
+				}
 			}
+			else if (locked && valueChanged)
+			{
+				inputState.interactionDetectedWhileLocked = true;
+			}
+			inputState.value1 = value1;
+			inputState.value2 = value2;
+			inputState.controlLocked = locked;
+			inputState.hasInteraction = true;
+			update_auxiliary_input_status(auxiliaryInputID);
 		}
 	}
 
@@ -1270,6 +1292,7 @@ namespace isobus
 		if ((nullptr != pool) &&
 		    (0 != size))
 		{
+			clear_auxiliary_input_object_pool_ready();
 			ObjectPoolDataStruct tempData;
 
 			tempData.objectPoolDataPointer = pool;
@@ -1299,6 +1322,7 @@ namespace isobus
 		if ((nullptr != pool) &&
 		    (!pool->empty()))
 		{
+			clear_auxiliary_input_object_pool_ready();
 			ObjectPoolDataStruct tempData;
 
 			tempData.objectPoolDataPointer = nullptr;
@@ -1329,6 +1353,7 @@ namespace isobus
 	{
 		// You have to call set_object_pool or register_object_pool_data_chunk_callback before calling this function
 		assert(poolIndex < objectPools.size());
+		clear_auxiliary_input_object_pool_ready();
 		objectPools[poolIndex].autoScaleDataMaskOriginalDimension = originalDataMaskDimensions_px;
 		objectPools[poolIndex].autoScaleSoftKeyDesignatorOriginalHeight = originalSoftKeyDesignatorHeight_px;
 	}
@@ -1338,6 +1363,7 @@ namespace isobus
 		if ((nullptr != value) &&
 		    (0 != poolTotalSize))
 		{
+			clear_auxiliary_input_object_pool_ready();
 			ObjectPoolDataStruct tempData;
 
 			tempData.objectPoolDataPointer = nullptr;
@@ -1380,6 +1406,10 @@ namespace isobus
 					const bool hadAssignments = !device.functions.empty();
 					device.ready = false;
 					auxiliaryAssignmentForceSync = auxiliaryAssignmentForceSync || hadAssignments;
+					for (const auto &function : device.functions)
+					{
+						auxiliaryFunctionStatuses.erase(function.functionObjectID);
+					}
 					device.functions.clear();
 					if (hadAssignments)
 					{
@@ -1785,8 +1815,8 @@ namespace isobus
 						LOG_ERROR("[VT]: Status Timeout");
 						break;
 					}
+					process_auxiliary_function_status_timeouts();
 					update_auxiliary_assignment_transaction(false);
-					update_auxiliary_input_status();
 				}
 				break;
 
@@ -1814,6 +1844,11 @@ namespace isobus
 		else
 		{
 			set_state(StateMachineState::Disconnected);
+		}
+
+		if (auxiliaryInputObjectPoolReady)
+		{
+			update_auxiliary_input_status();
 		}
 
 		if ((sendWorkingSetMaintenance) &&
@@ -1850,6 +1885,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_delete_object_pool() const
 	{
+		auxiliaryInputObjectPoolReady = false;
 		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::DeleteObjectPoolCommand),
 			                                                             0xFF,
 			                                                             0xFF,
@@ -2229,6 +2265,12 @@ namespace isobus
 		std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> toStore;
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			const bool isAlreadyAssigned = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [deviceName, inputObjectID, functionObjectID](const AssignedAuxiliaryInputDevice &device) {
+				return device.ready && (device.name == deviceName) &&
+				  std::any_of(device.functions.begin(), device.functions.end(), [inputObjectID, functionObjectID](const AssignedAuxiliaryFunction &function) {
+					       return (function.functionObjectID == functionObjectID) && (function.inputObjectID == inputObjectID);
+				       });
+			});
 			const bool preferencesLoaded = std::all_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
 				return device.preferredAssignmentsLoaded;
 			});
@@ -2254,7 +2296,7 @@ namespace isobus
 					std::get<2>(*pending) = std::get<2>(entry);
 				}
 			}
-			send_auxiliary_function_assignment_response(functionObjectID, hasError, false);
+			send_auxiliary_function_assignment_response(functionObjectID, hasError, !hasError && isAlreadyAssigned);
 		}
 	}
 
@@ -2278,6 +2320,7 @@ namespace isobus
 						toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
 					}
 				}
+				auxiliaryFunctionStatuses.clear();
 				return false;
 			}
 			for (auto &device : assignedAuxiliaryInputDevices)
@@ -2289,6 +2332,7 @@ namespace isobus
 					toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
 				}
 			}
+			auxiliaryFunctionStatuses.erase(functionObjectID);
 			return false;
 		}
 		if (NULL_OBJECT_ID == functionObjectID || NULL_OBJECT_ID == inputObjectID)
@@ -2325,6 +2369,7 @@ namespace isobus
 			}
 		}
 		target->functions.push_back(assignment);
+		auxiliaryFunctionStatuses.erase(functionObjectID);
 		return false;
 	}
 
@@ -2371,7 +2416,7 @@ namespace isobus
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage),
 			                                                         static_cast<std::uint8_t>(ourModelIdentificationCode),
 			                                                         static_cast<std::uint8_t>(ourModelIdentificationCode >> 8),
-			                                                         static_cast<std::uint8_t>((StateMachineState::Connected == state) ? 0x01 : 0x00),
+			                                                         static_cast<std::uint8_t>(auxiliaryInputObjectPoolReady ? 0x01 : 0x00),
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF,
@@ -2382,6 +2427,15 @@ namespace isobus
 		                                                      myControlFunction,
 		                                                      nullptr,
 		                                                      CANIdentifier::CANPriority::Priority3);
+	}
+
+	void VirtualTerminalClient::clear_auxiliary_input_object_pool_ready()
+	{
+		auxiliaryInputObjectPoolReady = false;
+		for (auto &input : ourAuxiliaryInputs)
+		{
+			input.second.enabled = false;
+		}
 	}
 
 	bool VirtualTerminalClient::send_auxiliary_input_status_enable_response(std::uint16_t objectID, bool isEnabled, bool invalidObjectID) const
@@ -2409,16 +2463,19 @@ namespace isobus
 	{
 		bool retVal = false;
 		AuxiliaryInputState &state = ourAuxiliaryInputs.at(objectID);
-		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs on interaction
-		if (SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY) ||
-		    (state.hasInteraction &&
-		     !get_auxiliary_input_learn_mode_enabled() &&
-		     SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
+		const bool learnMode = get_auxiliary_input_learn_mode_enabled();
+		const bool locked = state.controlLocked && is_vt_version_supported(VTVersion::Version6);
+		const std::uint16_t value1 = locked ? state.lockedValue1 : state.value1;
+		const std::uint16_t value2 = locked ? state.lockedValue2 : state.value2;
+		const bool heldBoolean = get_auxiliary_function_released_value(state.functionType, value1) != value1;
+		const bool statusEnabled = state.enabled || learnMode;
+		const bool heldRepeatDue = heldBoolean && SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_HELD_STATUS_DELAY);
+		const bool interactionDue = state.hasInteraction && SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION);
+		const bool periodicDue = SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY);
+		if (auxiliaryInputObjectPoolReady && statusEnabled && (periodicDue || heldRepeatDue || interactionDue))
 		{
-			state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
-
 			std::uint8_t operatingState = 0;
-			if (get_auxiliary_input_learn_mode_enabled())
+			if (learnMode)
 			{
 				operatingState |= 0x01;
 				if (state.hasInteraction)
@@ -2426,26 +2483,23 @@ namespace isobus
 					operatingState |= 0x02;
 				}
 			}
-			if (state.controlLocked)
+			if (locked)
 			{
 				operatingState |= 0x04;
-				if (state.hasInteraction)
+				if (state.interactionDetectedWhileLocked)
 				{
 					operatingState |= 0x08;
 				}
 			}
-			state.hasInteraction = false; // reset interaction flag
-
-			/// @todo Change values based on state of auxiliary input, e.g. for non-latched boolean inputs we have to change from value=1 (momentary) to value=2 (held)
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage),
 				                                                         static_cast<std::uint8_t>(objectID),
 				                                                         static_cast<std::uint8_t>(objectID >> 8),
-				                                                         static_cast<std::uint8_t>(state.value1),
-				                                                         static_cast<std::uint8_t>(state.value1 >> 8),
-				                                                         static_cast<std::uint8_t>(state.value2),
-				                                                         static_cast<std::uint8_t>(state.value2 >> 8),
+				                                                         static_cast<std::uint8_t>(value1),
+				                                                         static_cast<std::uint8_t>(value1 >> 8),
+				                                                         static_cast<std::uint8_t>(value2),
+				                                                         static_cast<std::uint8_t>(value2 >> 8),
 				                                                         operatingState };
-			if (get_auxiliary_input_learn_mode_enabled())
+			if (learnMode)
 			{
 				retVal = send_message_to_vt(buffer.data(), buffer.size(), CANIdentifier::CANPriority::Priority3);
 			}
@@ -2457,6 +2511,11 @@ namespace isobus
 				                                                        myControlFunction,
 				                                                        nullptr,
 				                                                        CANIdentifier::CANPriority::Priority3);
+			}
+			if (retVal)
+			{
+				state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
+				state.hasInteraction = false;
 			}
 		}
 		return retVal;
@@ -2475,6 +2534,7 @@ namespace isobus
 
 		if (StateMachineState::Disconnected == value)
 		{
+			clear_auxiliary_input_object_pool_ready();
 			lastVTStatusTimestamp_ms = 0;
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			auxiliaryAssignmentTransactionInFlight = false;
@@ -2482,6 +2542,7 @@ namespace isobus
 			auxiliaryAssignmentTransactionDevices.clear();
 			auxiliaryAssignmentDirty = false;
 			auxiliaryAssignmentForceSync = false;
+			auxiliaryFunctionStatuses.clear();
 			for (auto &device : assignedAuxiliaryInputDevices)
 			{
 				device.functions.clear();
@@ -2491,6 +2552,14 @@ namespace isobus
 			{
 				pool.uploaded = false;
 			}
+		}
+		else if ((StateMachineState::Failed == value) ||
+		         (StateMachineState::SendLoadVersion == value) ||
+		         (StateMachineState::SendGetMemory == value) ||
+		         (StateMachineState::UploadObjectPool == value) ||
+		         (StateMachineState::SendEndOfObjectPool == value))
+		{
+			clear_auxiliary_input_object_pool_ready();
 		}
 	}
 
@@ -2670,6 +2739,90 @@ namespace isobus
 				return current.ready && current.name == snapshot.name && current.modelIdentificationCode == snapshot.modelIdentificationCode;
 			});
 		});
+	}
+
+	void VirtualTerminalClient::process_auxiliary_function_status_timeouts()
+	{
+		std::vector<AuxiliaryFunctionEvent> releases;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (!auxiliaryFunctionsEnabled || get_auxiliary_input_learn_mode_enabled())
+			{
+				return;
+			}
+			for (auto status = auxiliaryFunctionStatuses.begin(); status != auxiliaryFunctionStatuses.end();)
+			{
+				if (!SystemTiming::time_expired_ms(status->second.lastStatusTimestamp_ms, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
+				{
+					++status;
+					continue;
+				}
+				const auto functionID = status->first;
+				auto function = find_active_auxiliary_function(functionID);
+				if (nullptr != function)
+				{
+					const std::uint16_t releasedValue = get_auxiliary_function_released_value(function->functionType, status->second.value1);
+					if (releasedValue != status->second.value1)
+					{
+						releases.push_back({ *function, this, releasedValue, status->second.value2 });
+					}
+				}
+				status = auxiliaryFunctionStatuses.erase(status);
+			}
+		}
+		for (auto &release : releases)
+		{
+			auxiliaryFunctionEventDispatcher.invoke(std::move(release));
+		}
+	}
+
+	VirtualTerminalClient::AssignedAuxiliaryFunction *VirtualTerminalClient::find_active_auxiliary_function(std::uint16_t functionObjectID)
+	{
+		for (auto &device : assignedAuxiliaryInputDevices)
+		{
+			if (!device.ready)
+			{
+				continue;
+			}
+			auto function = std::find_if(device.functions.begin(), device.functions.end(), [functionObjectID](const AssignedAuxiliaryFunction &candidate) {
+				return candidate.functionObjectID == functionObjectID;
+			});
+			if (function != device.functions.end())
+			{
+				return &*function;
+			}
+		}
+		return nullptr;
+	}
+
+	std::uint16_t VirtualTerminalClient::get_auxiliary_function_released_value(AuxiliaryTypeTwoFunctionType functionType, std::uint16_t value1)
+	{
+		switch (functionType)
+		{
+			case AuxiliaryTypeTwoFunctionType::BooleanMomentary:
+				return (2 == value1) ? 0 : value1;
+			case AuxiliaryTypeTwoFunctionType::DualBooleanMomentary:
+				return ((2 == value1) || (8 == value1)) ? 0 : value1;
+			case AuxiliaryTypeTwoFunctionType::DualBooleanLatchingUpOnly:
+				return (8 == value1) ? 0 : value1;
+			case AuxiliaryTypeTwoFunctionType::DualBooleanLatchingDownpOnly:
+				return (2 == value1) ? 0 : value1;
+			case AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary:
+				if (value1 <= 0x00FF)
+				{
+					for (unsigned int pair = 0; pair < 4; ++pair)
+					{
+						const auto shift = static_cast<std::uint16_t>(pair * 2);
+						if (2 == ((value1 >> shift) & 0x03))
+						{
+							value1 &= static_cast<std::uint16_t>(~(0x03 << shift));
+						}
+					}
+				}
+				return value1;
+			default:
+				return value1;
+		}
 	}
 
 	void VirtualTerminalClient::process_flags(std::uint32_t flag, void *parent)
@@ -3210,22 +3363,29 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage):
 						{
-							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled)
+							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							    !parentVT->get_auxiliary_input_learn_mode_enabled() && !message.get_bool_at(7, 0) &&
+							    (nullptr != message.get_source_control_function()))
 							{
+								const std::uint64_t sourceName = message.get_source_control_function()->get_NAME().get_full_name();
 								const std::uint16_t inputObjectID = message.get_uint16_at(1);
 								const std::uint16_t value1 = message.get_uint16_at(3);
 								const std::uint16_t value2 = message.get_uint16_at(5);
 								std::vector<AuxiliaryFunctionEvent> events;
 								{
 									LOCK_GUARD(Mutex, auxiliaryMutex);
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
+									const auto device = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [sourceName](const AssignedAuxiliaryInputDevice &candidate) {
+										return candidate.ready && candidate.name == sourceName;
+									});
+									if (device != parentVT->assignedAuxiliaryInputDevices.end())
 									{
-										auto result = std::find_if(aux.functions.begin(), aux.functions.end(), [inputObjectID](const AssignedAuxiliaryFunction &assignment) {
-											return assignment.inputObjectID == inputObjectID;
-										});
-										if (aux.functions.end() != result)
+										for (const auto &function : device->functions)
 										{
-											events.push_back({ *result, parentVT, value1, value2 });
+											if (function.inputObjectID == inputObjectID)
+											{
+												parentVT->auxiliaryFunctionStatuses[function.functionObjectID] = { SystemTiming::get_timestamp_ms(), value1, value2 };
+												events.push_back({ function, parentVT, value1, value2 });
+											}
 										}
 									}
 								}
@@ -3239,13 +3399,26 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand):
 						{
+							if ((CAN_DATA_LENGTH != message.get_data_length()) ||
+							    (message.get_source_control_function() != parentVT->partnerControlFunction))
+							{
+								break;
+							}
 							std::uint16_t inputObjectID = message.get_uint16_at(1);
 							bool shouldEnable = message.get_bool_at(3, 0);
 							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [&inputObjectID](const std::pair<std::uint16_t, AuxiliaryInputState> &input) {
 								return input.first == inputObjectID;
 							});
-							bool isInvalidObjectID = (result == std::end(parentVT->ourAuxiliaryInputs));
-							if (!isInvalidObjectID)
+							const bool disableAll = (NULL_OBJECT_ID == inputObjectID) && (0 == message.get_uint8_at(3));
+							const bool isInvalidObjectID = !disableAll && ((NULL_OBJECT_ID == inputObjectID) || (result == std::end(parentVT->ourAuxiliaryInputs)));
+							if (disableAll)
+							{
+								for (auto &input : parentVT->ourAuxiliaryInputs)
+								{
+									input.second.enabled = false;
+								}
+							}
+							else if (!isInvalidObjectID)
 							{
 								result->second.enabled = shouldEnable;
 							}
@@ -3438,6 +3611,7 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									LOG_INFO("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
+									parentVT->auxiliaryInputObjectPoolReady = true;
 
 									// Reset retry counter and send auxiliary assignments if needed
 									bool hasAuxiliaryDevices;
@@ -3562,6 +3736,7 @@ namespace isobus
 								if ((0 == errorCodes) &&
 								    (0 == objectPoolErrorBitmask))
 								{
+									parentVT->auxiliaryInputObjectPoolReady = true;
 									// Clear scaling buffers
 									for (auto &objectPool : parentVT->objectPools)
 									{
@@ -3593,6 +3768,7 @@ namespace isobus
 								}
 								else
 								{
+									parentVT->clear_auxiliary_input_object_pool_ready();
 									parentVT->set_state(StateMachineState::Failed);
 									LOG_ERROR("[VT]: Error in end of object pool message." +
 									          std::string("Faulty Object ") +
@@ -3699,6 +3875,8 @@ namespace isobus
 									{
 										const bool hadActiveAssignments = !previous.functions.empty();
 										parentVT->auxiliaryAssignmentForceSync = parentVT->auxiliaryAssignmentForceSync || hadActiveAssignments;
+										for (const auto &function : previous.functions)
+											parentVT->auxiliaryFunctionStatuses.erase(function.functionObjectID);
 										previous.functions.clear();
 										previous.ready = false;
 										if (hadActiveAssignments)
@@ -3734,6 +3912,8 @@ namespace isobus
 									const bool changed = !device->functions.empty();
 									parentVT->auxiliaryAssignmentForceSync = parentVT->auxiliaryAssignmentForceSync || changed;
 									device->ready = false;
+									for (const auto &function : device->functions)
+										parentVT->auxiliaryFunctionStatuses.erase(function.functionObjectID);
 									device->functions.clear();
 									if (changed)
 									{
