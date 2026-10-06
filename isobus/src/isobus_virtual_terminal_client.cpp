@@ -3217,6 +3217,11 @@ namespace isobus
 	void VirtualTerminalClient::print_objectpool_error(std::uint8_t errorCodes, std::uint8_t objectPoolErrorCodes)
 	{
 		LOG_ERROR("Error(s) occured during the IOP parsing process:");
+		if (errorCodes & 0x1)
+		{
+			LOG_ERROR(" - Error in the object pool");
+		}
+
 		if (errorCodes & 0x2)
 		{
 			LOG_ERROR(" - VT ran out of memory during transfer");

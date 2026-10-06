@@ -107,6 +107,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 			                                                                                       process_rx_message,
 			                                                                                       this);
+			initialized = true;
 		}
 	}
 
@@ -2583,7 +2584,7 @@ namespace isobus
 	bool VirtualTerminalServer::send_end_of_object_pool_response(bool success,
 	                                                             std::uint16_t parentIDOfFaultingObject,
 	                                                             std::uint16_t faultingObjectID,
-	                                                             std::uint8_t errorCodes,
+	                                                             std::uint8_t objectPoolErrorCodes,
 	                                                             std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
@@ -2594,7 +2595,7 @@ namespace isobus
 		buffer[3] = get_high_byte(parentIDOfFaultingObject);
 		buffer[4] = get_low_byte(faultingObjectID);
 		buffer[5] = get_high_byte(faultingObjectID);
-		buffer[6] = errorCodes;
+		buffer[6] = objectPoolErrorCodes;
 		buffer[7] = 0xFF; // Reserved
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -2820,18 +2821,29 @@ namespace isobus
 			if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == ws->get_object_pool_processing_state())
 			{
 				ws->join_parsing_thread();
-				send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
-				if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
+
+				auto workingSetObject = ws->get_working_set_object();
+
+				if (nullptr == workingSetObject)
 				{
-					activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
-					activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(ws->get_working_set_object())->get_active_mask();
+					LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
+					send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+				}
+				else
+				{
+					send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
+					if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
+					{
+						activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
+						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();
+					}
 				}
 			}
 			else if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == ws->get_object_pool_processing_state())
 			{
 				ws->join_parsing_thread();
 				///  @todo Get the parent object ID of the faulting object
-				send_end_of_object_pool_response(true, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), 0, ws->get_control_function());
+				send_end_of_object_pool_response(false, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
 			}
 		}
 	}

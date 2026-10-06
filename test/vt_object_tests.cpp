@@ -367,6 +367,52 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AlarmMaskTests)
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::AlarmMask));
 }
 
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ContainerIsAValidChildWhereTheStandardAllowsIt)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+
+	auto container = std::make_shared<Container>();
+	container->set_id(100);
+	objects[container->get_id()] = container;
+
+	auto dataMask = std::make_shared<DataMask>();
+	dataMask->set_id(1);
+	dataMask->add_child(container->get_id(), 0, 0);
+	objects[dataMask->get_id()] = dataMask;
+	EXPECT_TRUE(dataMask->get_is_valid(objects));
+
+	auto alarmMask = std::make_shared<AlarmMask>();
+	alarmMask->set_id(2);
+	alarmMask->add_child(container->get_id(), 0, 0);
+	objects[alarmMask->get_id()] = alarmMask;
+	EXPECT_TRUE(alarmMask->get_is_valid(objects));
+
+	auto auxiliaryFunction = std::make_shared<AuxiliaryFunctionType2>();
+	auxiliaryFunction->set_id(3);
+	auxiliaryFunction->add_child(container->get_id(), 0, 0);
+	objects[auxiliaryFunction->get_id()] = auxiliaryFunction;
+	EXPECT_TRUE(auxiliaryFunction->get_is_valid(objects));
+
+	auto auxiliaryInput = std::make_shared<AuxiliaryInputType2>();
+	auxiliaryInput->set_id(4);
+	auxiliaryInput->add_child(container->get_id(), 0, 0);
+	objects[auxiliaryInput->get_id()] = auxiliaryInput;
+	EXPECT_TRUE(auxiliaryInput->get_is_valid(objects));
+
+	// The version 1 auxiliary objects predate containers, so they must still reject one
+	auto legacyAuxiliaryFunction = std::make_shared<AuxiliaryFunctionType1>();
+	legacyAuxiliaryFunction->set_id(5);
+	legacyAuxiliaryFunction->add_child(container->get_id(), 0, 0);
+	objects[legacyAuxiliaryFunction->get_id()] = legacyAuxiliaryFunction;
+	EXPECT_FALSE(legacyAuxiliaryFunction->get_is_valid(objects));
+
+	auto legacyAuxiliaryInput = std::make_shared<AuxiliaryInputType1>();
+	legacyAuxiliaryInput->set_id(6);
+	legacyAuxiliaryInput->add_child(container->get_id(), 0, 0);
+	objects[legacyAuxiliaryInput->get_id()] = legacyAuxiliaryInput;
+	EXPECT_FALSE(legacyAuxiliaryInput->get_is_valid(objects));
+}
+
 TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, SoftKeyMaskTests)
 {
 	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
