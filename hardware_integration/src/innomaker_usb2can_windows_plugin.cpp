@@ -87,8 +87,22 @@ namespace isobus
 		if (nullptr == driverInstance)
 		{
 			driverInstance = std::unique_ptr<InnoMakerUsb2CanLib>(new InnoMakerUsb2CanLib());
-			driverInstance->setup();
-			driverInstance->scanInnoMakerDevice();
+			if (!driverInstance->setup())
+			{
+				lastError = "Unable to initialize the InnoMaker USB2CAN driver.";
+				LOG_ERROR("[InnoMaker-Windows] " + lastError);
+				driverInstance.reset();
+				return;
+			}
+
+			if (!driverInstance->scanInnoMakerDevice())
+			{
+				lastError = "Unable to scan for InnoMaker USB2CAN adapters.";
+				LOG_ERROR("[InnoMaker-Windows] " + lastError);
+				driverInstance->setdown();
+				driverInstance.reset();
+				return;
+			}
 		}
 
 		InnoMakerUsb2CanLib::InnoMakerDevice *device = get_device();

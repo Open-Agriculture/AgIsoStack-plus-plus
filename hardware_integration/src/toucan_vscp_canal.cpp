@@ -59,6 +59,7 @@ namespace isobus
 		}
 		else
 		{
+			openResult = CANAL_ERROR_NOT_OPEN;
 			lastError = "Unable to open TouCAN adapter " + name + ", check that it is plugged in and that the device ID and serial number are right.";
 			LOG_CRITICAL("[TouCAN]: " + lastError);
 		}
