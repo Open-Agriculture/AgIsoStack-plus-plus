@@ -23,11 +23,12 @@ static constexpr std::uint64_t MODEL_IDENTIFICATION_CODE = 1; ///< The model ide
 
 static constexpr std::uint64_t BUTTON_CYCLIC_DELAY = 3500; ///< 3.5 seconds between button presses
 static constexpr std::uint64_t SLIDER_CYCLIC_DELAY = 1000; ///< 1 second between slider movements
-static std::uint64_t lastButtonTimestamp = 0;
-static std::uint64_t lastSliderTimestamp = 0;
+static std::uint32_t lastButtonTimestamp = 0;
+static std::uint32_t lastSliderTimestamp = 0;
 
 static bool buttonPressed = false;
 static std::uint16_t buttonTransitions = 0;
+static std::uint32_t buttonPressedTimestamp = 0;
 
 static constexpr std::uint16_t SLIDER_MAX_POSITION = 0xFAFF;
 static bool backToZero = false;
@@ -42,8 +43,23 @@ void signal_handler(int)
 void simulate_button_press()
 {
 	buttonPressed = !buttonPressed;
-	TestVirtualTerminalClient->update_auxiliary_input(AUXN_INPUT_BUTTON, buttonPressed, buttonTransitions);
-	buttonTransitions++;
+	if (buttonPressed)
+	{
+		++buttonTransitions;
+	}
+	TestVirtualTerminalClient->update_auxiliary_input(BOOLEAN_LATCHING_INPUT, buttonPressed, buttonTransitions);
+	if (buttonPressed)
+	{
+		// For non-latching input, start with state 1 (pressed)
+		TestVirtualTerminalClient->update_auxiliary_input(BOOLEAN_NONLATCHING_INPUT, 1, buttonTransitions);
+		buttonPressedTimestamp = isobus::SystemTiming::get_timestamp_ms();
+	}
+	else
+	{
+		// Released
+		TestVirtualTerminalClient->update_auxiliary_input(BOOLEAN_NONLATCHING_INPUT, 0, buttonTransitions);
+		buttonPressedTimestamp = 0;
+	}
 }
 
 void simulate_slider_move()
@@ -73,7 +89,7 @@ void simulate_slider_move()
 			backToZero = true;
 		}
 	}
-	TestVirtualTerminalClient->update_auxiliary_input(AUXN_INPUT_SLIDER, sliderPosition, 0xFFFF);
+	TestVirtualTerminalClient->update_auxiliary_input(ANALOGUE_MAINTAINS_INPUT, sliderPosition, 0xFFFF);
 }
 
 void on_periodic_update()
@@ -81,6 +97,13 @@ void on_periodic_update()
 	if (nullptr != TestVirtualTerminalClient &&
 	    !TestVirtualTerminalClient->get_auxiliary_input_learn_mode_enabled())
 	{
+		// Check if button has been held for 100ms and update to state 2 (held)
+		if (buttonPressedTimestamp != 0 && isobus::SystemTiming::time_expired_ms(buttonPressedTimestamp, 100))
+		{
+			TestVirtualTerminalClient->update_auxiliary_input(BOOLEAN_NONLATCHING_INPUT, 2, buttonTransitions);
+			buttonPressedTimestamp = 0; // Only update once
+		}
+
 		if (isobus::SystemTiming::time_expired_ms(lastButtonTimestamp, BUTTON_CYCLIC_DELAY))
 		{
 			lastButtonTimestamp = isobus::SystemTiming::get_timestamp_ms();
@@ -155,8 +178,9 @@ int main(int argc, char **argv)
 	TestVirtualTerminalClient = std::make_shared<isobus::VirtualTerminalClient>(TestPartnerVT, TestInternalECU);
 	TestVirtualTerminalClient->set_object_pool(0, testPool.data(), testPool.size(), objectPoolHash);
 	TestVirtualTerminalClient->set_auxiliary_input_model_identification_code(MODEL_IDENTIFICATION_CODE);
-	TestVirtualTerminalClient->add_auxiliary_input_object_id(AUXN_INPUT_SLIDER);
-	TestVirtualTerminalClient->add_auxiliary_input_object_id(AUXN_INPUT_BUTTON);
+	TestVirtualTerminalClient->add_auxiliary_input_object_id(ANALOGUE_MAINTAINS_INPUT);
+	TestVirtualTerminalClient->add_auxiliary_input_object_id(BOOLEAN_LATCHING_INPUT);
+	TestVirtualTerminalClient->add_auxiliary_input_object_id(BOOLEAN_NONLATCHING_INPUT, isobus::VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary);
 	TestVirtualTerminalClient->initialize(true);
 
 	while (running)
