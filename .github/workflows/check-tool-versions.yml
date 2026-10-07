@@ -1,0 +1,38 @@
+name: Check mutation testing tool versions
+
+on:  
+  workflow_dispatch:
+
+jobs:
+  check-versions:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Clang and LLVM 19
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-19 llvm-19
+
+      - name: Install Mull for LLVM 19
+        run: |
+          curl -1sLf 'https://dl.cloudsmith.io/public/mull-project/mull-stable/setup.deb.sh' |
+            sudo -E bash
+          sudo apt-get update
+          sudo apt-get install -y mull-19
+
+      - name: Display exact versions
+        run: |
+          echo "=== Clang ==="
+          clang-19 --version
+
+          echo "=== Clang++ ==="
+          clang++-19 --version
+
+          echo "=== LLVM ==="
+          llvm-config-19 --version
+
+          echo "=== Mull ==="
+          mull-runner-19 --version
