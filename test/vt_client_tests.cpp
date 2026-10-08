@@ -631,6 +631,152 @@ TEST_F(VirtualTerminalTest, AuxiliaryAssignmentIsAcknowledgedBeforePreferencesAr
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, ReassigningIdenticalAuxiliaryFunctionSetsLegacyAlreadyAssignedResponseBit)
+{
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x26, 0);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	clientUnderTest.set_auxiliary_functions_enabled(true);
+	clientUnderTest.test_wrapper_set_connected_vt_version(0x05);
+
+	NAME inputName(0);
+	inputName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
+	inputName.set_identity_number(283);
+	const auto inputDevice = std::make_shared<ControlFunction>(inputName, 0x21, 0);
+	clientUnderTest.test_wrapper_process_rx_message(make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryInputTypeTwoMaintenanceMessage),
+	                                                                       { 0, 0x34, 0x12, 1, 0xFF, 0xFF, 0xFF, 0xFF },
+	                                                                       inputDevice),
+	                                                &clientUnderTest);
+	clientUnderTest.test_wrapper_update_auxiliary_assignment_transaction(true);
+	(void)count_transmitted_function_frames(serverVT, static_cast<std::uint8_t>(VirtualTerminalClient::Function::PreferredAssignmentCommand));
+
+	std::vector<std::uint8_t> assignment(14, 0xFF);
+	for (std::size_t index = 0; index < 8; ++index)
+	{
+		assignment[index + 1] = static_cast<std::uint8_t>(inputName.get_full_name() >> (index * 8));
+	}
+	assignment[9] = static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary);
+	assignment[10] = 0x34;
+	assignment[11] = 0x12;
+	assignment[12] = 0x01;
+	assignment[13] = 0x01;
+	const auto processAssignmentAndReadResponse = [&]() {
+		clientUnderTest.test_wrapper_process_rx_message(make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand), assignment, vtPartner),
+		                                                &clientUnderTest);
+		CANHardwareInterface::update();
+		CANMessageFrame frame = {};
+		std::uint8_t responseFlags = 0xFF;
+		while (serverVT.read_frame(frame, 0))
+		{
+			if (static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand) == frame.data[0])
+			{
+				responseFlags = frame.data[3];
+			}
+		}
+		return responseFlags;
+	};
+	EXPECT_EQ(0U, processAssignmentAndReadResponse());
+	EXPECT_EQ(0x02U, processAssignmentAndReadResponse());
+
+	clientUnderTest.test_wrapper_set_connected_vt_version(0x06);
+	EXPECT_EQ(0U, processAssignmentAndReadResponse()); // Bit 1 is reserved for VT version 6 and later.
+
+	serverVT.close();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, AuxiliaryInputStatusIsScopedToSourceDeviceAndDispatchesEveryMatchingFunction)
+{
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x26, 0);
+	DerivedTestVTClient clientUnderTest(vtPartner, nullptr);
+	clientUnderTest.set_auxiliary_functions_enabled(true);
+	NAME firstName(0);
+	firstName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
+	firstName.set_identity_number(284);
+	NAME secondName(0);
+	secondName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
+	secondName.set_identity_number(285);
+	const auto firstDevice = std::make_shared<ControlFunction>(firstName, 0x21, 0);
+	const auto secondDevice = std::make_shared<ControlFunction>(secondName, 0x22, 0);
+	NAME unknownName(0);
+	unknownName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
+	unknownName.set_identity_number(286);
+	const auto unknownDevice = std::make_shared<ControlFunction>(unknownName, 0x23, 0);
+	const auto maintenance = [](const std::shared_ptr<ControlFunction> &device) {
+		return make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryInputTypeTwoMaintenanceMessage),
+		                              { 0, 0x34, 0x12, 1, 0xFF, 0xFF, 0xFF, 0xFF },
+		                              device);
+	};
+	clientUnderTest.test_wrapper_process_rx_message(maintenance(firstDevice), &clientUnderTest);
+	clientUnderTest.test_wrapper_process_rx_message(maintenance(secondDevice), &clientUnderTest);
+
+	const auto assignment = [vtPartner](std::uint64_t deviceName, std::uint16_t functionID) {
+		std::vector<std::uint8_t> bytes(14, 0xFF);
+		for (std::size_t index = 0; index < 8; ++index)
+		{
+			bytes[index + 1] = static_cast<std::uint8_t>(deviceName >> (index * 8));
+		}
+		bytes[9] = static_cast<std::uint8_t>(0x80 | static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary));
+		bytes[10] = 0x34;
+		bytes[11] = 0x12;
+		bytes[12] = static_cast<std::uint8_t>(functionID);
+		bytes[13] = static_cast<std::uint8_t>(functionID >> 8);
+		return make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand), std::move(bytes), vtPartner);
+	};
+	clientUnderTest.test_wrapper_process_rx_message(assignment(firstName.get_full_name(), 0x0101), &clientUnderTest);
+	clientUnderTest.test_wrapper_process_rx_message(assignment(firstName.get_full_name(), 0x0102), &clientUnderTest);
+	clientUnderTest.test_wrapper_process_rx_message(assignment(secondName.get_full_name(), 0x0201), &clientUnderTest);
+
+	std::vector<std::uint16_t> eventFunctionIDs;
+	clientUnderTest.get_auxiliary_function_event_dispatcher().add_listener([&clientUnderTest, &eventFunctionIDs](const VirtualTerminalClient::AuxiliaryFunctionEvent &event) {
+		eventFunctionIDs.push_back(event.function.functionObjectID);
+		EXPECT_EQ(0x0056, event.value1);
+		EXPECT_EQ(0x0078, event.value2);
+		EXPECT_EQ(&clientUnderTest, event.parentPointer);
+		// This setter takes the assignment mutex. Completing the callback proves
+		// dispatch happens after the status handler releases that mutex.
+		clientUnderTest.set_auxiliary_functions_enabled(false);
+		clientUnderTest.set_auxiliary_functions_enabled(true);
+	});
+	const auto statusMessage = [](const std::shared_ptr<ControlFunction> &source) {
+		const auto function = static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryInputTypeTwoStatusMessage);
+		const std::uint8_t sourceAddress = (nullptr != source) ? source->get_address() : 0x24;
+		CANIdentifier identifier(CANIdentifier::Type::Extended,
+		                         static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                         CANIdentifier::CANPriority::PriorityDefault6,
+		                         0,
+		                         sourceAddress);
+		return CANMessage(CANMessage::Type::Receive,
+		                  identifier,
+		                  { function, 0x34, 0x12, 0x56, 0x00, 0x78, 0x00, 0xFF },
+		                  source,
+		                  nullptr,
+		                  0,
+		                  0);
+	};
+	clientUnderTest.test_wrapper_process_rx_message(statusMessage(firstDevice), &clientUnderTest);
+	ASSERT_EQ(2U, eventFunctionIDs.size());
+	EXPECT_EQ(0x0101, eventFunctionIDs[0]);
+	EXPECT_EQ(0x0102, eventFunctionIDs[1]);
+
+	clientUnderTest.test_wrapper_process_rx_message(statusMessage(secondDevice), &clientUnderTest);
+	ASSERT_EQ(3U, eventFunctionIDs.size());
+	EXPECT_EQ(0x0201, eventFunctionIDs[2]);
+
+	clientUnderTest.test_wrapper_process_rx_message(statusMessage(unknownDevice), &clientUnderTest);
+	clientUnderTest.test_wrapper_process_rx_message(statusMessage(nullptr), &clientUnderTest);
+	EXPECT_EQ(3U, eventFunctionIDs.size());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+}
+
 TEST_F(VirtualTerminalTest, TerminatingClientFlushesAcknowledgedAuxiliaryPreferences)
 {
 	VirtualCANPlugin serverVT;

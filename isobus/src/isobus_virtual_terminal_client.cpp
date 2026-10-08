@@ -1377,15 +1377,7 @@ namespace isobus
 				if (device.ready && SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
 				{
 					timedOutDevices.emplace_back(device.name, device.modelIdentificationCode);
-					const bool hadAssignments = !device.functions.empty();
-					device.ready = false;
-					auxiliaryAssignmentForceSync = auxiliaryAssignmentForceSync || hadAssignments;
-					device.functions.clear();
-					if (hadAssignments)
-					{
-						++auxiliaryAssignmentGeneration;
-						auxiliaryAssignmentDirty = true;
-					}
+					mark_auxiliary_input_device_unavailable(device);
 				}
 			}
 		}
@@ -2226,6 +2218,7 @@ namespace isobus
 		const std::uint16_t inputObjectID = message.get_uint16_at(10);
 		const std::uint16_t functionObjectID = message.get_uint16_at(12);
 		bool hasError = false;
+		bool isAlreadyAssigned = false;
 		std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> toStore;
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
@@ -2238,6 +2231,12 @@ namespace isobus
 			}
 			else
 			{
+				isAlreadyAssigned = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [deviceName, inputObjectID, functionObjectID](const AssignedAuxiliaryInputDevice &device) {
+					return device.ready && device.name == deviceName &&
+					  std::any_of(device.functions.begin(), device.functions.end(), [inputObjectID, functionObjectID](const AssignedAuxiliaryFunction &function) {
+						       return function.inputObjectID == inputObjectID && function.functionObjectID == functionObjectID;
+					       });
+				});
 				hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore);
 			}
 			for (const auto &entry : toStore)
@@ -2254,7 +2253,20 @@ namespace isobus
 					std::get<2>(*pending) = std::get<2>(entry);
 				}
 			}
-			send_auxiliary_function_assignment_response(functionObjectID, hasError, false);
+			send_auxiliary_function_assignment_response(functionObjectID, hasError, isAlreadyAssigned && !hasError);
+		}
+	}
+
+	void VirtualTerminalClient::mark_auxiliary_input_device_unavailable(AssignedAuxiliaryInputDevice &device)
+	{
+		const bool hadAssignments = !device.functions.empty();
+		device.ready = false;
+		device.functions.clear();
+		auxiliaryAssignmentForceSync = auxiliaryAssignmentForceSync || hadAssignments;
+		if (hadAssignments)
+		{
+			++auxiliaryAssignmentGeneration;
+			auxiliaryAssignmentDirty = true;
 		}
 	}
 
@@ -3210,22 +3222,27 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage):
 						{
-							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled)
+							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							    (nullptr != message.get_source_control_function()))
 							{
 								const std::uint16_t inputObjectID = message.get_uint16_at(1);
 								const std::uint16_t value1 = message.get_uint16_at(3);
 								const std::uint16_t value2 = message.get_uint16_at(5);
+								const std::uint64_t sourceName = message.get_source_control_function()->get_NAME().get_full_name();
 								std::vector<AuxiliaryFunctionEvent> events;
 								{
 									LOCK_GUARD(Mutex, auxiliaryMutex);
-									for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
+									auto device = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [sourceName](const AssignedAuxiliaryInputDevice &candidate) {
+										return candidate.ready && candidate.name == sourceName;
+									});
+									if (device != parentVT->assignedAuxiliaryInputDevices.end())
 									{
-										auto result = std::find_if(aux.functions.begin(), aux.functions.end(), [inputObjectID](const AssignedAuxiliaryFunction &assignment) {
-											return assignment.inputObjectID == inputObjectID;
-										});
-										if (aux.functions.end() != result)
+										for (const AssignedAuxiliaryFunction &assignment : device->functions)
 										{
-											events.push_back({ *result, parentVT, value1, value2 });
+											if (assignment.inputObjectID == inputObjectID)
+											{
+												events.push_back({ assignment, parentVT, value1, value2 });
+											}
 										}
 									}
 								}
@@ -3697,15 +3714,7 @@ namespace isobus
 								{
 									if (previous.name == deviceName && previous.modelIdentificationCode != modelCode && previous.ready)
 									{
-										const bool hadActiveAssignments = !previous.functions.empty();
-										parentVT->auxiliaryAssignmentForceSync = parentVT->auxiliaryAssignmentForceSync || hadActiveAssignments;
-										previous.functions.clear();
-										previous.ready = false;
-										if (hadActiveAssignments)
-										{
-											++parentVT->auxiliaryAssignmentGeneration;
-											parentVT->auxiliaryAssignmentDirty = true;
-										}
+										parentVT->mark_auxiliary_input_device_unavailable(previous);
 									}
 								}
 								auto device = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [deviceName, modelCode](const AssignedAuxiliaryInputDevice &candidate) {
@@ -3731,15 +3740,7 @@ namespace isobus
 								}
 								else if (!ready && device->ready)
 								{
-									const bool changed = !device->functions.empty();
-									parentVT->auxiliaryAssignmentForceSync = parentVT->auxiliaryAssignmentForceSync || changed;
-									device->ready = false;
-									device->functions.clear();
-									if (changed)
-									{
-										++parentVT->auxiliaryAssignmentGeneration;
-										parentVT->auxiliaryAssignmentDirty = true;
-									}
+									parentVT->mark_auxiliary_input_device_unavailable(*device);
 								}
 							}
 						}
