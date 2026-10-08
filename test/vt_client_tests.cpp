@@ -297,6 +297,71 @@ static std::size_t count_transmitted_function_frames(VirtualCANPlugin &virtualVT
 	return count;
 }
 
+// Complete the ECU-to-VT TP exchange and validate its envelope while reassembling the command.
+static void receive_preferred_assignment_payload(VirtualCANPlugin &virtualVT,
+                                                 const std::shared_ptr<InternalControlFunction> &ecu,
+                                                 const std::shared_ptr<PartneredControlFunction> &vt,
+                                                 test_helpers::TestTimeSource &timeSource,
+                                                 std::uint16_t expectedLength,
+                                                 std::vector<std::uint8_t> &payload)
+{
+	CANHardwareInterface::update();
+	CANNetworkManager::CANNetwork.update();
+	timeSource.update_for_ms(10);
+	CANMessageFrame frame = {};
+	bool foundRts = false;
+	while (virtualVT.read_frame(frame, 10))
+	{
+		const CANIdentifier identifier(frame.identifier);
+		if ((identifier.get_parameter_group_number() == 0xEC00) && (frame.data[0] == 0x10) &&
+		    (frame.data[5] == 0x00) && (frame.data[6] == 0xE7) && (frame.data[7] == 0x00))
+		{
+			EXPECT_EQ(ecu->get_address(), identifier.get_source_address());
+			EXPECT_EQ(vt->get_address(), identifier.get_destination_address());
+			ASSERT_EQ(CAN_DATA_LENGTH, frame.dataLength);
+			foundRts = true;
+			break;
+		}
+	}
+	ASSERT_TRUE(foundRts);
+	EXPECT_EQ(expectedLength, static_cast<std::uint16_t>(frame.data[1] | (static_cast<std::uint16_t>(frame.data[2]) << 8)));
+	const auto packetCount = static_cast<std::uint8_t>((expectedLength + 6) / 7);
+	EXPECT_EQ(packetCount, frame.data[3]);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6, 0xEC00, ecu, vt, { 0x11, packetCount, 1, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	timeSource.update_for_ms(10);
+	payload.clear();
+	std::uint8_t sequence = 1;
+	while (virtualVT.read_frame(frame, 10))
+	{
+		const CANIdentifier identifier(frame.identifier);
+		if (identifier.get_parameter_group_number() == 0xEB00)
+		{
+			EXPECT_EQ(ecu->get_address(), identifier.get_source_address());
+			EXPECT_EQ(vt->get_address(), identifier.get_destination_address());
+			ASSERT_EQ(CAN_DATA_LENGTH, frame.dataLength);
+			EXPECT_EQ(sequence++, frame.data[0]);
+			for (std::size_t byte = 1; byte < CAN_DATA_LENGTH; ++byte)
+			{
+				if (payload.size() < expectedLength)
+				{
+					payload.push_back(frame.data[byte]);
+				}
+				else
+				{
+					EXPECT_EQ(0xFF, frame.data[byte]);
+				}
+			}
+		}
+	}
+	EXPECT_EQ(packetCount + 1, sequence);
+	EXPECT_EQ(expectedLength, payload.size());
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6, 0xEC00, ecu, vt, { 0x13, static_cast<std::uint8_t>(expectedLength), static_cast<std::uint8_t>(expectedLength >> 8), packetCount, 0xFF, 0x00, 0xE7, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+}
+
 class VirtualTerminalTest : public AgIsoStackTestFixture
 {
 	// Wrapper to give tests a more meaningful name - no content.
@@ -473,8 +538,16 @@ TEST_F(VirtualTerminalTest, AuxiliaryCallbacksEnableBeforeInitializationAndCanno
 
 TEST_F(VirtualTerminalTest, AuxiliaryMaintenanceUsesNameAndRequiresExactReadyValue)
 {
-	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x26, 0);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 	clientUnderTest.set_auxiliary_functions_enabled(true);
+	AuxiliaryAssignmentPreferenceMap preferences;
 	NAME firstName(0);
 	firstName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
 	firstName.set_identity_number(101);
@@ -483,6 +556,16 @@ TEST_F(VirtualTerminalTest, AuxiliaryMaintenanceUsesNameAndRequiresExactReadyVal
 	secondName.set_identity_number(102);
 	const auto firstDevice = std::make_shared<ControlFunction>(firstName, 0x21, 0);
 	const auto secondDevice = std::make_shared<ControlFunction>(secondName, 0x22, 0);
+	const auto firstNameValue = firstName.get_full_name();
+	const auto secondNameValue = secondName.get_full_name();
+	preferences.assignmentsByDevice[firstNameValue] = {
+		VirtualTerminalClient::AssignedAuxiliaryFunction(0x0101, 0x1111, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary),
+		VirtualTerminalClient::AssignedAuxiliaryFunction(0x0102, 0x2222, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary)
+	};
+	preferences.assignmentsByDevice[secondNameValue] = {
+		VirtualTerminalClient::AssignedAuxiliaryFunction(0x0201, 0x3333, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary)
+	};
+	clientUnderTest.set_auxiliary_assignment_callbacks(load_auxiliary_assignment_preferences, store_auxiliary_assignment_preferences, &preferences);
 
 	auto maintenance = [](std::uint8_t ready, const std::shared_ptr<ControlFunction> &source) {
 		return make_auxiliary_message(
@@ -492,6 +575,7 @@ TEST_F(VirtualTerminalTest, AuxiliaryMaintenanceUsesNameAndRequiresExactReadyVal
 	};
 
 	clientUnderTest.test_wrapper_process_rx_message(maintenance(0xFF, firstDevice), &clientUnderTest);
+	EXPECT_FALSE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(0));
 	ASSERT_EQ(1U, clientUnderTest.test_wrapper_get_auxiliary_device_count());
 	EXPECT_FALSE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(0));
 	clientUnderTest.test_wrapper_process_rx_message(maintenance(1, firstDevice), &clientUnderTest);
@@ -502,15 +586,86 @@ TEST_F(VirtualTerminalTest, AuxiliaryMaintenanceUsesNameAndRequiresExactReadyVal
 	EXPECT_TRUE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(0));
 	EXPECT_TRUE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(1));
 
-	// Both devices share a model code; each must independently expire when its
-	// maintenance messages stop.
-	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_ensure_auxiliary_preferences_loaded());
+	const auto assignFunction = [&clientUnderTest, &vtPartner](std::uint64_t deviceName, std::uint16_t inputID, std::uint16_t functionID) {
+		std::vector<std::uint8_t> bytes(14, 0xFF);
+		for (std::size_t index = 0; index < 8; ++index)
+		{
+			bytes[index + 1] = static_cast<std::uint8_t>(deviceName >> (index * 8));
+		}
+		bytes[9] = static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary);
+		bytes[10] = static_cast<std::uint8_t>(inputID);
+		bytes[11] = static_cast<std::uint8_t>(inputID >> 8);
+		bytes[12] = static_cast<std::uint8_t>(functionID);
+		bytes[13] = static_cast<std::uint8_t>(functionID >> 8);
+		clientUnderTest.test_wrapper_process_rx_message(make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand), std::move(bytes), vtPartner),
+		                                                &clientUnderTest);
+	};
+	assignFunction(firstNameValue, 0x1111, 0x0101);
+	assignFunction(firstNameValue, 0x2222, 0x0102);
+	assignFunction(secondNameValue, 0x3333, 0x0201);
+	ASSERT_EQ(2U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(0));
+	ASSERT_EQ(1U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(1));
+
+	// Refresh the second NAME immediately before maintenance processing. The
+	// first device expires independently after 300 ms.
 	clientUnderTest.update();
 	time_source.update_for_ms(301);
+	clientUnderTest.test_wrapper_process_rx_message(maintenance(1, secondDevice), &clientUnderTest);
 	clientUnderTest.update();
 	EXPECT_EQ(2U, clientUnderTest.test_wrapper_get_auxiliary_device_count());
 	EXPECT_FALSE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(0));
-	EXPECT_FALSE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(1));
+	EXPECT_TRUE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(1));
+	EXPECT_EQ(0U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(0));
+	EXPECT_EQ(1U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(1));
+	EXPECT_EQ(2U, clientUnderTest.test_wrapper_get_auxiliary_preferred_assignment_count(0));
+	EXPECT_EQ(1U, clientUnderTest.test_wrapper_get_auxiliary_preferred_assignment_count(1));
+	EXPECT_EQ(0U, preferences.storeCount);
+
+	// The VT owns the removal command after an unexpected timeout. Its
+	// do-not-store flag keeps the input unit's preferred assignments intact.
+	CANHardwareInterface::update();
+	CANMessageFrame oldFrame = {};
+	while (serverVT.read_frame(oldFrame, 0))
+	{
+	}
+	for (const auto functionID : { 0x0101, 0x0102 })
+	{
+		std::vector<std::uint8_t> removeAssignment(14, 0xFF);
+		removeAssignment[9] = 0x9F;
+		removeAssignment[12] = static_cast<std::uint8_t>(functionID);
+		removeAssignment[13] = static_cast<std::uint8_t>(functionID >> 8);
+		clientUnderTest.test_wrapper_process_rx_message(make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand),
+		                                                                       std::move(removeAssignment),
+		                                                                       vtPartner),
+		                                                &clientUnderTest);
+	}
+	CANHardwareInterface::update();
+	CANMessageFrame removalResponse = {};
+	std::vector<std::uint16_t> removedFunctionIDs;
+	while (serverVT.read_frame(removalResponse, 0))
+	{
+		const CANIdentifier identifier(removalResponse.identifier);
+		if ((identifier.get_parameter_group_number() == 0xE700) && (removalResponse.data[0] == static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand)))
+		{
+			EXPECT_EQ(internalECU->get_address(), identifier.get_source_address());
+			EXPECT_EQ(vtPartner->get_address(), identifier.get_destination_address());
+			EXPECT_EQ(0U, removalResponse.data[3]);
+			EXPECT_EQ((std::array<std::uint8_t, 4>{ 0xFF, 0xFF, 0xFF, 0xFF }), (std::array<std::uint8_t, 4>{ removalResponse.data[4], removalResponse.data[5], removalResponse.data[6], removalResponse.data[7] }));
+			removedFunctionIDs.push_back(static_cast<std::uint16_t>(removalResponse.data[1] | (static_cast<std::uint16_t>(removalResponse.data[2]) << 8)));
+		}
+	}
+	std::sort(removedFunctionIDs.begin(), removedFunctionIDs.end());
+	EXPECT_EQ((std::vector<std::uint16_t>{ 0x0101, 0x0102 }), removedFunctionIDs);
+	EXPECT_EQ(0U, preferences.storeCount);
+	EXPECT_EQ(2U, preferences.assignmentsByDevice[firstNameValue].size());
+	EXPECT_EQ(0U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(0));
+	EXPECT_EQ(1U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(1));
+
+	serverVT.close();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST_F(VirtualTerminalTest, AuxiliaryUnavailableTransitionsClearActiveAssignmentsAndKeepPreferences)
@@ -574,10 +729,16 @@ TEST_F(VirtualTerminalTest, AuxiliaryUnavailableTransitionsClearActiveAssignment
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 }
 
-TEST_F(VirtualTerminalTest, ReturningToReadyMarksCompleteAssignmentSetDirtyAgain)
+TEST_F(VirtualTerminalTest, ReturningToReadyTransmitsPreferredAssignmentsAgain)
 {
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0, time_source);
 	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x26, 0);
-	DerivedTestVTClient clientUnderTest(vtPartner, nullptr);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 	AuxiliaryAssignmentPreferenceMap preferences;
 	NAME inputName(0);
 	inputName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
@@ -594,13 +755,50 @@ TEST_F(VirtualTerminalTest, ReturningToReadyMarksCompleteAssignmentSetDirtyAgain
 		                              { 0, 0x34, 0x12, state, 0xFF, 0xFF, 0xFF, 0xFF },
 		                              inputDevice);
 	};
+	const std::vector<std::uint8_t> expectedPayload = {
+		0x22,
+		0x01,
+		static_cast<std::uint8_t>(inputName.get_full_name()),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 8),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 16),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 24),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 32),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 40),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 48),
+		static_cast<std::uint8_t>(inputName.get_full_name() >> 56),
+		0x34,
+		0x12,
+		0x01,
+		0x01,
+		0x01,
+		0x34,
+		0x12
+	};
+	const auto transmitAndAcknowledgePreferredAssignment = [&]() {
+		clientUnderTest.test_wrapper_update_auxiliary_assignment_transaction(false);
+		ASSERT_TRUE(clientUnderTest.test_wrapper_get_assignment_in_flight());
+		std::vector<std::uint8_t> payload;
+		receive_preferred_assignment_payload(serverVT, internalECU, vtPartner, time_source, 17, payload);
+		EXPECT_EQ(expectedPayload, payload);
+		clientUnderTest.test_wrapper_process_rx_message(make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::PreferredAssignmentCommand),
+		                                                                       { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF },
+		                                                                       vtPartner),
+		                                                &clientUnderTest);
+		EXPECT_FALSE(clientUnderTest.test_wrapper_get_assignment_in_flight());
+	};
+
 	clientUnderTest.test_wrapper_process_rx_message(maintenance(0), &clientUnderTest);
-	EXPECT_FALSE(clientUnderTest.test_wrapper_get_auxiliary_assignment_dirty());
 	clientUnderTest.test_wrapper_process_rx_message(maintenance(1), &clientUnderTest);
-	EXPECT_FALSE(clientUnderTest.test_wrapper_get_auxiliary_assignment_dirty()); // Stored preferences are loaded outside the receive callback.
 	ASSERT_TRUE(clientUnderTest.test_wrapper_ensure_auxiliary_preferences_loaded());
-	EXPECT_TRUE(clientUnderTest.test_wrapper_get_auxiliary_assignment_dirty());
+	transmitAndAcknowledgePreferredAssignment();
+
+	clientUnderTest.test_wrapper_process_rx_message(maintenance(0), &clientUnderTest); // Ready -> Initializing.
+	clientUnderTest.test_wrapper_process_rx_message(maintenance(1), &clientUnderTest); // Reinitialization returns to Ready.
+	transmitAndAcknowledgePreferredAssignment();
+	serverVT.close();
+	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST_F(VirtualTerminalTest, RemovingOneGlobalPreferencePreservesUnloadedPreferencesForOtherDevices)
@@ -768,6 +966,8 @@ TEST_F(VirtualTerminalTest, AuxiliaryAssignmentIsAcknowledgedBeforePreferencesAr
 	                                                &clientUnderTest);
 	EXPECT_EQ(0U, storedAssignments.callCount);
 
+	// This ordering is an implementation guarantee tested here; ISO 11783-6
+	// leaves the Working Set's preferred-assignment commit timing open.
 	CANHardwareInterface::update();
 	CANMessageFrame frame = {};
 	bool assignmentResponseQueued = false;
@@ -776,6 +976,13 @@ TEST_F(VirtualTerminalTest, AuxiliaryAssignmentIsAcknowledgedBeforePreferencesAr
 		if ((static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand) == frame.data[0]) &&
 		    (0x01 == frame.data[1]) && (0x01 == frame.data[2]))
 		{
+			const CANIdentifier identifier(frame.identifier);
+			EXPECT_EQ(0xE700, identifier.get_parameter_group_number());
+			EXPECT_EQ(CAN_DATA_LENGTH, frame.dataLength);
+			EXPECT_EQ(internalECU->get_address(), identifier.get_source_address());
+			EXPECT_EQ(vtPartner->get_address(), identifier.get_destination_address());
+			EXPECT_EQ(0U, frame.data[3]); // Accepted.
+			EXPECT_EQ((std::array<std::uint8_t, 4>{ 0xFF, 0xFF, 0xFF, 0xFF }), (std::array<std::uint8_t, 4>{ frame.data[4], frame.data[5], frame.data[6], frame.data[7] }));
 			assignmentResponseQueued = true;
 		}
 	}
@@ -787,6 +994,48 @@ TEST_F(VirtualTerminalTest, AuxiliaryAssignmentIsAcknowledgedBeforePreferencesAr
 	EXPECT_EQ(inputName.get_full_name(), storedAssignments.deviceName);
 	ASSERT_EQ(1U, storedAssignments.assignments.size());
 	EXPECT_EQ(0x0101, storedAssignments.assignments[0].functionObjectID);
+
+	NAME unknownName(0);
+	unknownName.set_function_code(static_cast<std::uint8_t>(NAME::Function::IOController));
+	unknownName.set_identity_number(999);
+	std::vector<std::uint8_t> rejectedAssignment(14, 0xFF);
+	for (std::size_t index = 0; index < 8; ++index)
+	{
+		rejectedAssignment[index + 1] = static_cast<std::uint8_t>(unknownName.get_full_name() >> (index * 8));
+	}
+	rejectedAssignment[9] = static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary);
+	rejectedAssignment[10] = 0x78;
+	rejectedAssignment[11] = 0x56;
+	rejectedAssignment[12] = 0x01;
+	rejectedAssignment[13] = 0x01;
+	clientUnderTest.test_wrapper_process_rx_message(make_auxiliary_message(static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand),
+	                                                                       std::move(rejectedAssignment),
+	                                                                       vtPartner),
+	                                                &clientUnderTest);
+	CANHardwareInterface::update();
+	bool rejectedAssignmentResponse = false;
+	while (serverVT.read_frame(frame, 0))
+	{
+		if ((static_cast<std::uint8_t>(VirtualTerminalClient::Function::AuxiliaryAssignmentTypeTwoCommand) == frame.data[0]) &&
+		    (0x01 == frame.data[1]) && (0x01 == frame.data[2]))
+		{
+			const CANIdentifier identifier(frame.identifier);
+			EXPECT_EQ(0xE700, identifier.get_parameter_group_number());
+			EXPECT_EQ(CAN_DATA_LENGTH, frame.dataLength);
+			EXPECT_EQ(internalECU->get_address(), identifier.get_source_address());
+			EXPECT_EQ(vtPartner->get_address(), identifier.get_destination_address());
+			EXPECT_EQ(0x01, frame.data[3]); // Rejected; reserved bits remain clear.
+			EXPECT_EQ((std::array<std::uint8_t, 4>{ 0xFF, 0xFF, 0xFF, 0xFF }), (std::array<std::uint8_t, 4>{ frame.data[4], frame.data[5], frame.data[6], frame.data[7] }));
+			rejectedAssignmentResponse = true;
+		}
+	}
+	EXPECT_TRUE(rejectedAssignmentResponse);
+	clientUnderTest.update();
+	EXPECT_EQ(1U, storedAssignments.callCount);
+	ASSERT_EQ(1U, storedAssignments.assignments.size());
+	EXPECT_EQ(0x0101, storedAssignments.assignments[0].functionObjectID);
+	EXPECT_EQ(0x1234, storedAssignments.assignments[0].inputObjectID);
+	EXPECT_EQ(1U, clientUnderTest.test_wrapper_get_auxiliary_active_assignment_count(0));
 
 	serverVT.close();
 	CANHardwareInterface::stop();
@@ -1150,54 +1399,10 @@ TEST_F(VirtualTerminalTest, AuxiliaryPreferredAssignmentReassembledPayloadContai
 	EXPECT_TRUE(clientUnderTest.test_wrapper_get_assignment_in_flight());
 	EXPECT_EQ(3U, preferences.loadCount);
 
-	CANMessageFrame frame = {};
-	bool foundPreferredAssignmentRts = false;
-	while (serverVT.read_frame(frame, 10))
-	{
-		if ((CANIdentifier(frame.identifier).get_parameter_group_number() == 0xEC00) && (frame.data[0] == 0x10) && (frame.data[5] == 0x00) && (frame.data[6] == 0xE7) && (frame.data[7] == 0x00))
-		{
-			foundPreferredAssignmentRts = true;
-			break;
-		}
-	}
-	ASSERT_TRUE(foundPreferredAssignmentRts);
-	const auto payloadLength = static_cast<std::uint16_t>(frame.data[1] | (static_cast<std::uint16_t>(frame.data[2]) << 8));
-	EXPECT_EQ(32U, payloadLength); // Two device records, each carrying one preferred function.
-	EXPECT_EQ(5U, frame.data[3]);
-	EXPECT_EQ(3U, preferences.loadCount);
 	ASSERT_EQ(3U, clientUnderTest.test_wrapper_get_auxiliary_device_count());
 	EXPECT_TRUE(clientUnderTest.test_wrapper_get_auxiliary_device_ready(2));
-
-	// Grant all five TP packets and reconstruct only the advertised payload bytes.
-	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
-	  6, 0xEC00, internalECU, vtPartner, { 0x11, 5, 1, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(10);
 	std::vector<std::uint8_t> payload;
-	std::uint8_t nextSequenceNumber = 1;
-	while (serverVT.read_frame(frame, 10))
-	{
-		const CANIdentifier identifier(frame.identifier);
-		if (identifier.get_parameter_group_number() == 0xEB00)
-		{
-			EXPECT_EQ(internalECU->get_address(), identifier.get_source_address());
-			EXPECT_EQ(vtPartner->get_address(), identifier.get_destination_address());
-			ASSERT_EQ(CAN_DATA_LENGTH, frame.dataLength);
-			EXPECT_EQ(nextSequenceNumber++, frame.data[0]);
-			for (std::size_t byte = 1; byte < CAN_DATA_LENGTH; ++byte)
-			{
-				if (payload.size() < payloadLength)
-				{
-					payload.push_back(frame.data[byte]);
-				}
-				else
-				{
-					EXPECT_EQ(0xFF, frame.data[byte]); // Final TP packet padding.
-				}
-			}
-		}
-	}
-	EXPECT_EQ(6, nextSequenceNumber);
+	receive_preferred_assignment_payload(serverVT, internalECU, vtPartner, time_source, 32, payload);
 	const std::vector<std::uint8_t> expectedPayload = {
 		0x22, 0x02, // Preferred Assignment command, two input units with preferences.
 		0xEF,
@@ -1232,10 +1437,6 @@ TEST_F(VirtualTerminalTest, AuxiliaryPreferredAssignmentReassembledPayloadContai
 		0xCD // Function object ID followed by input object ID.
 	};
 	EXPECT_EQ(expectedPayload, payload);
-	// Finish the TP session so this test leaves no transfer awaiting acknowledgement.
-	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
-	  6, 0xEC00, internalECU, vtPartner, { 0x13, 32, 0, 5, 0xFF, 0x00, 0xE7, 0x00 }));
-	CANNetworkManager::CANNetwork.update();
 	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Disconnected);
 	serverVT.close();
 	CANHardwareInterface::stop();
