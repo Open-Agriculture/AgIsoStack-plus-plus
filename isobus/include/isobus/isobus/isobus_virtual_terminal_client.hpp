@@ -1558,6 +1558,10 @@ namespace isobus
 		/// @param[in] updatePreferred true to remove the function from stored preferences
 		void erase_auxiliary_function_assignment(AssignedAuxiliaryInputDevice &device, std::uint16_t functionObjectID, bool updatePreferred);
 
+		/// @brief Clears active assignments when an auxiliary input device becomes unavailable
+		/// @details The caller must hold auxiliaryAssignmentMutex. Preferred assignments are preserved.
+		void mark_auxiliary_input_device_unavailable(AssignedAuxiliaryInputDevice &device);
+
 		/// @brief Send the auxiliary control type 2 assignment reponse message
 		/// @param[in] functionObjectID The object ID of the function
 		/// @param[in] hasError true if the assignment failed
