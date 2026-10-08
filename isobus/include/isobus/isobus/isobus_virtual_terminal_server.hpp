@@ -99,13 +99,6 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_string_value_message(std::uint16_t objectId, const std::string &value, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends a response to a load version command
-		/// @details The server sends this itself once a pool restored by a load version command has been parsed.
-		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
-		/// @param[in] destination The VT client to send the message to
-		/// @returns True if the message was sent, otherwise false
-		bool send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
-
 		/// @brief Conditionally executes a macro. If the object passed in is of the specified type, and
 		/// a macro is defined for that object, the macro will be executed if the macro event matches the
 		/// event ID of the macro.
@@ -704,10 +697,6 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Returns the load version error bitfield to report when a restored object pool fails to parse
-		/// @returns The file system error or pool data corruption bit, or the any other error bit if our VT version is older than 4
-		std::uint8_t get_load_version_parse_error_bitfield() const;
-
 		/// @brief Sends a response to a delete object pool command
 		/// @param[in] errorBitfield An error bitfield to report back to the client
 		/// @param[in] destination The control function to send the message to
@@ -829,6 +818,17 @@ namespace isobus
 		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
 		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
+
+	private:
+		/// @brief Sends a response to a load version command
+		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
+		/// @param[in] destination The VT client to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Returns the load version error bitfield to report when a restored object pool fails to parse
+		/// @returns The file system error or pool data corruption bit, or the any other error bit if our VT version is older than 4
+		std::uint8_t get_load_version_parse_error_bitfield() const;
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP
