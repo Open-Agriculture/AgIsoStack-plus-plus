@@ -100,9 +100,7 @@ namespace isobus
 		bool send_change_string_value_message(std::uint16_t objectId, const std::string &value, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a load version command
-		/// The reason this is exposed is because you will need to send this message after
-		/// the object pool processing thread completes at some point to tell the client to proceed if their
-		/// object pool was loaded via a load version command.
+		/// @details The server sends this itself once a pool restored by a load version command has been parsed.
 		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
 		/// @param[in] destination The VT client to send the message to
 		/// @returns True if the message was sent, otherwise false
@@ -406,6 +404,15 @@ namespace isobus
 			AnyOtherError = 3
 		};
 
+		/// @brief Enumerates the different error bit indices that can be set in a load version response
+		enum class LoadVersionErrorBit : std::uint8_t
+		{
+			FileSystemErrorOrPoolDataCorruption = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
 		enum class EnableDisableObjectErrorBit : std::uint8_t
 		{
@@ -696,6 +703,10 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Returns the load version error bitfield to report when a restored object pool fails to parse
+		/// @returns The file system error or pool data corruption bit, or the any other error bit if our VT version is older than 4
+		std::uint8_t get_load_version_parse_error_bitfield() const;
 
 		/// @brief Sends a response to a delete object pool command
 		/// @param[in] errorBitfield An error bitfield to report back to the client
