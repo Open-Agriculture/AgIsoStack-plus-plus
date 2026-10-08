@@ -1545,6 +1545,10 @@ namespace isobus
 		/// @param[in] message The validated assignment command received from the partnered VT
 		void handle_auxiliary_assignment_command(const CANMessage &message);
 
+		/// @brief Captures Type 2 function IDs and types before borrowed pool storage can be released.
+		/// @details Called without the assignment mutex because object-pool callbacks may be needed.
+		void build_auxiliary_function_lookup();
+
 		/// @brief Applies a validated assignment command while holding auxiliaryAssignmentMutex
 		/// @details Updates active mappings and, when requested, preferred mappings. The caller holds
 		/// auxiliaryAssignmentMutex. Store records are collected for callbacks after releasing the state lock.
@@ -1786,7 +1790,7 @@ namespace isobus
 		std::vector<AssignedAuxiliaryInputDevice> auxiliaryAssignmentTransactionDevices; ///< Complete device set being retried
 		bool auxiliaryAssignmentTransactionInFlight = false; ///< Whether the current transaction awaits acknowledgement
 		bool auxiliaryAssignmentDirty = false; ///< Whether the current known device set needs a preferred assignment
-		bool auxiliaryAssignmentForceSync = false; ///< A removal with active mappings requires a complete-set update, even when empty
+		std::map<std::uint16_t, std::uint8_t> auxiliaryFunctionTypes; ///< Function validation metadata retained after startup
 		bool auxiliaryFunctionsEnabled = false; ///< Whether AUX-N function handling is enabled
 		Mutex auxiliaryAssignmentMutex; ///< Protects assigned device state and preferred assignment transaction state
 		Mutex auxiliaryPreferenceOperationMutex; ///< Serializes load, mutation, and store operations

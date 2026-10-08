@@ -273,6 +273,10 @@ namespace isobus
 
 	void VirtualTerminalClient::transition_to_connected_or_auxiliary_assignment()
 	{
+		if (auxiliaryFunctionsEnabled)
+		{
+			build_auxiliary_function_lookup();
+		}
 		set_state(auxiliaryFunctionsEnabled ? StateMachineState::SendAuxiliaryPreferredAssignment : StateMachineState::Connected);
 	}
 
@@ -2162,16 +2166,22 @@ namespace isobus
 				}
 			}
 		}
-		for (auto &entry : loaded)
+		bool allValid = true;
+		for (auto entry = loaded.begin(); entry != loaded.end();)
 		{
 			if (nullptr != auxiliaryAssignmentLoadCallback)
 			{
-				entry.second = auxiliaryAssignmentLoadCallback(entry.first.first, entry.first.second, auxiliaryAssignmentCallbackContext);
+				entry->second = auxiliaryAssignmentLoadCallback(entry->first.first, entry->first.second, auxiliaryAssignmentCallbackContext);
 			}
-			if (!valid_preferred_auxiliary_assignments(entry.second))
+			if (!valid_preferred_auxiliary_assignments(entry->second))
 			{
 				LOG_WARNING("[AUX-N]: Stored assignments contain invalid or duplicate entries.");
-				return false;
+				allValid = false;
+				entry = loaded.erase(entry);
+			}
+			else
+			{
+				++entry;
 			}
 		}
 		{
@@ -2200,7 +2210,7 @@ namespace isobus
 				}
 			}
 		}
-		return true;
+		return allValid;
 	}
 
 	void VirtualTerminalClient::store_pending_auxiliary_preferences()
@@ -2222,6 +2232,328 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalClient::build_auxiliary_function_lookup()
+	{
+		// Pool buffers are borrowed only until Connected. Read bounded record headers
+		// at startup and retain only the metadata needed to validate assignments.
+		std::map<std::uint16_t, std::uint8_t> functions;
+		for (std::uint32_t index = 0; index < objectPools.size(); ++index)
+		{
+			const auto &pool = objectPools[index];
+			const auto poolSize = (nullptr != pool.objectPoolVectorPointer) ? static_cast<std::uint32_t>(pool.objectPoolVectorPointer->size()) : pool.objectPoolSize;
+			std::uint32_t callbackReadIndex = 0;
+			std::uint32_t offset = 0;
+			auto read = [&](std::uint32_t offset, std::uint32_t length, std::uint8_t *destination) {
+				if ((offset > poolSize) || (length > (poolSize - offset)))
+				{
+					return false;
+				}
+				if (pool.useDataCallback)
+				{
+					return (nullptr != pool.dataCallback) && pool.dataCallback(callbackReadIndex++, offset, length, destination, this);
+				}
+				if (nullptr != pool.objectPoolVectorPointer)
+				{
+					std::copy_n(pool.objectPoolVectorPointer->data() + offset, length, destination);
+					return true;
+				}
+				if (nullptr != pool.objectPoolDataPointer)
+				{
+					std::copy_n(pool.objectPoolDataPointer + offset, length, destination);
+					return true;
+				}
+				return false;
+			};
+			auto readObject = [&](std::uint32_t objectOffset, std::uint32_t length, std::uint8_t *destination) {
+				return (offset <= poolSize) && (objectOffset <= (poolSize - offset)) && read(offset + objectOffset, length, destination);
+			};
+
+			std::map<std::uint16_t, std::uint8_t> poolFunctions;
+			bool validPool = true;
+			while (offset < poolSize)
+			{
+				std::array<std::uint8_t, 38> header{};
+				if ((poolSize - offset < 3) || !read(offset, 3, header.data()))
+				{
+					validPool = false;
+					break;
+				}
+				const auto type = static_cast<VirtualTerminalObjectType>(header[2]);
+				std::uint32_t minimumLength = 0;
+				if (45 == header[2]) // Colour Palette is not yet in the public object-type enum.
+				{
+					minimumLength = 6;
+				}
+				else
+				{
+					switch (type)
+					{
+						case VirtualTerminalObjectType::InputAttributes:
+							minimumLength = 6;
+							break;
+						case VirtualTerminalObjectType::ColourMap:
+							minimumLength = 5;
+							break;
+						case VirtualTerminalObjectType::ObjectLabelRefrenceList:
+							minimumLength = 5;
+							break;
+						case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
+							minimumLength = 6;
+							break;
+						case VirtualTerminalObjectType::ScaledGraphic:
+							minimumLength = 12;
+							break;
+						case VirtualTerminalObjectType::GraphicData:
+							minimumLength = 8;
+							break;
+						case VirtualTerminalObjectType::WorkingSetSpecialControls:
+							minimumLength = 10;
+							break;
+						default:
+							minimumLength = get_minimum_object_length(type);
+							break;
+					}
+				}
+				if ((minimumLength < 3) || (minimumLength > header.size()) || (minimumLength > (poolSize - offset)) ||
+				    !read(offset, minimumLength, header.data()))
+				{
+					validPool = false;
+					break;
+				}
+
+				std::uint32_t objectLength = 0;
+				std::int32_t macroCountOffset = -1;
+				if (45 == header[2])
+				{
+					objectLength = 6 + (4 * (static_cast<std::uint32_t>(header[4]) | (static_cast<std::uint32_t>(header[5]) << 8)));
+				}
+				else
+				{
+					switch (type)
+					{
+						case VirtualTerminalObjectType::ColourMap:
+						{
+							const std::uint32_t numberOfIndexes = static_cast<std::uint32_t>(header[3]) | (static_cast<std::uint32_t>(header[4]) << 8);
+							objectLength = 5 + numberOfIndexes;
+						}
+						break;
+
+						case VirtualTerminalObjectType::ObjectLabelRefrenceList:
+							objectLength = 5 + (7 * (static_cast<std::uint32_t>(header[3]) | (static_cast<std::uint32_t>(header[4]) << 8)));
+							break;
+
+						case VirtualTerminalObjectType::InputAttributes:
+						{
+							const std::uint32_t validationLength = header[4];
+							macroCountOffset = static_cast<std::int32_t>(5 + validationLength);
+							std::uint8_t macroCount = 0;
+							if (!readObject(static_cast<std::uint32_t>(macroCountOffset), 1, &macroCount))
+							{
+								validPool = false;
+								break;
+							}
+							objectLength = 6 + validationLength + (2 * macroCount);
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputString:
+						case VirtualTerminalObjectType::OutputString:
+						{
+							const std::uint32_t valueLength = (VirtualTerminalObjectType::InputString == type) ? header[16] : (static_cast<std::uint32_t>(header[14]) | (static_cast<std::uint32_t>(header[15]) << 8));
+							macroCountOffset = static_cast<std::int32_t>(((VirtualTerminalObjectType::InputString == type) ? 18 : 16) + valueLength);
+							std::uint8_t macroCount = 0;
+							if (!readObject(static_cast<std::uint32_t>(macroCountOffset), 1, &macroCount))
+							{
+								validPool = false;
+								break;
+							}
+							objectLength = ((VirtualTerminalObjectType::InputString == type) ? 19 : 17) + valueLength + (2 * macroCount);
+						}
+						break;
+
+						case VirtualTerminalObjectType::ExtendedInputAttributes:
+						{
+							const std::uint32_t numberOfCodePlanes = header[4];
+							objectLength = 5;
+							for (std::uint32_t plane = 0; plane < numberOfCodePlanes; ++plane)
+							{
+								std::uint8_t rangeCount = 0;
+								if ((objectLength > (poolSize - offset)) || ((poolSize - offset - objectLength) < 2) ||
+								    !readObject(objectLength + 1, 1, &rangeCount) ||
+								    (rangeCount > ((poolSize - offset - objectLength - 2) / 4)))
+								{
+									validPool = false;
+									break;
+								}
+								objectLength += 2 + (4 * rangeCount);
+							}
+						}
+						break;
+
+						case VirtualTerminalObjectType::AuxiliaryInputType2:
+						{
+							std::uint8_t childCount = 0;
+							if (!readObject(6, 1, &childCount))
+							{
+								validPool = false;
+								break;
+							}
+							objectLength = 7 + (6 * childCount);
+						}
+						break;
+
+						case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
+							objectLength = 6;
+							break;
+						case VirtualTerminalObjectType::ScaledGraphic:
+							macroCountOffset = 11;
+							objectLength = 12 + (2 * header[11]);
+							break;
+						case VirtualTerminalObjectType::GraphicData:
+						{
+							const std::uint32_t dataLength = static_cast<std::uint32_t>(header[4]) | (static_cast<std::uint32_t>(header[5]) << 8) |
+							  (static_cast<std::uint32_t>(header[6]) << 16) | (static_cast<std::uint32_t>(header[7]) << 24);
+							if (dataLength > (poolSize - offset - 8))
+							{
+								validPool = false;
+							}
+							else
+							{
+								objectLength = 8 + dataLength;
+							}
+						}
+						break;
+						case VirtualTerminalObjectType::WorkingSetSpecialControls:
+							objectLength = 5 + static_cast<std::uint32_t>(header[3]) + (static_cast<std::uint32_t>(header[4]) << 8);
+							break;
+						case VirtualTerminalObjectType::Animation:
+							macroCountOffset = 16;
+							objectLength = 17 + (6 * header[15]) + (2 * header[16]);
+							break;
+						case VirtualTerminalObjectType::PictureGraphic:
+						{
+							const std::uint32_t dataLength = static_cast<std::uint32_t>(header[12]) | (static_cast<std::uint32_t>(header[13]) << 8) |
+							  (static_cast<std::uint32_t>(header[14]) << 16) | (static_cast<std::uint32_t>(header[15]) << 24);
+							const std::uint32_t available = poolSize - offset;
+							macroCountOffset = 16;
+							if ((available < 17) || (dataLength > (available - 17)) ||
+							    (header[16] > ((available - 17 - dataLength) / 2)))
+							{
+								validPool = false;
+							}
+							else
+							{
+								objectLength = 17 + dataLength + (2 * header[16]);
+							}
+						}
+						break;
+
+						default:
+						{
+							objectLength = get_number_bytes_in_object(header.data());
+						}
+						break;
+					}
+				}
+				if (!validPool || (objectLength < minimumLength) || (objectLength > (poolSize - offset)))
+				{
+					validPool = false;
+					break;
+				}
+
+				constexpr std::array<std::pair<VirtualTerminalObjectType, std::uint8_t>, 27> macroCountOffsets = { { { VirtualTerminalObjectType::WorkingSet, 8 },
+					                                                                                                   { VirtualTerminalObjectType::DataMask, 7 },
+					                                                                                                   { VirtualTerminalObjectType::AlarmMask, 9 },
+					                                                                                                   { VirtualTerminalObjectType::Container, 9 },
+					                                                                                                   { VirtualTerminalObjectType::SoftKeyMask, 5 },
+					                                                                                                   { VirtualTerminalObjectType::Key, 6 },
+					                                                                                                   { VirtualTerminalObjectType::Button, 12 },
+					                                                                                                   { VirtualTerminalObjectType::InputBoolean, 12 },
+					                                                                                                   { VirtualTerminalObjectType::InputNumber, 37 },
+					                                                                                                   { VirtualTerminalObjectType::InputList, 12 },
+					                                                                                                   { VirtualTerminalObjectType::OutputNumber, 28 },
+					                                                                                                   { VirtualTerminalObjectType::OutputList, 11 },
+					                                                                                                   { VirtualTerminalObjectType::OutputLine, 10 },
+					                                                                                                   { VirtualTerminalObjectType::OutputRectangle, 12 },
+					                                                                                                   { VirtualTerminalObjectType::OutputEllipse, 14 },
+					                                                                                                   { VirtualTerminalObjectType::OutputPolygon, 13 },
+					                                                                                                   { VirtualTerminalObjectType::OutputMeter, 20 },
+					                                                                                                   { VirtualTerminalObjectType::OutputLinearBarGraph, 23 },
+					                                                                                                   { VirtualTerminalObjectType::OutputArchedBarGraph, 26 },
+					                                                                                                   { VirtualTerminalObjectType::PictureGraphic, 16 },
+					                                                                                                   { VirtualTerminalObjectType::FontAttributes, 7 },
+					                                                                                                   { VirtualTerminalObjectType::LineAttributes, 7 },
+					                                                                                                   { VirtualTerminalObjectType::FillAttributes, 7 },
+					                                                                                                   { VirtualTerminalObjectType::WindowMask, 16 },
+					                                                                                                   { VirtualTerminalObjectType::KeyGroup, 9 },
+					                                                                                                   { VirtualTerminalObjectType::Animation, 16 },
+					                                                                                                   { VirtualTerminalObjectType::ScaledGraphic, 11 } } };
+				if (macroCountOffset < 0)
+				{
+					auto macroCount = std::find_if(macroCountOffsets.begin(), macroCountOffsets.end(), [type](const auto &entry) { return entry.first == type; });
+					if (macroCount != macroCountOffsets.end())
+					{
+						macroCountOffset = macroCount->second;
+					}
+				}
+				if (macroCountOffset >= 0)
+				{
+					std::uint8_t macroCount = 0;
+					if (!readObject(static_cast<std::uint32_t>(macroCountOffset), 1, &macroCount))
+					{
+						validPool = false;
+						break;
+					}
+					std::uint32_t macroOffset = (VirtualTerminalObjectType::WorkingSet == type) ? (10 + (6 * header[7])) : objectLength - (2 * macroCount);
+					for (std::uint32_t macro = 0; macro < macroCount; ++macro)
+					{
+						std::array<std::uint8_t, 4> macroHeader{};
+						if (!readObject(macroOffset, 2, macroHeader.data()))
+						{
+							validPool = false;
+							break;
+						}
+						if (0xFF == macroHeader[0])
+						{
+							if (!readObject(macroOffset, 4, macroHeader.data()))
+							{
+								validPool = false;
+								break;
+							}
+							macroOffset += 4;
+							objectLength += 2;
+						}
+						else
+						{
+							macroOffset += 2;
+						}
+					}
+					if (!validPool || (objectLength > (poolSize - offset)))
+					{
+						validPool = false;
+						break;
+					}
+				}
+
+				if (VirtualTerminalObjectType::AuxiliaryFunctionType2 == type)
+				{
+					poolFunctions.emplace(static_cast<std::uint16_t>(header[0] | (static_cast<std::uint16_t>(header[1]) << 8)), header[4] & 0x1FU);
+				}
+				offset += objectLength;
+			}
+			if (validPool)
+			{
+				functions.insert(poolFunctions.begin(), poolFunctions.end());
+			}
+			else
+			{
+				LOG_WARNING("[AUX-N]: Could not decode object pool for assignment validation.");
+			}
+		}
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+		auxiliaryFunctionTypes.swap(functions);
+	}
+
 	void VirtualTerminalClient::handle_auxiliary_assignment_command(const CANMessage &message)
 	{
 		const std::uint64_t deviceName = message.get_uint64_at(1);
@@ -2232,25 +2564,21 @@ namespace isobus
 		bool hasError = false;
 		bool isAlreadyAssigned = false;
 		std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> toStore;
+		if (storeAsPreferred)
+		{
+			// Load existing ownership before updating it, without requiring unrelated
+			// devices to have valid preferences to accept this command.
+			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+			ensure_auxiliary_preferences_loaded();
+		}
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			const bool preferencesLoaded = std::all_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
-				return device.preferredAssignmentsLoaded;
-			});
-			if (storeAsPreferred && !preferencesLoaded)
-			{
-				hasError = true;
-			}
-			else
-			{
-				hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
-			}
+			hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
 			if (!hasError && !toStore.empty() &&
 			    (auxiliaryAssignmentTransactionInFlight || (0 != auxiliaryAssignmentAttemptCount)))
 			{
 				++auxiliaryAssignmentGeneration;
 				auxiliaryAssignmentDirty = true;
-				auxiliaryAssignmentForceSync = true;
 			}
 			for (const auto &entry : toStore)
 			{
@@ -2278,7 +2606,6 @@ namespace isobus
 		device.functions.clear();
 		if (hadActiveAssignments || hadPreferredAssignments)
 		{
-			auxiliaryAssignmentForceSync = true;
 			++auxiliaryAssignmentGeneration;
 			auxiliaryAssignmentDirty = true;
 		}
@@ -2287,6 +2614,14 @@ namespace isobus
 	bool VirtualTerminalClient::apply_auxiliary_assignment_command_locked(std::uint64_t deviceName, bool storeAsPreferred, std::uint8_t functionType, std::uint16_t inputObjectID, std::uint16_t functionObjectID, std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore, bool &isAlreadyAssigned)
 	{
 		isAlreadyAssigned = false;
+		if (0x1F != functionType)
+		{
+			const auto function = auxiliaryFunctionTypes.find(functionObjectID);
+			if ((function == auxiliaryFunctionTypes.end()) || (function->second != functionType))
+			{
+				return true;
+			}
+		}
 		if (0x1F == functionType)
 		{
 			if ((DEFAULT_NAME != deviceName) || (NULL_OBJECT_ID != inputObjectID))
@@ -2317,7 +2652,6 @@ namespace isobus
 				erase_auxiliary_function_assignment(device, functionObjectID, storeAsPreferred);
 				if (storeAsPreferred)
 				{
-					device.preferredAssignmentsLoaded = true;
 					if (oldPreferredFunctions != device.preferredFunctions)
 					{
 						toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
@@ -2371,7 +2705,10 @@ namespace isobus
 				{
 					toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
 				}
-				device.preferredAssignmentsLoaded = true;
+				if (isTarget)
+				{
+					device.preferredAssignmentsLoaded = true;
+				}
 			}
 		}
 		target->functions.push_back(assignment);
@@ -2535,7 +2872,6 @@ namespace isobus
 				mark_auxiliary_input_device_unavailable(device);
 			}
 			auxiliaryAssignmentDirty = false;
-			auxiliaryAssignmentForceSync = false;
 			for (auto &pool : objectPools)
 			{
 				pool.uploaded = false;
@@ -2622,7 +2958,18 @@ namespace isobus
 	bool VirtualTerminalClient::prepare_auxiliary_assignment_attempt(bool startup, std::vector<AssignedAuxiliaryInputDevice> &devices, std::uint8_t &attempts, bool &failed)
 	{
 		failed = false;
-		if (!ensure_auxiliary_preferences_loaded())
+		// Do not load preference data while an attempt is outstanding or being retried.
+		// A newly discovered device is loaded when the next complete snapshot starts.
+		bool needsNewSnapshot = false;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			const bool pendingReadinessCheck = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
+				return device.ready && device.preferredAssignmentReadyCheckPending;
+			});
+			needsNewSnapshot = (0 == auxiliaryAssignmentAttemptCount) && !auxiliaryAssignmentTransactionInFlight &&
+			  (startup || auxiliaryAssignmentDirty || pendingReadinessCheck);
+		}
+		if (needsNewSnapshot && !ensure_auxiliary_preferences_loaded())
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			for (auto &device : assignedAuxiliaryInputDevices)
@@ -2655,10 +3002,6 @@ namespace isobus
 				attempts = auxiliaryAssignmentAttemptCount;
 				auxiliaryAssignmentTransactionInFlight = false;
 				auxiliaryAssignmentDirty = auxiliaryAssignmentGeneration != auxiliaryAssignmentTransactionGeneration;
-				if (!auxiliaryAssignmentDirty)
-				{
-					auxiliaryAssignmentForceSync = false;
-				}
 				auxiliaryAssignmentTransactionDevices.clear();
 				auxiliaryAssignmentAttemptCount = 0;
 			}
@@ -2683,14 +3026,6 @@ namespace isobus
 				}
 			}
 			auxiliaryAssignmentTransactionGeneration = auxiliaryAssignmentGeneration;
-		}
-		const bool emptyUnforcedUpdate = !startup && !auxiliaryAssignmentForceSync && auxiliaryAssignmentTransactionDevices.empty();
-		if (emptyUnforcedUpdate)
-		{
-			auxiliaryAssignmentTransactionDevices.clear();
-			auxiliaryAssignmentAttemptCount = 0;
-			auxiliaryAssignmentDirty = false;
-			return false;
 		}
 		if (!valid_auxiliary_assignment_device_set(auxiliaryAssignmentTransactionDevices))
 		{
@@ -3205,10 +3540,6 @@ namespace isobus
 									  (StateMachineState::SendAuxiliaryPreferredAssignment == parentVT->state);
 									parentVT->auxiliaryAssignmentTransactionInFlight = false;
 									parentVT->auxiliaryAssignmentDirty = parentVT->auxiliaryAssignmentGeneration != parentVT->auxiliaryAssignmentTransactionGeneration;
-									if (parentVT->auxiliaryAssignmentGeneration == parentVT->auxiliaryAssignmentTransactionGeneration)
-									{
-										parentVT->auxiliaryAssignmentForceSync = false;
-									}
 									parentVT->auxiliaryAssignmentTransactionDevices.clear();
 									parentVT->auxiliaryAssignmentAttemptCount = 0;
 								}
@@ -3255,6 +3586,7 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage):
 						{
 							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							    !parentVT->get_auxiliary_input_learn_mode_enabled() &&
 							    (nullptr != message.get_source_control_function()))
 							{
 								const std::uint16_t inputObjectID = message.get_uint16_at(1);
