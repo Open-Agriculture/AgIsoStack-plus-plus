@@ -41,3 +41,19 @@ This mapping can be done by the operator on the Virtual Terminal, and is stored 
 
 Both the Inputs and Functions are given by a :ref:`Virtual Terminal Client <API VirtualTerminalClient>` with AuxiliaryInputObjects and AuxiliaryOutputObjects.
 
+AUX-N is static client configuration. Configure AUX-N enablement, the model identification code, and any assignment
+persistence callbacks before calling ``VirtualTerminalClient::initialize()``. Callback registration automatically enables
+AUX-N; applications that do not need persistence callbacks can enable it with ``set_auxiliary_functions_enabled(true)``.
+AUX-N is disabled by default, and its settings cannot be changed while the client is initialized. The lifecycle is:
+
+.. code-block:: text
+
+   Configure client
+       ↓
+   set AUX-N settings/callbacks
+       ↓
+   initialize()
+       ↓
+   runtime AUX-N operation
+       ↓
+   terminate()
