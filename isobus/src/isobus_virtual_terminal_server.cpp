@@ -43,6 +43,9 @@ namespace isobus
 		return (bitIndex < 8U) ? static_cast<std::uint8_t>(1U << bitIndex) : static_cast<std::uint8_t>(0U);
 	}
 
+	/// @brief The VT status message busy code bit index for "VT is busy parsing an object pool" (VT version 3 and later)
+	constexpr std::uint8_t BUSY_PARSING_OBJECT_POOL_BIT = 4;
+
 	/// @brief Extracts a byte from a 32-bit value.
 	/// @param value The value to extract the byte from.
 	/// @param byteIndex The zero-based byte index.
@@ -2717,6 +2720,23 @@ namespace isobus
 	bool VirtualTerminalServer::send_status_message() const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+		std::uint8_t busyCodes = busyCodesBitfield;
+
+		if (get_vt_version_byte(get_version()) >= 3)
+		{
+			for (const auto &ws : managedWorkingSetList)
+			{
+				const auto state = ws->get_object_pool_processing_state();
+
+				// A parsed pool stays busy until update() joins it, right before the response is sent
+				if ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == state) ||
+				    (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
+				    (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state))
+				{
+					busyCodes |= get_bit(BUSY_PARSING_OBJECT_POOL_BIT);
+				}
+			}
+		}
 
 		buffer[0] = static_cast<std::uint8_t>(Function::VTStatusMessage);
 		buffer[1] = activeWorkingSetMasterAddress;
@@ -2724,7 +2744,7 @@ namespace isobus
 		buffer[3] = get_high_byte(activeWorkingSetDataMaskObjectID);
 		buffer[4] = get_low_byte(activeWorkingSetSoftkeyMaskObjectID);
 		buffer[5] = get_high_byte(activeWorkingSetSoftkeyMaskObjectID);
-		buffer[6] = busyCodesBitfield;
+		buffer[6] = busyCodes;
 		buffer[7] = currentCommandFunctionCode;
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
