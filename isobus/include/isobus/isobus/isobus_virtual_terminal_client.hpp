@@ -602,13 +602,18 @@ namespace isobus
 		/// @brief Set the model identification code of our auxiliary input device.
 		/// @details The model identification code is used to allow other devices identify
 		/// whether our device differs from a previous versions. If the model identification code
-		/// is different, the preferred assignments are reset.
+		/// is different, the preferred assignments are reset. Configure it before initialize();
+		/// AUX-N settings cannot be changed while the client is initialized.
 		/// @param[in] modelIdentificationCode The model identification code
 		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
 
 		/// @brief Registers callbacks for loading and storing auxiliary function assignments
-		/// @details Register callbacks before initialize(); this also enables AUX-N handling. Load callbacks run while
-		/// processing readiness or a Preferred Assignment transaction. Store callbacks are deferred to update() or
+		/// @details Configure the client, set its AUX-N settings and callbacks, then call initialize() before runtime
+		/// AUX-N operation; terminate() ends that lifecycle. AUX-N is disabled by default. Callbacks cannot be changed
+		/// while initialized. Registering callbacks automatically enables AUX-N; use
+		/// set_auxiliary_functions_enabled(true) when AUX-N is used without persistence callbacks. Load callbacks run
+		/// while processing readiness or a Preferred Assignment transaction. Reconfiguring callbacks between
+		/// lifecycles invalidates cached preferences so the new load callback is used. Store callbacks are deferred to update() or
 		/// terminate() after the Type 2 assignment response is queued. Both run without the device state lock and are
 		/// serialized with each other. Callbacks must not reenter AUX-N preference operations on this client.
 		/// @param[in] loadCallback Callback function to load stored assignments (optional)
@@ -619,8 +624,9 @@ namespace isobus
 		                                        void *context = nullptr);
 
 		/// @brief Enables or disables AUX-N function handling
-		/// @details Enable this before initialize() when the object pool contains Auxiliary Function Type 2 objects.
-		/// Applications should register a listener for assignment failures and alert the operator.
+		/// @details Configure this before initialize() when the object pool contains Auxiliary Function Type 2 objects.
+		/// The setting cannot be changed while initialized. Applications should register a listener for assignment
+		/// failures and alert the operator.
 		/// @param[in] enabled true to enable AUX-N function handling, false to disable it
 		void set_auxiliary_functions_enabled(bool enabled);
 
@@ -1548,8 +1554,17 @@ namespace isobus
 		/// @param[in] inputObjectID Assigned input object ID
 		/// @param[in] functionObjectID Assigned function object ID
 		/// @param[out] toStore Updated device preferences to persist after releasing auxiliaryAssignmentMutex
+		/// @param[out] isAlreadyAssigned true when the same device, function ID, and input ID were already assigned
 		/// @returns true when the command contains invalid values or references an unavailable device
-		bool apply_auxiliary_assignment_command_locked(std::uint64_t deviceName, bool storeAsPreferred, std::uint8_t functionType, std::uint16_t inputObjectID, std::uint16_t functionObjectID, std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore);
+		bool apply_auxiliary_assignment_command_locked(std::uint64_t deviceName,
+		                                               bool storeAsPreferred,
+		                                               std::uint8_t functionType,
+		                                               std::uint16_t inputObjectID,
+		                                               std::uint16_t functionObjectID,
+		                                               std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore,
+		                                               bool &isAlreadyAssigned);
+		/// @brief Continues connection startup with AUX-N assignment synchronization when configured.
+		void transition_to_connected_or_auxiliary_assignment();
 
 		/// @brief Removes a function ID from a device's active and preferred assignments
 		/// @details The caller must hold auxiliaryAssignmentMutex. Preferred mappings are only removed when requested.
@@ -1560,6 +1575,7 @@ namespace isobus
 
 		/// @brief Clears active assignments when an auxiliary input device becomes unavailable
 		/// @details The caller must hold auxiliaryAssignmentMutex. Preferred assignments are preserved.
+		/// @param[in,out] device Device whose active assignments are cleared
 		void mark_auxiliary_input_device_unavailable(AssignedAuxiliaryInputDevice &device);
 
 		/// @brief Send the auxiliary control type 2 assignment reponse message
