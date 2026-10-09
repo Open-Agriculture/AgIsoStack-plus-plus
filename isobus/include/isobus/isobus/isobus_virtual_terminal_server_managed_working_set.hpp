@@ -86,12 +86,12 @@ namespace isobus
 		/// which is useful if you want to stop drawing this working set
 		void clear_callback_handles();
 
-		/// @brief Tells the server where this pool originated from.
-		/// @returns True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
+		/// @brief Tells the server whether the pool being parsed must be answered with a Load Version response
+		/// @returns True from a Load Version Command until the server has sent its Load Version response
 		bool get_was_object_pool_loaded_from_non_volatile_memory() const;
 
-		/// @brief Tells the server where this pool originated from.
-		/// @param[in] value True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
+		/// @brief Tells the server whether the pool being parsed must be answered with a Load Version response
+		/// @param[in] value True when a Load Version Command restored the pool, false once its Load Version response has been sent
 		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>);
 
 		/// @brief Sets the object ID of the currently focused object

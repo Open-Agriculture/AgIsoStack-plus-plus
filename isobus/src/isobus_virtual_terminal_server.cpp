@@ -554,18 +554,14 @@ namespace isobus
 				{
 					managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
 					managedWorkingSet->add_iop_raw_data(loadedVersion);
+					managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, {});
+					managedWorkingSet->start_parsing_thread();
+					LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
 				}
 				else
 				{
-					send_load_version_response(0x01, managedWorkingSet->get_control_function());
+					send_load_version_response(get_bit(static_cast<std::uint8_t>(LoadVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
 					LOG_ERROR("[VT Server]: Failed to load requested object pool version");
-				}
-
-				if (managedWorkingSet->get_any_object_pools())
-				{
-					managedWorkingSet->start_parsing_thread();
-					managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, {});
-					LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
 				}
 			}
 			break;
@@ -2502,6 +2498,17 @@ namespace isobus
 		return retVal;
 	}
 
+	std::uint8_t VirtualTerminalServer::get_load_version_parse_error_bitfield() const
+	{
+		LoadVersionErrorBit errorBit = LoadVersionErrorBit::AnyOtherError;
+
+		if (get_vt_version_byte(get_version()) > 3)
+		{
+			errorBit = LoadVersionErrorBit::FileSystemErrorOrPoolDataCorruption;
+		}
+		return get_bit(static_cast<std::uint8_t>(errorBit));
+	}
+
 	bool VirtualTerminalServer::send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
@@ -2826,12 +2833,29 @@ namespace isobus
 
 				if (nullptr == workingSetObject)
 				{
-					LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
-					send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+					if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
+					{
+						send_load_version_response(get_load_version_parse_error_bitfield(), ws->get_control_function());
+						ws->set_was_object_pool_loaded_from_non_volatile_memory(false, {});
+						LOG_ERROR("[VT Server]: The object pool loaded from non-volatile memory contains no working set object. Rejecting the pool.");
+					}
+					else
+					{
+						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+						LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
+					}
 				}
 				else
 				{
-					send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
+					if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
+					{
+						send_load_version_response(0, ws->get_control_function());
+						ws->set_was_object_pool_loaded_from_non_volatile_memory(false, {});
+					}
+					else
+					{
+						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
+					}
 					if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
 					{
 						activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
@@ -2842,8 +2866,16 @@ namespace isobus
 			else if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == ws->get_object_pool_processing_state())
 			{
 				ws->join_parsing_thread();
-				///  @todo Get the parent object ID of the faulting object
-				send_end_of_object_pool_response(false, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+				if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
+				{
+					send_load_version_response(get_load_version_parse_error_bitfield(), ws->get_control_function());
+					ws->set_was_object_pool_loaded_from_non_volatile_memory(false, {});
+				}
+				else
+				{
+					///  @todo Get the parent object ID of the faulting object
+					send_end_of_object_pool_response(false, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+				}
 			}
 		}
 	}
