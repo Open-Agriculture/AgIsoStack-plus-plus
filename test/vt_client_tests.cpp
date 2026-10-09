@@ -77,6 +77,11 @@ public:
 		VirtualTerminalClient::set_state(value);
 	}
 
+	VirtualTerminalClient::StateMachineState test_wrapper_get_state() const
+	{
+		return VirtualTerminalClient::state;
+	}
+
 	static std::vector<std::uint8_t> staticTestPool;
 
 	static bool testWrapperDataChunkCallback(std::uint32_t,
@@ -984,6 +989,50 @@ TEST_F(VirtualTerminalTest, MessageConstruction)
 
 	serverVT.close();
 	CANHardwareInterface::stop();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
+{
+	// Regression test for the permanent-stall bug: a VT that never (re)announces
+	// itself - dropped off the bus, or simply never resumed broadcasting after a
+	// prior disconnect - used to leave the client waiting here forever, since
+	// lastVTStatusTimestamp_ms stays 0 and nothing else moved the state machine
+	// on. This confirms the wait state now honors VT_STATUS_TIMEOUT_MS like every
+	// other wait state in the machine, and that Failed actually retries instead
+	// of becoming a second permanent stall.
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage, clientUnderTest.test_wrapper_get_state());
+
+	// Just under the 3 second VT status timeout - no VT Status message has been
+	// received, so it should still be waiting.
+	time_source.simulate_delay_ms(2999);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage, clientUnderTest.test_wrapper_get_state());
+
+	// Past the timeout now - this is the case that used to hang forever.
+	time_source.simulate_delay_ms(2);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Failed, clientUnderTest.test_wrapper_get_state());
+
+	// Failed retries back to Disconnected after its own 5 second timeout,
+	// rather than being a second permanent stall.
+	time_source.simulate_delay_ms(5001);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.test_wrapper_get_state());
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
