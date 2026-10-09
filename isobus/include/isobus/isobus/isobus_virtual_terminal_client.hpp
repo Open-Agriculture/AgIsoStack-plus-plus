@@ -17,11 +17,12 @@
 #include "isobus/utility/processing_flags.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <array>
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
-#include <tuple>
+#include <utility>
 #include <vector>
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
@@ -610,10 +611,15 @@ namespace isobus
 		/// AUX-N operation; terminate() ends that lifecycle. AUX-N is disabled by default. Callbacks cannot be changed
 		/// while initialized. AUX-N Functions are disabled by default and must be enabled explicitly with
 		/// set_auxiliary_functions_enabled(true). Registering input object IDs enables AUX-N Input maintenance
-		/// independently. Load callbacks run while processing readiness or assignment messages. Reconfiguring callbacks between
+		/// independently. Ready devices are loaded in update(); a preferred assignment arriving before loading
+		/// completes loads synchronously before modification. Reconfiguring callbacks between
 		/// lifecycles invalidates cached preferences so the new load callback is used. Store callbacks are deferred to update() or
-		/// terminate() after the Type 2 assignment response is queued. Both run without the device state lock and are
-		/// serialized with each other. Callbacks must not reenter AUX-N preference operations on this client.
+		/// terminate(), independently of response delivery. Accepted changes are flushed at termination. Both run without the device state lock and are
+		/// serialized with each other. Callbacks must not reenter AUX-N preference operations on this client. Callbacks must be fast and bounded,
+		/// including contention with other callbacks, to permit assignment responses within one second and maintenance
+		/// every 100 ms. Queue slow storage work asynchronously in the application. Call update() frequently enough to
+		/// meet these deadlines. Assignment responses use an eight-entry FIFO; overflow refuses the newest command
+		/// before applying it and is logged. Failed sends are retried; missed deadlines are logged as protocol failures.
 		/// @param[in] loadCallback Callback function to load stored assignments (optional)
 		/// @param[in] storeCallback Callback function to store assignments (optional)
 		/// @param[in] context User context pointer passed to callbacks (optional)
@@ -1318,6 +1324,46 @@ namespace isobus
 		/// @brief Used to determine the language and unit systems in use by the VT server
 		LanguageCommandInterface languageCommandInterface;
 
+	private:
+		/// @brief Immutable command and bookkeeping for one Preferred Assignment transaction
+		struct AuxiliaryAssignmentTransaction
+		{
+			std::vector<std::uint8_t> message;
+			std::vector<std::pair<std::uint64_t, std::uint16_t>> devices;
+			std::uint8_t attemptCount = 0;
+			std::uint32_t timestamp_ms = 0;
+			bool obsolete = false;
+
+			bool outstanding() const
+			{
+				return attemptCount != 0;
+			}
+			void reset()
+			{
+				message.clear();
+				devices.clear();
+				attemptCount = 0;
+				timestamp_ms = 0;
+				obsolete = false;
+			}
+		};
+
+		struct AuxiliaryPreferenceSnapshot
+		{
+			std::uint64_t name;
+			std::uint16_t modelIdentificationCode;
+			std::vector<AssignedAuxiliaryFunction> functions;
+		};
+
+		struct AuxiliaryAssignmentResponse
+		{
+			std::uint16_t functionObjectID;
+			bool hasError;
+			bool isAlreadyAssigned;
+			std::uint32_t receivedTimestamp_ms;
+			bool deadlineReported;
+		};
+
 	protected:
 		/// @brief Enumerates the command types for graphics context objects
 		enum class GraphicsContextSubCommandID : std::uint8_t
@@ -1504,10 +1550,15 @@ namespace isobus
 		bool ensure_auxiliary_preferences_loaded();
 		/// @brief Persists queued preference snapshots outside the CAN receive callback
 		void store_pending_auxiliary_preferences();
+		/// @brief Retries assignment responses in receive order; caller holds auxiliaryAssignmentMutex
+		void send_pending_auxiliary_assignment_responses_locked();
+		/// @brief Builds a complete validated transaction snapshot; caller holds auxiliaryAssignmentMutex
+		bool prepare_auxiliary_assignment_transaction_locked();
 
 		/// @brief Advances the preferred assignment transaction independently of the VT connection state machine
 		/// @details Sends a complete assignment set, waits for acknowledgement, and retries after two seconds up to
-		/// three attempts. Reports failures through the auxiliary assignment failure event dispatcher.
+		/// three successful transmissions. Obsolete snapshots are not retransmitted. Missing responses report failure
+		/// without consuming newly pending synchronization; a valid rejection completes the transaction.
 		void update_auxiliary_assignment_transaction();
 
 		/// @brief Applies an Auxiliary Assignment Type 2 command and sends its assignment response
@@ -1532,7 +1583,7 @@ namespace isobus
 		                                               std::uint8_t functionType,
 		                                               std::uint16_t inputObjectID,
 		                                               std::uint16_t functionObjectID,
-		                                               std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore,
+		                                               std::vector<AuxiliaryPreferenceSnapshot> &toStore,
 		                                               bool &isAlreadyAssigned);
 
 		/// @brief Removes a function ID from a device's active and preferred assignments
@@ -1749,12 +1800,14 @@ namespace isobus
 		StateMachineState state = StateMachineState::Disconnected; ///< The current client state machine state
 		CurrentObjectPoolUploadState currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized; ///< The current upload state of the object pool being processed
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp from the last state machine update
-		std::uint8_t auxiliaryAssignmentAttemptCount = 0; ///< Successful transmissions in the current transaction
-		std::uint32_t auxiliaryAssignmentTimestamp_ms = 0; ///< Last successful transmission timestamp
-		std::vector<std::uint8_t> auxiliaryAssignmentMessage; ///< Complete command snapshot used for retries
-		bool auxiliaryAssignmentTransactionInFlight = false; ///< Whether the current transaction awaits acknowledgement
+		std::uint32_t auxiliaryAssignmentSessionGeneration = 0; ///< Rejects callback results and commands from an ended VT session
+		AuxiliaryAssignmentTransaction auxiliaryAssignmentTransaction; ///< Current command snapshot and retry state
 		bool auxiliaryAssignmentPending = false; ///< Whether a complete Preferred Assignment command is pending
 		bool auxiliaryFunctionsEnabled = false; ///< Whether AUX-N function handling is enabled
+		static constexpr std::size_t AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY = 8;
+		std::array<AuxiliaryAssignmentResponse, AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY> auxiliaryAssignmentResponses{};
+		std::size_t auxiliaryAssignmentResponseHead = 0;
+		std::size_t auxiliaryAssignmentResponseCount = 0;
 		Mutex auxiliaryAssignmentMutex; ///< Protects assigned device state and preferred assignment transaction state
 		Mutex auxiliaryPreferenceOperationMutex; ///< Serializes load, mutation, and store operations
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
@@ -1795,7 +1848,7 @@ namespace isobus
 		AuxiliaryAssignmentLoadCallback auxiliaryAssignmentLoadCallback = nullptr; ///< Callback to load stored assignments
 		AuxiliaryAssignmentStoreCallback auxiliaryAssignmentStoreCallback = nullptr; ///< Callback to store assignments
 		void *auxiliaryAssignmentCallbackContext = nullptr; ///< User context for storage callbacks
-		std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> auxiliaryAssignmentPendingStores; ///< Preference snapshots waiting for application persistence
+		std::vector<AuxiliaryPreferenceSnapshot> auxiliaryAssignmentPendingStores; ///< Preference snapshots waiting for application persistence
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback = nullptr; ///< The callback to use to get pool data

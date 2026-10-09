@@ -21,7 +21,7 @@
 #include <functional>
 #include <limits>
 #include <map>
-#include <tuple>
+#include <set>
 #include <unordered_map>
 #include <utility>
 
@@ -36,14 +36,12 @@ namespace isobus
 		{
 			return false;
 		}
-		for (auto entry = assignments.begin(); entry != assignments.end(); ++entry)
+		std::set<std::uint16_t> functionIDs;
+		for (const auto &assignment : assignments)
 		{
-			const auto &assignment = *entry;
 			if ((NULL_OBJECT_ID == assignment.functionObjectID) || (NULL_OBJECT_ID == assignment.inputObjectID) ||
 			    (static_cast<std::uint8_t>(assignment.functionType) > static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BidirectionalEncoder)) ||
-			    (entry != std::find_if(assignments.begin(), entry, [&assignment](const VirtualTerminalClient::AssignedAuxiliaryFunction &other) {
-				     return other.functionObjectID == assignment.functionObjectID;
-			     })))
+			    !functionIDs.insert(assignment.functionObjectID).second)
 			{
 				return false;
 			}
@@ -1371,6 +1369,10 @@ namespace isobus
 
 	void VirtualTerminalClient::update()
 	{
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			send_pending_auxiliary_assignment_responses_locked();
+		}
 		store_pending_auxiliary_preferences();
 
 		StateMachineState previousStateMachineState = state; // Save state to see if it changes this update
@@ -1794,25 +1796,6 @@ namespace isobus
 		}
 		if (StateMachineState::Connected == state)
 		{
-			bool needsPreferences = false;
-			{
-				LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-				needsPreferences = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
-					return device.ready && !device.preferredAssignmentsLoaded;
-				});
-			}
-			if (needsPreferences)
-			{
-				bool valid;
-				{
-					LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
-					valid = ensure_auxiliary_preferences_loaded();
-				}
-				if (!valid)
-				{
-					auxiliaryAssignmentFailureEventDispatcher.invoke({ this, 0 });
-				}
-			}
 			update_auxiliary_assignment_transaction();
 		}
 
@@ -2089,14 +2072,16 @@ namespace isobus
 
 	bool VirtualTerminalClient::ensure_auxiliary_preferences_loaded()
 	{
-		std::vector<std::pair<std::pair<std::uint64_t, std::uint16_t>, std::vector<AssignedAuxiliaryFunction>>> loaded;
+		std::vector<AuxiliaryPreferenceSnapshot> loaded;
+		std::uint32_t sessionGeneration;
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			sessionGeneration = auxiliaryAssignmentSessionGeneration;
 			for (const auto &device : assignedAuxiliaryInputDevices)
 			{
 				if (device.ready && !device.preferredAssignmentsLoaded)
 				{
-					loaded.push_back({ { device.name, device.modelIdentificationCode }, {} });
+					loaded.push_back({ device.name, device.modelIdentificationCode, {} });
 				}
 			}
 		}
@@ -2105,25 +2090,29 @@ namespace isobus
 		{
 			if (nullptr != auxiliaryAssignmentLoadCallback)
 			{
-				entry.second = auxiliaryAssignmentLoadCallback(entry.first.first, entry.first.second, auxiliaryAssignmentCallbackContext);
+				entry.functions = auxiliaryAssignmentLoadCallback(entry.name, entry.modelIdentificationCode, auxiliaryAssignmentCallbackContext);
 			}
-			if (!valid_preferred_auxiliary_assignments(entry.second))
+			if (!valid_preferred_auxiliary_assignments(entry.functions))
 			{
 				LOG_WARNING("[AUX-N]: Stored assignments contain invalid or duplicate entries.");
 				allValid = false;
-				entry.second.clear();
+				entry.functions.clear();
 			}
 		}
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (sessionGeneration != auxiliaryAssignmentSessionGeneration)
+			{
+				return allValid;
+			}
 			for (const auto &entry : loaded)
 			{
 				auto device = std::find_if(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [&entry](const AssignedAuxiliaryInputDevice &candidate) {
-					return candidate.name == entry.first.first && candidate.modelIdentificationCode == entry.first.second;
+					return candidate.name == entry.name && candidate.modelIdentificationCode == entry.modelIdentificationCode;
 				});
-				if (device != assignedAuxiliaryInputDevices.end() && !device->preferredAssignmentsLoaded)
+				if (device != assignedAuxiliaryInputDevices.end() && device->ready && !device->preferredAssignmentsLoaded)
 				{
-					device->preferredFunctions = entry.second;
+					device->preferredFunctions = entry.functions;
 					device->preferredAssignmentsLoaded = true;
 					if (device->ready && !device->preferredFunctions.empty())
 					{
@@ -2137,7 +2126,7 @@ namespace isobus
 
 	void VirtualTerminalClient::store_pending_auxiliary_preferences()
 	{
-		std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> pending;
+		std::vector<AuxiliaryPreferenceSnapshot> pending;
 		{
 			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
 			{
@@ -2148,40 +2137,87 @@ namespace isobus
 			{
 				for (const auto &entry : pending)
 				{
-					auxiliaryAssignmentStoreCallback(std::get<0>(entry), std::get<1>(entry), std::get<2>(entry), auxiliaryAssignmentCallbackContext);
+					auxiliaryAssignmentStoreCallback(entry.name, entry.modelIdentificationCode, entry.functions, auxiliaryAssignmentCallbackContext);
 				}
 			}
 		}
 	}
 
+	void VirtualTerminalClient::send_pending_auxiliary_assignment_responses_locked()
+	{
+		for (std::size_t i = 0; i < auxiliaryAssignmentResponseCount; ++i)
+		{
+			auto &response = auxiliaryAssignmentResponses[(auxiliaryAssignmentResponseHead + i) % AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY];
+			if (!response.deadlineReported && SystemTiming::time_expired_ms(response.receivedTimestamp_ms, 1000))
+			{
+				response.deadlineReported = true;
+				LOG_ERROR("[AUX-N]: Assignment response missed its one-second deadline.");
+			}
+		}
+		while (auxiliaryAssignmentResponseCount != 0)
+		{
+			const auto &response = auxiliaryAssignmentResponses[auxiliaryAssignmentResponseHead];
+			if (!send_auxiliary_function_assignment_response(response.functionObjectID, response.hasError, response.isAlreadyAssigned))
+			{
+				return;
+			}
+			auxiliaryAssignmentResponseHead = (auxiliaryAssignmentResponseHead + 1) % AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY;
+			--auxiliaryAssignmentResponseCount;
+		}
+	}
+
 	void VirtualTerminalClient::handle_auxiliary_assignment_command(const CANMessage &message)
 	{
+		const auto receivedTimestamp = SystemTiming::get_timestamp_ms();
 		const std::uint64_t deviceName = message.get_uint64_at(1);
 		const bool storeAsPreferred = !message.get_bool_at(9, 7);
 		const std::uint8_t functionType = message.get_uint8_at(9) & 0x1F;
 		const std::uint16_t inputObjectID = message.get_uint16_at(10);
 		const std::uint16_t functionObjectID = message.get_uint16_at(12);
-		bool hasError = false;
-		bool isAlreadyAssigned = false;
-		std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> toStore;
+		// Serialize admission, loading and mutation against other commands and stores.
+		// Never acquire the operation mutex while holding the state mutex.
+		std::uint32_t sessionGeneration;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			sessionGeneration = auxiliaryAssignmentSessionGeneration;
+		}
+		LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (sessionGeneration != auxiliaryAssignmentSessionGeneration)
+			{
+				LOG_WARNING("[AUX-N]: Assignment session ended before command admission; command not applied.");
+				return;
+			}
+			send_pending_auxiliary_assignment_responses_locked();
+			if (auxiliaryAssignmentResponseCount == AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY)
+			{
+				LOG_ERROR("[AUX-N]: Assignment response FIFO full; refusing command before applying it.");
+				return;
+			}
+		}
 		if (storeAsPreferred)
 		{
-			// Load existing ownership before updating it, without requiring unrelated
-			// devices to have valid preferences to accept this command.
-			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
 			ensure_auxiliary_preferences_loaded();
 		}
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
-			if (!hasError && !toStore.empty() && (auxiliaryAssignmentAttemptCount > 0))
+			if (sessionGeneration != auxiliaryAssignmentSessionGeneration)
+			{
+				LOG_WARNING("[AUX-N]: Assignment session ended while loading preferences; command not applied.");
+				return;
+			}
+			bool isAlreadyAssigned = false;
+			std::vector<AuxiliaryPreferenceSnapshot> toStore;
+			const bool hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
+			if (!hasError && !toStore.empty() && auxiliaryAssignmentTransaction.outstanding())
 			{
 				auxiliaryAssignmentPending = true;
 			}
 			for (const auto &entry : toStore)
 			{
-				auto pending = std::find_if(auxiliaryAssignmentPendingStores.begin(), auxiliaryAssignmentPendingStores.end(), [&entry](const auto &candidate) {
-					return (std::get<0>(candidate) == std::get<0>(entry)) && (std::get<1>(candidate) == std::get<1>(entry));
+				auto pending = std::find_if(auxiliaryAssignmentPendingStores.begin(), auxiliaryAssignmentPendingStores.end(), [&entry](const AuxiliaryPreferenceSnapshot &candidate) {
+					return candidate.name == entry.name && candidate.modelIdentificationCode == entry.modelIdentificationCode;
 				});
 				if (pending == auxiliaryAssignmentPendingStores.end())
 				{
@@ -2189,54 +2225,35 @@ namespace isobus
 				}
 				else
 				{
-					std::get<2>(*pending) = std::get<2>(entry);
+					pending->functions = entry.functions;
 				}
 			}
-			send_auxiliary_function_assignment_response(functionObjectID, hasError, isAlreadyAssigned && !hasError);
+			const auto tail = (auxiliaryAssignmentResponseHead + auxiliaryAssignmentResponseCount) % AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY;
+			auxiliaryAssignmentResponses[tail] = { functionObjectID, hasError, isAlreadyAssigned && !hasError, receivedTimestamp, false };
+			++auxiliaryAssignmentResponseCount;
+			send_pending_auxiliary_assignment_responses_locked();
 		}
 	}
 
 	void VirtualTerminalClient::mark_auxiliary_input_device_unavailable(AssignedAuxiliaryInputDevice &device)
 	{
-		const bool hadActiveAssignments = !device.functions.empty();
-		const bool hadPreferredAssignments = device.ready && !device.preferredFunctions.empty();
-		bool wasInTransaction = false;
-		if ((auxiliaryAssignmentAttemptCount > 0) && (auxiliaryAssignmentMessage.size() >= CAN_DATA_LENGTH))
-		{
-			std::size_t offset = 2;
-			for (std::uint8_t deviceCount = auxiliaryAssignmentMessage[1]; (deviceCount > 0) && (offset + 11 <= auxiliaryAssignmentMessage.size()); --deviceCount)
-			{
-				std::uint64_t name = 0;
-				for (unsigned int byte = 0; byte < 8; ++byte)
-				{
-					name |= static_cast<std::uint64_t>(auxiliaryAssignmentMessage[offset + byte]) << (byte * 8);
-				}
-				const std::uint8_t functionCount = auxiliaryAssignmentMessage[offset + 10];
-				if ((name == device.name) && (auxiliaryAssignmentMessage[offset + 8] == static_cast<std::uint8_t>(device.modelIdentificationCode)) &&
-				    (auxiliaryAssignmentMessage[offset + 9] == static_cast<std::uint8_t>(device.modelIdentificationCode >> 8)))
-				{
-					wasInTransaction = true;
-					break;
-				}
-				offset += 11 + (4 * functionCount);
-			}
-		}
+		const bool hadAssignments = !device.functions.empty() || (device.ready && !device.preferredFunctions.empty());
+		const auto key = std::make_pair(device.name, device.modelIdentificationCode);
+		const bool wasInTransaction = auxiliaryAssignmentTransaction.outstanding() &&
+		  (auxiliaryAssignmentTransaction.devices.end() != std::find(auxiliaryAssignmentTransaction.devices.begin(), auxiliaryAssignmentTransaction.devices.end(), key));
 		device.ready = false;
 		device.functions.clear();
 		if (wasInTransaction)
 		{
-			auxiliaryAssignmentTransactionInFlight = false;
-			auxiliaryAssignmentAttemptCount = 0;
-			auxiliaryAssignmentMessage.clear();
-			auxiliaryAssignmentPending = true;
+			auxiliaryAssignmentTransaction.obsolete = true;
 		}
-		else if (hadActiveAssignments || hadPreferredAssignments)
+		if (wasInTransaction || hadAssignments)
 		{
 			auxiliaryAssignmentPending = true;
 		}
 	}
 
-	bool VirtualTerminalClient::apply_auxiliary_assignment_command_locked(std::uint64_t deviceName, bool storeAsPreferred, std::uint8_t functionType, std::uint16_t inputObjectID, std::uint16_t functionObjectID, std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore, bool &isAlreadyAssigned)
+	bool VirtualTerminalClient::apply_auxiliary_assignment_command_locked(std::uint64_t deviceName, bool storeAsPreferred, std::uint8_t functionType, std::uint16_t inputObjectID, std::uint16_t functionObjectID, std::vector<AuxiliaryPreferenceSnapshot> &toStore, bool &isAlreadyAssigned)
 	{
 		isAlreadyAssigned = false;
 		if (0x1F == functionType)
@@ -2257,7 +2274,7 @@ namespace isobus
 						device.preferredAssignmentsLoaded = true;
 						if (preferencesChanged)
 						{
-							toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
+							toStore.push_back({ device.name, device.modelIdentificationCode, device.preferredFunctions });
 						}
 					}
 				}
@@ -2271,7 +2288,7 @@ namespace isobus
 				{
 					if (oldPreferredFunctions != device.preferredFunctions)
 					{
-						toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
+						toStore.push_back({ device.name, device.modelIdentificationCode, device.preferredFunctions });
 					}
 				}
 			}
@@ -2320,7 +2337,7 @@ namespace isobus
 				}
 				if (oldPreferredFunctions != device.preferredFunctions)
 				{
-					toStore.emplace_back(device.name, device.modelIdentificationCode, device.preferredFunctions);
+					toStore.push_back({ device.name, device.modelIdentificationCode, device.preferredFunctions });
 				}
 				if (isTarget)
 				{
@@ -2468,6 +2485,7 @@ namespace isobus
 
 	void VirtualTerminalClient::set_state(StateMachineState value)
 	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 
 		if (value != state)
@@ -2476,7 +2494,6 @@ namespace isobus
 		}
 		if ((StateMachineState::Connected == value) && (StateMachineState::Connected != state) && auxiliaryFunctionsEnabled)
 		{
-			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			auxiliaryAssignmentPending = true;
 		}
 
@@ -2485,10 +2502,14 @@ namespace isobus
 		if (StateMachineState::Disconnected == value)
 		{
 			lastVTStatusTimestamp_ms = 0;
-			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			auxiliaryAssignmentTransactionInFlight = false;
-			auxiliaryAssignmentAttemptCount = 0;
-			auxiliaryAssignmentMessage.clear();
+			++auxiliaryAssignmentSessionGeneration;
+			auxiliaryAssignmentTransaction.reset();
+			if (auxiliaryAssignmentResponseCount != 0)
+			{
+				LOG_ERROR("[AUX-N]: VT session ended with undelivered assignment responses.");
+			}
+			auxiliaryAssignmentResponseCount = 0;
+			auxiliaryAssignmentResponseHead = 0;
 			for (auto &device : assignedAuxiliaryInputDevices)
 			{
 				mark_auxiliary_input_device_unavailable(device);
@@ -2501,6 +2522,54 @@ namespace isobus
 		}
 	}
 
+	bool VirtualTerminalClient::prepare_auxiliary_assignment_transaction_locked()
+	{
+		AuxiliaryAssignmentTransaction snapshot;
+		std::set<std::uint16_t> functionIDs;
+		snapshot.message = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
+		for (const auto &device : assignedAuxiliaryInputDevices)
+		{
+			if (!device.ready || device.preferredFunctions.empty())
+			{
+				continue;
+			}
+			if (!device.preferredAssignmentsLoaded || !valid_preferred_auxiliary_assignments(device.preferredFunctions) ||
+			    (snapshot.devices.size() == std::numeric_limits<std::uint8_t>::max()))
+			{
+				return false;
+			}
+			for (const auto &function : device.preferredFunctions)
+			{
+				if (!functionIDs.insert(function.functionObjectID).second)
+				{
+					return false;
+				}
+			}
+			snapshot.devices.emplace_back(device.name, device.modelIdentificationCode);
+			for (unsigned int byte = 0; byte < 8; ++byte)
+			{
+				snapshot.message.push_back(static_cast<std::uint8_t>(device.name >> (byte * 8)));
+			}
+			snapshot.message.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode));
+			snapshot.message.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode >> 8));
+			snapshot.message.push_back(static_cast<std::uint8_t>(device.preferredFunctions.size()));
+			for (const auto &function : device.preferredFunctions)
+			{
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.functionObjectID));
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.functionObjectID >> 8));
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.inputObjectID));
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.inputObjectID >> 8));
+			}
+		}
+		snapshot.message[1] = static_cast<std::uint8_t>(snapshot.devices.size());
+		if (snapshot.message.size() < CAN_DATA_LENGTH)
+		{
+			snapshot.message.resize(CAN_DATA_LENGTH, 0xFF);
+		}
+		auxiliaryAssignmentTransaction = std::move(snapshot);
+		return true;
+	}
+
 	void VirtualTerminalClient::update_auxiliary_assignment_transaction()
 	{
 		if (!auxiliaryFunctionsEnabled || (nullptr == partnerControlFunction) ||
@@ -2510,152 +2579,85 @@ namespace isobus
 		}
 
 		bool failed = false;
+		bool invalidPreferences = false;
 		std::uint8_t failedAttempts = 0;
-		bool loadPreferences = false;
 		{
-			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			if (auxiliaryAssignmentTransactionInFlight &&
-			    SystemTiming::time_expired_ms(auxiliaryAssignmentTimestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+			std::uint32_t sessionGeneration;
 			{
-				if (auxiliaryAssignmentAttemptCount >= 3)
-				{
-					failed = true;
-					failedAttempts = auxiliaryAssignmentAttemptCount;
-					auxiliaryAssignmentTransactionInFlight = false;
-					auxiliaryAssignmentAttemptCount = 0;
-					auxiliaryAssignmentMessage.clear();
-				}
-				else
-				{
-					auxiliaryAssignmentTransactionInFlight = false;
-				}
+				LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+				sessionGeneration = auxiliaryAssignmentSessionGeneration;
 			}
-			if (auxiliaryAssignmentTransactionInFlight)
+			const bool preferencesValid = ensure_auxiliary_preferences_loaded();
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if ((StateMachineState::Connected != state) || (sessionGeneration != auxiliaryAssignmentSessionGeneration))
 			{
 				return;
 			}
-			if (!failed)
+			auto &transaction = auxiliaryAssignmentTransaction;
+			if (transaction.outstanding())
 			{
-				loadPreferences = (0 == auxiliaryAssignmentAttemptCount) && auxiliaryAssignmentPending;
-				if (!loadPreferences && (0 == auxiliaryAssignmentAttemptCount))
+				if (SystemTiming::time_expired_ms(transaction.timestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+				{
+					if (transaction.obsolete || (transaction.attemptCount >= 3))
+					{
+						failed = true;
+						failedAttempts = transaction.attemptCount;
+						transaction.reset();
+						// Do not consume changes triggered while the old transaction was outstanding.
+					}
+					else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
+					{
+						++transaction.attemptCount;
+						transaction.timestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+				}
+			}
+			if (!preferencesValid)
+			{
+				invalidPreferences = true;
+				if (!transaction.outstanding())
+				{
+					auxiliaryAssignmentPending = false;
+				}
+			}
+			else if (!failed && !transaction.outstanding() && auxiliaryAssignmentPending)
+			{
+				// Devices discovered or reconfigured during loading must be loaded on the next update
+				// before publishing a complete assignment set.
+				if (std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
+					    return device.ready && !device.preferredAssignmentsLoaded;
+				    }))
 				{
 					return;
 				}
-			}
-		}
-		if (failed)
-		{
-			LOG_WARNING("[AUX-N]: Preferred assignment response timed out after three transmissions.");
-			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
-			return;
-		}
-
-		bool preferencesValid = true;
-		if (loadPreferences)
-		{
-			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
-			preferencesValid = ensure_auxiliary_preferences_loaded();
-		}
-
-		{
-			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			if ((StateMachineState::Connected != state) || auxiliaryAssignmentTransactionInFlight)
-			{
-				return;
-			}
-			if (loadPreferences && !preferencesValid)
-			{
-				auxiliaryAssignmentPending = false;
-				failed = true;
-				failedAttempts = 0;
-			}
-			else if (loadPreferences && auxiliaryAssignmentPending)
-			{
-				std::size_t deviceCount = 0;
-				for (const auto &device : assignedAuxiliaryInputDevices)
+				if (!prepare_auxiliary_assignment_transaction_locked())
 				{
-					if (device.ready && !device.preferredFunctions.empty())
-					{
-						++deviceCount;
-					}
-				}
-				bool valid = deviceCount <= 0xFF;
-				for (auto device = assignedAuxiliaryInputDevices.begin(); valid && (device != assignedAuxiliaryInputDevices.end()); ++device)
-				{
-					if (!device->ready || device->preferredFunctions.empty())
-					{
-						continue;
-					}
-					for (auto other = assignedAuxiliaryInputDevices.begin(); valid && (other != device); ++other)
-					{
-						for (const auto &function : device->preferredFunctions)
-						{
-							if (other->ready && (other->preferredFunctions.end() != std::find_if(other->preferredFunctions.begin(), other->preferredFunctions.end(), [&function](const AssignedAuxiliaryFunction &candidate) {
-								                     return candidate.functionObjectID == function.functionObjectID;
-							                     })))
-							{
-								valid = false;
-								break;
-							}
-						}
-					}
-				}
-				if (!valid)
-				{
+					invalidPreferences = true;
 					auxiliaryAssignmentPending = false;
-					failed = true;
-					failedAttempts = 0;
+				}
+				else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
+				{
+					transaction.attemptCount = 1;
+					transaction.timestamp_ms = SystemTiming::get_timestamp_ms();
+					auxiliaryAssignmentPending = false;
 				}
 				else
 				{
-					auxiliaryAssignmentMessage = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), static_cast<std::uint8_t>(deviceCount) };
-					for (const auto &device : assignedAuxiliaryInputDevices)
-					{
-						if (!device.ready || device.preferredFunctions.empty())
-						{
-							continue;
-						}
-						for (unsigned int byte = 0; byte < 8; ++byte)
-						{
-							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.name >> (byte * 8)));
-						}
-						auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode));
-						auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode >> 8));
-						auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.preferredFunctions.size()));
-						for (const auto &function : device.preferredFunctions)
-						{
-							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.functionObjectID));
-							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.functionObjectID >> 8));
-							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.inputObjectID));
-							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.inputObjectID >> 8));
-						}
-					}
-					if (auxiliaryAssignmentMessage.size() < CAN_DATA_LENGTH)
-					{
-						auxiliaryAssignmentMessage.resize(CAN_DATA_LENGTH, 0xFF);
-					}
-					auxiliaryAssignmentPending = false;
-					auxiliaryAssignmentAttemptCount = 0;
+					// No command was queued: preserve pending demand and rebuild on the next update.
+					transaction.reset();
 				}
-			}
-
-			if (!failed && !auxiliaryAssignmentMessage.empty() &&
-			    send_message_to_vt(auxiliaryAssignmentMessage.data(), auxiliaryAssignmentMessage.size()))
-			{
-				auxiliaryAssignmentTransactionInFlight = true;
-				++auxiliaryAssignmentAttemptCount;
-				auxiliaryAssignmentTimestamp_ms = SystemTiming::get_timestamp_ms();
-			}
-			else if (!failed && (0 == auxiliaryAssignmentAttemptCount))
-			{
-				auxiliaryAssignmentPending = true;
-				auxiliaryAssignmentMessage.clear();
 			}
 		}
 		if (failed)
 		{
-			LOG_WARNING("[AUX-N]: Stored preferred assignments could not be serialized.");
+			LOG_WARNING("[AUX-N]: Preferred assignment timed out; snapshot obsolete or retry limit reached.");
 			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
+		}
+		if (invalidPreferences)
+		{
+			LOG_WARNING("[AUX-N]: Stored preferred assignments could not be serialized.");
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, 0 });
 		}
 	}
 
@@ -3136,20 +3138,18 @@ namespace isobus
 								break;
 							}
 							const std::uint8_t errors = message.get_uint8_at(1);
-							bool wasInFlight = false;
+							bool wasOutstanding = false;
 							std::uint8_t attempts = 0;
 							{
 								LOCK_GUARD(Mutex, auxiliaryMutex);
-								wasInFlight = parentVT->auxiliaryAssignmentTransactionInFlight;
-								if (wasInFlight)
+								wasOutstanding = parentVT->auxiliaryAssignmentTransaction.outstanding();
+								if (wasOutstanding)
 								{
-									attempts = parentVT->auxiliaryAssignmentAttemptCount;
-									parentVT->auxiliaryAssignmentTransactionInFlight = false;
-									parentVT->auxiliaryAssignmentAttemptCount = 0;
-									parentVT->auxiliaryAssignmentMessage.clear();
+									attempts = parentVT->auxiliaryAssignmentTransaction.attemptCount;
+									parentVT->auxiliaryAssignmentTransaction.reset();
 								}
 							}
-							if (!wasInFlight)
+							if (!wasOutstanding)
 							{
 								LOG_WARNING("[AUX-N]: Ignoring preferred assignment response without an active transaction.");
 								break;
