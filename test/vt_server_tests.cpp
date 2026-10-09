@@ -155,6 +155,7 @@ public:
 	}
 
 	using VirtualTerminalServer::busyCodesBitfield;
+	using VirtualTerminalServer::managedWorkingSetList;
 	using VirtualTerminalServer::send_status_message;
 
 	std::vector<std::uint8_t> versionToLoad;
@@ -630,6 +631,40 @@ TEST_F(VirtualTerminalServerMessagingTest, StatusMessageDoesNotReportParsingOnVe
 
 	ASSERT_TRUE(foundStatus);
 	EXPECT_EQ(0x00, busyCodes);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolCommandsAreIgnoredUntilThePreviousObjectPoolIsAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x32, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8D, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	serverUnderTest.wait_for_object_pool_to_parse();
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	receive_from_client(internalECU, client, { 0x11, 0x00, 0xF0, 0x15, 0x00, 0x00, 0x00, 0x00 });
+	const auto numberOfPoolSegments = serverUnderTest.managedWorkingSetList.front()->get_number_iop_files();
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundLoadVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD1, responseFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(1U, numberOfPoolSegments);
+	ASSERT_TRUE(foundLoadVersionResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
 }
 
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet

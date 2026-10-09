@@ -46,6 +46,18 @@ namespace isobus
 	/// @brief The VT status message busy code bit index for "VT is busy parsing an object pool" (VT version 3 and later)
 	constexpr std::uint8_t BUSY_PARSING_OBJECT_POOL_BIT = 4;
 
+	/// @brief Checks if a working set's object pool parse has started but its response has not been sent yet.
+	/// @param workingSet The working set to check.
+	/// @returns true if update() has not yet joined the parsing thread and sent the response, otherwise false.
+	static bool is_object_pool_parse_unanswered(VirtualTerminalServerManagedWorkingSet &workingSet)
+	{
+		const auto state = workingSet.get_object_pool_processing_state();
+
+		return ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == state) ||
+		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
+		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state));
+	}
+
 	/// @brief Extracts a byte from a 32-bit value.
 	/// @param value The value to extract the byte from.
 	/// @param byteIndex The zero-based byte index.
@@ -484,7 +496,19 @@ namespace isobus
 	void VirtualTerminalServer::process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet)
 	{
 		const auto &data = message.get_data();
-		switch (static_cast<Function>(data.at(0)))
+		const auto function = static_cast<Function>(data.at(0));
+
+		// The client must wait for the response first, and the parsing thread is still reading the pool data
+		if (((Function::ObjectPoolTransferMessage == function) ||
+		     (Function::EndOfObjectPoolMessage == function) ||
+		     (Function::LoadVersionCommand == function)) &&
+		    is_object_pool_parse_unanswered(*managedWorkingSet))
+		{
+			LOG_WARNING("[VT Server]: Ignoring object pool command %u from client %u, its previous object pool has not been answered yet.", data.at(0), message.get_identifier().get_source_address());
+			return;
+		}
+
+		switch (function)
 		{
 			case Function::GetMemoryMessage:
 			{
@@ -2726,12 +2750,7 @@ namespace isobus
 		{
 			for (const auto &ws : managedWorkingSetList)
 			{
-				const auto state = ws->get_object_pool_processing_state();
-
-				// A parsed pool stays busy until update() joins it, right before the response is sent
-				if ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == state) ||
-				    (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
-				    (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state))
+				if (is_object_pool_parse_unanswered(*ws))
 				{
 					busyCodes |= get_bit(BUSY_PARSING_OBJECT_POOL_BIT);
 				}
@@ -2876,6 +2895,7 @@ namespace isobus
 					{
 						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
 					}
+
 					if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
 					{
 						activeWorkingSetMasterAddress = ws->get_control_function()->get_address();

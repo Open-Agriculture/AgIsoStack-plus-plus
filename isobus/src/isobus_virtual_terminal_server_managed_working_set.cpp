@@ -38,6 +38,7 @@ namespace isobus
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
+			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
 		}
 	}
@@ -179,7 +180,6 @@ namespace isobus
 		{
 			bool lSuccess = true;
 
-			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
