@@ -166,7 +166,7 @@ namespace isobus
 	}
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-	std::condition_variable &TaskControllerServer::get_condition_variable()
+	ConditionVariable &TaskControllerServer::get_condition_variable()
 	{
 		return updateWakeupCondition;
 	}
@@ -238,7 +238,7 @@ namespace isobus
 		{
 			auto server = static_cast<TaskControllerServer *>(parentPointer);
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			const std::lock_guard<std::mutex> lock(server->messagesMutex);
+			const LockGuard<Mutex> lock(server->messagesMutex);
 			server->rxMessageQueue.push_back(message);
 			server->updateWakeupCondition.notify_all();
 #else
@@ -250,7 +250,7 @@ namespace isobus
 	void TaskControllerServer::process_rx_messages()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(messagesMutex);
+		const LockGuard<Mutex> lock(messagesMutex);
 #endif
 		while (!rxMessageQueue.empty())
 		{

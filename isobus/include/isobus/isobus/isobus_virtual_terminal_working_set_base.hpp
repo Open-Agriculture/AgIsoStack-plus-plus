@@ -11,8 +11,7 @@
 #define ISOBUS_VIRTUAL_TERMINAL_WORKING_SET_BASE_HPP
 
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
-
-#include <mutex>
+#include "isobus/utility/thread_synchronization.hpp"
 
 namespace isobus
 {
@@ -116,7 +115,7 @@ namespace isobus
 			std::vector<std::uint8_t> data; ///< Stores the raw IOP data
 		};
 
-		std::mutex managedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
+		Mutex managedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
 		VTColourTable workingSetColourTable; ///< This working set's colour table
 		std::uint32_t iopSize = 0; ///< Total size of the IOP in bytes
 		std::uint32_t transferredIopSize = 0; ///< Total number of IOP bytes transferred

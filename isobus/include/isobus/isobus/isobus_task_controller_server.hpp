@@ -13,12 +13,9 @@
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/isobus_language_command_interface.hpp"
 #include "isobus/isobus/isobus_task_controller_server_options.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <deque>
-
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <condition_variable>
-#endif
 
 namespace isobus
 {
@@ -385,7 +382,8 @@ namespace isobus
 		/// @brief Returns a condition variable which you can optionally use to wake up your server's thread
 		/// when messages are received from the client.
 		/// @returns A condition variable which you can optionally use to wake up your server's thread
-		std::condition_variable &get_condition_variable();
+		/// @note The CMSIS-RTOS2 backend supports one waiting thread for this condition variable.
+		ConditionVariable &get_condition_variable();
 #endif
 
 		// **** Functions used to initialize and run the server ****
@@ -600,8 +598,8 @@ namespace isobus
 		std::deque<CANMessage> rxMessageQueue; ///< A queue of messages received from the clients which will be processed when update is called.
 		std::deque<std::shared_ptr<ActiveClient>> activeClients; ///< A list of clients that are currently being communicated with.
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::condition_variable updateWakeupCondition; ///< A condition variable you can optionally use to update the interface when messages are received
-		std::mutex messagesMutex; ///< A mutex used to protect the rxMessageQueue.
+		ConditionVariable updateWakeupCondition; ///< A condition variable you can optionally use to update the interface when messages are received
+		Mutex messagesMutex; ///< A mutex used to protect the rxMessageQueue.
 #endif
 		std::uint32_t lastStatusMessageTimestamp_ms = 0; ///< The timestamp of the last status message sent on the bus
 		bool statusUpdatePending = false; ///< Flag to indicate a status update should be sent after minimum interval.

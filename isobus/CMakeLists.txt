@@ -52,13 +52,10 @@ set(ISOBUS_SRC
     "nmea2000_message_definitions.cpp"
     "nmea2000_message_interface.cpp"
     "isobus_device_descriptor_object_pool_helpers.cpp"
-    "can_message_data.cpp")
-
-if(NOT CAN_STACK_DISABLE_THREADS)
-  list(APPEND ISOBUS_SRC "isobus_virtual_terminal_server.cpp"
-       "isobus_virtual_terminal_working_set_base.cpp"
-       "isobus_virtual_terminal_server_managed_working_set.cpp")
-endif()
+    "can_message_data.cpp"
+    "isobus_virtual_terminal_server.cpp"
+    "isobus_virtual_terminal_working_set_base.cpp"
+    "isobus_virtual_terminal_server_managed_working_set.cpp")
 
 # Prepend the source directory path to all the source files
 prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
@@ -108,18 +105,11 @@ set(ISOBUS_INCLUDE
     "nmea2000_message_interface.hpp"
     "isobus_preferred_addresses.hpp"
     "isobus_device_descriptor_object_pool_helpers.hpp"
-    "can_message_data.hpp")
-
-# Conditionally add Virtual Terminal components
-if(NOT CAN_STACK_DISABLE_THREADS)
-  list(
-    APPEND
-    ISOBUS_INCLUDE
+    "can_message_data.hpp"
     "isobus_virtual_terminal_base.hpp"
     "isobus_virtual_terminal_server.hpp"
     "isobus_virtual_terminal_working_set_base.hpp"
     "isobus_virtual_terminal_server_managed_working_set.hpp")
-endif()
 
 # Prepend the include directory path to all the include files
 prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
@@ -155,6 +145,9 @@ if(NOT CAN_PORT_MAXIMUM_VALUE STREQUAL "4")
 endif()
 target_compile_definitions(
   Isobus PUBLIC CAN_PORT_MAXIMUM_VALUE=${CAN_PORT_MAXIMUM_VALUE})
+if(USE_CMSIS_RTOS2_THREADING)
+  target_compile_definitions(Isobus PUBLIC USE_CMSIS_RTOS2_THREADING)
+endif()
 
 target_compile_features(Isobus PUBLIC cxx_std_11)
 set_target_properties(Isobus PROPERTIES CXX_EXTENSIONS OFF)

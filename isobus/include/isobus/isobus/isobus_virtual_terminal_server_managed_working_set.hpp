@@ -11,14 +11,13 @@
 
 #include <array>
 #include <map>
-#include <mutex>
-#include <thread>
 
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_working_set_base.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 namespace isobus
 {
@@ -141,7 +140,7 @@ namespace isobus
 		/// @brief The object pool processing thread will execute this function when it runs
 		void worker_thread_function();
 
-		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
+		std::unique_ptr<Thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool

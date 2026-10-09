@@ -33,6 +33,9 @@ add_library(${PROJECT_NAME}::Utility ALIAS Utility)
 
 target_compile_features(Utility PUBLIC cxx_std_11)
 set_target_properties(Utility PROPERTIES CXX_EXTENSIONS OFF)
+if(USE_CMSIS_RTOS2_THREADING)
+  target_compile_definitions(Utility PUBLIC USE_CMSIS_RTOS2_THREADING)
+endif()
 
 # Specify the include directory to be exported for other moduels to use. The
 # PUBLIC keyword here allows other libraries or exectuables to link to this

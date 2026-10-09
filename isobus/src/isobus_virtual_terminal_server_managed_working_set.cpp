@@ -36,20 +36,33 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
 	{
+#if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
+		worker_thread_function();
+#else
 		if (nullptr == objectPoolProcessingThread)
 		{
-			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
+			objectPoolProcessingThread.reset(new Thread([this]() { worker_thread_function(); }));
 		}
+#endif
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::join_parsing_thread()
 	{
+#if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
+		const auto state = get_object_pool_processing_state();
+		if ((ObjectPoolProcessingThreadState::Success == state) ||
+		    (ObjectPoolProcessingThreadState::Fail == state))
+		{
+			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Joined);
+		}
+#else
 		if ((nullptr != objectPoolProcessingThread) && (objectPoolProcessingThread->joinable()))
 		{
 			objectPoolProcessingThread->join();
 			objectPoolProcessingThread = nullptr;
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Joined);
 		}
+#endif
 	}
 
 	bool VirtualTerminalServerManagedWorkingSet::get_any_object_pools() const
@@ -59,7 +72,7 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState VirtualTerminalServerManagedWorkingSet::get_object_pool_processing_state()
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		return processingState;
 	}
 
@@ -130,7 +143,7 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::set_iop_size(std::uint32_t newIopSize)
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		iopSize = newIopSize;
 	}
 
@@ -169,7 +182,7 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_pool_processing_state(ObjectPoolProcessingThreadState value)
 	{
-		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		const LockGuard<Mutex> lock(managedWorkingSetMutex);
 		processingState = value;
 	}
 

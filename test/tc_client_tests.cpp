@@ -1374,6 +1374,8 @@ TEST_F(TaskControllerClientTest, WorkerThread)
 	EXPECT_NO_THROW(interfaceUnderTest.initialize(true));
 
 	EXPECT_NO_THROW(interfaceUnderTest.terminate());
+	EXPECT_NO_THROW(interfaceUnderTest.initialize(true));
+	EXPECT_NO_THROW(interfaceUnderTest.terminate());
 	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner); // Account for the pointer in the TC client and the language interface
 }
 

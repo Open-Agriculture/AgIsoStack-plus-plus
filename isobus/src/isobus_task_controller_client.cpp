@@ -19,9 +19,6 @@
 #include <array>
 #include <cassert>
 #include <cstring>
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-#include <thread>
-#endif
 
 namespace isobus
 {
@@ -44,6 +41,14 @@ namespace isobus
 		assert(nullptr != myControlFunction);
 		assert(nullptr != partnerControlFunction);
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if ((nullptr != workerThread) && workerThread->is_current_thread())
+		{
+			LOG_ERROR("[TC]: Cannot reinitialize TC client from its worker thread!");
+			return;
+		}
+#endif
+
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
@@ -52,6 +57,17 @@ namespace isobus
 		{
 			languageCommandInterface.initialize();
 		}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		// A previous worker may have exited without being joined (for example,
+		// terminate() was called from that worker). Reap it before clearing the
+		// termination flag or replacing the Thread wrapper.
+		if ((shouldTerminate || !initialized) && (nullptr != workerThread))
+		{
+			workerThread->join();
+			workerThread.reset();
+		}
+#endif
 
 		if (shouldTerminate)
 		{
@@ -64,7 +80,7 @@ namespace isobus
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			if (spawnThread)
 			{
-				workerThread = new std::thread([this]() { worker_thread_function(); });
+				workerThread.reset(new Thread([this]() { worker_thread_function(); }));
 			}
 #endif
 			initialized = true;
@@ -268,11 +284,10 @@ namespace isobus
 			shouldTerminate = true;
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if ((nullptr != workerThread) && (workerThread->get_id() != std::this_thread::get_id()))
+			if ((nullptr != workerThread) && !workerThread->is_current_thread())
 			{
 				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
+				workerThread.reset();
 			}
 #endif
 		}
@@ -2430,7 +2445,7 @@ namespace isobus
 				break;
 			}
 			update();
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			sleep_for(std::chrono::milliseconds(50));
 		}
 #endif
 	}
