@@ -41,10 +41,21 @@ This mapping can be done by the operator on the Virtual Terminal, and is stored 
 
 Both the Inputs and Functions are given by a :ref:`Virtual Terminal Client <API VirtualTerminalClient>` with AuxiliaryInputObjects and AuxiliaryOutputObjects.
 
-AUX-N is static client configuration. Configure AUX-N enablement, the model identification code, and any assignment
-persistence callbacks before calling ``VirtualTerminalClient::initialize()``. Callback registration automatically enables
-AUX-N; applications that do not need persistence callbacks can enable it with ``set_auxiliary_functions_enabled(true)``.
-AUX-N is disabled by default, and its settings cannot be changed while the client is initialized. The lifecycle is:
+AUX-N Functions are disabled by default. Enable them explicitly with
+``set_auxiliary_functions_enabled(true)`` before calling ``VirtualTerminalClient::initialize()``.
+Registering assignment persistence callbacks does not enable Functions. AUX-N Inputs are enabled
+independently by registering input Object IDs with ``add_auxiliary_input_object_id()``.
+A Working Set can provide Inputs, Functions, or both.
+For AUX-N Functions, configure the partnered VT with a Function Instance NAME filter of 0.
+Assignment operations use this primary VT, where the Working Set's object pool is loaded.
+
+The application must supply a correct object pool and valid function and input Object IDs.
+The client does not inspect the pool for AUX-N capabilities. Configure the model identification
+code and any persistence callbacks before initialization. Preferred Assignment synchronization
+runs independently of normal VT initialization and does not delay the Connected state.
+Inputs report Initializing until the VT confirms pool loading, then Ready. Assignment failure
+is reported through the auxiliary assignment failure event dispatcher and does not disconnect the VT.
+The lifecycle is:
 
 .. code-block:: text
 
