@@ -21,7 +21,6 @@
 #include <functional>
 #include <limits>
 #include <map>
-#include <set>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -37,12 +36,14 @@ namespace isobus
 		{
 			return false;
 		}
-		std::set<std::uint16_t> functionIDs;
-		for (const auto &assignment : assignments)
+		for (auto entry = assignments.begin(); entry != assignments.end(); ++entry)
 		{
+			const auto &assignment = *entry;
 			if ((NULL_OBJECT_ID == assignment.functionObjectID) || (NULL_OBJECT_ID == assignment.inputObjectID) ||
 			    (static_cast<std::uint8_t>(assignment.functionType) > static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BidirectionalEncoder)) ||
-			    !functionIDs.insert(assignment.functionObjectID).second)
+			    (entry != std::find_if(assignments.begin(), entry, [&assignment](const VirtualTerminalClient::AssignedAuxiliaryFunction &other) {
+				     return other.functionObjectID == assignment.functionObjectID;
+			     })))
 			{
 				return false;
 			}
@@ -253,7 +254,6 @@ namespace isobus
 		auxiliaryAssignmentLoadCallback = loadCallback;
 		auxiliaryAssignmentStoreCallback = storeCallback;
 		auxiliaryAssignmentCallbackContext = context;
-		auxiliaryFunctionsEnabled = true;
 		for (auto &device : assignedAuxiliaryInputDevices)
 		{
 			device.preferredFunctions.clear();
@@ -269,15 +269,6 @@ namespace isobus
 			return;
 		}
 		auxiliaryFunctionsEnabled = enabled;
-	}
-
-	void VirtualTerminalClient::transition_to_connected_or_auxiliary_assignment()
-	{
-		if (auxiliaryFunctionsEnabled)
-		{
-			build_auxiliary_function_lookup();
-		}
-		set_state(auxiliaryFunctionsEnabled ? StateMachineState::SendAuxiliaryPreferredAssignment : StateMachineState::Connected);
 	}
 
 	EventDispatcher<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> &VirtualTerminalClient::get_auxiliary_assignment_failure_event_dispatcher()
@@ -1413,7 +1404,6 @@ namespace isobus
 				case StateMachineState::Disconnected:
 				{
 					sendWorkingSetMaintenance = false;
-					sendAuxiliaryMaintenance = false;
 					unsupportedFunctions.clear();
 
 					if (partnerControlFunction->get_address_valid())
@@ -1458,7 +1448,6 @@ namespace isobus
 						send_working_set_maintenance(true);
 						lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
 						sendWorkingSetMaintenance = true;
-						sendAuxiliaryMaintenance = true;
 					}
 				}
 				break;
@@ -1766,24 +1755,6 @@ namespace isobus
 				}
 				break;
 
-				case StateMachineState::SendAuxiliaryPreferredAssignment:
-				{
-					update_auxiliary_assignment_transaction(true);
-				}
-				break;
-
-				case StateMachineState::WaitForPreferredAssignmentResponse:
-				{
-					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
-					{
-						set_state(StateMachineState::Disconnected);
-						LOG_ERROR("[VT]: Status Timeout");
-						break;
-					}
-					update_auxiliary_assignment_transaction(true);
-				}
-				break;
-
 				case StateMachineState::Connected:
 				{
 					// Check for timeouts
@@ -1793,7 +1764,6 @@ namespace isobus
 						LOG_ERROR("[VT]: Status Timeout");
 						break;
 					}
-					update_auxiliary_assignment_transaction(false);
 					update_auxiliary_input_status();
 				}
 				break;
@@ -1802,7 +1772,6 @@ namespace isobus
 				{
 					constexpr std::uint32_t VT_STATE_MACHINE_RETRY_TIMEOUT_MS = 5000;
 					sendWorkingSetMaintenance = false;
-					sendAuxiliaryMaintenance = false;
 
 					// Retry connecting after a while
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS))
@@ -1823,17 +1792,38 @@ namespace isobus
 		{
 			set_state(StateMachineState::Disconnected);
 		}
+		if (StateMachineState::Connected == state)
+		{
+			bool needsPreferences = false;
+			{
+				LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+				needsPreferences = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
+					return device.ready && !device.preferredAssignmentsLoaded;
+				});
+			}
+			if (needsPreferences)
+			{
+				bool valid;
+				{
+					LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+					valid = ensure_auxiliary_preferences_loaded();
+				}
+				if (!valid)
+				{
+					auxiliaryAssignmentFailureEventDispatcher.invoke({ this, 0 });
+				}
+			}
+			update_auxiliary_assignment_transaction();
+		}
 
 		if ((sendWorkingSetMaintenance) &&
 		    (SystemTiming::time_expired_ms(lastWorkingSetMaintenanceTimestamp_ms, WORKING_SET_MAINTENANCE_TIMEOUT_MS)))
 		{
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
 		}
-		if ((sendAuxiliaryMaintenance) &&
-		    (!ourAuxiliaryInputs.empty()) &&
+		if ((!ourAuxiliaryInputs.empty()) &&
 		    (SystemTiming::time_expired_ms(lastAuxiliaryMaintenanceTimestamp_ms, AUXILIARY_MAINTENANCE_TIMEOUT_MS)))
 		{
-			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendAuxiliaryMaintenance));
 		}
 
@@ -2097,62 +2087,6 @@ namespace isobus
 		                                                      CANIdentifier::CANPriority::Priority5);
 	}
 
-	bool VirtualTerminalClient::valid_auxiliary_assignment_device_set(const std::vector<AssignedAuxiliaryInputDevice> &devices) const
-	{
-		if (devices.size() > std::numeric_limits<std::uint8_t>::max())
-		{
-			return false;
-		}
-		std::set<std::uint16_t> functionIDs;
-		for (const auto &device : devices)
-		{
-			if (!valid_preferred_auxiliary_assignments(device.preferredFunctions))
-			{
-				return false;
-			}
-			for (const auto &assignment : device.preferredFunctions)
-			{
-				if (!functionIDs.insert(assignment.functionObjectID).second)
-				{
-					return false;
-				}
-			}
-		}
-		return true;
-	}
-
-	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment(const std::vector<AssignedAuxiliaryInputDevice> &devices) const
-	{
-		if (!valid_auxiliary_assignment_device_set(devices))
-		{
-			LOG_WARNING("[AUX-N]: Preferred assignment set contains invalid, duplicate, or too many entries.");
-			return false;
-		}
-		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), static_cast<std::uint8_t>(devices.size()) };
-		for (const AssignedAuxiliaryInputDevice &device : devices)
-		{
-			for (unsigned int byte = 0; byte < 8; ++byte)
-			{
-				buffer.push_back(static_cast<std::uint8_t>(device.name >> (byte * 8)));
-			}
-			buffer.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode));
-			buffer.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode >> 8));
-			buffer.push_back(static_cast<std::uint8_t>(device.preferredFunctions.size()));
-			for (const AssignedAuxiliaryFunction &function : device.preferredFunctions)
-			{
-				buffer.push_back(static_cast<std::uint8_t>(function.functionObjectID));
-				buffer.push_back(static_cast<std::uint8_t>(function.functionObjectID >> 8));
-				buffer.push_back(static_cast<std::uint8_t>(function.inputObjectID));
-				buffer.push_back(static_cast<std::uint8_t>(function.inputObjectID >> 8));
-			}
-		}
-		if (buffer.size() < CAN_DATA_LENGTH)
-		{
-			buffer.resize(CAN_DATA_LENGTH, 0xFF);
-		}
-		return send_message_to_vt(buffer.data(), buffer.size());
-	}
-
 	bool VirtualTerminalClient::ensure_auxiliary_preferences_loaded()
 	{
 		std::vector<std::pair<std::pair<std::uint64_t, std::uint16_t>, std::vector<AssignedAuxiliaryFunction>>> loaded;
@@ -2160,28 +2094,24 @@ namespace isobus
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			for (const auto &device : assignedAuxiliaryInputDevices)
 			{
-				if (!device.preferredAssignmentsLoaded)
+				if (device.ready && !device.preferredAssignmentsLoaded)
 				{
 					loaded.push_back({ { device.name, device.modelIdentificationCode }, {} });
 				}
 			}
 		}
 		bool allValid = true;
-		for (auto entry = loaded.begin(); entry != loaded.end();)
+		for (auto &entry : loaded)
 		{
 			if (nullptr != auxiliaryAssignmentLoadCallback)
 			{
-				entry->second = auxiliaryAssignmentLoadCallback(entry->first.first, entry->first.second, auxiliaryAssignmentCallbackContext);
+				entry.second = auxiliaryAssignmentLoadCallback(entry.first.first, entry.first.second, auxiliaryAssignmentCallbackContext);
 			}
-			if (!valid_preferred_auxiliary_assignments(entry->second))
+			if (!valid_preferred_auxiliary_assignments(entry.second))
 			{
 				LOG_WARNING("[AUX-N]: Stored assignments contain invalid or duplicate entries.");
 				allValid = false;
-				entry = loaded.erase(entry);
-			}
-			else
-			{
-				++entry;
+				entry.second.clear();
 			}
 		}
 		{
@@ -2195,17 +2125,9 @@ namespace isobus
 				{
 					device->preferredFunctions = entry.second;
 					device->preferredAssignmentsLoaded = true;
-				}
-			}
-			for (auto &device : assignedAuxiliaryInputDevices)
-			{
-				if (device.ready && device.preferredAssignmentReadyCheckPending)
-				{
-					device.preferredAssignmentReadyCheckPending = false;
-					if (!device.preferredFunctions.empty())
+					if (device->ready && !device->preferredFunctions.empty())
 					{
-						auxiliaryAssignmentDirty = true;
-						++auxiliaryAssignmentGeneration;
+						auxiliaryAssignmentPending = true;
 					}
 				}
 			}
@@ -2232,328 +2154,6 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::build_auxiliary_function_lookup()
-	{
-		// Pool buffers are borrowed only until Connected. Read bounded record headers
-		// at startup and retain only the metadata needed to validate assignments.
-		std::map<std::uint16_t, std::uint8_t> functions;
-		for (std::uint32_t index = 0; index < objectPools.size(); ++index)
-		{
-			const auto &pool = objectPools[index];
-			const auto poolSize = (nullptr != pool.objectPoolVectorPointer) ? static_cast<std::uint32_t>(pool.objectPoolVectorPointer->size()) : pool.objectPoolSize;
-			std::uint32_t callbackReadIndex = 0;
-			std::uint32_t offset = 0;
-			auto read = [&](std::uint32_t offset, std::uint32_t length, std::uint8_t *destination) {
-				if ((offset > poolSize) || (length > (poolSize - offset)))
-				{
-					return false;
-				}
-				if (pool.useDataCallback)
-				{
-					return (nullptr != pool.dataCallback) && pool.dataCallback(callbackReadIndex++, offset, length, destination, this);
-				}
-				if (nullptr != pool.objectPoolVectorPointer)
-				{
-					std::copy_n(pool.objectPoolVectorPointer->data() + offset, length, destination);
-					return true;
-				}
-				if (nullptr != pool.objectPoolDataPointer)
-				{
-					std::copy_n(pool.objectPoolDataPointer + offset, length, destination);
-					return true;
-				}
-				return false;
-			};
-			auto readObject = [&](std::uint32_t objectOffset, std::uint32_t length, std::uint8_t *destination) {
-				return (offset <= poolSize) && (objectOffset <= (poolSize - offset)) && read(offset + objectOffset, length, destination);
-			};
-
-			std::map<std::uint16_t, std::uint8_t> poolFunctions;
-			bool validPool = true;
-			while (offset < poolSize)
-			{
-				std::array<std::uint8_t, 38> header{};
-				if ((poolSize - offset < 3) || !read(offset, 3, header.data()))
-				{
-					validPool = false;
-					break;
-				}
-				const auto type = static_cast<VirtualTerminalObjectType>(header[2]);
-				std::uint32_t minimumLength = 0;
-				if (45 == header[2]) // Colour Palette is not yet in the public object-type enum.
-				{
-					minimumLength = 6;
-				}
-				else
-				{
-					switch (type)
-					{
-						case VirtualTerminalObjectType::InputAttributes:
-							minimumLength = 6;
-							break;
-						case VirtualTerminalObjectType::ColourMap:
-							minimumLength = 5;
-							break;
-						case VirtualTerminalObjectType::ObjectLabelRefrenceList:
-							minimumLength = 5;
-							break;
-						case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
-							minimumLength = 6;
-							break;
-						case VirtualTerminalObjectType::ScaledGraphic:
-							minimumLength = 12;
-							break;
-						case VirtualTerminalObjectType::GraphicData:
-							minimumLength = 8;
-							break;
-						case VirtualTerminalObjectType::WorkingSetSpecialControls:
-							minimumLength = 10;
-							break;
-						default:
-							minimumLength = get_minimum_object_length(type);
-							break;
-					}
-				}
-				if ((minimumLength < 3) || (minimumLength > header.size()) || (minimumLength > (poolSize - offset)) ||
-				    !read(offset, minimumLength, header.data()))
-				{
-					validPool = false;
-					break;
-				}
-
-				std::uint32_t objectLength = 0;
-				std::int32_t macroCountOffset = -1;
-				if (45 == header[2])
-				{
-					objectLength = 6 + (4 * (static_cast<std::uint32_t>(header[4]) | (static_cast<std::uint32_t>(header[5]) << 8)));
-				}
-				else
-				{
-					switch (type)
-					{
-						case VirtualTerminalObjectType::ColourMap:
-						{
-							const std::uint32_t numberOfIndexes = static_cast<std::uint32_t>(header[3]) | (static_cast<std::uint32_t>(header[4]) << 8);
-							objectLength = 5 + numberOfIndexes;
-						}
-						break;
-
-						case VirtualTerminalObjectType::ObjectLabelRefrenceList:
-							objectLength = 5 + (7 * (static_cast<std::uint32_t>(header[3]) | (static_cast<std::uint32_t>(header[4]) << 8)));
-							break;
-
-						case VirtualTerminalObjectType::InputAttributes:
-						{
-							const std::uint32_t validationLength = header[4];
-							macroCountOffset = static_cast<std::int32_t>(5 + validationLength);
-							std::uint8_t macroCount = 0;
-							if (!readObject(static_cast<std::uint32_t>(macroCountOffset), 1, &macroCount))
-							{
-								validPool = false;
-								break;
-							}
-							objectLength = 6 + validationLength + (2 * macroCount);
-						}
-						break;
-
-						case VirtualTerminalObjectType::InputString:
-						case VirtualTerminalObjectType::OutputString:
-						{
-							const std::uint32_t valueLength = (VirtualTerminalObjectType::InputString == type) ? header[16] : (static_cast<std::uint32_t>(header[14]) | (static_cast<std::uint32_t>(header[15]) << 8));
-							macroCountOffset = static_cast<std::int32_t>(((VirtualTerminalObjectType::InputString == type) ? 18 : 16) + valueLength);
-							std::uint8_t macroCount = 0;
-							if (!readObject(static_cast<std::uint32_t>(macroCountOffset), 1, &macroCount))
-							{
-								validPool = false;
-								break;
-							}
-							objectLength = ((VirtualTerminalObjectType::InputString == type) ? 19 : 17) + valueLength + (2 * macroCount);
-						}
-						break;
-
-						case VirtualTerminalObjectType::ExtendedInputAttributes:
-						{
-							const std::uint32_t numberOfCodePlanes = header[4];
-							objectLength = 5;
-							for (std::uint32_t plane = 0; plane < numberOfCodePlanes; ++plane)
-							{
-								std::uint8_t rangeCount = 0;
-								if ((objectLength > (poolSize - offset)) || ((poolSize - offset - objectLength) < 2) ||
-								    !readObject(objectLength + 1, 1, &rangeCount) ||
-								    (rangeCount > ((poolSize - offset - objectLength - 2) / 4)))
-								{
-									validPool = false;
-									break;
-								}
-								objectLength += 2 + (4 * rangeCount);
-							}
-						}
-						break;
-
-						case VirtualTerminalObjectType::AuxiliaryInputType2:
-						{
-							std::uint8_t childCount = 0;
-							if (!readObject(6, 1, &childCount))
-							{
-								validPool = false;
-								break;
-							}
-							objectLength = 7 + (6 * childCount);
-						}
-						break;
-
-						case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
-							objectLength = 6;
-							break;
-						case VirtualTerminalObjectType::ScaledGraphic:
-							macroCountOffset = 11;
-							objectLength = 12 + (2 * header[11]);
-							break;
-						case VirtualTerminalObjectType::GraphicData:
-						{
-							const std::uint32_t dataLength = static_cast<std::uint32_t>(header[4]) | (static_cast<std::uint32_t>(header[5]) << 8) |
-							  (static_cast<std::uint32_t>(header[6]) << 16) | (static_cast<std::uint32_t>(header[7]) << 24);
-							if (dataLength > (poolSize - offset - 8))
-							{
-								validPool = false;
-							}
-							else
-							{
-								objectLength = 8 + dataLength;
-							}
-						}
-						break;
-						case VirtualTerminalObjectType::WorkingSetSpecialControls:
-							objectLength = 5 + static_cast<std::uint32_t>(header[3]) + (static_cast<std::uint32_t>(header[4]) << 8);
-							break;
-						case VirtualTerminalObjectType::Animation:
-							macroCountOffset = 16;
-							objectLength = 17 + (6 * header[15]) + (2 * header[16]);
-							break;
-						case VirtualTerminalObjectType::PictureGraphic:
-						{
-							const std::uint32_t dataLength = static_cast<std::uint32_t>(header[12]) | (static_cast<std::uint32_t>(header[13]) << 8) |
-							  (static_cast<std::uint32_t>(header[14]) << 16) | (static_cast<std::uint32_t>(header[15]) << 24);
-							const std::uint32_t available = poolSize - offset;
-							macroCountOffset = 16;
-							if ((available < 17) || (dataLength > (available - 17)) ||
-							    (header[16] > ((available - 17 - dataLength) / 2)))
-							{
-								validPool = false;
-							}
-							else
-							{
-								objectLength = 17 + dataLength + (2 * header[16]);
-							}
-						}
-						break;
-
-						default:
-						{
-							objectLength = get_number_bytes_in_object(header.data());
-						}
-						break;
-					}
-				}
-				if (!validPool || (objectLength < minimumLength) || (objectLength > (poolSize - offset)))
-				{
-					validPool = false;
-					break;
-				}
-
-				constexpr std::array<std::pair<VirtualTerminalObjectType, std::uint8_t>, 27> macroCountOffsets = { { { VirtualTerminalObjectType::WorkingSet, 8 },
-					                                                                                                   { VirtualTerminalObjectType::DataMask, 7 },
-					                                                                                                   { VirtualTerminalObjectType::AlarmMask, 9 },
-					                                                                                                   { VirtualTerminalObjectType::Container, 9 },
-					                                                                                                   { VirtualTerminalObjectType::SoftKeyMask, 5 },
-					                                                                                                   { VirtualTerminalObjectType::Key, 6 },
-					                                                                                                   { VirtualTerminalObjectType::Button, 12 },
-					                                                                                                   { VirtualTerminalObjectType::InputBoolean, 12 },
-					                                                                                                   { VirtualTerminalObjectType::InputNumber, 37 },
-					                                                                                                   { VirtualTerminalObjectType::InputList, 12 },
-					                                                                                                   { VirtualTerminalObjectType::OutputNumber, 28 },
-					                                                                                                   { VirtualTerminalObjectType::OutputList, 11 },
-					                                                                                                   { VirtualTerminalObjectType::OutputLine, 10 },
-					                                                                                                   { VirtualTerminalObjectType::OutputRectangle, 12 },
-					                                                                                                   { VirtualTerminalObjectType::OutputEllipse, 14 },
-					                                                                                                   { VirtualTerminalObjectType::OutputPolygon, 13 },
-					                                                                                                   { VirtualTerminalObjectType::OutputMeter, 20 },
-					                                                                                                   { VirtualTerminalObjectType::OutputLinearBarGraph, 23 },
-					                                                                                                   { VirtualTerminalObjectType::OutputArchedBarGraph, 26 },
-					                                                                                                   { VirtualTerminalObjectType::PictureGraphic, 16 },
-					                                                                                                   { VirtualTerminalObjectType::FontAttributes, 7 },
-					                                                                                                   { VirtualTerminalObjectType::LineAttributes, 7 },
-					                                                                                                   { VirtualTerminalObjectType::FillAttributes, 7 },
-					                                                                                                   { VirtualTerminalObjectType::WindowMask, 16 },
-					                                                                                                   { VirtualTerminalObjectType::KeyGroup, 9 },
-					                                                                                                   { VirtualTerminalObjectType::Animation, 16 },
-					                                                                                                   { VirtualTerminalObjectType::ScaledGraphic, 11 } } };
-				if (macroCountOffset < 0)
-				{
-					auto macroCount = std::find_if(macroCountOffsets.begin(), macroCountOffsets.end(), [type](const auto &entry) { return entry.first == type; });
-					if (macroCount != macroCountOffsets.end())
-					{
-						macroCountOffset = macroCount->second;
-					}
-				}
-				if (macroCountOffset >= 0)
-				{
-					std::uint8_t macroCount = 0;
-					if (!readObject(static_cast<std::uint32_t>(macroCountOffset), 1, &macroCount))
-					{
-						validPool = false;
-						break;
-					}
-					std::uint32_t macroOffset = (VirtualTerminalObjectType::WorkingSet == type) ? (10 + (6 * header[7])) : objectLength - (2 * macroCount);
-					for (std::uint32_t macro = 0; macro < macroCount; ++macro)
-					{
-						std::array<std::uint8_t, 4> macroHeader{};
-						if (!readObject(macroOffset, 2, macroHeader.data()))
-						{
-							validPool = false;
-							break;
-						}
-						if (0xFF == macroHeader[0])
-						{
-							if (!readObject(macroOffset, 4, macroHeader.data()))
-							{
-								validPool = false;
-								break;
-							}
-							macroOffset += 4;
-							objectLength += 2;
-						}
-						else
-						{
-							macroOffset += 2;
-						}
-					}
-					if (!validPool || (objectLength > (poolSize - offset)))
-					{
-						validPool = false;
-						break;
-					}
-				}
-
-				if (VirtualTerminalObjectType::AuxiliaryFunctionType2 == type)
-				{
-					poolFunctions.emplace(static_cast<std::uint16_t>(header[0] | (static_cast<std::uint16_t>(header[1]) << 8)), header[4] & 0x1FU);
-				}
-				offset += objectLength;
-			}
-			if (validPool)
-			{
-				functions.insert(poolFunctions.begin(), poolFunctions.end());
-			}
-			else
-			{
-				LOG_WARNING("[AUX-N]: Could not decode object pool for assignment validation.");
-			}
-		}
-		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-		auxiliaryFunctionTypes.swap(functions);
-	}
-
 	void VirtualTerminalClient::handle_auxiliary_assignment_command(const CANMessage &message)
 	{
 		const std::uint64_t deviceName = message.get_uint64_at(1);
@@ -2574,11 +2174,9 @@ namespace isobus
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
-			if (!hasError && !toStore.empty() &&
-			    (auxiliaryAssignmentTransactionInFlight || (0 != auxiliaryAssignmentAttemptCount)))
+			if (!hasError && !toStore.empty() && (auxiliaryAssignmentAttemptCount > 0))
 			{
-				++auxiliaryAssignmentGeneration;
-				auxiliaryAssignmentDirty = true;
+				auxiliaryAssignmentPending = true;
 			}
 			for (const auto &entry : toStore)
 			{
@@ -2602,26 +2200,45 @@ namespace isobus
 	{
 		const bool hadActiveAssignments = !device.functions.empty();
 		const bool hadPreferredAssignments = device.ready && !device.preferredFunctions.empty();
+		bool wasInTransaction = false;
+		if ((auxiliaryAssignmentAttemptCount > 0) && (auxiliaryAssignmentMessage.size() >= CAN_DATA_LENGTH))
+		{
+			std::size_t offset = 2;
+			for (std::uint8_t deviceCount = auxiliaryAssignmentMessage[1]; (deviceCount > 0) && (offset + 11 <= auxiliaryAssignmentMessage.size()); --deviceCount)
+			{
+				std::uint64_t name = 0;
+				for (unsigned int byte = 0; byte < 8; ++byte)
+				{
+					name |= static_cast<std::uint64_t>(auxiliaryAssignmentMessage[offset + byte]) << (byte * 8);
+				}
+				const std::uint8_t functionCount = auxiliaryAssignmentMessage[offset + 10];
+				if ((name == device.name) && (auxiliaryAssignmentMessage[offset + 8] == static_cast<std::uint8_t>(device.modelIdentificationCode)) &&
+				    (auxiliaryAssignmentMessage[offset + 9] == static_cast<std::uint8_t>(device.modelIdentificationCode >> 8)))
+				{
+					wasInTransaction = true;
+					break;
+				}
+				offset += 11 + (4 * functionCount);
+			}
+		}
 		device.ready = false;
 		device.functions.clear();
-		if (hadActiveAssignments || hadPreferredAssignments)
+		if (wasInTransaction)
 		{
-			++auxiliaryAssignmentGeneration;
-			auxiliaryAssignmentDirty = true;
+			auxiliaryAssignmentTransactionInFlight = false;
+			auxiliaryAssignmentAttemptCount = 0;
+			auxiliaryAssignmentMessage.clear();
+			auxiliaryAssignmentPending = true;
+		}
+		else if (hadActiveAssignments || hadPreferredAssignments)
+		{
+			auxiliaryAssignmentPending = true;
 		}
 	}
 
 	bool VirtualTerminalClient::apply_auxiliary_assignment_command_locked(std::uint64_t deviceName, bool storeAsPreferred, std::uint8_t functionType, std::uint16_t inputObjectID, std::uint16_t functionObjectID, std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore, bool &isAlreadyAssigned)
 	{
 		isAlreadyAssigned = false;
-		if (0x1F != functionType)
-		{
-			const auto function = auxiliaryFunctionTypes.find(functionObjectID);
-			if ((function == auxiliaryFunctionTypes.end()) || (function->second != functionType))
-			{
-				return true;
-			}
-		}
 		if (0x1F == functionType)
 		{
 			if ((DEFAULT_NAME != deviceName) || (NULL_OBJECT_ID != inputObjectID))
@@ -2857,6 +2474,11 @@ namespace isobus
 		{
 			firstTimeInState = true;
 		}
+		if ((StateMachineState::Connected == value) && (StateMachineState::Connected != state) && auxiliaryFunctionsEnabled)
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			auxiliaryAssignmentPending = true;
+		}
 
 		state = value;
 
@@ -2866,12 +2488,12 @@ namespace isobus
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			auxiliaryAssignmentTransactionInFlight = false;
 			auxiliaryAssignmentAttemptCount = 0;
-			auxiliaryAssignmentTransactionDevices.clear();
+			auxiliaryAssignmentMessage.clear();
 			for (auto &device : assignedAuxiliaryInputDevices)
 			{
 				mark_auxiliary_input_device_unavailable(device);
 			}
-			auxiliaryAssignmentDirty = false;
+			auxiliaryAssignmentPending = false;
 			for (auto &pool : objectPools)
 			{
 				pool.uploaded = false;
@@ -2879,176 +2501,162 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalClient::update_auxiliary_assignment_transaction(bool startup)
+	void VirtualTerminalClient::update_auxiliary_assignment_transaction()
 	{
-		if (!auxiliaryFunctionsEnabled)
+		if (!auxiliaryFunctionsEnabled || (nullptr == partnerControlFunction) ||
+		    (0 != partnerControlFunction->get_NAME().get_function_instance()) || !is_vt_version_supported(VTVersion::Version3))
 		{
-			if (startup)
-			{
-				set_state(StateMachineState::Connected);
-			}
 			return;
 		}
-		if (!is_vt_version_supported(VTVersion::Version3))
-		{
-			if (startup)
-			{
-				set_state(StateMachineState::Connected);
-			}
-			return;
-		}
-		if (!startup)
+
+		bool failed = false;
+		std::uint8_t failedAttempts = 0;
+		bool loadPreferences = false;
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			const bool pendingReadinessCheck = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
-				return device.ready && device.preferredAssignmentReadyCheckPending;
-			});
-			if (!auxiliaryAssignmentDirty && !auxiliaryAssignmentTransactionInFlight && !pendingReadinessCheck)
+			if (auxiliaryAssignmentTransactionInFlight &&
+			    SystemTiming::time_expired_ms(auxiliaryAssignmentTimestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+			{
+				if (auxiliaryAssignmentAttemptCount >= 3)
+				{
+					failed = true;
+					failedAttempts = auxiliaryAssignmentAttemptCount;
+					auxiliaryAssignmentTransactionInFlight = false;
+					auxiliaryAssignmentAttemptCount = 0;
+					auxiliaryAssignmentMessage.clear();
+				}
+				else
+				{
+					auxiliaryAssignmentTransactionInFlight = false;
+				}
+			}
+			if (auxiliaryAssignmentTransactionInFlight)
 			{
 				return;
 			}
-		}
-
-		std::vector<AssignedAuxiliaryInputDevice> devices;
-		bool failed = false;
-		std::uint8_t attempts = 0;
-		bool shouldSend = false;
-		{
-			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
-			shouldSend = prepare_auxiliary_assignment_attempt(startup, devices, attempts, failed);
+			if (!failed)
+			{
+				loadPreferences = (0 == auxiliaryAssignmentAttemptCount) && auxiliaryAssignmentPending;
+				if (!loadPreferences && (0 == auxiliaryAssignmentAttemptCount))
+				{
+					return;
+				}
+			}
 		}
 		if (failed)
 		{
-			LOG_WARNING("[AUX-N]: Preferred assignment failed; auxiliary functions may be unavailable.");
-			if (startup)
-			{
-				set_state(StateMachineState::Connected);
-			}
-			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, attempts });
+			LOG_WARNING("[AUX-N]: Preferred assignment response timed out after three transmissions.");
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
 			return;
 		}
-		if (shouldSend)
+
+		bool preferencesValid = true;
+		if (loadPreferences)
+		{
+			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+			preferencesValid = ensure_auxiliary_preferences_loaded();
+		}
+
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			if (!auxiliary_assignment_snapshot_is_available())
+			if ((StateMachineState::Connected != state) || auxiliaryAssignmentTransactionInFlight)
 			{
-				auxiliaryAssignmentTransactionInFlight = false;
-				auxiliaryAssignmentTransactionDevices.clear();
-				auxiliaryAssignmentAttemptCount = 0;
-				auxiliaryAssignmentDirty = true;
+				return;
 			}
-			else if (send_auxiliary_functions_preferred_assignment(devices))
+			if (loadPreferences && !preferencesValid)
+			{
+				auxiliaryAssignmentPending = false;
+				failed = true;
+				failedAttempts = 0;
+			}
+			else if (loadPreferences && auxiliaryAssignmentPending)
+			{
+				std::size_t deviceCount = 0;
+				for (const auto &device : assignedAuxiliaryInputDevices)
+				{
+					if (device.ready && !device.preferredFunctions.empty())
+					{
+						++deviceCount;
+					}
+				}
+				bool valid = deviceCount <= 0xFF;
+				for (auto device = assignedAuxiliaryInputDevices.begin(); valid && (device != assignedAuxiliaryInputDevices.end()); ++device)
+				{
+					if (!device->ready || device->preferredFunctions.empty())
+					{
+						continue;
+					}
+					for (auto other = assignedAuxiliaryInputDevices.begin(); valid && (other != device); ++other)
+					{
+						for (const auto &function : device->preferredFunctions)
+						{
+							if (other->ready && (other->preferredFunctions.end() != std::find_if(other->preferredFunctions.begin(), other->preferredFunctions.end(), [&function](const AssignedAuxiliaryFunction &candidate) {
+								                     return candidate.functionObjectID == function.functionObjectID;
+							                     })))
+							{
+								valid = false;
+								break;
+							}
+						}
+					}
+				}
+				if (!valid)
+				{
+					auxiliaryAssignmentPending = false;
+					failed = true;
+					failedAttempts = 0;
+				}
+				else
+				{
+					auxiliaryAssignmentMessage = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), static_cast<std::uint8_t>(deviceCount) };
+					for (const auto &device : assignedAuxiliaryInputDevices)
+					{
+						if (!device.ready || device.preferredFunctions.empty())
+						{
+							continue;
+						}
+						for (unsigned int byte = 0; byte < 8; ++byte)
+						{
+							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.name >> (byte * 8)));
+						}
+						auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode));
+						auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode >> 8));
+						auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(device.preferredFunctions.size()));
+						for (const auto &function : device.preferredFunctions)
+						{
+							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.functionObjectID));
+							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.functionObjectID >> 8));
+							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.inputObjectID));
+							auxiliaryAssignmentMessage.push_back(static_cast<std::uint8_t>(function.inputObjectID >> 8));
+						}
+					}
+					if (auxiliaryAssignmentMessage.size() < CAN_DATA_LENGTH)
+					{
+						auxiliaryAssignmentMessage.resize(CAN_DATA_LENGTH, 0xFF);
+					}
+					auxiliaryAssignmentPending = false;
+					auxiliaryAssignmentAttemptCount = 0;
+				}
+			}
+
+			if (!failed && !auxiliaryAssignmentMessage.empty() &&
+			    send_message_to_vt(auxiliaryAssignmentMessage.data(), auxiliaryAssignmentMessage.size()))
 			{
 				auxiliaryAssignmentTransactionInFlight = true;
 				++auxiliaryAssignmentAttemptCount;
-				attempts = auxiliaryAssignmentAttemptCount;
 				auxiliaryAssignmentTimestamp_ms = SystemTiming::get_timestamp_ms();
-				if (startup && (StateMachineState::SendAuxiliaryPreferredAssignment == state))
-				{
-					set_state(StateMachineState::WaitForPreferredAssignmentResponse);
-				}
 			}
-			else
+			else if (!failed && (0 == auxiliaryAssignmentAttemptCount))
 			{
-				LOG_DEBUG("[AUX-N]: Unable to queue preferred assignment command; retrying later.");
+				auxiliaryAssignmentPending = true;
+				auxiliaryAssignmentMessage.clear();
 			}
 		}
-	}
-
-	bool VirtualTerminalClient::prepare_auxiliary_assignment_attempt(bool startup, std::vector<AssignedAuxiliaryInputDevice> &devices, std::uint8_t &attempts, bool &failed)
-	{
-		failed = false;
-		// Do not load preference data while an attempt is outstanding or being retried.
-		// A newly discovered device is loaded when the next complete snapshot starts.
-		bool needsNewSnapshot = false;
+		if (failed)
 		{
-			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			const bool pendingReadinessCheck = std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
-				return device.ready && device.preferredAssignmentReadyCheckPending;
-			});
-			needsNewSnapshot = (0 == auxiliaryAssignmentAttemptCount) && !auxiliaryAssignmentTransactionInFlight &&
-			  (startup || auxiliaryAssignmentDirty || pendingReadinessCheck);
+			LOG_WARNING("[AUX-N]: Stored preferred assignments could not be serialized.");
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
 		}
-		if (needsNewSnapshot && !ensure_auxiliary_preferences_loaded())
-		{
-			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-			for (auto &device : assignedAuxiliaryInputDevices)
-			{
-				device.preferredAssignmentReadyCheckPending = false;
-			}
-			attempts = std::max<std::uint8_t>(1, auxiliaryAssignmentAttemptCount);
-			auxiliaryAssignmentTransactionInFlight = false;
-			auxiliaryAssignmentDirty = false;
-			auxiliaryAssignmentTransactionDevices.clear();
-			auxiliaryAssignmentAttemptCount = 0;
-			failed = true;
-			return false;
-		}
-
-		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
-		if (auxiliaryAssignmentTransactionInFlight &&
-		    SystemTiming::time_expired_ms(auxiliaryAssignmentTimestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
-		{
-			if (!auxiliary_assignment_snapshot_is_available())
-			{
-				auxiliaryAssignmentTransactionInFlight = false;
-				auxiliaryAssignmentTransactionDevices.clear();
-				auxiliaryAssignmentAttemptCount = 0;
-				auxiliaryAssignmentDirty = true;
-			}
-			else if (auxiliaryAssignmentAttemptCount >= 3)
-			{
-				failed = true;
-				attempts = auxiliaryAssignmentAttemptCount;
-				auxiliaryAssignmentTransactionInFlight = false;
-				auxiliaryAssignmentDirty = auxiliaryAssignmentGeneration != auxiliaryAssignmentTransactionGeneration;
-				auxiliaryAssignmentTransactionDevices.clear();
-				auxiliaryAssignmentAttemptCount = 0;
-			}
-			else
-			{
-				auxiliaryAssignmentTransactionInFlight = false;
-				LOG_WARNING("[AUX-N]: Preferred assignment response timed out; retrying.");
-			}
-		}
-		if (failed || auxiliaryAssignmentTransactionInFlight || (!startup && !auxiliaryAssignmentDirty))
-		{
-			return false;
-		}
-		if (0 == auxiliaryAssignmentAttemptCount)
-		{
-			auxiliaryAssignmentTransactionDevices.clear();
-			for (const auto &device : assignedAuxiliaryInputDevices)
-			{
-				if (device.ready && !device.preferredFunctions.empty())
-				{
-					auxiliaryAssignmentTransactionDevices.push_back(device);
-				}
-			}
-			auxiliaryAssignmentTransactionGeneration = auxiliaryAssignmentGeneration;
-		}
-		if (!valid_auxiliary_assignment_device_set(auxiliaryAssignmentTransactionDevices))
-		{
-			attempts = 1;
-			auxiliaryAssignmentDirty = false;
-			auxiliaryAssignmentTransactionDevices.clear();
-			auxiliaryAssignmentAttemptCount = 0;
-			failed = true;
-			return false;
-		}
-
-		devices = auxiliaryAssignmentTransactionDevices;
-		attempts = static_cast<std::uint8_t>(auxiliaryAssignmentAttemptCount + 1);
-		return true;
-	}
-
-	bool VirtualTerminalClient::auxiliary_assignment_snapshot_is_available() const
-	{
-		return std::all_of(auxiliaryAssignmentTransactionDevices.begin(), auxiliaryAssignmentTransactionDevices.end(), [this](const AssignedAuxiliaryInputDevice &snapshot) {
-			return std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [&snapshot](const AssignedAuxiliaryInputDevice &current) {
-				return current.ready && current.name == snapshot.name && current.modelIdentificationCode == snapshot.modelIdentificationCode;
-			});
-		});
 	}
 
 	void VirtualTerminalClient::process_flags(std::uint32_t flag, void *parent)
@@ -3522,13 +3130,13 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::PreferredAssignmentCommand):
 						{
 							if ((message.get_data_length() != CAN_DATA_LENGTH) || !parentVT->auxiliaryFunctionsEnabled ||
+							    (nullptr == parentVT->partnerControlFunction) || (0 != parentVT->partnerControlFunction->get_NAME().get_function_instance()) ||
 							    (message.get_source_control_function() != parentVT->partnerControlFunction))
 							{
 								break;
 							}
 							const std::uint8_t errors = message.get_uint8_at(1);
 							bool wasInFlight = false;
-							bool startup = false;
 							std::uint8_t attempts = 0;
 							{
 								LOCK_GUARD(Mutex, auxiliaryMutex);
@@ -3536,12 +3144,9 @@ namespace isobus
 								if (wasInFlight)
 								{
 									attempts = parentVT->auxiliaryAssignmentAttemptCount;
-									startup = (StateMachineState::WaitForPreferredAssignmentResponse == parentVT->state) ||
-									  (StateMachineState::SendAuxiliaryPreferredAssignment == parentVT->state);
 									parentVT->auxiliaryAssignmentTransactionInFlight = false;
-									parentVT->auxiliaryAssignmentDirty = parentVT->auxiliaryAssignmentGeneration != parentVT->auxiliaryAssignmentTransactionGeneration;
-									parentVT->auxiliaryAssignmentTransactionDevices.clear();
 									parentVT->auxiliaryAssignmentAttemptCount = 0;
+									parentVT->auxiliaryAssignmentMessage.clear();
 								}
 							}
 							if (!wasInFlight)
@@ -3552,19 +3157,11 @@ namespace isobus
 							if (0 != errors)
 							{
 								LOG_ERROR("[AUX-N]: VT rejected the preferred assignment command (error flags " + isobus::to_string(errors) + ").");
-								if (startup)
-								{
-									parentVT->set_state(StateMachineState::Connected);
-								}
 								parentVT->auxiliaryAssignmentFailureEventDispatcher.invoke({ parentVT, attempts });
 							}
 							else
 							{
 								LOG_DEBUG("[AUX-N]: Preferred Assignment OK");
-								if (startup)
-								{
-									parentVT->set_state(StateMachineState::Connected);
-								}
 							}
 						}
 						break;
@@ -3572,6 +3169,7 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand):
 						{
 							if ((14 == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							    (nullptr != parentVT->partnerControlFunction) && (0 == parentVT->partnerControlFunction->get_NAME().get_function_instance()) &&
 							    (message.get_source_control_function() == parentVT->partnerControlFunction))
 							{
 								parentVT->handle_auxiliary_assignment_command(message);
@@ -3620,6 +3218,12 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand):
 						{
+							if ((nullptr == parentVT->partnerControlFunction) ||
+							    (0 != parentVT->partnerControlFunction->get_NAME().get_function_instance()) ||
+							    (message.get_source_control_function() != parentVT->partnerControlFunction))
+							{
+								break;
+							}
 							std::uint16_t inputObjectID = message.get_uint16_at(1);
 							bool shouldEnable = message.get_bool_at(3, 0);
 							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [&inputObjectID](const std::pair<std::uint16_t, AuxiliaryInputState> &input) {
@@ -3820,8 +3424,8 @@ namespace isobus
 								{
 									LOG_INFO("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
 
-									// Continue startup with AUX-N synchronization when configured.
-									parentVT->transition_to_connected_or_auxiliary_assignment();
+									// Normal VT initialization is complete; AUX-N synchronization runs from update().
+									parentVT->set_state(StateMachineState::Connected);
 								}
 								else
 								{
@@ -3861,7 +3465,7 @@ namespace isobus
 									LOG_INFO("[VT]: Stored object pool with no error.");
 
 									// After successful store, send auxiliary assignments if needed.
-									parentVT->transition_to_connected_or_auxiliary_assignment();
+									parentVT->set_state(StateMachineState::Connected);
 								}
 								else
 								{
@@ -3933,7 +3537,7 @@ namespace isobus
 									else
 									{
 										// No version to store, check for auxiliary assignments.
-										parentVT->transition_to_connected_or_auxiliary_assignment();
+										parentVT->set_state(StateMachineState::Connected);
 									}
 								}
 								else
@@ -4064,7 +3668,10 @@ namespace isobus
 								if (ready && !device->ready)
 								{
 									device->ready = true;
-									device->preferredAssignmentReadyCheckPending = true;
+									if (!device->preferredFunctions.empty())
+									{
+										parentVT->auxiliaryAssignmentPending = true;
+									}
 								}
 								else if (!ready && device->ready)
 								{

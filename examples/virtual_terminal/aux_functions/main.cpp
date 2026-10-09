@@ -156,7 +156,8 @@ int main(int argc, char **argv)
 	std::string objectPoolHash = isobus::IOPFileInterface::hash_object_pool_to_version(testPool);
 
 	const isobus::NAMEFilter filterVirtualTerminal(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
-	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal };
+	const isobus::NAMEFilter filterPrimaryVT(isobus::NAME::NAMEParameters::FunctionInstance, 0);
+	const std::vector<isobus::NAMEFilter> vtNameFilters = { filterVirtualTerminal, filterPrimaryVT };
 	auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
 	auto TestPartnerVT = isobus::CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
 
@@ -169,6 +170,7 @@ int main(int argc, char **argv)
 
 	TestVirtualTerminalClient->set_auxiliary_assignment_callbacks(load_assignments, store_assignments, nullptr);
 	std::cout << "Registered auxiliary assignment storage callbacks (in-memory)" << std::endl;
+	TestVirtualTerminalClient->set_auxiliary_functions_enabled(true);
 
 	TestVirtualTerminalClient->initialize(true);
 

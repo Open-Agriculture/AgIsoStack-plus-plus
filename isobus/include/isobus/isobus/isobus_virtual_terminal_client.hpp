@@ -349,8 +349,6 @@ namespace isobus
 			UploadObjectPool, ///< Client is uploading the object pool
 			SendEndOfObjectPool, ///< Client is sending the end of object pool message
 			WaitForEndOfObjectPoolResponse, ///< Client is waiting for the end of object pool response message
-			SendAuxiliaryPreferredAssignment, ///< Sending auxiliary functions preferred assignment
-			WaitForPreferredAssignmentResponse, ///< Waiting for Preferred Assignment OK response
 			Connected, ///< Client is connected to the VT server and the application layer is in control
 			Failed ///< Client could not connect to the VT due to an error
 		};
@@ -610,9 +608,9 @@ namespace isobus
 		/// @brief Registers callbacks for loading and storing auxiliary function assignments
 		/// @details Configure the client, set its AUX-N settings and callbacks, then call initialize() before runtime
 		/// AUX-N operation; terminate() ends that lifecycle. AUX-N is disabled by default. Callbacks cannot be changed
-		/// while initialized. Registering callbacks automatically enables AUX-N; use
-		/// set_auxiliary_functions_enabled(true) when AUX-N is used without persistence callbacks. Load callbacks run
-		/// while processing readiness or a Preferred Assignment transaction. Reconfiguring callbacks between
+		/// while initialized. AUX-N Functions are disabled by default and must be enabled explicitly with
+		/// set_auxiliary_functions_enabled(true). Registering input object IDs enables AUX-N Input maintenance
+		/// independently. Load callbacks run while processing readiness or assignment messages. Reconfiguring callbacks between
 		/// lifecycles invalidates cached preferences so the new load callback is used. Store callbacks are deferred to update() or
 		/// terminate() after the Type 2 assignment response is queued. Both run without the device state lock and are
 		/// serialized with each other. Callbacks must not reenter AUX-N preference operations on this client.
@@ -624,7 +622,8 @@ namespace isobus
 		                                        void *context = nullptr);
 
 		/// @brief Enables or disables AUX-N function handling
-		/// @details Configure this before initialize() when the object pool contains Auxiliary Function Type 2 objects.
+		/// @details Configure this before initialize() to use AUX-N Functions. The configured partnered VT must be function
+		/// instance 0. Applications supply valid object pools and function/input object IDs.
 		/// The setting cannot be changed while initialized. Applications should register a listener for assignment
 		/// failures and alert the operator.
 		/// @param[in] enabled true to enable AUX-N function handling, false to disable it
@@ -639,8 +638,8 @@ namespace isobus
 		bool get_auxiliary_input_learn_mode_enabled() const;
 
 		/// @brief Add a new auxiliary input to be managed by this virtual terminal object.
-		/// @details This function should be called for each auxiliary input that is available in the pool,
-		/// and will receive updates using update_auxiliary_input().
+		/// @details Register each local auxiliary input to enable AUX-N Input maintenance. Applications supply valid object
+		/// IDs and can send updates using update_auxiliary_input().
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		void add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
 		/// @brief Remove an auxiliary input from the pool of managed auxiliary inputs.
@@ -1388,7 +1387,6 @@ namespace isobus
 			std::vector<AssignedAuxiliaryFunction> preferredFunctions; ///< Stored preferences, independent of temporary active assignments
 			bool preferredAssignmentsLoaded; ///< Whether persisted preferences have been loaded or updated
 			bool ready; ///< Whether this device currently reports Ready
-			bool preferredAssignmentReadyCheckPending = false; ///< Whether readiness requires checking for stored preferences
 		};
 
 		/// @brief Struct for storing the state of an auxiliary input on our device
@@ -1498,17 +1496,6 @@ namespace isobus
 		/// @returns true if the message was sent
 		bool send_working_set_master() const;
 
-		/// @brief Send the preferred auxiliary control type 2 assignment command
-		/// @param[in] devices the AssignedAuxiliaryInputDevices for which to send the preferred assignment
-		/// @returns true if the message was sent successfully
-		bool send_auxiliary_functions_preferred_assignment(const std::vector<AssignedAuxiliaryInputDevice> &devices) const;
-
-		/// @brief Validates a complete preferred assignment set before serialization
-		/// @details Checks count limits, object IDs, function types, and function ID uniqueness across all devices.
-		/// @param[in] devices The input devices and their preferred assignments to validate
-		/// @returns true if the complete set can be represented by a valid Preferred Assignment command
-		bool valid_auxiliary_assignment_device_set(const std::vector<AssignedAuxiliaryInputDevice> &devices) const;
-
 		/// @brief Loads and validates preferences for known input devices whose preferences have not been loaded
 		/// @details The caller must hold auxiliaryPreferenceOperationMutex and must not hold auxiliaryAssignmentMutex.
 		/// Load callbacks run outside the device state lock; devices use empty preferences when no callback is registered.
@@ -1517,37 +1504,16 @@ namespace isobus
 		/// @brief Persists queued preference snapshots outside the CAN receive callback
 		void store_pending_auxiliary_preferences();
 
-		/// @brief Advances the shared preferred assignment transaction for startup or subsequent configuration changes
+		/// @brief Advances the preferred assignment transaction independently of the VT connection state machine
 		/// @details Sends a complete assignment set, waits for acknowledgement, and retries after two seconds up to
 		/// three attempts. Reports failures through the auxiliary assignment failure event dispatcher.
-		/// @param[in] startup true during initial connection, false when servicing changes while connected
-		void update_auxiliary_assignment_transaction(bool startup);
-
-		/// @brief Prepares the next preferred assignment attempt using the device state lock
-		/// @details The caller must hold auxiliaryPreferenceOperationMutex. This method acquires auxiliaryAssignmentMutex,
-		/// updates retry state, and copies the complete device snapshot for transmission; it does not send messages or
-		/// dispatch callbacks.
-		/// @param[in] startup true during initial connection, false when servicing changes while connected
-		/// @param[out] devices Snapshot to send when the method returns true
-		/// @param[out] attempts Attempt number associated with a send or failure
-		/// @param[out] failed true when the transaction has exhausted retries or has invalid preferences
-		/// @returns true when a preferred assignment command should be sent
-		bool prepare_auxiliary_assignment_attempt(bool startup, std::vector<AssignedAuxiliaryInputDevice> &devices, std::uint8_t &attempts, bool &failed);
-
-		/// @brief Tests whether all devices in the in-flight snapshot are still ready
-		/// @details The caller must hold auxiliaryAssignmentMutex.
-		/// @returns true when each snapshot device remains ready in the current device list
-		bool auxiliary_assignment_snapshot_is_available() const;
+		void update_auxiliary_assignment_transaction();
 
 		/// @brief Applies an Auxiliary Assignment Type 2 command and sends its assignment response
 		/// @details Assigns, replaces, or removes active mappings and updates stored preferences when requested.
 		/// The caller must validate the command source and its 14-byte payload length before calling this method.
 		/// @param[in] message The validated assignment command received from the partnered VT
 		void handle_auxiliary_assignment_command(const CANMessage &message);
-
-		/// @brief Captures Type 2 function IDs and types before borrowed pool storage can be released.
-		/// @details Called without the assignment mutex because object-pool callbacks may be needed.
-		void build_auxiliary_function_lookup();
 
 		/// @brief Applies a validated assignment command while holding auxiliaryAssignmentMutex
 		/// @details Updates active mappings and, when requested, preferred mappings. The caller holds
@@ -1567,8 +1533,6 @@ namespace isobus
 		                                               std::uint16_t functionObjectID,
 		                                               std::vector<std::tuple<std::uint64_t, std::uint16_t, std::vector<AssignedAuxiliaryFunction>>> &toStore,
 		                                               bool &isAlreadyAssigned);
-		/// @brief Continues connection startup with AUX-N assignment synchronization when configured.
-		void transition_to_connected_or_auxiliary_assignment();
 
 		/// @brief Removes a function ID from a device's active and preferred assignments
 		/// @details The caller must hold auxiliaryAssignmentMutex. Preferred mappings are only removed when requested.
@@ -1783,14 +1747,11 @@ namespace isobus
 		StateMachineState state = StateMachineState::Disconnected; ///< The current client state machine state
 		CurrentObjectPoolUploadState currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized; ///< The current upload state of the object pool being processed
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp from the last state machine update
-		std::uint8_t auxiliaryAssignmentAttemptCount = 0; ///< Attempts in the current preferred assignment transaction
-		std::uint32_t auxiliaryAssignmentTimestamp_ms = 0; ///< Start of the current preferred assignment attempt's response window
-		std::uint64_t auxiliaryAssignmentGeneration = 0; ///< Incremented when the complete assignment set changes
-		std::uint64_t auxiliaryAssignmentTransactionGeneration = 0; ///< Generation represented by the outstanding transaction
-		std::vector<AssignedAuxiliaryInputDevice> auxiliaryAssignmentTransactionDevices; ///< Complete device set being retried
+		std::uint8_t auxiliaryAssignmentAttemptCount = 0; ///< Successful transmissions in the current transaction
+		std::uint32_t auxiliaryAssignmentTimestamp_ms = 0; ///< Last successful transmission timestamp
+		std::vector<std::uint8_t> auxiliaryAssignmentMessage; ///< Complete command snapshot used for retries
 		bool auxiliaryAssignmentTransactionInFlight = false; ///< Whether the current transaction awaits acknowledgement
-		bool auxiliaryAssignmentDirty = false; ///< Whether the current known device set needs a preferred assignment
-		std::map<std::uint16_t, std::uint8_t> auxiliaryFunctionTypes; ///< Function validation metadata retained after startup
+		bool auxiliaryAssignmentPending = false; ///< Whether a complete Preferred Assignment command is pending
 		bool auxiliaryFunctionsEnabled = false; ///< Whether AUX-N function handling is enabled
 		Mutex auxiliaryAssignmentMutex; ///< Protects assigned device state and preferred assignment transaction state
 		Mutex auxiliaryPreferenceOperationMutex; ///< Serializes load, mutation, and store operations
@@ -1807,7 +1768,6 @@ namespace isobus
 		bool firstTimeInState = false; ///< Stores if the current update cycle is the first time a state machine state has been processed
 		bool initialized = false; ///< Stores the client initialization state
 		bool sendWorkingSetMaintenance = false; ///< Used internally to enable and disable cyclic sending of the working set maintenance message
-		bool sendAuxiliaryMaintenance = false; ///< Used internally to enable and disable cyclic sending of the auxiliary maintenance message
 		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
 
 		// Command queue

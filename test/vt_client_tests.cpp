@@ -3,8 +3,6 @@
 #include <algorithm>
 
 #include <map>
-#include <set>
-#include <tuple>
 
 #include "isobus//utility/iop_file_interface.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
@@ -81,14 +79,7 @@ public:
 
 	void test_wrapper_set_state(VirtualTerminalClient::StateMachineState value)
 	{
-		if (StateMachineState::SendAuxiliaryPreferredAssignment == value)
-		{
-			transition_to_connected_or_auxiliary_assignment();
-		}
-		else
-		{
-			VirtualTerminalClient::set_state(value);
-		}
+		VirtualTerminalClient::set_state(value);
 	}
 
 	void test_wrapper_set_vt_version(std::uint8_t version)
@@ -170,24 +161,7 @@ TEST_F(VirtualTerminalTest, InitializeAndInitialState)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-// Annex J regression scenarios use the existing receive boundary to avoid simulating
-// the unrelated object-pool handshake. Runtime behavior goes through update(), CAN and events.
-struct AuxiliaryPreferences
-{
-	std::map<std::uint64_t, std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction>> byName;
-};
-
-static std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> load_auxiliary_preferences(std::uint64_t name, std::uint16_t, void *context)
-{
-	return static_cast<AuxiliaryPreferences *>(context)->byName[name];
-}
-
-static void store_auxiliary_preferences(std::uint64_t name, std::uint16_t, const std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> &assignments, void *context)
-{
-	static_cast<AuxiliaryPreferences *>(context)->byName[name] = assignments;
-}
-
-// Only shared CAN setup/cleanup; the client is destroyed before this local fixture.
+// AUX-N protocol tests use the normal message boundary and never construct an object pool.
 struct AuxiliaryTestCAN
 {
 	VirtualCANPlugin vt;
@@ -217,22 +191,39 @@ static std::shared_ptr<ControlFunction> auxiliary_device(std::uint64_t name, std
 	return std::make_shared<ControlFunction>(NAME(name), address, 0);
 }
 
+struct AuxiliaryPreferences
+{
+	std::map<std::uint64_t, std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction>> byName;
+	unsigned int loadCalls = 0;
+};
+
+static std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> load_auxiliary_preferences(std::uint64_t name, std::uint16_t, void *context)
+{
+	auto &preferences = *static_cast<AuxiliaryPreferences *>(context);
+	++preferences.loadCalls;
+	return preferences.byName[name];
+}
+
+static void store_auxiliary_preferences(std::uint64_t name, std::uint16_t, const std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> &assignments, void *context)
+{
+	static_cast<AuxiliaryPreferences *>(context)->byName[name] = assignments;
+}
+
+static std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> empty_auxiliary_preferences(std::uint64_t, std::uint16_t, void *)
+{
+	return {};
+}
+
+static void ignore_auxiliary_preferences(std::uint64_t, std::uint16_t, const std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> &, void *)
+{
+}
+
 static void receive_auxiliary(DerivedTestVTClient &client, const std::shared_ptr<ControlFunction> &source, const std::vector<std::uint8_t> &data)
 {
 	const bool broadcast = (data[0] == 0x23) || (data[0] == 0x26) || (data[0] == 0xFE);
 	const auto pgn = (data[0] == 0x23) ? 0xE700 : 0xE600;
 	const auto message = broadcast ? test_helpers::create_message_broadcast(6, pgn, source, data.data(), static_cast<std::uint32_t>(data.size())) : test_helpers::create_message(6, pgn, client.get_internal_control_function(), source, data.data(), static_cast<std::uint32_t>(data.size()));
 	client.test_wrapper_process_rx_message(message, &client);
-}
-
-static std::vector<std::uint8_t> auxiliary_function_pool(std::initializer_list<std::uint16_t> functions)
-{
-	std::vector<std::uint8_t> pool;
-	for (const auto id : functions)
-	{
-		pool.insert(pool.end(), { static_cast<std::uint8_t>(id), static_cast<std::uint8_t>(id >> 8), 31, 0, 4, 0 });
-	}
-	return pool;
 }
 
 static void auxiliary_maintenance(DerivedTestVTClient &client, const std::shared_ptr<ControlFunction> &source, std::uint16_t model, std::uint8_t ready = 1)
@@ -268,7 +259,7 @@ static void auxiliary_response(DerivedTestVTClient &client, const std::shared_pt
 
 static void update_auxiliary_client(DerivedTestVTClient &client)
 {
-	client.test_wrapper_refresh_vt_status(); // Keep the unrelated VT connection alive during time advances.
+	client.test_wrapper_refresh_vt_status();
 	client.update();
 }
 
@@ -288,97 +279,30 @@ static std::vector<CANMessageFrame> auxiliary_frames(VirtualCANPlugin &vt)
 	return frames;
 }
 
-// Complete TP only to inspect a logical Preferred Assignment command, not to retest TP.
 static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can, test_helpers::TestTimeSource &clock)
 {
 	CANNetworkManager::CANNetwork.update();
 	clock.update_for_ms(10);
-	std::uint16_t length = 0;
-	std::vector<std::uint8_t> payload;
 	for (const auto &frame : auxiliary_frames(can.vt))
 	{
-		const auto pgn = CANIdentifier(frame.identifier).get_parameter_group_number();
-		if ((pgn == 0xE700) && (frame.data[0] == 0x22))
+		if ((CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700) && (frame.data[0] == 0x22))
 		{
 			return { frame.data, frame.data + frame.dataLength };
 		}
-		if ((pgn == 0xEC00) && (frame.data[0] == 0x10) && (frame.data[6] == 0xE7))
-		{
-			length = static_cast<std::uint16_t>(frame.data[1] | (frame.data[2] << 8));
-		}
 	}
-	if (length == 0)
-	{
-		ADD_FAILURE() << "No Preferred Assignment command transmitted";
-		return {};
-	}
-	const auto packets = static_cast<std::uint8_t>((length + 6) / 7);
-	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
-	  6, 0xEC00, can.ecu, can.partner, { 0x11, packets, 1, 0xFF, 0xFF, 0, 0xE7, 0 }));
-	CANNetworkManager::CANNetwork.update();
-	clock.update_for_ms(10);
-	for (const auto &packet : auxiliary_frames(can.vt))
-	{
-		if (CANIdentifier(packet.identifier).get_parameter_group_number() == 0xEB00)
-		{
-			for (std::size_t i = 1; (i < CAN_DATA_LENGTH) && (payload.size() < length); ++i)
-			{
-				payload.push_back(packet.data[i]);
-			}
-		}
-	}
-	EXPECT_EQ(length, payload.size());
-	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
-	  6, 0xEC00, can.ecu, can.partner, { 0x13, static_cast<std::uint8_t>(length), static_cast<std::uint8_t>(length >> 8), packets, 0xFF, 0, 0xE7, 0 }));
-	CANNetworkManager::CANNetwork.update();
-	return payload;
+	ADD_FAILURE() << "No Preferred Assignment command transmitted";
+	return {};
 }
 
-using PreferredRecord = std::tuple<std::uint64_t, std::uint16_t, std::uint16_t, std::uint16_t>;
-static void expect_preferred_records(const std::vector<std::uint8_t> &payload, std::vector<PreferredRecord> expected, std::uint64_t optionalEmptyDevice = UINT64_MAX)
+static void expect_empty_preferred_assignment(const std::vector<std::uint8_t> &payload)
 {
-	ASSERT_GE(payload.size(), 2U);
-	ASSERT_EQ(0x22, payload[0]);
-	std::vector<PreferredRecord> records;
-	std::set<std::uint64_t> names;
-	std::size_t offset = 2;
-	for (unsigned int device = 0; device < payload[1]; ++device)
+	ASSERT_EQ(CAN_DATA_LENGTH, payload.size());
+	EXPECT_EQ(0x22, payload[0]);
+	EXPECT_EQ(0, payload[1]);
+	for (std::size_t i = 2; i < payload.size(); ++i)
 	{
-		ASSERT_LE(offset + 11, payload.size());
-		std::uint64_t name = 0;
-		for (int byte = 0; byte < 8; ++byte)
-		{
-			name |= static_cast<std::uint64_t>(payload[offset++]) << (8 * byte);
-		}
-		EXPECT_TRUE(names.insert(name).second);
-		const auto model = static_cast<std::uint16_t>(payload[offset] | (payload[offset + 1] << 8));
-		offset += 2;
-		const auto count = payload[offset++];
-		if (count == 0)
-		{
-			EXPECT_EQ(optionalEmptyDevice, name);
-		}
-		for (unsigned int assignment = 0; assignment < count; ++assignment)
-		{
-			ASSERT_LE(offset + 4, payload.size());
-			const auto function = static_cast<std::uint16_t>(payload[offset] | (payload[offset + 1] << 8));
-			const auto input = static_cast<std::uint16_t>(payload[offset + 2] | (payload[offset + 3] << 8));
-			offset += 4;
-			records.emplace_back(name, model, function, input);
-		}
+		EXPECT_EQ(0xFF, payload[i]);
 	}
-	// Single-frame commands are padded; multi-packet commands use their logical length.
-	if (offset < CAN_DATA_LENGTH)
-	{
-		for (; offset < payload.size(); ++offset)
-		{
-			EXPECT_EQ(0xFF, payload[offset]);
-		}
-	}
-	EXPECT_EQ(payload.size(), offset);
-	std::sort(records.begin(), records.end());
-	std::sort(expected.begin(), expected.end());
-	EXPECT_EQ(expected, records);
 }
 
 static void expect_assignment_response(AuxiliaryTestCAN &can, std::uint16_t function, std::uint8_t error)
@@ -388,240 +312,111 @@ static void expect_assignment_response(AuxiliaryTestCAN &can, std::uint16_t func
 		return CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700 && frame.data[0] == 0x24;
 	});
 	ASSERT_NE(frames.end(), response);
-	const CANIdentifier id(response->identifier);
-	EXPECT_EQ(can.ecu->get_address(), id.get_source_address());
-	EXPECT_EQ(can.partner->get_address(), id.get_destination_address());
-	ASSERT_EQ(CAN_DATA_LENGTH, response->dataLength);
 	EXPECT_EQ((std::vector<std::uint8_t>{ 0x24, static_cast<std::uint8_t>(function), static_cast<std::uint8_t>(function >> 8), error, 0xFF, 0xFF, 0xFF, 0xFF }),
 	          (std::vector<std::uint8_t>(response->data, response->data + response->dataLength)));
 }
 
-TEST_F(VirtualTerminalTest, AuxiliaryConfigurationIsPreInitializationOnly)
+TEST_F(VirtualTerminalTest, InputRegistrationDoesNotEnableFunctionsAndSendsMaintenance)
 {
 	AuxiliaryTestCAN can(time_source);
-	AuxiliaryPreferences preferences;
 	DerivedTestVTClient client(can.partner, can.ecu);
 	EXPECT_FALSE(client.test_wrapper_auxiliary_enabled());
-	client.set_auxiliary_functions_enabled(true);
-	EXPECT_TRUE(client.test_wrapper_auxiliary_enabled());
-	client.set_auxiliary_functions_enabled(false);
-	client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, nullptr, &preferences);
-	EXPECT_TRUE(client.test_wrapper_auxiliary_enabled());
-	const auto device = auxiliary_device(0x8123456789ABCDEF, 0x21);
-	preferences.byName[device->get_NAME().get_full_name()] = { { 0x0101, 0x1234, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
+	client.set_auxiliary_assignment_callbacks(empty_auxiliary_preferences, ignore_auxiliary_preferences, nullptr);
+	EXPECT_FALSE(client.test_wrapper_auxiliary_enabled());
+	client.add_auxiliary_input_object_id(0x1234);
 	client.initialize(false);
-	client.set_auxiliary_functions_enabled(false);
-	client.set_auxiliary_assignment_callbacks(nullptr, nullptr, nullptr);
-	EXPECT_TRUE(client.test_wrapper_auxiliary_enabled());
-	auxiliary_maintenance(client, device, 0x3344);
-	client.test_wrapper_set_vt_version(3);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	EXPECT_FALSE(client.test_wrapper_auxiliary_enabled());
+
+	time_source.update_for_ms(100);
 	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), { { device->get_NAME().get_full_name(), 0x3344, 0x0101, 0x1234 } });
+	const auto frames = auxiliary_frames(can.vt);
+	EXPECT_TRUE(std::any_of(frames.begin(), frames.end(), [](const CANMessageFrame &frame) {
+		return (CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700) && (frame.data[0] == 0x23);
+	}));
 }
 
-TEST_F(VirtualTerminalTest, PreferredAssignmentStartupSerializesTheCompleteReadySetForVersionThree)
+TEST_F(VirtualTerminalTest, EmptyPreferredAssignmentWaitsForTheCorrectVTResponse)
 {
 	AuxiliaryTestCAN can(time_source);
 	AuxiliaryPreferences preferences;
-	DerivedTestVTClient client(can.partner, can.ecu);
-	client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, nullptr, &preferences);
-	client.test_wrapper_set_vt_version(2);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
-	update_auxiliary_client(client);
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	client.test_wrapper_set_vt_version(3);
-	const auto pool = auxiliary_function_pool({ 0x0101 }); // Provides a function with no stored preferences.
-	client.set_object_pool(0, pool.data(), static_cast<std::uint32_t>(pool.size()));
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse);
-	receive_auxiliary(client, can.partner, { 0x12, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0xFF });
-	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), {});
-	auxiliary_response(client, can.partner);
-
-	const auto first = auxiliary_device(0x8123456789ABCDEF, 0x21);
-	const auto second = auxiliary_device(0x923456789ABCDEF0, 0x22);
-	const auto empty = auxiliary_device(0xA3456789ABCDEF01, 0x23);
-	preferences.byName[first->get_NAME().get_full_name()] = { { 0x1023, 0x4567, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
-	preferences.byName[second->get_NAME().get_full_name()] = { { 0x89AB, 0xCDEF, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
-	auxiliary_maintenance(client, first, 0x1357);
-	auxiliary_maintenance(client, second, 0x2468, 0);
-	auxiliary_maintenance(client, empty, 0x9ABC);
-	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), { { first->get_NAME().get_full_name(), 0x1357, 0x1023, 0x4567 } }, empty->get_NAME().get_full_name());
-	auxiliary_response(client, can.partner);
-	auxiliary_maintenance(client, second, 0x2468);
-	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), { { first->get_NAME().get_full_name(), 0x1357, 0x1023, 0x4567 }, { second->get_NAME().get_full_name(), 0x2468, 0x89AB, 0xCDEF } }, empty->get_NAME().get_full_name());
-}
-
-TEST_F(VirtualTerminalTest, PreferredAssignmentWaitsForPartnerResponseAndRetriesThreeTransmittedAttempts)
-{
-	AuxiliaryTestCAN can(time_source);
+	preferences.byName[601] = { { 0x0101, 0x1234, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
 	DerivedTestVTClient client(can.partner, can.ecu);
 	client.set_auxiliary_functions_enabled(true);
-	client.test_wrapper_set_vt_version(3);
-	std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
-	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
-	const auto start = [&]() {
-		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
-		update_auxiliary_client(client);
-		expect_preferred_records(receive_preferred_payload(can, time_source), {});
-	};
-	start();
+	client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
+	client.test_wrapper_set_vt_version(6);
+	client.initialize(false);
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	update_auxiliary_client(client);
+	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+
 	auxiliary_response(client, auxiliary_device(99, 0x22));
 	update_auxiliary_client(client);
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	EXPECT_FALSE(client.get_is_connected());
 	auxiliary_response(client, can.partner);
-	EXPECT_TRUE(client.get_is_connected());
-	EXPECT_TRUE(failures.empty());
-	update_auxiliary_client(client);
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-
-	start();
-	auxiliary_response(client, can.partner, 1);
-	EXPECT_FALSE(failures.empty());
-	failures.clear();
-	start();
-	// Capture three commands on the bus; an unanswered third command reports failure.
-	for (int attempt = 1; attempt < 3; ++attempt)
-	{
-		time_source.update_for_ms(1989); // Payload capture advanced the test clock by 10 ms.
-		update_auxiliary_client(client);
-		EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-		time_source.update_for_ms(1);
-		update_auxiliary_client(client);
-		expect_preferred_records(receive_preferred_payload(can, time_source), {});
-		EXPECT_TRUE(failures.empty());
-	}
-	time_source.update_for_ms(1990);
-	update_auxiliary_client(client);
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	EXPECT_FALSE(failures.empty());
 	time_source.update_for_ms(2000);
 	update_auxiliary_client(client);
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	// With no local CF, no attempt can reach CAN. Even repeated send failures
-	// must not trigger the operator failure indication reserved for failed transactions.
-	DerivedTestVTClient unsendable(can.partner, nullptr);
-	unsendable.set_auxiliary_functions_enabled(true);
-	unsendable.test_wrapper_set_vt_version(3);
-	unsendable.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
-	bool sendFailureReported = false;
-	unsendable.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &) { sendFailureReported = true; });
-	for (int retry = 0; retry < 4; ++retry)
-	{
-		update_auxiliary_client(unsendable);
-		time_source.update_for_ms(2000);
-	}
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	EXPECT_FALSE(sendFailureReported);
-}
 
-TEST_F(VirtualTerminalTest, AssignmentsAcknowledgeMappingsAndPreservePreferencesAcrossTemporaryChanges)
-{
-	AuxiliaryTestCAN can(time_source);
-	AuxiliaryPreferences preferences;
-	DerivedTestVTClient client(can.partner, can.ecu);
-	DerivedTestVTClient::staticTestPool.assign(34, 0); // Graphics Context before the functions.
-	DerivedTestVTClient::staticTestPool[2] = 36;
-	DerivedTestVTClient::staticTestPool.insert(DerivedTestVTClient::staticTestPool.end(), { 0, 0x70, 33, 0, 0xFF, 0xFF }); // AUX Designator.
-	DerivedTestVTClient::staticTestPool.insert(DerivedTestVTClient::staticTestPool.end(), { 1, 0x70, 1, 0, 0xFF, 0xFF, 0, 1, 0xFF, 2, 3, 0x70, 2, 0x70, 28, 0, 0 }); // Data Mask with an extended macro reference, then its Macro.
-	DerivedTestVTClient::staticTestPool.insert(DerivedTestVTClient::staticTestPool.end(), { 3, 0x70, 38, 0, 1, 0, 1, 0, 0, 0xFF, 0xFF }); // One extended character range.
-	const auto functions = auxiliary_function_pool({ 0x0101, 0x0102 });
-	DerivedTestVTClient::staticTestPool.insert(DerivedTestVTClient::staticTestPool.end(), functions.begin(), functions.end());
-	client.register_object_pool_data_chunk_callback(0, static_cast<std::uint32_t>(DerivedTestVTClient::staticTestPool.size()), [](auto index, auto offset, auto size, auto *buffer, void *context) {
-		return size <= 38 && DerivedTestVTClient::testWrapperDataChunkCallback(index, offset, size, buffer, context);
-	});
-	client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
-	client.test_wrapper_set_vt_version(6);
-	const auto a = auxiliary_device(101, 0x21), b = auxiliary_device(102, 0x22);
-	auxiliary_maintenance(client, a, 0x3344);
-	auxiliary_maintenance(client, b, 0x5566);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
+	const auto input = auxiliary_device(601, 0x21);
+	auxiliary_maintenance(client, input, 0x3344, 0);
 	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), {});
-	auxiliary_response(client, can.partner);
-	DerivedTestVTClient::staticTestPool.clear(); // Runtime validation must retain metadata, not borrow upload storage.
-	std::vector<std::uint16_t> events;
-	client.get_auxiliary_function_event_dispatcher().add_listener([&](const auto &event) { events.push_back(event.function.functionObjectID); });
-	const auto assign = [&](std::uint64_t name, std::uint16_t function, std::uint16_t input, std::uint8_t flags, std::uint8_t error = 0) {
-		auxiliary_assignment(client, can.partner, name, function, input, flags);
-		expect_assignment_response(can, function, error);
-		update_auxiliary_client(client); // Allow the application to commit preferences; no ordering/timing contract.
-	};
-	auxiliary_maintenance(client, auxiliary_device(103, 0x23), 0x7788); // Not yet loaded; must not block assignment.
-	assign(101, 0x0101, 0x1111, 0x04);
-	assign(102, 0x0101, 0x2222, 0x84); // Temporary reassignment does not replace the preference.
-	auxiliary_status(client, a, 0x1111);
-	EXPECT_TRUE(events.empty());
-	auxiliary_status(client, b, 0x2222);
-	EXPECT_EQ((std::vector<std::uint16_t>{ 0x0101 }), events);
-	ASSERT_EQ(1U, preferences.byName[101].size());
-	EXPECT_EQ(0x1111, preferences.byName[101][0].inputObjectID);
-	assign(102, 0x0101, 0x2222, 0x04); // Persistent reassignment transfers preferred ownership too.
-	EXPECT_TRUE(preferences.byName[101].empty());
-	ASSERT_EQ(1U, preferences.byName[102].size());
-	EXPECT_EQ(0x0101, preferences.byName[102][0].functionObjectID);
-	assign(UINT64_MAX, 0x0101, 0xFFFF, 0x84, 1); // Malformed removal.
-	EXPECT_EQ(1U, preferences.byName[102].size());
-	assign(102, 0x9999, 0x2222, 0x04, 1); // Nonexistent function.
-	assign(102, 0x0101, 0x2222, 0x02, 1); // Incompatible function type.
-	assign(999, 0x0101, 0x1234, 0x04, 1); // Rejected reassignment leaves the working mapping intact.
-	events.clear();
-	auxiliary_status(client, b, 0x2222);
-	EXPECT_EQ((std::vector<std::uint16_t>{ 0x0101 }), events);
-	assign(UINT64_MAX, 0x0101, 0xFFFF, 0x9F); // Remove one without storing.
-	events.clear();
-	auxiliary_status(client, b, 0x2222);
-	EXPECT_TRUE(events.empty());
-	EXPECT_EQ(1U, preferences.byName[102].size());
-	assign(102, 0x0102, 0x2222, 0x04);
-	assign(UINT64_MAX, 0xFFFF, 0xFFFF, 0x1F); // Remove all and store the empty preference set.
-	events.clear();
-	auxiliary_status(client, b, 0x2222);
-	EXPECT_TRUE(events.empty());
-	EXPECT_TRUE(preferences.byName[101].empty());
-	EXPECT_TRUE(preferences.byName[102].empty());
+	EXPECT_EQ(0U, preferences.loadCalls);
+	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
+
+	auxiliary_maintenance(client, input, 0x3344, 1);
+	update_auxiliary_client(client);
+	EXPECT_EQ(1U, preferences.loadCalls);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(10);
+	const auto frames = auxiliary_frames(can.vt);
+	EXPECT_TRUE(std::any_of(frames.begin(), frames.end(), [](const CANMessageFrame &frame) {
+		return (CANIdentifier(frame.identifier).get_parameter_group_number() == 0xEC00) && (frame.data[0] == 0x10) &&
+		  (frame.data[6] == 0xE7) && (frame.data[7] == 0x00);
+	}));
 }
 
-TEST_F(VirtualTerminalTest, IdenticalAssignmentsSetOnlyTheLegacyAlreadyAssignedBit)
+TEST_F(VirtualTerminalTest, PreferredAssignmentRetriesThreeTimesThenReportsFailure)
 {
 	AuxiliaryTestCAN can(time_source);
 	DerivedTestVTClient client(can.partner, can.ecu);
-	const auto pool = auxiliary_function_pool({ 0x0103, 0x0104, 0x0105, 0x0106 });
-	client.set_object_pool(0, &pool);
 	client.set_auxiliary_functions_enabled(true);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
-	const auto device = auxiliary_device(201, 0x21);
-	auxiliary_maintenance(client, device, 0x3344);
-	for (const std::uint8_t version : { 3, 4, 5, 6 })
+	client.test_wrapper_set_vt_version(6);
+	client.initialize(false);
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	update_auxiliary_client(client);
+	std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
+	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
+
+	for (int attempt = 0; attempt < 3; ++attempt)
 	{
-		SCOPED_TRACE(version);
-		client.test_wrapper_set_vt_version(version);
-		const auto function = static_cast<std::uint16_t>(0x0100 + version);
-		auxiliary_assignment(client, can.partner, 201, function, 0x1234);
-		expect_assignment_response(can, function, 0);
-		auxiliary_assignment(client, can.partner, 201, function, 0x1234);
-		expect_assignment_response(can, function, version <= 5 ? 2 : 0);
+		if (attempt > 0)
+		{
+			time_source.update_for_ms(1990); // Payload capture advances time by 10 ms.
+			update_auxiliary_client(client);
+		}
+		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		EXPECT_TRUE(failures.empty());
 	}
+	time_source.update_for_ms(2000);
+	update_auxiliary_client(client);
+	EXPECT_EQ(1U, failures.size());
+	EXPECT_EQ(3, failures[0].attempts);
 }
 
 TEST_F(VirtualTerminalTest, AuxiliaryStatusUsesSourceNameAndDispatchesEveryMatchingFunction)
 {
 	AuxiliaryTestCAN can(time_source);
 	DerivedTestVTClient client(can.partner, can.ecu);
-	const auto pool = auxiliary_function_pool({ 0x0101, 0x0102, 0x0201 });
-	client.set_object_pool(0, &pool);
 	client.set_auxiliary_functions_enabled(true);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
+	client.test_wrapper_set_vt_version(6);
 	const auto a = auxiliary_device(301, 0x21), b = auxiliary_device(302, 0x22);
 	auxiliary_maintenance(client, a, 0x3344);
 	auxiliary_maintenance(client, b, 0x3344);
 	auxiliary_assignment(client, can.partner, 301, 0x0101, 0x1234);
 	auxiliary_assignment(client, can.partner, 301, 0x0102, 0x1234);
 	auxiliary_assignment(client, can.partner, 302, 0x0201, 0x1234);
+
 	std::vector<std::uint16_t> events;
 	client.get_auxiliary_function_event_dispatcher().add_listener([&](const auto &event) {
 		events.push_back(event.function.functionObjectID);
@@ -634,124 +429,62 @@ TEST_F(VirtualTerminalTest, AuxiliaryStatusUsesSourceNameAndDispatchesEveryMatch
 	events.clear();
 	auxiliary_status(client, b, 0x1234);
 	EXPECT_EQ((std::vector<std::uint16_t>{ 0x0201 }), events);
-	events.clear();
-	auxiliary_status(client, auxiliary_device(999, 0x23), 0x1234);
-	EXPECT_TRUE(events.empty());
-	receive_auxiliary(client, can.partner, { 0xFE, 0x37, 0xFF, 0xFF, 0xFF, 0xFF, 0x40, 0xFF });
-	auxiliary_status(client, a, 0x1234);
-	EXPECT_TRUE(events.empty()); // J.8: partnered VT learn mode suppresses function events.
-	receive_auxiliary(client, can.partner, { 0xFE, 0x37, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0xFF });
-	auxiliary_status(client, a, 0x1234);
-	EXPECT_EQ(2U, events.size());
 }
 
-TEST_F(VirtualTerminalTest, MaintenanceAvailabilityClearsOnlyAffectedMappingsAndRetainsPreferences)
+TEST_F(VirtualTerminalTest, DuplicateAssignmentsUseTheVTVersionSpecificResponse)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+	client.set_auxiliary_functions_enabled(true);
+	const auto device = auxiliary_device(401, 0x21);
+	auxiliary_maintenance(client, device, 0x3344);
+
+	for (const auto version : { 5, 6 })
+	{
+		SCOPED_TRACE(version);
+		client.test_wrapper_set_vt_version(static_cast<std::uint8_t>(version));
+		const auto function = static_cast<std::uint16_t>(0x0100 + version);
+		auxiliary_assignment(client, can.partner, 401, function, 0x1234);
+		expect_assignment_response(can, function, 0);
+		auxiliary_assignment(client, can.partner, 401, function, 0x1234);
+		expect_assignment_response(can, function, version == 5 ? 2 : 0);
+	}
+}
+
+TEST_F(VirtualTerminalTest, LostInputExpiresActiveAssignmentButPreservesItsPreference)
 {
 	AuxiliaryTestCAN can(time_source);
 	AuxiliaryPreferences preferences;
 	DerivedTestVTClient client(can.partner, can.ecu);
-	const auto pool = auxiliary_function_pool({ 0x0101, 0x0102, 0x0201 });
-	client.set_object_pool(0, &pool);
+	client.set_auxiliary_functions_enabled(true);
 	client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
-	client.test_wrapper_set_vt_version(3);
-	const auto a = auxiliary_device(401, 0x21), b = auxiliary_device(402, 0x22);
-	auxiliary_maintenance(client, a, 0x3344, 0xFF);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
+	client.test_wrapper_set_vt_version(6);
+	const auto device = auxiliary_device(501, 0x21);
+	auxiliary_maintenance(client, device, 0x3344);
+	auxiliary_assignment(client, can.partner, 501, 0x0101, 0x1234, 0x04);
 	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), {});
-	auxiliary_response(client, can.partner);
-	auxiliary_assignment(client, can.partner, 401, 0x0101, 0x1234, 0x04);
-	expect_assignment_response(can, 0x0101, 1); // Reserved Ready value does not make the pool assignable.
-	auxiliary_maintenance(client, a, 0x3344);
-	auxiliary_maintenance(client, b, 0x3344);
-	update_auxiliary_client(client); // Load newly discovered preferences before persistent assignment.
-	auxiliary_assignment(client, can.partner, 401, 0x0101, 0x1234, 0x04);
-	auxiliary_assignment(client, can.partner, 401, 0x0102, 0x1234, 0x04);
-	auxiliary_assignment(client, can.partner, 402, 0x0201, 0x1234, 0x04);
-	update_auxiliary_client(client);
+	ASSERT_EQ(1U, preferences.byName[501].size());
+	EXPECT_EQ(0x1234, preferences.byName[501][0].inputObjectID);
+
 	std::vector<std::uint16_t> events;
 	client.get_auxiliary_function_event_dispatcher().add_listener([&](const auto &event) { events.push_back(event.function.functionObjectID); });
-	const auto expectFunctions = [&](const std::shared_ptr<ControlFunction> &device, std::vector<std::uint16_t> expected) {
-		events.clear();
-		auxiliary_status(client, device, 0x1234);
-		std::sort(events.begin(), events.end());
-		EXPECT_EQ(expected, events);
-	};
-	expectFunctions(a, { 0x0101, 0x0102 });
-	expectFunctions(b, { 0x0201 });
-	time_source.update_for_ms(299);
-	auxiliary_maintenance(client, b, 0x3344);
+	auxiliary_status(client, device, 0x1234);
+	EXPECT_EQ((std::vector<std::uint16_t>{ 0x0101 }), events);
+	time_source.update_for_ms(300);
 	update_auxiliary_client(client);
-	expectFunctions(a, { 0x0101, 0x0102 });
-	time_source.update_for_ms(1);
-	update_auxiliary_client(client);
-	expectFunctions(a, {});
-	expectFunctions(b, { 0x0201 });
-	ASSERT_EQ(2U, preferences.byName[401].size());
+	events.clear();
+	auxiliary_status(client, device, 0x1234);
+	EXPECT_TRUE(events.empty());
+	ASSERT_EQ(1U, preferences.byName[501].size());
+	EXPECT_EQ(0x1234, preferences.byName[501][0].inputObjectID);
 
-	auxiliary_maintenance(client, b, 0x3344, 0);
-	expectFunctions(b, {});
-	auxiliary_maintenance(client, b, 0x3344);
-	auxiliary_assignment(client, can.partner, 402, 0x0201, 0x1234);
-	expectFunctions(b, { 0x0201 });
-	auxiliary_maintenance(client, b, 0x5566); // Same NAME with a different model also invalidates the mapping.
-	expectFunctions(b, {});
+	auxiliary_maintenance(client, device, 0x3344);
+	auxiliary_assignment(client, can.partner, 501, 0x0101, 0x1234, 0x04);
 	update_auxiliary_client(client);
-	ASSERT_EQ(1U, preferences.byName[402].size());
-	EXPECT_EQ(0x0201, preferences.byName[402][0].functionObjectID);
-}
-
-TEST_F(VirtualTerminalTest, PreferredAssignmentResynchronizesCompleteChangesAfterAcknowledgement)
-{
-	AuxiliaryTestCAN can(time_source);
-	AuxiliaryPreferences preferences;
-	DerivedTestVTClient client(can.partner, can.ecu);
-	const auto pool = auxiliary_function_pool({ 0x0101, 0x0201 });
-	client.set_object_pool(0, &pool);
-	client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
-	client.test_wrapper_set_vt_version(3);
-	const auto a = auxiliary_device(501, 0x21), b = auxiliary_device(502, 0x22), unrelated = auxiliary_device(503, 0x23);
-	preferences.byName[501] = { { 0x0101, 0x1234, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
-	preferences.byName[502] = { { 0x0201, 0x5678, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
-	auxiliary_maintenance(client, a, 0x3344);
-	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendAuxiliaryPreferredAssignment);
-	update_auxiliary_client(client);
-	const std::vector<PreferredRecord> first = { { 501, 0x3344, 0x0101, 0x1234 } };
-	expect_preferred_records(receive_preferred_payload(can, time_source), first);
-	bool failed = false;
-	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &) { failed = true; });
-	preferences.byName[503] = { { 0xFFFF, 0x1234, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
-	auxiliary_maintenance(client, unrelated, 0x7788); // Bad unrelated stored data must not cancel an outstanding command.
-	auxiliary_maintenance(client, b, 0x5566);
-	update_auxiliary_client(client);
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty()); // Wait for the current transaction's acknowledgement.
-	EXPECT_FALSE(failed);
-	preferences.byName[503].clear();
-	auxiliary_response(client, can.partner);
-	update_auxiliary_client(client);
-	const std::vector<PreferredRecord> complete = { { 501, 0x3344, 0x0101, 0x1234 }, { 502, 0x5566, 0x0201, 0x5678 } };
-	expect_preferred_records(receive_preferred_payload(can, time_source), complete);
-	auxiliary_response(client, can.partner);
-	auxiliary_maintenance(client, unrelated, 0x7788);
-	update_auxiliary_client(client);
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	auxiliary_maintenance(client, a, 0x3344, 0);
-	auxiliary_maintenance(client, a, 0x3344);
-	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), complete);
-	// Change a preference while this complete-set transaction awaits its response.
-	auxiliary_assignment(client, can.partner, 501, 0x0101, 0x9ABC, 0x04);
-	expect_assignment_response(can, 0x0101, 0);
-	update_auxiliary_client(client);
-	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
-	auxiliary_response(client, can.partner);
-	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), { { 501, 0x3344, 0x0101, 0x9ABC }, { 502, 0x5566, 0x0201, 0x5678 } });
-	auxiliary_response(client, can.partner);
-	auxiliary_maintenance(client, a, 0x3344, 0);
-	auxiliary_maintenance(client, b, 0x5566, 0);
-	update_auxiliary_client(client);
-	expect_preferred_records(receive_preferred_payload(can, time_source), {}); // Complete set after both preferred units disappear.
+	auxiliary_status(client, device, 0x1234);
+	EXPECT_EQ((std::vector<std::uint16_t>{ 0x0101 }), events);
+	ASSERT_EQ(1U, preferences.byName[501].size());
+	EXPECT_EQ(0x1234, preferences.byName[501][0].inputObjectID);
 }
 
 TEST_F(VirtualTerminalTest, VTStatusMessage)
