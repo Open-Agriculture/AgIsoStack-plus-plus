@@ -642,6 +642,7 @@ namespace isobus
 		/// IDs and can send updates using update_auxiliary_input().
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		void add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
+
 		/// @brief Remove an auxiliary input from the pool of managed auxiliary inputs.
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		void remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
@@ -1556,6 +1557,7 @@ namespace isobus
 		/// @brief Send the auxiliary control type 2 maintenance message
 		/// @returns true if the message was sent successfully
 		bool send_auxiliary_input_maintenance() const;
+
 		/// @brief Send the auxiliary input status type 2 enable response
 		/// @param[in] objectID The object ID of the input
 		/// @param[in] isEnabled true if the input is enabled
