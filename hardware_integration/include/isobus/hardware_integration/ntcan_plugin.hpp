@@ -70,6 +70,7 @@ namespace isobus
 		std::uint64_t timestampOffset; ///< The offset of the timestamps
 		NTCAN_HANDLE handle = NTCAN_NO_HANDLE; ///< The handle as defined in the NTCAN driver API
 		NTCAN_RESULT openResult = NTCAN_SUCCESS; ///< Stores the result of the call to begin CAN communication. Used for is_valid check later.
+		std::uint64_t numLostMsgs = 0; ///< total number of lost RX messages (due to RX FIFO overrun in hardware or driver)
 	};
 }
 
