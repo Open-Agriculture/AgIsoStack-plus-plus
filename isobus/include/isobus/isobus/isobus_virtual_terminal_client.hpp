@@ -1312,7 +1312,7 @@ namespace isobus
 			const std::vector<std::uint8_t> *objectPoolVectorPointer; ///< A pointer to an object pool (vector format)
 			std::vector<std::uint8_t> scaledObjectPool; ///< Stores a copy of a pool to auto-scale in RAM before uploading it
 			DataChunkCallback dataCallback; ///< A callback used to get data in chunks as an alternative to loading the whole pool at once
-			std::string versionLabel; ///< An optional version label that will be used to load/store the pool to the VT. 7 character max!
+			std::string versionLabel; ///< An optional version label that will be used to load/store the pool to the VT. 7 characters max, or 32 on a VT version 5 or later!
 			std::uint32_t objectPoolSize; ///< The size of the object pool
 			std::uint32_t autoScaleDataMaskOriginalDimension; ///< The original length or width of this object pool's data mask area (in pixels)
 			std::uint32_t autoScaleSoftKeyDesignatorOriginalHeight; ///< The original height of a soft key designator as designed in the pool (in pixels)
@@ -1591,6 +1591,10 @@ namespace isobus
 		/// @brief Tries to send all messages in the queue
 		void process_command_queue();
 
+		/// @brief Queues an extended version label for update() to delete from the VT
+		/// @param[in] versionLabel The 32 character version label to delete
+		void queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel);
+
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
@@ -1659,7 +1663,8 @@ namespace isobus
 		std::vector<std::vector<std::uint8_t>> commandQueue; ///< A queue of commands to send to the VT server
 		bool commandAwaitingResponse = false; ///< Determines if we are currently waiting for a response to a command
 		std::uint32_t lastCommandTimestamp_ms = 0; ///< The timestamp of the last command sent
-		Mutex commandQueueMutex; ///< A mutex to protect the command queue
+		std::vector<std::array<std::uint8_t, 32>> pendingExtendedVersionDeletes; ///< Extended version labels still to be deleted from the VT
+		Mutex commandQueueMutex; ///< A mutex to protect the command queue and the pending extended version deletes
 
 		// Activation event callbacks
 		EventDispatcher<VTKeyEvent> softKeyEventDispatcher; ///< A list of all soft key event callbacks

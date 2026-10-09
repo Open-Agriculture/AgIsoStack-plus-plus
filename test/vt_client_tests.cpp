@@ -93,6 +93,10 @@ public:
 	{
 		VirtualTerminalClient::process_command_queue();
 	}
+
+	using VirtualTerminalClient::connectedVTVersion;
+	using VirtualTerminalClient::pendingExtendedVersionDeletes;
+	using VirtualTerminalClient::state;
 };
 
 std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
@@ -983,6 +987,148 @@ TEST_F(VirtualTerminalTest, MessageConstruction)
 	EXPECT_EQ('a', testFrame.data[6]);
 
 	serverVT.close();
+	CANHardwareInterface::stop();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+static CANMessage create_vt_to_ecu_message(const std::vector<std::uint8_t> &data)
+{
+	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+	return CANMessage(CANMessage::Type::Receive, identifier, data, nullptr, nullptr, 0);
+}
+
+TEST_F(VirtualTerminalTest, ExtendedVersionResponsesDriveTheConnectStateMachine)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x40);
+	std::vector<isobus::NAMEFilter> vtNameFilters = { isobus::NAMEFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	const std::vector<std::uint8_t> pool = { 0x00 };
+	clientUnderTest.set_object_pool(0, &pool, "EXTENDED VERSION");
+
+	const auto create_get_versions_response = [](const std::string &label) {
+		std::vector<std::uint8_t> response = { 0xD3, 1 };
+		response.insert(response.end(), label.begin(), label.end());
+		response.resize(2 + 32, ' ');
+		return create_vt_to_ecu_message(response);
+	};
+
+	// Only the 32 byte label tells these apart, the first 7 characters are the same
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForGetVersionsResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_get_versions_response("EXTENDED OTHER"), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::UploadObjectPool, clientUnderTest.state);
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForGetVersionsResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_get_versions_response("EXTENDED VERSION"), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::SendLoadVersion, clientUnderTest.state);
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForLoadVersionResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD5, 0xFF, 0xFF, 0xFF, 0xFF, 0x02, 0xFF, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::UploadObjectPool, clientUnderTest.state);
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForLoadVersionResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD5, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForStoreVersionResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD4, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, ExtendedVersionDeletesAreSentOneAtATime)
+{
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x44, 0);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	clientUnderTest.initialize(false);
+	const std::vector<std::uint8_t> pool = { 0x00 };
+	clientUnderTest.set_object_pool(0, &pool, "EXTENDED VERSION");
+	clientUnderTest.connectedVTVersion = 5;
+
+	std::vector<std::uint8_t> response = { 0xD3, 2 };
+	for (const std::string label : { "OLD VERSION A", "OLD VERSION B" })
+	{
+		response.insert(response.end(), label.begin(), label.end());
+		response.resize(response.size() + 32 - label.size(), ' ');
+	}
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForGetVersionsResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message(response), &clientUnderTest);
+	const auto queuedDeletes = clientUnderTest.pendingExtendedVersionDeletes.size();
+
+	// The first delete holds the only TP session to the VT until it completes, so the second has to wait
+	clientUnderTest.update();
+	const auto deletesAfterFirstUpdate = clientUnderTest.pendingExtendedVersionDeletes.size();
+	clientUnderTest.update();
+	const auto deletesAfterSecondUpdate = clientUnderTest.pendingExtendedVersionDeletes.size();
+
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(2U, queuedDeletes);
+	EXPECT_EQ(1U, deletesAfterFirstUpdate);
+	EXPECT_EQ(1U, deletesAfterSecondUpdate);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, ExtendedVersionCommandsAreOnlySentForLongLabelsOnVersion5)
+{
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x41, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x42, 0);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	clientUnderTest.initialize(false);
+	const std::vector<std::uint8_t> pool = { 0x00 };
+	CANMessageFrame testFrame = {};
+
+	const auto send_in_state = [&](std::uint8_t vtVersion, const std::string &label, VirtualTerminalClient::StateMachineState sendState) {
+		clientUnderTest.set_object_pool(0, &pool, label);
+		clientUnderTest.connectedVTVersion = vtVersion;
+		time_source.update_for_ms(50);
+		serverVT.clear_queue();
+		clientUnderTest.test_wrapper_set_state(sendState);
+		clientUnderTest.update();
+		time_source.update_for_ms(5);
+		testFrame = {};
+		return serverVT.read_frame(testFrame);
+	};
+
+	ASSERT_TRUE(send_in_state(5, "EXTENDED VERSION", VirtualTerminalClient::StateMachineState::SendGetVersions));
+	EXPECT_EQ(0xD3, testFrame.data[0]);
+
+	ASSERT_TRUE(send_in_state(5, "VERSION", VirtualTerminalClient::StateMachineState::SendGetVersions));
+	EXPECT_EQ(0xDF, testFrame.data[0]);
+
+	ASSERT_TRUE(send_in_state(5, "EXTENDED VERSION", VirtualTerminalClient::StateMachineState::SendLoadVersion));
+	EXPECT_EQ(0x10, testFrame.data[0]); // TP request to send
+	EXPECT_EQ(33, testFrame.data[1]);
+
+	ASSERT_TRUE(send_in_state(4, "EXTENDED VERSION", VirtualTerminalClient::StateMachineState::SendStoreVersion));
+	EXPECT_EQ(0xD0, testFrame.data[0]);
+	EXPECT_EQ(0, std::memcmp("EXTENDE", &testFrame.data[1], 7));
+
 	CANHardwareInterface::stop();
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
