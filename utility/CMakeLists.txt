@@ -14,10 +14,12 @@ prepend(UTILITY_SRC ${UTILITY_SRC_DIR} ${UTILITY_SRC})
 
 # Set the include files
 set(UTILITY_INCLUDE
+    "data_span.hpp"
     "system_timing.hpp"
     "chrono_time_source.hpp"
     "time_source.hpp"
     "processing_flags.hpp"
+    "span.hpp"
     "iop_file_interface.hpp"
     "to_string.hpp"
     "platform_endianness.hpp"
