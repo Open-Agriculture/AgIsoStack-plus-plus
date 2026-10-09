@@ -1,0 +1,22 @@
+# Board memory/flash config for the Waveshare ESP32-S3-ETH-8DI-8RO-C
+# (ESP32-S3-WROOM-1U-N16R8: 16 MB quad SPI flash, 8 MB octal PSRAM) -- the
+# board on COM12. These match the values proven to boot in the AgIsoRelayBlock
+# firmware. If you instead use a plain DevKitC-1 (8 MB flash, no PSRAM),
+# delete the four SPIRAM lines and change the flash size to 8 MB.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# AgIsoStack++ spawns its own std::thread workers (CAN hardware interface,
+# network manager, VT client) backed by ESP-IDF's pthread component. The
+# 3072-byte default pthread stack overflows once the STL-heavy Task Controller
+# / Virtual Terminal code runs on those threads. Bumped generously here; if you
+# still see stack-overflow resets, increase this further.
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=32768
+
+# Match the FreeRTOS tick rate to the CAN stack's default 4 ms update period
+# for smoother timing (the default tick is 100 Hz / 10 ms). See the ESP32
+# PlatformIO tutorial for the alternative of slowing the stack instead.
+CONFIG_FREERTOS_HZ=250
