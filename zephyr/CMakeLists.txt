@@ -18,7 +18,7 @@ if(NOT CONFIG_AGISOSTACK_CMSIS_RTOS2_THREADING)
 endif()
 
 # Zephyr provides its RTOS and compiler settings through this interface target.
-set(CAN_DRIVER None)
+set(CAN_DRIVER Zephyr)
 set(CAN_STACK_DISABLE_THREADS OFF)
 set(USE_CMSIS_RTOS2_THREADING ON)
 
@@ -28,6 +28,10 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../isobus
                  ${CMAKE_CURRENT_BINARY_DIR}/agisostack_isobus)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../hardware_integration
                  ${CMAKE_CURRENT_BINARY_DIR}/agisostack_hardware_integration)
+target_sources(HardwareIntegration
+               PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/can_plugin.cpp)
+target_include_directories(HardwareIntegration
+                           PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 
 foreach(target Utility Isobus HardwareIntegration)
   target_link_libraries(${target} PUBLIC zephyr_interface)
