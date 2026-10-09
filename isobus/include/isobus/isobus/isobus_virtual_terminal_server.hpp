@@ -170,6 +170,13 @@ namespace isobus
 		/// @returns A vector of object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
 
+		/// @brief This function is called when the interface needs to know what extended (32 byte label) versions of object pools are available for a client.
+		/// @details Only the versions stored with a 32 byte label belong here, the 7 byte ones are returned by get_versions().
+		/// Return an empty vector if this VT does not support extended versions (VT version 4 and older).
+		/// @param[in] clientNAME The client requesting the object pool versions
+		/// @returns A vector of extended object pool versions available for the client
+		virtual std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME clientNAME) = 0;
+
 		/// @brief This function is called when the interface needs to know what objects are supported by the server.
 		/// @returns A vector of supported objects
 		virtual std::vector<std::uint8_t> get_supported_objects() const = 0;
@@ -177,6 +184,8 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to load a previously stored object pool.
 		/// If there exists in the VT's non-volatile memory an object pool matching the provided version label,
 		/// return it. If one does not exist, return an empty vector.
+		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
+		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] versionLabel The object pool version to load for the given client NAME
 		/// @param[in] clientNAME The client requesting the object pool
 		/// @returns The requested object pool associated with the version label.
@@ -187,6 +196,8 @@ namespace isobus
 		/// If the object pool is saved successfully, return true, otherwise return false.
 		/// @note This may be called multiple times with the same version, but different data. When this
 		/// happens, the expectation is that you will append each objectPool together into one large file.
+		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
+		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] objectPool The object pool data to save
 		/// @param[in] versionLabel The object pool version to save for the given client NAME
 		/// @param[in] clientNAME The client requesting the object pool
@@ -196,17 +207,22 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to delete a stored object pool.
 		/// All object pool files matching the specified version label should then be deleted from the VT's
 		/// non-volatile storage.
+		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
+		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] versionLabel The version label for the object pool(s) to delete
 		/// @param[in] clientNAME The NAME of the client that is requesting deletion
 		/// @returns True if the version was deleted from VT non-volatile storage, otherwise false.
 		virtual bool delete_version(const std::vector<std::uint8_t> &versionLabel, NAME clientNAME) = 0;
 
-		/// @brief This function is called when the client wants the server to delete ALL stored object pools associated to it's NAME.
-		/// All object pool files matching the specified client NAME should then be deleted from the VT's
-		/// non-volatile storage.
+		/// @brief This function is called when the client wants the server to delete ALL stored version object pools of one label length associated to its NAME.
+		/// All object pool files with a version label of the given length matching the specified client NAME should then be deleted from the VT's
+		/// non-volatile storage. Object pools stored under the other label length, or owned by another client, must be kept.
+		/// @note This is called for a Delete Version or Extended Delete Version command whose label is a single asterisk padded with spaces,
+		/// and only when get_version() reports VT version 6.
+		/// @param[in] versionLabelLength 7 for the Delete Version command, 32 for the Extended Delete Version command
 		/// @param[in] clientNAME The NAME of the client that is requesting deletion
 		/// @returns True if all relevant object pools were deleted from VT non-volatile storage, otherwise false.
-		virtual bool delete_all_versions(NAME clientNAME) = 0;
+		virtual bool delete_all_versions(std::uint8_t versionLabelLength, NAME clientNAME) = 0;
 
 		/// @brief This function is called when the client wants the server to deactivate its object pool.
 		/// You should treat this as a disconnection by the client, as it may be moving to another VT.
@@ -387,23 +403,6 @@ namespace isobus
 			StringTooLong = 2,
 			AnyOtherError = 3,
 			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
-		};
-
-		/// @brief Enumerates the different error bit indices that can be set in a delete version response
-		enum class DeleteVersionErrorBit : std::uint8_t
-		{
-			Reserved = 0,
-			VersionLabelNotCorrectOrUnknown = 1,
-			AnyOtherError = 3
-		};
-
-		/// @brief Enumerates the different error bit indices that can be set in a load version response
-		enum class LoadVersionErrorBit : std::uint8_t
-		{
-			FileSystemErrorOrPoolDataCorruption = 0,
-			VersionLabelNotCorrectOrUnknown = 1,
-			InsufficientMemory = 2,
-			AnyOtherError = 3
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
@@ -691,11 +690,12 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends a response to a delete version command
+		/// @brief Sends a response to a delete version or extended delete version command
+		/// @param[in] function The command being answered, DeleteVersionCommand or ExtendedDeleteVersionCommand
 		/// @param[in] errorBitfield An error bitfield to report back to the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+		bool send_delete_version_response(Function function, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a delete object pool command
 		/// @param[in] errorBitfield An error bitfield to report back to the client
@@ -822,11 +822,45 @@ namespace isobus
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
 
 	private:
-		/// @brief Sends a response to a load version command
+		/// @brief Enumerates the different error bit indices that can be set in a delete version response
+		enum class DeleteVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			AnyOtherError = 3
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a load version response
+		enum class LoadVersionErrorBit : std::uint8_t
+		{
+			FileSystemErrorOrPoolDataCorruption = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a store version response
+		enum class StoreVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrect = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
+		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
+
+		/// @brief Sends a response to a load version or extended load version command
+		/// @param[in] function The command being answered, LoadVersionCommand or ExtendedLoadVersionCommand
 		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
 		/// @param[in] destination The VT client to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
+		bool send_load_version_response(Function function, std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends the (extended) load version response for an object pool restored from non-volatile memory, and clears its restored flag
+		/// @param[in] workingSet The working set whose restored object pool finished parsing
+		/// @param[in] errorCodes A set of error bits to report to the client
+		void send_restored_object_pool_response(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint8_t errorCodes);
 
 		/// @brief Returns the load version error bitfield to report when a restored object pool fails to parse
 		/// @returns The file system error or pool data corruption bit, or the any other error bit if our VT version is older than 4

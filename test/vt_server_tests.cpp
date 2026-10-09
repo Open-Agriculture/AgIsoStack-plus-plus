@@ -8,6 +8,7 @@
 //================================================================================================
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <thread>
 
@@ -93,29 +94,38 @@ public:
 		return {};
 	}
 
+	std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME) override
+	{
+		return extendedVersions;
+	}
+
 	std::vector<std::uint8_t> get_supported_objects() const override
 	{
 		return {};
 	}
 
-	std::vector<std::uint8_t> load_version(const std::vector<std::uint8_t> &, NAME) override
+	std::vector<std::uint8_t> load_version(const std::vector<std::uint8_t> &versionLabel, NAME) override
 	{
+		lastVersionLabel = versionLabel;
 		return versionToLoad;
 	}
 
-	bool save_version(const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &, NAME) override
+	bool save_version(const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &versionLabel, NAME) override
 	{
-		return true;
+		lastVersionLabel = versionLabel;
+		return saveSucceeds;
 	}
 
-	bool delete_version(const std::vector<std::uint8_t> &, NAME) override
+	bool delete_version(const std::vector<std::uint8_t> &versionLabel, NAME) override
 	{
-		return true;
+		lastVersionLabel = versionLabel;
+		return deleteSucceeds;
 	}
 
-	bool delete_all_versions(NAME) override
+	bool delete_all_versions(std::uint8_t versionLabelLength, NAME) override
 	{
-		return true;
+		deletedAllVersionsLabelLength = versionLabelLength;
+		return deleteSucceeds;
 	}
 
 	bool delete_object_pool(NAME) override
@@ -160,6 +170,11 @@ public:
 
 	std::vector<std::uint8_t> versionToLoad;
 	VTVersion version = VTVersion::Version3;
+	bool saveSucceeds = true;
+	bool deleteSucceeds = true;
+	std::uint8_t deletedAllVersionsLabelLength = 0;
+	std::vector<std::array<std::uint8_t, 32>> extendedVersions;
+	std::vector<std::uint8_t> lastVersionLabel;
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -177,6 +192,94 @@ protected:
 		CANNetworkManager::CANNetwork.update();
 	}
 
+	static void receive_tp_from_client(std::shared_ptr<InternalControlFunction> server,
+	                                   std::shared_ptr<ControlFunction> client,
+	                                   const std::vector<std::uint8_t> &payload)
+	{
+		const auto size = static_cast<std::uint16_t>(payload.size());
+		const auto numberOfPackets = static_cast<std::uint8_t>((size + 6) / 7);
+
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
+		                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement),
+		                                                                                                   server,
+		                                                                                                   client,
+		                                                                                                   { 0x10, static_cast<std::uint8_t>(size & 0xFF), static_cast<std::uint8_t>(size >> 8), numberOfPackets, 0xFF, 0x00, 0xE7, 0x00 }));
+		CANNetworkManager::CANNetwork.update();
+
+		for (std::uint8_t packet = 0; packet < numberOfPackets; packet++)
+		{
+			auto frame = test_helpers::create_message_frame(7,
+			                                                static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolDataTransfer),
+			                                                server,
+			                                                client,
+			                                                { static_cast<std::uint8_t>(packet + 1), 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+			for (std::size_t i = 0; (i < 7) && ((packet * 7U + i) < size); i++)
+			{
+				frame.data[i + 1] = payload[packet * 7U + i];
+			}
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(frame);
+			CANNetworkManager::CANNetwork.update();
+		}
+	}
+
+	static std::vector<std::uint8_t> extended_version_command(std::uint8_t function, const std::string &label)
+	{
+		std::vector<std::uint8_t> command(33, ' ');
+		command[0] = function;
+		std::copy(label.begin(), label.end(), command.begin() + 1);
+		return command;
+	}
+
+	static std::uint8_t get_pdu_format(const CANMessageFrame &frame)
+	{
+		return static_cast<std::uint8_t>(frame.identifier >> 16);
+	}
+
+	bool read_tp_from_server(VirtualCANPlugin &plugin,
+	                         std::shared_ptr<InternalControlFunction> server,
+	                         std::shared_ptr<ControlFunction> client,
+	                         std::vector<std::uint8_t> &payload)
+	{
+		CANMessageFrame frame = {};
+		bool foundRequestToSend = false;
+		std::uint16_t size = 0;
+
+		for (std::uint_fast8_t attempt = 0; (attempt < 50) && (!foundRequestToSend); attempt++)
+		{
+			CANNetworkManager::CANNetwork.update();
+			time_source.update_for_ms(5);
+			while ((!foundRequestToSend) && plugin.read_frame(frame, 10))
+			{
+				foundRequestToSend = (0xEC == get_pdu_format(frame)) && (0x10 == frame.data[0]);
+			}
+		}
+
+		if (foundRequestToSend)
+		{
+			size = static_cast<std::uint16_t>(frame.data[1] | (frame.data[2] << 8));
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
+			                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement),
+			                                                                                                   server,
+			                                                                                                   client,
+			                                                                                                   { 0x11, frame.data[3], 0x01, 0xFF, 0xFF, frame.data[5], frame.data[6], frame.data[7] }));
+
+			for (std::uint_fast8_t attempt = 0; (attempt < 50) && (payload.size() < size); attempt++)
+			{
+				CANNetworkManager::CANNetwork.update();
+				time_source.update_for_ms(5);
+				while ((payload.size() < size) && plugin.read_frame(frame, 10))
+				{
+					if (0xEB == get_pdu_format(frame))
+					{
+						payload.insert(payload.end(), frame.data + 1, frame.data + 8);
+					}
+				}
+			}
+			payload.resize(std::min<std::size_t>(payload.size(), size));
+		}
+		return foundRequestToSend && (payload.size() == size);
+	}
+
 	bool poll_for_response(DerivedTestVTServer &server,
 	                       VirtualCANPlugin &plugin,
 	                       std::uint8_t function,
@@ -192,7 +295,8 @@ protected:
 
 			while ((!foundResponse) && plugin.read_frame(responseFrame, 10))
 			{
-				foundResponse = (function == responseFrame.data[0]);
+				// Address claims are on the bus too, and a NAME can start with the function code
+				foundResponse = (0xE6 == get_pdu_format(responseFrame)) && (function == responseFrame.data[0]);
 			}
 		}
 		return foundResponse;
@@ -665,6 +769,393 @@ TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolCommandsAreIgnoredUntilTheP
 	EXPECT_EQ(1U, numberOfPoolSegments);
 	ASSERT_TRUE(foundLoadVersionResponse);
 	EXPECT_EQ(0x00, responseFrame.data[5]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, StoreVersionResponseReportsAnyOtherErrorWhenTheObjectPoolCannotBeStored)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x33, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8E, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.saveSucceeds = false;
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0x00, 0xF0, 0x15, 0x00, 0x00, 0x00, 0x00 });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+
+	CANMessageFrame responseFrame = {};
+	const bool foundStoreVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD0, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundStoreVersionResponse);
+	EXPECT_EQ(0x08, responseFrame.data[5]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedGetVersionsResponseWithNoVersionsIsPaddedToOneFrame)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x34, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8F, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD3, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD3, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(8U, responseFrame.dataLength);
+	EXPECT_EQ(0x00, responseFrame.data[1]);
+	for (std::uint8_t i = 2; i < 8; i++)
+	{
+		EXPECT_EQ(0xFF, responseFrame.data[i]);
+	}
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedGetVersionsResponseCarriesThe32ByteLabels)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x35, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x90, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	std::array<std::uint8_t, 32> label;
+	label.fill(' ');
+	std::copy_n("EXTENDED VERSION", 16, label.begin());
+	serverUnderTest.extendedVersions = { label };
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD3, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	std::vector<std::uint8_t> response;
+	const bool foundResponse = read_tp_from_server(testPlugin, internalECU, client, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	ASSERT_EQ(34U, response.size());
+	EXPECT_EQ(0xD3, response[0]);
+	EXPECT_EQ(1, response[1]);
+	EXPECT_TRUE(std::equal(label.begin(), label.end(), response.begin() + 2));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedLoadVersionResponseIsSentWhenARestoredObjectPoolParses)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x36, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x91, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const auto command = extended_version_command(0xD5, "EXTENDED VERSION");
+	receive_tp_from_client(internalECU, client, command);
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD5, responseFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(std::vector<std::uint8_t>(command.begin() + 1, command.end()), serverUnderTest.lastVersionLabel);
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedLoadVersionResponseReportsAnUnknownLabelWhenNoPoolIsStored)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x37, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x92, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD5, "UNKNOWN"));
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD5, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x02, responseFrame.data[5]); // Version label not correct or unknown
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedLoadVersionResponseReportsPoolDataCorruptionWhenARestoredObjectPoolFailsToParse)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x38, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x93, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	serverUnderTest.versionToLoad = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD5, "EXTENDED VERSION"));
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD5, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[5]); // File system error or pool data corruption
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedLoadVersionIsIgnoredUntilThePreviousObjectPoolIsAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x39, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x94, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD5, "EXTENDED VERSION"));
+	serverUnderTest.wait_for_object_pool_to_parse();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD5, "EXTENDED VERSION"));
+	const auto numberOfPoolSegments = serverUnderTest.managedWorkingSetList.front()->get_number_iop_files();
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD5, responseFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(1U, numberOfPoolSegments);
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedVersionCommandTooShortForItsLabelIsIgnored)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3A, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x95, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD5, 'S', 'H', 'O', 'R', 'T', ' ', ' ' });
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD5, responseFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_FALSE(foundResponse);
+	EXPECT_TRUE(serverUnderTest.lastVersionLabel.empty());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedStoreVersionStoresThePoolUnderThe32ByteLabel)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3B, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x96, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0x00, 0xF0, 0x15, 0x00, 0x00, 0x00, 0x00 });
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD4, "EXTENDED VERSION"));
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xD4, responseFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(32U, serverUnderTest.lastVersionLabel.size());
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendedDeleteVersionResponseReportsAnUnknownLabel)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3C, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x97, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD6, "EXTENDED VERSION"));
+
+	CANMessageFrame deletedFrame = {};
+	const bool foundDeletedResponse = poll_for_response(serverUnderTest, testPlugin, 0xD6, deletedFrame);
+
+	serverUnderTest.deleteSucceeds = false;
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD6, "UNKNOWN"));
+
+	CANMessageFrame unknownFrame = {};
+	const bool foundUnknownResponse = poll_for_response(serverUnderTest, testPlugin, 0xD6, unknownFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(32U, serverUnderTest.lastVersionLabel.size());
+	ASSERT_TRUE(foundDeletedResponse);
+	EXPECT_EQ(0x00, deletedFrame.data[5]);
+	ASSERT_TRUE(foundUnknownResponse);
+	EXPECT_EQ(0x02, unknownFrame.data[5]); // Version label not correct or unknown
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, DeleteVersionWildcardDeletesAllVersionsOnlyOnVersion6)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3D, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x99, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD6, "*"));
+
+	CANMessageFrame version5Frame = {};
+	const bool foundVersion5Response = poll_for_response(serverUnderTest, testPlugin, 0xD6, version5Frame);
+	const auto version5DeletedAllLength = serverUnderTest.deletedAllVersionsLabelLength;
+	const auto version5Label = serverUnderTest.lastVersionLabel;
+
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version6;
+	serverUnderTest.lastVersionLabel.clear();
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD6, "*"));
+
+	CANMessageFrame version6Frame = {};
+	const bool foundVersion6Response = poll_for_response(serverUnderTest, testPlugin, 0xD6, version6Frame);
+	const auto version6DeletedAllLength = serverUnderTest.deletedAllVersionsLabelLength;
+	const bool version6CalledDeleteVersion = !serverUnderTest.lastVersionLabel.empty();
+
+	serverUnderTest.deletedAllVersionsLabelLength = 0;
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD2, '*', ' ', ' ', ' ', ' ', ' ', ' ' });
+
+	CANMessageFrame shortWildcardFrame = {};
+	const bool foundShortWildcardResponse = poll_for_response(serverUnderTest, testPlugin, 0xD2, shortWildcardFrame);
+	const auto shortWildcardDeletedAllLength = serverUnderTest.deletedAllVersionsLabelLength;
+	const bool shortWildcardCalledDeleteVersion = !serverUnderTest.lastVersionLabel.empty();
+
+	serverUnderTest.deletedAllVersionsLabelLength = 0;
+	testPlugin.clear_queue();
+	receive_tp_from_client(internalECU, client, extended_version_command(0xD6, "A"));
+
+	CANMessageFrame otherLabelFrame = {};
+	const bool foundOtherLabelResponse = poll_for_response(serverUnderTest, testPlugin, 0xD6, otherLabelFrame);
+	const auto otherLabelDeletedAllLength = serverUnderTest.deletedAllVersionsLabelLength;
+	const auto otherLabelSize = serverUnderTest.lastVersionLabel.size();
+
+	serverUnderTest.deleteSucceeds = false;
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD2, '*', ' ', ' ', ' ', ' ', ' ', ' ' });
+
+	CANMessageFrame failedWildcardFrame = {};
+	const bool foundFailedWildcardResponse = poll_for_response(serverUnderTest, testPlugin, 0xD2, failedWildcardFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundVersion5Response);
+	EXPECT_EQ(0, version5DeletedAllLength);
+	EXPECT_EQ(32U, version5Label.size());
+	ASSERT_TRUE(foundVersion6Response);
+	EXPECT_EQ(0x00, version6Frame.data[5]);
+	EXPECT_EQ(32, version6DeletedAllLength);
+	EXPECT_FALSE(version6CalledDeleteVersion);
+	ASSERT_TRUE(foundShortWildcardResponse);
+	EXPECT_EQ(0x00, shortWildcardFrame.data[5]);
+	EXPECT_EQ(7, shortWildcardDeletedAllLength);
+	EXPECT_FALSE(shortWildcardCalledDeleteVersion);
+	ASSERT_TRUE(foundOtherLabelResponse);
+	EXPECT_EQ(0, otherLabelDeletedAllLength);
+	EXPECT_EQ(32U, otherLabelSize);
+	ASSERT_TRUE(foundFailedWildcardResponse);
+	EXPECT_EQ(0x08, failedWildcardFrame.data[5]);
 }
 
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet
