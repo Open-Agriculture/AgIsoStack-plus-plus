@@ -154,6 +154,10 @@ public:
 		return execute_macro(objectID, workingSet);
 	}
 
+	using VirtualTerminalServer::busyCodesBitfield;
+	using VirtualTerminalServer::managedWorkingSetList;
+	using VirtualTerminalServer::send_status_message;
+
 	std::vector<std::uint8_t> versionToLoad;
 	VTVersion version = VTVersion::Version3;
 };
@@ -192,6 +196,22 @@ protected:
 			}
 		}
 		return foundResponse;
+	}
+
+	bool read_status_busy_codes(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, std::uint8_t &busyCodes)
+	{
+		bool foundStatus = false;
+		CANMessageFrame statusFrame = {};
+
+		plugin.clear_queue();
+		server.send_status_message();
+		time_source.update_for_ms(5);
+		while ((!foundStatus) && plugin.read_frame(statusFrame, 10))
+		{
+			foundStatus = (0xFE == statusFrame.data[0]);
+		}
+		busyCodes = statusFrame.data[6];
+		return foundStatus;
 	}
 
 	static std::vector<std::uint8_t> read_test_pool()
@@ -505,6 +525,146 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionWithAnUnknownLabelDoesNotA
 	ASSERT_TRUE(foundLoadVersionResponse);
 	EXPECT_EQ(0x02, loadVersionErrorCodes); // Version label is not correct or unknown
 	EXPECT_FALSE(foundSecondEndOfObjectPoolResponse);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsParsingUntilTheLoadVersionResponseIsSent)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x2F, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8A, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	serverUnderTest.wait_for_object_pool_to_parse();
+
+	std::uint8_t busyCodesBeforeResponse = 0;
+	const bool foundStatusBeforeResponse = read_status_busy_codes(serverUnderTest, testPlugin, busyCodesBeforeResponse);
+
+	CANMessageFrame responseFrame = {};
+	const bool foundLoadVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD1, responseFrame);
+
+	std::uint8_t busyCodesAfterResponse = 0xFF;
+	const bool foundStatusAfterResponse = read_status_busy_codes(serverUnderTest, testPlugin, busyCodesAfterResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundStatusBeforeResponse);
+	EXPECT_EQ(0x10, busyCodesBeforeResponse); // VT is busy parsing an object pool
+	ASSERT_TRUE(foundLoadVersionResponse);
+	ASSERT_TRUE(foundStatusAfterResponse);
+	EXPECT_EQ(0x00, busyCodesAfterResponse);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsParsingUntilTheEndOfObjectPoolResponseIsSent)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x30, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8B, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.busyCodesBitfield = 0x40; // VT is in auxiliary learn mode
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	serverUnderTest.wait_for_object_pool_to_parse();
+
+	std::uint8_t busyCodesBeforeResponse = 0;
+	const bool foundStatusBeforeResponse = read_status_busy_codes(serverUnderTest, testPlugin, busyCodesBeforeResponse);
+
+	CANMessageFrame responseFrame = {};
+	const bool foundEndOfObjectPoolResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, responseFrame);
+
+	std::uint8_t busyCodesAfterResponse = 0xFF;
+	const bool foundStatusAfterResponse = read_status_busy_codes(serverUnderTest, testPlugin, busyCodesAfterResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundStatusBeforeResponse);
+	EXPECT_EQ(0x50, busyCodesBeforeResponse); // Parsing on top of auxiliary learn mode
+	ASSERT_TRUE(foundEndOfObjectPoolResponse);
+	ASSERT_TRUE(foundStatusAfterResponse);
+	EXPECT_EQ(0x40, busyCodesAfterResponse);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, StatusMessageDoesNotReportParsingOnVersion2OrOlder)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x31, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8C, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version2OrOlder;
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	serverUnderTest.wait_for_object_pool_to_parse();
+
+	std::uint8_t busyCodes = 0xFF;
+	const bool foundStatus = read_status_busy_codes(serverUnderTest, testPlugin, busyCodes);
+	serverUnderTest.run_update(); // Joins the parsing thread, which must not outlive the working set
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundStatus);
+	EXPECT_EQ(0x00, busyCodes);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolCommandsAreIgnoredUntilThePreviousObjectPoolIsAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x32, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x8D, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	serverUnderTest.wait_for_object_pool_to_parse();
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	receive_from_client(internalECU, client, { 0x11, 0x00, 0xF0, 0x15, 0x00, 0x00, 0x00, 0x00 });
+	const auto numberOfPoolSegments = serverUnderTest.managedWorkingSetList.front()->get_number_iop_files();
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundLoadVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD1, responseFrame);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(1U, numberOfPoolSegments);
+	ASSERT_TRUE(foundLoadVersionResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
 }
 
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet

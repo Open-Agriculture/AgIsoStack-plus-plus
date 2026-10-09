@@ -43,6 +43,21 @@ namespace isobus
 		return (bitIndex < 8U) ? static_cast<std::uint8_t>(1U << bitIndex) : static_cast<std::uint8_t>(0U);
 	}
 
+	/// @brief The VT status message busy code bit index for "VT is busy parsing an object pool" (VT version 3 and later)
+	constexpr std::uint8_t BUSY_PARSING_OBJECT_POOL_BIT = 4;
+
+	/// @brief Checks if a working set's object pool parse has started but its response has not been sent yet.
+	/// @param workingSet The working set to check.
+	/// @returns true if update() has not yet joined the parsing thread and sent the response, otherwise false.
+	static bool is_object_pool_parse_unanswered(VirtualTerminalServerManagedWorkingSet &workingSet)
+	{
+		const auto state = workingSet.get_object_pool_processing_state();
+
+		return ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == state) ||
+		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
+		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state));
+	}
+
 	/// @brief Extracts a byte from a 32-bit value.
 	/// @param value The value to extract the byte from.
 	/// @param byteIndex The zero-based byte index.
@@ -481,7 +496,19 @@ namespace isobus
 	void VirtualTerminalServer::process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet)
 	{
 		const auto &data = message.get_data();
-		switch (static_cast<Function>(data.at(0)))
+		const auto function = static_cast<Function>(data.at(0));
+
+		// The client must wait for the response first, and the parsing thread is still reading the pool data
+		if (((Function::ObjectPoolTransferMessage == function) ||
+		     (Function::EndOfObjectPoolMessage == function) ||
+		     (Function::LoadVersionCommand == function)) &&
+		    is_object_pool_parse_unanswered(*managedWorkingSet))
+		{
+			LOG_WARNING("[VT Server]: Ignoring object pool command %u from client %u, its previous object pool has not been answered yet.", data.at(0), message.get_identifier().get_source_address());
+			return;
+		}
+
+		switch (function)
 		{
 			case Function::GetMemoryMessage:
 			{
@@ -2717,6 +2744,18 @@ namespace isobus
 	bool VirtualTerminalServer::send_status_message() const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+		std::uint8_t busyCodes = busyCodesBitfield;
+
+		if (get_vt_version_byte(get_version()) >= 3)
+		{
+			for (const auto &ws : managedWorkingSetList)
+			{
+				if (is_object_pool_parse_unanswered(*ws))
+				{
+					busyCodes |= get_bit(BUSY_PARSING_OBJECT_POOL_BIT);
+				}
+			}
+		}
 
 		buffer[0] = static_cast<std::uint8_t>(Function::VTStatusMessage);
 		buffer[1] = activeWorkingSetMasterAddress;
@@ -2724,7 +2763,7 @@ namespace isobus
 		buffer[3] = get_high_byte(activeWorkingSetDataMaskObjectID);
 		buffer[4] = get_low_byte(activeWorkingSetSoftkeyMaskObjectID);
 		buffer[5] = get_high_byte(activeWorkingSetSoftkeyMaskObjectID);
-		buffer[6] = busyCodesBitfield;
+		buffer[6] = busyCodes;
 		buffer[7] = currentCommandFunctionCode;
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
@@ -2856,6 +2895,7 @@ namespace isobus
 					{
 						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
 					}
+
 					if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
 					{
 						activeWorkingSetMasterAddress = ws->get_control_function()->get_address();

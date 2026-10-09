@@ -764,6 +764,8 @@ namespace isobus
 		/// @brief Sends the VT status message broadcast. The status message
 		/// contains information such as which working set is the active one, and information about
 		/// what the VT server is doing, such as busy flags. This message should be sent at 1 Hz.
+		/// The busy codes are busyCodesBitfield, plus the "busy parsing an object pool" bit on VT version 3 and later
+		/// while any working set's object pool is being parsed and its response has not been sent yet.
 		/// @returns true if the message was sent, otherwise false
 		bool send_status_message() const;
 
