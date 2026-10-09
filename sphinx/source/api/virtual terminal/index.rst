@@ -55,6 +55,30 @@ code and any persistence callbacks before initialization. Preferred Assignment s
 runs independently of normal VT initialization and does not delay the Connected state.
 Inputs report Initializing until the VT confirms pool loading, then Ready. Assignment failure
 is reported through the auxiliary assignment failure event dispatcher and does not disconnect the VT.
+Ready devices load preferred assignments during ``update()``. If a preferred assignment command
+arrives before loading completes, the client loads preferences synchronously before modifying them.
+Load and store callbacks are serialized and run without the device-state mutex. They must be fast
+and bounded so callback execution and contention permit assignment responses within one second
+and maintenance every 100 ms. Applications using slow storage should enqueue storage work
+asynchronously, and applications supplying their own update loop must call it frequently enough
+to meet the protocol deadlines. Callbacks must not reenter AUX-N preference operations.
+
+Accepted preferred assignments are persisted independently of response delivery. Store callbacks
+are deferred to ``update()`` and all pending accepted changes are flushed at ``terminate()``.
+Assignment responses use an eight-entry FIFO and are retried in receive order when queuing fails.
+If the FIFO is full and cannot advance, the newest command is refused before application and an
+error is logged. Missed response deadlines and undelivered responses at session termination are
+also logged; these diagnostics do not make late responses compliant.
+
+Preferred Assignment retransmissions use an immutable snapshot. Device loss or model changes
+mark affected snapshots obsolete, without sending an overlapping replacement. A valid response,
+including rejection, completes the transaction. An obsolete snapshot is discarded after its
+response timeout instead of retransmitted. After three unanswered transmissions, failure is
+reported and synchronization continues only when another change is pending or a new trigger
+occurs. There is no permanent suspension. Automatic timeout recovery cannot distinguish a late
+response to an old command from a response to its replacement, because responses have no
+transaction identifier.
+
 The lifecycle is:
 
 .. code-block:: text
