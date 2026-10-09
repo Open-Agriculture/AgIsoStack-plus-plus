@@ -1591,10 +1591,6 @@ namespace isobus
 		/// @brief Tries to send all messages in the queue
 		void process_command_queue();
 
-		/// @brief Queues an extended version label for update() to delete from the VT
-		/// @param[in] versionLabel The 32 character version label to delete
-		void queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel);
-
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
@@ -1683,6 +1679,16 @@ namespace isobus
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback = nullptr; ///< The callback to use to get pool data
 		std::uint32_t lastObjectPoolIndex = 0; ///< The last object pool index that was processed
+
+	private:
+		/// @brief Checks if the extended (32 character) version commands must be used for a version label
+		/// @param[in] versionLabel The object pool version label
+		/// @returns true if the VT supports extended versions and the label does not fit the 7 character ones
+		bool uses_extended_versions(const std::string &versionLabel) const;
+
+		/// @brief Queues an extended version label for update() to delete from the VT
+		/// @param[in] versionLabel The 32 character version label to delete
+		void queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel);
 	};
 
 } // namespace isobus

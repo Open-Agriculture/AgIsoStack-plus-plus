@@ -103,7 +103,12 @@ std::vector<std::uint8_t> DerivedTestVTClient::staticTestPool;
 
 class VirtualTerminalTest : public AgIsoStackTestFixture
 {
-	// Wrapper to give tests a more meaningful name - no content.
+protected:
+	static CANMessage create_vt_to_ecu_message(const std::vector<std::uint8_t> &data)
+	{
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+		return CANMessage(CANMessage::Type::Receive, identifier, data, nullptr, nullptr, 0);
+	}
 };
 
 TEST_F(VirtualTerminalTest, InitializeAndInitialState)
@@ -991,12 +996,6 @@ TEST_F(VirtualTerminalTest, MessageConstruction)
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
-}
-
-static CANMessage create_vt_to_ecu_message(const std::vector<std::uint8_t> &data)
-{
-	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
-	return CANMessage(CANMessage::Type::Receive, identifier, data, nullptr, nullptr, 0);
 }
 
 TEST_F(VirtualTerminalTest, ExtendedVersionResponsesDriveTheConnectStateMachine)

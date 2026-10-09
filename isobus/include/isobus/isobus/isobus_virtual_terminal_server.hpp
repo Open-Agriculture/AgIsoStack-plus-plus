@@ -405,32 +405,6 @@ namespace isobus
 			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
 		};
 
-		/// @brief Enumerates the different error bit indices that can be set in a delete version response
-		enum class DeleteVersionErrorBit : std::uint8_t
-		{
-			Reserved = 0,
-			VersionLabelNotCorrectOrUnknown = 1,
-			AnyOtherError = 3
-		};
-
-		/// @brief Enumerates the different error bit indices that can be set in a store version response
-		enum class StoreVersionErrorBit : std::uint8_t
-		{
-			Reserved = 0,
-			VersionLabelNotCorrect = 1,
-			InsufficientMemory = 2,
-			AnyOtherError = 3
-		};
-
-		/// @brief Enumerates the different error bit indices that can be set in a load version response
-		enum class LoadVersionErrorBit : std::uint8_t
-		{
-			FileSystemErrorOrPoolDataCorruption = 0,
-			VersionLabelNotCorrectOrUnknown = 1,
-			InsufficientMemory = 2,
-			AnyOtherError = 3
-		};
-
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
 		enum class EnableDisableObjectErrorBit : std::uint8_t
 		{
@@ -829,7 +803,6 @@ namespace isobus
 		void update();
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
-		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher; ///< Event dispatcher for active data/alarm mask change events
@@ -849,6 +822,34 @@ namespace isobus
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
 
 	private:
+		/// @brief Enumerates the different error bit indices that can be set in a delete version response
+		enum class DeleteVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			AnyOtherError = 3
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a load version response
+		enum class LoadVersionErrorBit : std::uint8_t
+		{
+			FileSystemErrorOrPoolDataCorruption = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a store version response
+		enum class StoreVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrect = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
+		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
+
 		/// @brief Sends a response to a load version or extended load version command
 		/// @param[in] function The command being answered, LoadVersionCommand or ExtendedLoadVersionCommand
 		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.

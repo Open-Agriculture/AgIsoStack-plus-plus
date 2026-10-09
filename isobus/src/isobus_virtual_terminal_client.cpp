@@ -25,17 +25,6 @@
 
 namespace isobus
 {
-	/// @brief Checks if the extended (32 character) version commands must be used for a version label
-	/// @param[in] client The client, for the version of the connected VT
-	/// @param[in] versionLabel The object pool version label
-	/// @returns true if the VT supports extended versions and the label does not fit the 7 character ones
-	static bool uses_extended_versions(const VirtualTerminalClient &client, const std::string &versionLabel)
-	{
-		constexpr std::size_t VERSION_LABEL_LENGTH = 7;
-
-		return client.is_vt_version_supported(VirtualTerminalClient::VTVersion::Version5) && (versionLabel.size() > VERSION_LABEL_LENGTH);
-	}
-
 	/// @brief Pads a version label with spaces, or truncates it, to the label length a version command uses
 	/// @param[in] versionLabel The object pool version label
 	/// @returns The label as sent in a version command
@@ -1484,7 +1473,7 @@ namespace isobus
 					}
 					else if ((!objectPools.empty()) &&
 					         (!objectPools[0].versionLabel.empty()) &&
-					         (uses_extended_versions(*this, objectPools[0].versionLabel) ? send_extended_get_versions() : send_get_versions()))
+					         (uses_extended_versions(objectPools[0].versionLabel) ? send_extended_get_versions() : send_get_versions()))
 					{
 						set_state(StateMachineState::WaitForGetVersionsResponse);
 					}
@@ -1511,7 +1500,7 @@ namespace isobus
 					else
 					{
 						const std::string &versionLabel = objectPools[0].versionLabel;
-						const bool sent = uses_extended_versions(*this, versionLabel) ? send_extended_load_version(make_version_label<32>(versionLabel)) : send_load_version(make_version_label<7>(versionLabel));
+						const bool sent = uses_extended_versions(versionLabel) ? send_extended_load_version(make_version_label<32>(versionLabel)) : send_load_version(make_version_label<7>(versionLabel));
 
 						if (sent)
 						{
@@ -1541,7 +1530,7 @@ namespace isobus
 					else
 					{
 						const std::string &versionLabel = objectPools[0].versionLabel;
-						const bool sent = uses_extended_versions(*this, versionLabel) ? send_extended_store_version(make_version_label<32>(versionLabel)) : send_store_version(make_version_label<7>(versionLabel));
+						const bool sent = uses_extended_versions(versionLabel) ? send_extended_store_version(make_version_label<32>(versionLabel)) : send_store_version(make_version_label<7>(versionLabel));
 
 						if (sent)
 						{
@@ -4665,6 +4654,13 @@ namespace isobus
 		}
 
 		return true;
+	}
+
+	bool VirtualTerminalClient::uses_extended_versions(const std::string &versionLabel) const
+	{
+		constexpr std::size_t VERSION_LABEL_LENGTH = 7;
+
+		return is_vt_version_supported(VTVersion::Version5) && (versionLabel.size() > VERSION_LABEL_LENGTH);
 	}
 
 	void VirtualTerminalClient::queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel)
