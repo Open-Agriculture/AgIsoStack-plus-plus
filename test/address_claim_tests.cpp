@@ -231,3 +231,77 @@ TEST_F(AddressClaimTest, PreferredAddressContention)
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(secondInternalECU2);
 }
+
+// A partnered control function that is created while the network manager's prune timer for the last
+// global request for address claim is still pending must not be declared offline if its device
+// already answered that request.
+TEST_F(AddressClaimTest, PartnerCreatedInsideRequestWindowIsNotPruned)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	time_source.update_for_ms(250);
+
+	// An external device (a VT) that is already on the bus. Frames are injected as if they came from the wire.
+	isobus::NAME vtName(0);
+	vtName.set_arbitrary_address_capable(false);
+	vtName.set_industry_group(2);
+	vtName.set_device_class(0);
+	vtName.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtName.set_identity_number(1);
+	vtName.set_ecu_instance(0);
+	vtName.set_function_instance(0);
+	vtName.set_device_class_instance(0);
+	vtName.set_manufacturer_code(69);
+
+	constexpr std::uint8_t vtAddress = 0x26;
+	const auto inject_vt_address_claim = [&]() {
+		CANMessageFrame claim = {};
+		claim.channel = 0;
+		claim.isExtendedFrame = true;
+		claim.identifier = 0x18EEFF00 | vtAddress;
+		claim.dataLength = 8;
+		const std::uint64_t fullName = vtName.get_full_name();
+		for (std::uint8_t i = 0; i < 8; i++)
+		{
+			claim.data[i] = static_cast<std::uint8_t>(fullName >> (8 * i));
+		}
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(claim);
+	};
+
+	inject_vt_address_claim();
+	time_source.update_for_ms(50);
+
+	// Some device on the bus (here: one that has not claimed an address yet, so it uses the null address
+	// 254) sends a global request for address claim, and the VT answers straight away.
+	CANMessageFrame request = {};
+	request.channel = 0;
+	request.isExtendedFrame = true;
+	request.identifier = 0x18EAFFFE;
+	request.dataLength = 3;
+	request.data[0] = 0x00; // PGN 0x00EE00 (address claim), little endian
+	request.data[1] = 0xEE;
+	request.data[2] = 0x00;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	time_source.update_for_ms(10);
+	inject_vt_address_claim();
+	time_source.update_for_ms(50);
+
+	// The application only now creates its partner for the VT, ~60 ms after that request
+	const NAMEFilter filterVirtualTerminal(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
+	auto partnerVT = CANNetworkManager::CANNetwork.create_partnered_control_function(0, { filterVirtualTerminal });
+	time_source.update_for_ms(50);
+
+	// The partner is matched with the device that is already on the bus
+	ASSERT_TRUE(partnerVT->get_address_valid());
+	EXPECT_EQ(vtAddress, partnerVT->get_address());
+
+	// The prune timer for the request above runs out 755 ms after it. The VT answered the request, so it
+	// must still be online afterwards.
+	time_source.update_for_ms(1000);
+	EXPECT_TRUE(partnerVT->get_address_valid()) << "The VT answered the request for address claim but the partnered control function was marked offline anyway";
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(partnerVT);
+}
