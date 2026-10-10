@@ -105,6 +105,16 @@ namespace isobus
 		wasLoadedWithExtendedVersionLabel = extendedVersionLabel;
 	}
 
+	void VirtualTerminalServerManagedWorkingSet::clear_object_pool_data(CANLibBadge<VirtualTerminalServer>)
+	{
+		vtObjectTree.clear();
+		iopFilesRawData.clear();
+		transferredIopSize = 0;
+		workingSetID = NULL_OBJECT_ID;
+		focusedObject = NULL_OBJECT_ID;
+		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
 	{
 		focusedObject = objectID;

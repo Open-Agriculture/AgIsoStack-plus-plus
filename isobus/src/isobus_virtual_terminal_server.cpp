@@ -611,6 +611,7 @@ namespace isobus
 					auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
 					if (!loadedVersion.empty())
 					{
+						managedWorkingSet->clear_object_pool_data({});
 						managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
 						managedWorkingSet->add_iop_raw_data(loadedVersion);
 						managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, isExtended, {});

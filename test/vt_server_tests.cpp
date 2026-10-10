@@ -631,6 +631,47 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionWithAnUnknownLabelDoesNotA
 	EXPECT_FALSE(foundSecondEndOfObjectPoolResponse);
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, LoadVersionOverwritesTheExistingObjectPool)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3E, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9A, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, client, { 0x11, 0x01, 0xF0, 0x01, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x00, 0x01, 0x01, 0xF0, 0x00, 0x00, 0x03, 'e', 'n', 'd', 'e', 'f', 'r' });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	CANMessageFrame responseFrame = {};
+	const bool foundEndOfObjectPoolResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, responseFrame);
+	const std::uint8_t endOfObjectPoolErrorCodes = responseFrame.data[1];
+
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+
+	const bool foundLoadVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD1, responseFrame);
+	CANHardwareInterface::stop();
+
+	auto workingSet = serverUnderTest.managedWorkingSetList.front();
+	ASSERT_TRUE(foundEndOfObjectPoolResponse);
+	ASSERT_EQ(0x00, endOfObjectPoolErrorCodes);
+	ASSERT_TRUE(foundLoadVersionResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
+	ASSERT_EQ(1U, workingSet->get_number_iop_files());
+	EXPECT_EQ(serverUnderTest.versionToLoad, workingSet->get_iop_raw_data(0));
+	EXPECT_EQ(0U, workingSet->get_object_tree().count(0xF000));
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsParsingUntilTheLoadVersionResponseIsSent)
 {
 	VirtualCANPlugin testPlugin;
