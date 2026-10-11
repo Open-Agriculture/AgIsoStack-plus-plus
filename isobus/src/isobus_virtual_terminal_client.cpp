@@ -2477,8 +2477,6 @@ namespace isobus
 		    (state.hasInteraction &&
 		     SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
 		{
-			state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
-
 			std::uint8_t operatingState = 0;
 			if (get_auxiliary_input_learn_mode_enabled())
 			{
@@ -2496,8 +2494,6 @@ namespace isobus
 					operatingState |= 0x08;
 				}
 			}
-			state.hasInteraction = false; // reset interaction flag
-
 			/// @todo Change values based on state of auxiliary input, e.g. for non-latched boolean inputs we have to change from value=1 (momentary) to value=2 (held)
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage),
 				                                                         static_cast<std::uint8_t>(objectID),
@@ -2519,6 +2515,11 @@ namespace isobus
 				                                                        myControlFunction,
 				                                                        nullptr,
 				                                                        CANIdentifier::CANPriority::Priority3);
+			}
+			if (retVal)
+			{
+				state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
+				state.hasInteraction = false;
 			}
 		}
 		return retVal;
