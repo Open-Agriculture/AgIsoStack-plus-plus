@@ -1466,9 +1466,9 @@ namespace isobus
 		/// @brief Struct for storing the state of an auxiliary input on our device
 		struct AuxiliaryInputState
 		{
-			std::uint64_t lastStatusUpdate; ///< The time of the last status update, in milliseconds
+			std::uint64_t lastStatusUpdate; ///< The time of the last successfully submitted status update, in milliseconds
 			bool enabled; ///< Whether the auxiliary input is enabled by the VT
-			bool hasInteraction; ///< Whether the auxiliary input is currently interacted with
+			bool hasInteraction; ///< Whether an interaction is pending successful status submission
 			bool controlLocked; ///< Whether the auxiliary input is currently locked
 			std::uint16_t value1; ///< The first value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
 			std::uint16_t value2; ///< The second value of the auxiliary input. See Table J.5 of Part 6 of the standard for details

@@ -93,6 +93,10 @@ public:
 	{
 		return send_auxiliary_input_maintenance();
 	}
+	bool test_wrapper_update_auxiliary_input_status(std::uint16_t objectID)
+	{
+		return update_auxiliary_input_status(objectID);
+	}
 
 	static std::vector<std::uint8_t> staticTestPool;
 
@@ -331,6 +335,65 @@ static void expect_assignment_response(AuxiliaryTestCAN &can, std::uint16_t func
 	ASSERT_NE(frames.end(), response);
 	EXPECT_EQ((std::vector<std::uint8_t>{ 0x24, static_cast<std::uint8_t>(function), static_cast<std::uint8_t>(function >> 8), error, 0xFF, 0xFF, 0xFF, 0xFF }),
 	          (std::vector<std::uint8_t>(response->data, response->data + response->dataLength)));
+}
+
+TEST_F(VirtualTerminalTest, AuxiliaryStatusRetriesAfterTransmitQueueFull)
+{
+	for (const bool learnMode : { false, true })
+	{
+		SCOPED_TRACE(learnMode);
+		AuxiliaryTestCAN can(time_source);
+		DerivedTestVTClient client(can.partner, can.ecu);
+		client.add_auxiliary_input_object_id(0x1234);
+		client.initialize(false);
+		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+		auxiliary_status_enable(client, can.partner, 0x1234, true);
+		auxiliary_vt_status(client, can.partner, learnMode ? 0x40 : 0);
+		auxiliary_frames(can.vt);
+
+		time_source.simulate_delay_ms(50);
+		client.update_auxiliary_input(0x1234, 1, 2, true);
+		auxiliary_frames(can.vt);
+		time_source.simulate_delay_ms(50);
+
+		// Fill the queue without servicing the hardware, then attempt an interaction status.
+		CANMessageFrame filler{};
+		std::size_t queued = 0;
+		while ((queued < 100) && CANHardwareInterface::transmit_can_frame(filler))
+		{
+			++queued;
+		}
+		ASSERT_GT(queued, 0);
+		ASSERT_LT(queued, 100);
+		client.update_auxiliary_input(0x1234, 3, 4, true);
+		EXPECT_FALSE(client.test_wrapper_update_auxiliary_input_status(0x1234));
+		auxiliary_frames(can.vt); // Free the queue without advancing time.
+
+		ASSERT_TRUE(client.test_wrapper_update_auxiliary_input_status(0x1234));
+		const auto frames = auxiliary_frames(can.vt);
+		ASSERT_EQ(1, frames.size());
+		EXPECT_EQ(learnMode ? 0xE700 : 0xE600, CANIdentifier(frames.front().identifier).get_parameter_group_number());
+		EXPECT_EQ(0x26, frames.front().data[0]);
+		EXPECT_EQ(3, frames.front().data[3]);
+		EXPECT_EQ(4, frames.front().data[5]);
+		EXPECT_EQ(learnMode ? 0x0F : 0x0C, frames.front().data[7]);
+
+		// A successful retry starts the existing 50 ms minimum interval.
+		client.update_auxiliary_input(0x1234, 5, 6, true);
+		time_source.simulate_delay_ms(49);
+		EXPECT_FALSE(client.test_wrapper_update_auxiliary_input_status(0x1234));
+		EXPECT_TRUE(auxiliary_frames(can.vt).empty());
+		time_source.simulate_delay_ms(1);
+		EXPECT_TRUE(client.test_wrapper_update_auxiliary_input_status(0x1234));
+		auxiliary_frames(can.vt);
+
+		// Periodic status no longer reports the successfully submitted interaction.
+		time_source.simulate_delay_ms(1000);
+		EXPECT_TRUE(client.test_wrapper_update_auxiliary_input_status(0x1234));
+		const auto periodicFrames = auxiliary_frames(can.vt);
+		ASSERT_EQ(1, periodicFrames.size());
+		EXPECT_EQ(learnMode ? 0x05 : 0x04, periodicFrames.front().data[7]);
+	}
 }
 
 TEST_F(VirtualTerminalTest, InputStatusEnableDisableAllAndLearnModeTiming)
