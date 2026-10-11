@@ -1396,9 +1396,12 @@ namespace isobus
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			for (auto &device : assignedAuxiliaryInputDevices)
 			{
-				if (device.ready && SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
+				if (SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
 				{
-					timedOutDevices.emplace_back(device.name, device.modelIdentificationCode);
+					if (device.ready)
+					{
+						timedOutDevices.emplace_back(device.name, device.modelIdentificationCode);
+					}
 					mark_auxiliary_input_device_unavailable(device);
 				}
 			}
@@ -2093,9 +2096,14 @@ namespace isobus
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			sessionGeneration = auxiliaryAssignmentSessionGeneration;
+			if (auxiliaryAssignmentTransaction.outstanding())
+			{
+				return true;
+			}
 			for (const auto &device : assignedAuxiliaryInputDevices)
 			{
-				if (device.ready && !device.preferredAssignmentsLoaded)
+				if (!device.preferredAssignmentsLoaded &&
+				    !SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
 				{
 					loaded.push_back({ device.name, device.modelIdentificationCode, {} });
 				}
@@ -2126,7 +2134,7 @@ namespace isobus
 				auto device = std::find_if(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [&entry](const AssignedAuxiliaryInputDevice &candidate) {
 					return candidate.name == entry.name && candidate.modelIdentificationCode == entry.modelIdentificationCode;
 				});
-				if (device != assignedAuxiliaryInputDevices.end() && device->ready && !device->preferredAssignmentsLoaded)
+				if (device != assignedAuxiliaryInputDevices.end() && !device->preferredAssignmentsLoaded)
 				{
 					device->preferredFunctions = entry.functions;
 					device->preferredAssignmentsLoaded = true;
@@ -2225,7 +2233,14 @@ namespace isobus
 			}
 			bool isAlreadyAssigned = false;
 			std::vector<AuxiliaryPreferenceSnapshot> toStore;
-			const bool hasError = apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
+			// Do not overwrite persisted preferences while their loading is deferred.
+			const bool preferencesUnavailable = storeAsPreferred &&
+			  std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
+				                                    return !device.preferredAssignmentsLoaded &&
+				                                      !SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS);
+			                                    });
+			const bool hasError = preferencesUnavailable ||
+			  apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
 			if (!hasError && !toStore.empty() && auxiliaryAssignmentTransaction.outstanding())
 			{
 				auxiliaryAssignmentPending = true;
@@ -2403,12 +2418,19 @@ namespace isobus
 		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
+	bool VirtualTerminalClient::get_auxiliary_input_pool_ready() const
+	{
+		return (StateMachineState::SendStoreVersion == state) ||
+		  (StateMachineState::WaitForStoreVersionResponse == state) ||
+		  (StateMachineState::Connected == state);
+	}
+
 	bool VirtualTerminalClient::send_auxiliary_input_maintenance() const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage),
 			                                                         static_cast<std::uint8_t>(ourModelIdentificationCode),
 			                                                         static_cast<std::uint8_t>(ourModelIdentificationCode >> 8),
-			                                                         static_cast<std::uint8_t>((StateMachineState::Connected == state) ? 0x01 : 0x00),
+			                                                         static_cast<std::uint8_t>(get_auxiliary_input_pool_ready() ? 0x01 : 0x00),
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF,
@@ -2446,10 +2468,13 @@ namespace isobus
 	{
 		bool retVal = false;
 		AuxiliaryInputState &state = ourAuxiliaryInputs.at(objectID);
+		if (!state.enabled && !get_auxiliary_input_learn_mode_enabled())
+		{
+			return false;
+		}
 		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs on interaction
 		if (SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY) ||
 		    (state.hasInteraction &&
-		     !get_auxiliary_input_learn_mode_enabled() &&
 		     SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
 		{
 			state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
@@ -2600,8 +2625,43 @@ namespace isobus
 		}
 
 		bool failed = false;
-		bool invalidPreferences = false;
 		std::uint8_t failedAttempts = 0;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (StateMachineState::Connected != state)
+			{
+				return;
+			}
+			auto &transaction = auxiliaryAssignmentTransaction;
+			if (transaction.outstanding())
+			{
+				if (SystemTiming::time_expired_ms(transaction.timestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+				{
+					if (transaction.obsolete || (transaction.attemptCount >= 3))
+					{
+						failed = true;
+						failedAttempts = transaction.attemptCount;
+						transaction.reset();
+					}
+					else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
+					{
+						++transaction.attemptCount;
+						transaction.timestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+				}
+				if (transaction.outstanding())
+				{
+					return;
+				}
+			}
+		}
+		if (failed)
+		{
+			LOG_WARNING("[AUX-N]: Preferred assignment timed out; snapshot obsolete or retry limit reached.");
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
+		}
+
+		bool invalidPreferences = false;
 		{
 			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
 			std::uint32_t sessionGeneration;
@@ -2616,38 +2676,17 @@ namespace isobus
 				return;
 			}
 			auto &transaction = auxiliaryAssignmentTransaction;
-			if (transaction.outstanding())
-			{
-				if (SystemTiming::time_expired_ms(transaction.timestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
-				{
-					if (transaction.obsolete || (transaction.attemptCount >= 3))
-					{
-						failed = true;
-						failedAttempts = transaction.attemptCount;
-						transaction.reset();
-						// Do not consume changes triggered while the old transaction was outstanding.
-					}
-					else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
-					{
-						++transaction.attemptCount;
-						transaction.timestamp_ms = SystemTiming::get_timestamp_ms();
-					}
-				}
-			}
 			if (!preferencesValid)
 			{
 				invalidPreferences = true;
-				if (!transaction.outstanding())
-				{
-					auxiliaryAssignmentPending = false;
-				}
+				auxiliaryAssignmentPending = false;
 			}
-			else if (!failed && !transaction.outstanding() && auxiliaryAssignmentPending)
+			else if (!transaction.outstanding() && auxiliaryAssignmentPending)
 			{
-				// Devices discovered or reconfigured during loading must be loaded on the next update
-				// before publishing a complete assignment set.
+				// Wait only for detected preferred devices; expired devices retain preferences.
 				if (std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
-					    return device.ready && !device.preferredAssignmentsLoaded;
+					    return !SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS) &&
+					      (!device.preferredAssignmentsLoaded || (!device.ready && !device.preferredFunctions.empty()));
 				    }))
 				{
 					return;
@@ -2665,15 +2704,10 @@ namespace isobus
 				}
 				else
 				{
-					// No command was queued: preserve pending demand and rebuild on the next update.
+					// Preserve pending demand if the command could not be queued.
 					transaction.reset();
 				}
 			}
-		}
-		if (failed)
-		{
-			LOG_WARNING("[AUX-N]: Preferred assignment timed out; snapshot obsolete or retry limit reached.");
-			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
 		}
 		if (invalidPreferences)
 		{
@@ -3247,13 +3281,26 @@ namespace isobus
 							}
 							std::uint16_t inputObjectID = message.get_uint16_at(1);
 							bool shouldEnable = message.get_bool_at(3, 0);
-							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [&inputObjectID](const std::pair<std::uint16_t, AuxiliaryInputState> &input) {
-								return input.first == inputObjectID;
-							});
-							bool isInvalidObjectID = (result == std::end(parentVT->ourAuxiliaryInputs));
-							if (!isInvalidObjectID)
+							bool isInvalidObjectID = false;
+							if (NULL_OBJECT_ID == inputObjectID)
 							{
-								result->second.enabled = shouldEnable;
+								isInvalidObjectID = shouldEnable;
+								if (!shouldEnable)
+								{
+									for (auto &input : parentVT->ourAuxiliaryInputs)
+									{
+										input.second.enabled = false;
+									}
+								}
+							}
+							else
+							{
+								auto result = parentVT->ourAuxiliaryInputs.find(inputObjectID);
+								isInvalidObjectID = (result == parentVT->ourAuxiliaryInputs.end());
+								if (!isInvalidObjectID)
+								{
+									result->second.enabled = shouldEnable;
+								}
 							}
 							parentVT->send_auxiliary_input_status_enable_response(inputObjectID, isInvalidObjectID ? false : shouldEnable, isInvalidObjectID);
 						}
