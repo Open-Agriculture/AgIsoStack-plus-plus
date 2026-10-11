@@ -302,10 +302,9 @@ protected:
 		return foundResponse;
 	}
 
-	bool read_status_busy_codes(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, std::uint8_t &busyCodes)
+	bool read_status_message(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, CANMessageFrame &statusFrame)
 	{
 		bool foundStatus = false;
-		CANMessageFrame statusFrame = {};
 
 		plugin.clear_queue();
 		server.send_status_message();
@@ -314,6 +313,13 @@ protected:
 		{
 			foundStatus = (0xFE == statusFrame.data[0]);
 		}
+		return foundStatus;
+	}
+
+	bool read_status_busy_codes(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, std::uint8_t &busyCodes)
+	{
+		CANMessageFrame statusFrame = {};
+		const bool foundStatus = read_status_message(server, plugin, statusFrame);
 		busyCodes = statusFrame.data[6];
 		return foundStatus;
 	}
@@ -431,6 +437,54 @@ TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsAnError
 	ASSERT_TRUE(foundResponse);
 	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, FirstSelectableWorkingSetIsSelectedAutomatically)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3E, 0, time_source);
+	auto notSelectableClient = test_helpers::force_claim_partnered_control_function(0x9A, 0);
+	auto selectableClient = test_helpers::force_claim_partnered_control_function(0x9B, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame notSelectableResponse = {};
+	CANMessageFrame selectableResponse = {};
+	CANMessageFrame statusAfterNotSelectable = {};
+	CANMessageFrame statusAfterSelectable = {};
+
+	receive_from_client(internalECU, notSelectableClient, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Working Set with Selectable (byte 5) = 0
+	receive_tp_from_client(internalECU, notSelectableClient, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+	receive_from_client(internalECU, notSelectableClient, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	const bool notSelectablePoolAnswered = poll_for_response(serverUnderTest, testPlugin, 0x12, notSelectableResponse);
+	const bool foundStatusAfterNotSelectable = read_status_message(serverUnderTest, testPlugin, statusAfterNotSelectable);
+
+	receive_from_client(internalECU, selectableClient, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, selectableClient, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+	receive_from_client(internalECU, selectableClient, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	const bool selectablePoolAnswered = poll_for_response(serverUnderTest, testPlugin, 0x12, selectableResponse);
+	const bool foundStatusAfterSelectable = read_status_message(serverUnderTest, testPlugin, statusAfterSelectable);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(notSelectablePoolAnswered);
+	EXPECT_EQ(0x00, notSelectableResponse.data[1]);
+	ASSERT_TRUE(foundStatusAfterNotSelectable);
+	EXPECT_EQ(NULL_CAN_ADDRESS, statusAfterNotSelectable.data[1]);
+	ASSERT_TRUE(selectablePoolAnswered);
+	EXPECT_EQ(0x00, selectableResponse.data[1]);
+	ASSERT_TRUE(foundStatusAfterSelectable);
+	EXPECT_EQ(0x9B, statusAfterSelectable.data[1]);
+	EXPECT_EQ(0x03E8, statusAfterSelectable.data[2] | (statusAfterSelectable.data[3] << 8));
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, LoadVersionResponseIsSentWhenARestoredObjectPoolParses)
