@@ -540,11 +540,29 @@ namespace isobus
 			std::uint16_t value2; ///< The second value
 		};
 
+		/// @brief Flags describing why a preferred auxiliary assignment failed
+		/// @details VTRejected is combined with every defined error bit in the VT response (ISO 11783-6, J.7.8).
+		/// Reserved response bits do not have specific flags, but a nonzero response always includes VTRejected.
+		/// Local failures contain exactly one of ResponseTimeout, ObsoleteAssignment, or InvalidPreferences.
+		enum class AuxiliaryAssignmentFailureReason : std::uint16_t
+		{
+			InvalidAuxiliaryInputUnit = 0x01, ///< VT reported invalid auxiliary input unit(s)
+			InvalidFunctionObjectID = 0x02, ///< VT reported invalid auxiliary function object ID(s)
+			InvalidInputObjectID = 0x04, ///< VT reported invalid auxiliary input object ID(s)
+			DuplicateFunctionObjectID = 0x08, ///< VT reported a duplicate auxiliary function object ID
+			OtherVTError = 0x10, ///< VT reported another error
+			ResponseTimeout = 0x0100, ///< No response after the final transmission attempt
+			ObsoleteAssignment = 0x0200, ///< No response before timeout for a transaction whose referenced devices became unavailable
+			InvalidPreferences = 0x0400, ///< Stored preferences failed validation or could not be serialized
+			VTRejected = 0x0800 ///< VT returned a nonzero error response
+		};
+
 		/// @brief Event raised when a preferred auxiliary assignment transaction fails
+		/// @details One event is emitted per failure; reason may contain several VT rejection flags.
 		struct AuxiliaryAssignmentFailureEvent
 		{
 			VirtualTerminalClient *parentPointer; ///< The client whose assignments failed
-			std::uint8_t attempts; ///< Number of attempts made, zero if validation failed before sending
+			AuxiliaryAssignmentFailureReason reason; ///< Failure reason flags, inspect individual flags using operator&
 		};
 
 		/// @brief The event dispatcher for when a soft key is pressed or released
@@ -1877,6 +1895,26 @@ namespace isobus
 		/// @param[in] versionLabel The 32 character version label to delete
 		void queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel);
 	};
+
+	/// @brief Combines auxiliary assignment failure reason flags
+	/// @param[in] lhs First set of flags
+	/// @param[in] rhs Second set of flags
+	/// @returns The combined flags
+	constexpr VirtualTerminalClient::AuxiliaryAssignmentFailureReason operator|(VirtualTerminalClient::AuxiliaryAssignmentFailureReason lhs,
+	                                                                            VirtualTerminalClient::AuxiliaryAssignmentFailureReason rhs)
+	{
+		return static_cast<VirtualTerminalClient::AuxiliaryAssignmentFailureReason>(static_cast<std::uint16_t>(lhs) | static_cast<std::uint16_t>(rhs));
+	}
+
+	/// @brief Selects auxiliary assignment failure reason flags common to both operands
+	/// @param[in] lhs Flags to inspect
+	/// @param[in] rhs Flags to select
+	/// @returns The common flags; compare with rhs to check whether all selected flags are present
+	constexpr VirtualTerminalClient::AuxiliaryAssignmentFailureReason operator&(VirtualTerminalClient::AuxiliaryAssignmentFailureReason lhs,
+	                                                                            VirtualTerminalClient::AuxiliaryAssignmentFailureReason rhs)
+	{
+		return static_cast<VirtualTerminalClient::AuxiliaryAssignmentFailureReason>(static_cast<std::uint16_t>(lhs) & static_cast<std::uint16_t>(rhs));
+	}
 
 } // namespace isobus
 

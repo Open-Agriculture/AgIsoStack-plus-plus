@@ -2625,7 +2625,7 @@ namespace isobus
 		}
 
 		bool failed = false;
-		std::uint8_t failedAttempts = 0;
+		AuxiliaryAssignmentFailureReason failureReason = AuxiliaryAssignmentFailureReason::ResponseTimeout;
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			if (StateMachineState::Connected != state)
@@ -2640,7 +2640,7 @@ namespace isobus
 					if (transaction.obsolete || (transaction.attemptCount >= 3))
 					{
 						failed = true;
-						failedAttempts = transaction.attemptCount;
+						failureReason = transaction.obsolete ? AuxiliaryAssignmentFailureReason::ObsoleteAssignment : AuxiliaryAssignmentFailureReason::ResponseTimeout;
 						transaction.reset();
 					}
 					else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
@@ -2658,7 +2658,7 @@ namespace isobus
 		if (failed)
 		{
 			LOG_WARNING("[AUX-N]: Preferred assignment timed out; snapshot obsolete or retry limit reached.");
-			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failedAttempts });
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failureReason });
 		}
 
 		bool invalidPreferences = false;
@@ -2712,7 +2712,7 @@ namespace isobus
 		if (invalidPreferences)
 		{
 			LOG_WARNING("[AUX-N]: Stored preferred assignments could not be serialized.");
-			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, 0 });
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, AuxiliaryAssignmentFailureReason::InvalidPreferences });
 		}
 	}
 
@@ -3194,13 +3194,11 @@ namespace isobus
 							}
 							const std::uint8_t errors = message.get_uint8_at(1);
 							bool wasOutstanding = false;
-							std::uint8_t attempts = 0;
 							{
 								LOCK_GUARD(Mutex, auxiliaryMutex);
 								wasOutstanding = parentVT->auxiliaryAssignmentTransaction.outstanding();
 								if (wasOutstanding)
 								{
-									attempts = parentVT->auxiliaryAssignmentTransaction.attemptCount;
 									parentVT->auxiliaryAssignmentTransaction.reset();
 								}
 							}
@@ -3212,7 +3210,8 @@ namespace isobus
 							if (0 != errors)
 							{
 								LOG_ERROR("[AUX-N]: VT rejected the preferred assignment command (error flags " + isobus::to_string(errors) + ").");
-								parentVT->auxiliaryAssignmentFailureEventDispatcher.invoke({ parentVT, attempts });
+								const auto reason = AuxiliaryAssignmentFailureReason::VTRejected | static_cast<AuxiliaryAssignmentFailureReason>(errors & 0x1F);
+								parentVT->auxiliaryAssignmentFailureEventDispatcher.invoke({ parentVT, reason });
 							}
 							else
 							{

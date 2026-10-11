@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <utility>
 
 //! It is discouraged to use global variables, but it is done here for simplicity.
 static std::shared_ptr<isobus::VirtualTerminalClient> TestVirtualTerminalClient = nullptr;
@@ -42,9 +43,27 @@ void handle_aux_function_input(const isobus::VirtualTerminalClient::AuxiliaryFun
 void handle_aux_assignment_failure(const isobus::VirtualTerminalClient::AuxiliaryAssignmentFailureEvent &event)
 {
 	// Present this alert on the operator interface (for example, an Alarm Mask) in a production application.
-	std::cerr << "Operator alert: Auxiliary function assignments are unavailable after "
-	          << static_cast<int>(event.attempts) << " transmission attempt(s). Check the auxiliary controls and assignments."
-	          << std::endl;
+	using Reason = isobus::VirtualTerminalClient::AuxiliaryAssignmentFailureReason;
+	const std::pair<Reason, const char *> descriptions[] = {
+		{ Reason::ResponseTimeout, "The VT did not respond." },
+		{ Reason::ObsoleteAssignment, "An auxiliary input device became unavailable before the VT responded." },
+		{ Reason::InvalidPreferences, "Stored assignments are invalid or could not be serialized." },
+		{ Reason::VTRejected, "The VT rejected the preferred assignments." },
+		{ Reason::InvalidAuxiliaryInputUnit, "Invalid auxiliary input unit(s)." },
+		{ Reason::InvalidFunctionObjectID, "Invalid auxiliary function object ID(s)." },
+		{ Reason::InvalidInputObjectID, "Invalid auxiliary input object ID(s)." },
+		{ Reason::DuplicateFunctionObjectID, "Duplicate auxiliary function object ID." },
+		{ Reason::OtherVTError, "The VT reported another error." }
+	};
+	std::cerr << "Operator alert: Preferred auxiliary assignments failed.";
+	for (const auto &description : descriptions)
+	{
+		if ((event.reason & description.first) == description.first)
+		{
+			std::cerr << " " << description.second;
+		}
+	}
+	std::cerr << " Check the auxiliary controls and assignments." << std::endl;
 }
 
 // Callback to load stored auxiliary function assignments

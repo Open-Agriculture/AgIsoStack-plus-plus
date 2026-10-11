@@ -444,7 +444,107 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentRetriesThreeTimesThenReportsFailu
 	time_source.update_for_ms(2000);
 	update_auxiliary_client(client);
 	ASSERT_EQ(1U, failures.size());
-	EXPECT_EQ(3, failures.front().attempts);
+	EXPECT_EQ(&client, failures.front().parentPointer);
+	EXPECT_EQ(VirtualTerminalClient::AuxiliaryAssignmentFailureReason::ResponseTimeout, failures.front().reason);
+}
+
+TEST_F(VirtualTerminalTest, PreferredAssignmentRejectionReportsAllDefinedReasons)
+{
+	using Reason = VirtualTerminalClient::AuxiliaryAssignmentFailureReason;
+	const std::vector<std::pair<std::uint8_t, Reason>> cases = {
+		{ 0x01, Reason::InvalidAuxiliaryInputUnit },
+		{ 0x02, Reason::InvalidFunctionObjectID },
+		{ 0x04, Reason::InvalidInputObjectID },
+		{ 0x08, Reason::DuplicateFunctionObjectID },
+		{ 0x10, Reason::OtherVTError },
+		{ 0x1F, Reason::InvalidAuxiliaryInputUnit | Reason::InvalidFunctionObjectID | Reason::InvalidInputObjectID | Reason::DuplicateFunctionObjectID | Reason::OtherVTError },
+		{ 0xE0, static_cast<Reason>(0) },
+		{ 0xE2, Reason::InvalidFunctionObjectID }
+	};
+	for (const auto &entry : cases)
+	{
+		SCOPED_TRACE(static_cast<unsigned int>(entry.first));
+		AuxiliaryTestCAN can(time_source);
+		DerivedTestVTClient client(can.partner, can.ecu);
+		client.set_auxiliary_functions_enabled(true);
+		client.test_wrapper_set_vt_version(6);
+		client.initialize(false);
+		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
+		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
+		update_auxiliary_client(client);
+		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		auxiliary_response(client, can.partner, entry.first);
+		ASSERT_EQ(1U, failures.size());
+		EXPECT_EQ(&client, failures.front().parentPointer);
+		EXPECT_EQ(Reason::VTRejected | entry.second, failures.front().reason);
+		EXPECT_EQ(Reason::VTRejected, failures.front().reason & Reason::VTRejected);
+		EXPECT_EQ(entry.second, failures.front().reason & entry.second);
+		update_auxiliary_client(client);
+		EXPECT_TRUE(auxiliary_frames(can.vt).empty());
+		EXPECT_EQ(1U, failures.size());
+	}
+}
+
+TEST_F(VirtualTerminalTest, PreferredAssignmentIgnoresInvalidAndUnsolicitedResponses)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+	client.set_auxiliary_functions_enabled(true);
+	client.test_wrapper_set_vt_version(6);
+	client.initialize(false);
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
+	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
+	auxiliary_response(client, can.partner, 0x01); // No active transaction.
+	update_auxiliary_client(client);
+	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	auxiliary_response(client, auxiliary_device(99, 0x22), 0x01);
+	receive_auxiliary(client, can.partner, { 0x22, 0x01 });
+	EXPECT_TRUE(failures.empty());
+	// Neither invalid response completed the transaction: a valid rejection must still report failure.
+	auxiliary_response(client, can.partner, 0x02);
+	ASSERT_EQ(1U, failures.size());
+	EXPECT_EQ(VirtualTerminalClient::AuxiliaryAssignmentFailureReason::VTRejected |
+	            VirtualTerminalClient::AuxiliaryAssignmentFailureReason::InvalidFunctionObjectID,
+	          failures.front().reason);
+	auxiliary_response(client, can.partner, 0x01); // Transaction already completed.
+	EXPECT_EQ(1U, failures.size());
+}
+
+TEST_F(VirtualTerminalTest, InvalidPreferredAssignmentsReportInvalidPreferences)
+{
+	for (bool invalidLoadedEntry : { true, false })
+	{
+		SCOPED_TRACE(invalidLoadedEntry ? "invalid loaded entry" : "duplicate function across devices");
+		AuxiliaryTestCAN can(time_source);
+		AuxiliaryPreferences preferences;
+		preferences.byName[651] = { { 0x0201, static_cast<std::uint16_t>(invalidLoadedEntry ? NULL_OBJECT_ID : 0x1234), VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
+		preferences.byName[652] = { { 0x0201, 0x2345, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
+		DerivedTestVTClient client(can.partner, can.ecu);
+		client.set_auxiliary_functions_enabled(true);
+		client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
+		client.test_wrapper_set_vt_version(6);
+		client.initialize(false);
+		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+		update_auxiliary_client(client);
+		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		auxiliary_response(client, can.partner);
+		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
+		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
+		auxiliary_maintenance(client, auxiliary_device(651, 0x24), 0x3344);
+		if (!invalidLoadedEntry)
+		{
+			auxiliary_maintenance(client, auxiliary_device(652, 0x25), 0x3344);
+		}
+		update_auxiliary_client(client);
+		ASSERT_EQ(1U, failures.size());
+		EXPECT_EQ(&client, failures.front().parentPointer);
+		EXPECT_EQ(VirtualTerminalClient::AuxiliaryAssignmentFailureReason::InvalidPreferences, failures.front().reason);
+		EXPECT_TRUE(auxiliary_frames(can.vt).empty());
+		update_auxiliary_client(client);
+		EXPECT_EQ(1U, failures.size());
+	}
 }
 
 TEST_F(VirtualTerminalTest, AuxiliaryMaintenanceReadinessFollowsPoolStates)
@@ -501,6 +601,8 @@ TEST_F(VirtualTerminalTest, EmptyPreferredAssignmentWaitsForCorrectVTResponse)
 	client.test_wrapper_set_vt_version(6);
 	client.initialize(false);
 	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
+	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 	auxiliary_maintenance(client, auxiliary_device(600, 0x20), 0x3344, 0);
 	update_auxiliary_client(client);
 	EXPECT_EQ(1U, preferences.loadCalls);
@@ -511,6 +613,7 @@ TEST_F(VirtualTerminalTest, EmptyPreferredAssignmentWaitsForCorrectVTResponse)
 	auxiliary_response(client, can.partner);
 	update_auxiliary_client(client);
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
+	EXPECT_TRUE(failures.empty());
 }
 
 TEST_F(VirtualTerminalTest, InitializingPreferredDevicesWaitAndStaleDevicesDoNotTriggerSync)
@@ -584,6 +687,8 @@ TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
 		client.test_wrapper_set_vt_version(6);
 		client.initialize(false);
 		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
+		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 		update_auxiliary_client(client);
 		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
 		auxiliary_response(client, can.partner);
@@ -617,6 +722,7 @@ TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
 		}));
 		if (acknowledge)
 		{
+			EXPECT_TRUE(failures.empty());
 			const auto replacement = std::find_if(replacementFrames.begin(), replacementFrames.end(), [](const CANMessageFrame &frame) {
 				return CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700 && frame.data[0] == 0x22;
 			});
@@ -625,6 +731,9 @@ TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
 		}
 		else
 		{
+			ASSERT_EQ(1U, failures.size());
+			EXPECT_EQ(&client, failures.front().parentPointer);
+			EXPECT_EQ(VirtualTerminalClient::AuxiliaryAssignmentFailureReason::ObsoleteAssignment, failures.front().reason);
 			EXPECT_TRUE(std::any_of(replacementFrames.begin(), replacementFrames.end(), [](const CANMessageFrame &frame) {
 				return CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700 && frame.data[0] == 0x22;
 			}));
