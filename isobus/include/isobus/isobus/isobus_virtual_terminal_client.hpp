@@ -1328,16 +1328,19 @@ namespace isobus
 		/// @brief Immutable command and bookkeeping for one Preferred Assignment transaction
 		struct AuxiliaryAssignmentTransaction
 		{
-			std::vector<std::uint8_t> message;
-			std::vector<std::pair<std::uint64_t, std::uint16_t>> devices;
-			std::uint8_t attemptCount = 0;
-			std::uint32_t timestamp_ms = 0;
-			bool obsolete = false;
+			std::vector<std::uint8_t> message; ///< Command bytes
+			std::vector<std::pair<std::uint64_t, std::uint16_t>> devices; ///< Referenced device NAMEs and model codes
+			std::uint8_t attemptCount = 0; ///< Successful transmission count
+			std::uint32_t timestamp_ms = 0; ///< Last transmission time
+			bool obsolete = false; ///< Whether referenced devices became unavailable
 
+			/// @brief Checks for an outstanding response
+			/// @returns true if a command was transmitted
 			bool outstanding() const
 			{
 				return attemptCount != 0;
 			}
+			/// @brief Clears the transaction
 			void reset()
 			{
 				message.clear();
@@ -1348,21 +1351,27 @@ namespace isobus
 			}
 		};
 
+		/// @brief Preferences queued for persistence
 		struct AuxiliaryPreferenceSnapshot
 		{
-			std::uint64_t name;
-			std::uint16_t modelIdentificationCode;
-			std::vector<AssignedAuxiliaryFunction> functions;
+			std::uint64_t name; ///< Device NAME
+			std::uint16_t modelIdentificationCode; ///< Device model code
+			std::vector<AssignedAuxiliaryFunction> functions; ///< Stored preferred assignments
 		};
 
+		/// @brief Assignment response queued for transmission
 		struct AuxiliaryAssignmentResponse
 		{
-			std::uint16_t functionObjectID;
-			bool hasError;
-			bool isAlreadyAssigned;
-			std::uint32_t receivedTimestamp_ms;
-			bool deadlineReported;
+			std::uint16_t functionObjectID; ///< Function object ID
+			bool hasError; ///< Whether assignment failed
+			bool isAlreadyAssigned; ///< Whether assignment already exists
+			std::uint32_t receivedTimestamp_ms; ///< Command reception time
+			bool deadlineReported; ///< Whether response deadline was reported
 		};
+
+		/// @brief Checks whether the VT has accepted the input pool
+		/// @returns true in store-version or connected states
+		bool get_auxiliary_input_pool_ready() const;
 
 	protected:
 		/// @brief Enumerates the command types for graphics context objects
@@ -1543,16 +1552,17 @@ namespace isobus
 		/// @returns true if the message was sent
 		bool send_working_set_master() const;
 
-		/// @brief Loads and validates preferences for known input devices whose preferences have not been loaded
+		/// @brief Loads and validates preferences for detected input devices
 		/// @details The caller must hold auxiliaryPreferenceOperationMutex and must not hold auxiliaryAssignmentMutex.
-		/// Load callbacks run outside the device state lock; devices use empty preferences when no callback is registered.
-		/// @returns true if all pending preferences were loaded successfully, false if a loaded list is invalid
+		/// Loading is deferred during outstanding transactions; callbacks run outside the device state lock.
+		/// @returns false if a loaded preference list is invalid, otherwise true
 		bool ensure_auxiliary_preferences_loaded();
 		/// @brief Persists queued preference snapshots outside the CAN receive callback
 		void store_pending_auxiliary_preferences();
 		/// @brief Retries assignment responses in receive order; caller holds auxiliaryAssignmentMutex
 		void send_pending_auxiliary_assignment_responses_locked();
 		/// @brief Builds a complete validated transaction snapshot; caller holds auxiliaryAssignmentMutex
+		/// @returns true if the snapshot is valid
 		bool prepare_auxiliary_assignment_transaction_locked();
 
 		/// @brief Advances the preferred assignment transaction independently of the VT connection state machine
@@ -1806,10 +1816,10 @@ namespace isobus
 		AuxiliaryAssignmentTransaction auxiliaryAssignmentTransaction; ///< Current command snapshot and retry state
 		bool auxiliaryAssignmentPending = false; ///< Whether a complete Preferred Assignment command is pending
 		bool auxiliaryFunctionsEnabled = false; ///< Whether AUX-N function handling is enabled
-		static constexpr std::size_t AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY = 8;
-		std::array<AuxiliaryAssignmentResponse, AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY> auxiliaryAssignmentResponses{};
-		std::size_t auxiliaryAssignmentResponseHead = 0;
-		std::size_t auxiliaryAssignmentResponseCount = 0;
+		static constexpr std::size_t AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY = 8; ///< Maximum queued assignment responses
+		std::array<AuxiliaryAssignmentResponse, AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY> auxiliaryAssignmentResponses{}; ///< Pending assignment responses
+		std::size_t auxiliaryAssignmentResponseHead = 0; ///< Oldest queued response index
+		std::size_t auxiliaryAssignmentResponseCount = 0; ///< Queued response count
 		Mutex auxiliaryAssignmentMutex; ///< Protects assigned device state and preferred assignment transaction state
 		Mutex auxiliaryPreferenceOperationMutex; ///< Serializes load, mutation, and store operations
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
