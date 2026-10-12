@@ -244,7 +244,7 @@ static void auxiliary_maintenance(DerivedTestVTClient &client, const std::shared
 
 static void auxiliary_assignment(DerivedTestVTClient &client, const std::shared_ptr<ControlFunction> &vt, std::uint64_t name, std::uint16_t function, std::uint16_t input, std::uint8_t flags = 0x84)
 {
-	std::vector<std::uint8_t> bytes(14, 0xFF);
+	std::vector<std::uint8_t> bytes(16, 0xFF);
 	bytes[0] = 0x24;
 	for (std::size_t i = 0; i < 8; ++i)
 	{
@@ -310,6 +310,37 @@ static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can
 		{
 			return { frame.data, frame.data + frame.dataLength };
 		}
+		if ((CANIdentifier(frame.identifier).get_parameter_group_number() == 0xEC00) &&
+		    (frame.data[0] == 0x10) && (frame.data[5] == 0) && (frame.data[6] == 0xE7) && (frame.data[7] == 0))
+		{
+			const std::size_t length = frame.data[1] | (frame.data[2] << 8);
+			const auto packets = frame.data[3];
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+			  6, 0xEC00, can.ecu, can.partner, { 0x11, packets, 1, 0xFF, 0xFF, 0, 0xE7, 0 }));
+			clock.update_for_ms(10);
+			CANNetworkManager::CANNetwork.update();
+			std::vector<std::uint8_t> payload;
+			for (const auto &packet : auxiliary_frames(can.vt))
+			{
+				if (CANIdentifier(packet.identifier).get_parameter_group_number() == 0xEB00)
+				{
+					EXPECT_EQ(payload.size() / 7 + 1, packet.data[0]);
+					payload.insert(payload.end(), packet.data + 1, packet.data + 8);
+				}
+			}
+			EXPECT_EQ(static_cast<std::size_t>(packets) * 7, payload.size());
+			if (payload.size() < length)
+			{
+				ADD_FAILURE() << "Incomplete Preferred Assignment transport";
+				return {};
+			}
+			payload.resize(length);
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+			  6, 0xEC00, can.ecu, can.partner, { 0x13, frame.data[1], frame.data[2], packets, 0xFF, 0, 0xE7, 0 }));
+			clock.update_for_ms(10);
+			CANNetworkManager::CANNetwork.update();
+			return payload;
+		}
 	}
 	ADD_FAILURE() << "No Preferred Assignment command transmitted";
 	return {};
@@ -335,6 +366,38 @@ static void expect_assignment_response(AuxiliaryTestCAN &can, std::uint16_t func
 	ASSERT_NE(frames.end(), response);
 	EXPECT_EQ((std::vector<std::uint8_t>{ 0x24, static_cast<std::uint8_t>(function), static_cast<std::uint8_t>(function >> 8), error, 0xFF, 0xFF, 0xFF, 0xFF }),
 	          (std::vector<std::uint8_t>(response->data, response->data + response->dataLength)));
+}
+
+TEST_F(VirtualTerminalTest, PopulatedPreferredAssignmentsIncludePacketPadding)
+{
+	for (const bool twoFunctions : { false, true })
+	{
+		SCOPED_TRACE(twoFunctions ? "two functions" : "one function");
+		AuxiliaryTestCAN can(time_source);
+		AuxiliaryPreferences preferences;
+		const std::uint64_t name = 0x0807060504030201;
+		preferences.byName[name] = { { 0x0101, 0x1234, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary } };
+		if (twoFunctions)
+		{
+			preferences.byName[name].push_back({ 0x0102, 0x5678, VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BooleanMomentary });
+		}
+		DerivedTestVTClient client(can.partner, can.ecu);
+		client.set_auxiliary_functions_enabled(true);
+		client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
+		client.test_wrapper_set_vt_version(6);
+		client.initialize(false);
+		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+		auxiliary_maintenance(client, auxiliary_device(name, 0x21), 0x3344);
+		update_auxiliary_client(client);
+		std::vector<std::uint8_t> expected = { 0x22, 1, 1, 2, 3, 4, 5, 6, 7, 8, 0x44, 0x33,
+		                                       static_cast<std::uint8_t>(twoFunctions ? 2 : 1), 1, 1, 0x34, 0x12 };
+		if (twoFunctions)
+		{
+			expected.insert(expected.end(), { 2, 1, 0x78, 0x56 });
+		}
+		expected.resize(24, 0xFF);
+		EXPECT_EQ(expected, receive_preferred_payload(can, time_source));
+	}
 }
 
 TEST_F(VirtualTerminalTest, AuxiliaryStatusRetriesAfterTransmitQueueFull)
