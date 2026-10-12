@@ -694,8 +694,8 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionOverwritesTheExistingObjec
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start(false);
 
-	auto internalECU = test_helpers::claim_internal_control_function(0x3E, 0, time_source);
-	auto client = test_helpers::force_claim_partnered_control_function(0x9A, 0);
+	auto internalECU = test_helpers::claim_internal_control_function(0x3F, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9C, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
 	serverUnderTest.versionToLoad = read_test_pool();
@@ -714,16 +714,26 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionOverwritesTheExistingObjec
 	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
 
 	const bool foundLoadVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD1, responseFrame);
+	const std::uint8_t loadVersionErrorCodes = responseFrame.data[5];
+
+	CANMessageFrame statusFrame = {};
+	const bool foundStatus = read_status_message(serverUnderTest, testPlugin, statusFrame);
 	CANHardwareInterface::stop();
 
 	auto workingSet = serverUnderTest.managedWorkingSetList.front();
 	ASSERT_TRUE(foundEndOfObjectPoolResponse);
 	ASSERT_EQ(0x00, endOfObjectPoolErrorCodes);
 	ASSERT_TRUE(foundLoadVersionResponse);
-	EXPECT_EQ(0x00, responseFrame.data[5]);
+	EXPECT_EQ(0x00, loadVersionErrorCodes);
 	ASSERT_EQ(1U, workingSet->get_number_iop_files());
 	EXPECT_EQ(serverUnderTest.versionToLoad, workingSet->get_iop_raw_data(0));
 	EXPECT_EQ(0U, workingSet->get_object_tree().count(0xF000));
+
+	const std::uint16_t loadedActiveMask = std::static_pointer_cast<WorkingSet>(workingSet->get_working_set_object())->get_active_mask();
+	ASSERT_NE(0xF001, loadedActiveMask);
+	ASSERT_TRUE(foundStatus);
+	EXPECT_EQ(0x9C, statusFrame.data[1]);
+	EXPECT_EQ(loadedActiveMask, static_cast<std::uint16_t>(statusFrame.data[2] | (statusFrame.data[3] << 8)));
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsParsingUntilTheLoadVersionResponseIsSent)
