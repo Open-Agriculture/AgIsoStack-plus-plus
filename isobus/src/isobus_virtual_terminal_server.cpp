@@ -2946,7 +2946,8 @@ namespace isobus
 						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
 					}
 
-					if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
+					if ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
+					    (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable()))
 					{
 						activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
 						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();

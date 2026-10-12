@@ -1133,3 +1133,37 @@ TEST_F(VirtualTerminalTest, ExtendedVersionCommandsAreOnlySentForLongLabelsOnVer
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
+
+TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage, clientUnderTest.state);
+
+	// No VT Status message received yet, but still within the 3 s timeout
+	time_source.simulate_delay_ms(2999);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage, clientUnderTest.state);
+
+	time_source.simulate_delay_ms(2);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Failed, clientUnderTest.state);
+
+	// Failed retries back to Disconnected after its own timeout
+	time_source.simulate_delay_ms(5001);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
