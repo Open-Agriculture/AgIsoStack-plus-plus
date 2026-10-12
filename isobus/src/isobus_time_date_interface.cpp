@@ -36,13 +36,18 @@ namespace isobus
 
 	TimeDateInterface::~TimeDateInterface()
 	{
-		if (initialized && (nullptr != myControlFunction))
+		if (initialized)
 		{
-			auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol().lock();
+			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TimeDate), process_rx_message, this);
 
-			if (nullptr != pgnRequestProtocol)
+			if (nullptr != myControlFunction)
 			{
-				pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TimeDate), process_request_for_time_date, this);
+				auto pgnRequestProtocol = myControlFunction->get_pgn_request_protocol().lock();
+
+				if (nullptr != pgnRequestProtocol)
+				{
+					pgnRequestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::TimeDate), process_request_for_time_date, this);
+				}
 			}
 		}
 	}
