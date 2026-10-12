@@ -368,6 +368,8 @@ TEST(DDOP_TESTS, DeviceElementDesignatorTests)
 	EXPECT_EQ(3500, objectUnderTest->get_object_id());
 	objectUnderTest->set_parent_object(4444);
 	EXPECT_EQ(4444, objectUnderTest->get_parent_object());
+	objectUnderTest->set_type(task_controller_object::DeviceElementObject::Type::Function);
+	EXPECT_EQ(task_controller_object::DeviceElementObject::Type::Function, objectUnderTest->get_type());
 
 	objectUnderTest->add_reference_to_child_object(111);
 	EXPECT_EQ(1, objectUnderTest->get_number_child_objects());
@@ -727,4 +729,28 @@ TEST(DDOP_TESTS, ISOXMLOutput)
 </ISO11783_TaskData>
 )ISOXML";
 	EXPECT_EQ(textXML, isoxml);
+}
+
+TEST(DDOP_TESTS, ISOXMLOutputSanitizesStrings)
+{
+	DeviceDescriptorObjectPool testDDOP(4);
+	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
+	std::string isoxml;
+
+	// Binary DDOPs pad strings with NULs, and 32 byte legacy designators can end mid UTF-8 sequence
+	ASSERT_TRUE(testDDOP.add_device(std::string("Boom & <Nozzles>\0\0\0", 19), "1.0 \"beta\" 'x'", std::string(6, '\0'), "I++1.00", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+	ASSERT_TRUE(testDDOP.add_device_element("T\xC3\xA1vols\xC3", 0, 0, task_controller_object::DeviceElementObject::Type::Device, 1));
+	ASSERT_TRUE(testDDOP.add_device_process_data("Rate\x01\tA", 141, 0xFFFF, 1, 8, 2));
+	ASSERT_TRUE(testDDOP.add_device_property("Width \xFF\xED\xA0\x80\xEF\xBF\xBF", 0, 134, 0xFFFF, 3));
+	ASSERT_TRUE(testDDOP.add_device_value_presentation("m\xC2\xB3/ha \xF0\x9F\x8C\xBE", 0, 1.0f, 0, 4));
+
+	ASSERT_TRUE(testDDOP.generate_task_data_iso_xml(isoxml));
+
+	EXPECT_EQ(std::string::npos, isoxml.find('\0'));
+	EXPECT_NE(std::string::npos, isoxml.find(R"(B="Boom &amp; &lt;Nozzles&gt;" C="1.0 &quot;beta&quot; &apos;x&apos;")"));
+	EXPECT_NE(std::string::npos, isoxml.find(R"(E="" F=")"));
+	EXPECT_NE(std::string::npos, isoxml.find("D=\"T\xC3\xA1vols\" E=\"0\""));
+	EXPECT_NE(std::string::npos, isoxml.find(R"(E="Rate&#9;A"/>)"));
+	EXPECT_NE(std::string::npos, isoxml.find(R"(D="Width "/>)"));
+	EXPECT_NE(std::string::npos, isoxml.find("E=\"m\xC2\xB3/ha \xF0\x9F\x8C\xBE\"/>"));
 }

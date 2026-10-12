@@ -86,13 +86,21 @@ namespace isobus
 		/// which is useful if you want to stop drawing this working set
 		void clear_callback_handles();
 
-		/// @brief Tells the server where this pool originated from.
-		/// @returns True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
+		/// @brief Tells the server whether the pool being parsed must be answered with a Load Version response
+		/// @returns True from a Load Version Command until the server has sent its Load Version response
 		bool get_was_object_pool_loaded_from_non_volatile_memory() const;
 
-		/// @brief Tells the server where this pool originated from.
-		/// @param[in] value True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
-		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>);
+		/// @brief Tells the server whether a restored pool must be answered with an Extended Load Version response
+		/// @returns True if the restoring command was an Extended Load Version Command
+		bool get_was_object_pool_loaded_with_extended_version_label() const;
+
+		/// @brief Tells the server whether the pool being parsed must be answered with a Load Version response
+		/// @param[in] value True when a Load Version Command restored the pool, false once its Load Version response has been sent
+		/// @param[in] extendedVersionLabel True when the restoring command was an Extended Load Version Command
+		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, bool extendedVersionLabel, CANLibBadge<VirtualTerminalServer>);
+
+		/// @brief Discards the object pool so that a loaded version can overwrite it, keeping the callback handles
+		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
 
 		/// @brief Sets the object ID of the currently focused object
 		/// @param[in] objectID The object ID to set as the focused object
@@ -149,6 +157,7 @@ namespace isobus
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
+		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
 	};
 } // namespace isobus

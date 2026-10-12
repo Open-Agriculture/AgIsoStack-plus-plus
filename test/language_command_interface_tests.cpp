@@ -19,10 +19,16 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/test_fixture.hpp"
 
 using namespace isobus;
 
-TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
+class LanguageCommandInterfaceTest : public AgIsoStackTestFixture
+{
+	// Wrapper to give tests a more meaningful name - no content.
+};
+
+TEST_F(LanguageCommandInterfaceTest, BasicConstructionAndInit)
 {
 	NAME clientNAME(0);
 	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
@@ -38,14 +44,14 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, BasicConstructionAndInit)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, InvalidICF)
+TEST_F(LanguageCommandInterfaceTest, InvalidICF)
 {
 	LanguageCommandInterface interfaceUnderTest(nullptr);
 	interfaceUnderTest.initialize();
 	ASSERT_FALSE(interfaceUnderTest.send_request_language_command());
 }
 
-TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
+TEST_F(LanguageCommandInterfaceTest, ValidPartner)
 {
 	std::vector<isobus::NAMEFilter> vtNameFilters;
 	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
@@ -66,13 +72,13 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, ValidPartner)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, Uninitialized)
+TEST_F(LanguageCommandInterfaceTest, Uninitialized)
 {
 	LanguageCommandInterface interfaceUnderTest(nullptr);
 	ASSERT_FALSE(interfaceUnderTest.get_initialized());
 }
 
-TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
+TEST_F(LanguageCommandInterfaceTest, MessageContentParsing)
 {
 	NAME clientNAME(0);
 	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x80);
@@ -182,16 +188,16 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, MessageContentParsing)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
+TEST_F(LanguageCommandInterfaceTest, SettersAndTransmitting)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
-	auto testECU = test_helpers::claim_internal_control_function(0x49, 0);
+	auto testECU = test_helpers::claim_internal_control_function(0x49, 0, time_source);
 
 	CANMessageFrame testFrame;
 	memset(&testFrame, 0, sizeof(testFrame));
@@ -284,6 +290,8 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 
 	ASSERT_TRUE(interfaceUnderTest.send_language_command());
 
+	time_source.update_for_ms(5);
+
 	testPlugin.read_frame(testFrame);
 
 	EXPECT_EQ(8, testFrame.dataLength);
@@ -311,6 +319,8 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 
 	ASSERT_TRUE(interfaceUnderTest.send_language_command());
 
+	time_source.update_for_ms(5);
+
 	testPlugin.read_frame(testFrame);
 
 	EXPECT_EQ(8, testFrame.dataLength);
@@ -336,6 +346,8 @@ TEST(LANGUAGE_COMMAND_INTERFACE_TESTS, SettersAndTransmitting)
 	interfaceUnderTest.set_country_code("AndShouldBeTruncatedWhenSent");
 
 	ASSERT_TRUE(interfaceUnderTest.send_language_command());
+
+	time_source.update_for_ms(5);
 
 	testPlugin.read_frame(testFrame);
 

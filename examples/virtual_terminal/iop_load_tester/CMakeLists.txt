@@ -6,7 +6,8 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(iop_loader main.cpp ../../common/console_logger.cpp)
+add_executable(iop_loader main.cpp ../../common/console_logger.cpp
+                          ../../common/create_can_driver.cpp)
 
 target_compile_features(iop_loader PUBLIC cxx_std_11)
 set_target_properties(iop_loader PROPERTIES CXX_EXTENSIONS OFF)

@@ -96,9 +96,9 @@ bool SeederVtApplication::initialize()
 	}
 
 	speedMessages.initialize();
-	speedMessages.get_machine_selected_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool changed) { this->handle_machine_selected_speed(mssData, changed); });
-	speedMessages.get_ground_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool changed) { this->handle_ground_based_speed(gbsData, changed); });
-	speedMessages.get_wheel_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool changed) { this->handle_wheel_based_speed(wbsData, changed); });
+	speedMessages.get_machine_selected_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::MachineSelectedSpeedData> mssData, bool changed) { this->handle_machine_selected_speed(mssData, changed); });
+	speedMessages.get_ground_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::GroundBasedSpeedData> gbsData, bool changed) { this->handle_ground_based_speed(gbsData, changed); });
+	speedMessages.get_wheel_based_machine_speed_data_event_publisher().add_listener([this](const std::shared_ptr<isobus::WheelBasedMachineSpeedData> wbsData, bool changed) { this->handle_wheel_based_speed(wbsData, changed); });
 
 	ddop = std::make_shared<isobus::DeviceDescriptorObjectPool>();
 	if (sectionControl.create_ddop(ddop, TCClientInterface.get_internal_control_function()->get_NAME()))
@@ -173,7 +173,6 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 						break;
 					}
 				}
-				break;
 			}
 			break;
 
@@ -234,64 +233,57 @@ void SeederVtApplication::handle_vt_key_events(const isobus::VirtualTerminalClie
 
 void SeederVtApplication::handle_numeric_value_events(const isobus::VirtualTerminalClient::VTChangeNumericValueEvent &event)
 {
-	switch (event.objectID)
+	if (statisticsSelection_VarNum == event.objectID)
 	{
-		case statisticsSelection_VarNum:
+		// Update the frame to show the newly selected statistic
+		std::uint16_t targetContainer;
+		switch (event.value)
 		{
-			// Update the frame to show the newly selected statistic
-			std::uint16_t targetContainer;
-			switch (event.value)
+			case 1:
 			{
-				case 1:
-				{
-					targetContainer = canStatistics_Container;
-				}
-				break;
-
-				case 2:
-				{
-					targetContainer = utStatistics_Container;
-				}
-				break;
-
-				case 3:
-				{
-					targetContainer = tcStatistics_Container;
-				}
-				break;
-
-				case 4:
-				{
-					targetContainer = credits_Container;
-				}
-				break;
-
-				default:
-				{
-					targetContainer = UNDEFINED;
-				}
-				break;
+				targetContainer = canStatistics_Container;
 			}
-			VTClientUpdateHelper.set_numeric_value(selectedStatisticsContainer_ObjPtr, targetContainer);
-		}
-		break;
-
-		default:
 			break;
+
+			case 2:
+			{
+				targetContainer = utStatistics_Container;
+			}
+			break;
+
+			case 3:
+			{
+				targetContainer = tcStatistics_Container;
+			}
+			break;
+
+			case 4:
+			{
+				targetContainer = credits_Container;
+			}
+			break;
+
+			default:
+			{
+				targetContainer = UNDEFINED;
+			}
+			break;
+		}
+		VTClientUpdateHelper.set_numeric_value(selectedStatisticsContainer_ObjPtr, targetContainer);
 	}
 }
 
-void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::MachineSelectedSpeedData> mssData, bool)
+void SeederVtApplication::handle_machine_selected_speed(const std::shared_ptr<isobus::MachineSelectedSpeedData> mssData, bool)
 {
 	process_new_speed(SpeedSources::MachineSelected, mssData->get_machine_speed());
 }
 
-void SeederVtApplication::handle_ground_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::GroundBasedSpeedData> gbsData, bool)
+void SeederVtApplication::handle_ground_based_speed(const std::shared_ptr<isobus::GroundBasedSpeedData> gbsData, bool)
 {
 	process_new_speed(SpeedSources::GroundBased, gbsData->get_machine_speed());
 }
 
-void SeederVtApplication::handle_wheel_based_speed(const std::shared_ptr<isobus::SpeedMessagesInterface::WheelBasedMachineSpeedData> wbsData, bool)
+void SeederVtApplication::handle_wheel_based_speed(const std::shared_ptr<isobus::WheelBasedMachineSpeedData> wbsData, bool)
 {
 	process_new_speed(SpeedSources::WheelBased, wbsData->get_machine_speed());
 }
@@ -476,14 +468,14 @@ void SeederVtApplication::update_speedometer_objects(std::uint32_t speed)
 		case isobus::LanguageCommandInterface::DistanceUnits::Metric:
 		{
 			// Scale to KPH
-			speed = static_cast<std::uint32_t>((speed * 0.001f) * 3.6f); // Converting mm/s to m/s, then mm/s to kph
+			speed = static_cast<std::uint32_t>((static_cast<float>(speed) * 0.001f) * 3.6f); // Converting mm/s to m/s, then mm/s to kph
 		}
 		break;
 
 		case isobus::LanguageCommandInterface::DistanceUnits::ImperialUS:
 		{
 			// Scale to MPH
-			speed = static_cast<std::uint32_t>((speed * 0.001f) * 2.23694f); // Converting mm/s to m/s, then mm/s to mph
+			speed = static_cast<std::uint32_t>((static_cast<float>(speed) * 0.001f) * 2.23694f); // Converting mm/s to m/s, then mm/s to mph
 		}
 		break;
 

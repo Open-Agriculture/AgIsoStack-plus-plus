@@ -52,367 +52,6 @@ namespace isobus
 		}
 	}
 
-	SpeedMessagesInterface::WheelBasedMachineSpeedData::WheelBasedMachineSpeedData(std::shared_ptr<ControlFunction> sender) :
-	  controlFunction(sender)
-	{
-	}
-
-	std::uint32_t SpeedMessagesInterface::WheelBasedMachineSpeedData::get_machine_distance() const
-	{
-		std::uint32_t retVal = wheelBasedMachineDistance_mm;
-
-		// Values above the max are sort of implicitly defined and should be ignored.
-		if (wheelBasedMachineDistance_mm > SAEds05_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_machine_distance(std::uint32_t distance)
-	{
-		bool retVal = (distance != wheelBasedMachineDistance_mm);
-		wheelBasedMachineDistance_mm = distance;
-		return retVal;
-	}
-
-	std::uint16_t SpeedMessagesInterface::WheelBasedMachineSpeedData::get_machine_speed() const
-	{
-		std::uint16_t retVal = wheelBasedMachineSpeed_mm_per_sec;
-
-		if (wheelBasedMachineSpeed_mm_per_sec > SAEvl01_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_machine_speed(std::uint16_t speed)
-	{
-		bool retVal = (speed != wheelBasedMachineSpeed_mm_per_sec);
-		wheelBasedMachineSpeed_mm_per_sec = speed;
-		return retVal;
-	}
-
-	std::uint8_t SpeedMessagesInterface::WheelBasedMachineSpeedData::get_maximum_time_of_tractor_power() const
-	{
-		return maximumTimeOfTractorPower_min;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_maximum_time_of_tractor_power(std::uint8_t maxTime)
-	{
-		bool retVal = (maximumTimeOfTractorPower_min != maxTime);
-		maximumTimeOfTractorPower_min = maxTime;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::MachineDirection SpeedMessagesInterface::WheelBasedMachineSpeedData::get_machine_direction_of_travel() const
-	{
-		return machineDirectionState;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_machine_direction_of_travel(MachineDirection direction)
-	{
-		bool retVal = (machineDirectionState != direction);
-		machineDirectionState = direction;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::WheelBasedMachineSpeedData::KeySwitchState SpeedMessagesInterface::WheelBasedMachineSpeedData::get_key_switch_state() const
-	{
-		return keySwitchState;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_key_switch_state(KeySwitchState state)
-	{
-		bool retVal = (keySwitchState != state);
-		keySwitchState = state;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::WheelBasedMachineSpeedData::ImplementStartStopOperations SpeedMessagesInterface::WheelBasedMachineSpeedData::get_implement_start_stop_operations_state() const
-	{
-		return implementStartStopOperationsState;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_implement_start_stop_operations_state(ImplementStartStopOperations state)
-	{
-		bool retVal = (implementStartStopOperationsState != state);
-		implementStartStopOperationsState = state;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::WheelBasedMachineSpeedData::OperatorDirectionReversed SpeedMessagesInterface::WheelBasedMachineSpeedData::get_operator_direction_reversed_state() const
-	{
-		return operatorDirectionReversedState;
-	}
-
-	bool SpeedMessagesInterface::WheelBasedMachineSpeedData::set_operator_direction_reversed_state(OperatorDirectionReversed reverseState)
-	{
-		bool retVal = (operatorDirectionReversedState != reverseState);
-		operatorDirectionReversedState = reverseState;
-		return retVal;
-	}
-
-	std::shared_ptr<ControlFunction> SpeedMessagesInterface::WheelBasedMachineSpeedData::get_sender_control_function() const
-	{
-		return controlFunction;
-	}
-
-	void SpeedMessagesInterface::WheelBasedMachineSpeedData::set_timestamp_ms(std::uint32_t timestamp)
-	{
-		timestamp_ms = timestamp;
-	}
-
-	std::uint32_t SpeedMessagesInterface::WheelBasedMachineSpeedData::get_timestamp_ms() const
-	{
-		return timestamp_ms;
-	}
-
-	SpeedMessagesInterface::MachineSelectedSpeedData::MachineSelectedSpeedData(std::shared_ptr<ControlFunction> sender) :
-	  controlFunction(sender)
-	{
-	}
-
-	std::uint32_t SpeedMessagesInterface::MachineSelectedSpeedData::get_machine_distance() const
-	{
-		std::uint32_t retVal = machineSelectedSpeedDistance_mm;
-
-		// Values above the max are sort of implicitly defined and should be ignored.
-		if (machineSelectedSpeedDistance_mm > SAEds05_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_machine_distance(std::uint32_t distance)
-	{
-		bool retVal = (machineSelectedSpeedDistance_mm != distance);
-		machineSelectedSpeedDistance_mm = distance;
-		return retVal;
-	}
-
-	std::uint16_t SpeedMessagesInterface::MachineSelectedSpeedData::get_machine_speed() const
-	{
-		std::uint16_t retVal = machineSelectedSpeed_mm_per_sec;
-
-		if (machineSelectedSpeed_mm_per_sec > SAEvl01_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_machine_speed(std::uint16_t speed)
-	{
-		bool retVal = (speed != machineSelectedSpeed_mm_per_sec);
-		machineSelectedSpeed_mm_per_sec = speed;
-		return retVal;
-	}
-
-	std::uint8_t SpeedMessagesInterface::MachineSelectedSpeedData::get_exit_reason_code() const
-	{
-		return exitReasonCode;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_exit_reason_code(std::uint8_t exitCode)
-	{
-		bool retVal = (exitCode != exitReasonCode);
-		exitReasonCode = exitCode;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::MachineSelectedSpeedData::SpeedSource SpeedMessagesInterface::MachineSelectedSpeedData::get_speed_source() const
-	{
-		return source;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_speed_source(SpeedSource selectedSource)
-	{
-		bool retVal = (source != selectedSource);
-		source = selectedSource;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::MachineSelectedSpeedData::LimitStatus SpeedMessagesInterface::MachineSelectedSpeedData::get_limit_status() const
-	{
-		return limitStatus;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_limit_status(LimitStatus statusToSet)
-	{
-		bool retVal = (limitStatus != statusToSet);
-		limitStatus = statusToSet;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::MachineDirection SpeedMessagesInterface::MachineSelectedSpeedData::get_machine_direction_of_travel() const
-	{
-		return machineDirectionState;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedData::set_machine_direction_of_travel(MachineDirection directionOfTravel)
-	{
-		bool retVal = (directionOfTravel != machineDirectionState);
-		machineDirectionState = directionOfTravel;
-		return retVal;
-	}
-
-	std::shared_ptr<ControlFunction> SpeedMessagesInterface::MachineSelectedSpeedData::get_sender_control_function() const
-	{
-		return controlFunction;
-	}
-
-	void SpeedMessagesInterface::MachineSelectedSpeedData::set_timestamp_ms(std::uint32_t timestamp)
-	{
-		timestamp_ms = timestamp;
-	}
-
-	std::uint32_t SpeedMessagesInterface::MachineSelectedSpeedData::get_timestamp_ms() const
-	{
-		return timestamp_ms;
-	}
-
-	SpeedMessagesInterface::GroundBasedSpeedData::GroundBasedSpeedData(std::shared_ptr<ControlFunction> sender) :
-	  controlFunction(sender)
-	{
-	}
-
-	std::uint32_t SpeedMessagesInterface::GroundBasedSpeedData::get_machine_distance() const
-	{
-		std::uint32_t retVal = groundBasedMachineDistance_mm;
-
-		// Values above the max are sort of implicitly defined and should be ignored.
-		if (groundBasedMachineDistance_mm > SAEds05_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::GroundBasedSpeedData::set_machine_distance(std::uint32_t distance)
-	{
-		bool retVal = (distance != groundBasedMachineDistance_mm);
-		groundBasedMachineDistance_mm = distance;
-		return retVal;
-	}
-
-	std::uint16_t SpeedMessagesInterface::GroundBasedSpeedData::get_machine_speed() const
-	{
-		std::uint16_t retVal = groundBasedMachineSpeed_mm_per_sec;
-
-		if (groundBasedMachineSpeed_mm_per_sec > SAEvl01_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::GroundBasedSpeedData::set_machine_speed(std::uint16_t speed)
-	{
-		bool retVal = (speed != groundBasedMachineSpeed_mm_per_sec);
-		groundBasedMachineSpeed_mm_per_sec = speed;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::MachineDirection SpeedMessagesInterface::GroundBasedSpeedData::get_machine_direction_of_travel() const
-	{
-		return machineDirectionState;
-	}
-
-	bool SpeedMessagesInterface::GroundBasedSpeedData::set_machine_direction_of_travel(MachineDirection directionOfTravel)
-	{
-		bool retVal = (directionOfTravel != machineDirectionState);
-		machineDirectionState = directionOfTravel;
-		return retVal;
-	}
-
-	std::shared_ptr<ControlFunction> SpeedMessagesInterface::GroundBasedSpeedData::get_sender_control_function() const
-	{
-		return controlFunction;
-	}
-
-	void SpeedMessagesInterface::GroundBasedSpeedData::set_timestamp_ms(std::uint32_t timestamp)
-	{
-		timestamp_ms = timestamp;
-	}
-
-	std::uint32_t SpeedMessagesInterface::GroundBasedSpeedData::get_timestamp_ms() const
-	{
-		return timestamp_ms;
-	}
-
-	SpeedMessagesInterface::MachineSelectedSpeedCommandData::MachineSelectedSpeedCommandData(std::shared_ptr<ControlFunction> sender) :
-	  controlFunction(sender)
-	{
-	}
-
-	std::uint16_t SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_machine_speed_setpoint_command() const
-	{
-		std::uint16_t retVal = speedCommandedSetpoint;
-
-		// Values over the max are implicitly defined, best to treat as zeros.
-		if (speedCommandedSetpoint > SAEvl01_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_machine_speed_setpoint_command(std::uint16_t speed)
-	{
-		bool retVal = (speed != speedCommandedSetpoint);
-		speedCommandedSetpoint = speed;
-		return retVal;
-	}
-
-	std::uint16_t SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_machine_selected_speed_setpoint_limit() const
-	{
-		std::uint16_t retVal = speedSetpointLimit;
-
-		// Values over the max are implicitly defined, best to treat as zeros.
-		if (speedSetpointLimit > SAEvl01_MAX_VALUE)
-		{
-			retVal = 0;
-		}
-		return retVal;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_machine_selected_speed_setpoint_limit(std::uint16_t speedLimit)
-	{
-		bool retVal = (speedSetpointLimit != speedLimit);
-		speedSetpointLimit = speedLimit;
-		return retVal;
-	}
-
-	SpeedMessagesInterface::MachineDirection SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_machine_direction_command() const
-	{
-		return machineDirectionCommand;
-	}
-
-	bool SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_machine_direction_of_travel(MachineDirection commandedDirection)
-	{
-		bool retVal = (commandedDirection != machineDirectionCommand);
-		machineDirectionCommand = commandedDirection;
-		return retVal;
-	}
-
-	std::shared_ptr<ControlFunction> SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_sender_control_function() const
-	{
-		return controlFunction;
-	}
-
-	void SpeedMessagesInterface::MachineSelectedSpeedCommandData::set_timestamp_ms(std::uint32_t timestamp)
-	{
-		timestamp_ms = timestamp;
-	}
-
-	std::uint32_t SpeedMessagesInterface::MachineSelectedSpeedCommandData::get_timestamp_ms() const
-	{
-		return timestamp_ms;
-	}
-
 	void SpeedMessagesInterface::initialize()
 	{
 		if (!initialized)
@@ -454,7 +93,7 @@ namespace isobus
 		return receivedMachineSelectedSpeedCommandMessages.size();
 	}
 
-	std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedData> SpeedMessagesInterface::get_received_machine_selected_speed(std::size_t index)
+	std::shared_ptr<MachineSelectedSpeedData> SpeedMessagesInterface::get_received_machine_selected_speed(std::size_t index)
 	{
 		std::shared_ptr<MachineSelectedSpeedData> retVal = nullptr;
 
@@ -465,7 +104,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::shared_ptr<SpeedMessagesInterface::WheelBasedMachineSpeedData> SpeedMessagesInterface::get_received_wheel_based_speed(std::size_t index)
+	std::shared_ptr<WheelBasedMachineSpeedData> SpeedMessagesInterface::get_received_wheel_based_speed(std::size_t index)
 	{
 		std::shared_ptr<WheelBasedMachineSpeedData> retVal = nullptr;
 
@@ -476,7 +115,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::shared_ptr<SpeedMessagesInterface::GroundBasedSpeedData> SpeedMessagesInterface::get_received_ground_based_speed(std::size_t index)
+	std::shared_ptr<GroundBasedSpeedData> SpeedMessagesInterface::get_received_ground_based_speed(std::size_t index)
 	{
 		std::shared_ptr<GroundBasedSpeedData> retVal = nullptr;
 
@@ -487,7 +126,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedCommandData> SpeedMessagesInterface::get_received_machine_selected_speed_command(std::size_t index)
+	std::shared_ptr<MachineSelectedSpeedCommandData> SpeedMessagesInterface::get_received_machine_selected_speed_command(std::size_t index)
 	{
 		std::shared_ptr<MachineSelectedSpeedCommandData> retVal = nullptr;
 
@@ -498,22 +137,22 @@ namespace isobus
 		return retVal;
 	}
 
-	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::WheelBasedMachineSpeedData>, bool> &SpeedMessagesInterface::get_wheel_based_machine_speed_data_event_publisher()
+	EventDispatcher<const std::shared_ptr<WheelBasedMachineSpeedData>, bool> &SpeedMessagesInterface::get_wheel_based_machine_speed_data_event_publisher()
 	{
 		return wheelBasedMachineSpeedDataEventPublisher;
 	}
 
-	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedData>, bool> &SpeedMessagesInterface::get_machine_selected_speed_data_event_publisher()
+	EventDispatcher<const std::shared_ptr<MachineSelectedSpeedData>, bool> &SpeedMessagesInterface::get_machine_selected_speed_data_event_publisher()
 	{
 		return machineSelectedSpeedDataEventPublisher;
 	}
 
-	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::GroundBasedSpeedData>, bool> &SpeedMessagesInterface::get_ground_based_machine_speed_data_event_publisher()
+	EventDispatcher<const std::shared_ptr<GroundBasedSpeedData>, bool> &SpeedMessagesInterface::get_ground_based_machine_speed_data_event_publisher()
 	{
 		return groundBasedSpeedDataEventPublisher;
 	}
 
-	EventDispatcher<const std::shared_ptr<SpeedMessagesInterface::MachineSelectedSpeedCommandData>, bool> &SpeedMessagesInterface::get_machine_selected_speed_command_data_event_publisher()
+	EventDispatcher<const std::shared_ptr<MachineSelectedSpeedCommandData>, bool> &SpeedMessagesInterface::get_machine_selected_speed_command_data_event_publisher()
 	{
 		return machineSelectedSpeedCommandDataEventPublisher;
 	}

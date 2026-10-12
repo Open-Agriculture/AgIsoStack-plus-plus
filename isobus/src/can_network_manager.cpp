@@ -49,9 +49,13 @@ namespace isobus
 
 	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
-		auto controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
-		partneredControlFunctions.push_back(controlFunction);
+		auto controlFunction = std::shared_ptr<PartneredControlFunction>{};
+		{
+			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
+			partneredControlFunctions.push_back(controlFunction);
+		}
+		update_new_partners();
 		return controlFunction;
 	}
 
@@ -292,7 +296,8 @@ namespace isobus
 		                                            rxFrame.dataLength,
 		                                            get_control_function(rxFrame.channel, identifier.get_source_address()),
 		                                            get_control_function(rxFrame.channel, identifier.get_destination_address()),
-		                                            rxFrame.channel);
+		                                            rxFrame.channel,
+		                                            rxFrame.timestamp_us);
 
 		update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
 
@@ -313,7 +318,8 @@ namespace isobus
 		                                            txFrame.dataLength,
 		                                            get_control_function(txFrame.channel, identifier.get_source_address()),
 		                                            get_control_function(txFrame.channel, identifier.get_destination_address()),
-		                                            txFrame.channel);
+		                                            txFrame.channel,
+		                                            txFrame.timestamp_us);
 
 		if (initialized)
 		{
@@ -525,16 +531,7 @@ namespace isobus
 
 		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
 		{
-			auto receive_message_callback = [this, i](const CANMessage &message) {
-				// TODO: hack port_index for now, once network manager isn't a singleton, this can be removed
-				CANMessage tempMessage(CANMessage::Type::Receive,
-				                       message.get_identifier(),
-				                       message.get_data(),
-				                       message.get_source_control_function(),
-				                       message.get_destination_control_function(),
-				                       i);
-				this->protocol_message_callback(message);
-			};
+			auto receive_message_callback = [this](const CANMessage &message) { this->protocol_message_callback(message); };
 			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));

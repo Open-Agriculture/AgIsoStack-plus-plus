@@ -29,7 +29,7 @@ namespace isobus
 		/// @brief Begin a transaction on the SPI bus. This should be called before any of the read/write operations.
 		/// @details Here the SPI bus can be acquired and prepared for a new transaction.
 		/// @note If any error occurs, end_transaction() should return false to mark a failed transaction
-		virtual void begin_transaction(){};
+		virtual void begin_transaction() {};
 
 		/// @brief Write a frame to the SPI bus. This should only be called after begin_transaction().
 		/// The result should only be read after end_transaction().

@@ -99,15 +99,6 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_string_value_message(std::uint16_t objectId, const std::string &value, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends a response to a load version command
-		/// The reason this is exposed is because you will need to send this message after
-		/// the object pool processing thread completes at some point to tell the client to proceed if their
-		/// object pool was loaded via a load version command.
-		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
-		/// @param[in] destination The VT client to send the message to
-		/// @returns True if the message was sent, otherwise false
-		bool send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
-
 		/// @brief Conditionally executes a macro. If the object passed in is of the specified type, and
 		/// a macro is defined for that object, the macro will be executed if the macro event matches the
 		/// event ID of the macro.
@@ -179,6 +170,13 @@ namespace isobus
 		/// @returns A vector of object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
 
+		/// @brief This function is called when the interface needs to know what extended (32 byte label) versions of object pools are available for a client.
+		/// @details Only the versions stored with a 32 byte label belong here, the 7 byte ones are returned by get_versions().
+		/// Return an empty vector if this VT does not support extended versions (VT version 4 and older).
+		/// @param[in] clientNAME The client requesting the object pool versions
+		/// @returns A vector of extended object pool versions available for the client
+		virtual std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME clientNAME) = 0;
+
 		/// @brief This function is called when the interface needs to know what objects are supported by the server.
 		/// @returns A vector of supported objects
 		virtual std::vector<std::uint8_t> get_supported_objects() const = 0;
@@ -186,6 +184,8 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to load a previously stored object pool.
 		/// If there exists in the VT's non-volatile memory an object pool matching the provided version label,
 		/// return it. If one does not exist, return an empty vector.
+		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
+		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] versionLabel The object pool version to load for the given client NAME
 		/// @param[in] clientNAME The client requesting the object pool
 		/// @returns The requested object pool associated with the version label.
@@ -196,6 +196,8 @@ namespace isobus
 		/// If the object pool is saved successfully, return true, otherwise return false.
 		/// @note This may be called multiple times with the same version, but different data. When this
 		/// happens, the expectation is that you will append each objectPool together into one large file.
+		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
+		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] objectPool The object pool data to save
 		/// @param[in] versionLabel The object pool version to save for the given client NAME
 		/// @param[in] clientNAME The client requesting the object pool
@@ -205,17 +207,22 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to delete a stored object pool.
 		/// All object pool files matching the specified version label should then be deleted from the VT's
 		/// non-volatile storage.
+		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
+		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] versionLabel The version label for the object pool(s) to delete
 		/// @param[in] clientNAME The NAME of the client that is requesting deletion
 		/// @returns True if the version was deleted from VT non-volatile storage, otherwise false.
 		virtual bool delete_version(const std::vector<std::uint8_t> &versionLabel, NAME clientNAME) = 0;
 
-		/// @brief This function is called when the client wants the server to delete ALL stored object pools associated to it's NAME.
-		/// All object pool files matching the specified client NAME should then be deleted from the VT's
-		/// non-volatile storage.
+		/// @brief This function is called when the client wants the server to delete ALL stored version object pools of one label length associated to its NAME.
+		/// All object pool files with a version label of the given length matching the specified client NAME should then be deleted from the VT's
+		/// non-volatile storage. Object pools stored under the other label length, or owned by another client, must be kept.
+		/// @note This is called for a Delete Version or Extended Delete Version command whose label is a single asterisk padded with spaces,
+		/// and only when get_version() reports VT version 6.
+		/// @param[in] versionLabelLength 7 for the Delete Version command, 32 for the Extended Delete Version command
 		/// @param[in] clientNAME The NAME of the client that is requesting deletion
 		/// @returns True if all relevant object pools were deleted from VT non-volatile storage, otherwise false.
-		virtual bool delete_all_versions(NAME clientNAME) = 0;
+		virtual bool delete_all_versions(std::uint8_t versionLabelLength, NAME clientNAME) = 0;
 
 		/// @brief This function is called when the client wants the server to deactivate its object pool.
 		/// You should treat this as a disconnection by the client, as it may be moving to another VT.
@@ -398,14 +405,6 @@ namespace isobus
 			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
 		};
 
-		/// @brief Enumerates the different error bit indices that can be set in a delete version response
-		enum class DeleteVersionErrorBit : std::uint8_t
-		{
-			Reserved = 0,
-			VersionLabelNotCorrectOrUnknown = 1,
-			AnyOtherError = 3
-		};
-
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
 		enum class EnableDisableObjectErrorBit : std::uint8_t
 		{
@@ -466,6 +465,15 @@ namespace isobus
 		{
 			DeletionError = 0,
 			AnyOtherError = 8
+		};
+
+		/// @brief Enumerates the bit indices of the Object Pool Error Codes field in an end of object pool response
+		enum class ObjectPoolErrorBit : std::uint8_t
+		{
+			MethodOrAttributeNotSupported = 0,
+			UnknownObjectReference = 1,
+			AnyOtherError = 2,
+			ObjectPoolWasDeletedFromVolatileMemory = 3
 		};
 
 		/// @brief Enumerates the possible values of the Screen Capture command Item Requested field
@@ -551,6 +559,17 @@ namespace isobus
 		/// @param[in] version The version to get the corresponding byte for
 		/// @returns The VT version byte associated to the specified version
 		static std::uint8_t get_vt_version_byte(VTVersion version);
+
+		/// @brief Processes a stateless CAN message from any VT client
+		/// @param[in] message The CAN message being received
+		/// @returns True if answer is being sent to the client, false if the message have not been processed/answered
+		bool process_stateless_messages(const CANMessage &message);
+
+		/// @brief Processes a connection-dependent CAN message from only VT clients
+		/// with whom we've established a working set master relationship
+		/// @param[in] message The CAN message being received
+		/// @param[in] managedWorkingSet The working set that is associated to the client sending the message
+		void process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet);
 
 		/// @brief Processes a CAN message from any VT client
 		/// @param[in] message The CAN message being received
@@ -671,11 +690,12 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_string_value_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends a response to a delete version command
+		/// @brief Sends a response to a delete version or extended delete version command
+		/// @param[in] function The command being answered, DeleteVersionCommand or ExtendedDeleteVersionCommand
 		/// @param[in] errorBitfield An error bitfield to report back to the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+		bool send_delete_version_response(Function function, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a delete object pool command
 		/// @param[in] errorBitfield An error bitfield to report back to the client
@@ -689,7 +709,7 @@ namespace isobus
 		/// @param[in] value The enable/disable state that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
+		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief This message is sent by the VT to a Working Set Master to acknowledge the End of Object Pool message.
 		/// @details When the VT replies with an error of any type
@@ -700,14 +720,14 @@ namespace isobus
 		/// @param[in] success Indicates if the pool was error free
 		/// @param[in] parentIDOfFaultingObject The parent object ID for the faulty object, or NULL_OBJECT_ID
 		/// @param[in] faultingObjectID The faulty object's ID or the NULL_OBJECT_ID
-		/// @param[in] errorCodes A bitfield of error codes that describe the issues with the pool
+		/// @param[in] objectPoolErrorCodes A bitfield of ObjectPoolErrorBit describing the issues with the pool
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,
 		                                      std::uint16_t faultingObjectID,
-		                                      std::uint8_t errorCodes,
-		                                      std::shared_ptr<ControlFunction> destination);
+		                                      std::uint8_t objectPoolErrorCodes,
+		                                      std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the execute macro or extended macro command
 		/// @param[in] objectID The object ID for the macro
@@ -715,7 +735,7 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @param[in] extendedMacro True if the macro is an extended macro, otherwise false
 		/// @returns true if the message was sent, otherwise false
-		bool send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro);
+		bool send_execute_macro_or_extended_macro_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination, bool extendedMacro) const;
 
 		/// @brief Sends a response to the hide/show object command
 		/// @param[in] objectID The object ID for the object
@@ -723,7 +743,7 @@ namespace isobus
 		/// @param[in] value The hide/show state that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
-		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination);
+		bool send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the change priority command
 		/// @param[in] objectID The object ID for the object
@@ -731,7 +751,7 @@ namespace isobus
 		/// @param[in] priority The priority that was set by the client
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination);
+		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the select input object command
 		/// @param[in] objectID The object ID for the object
@@ -739,13 +759,15 @@ namespace isobus
 		/// @param[in] response The response to the select input object command
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
-		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination);
+		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends the VT status message broadcast. The status message
 		/// contains information such as which working set is the active one, and information about
 		/// what the VT server is doing, such as busy flags. This message should be sent at 1 Hz.
+		/// The busy codes are busyCodesBitfield, plus the "busy parsing an object pool" bit on VT version 3 and later
+		/// while any working set's object pool is being parsed and its response has not been sent yet.
 		/// @returns true if the message was sent, otherwise false
-		bool send_status_message();
+		bool send_status_message() const;
 
 		/// @brief Sends the list of objects that the server supports to a client, usually in
 		/// response to a "get supported objects" message, which is used by a client.
@@ -798,6 +820,51 @@ namespace isobus
 		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
 		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
+
+	private:
+		/// @brief Enumerates the different error bit indices that can be set in a delete version response
+		enum class DeleteVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			AnyOtherError = 3
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a load version response
+		enum class LoadVersionErrorBit : std::uint8_t
+		{
+			FileSystemErrorOrPoolDataCorruption = 0,
+			VersionLabelNotCorrectOrUnknown = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
+		/// @brief Enumerates the different error bit indices that can be set in a store version response
+		enum class StoreVersionErrorBit : std::uint8_t
+		{
+			Reserved = 0,
+			VersionLabelNotCorrect = 1,
+			InsufficientMemory = 2,
+			AnyOtherError = 3
+		};
+
+		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
+
+		/// @brief Sends a response to a load version or extended load version command
+		/// @param[in] function The command being answered, LoadVersionCommand or ExtendedLoadVersionCommand
+		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
+		/// @param[in] destination The VT client to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_load_version_response(Function function, std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends the (extended) load version response for an object pool restored from non-volatile memory, and clears its restored flag
+		/// @param[in] workingSet The working set whose restored object pool finished parsing
+		/// @param[in] errorCodes A set of error bits to report to the client
+		void send_restored_object_pool_response(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint8_t errorCodes);
+
+		/// @brief Returns the load version error bitfield to report when a restored object pool fails to parse
+		/// @returns The file system error or pool data corruption bit, or the any other error bit if our VT version is older than 4
+		std::uint8_t get_load_version_parse_error_bitfield() const;
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP
