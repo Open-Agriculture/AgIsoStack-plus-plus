@@ -38,6 +38,7 @@ namespace isobus
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
+			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
 		}
 	}
@@ -93,9 +94,15 @@ namespace isobus
 		return wasLoadedFromNonVolatileMemory;
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>)
+	bool VirtualTerminalServerManagedWorkingSet::get_was_object_pool_loaded_with_extended_version_label() const
+	{
+		return wasLoadedWithExtendedVersionLabel;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_was_object_pool_loaded_from_non_volatile_memory(bool value, bool extendedVersionLabel, CANLibBadge<VirtualTerminalServer>)
 	{
 		wasLoadedFromNonVolatileMemory = value;
+		wasLoadedWithExtendedVersionLabel = extendedVersionLabel;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
@@ -179,16 +186,24 @@ namespace isobus
 		{
 			bool lSuccess = true;
 
-			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
-				if (!parse_iop_into_objects(iopFilesRawData[i].data(), static_cast<std::uint32_t>(iopFilesRawData[i].size())))
+				if (iopFilesRawData[i].processed)
+				{
+					continue;
+				}
+
+				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size())))
 				{
 					lSuccess = false;
 					break;
+				}
+				else
+				{
+					iopFilesRawData[i].processed = true;
 				}
 			}
 

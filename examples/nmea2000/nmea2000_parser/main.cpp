@@ -1,3 +1,4 @@
+#include "../../common/can_arguments_parser.hpp"
 #include "../../common/create_can_driver.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -95,15 +96,14 @@ void on_vessel_heading_update(const std::shared_ptr<isobus::NMEA2000Messages::Ve
 	std::cout << "  Sensor reference: " << static_cast<int>(message->get_sensor_reference()) << std::endl;
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	std::signal(SIGINT, signal_handler);
+	const auto canParameters = CanParametersParser(argc, argv).parameters();
 
-	auto canDriver = CANDriverFactory::create();
+	auto canDriver = CANDriverFactory::create(canParameters.interface, canParameters.driver);
 	if (nullptr == canDriver)
 	{
-		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 		return -1;
 	}
 

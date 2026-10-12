@@ -73,6 +73,10 @@ namespace isobus
 		/// @brief Connects to the hardware you specified in the constructor's channel argument
 		void open() override;
 
+		/// @brief Returns why the last call to open() failed
+		/// @returns A description of the failure, or an empty string if the last open() succeeded
+		std::string get_last_error() const override;
+
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
@@ -84,6 +88,10 @@ namespace isobus
 		bool write_frame(const isobus::CANMessageFrame &canFrame) override;
 
 	private:
+		/// @brief Returns this object's device from the shared driver, or `nullptr` if the driver is not loaded
+		/// @returns The device for this object's channel, or `nullptr` if it is unavailable
+		InnoMakerUsb2CanLib::InnoMakerDevice *get_device() const;
+
 		static constexpr InnoMakerUsb2CanLib::UsbCanMode CAN_MODE = InnoMakerUsb2CanLib::UsbCanModeNormal; ///< The mode to use for the CAN device
 		static constexpr std::uint32_t CAN_EFF_FLAG = 0x80000000; ///< Set if the frame is extended
 		static constexpr std::uint32_t CAN_SFF_MASK = 0x000007FF; ///< The mask for standard frames
@@ -93,6 +101,7 @@ namespace isobus
 		const int channel; ///< Stores the channel associated with this object
 		const std::uint32_t baudrate; ///< Stores the baud rate associated with this object
 		std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can> txContexts; ///< Stores Tx tickets for the driver
+		std::string lastError; ///< Why the last open() failed
 	};
 }
 #endif // INNOMAKER_USB2CAN_PLUGIN_HPP

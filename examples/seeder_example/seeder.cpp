@@ -19,15 +19,13 @@
 #include <iostream>
 #include <thread>
 
-bool Seeder::initialize(const std::string &interfaceName)
+bool Seeder::initialize(const std::string &interfaceName, const std::string &driver)
 {
 	bool retVal = true;
 
-	auto canDriver = CANDriverFactory::create(interfaceName);
+	auto canDriver = CANDriverFactory::create(interfaceName, driver);
 	if (nullptr == canDriver)
 	{
-		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 		return false;
 	}
 
