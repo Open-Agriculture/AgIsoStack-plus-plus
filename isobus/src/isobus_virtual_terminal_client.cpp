@@ -1516,11 +1516,34 @@ namespace isobus
 				break;
 
 				case StateMachineState::WaitForLoadVersionResponse:
+				case StateMachineState::WaitForEndOfObjectPoolResponse:
 				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					bool responseTimedOut;
+					if (is_vt_version_supported(VTVersion::Version3))
 					{
+						responseTimedOut = consecutiveNonParsingVTStatusMessages >= 3;
+					}
+					else
+					{
+						responseTimedOut = SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS);
+					}
+
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Disconnected);
+						LOG_ERROR("[VT]: Status Timeout");
+					}
+					else if (responseTimedOut)
+					{
+						if (StateMachineState::WaitForLoadVersionResponse == state)
+						{
+							LOG_ERROR("[VT]: Load Version Response Timeout");
+						}
+						else
+						{
+							LOG_ERROR("[VT]: Get End of Object Pool Response Timeout");
+						}
 						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Load Version Response Timeout");
 					}
 				}
 				break;
@@ -1646,23 +1669,7 @@ namespace isobus
 				{
 					if (send_end_of_object_pool())
 					{
-						consecutiveNonParsingVTStatusMessages = 0;
 						set_state(StateMachineState::WaitForEndOfObjectPoolResponse);
-					}
-				}
-				break;
-
-				case StateMachineState::WaitForEndOfObjectPoolResponse:
-				{
-					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
-					{
-						set_state(StateMachineState::Disconnected);
-						LOG_ERROR("[VT]: Status Timeout");
-					}
-					else if (is_vt_version_supported(VTVersion::Version3) ? (consecutiveNonParsingVTStatusMessages >= 3) : SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
-					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Get End of Object Pool Response Timeout");
 					}
 				}
 				break;
@@ -2122,6 +2129,11 @@ namespace isobus
 		if (value != state)
 		{
 			firstTimeInState = true;
+			if ((StateMachineState::WaitForEndOfObjectPoolResponse == value) ||
+			    (StateMachineState::WaitForLoadVersionResponse == value))
+			{
+				consecutiveNonParsingVTStatusMessages = 0;
+			}
 		}
 
 		state = value;
@@ -2786,10 +2798,11 @@ namespace isobus
 							parentVT->busyCodesBitfield = message.get_uint8_at(6);
 							parentVT->currentCommandFunctionCode = message.get_uint8_at(7);
 
-							if ((StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state) &&
+							if (((StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state) ||
+							     (StateMachineState::WaitForLoadVersionResponse == parentVT->state)) &&
 							    parentVT->is_vt_version_supported(VTVersion::Version3))
 							{
-								// ISO 11783-6 C.2.2: queued status messages can precede parsing.
+								// ISO 11783-6 C.2.2 and Annex E: queued status messages can precede parsing.
 								if (message.get_bool_at(6, 4))
 								{
 									parentVT->consecutiveNonParsingVTStatusMessages = 0;

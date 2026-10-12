@@ -1616,7 +1616,7 @@ namespace isobus
 		std::uint8_t busyCodesBitfield = 0; ///< The VT server's busy codes
 		std::uint8_t currentCommandFunctionCode = 0; ///< The VT server's current command function code
 
-		std::uint8_t consecutiveNonParsingVTStatusMessages = 0; ///< Consecutive VT status messages with parsing clear while awaiting the end of object pool response, capped at three
+		std::uint8_t consecutiveNonParsingVTStatusMessages = 0; ///< Consecutive VT status messages with parsing clear while awaiting an end of object pool or load version response, capped at three
 
 		std::uint8_t connectedVTVersion = 0; ///< The VT server's supported max version
 
