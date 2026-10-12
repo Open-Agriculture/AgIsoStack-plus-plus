@@ -1479,7 +1479,7 @@ TEST_F(VirtualTerminalServerMessagingTest, WorkingSetThatShutsDownWhileParsingIs
 	auto client = test_helpers::force_claim_partnered_control_function(0xB7, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
