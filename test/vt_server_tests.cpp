@@ -17,11 +17,11 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server.hpp"
-#include "isobus/utility/iop_file_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
+#include "helpers/object_pool_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
 using namespace isobus;
@@ -323,18 +323,6 @@ protected:
 		busyCodes = statusFrame.data[6];
 		return foundStatus;
 	}
-
-	static std::vector<std::uint8_t> read_test_pool()
-	{
-		std::vector<std::uint8_t> testPool = IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-		if (testPool.empty())
-		{
-			// Try a different path to mitigate differences between how IDEs run the unit test
-			testPool = IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-		}
-		return testPool;
-	}
 };
 
 TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToTheWorkingSetMasterNotGlobally)
@@ -500,7 +488,7 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionResponseIsSentWhenARestore
 	auto client = test_helpers::force_claim_partnered_control_function(0x84, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
@@ -623,7 +611,7 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionResponseIsSentWhenObjectsA
 	auto client = test_helpers::force_claim_partnered_control_function(0x88, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
@@ -698,7 +686,7 @@ TEST_F(VirtualTerminalServerMessagingTest, LoadVersionOverwritesTheExistingObjec
 	auto client = test_helpers::force_claim_partnered_control_function(0x9C, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
@@ -749,7 +737,7 @@ TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsParsingUntilTheLo
 	auto client = test_helpers::force_claim_partnered_control_function(0x8A, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
@@ -855,7 +843,7 @@ TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolCommandsAreIgnoredUntilTheP
 	auto client = test_helpers::force_claim_partnered_control_function(0x8D, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
@@ -984,7 +972,7 @@ TEST_F(VirtualTerminalServerMessagingTest, ExtendedLoadVersionResponseIsSentWhen
 	auto client = test_helpers::force_claim_partnered_control_function(0x91, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 
@@ -1071,7 +1059,7 @@ TEST_F(VirtualTerminalServerMessagingTest, ExtendedLoadVersionIsIgnoredUntilTheP
 	auto client = test_helpers::force_claim_partnered_control_function(0x94, 0);
 
 	DerivedTestVTServer serverUnderTest(internalECU);
-	serverUnderTest.versionToLoad = read_test_pool();
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
 	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
 	serverUnderTest.initialize();
 

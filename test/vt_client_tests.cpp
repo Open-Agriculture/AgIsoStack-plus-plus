@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "isobus//utility/iop_file_interface.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
@@ -9,6 +8,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/object_pool_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
 using namespace isobus;
@@ -223,13 +223,7 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithVector)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-	if (0 == testPool.size())
-	{
-		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-	}
+	std::vector<std::uint8_t> testPool = test_helpers::read_vt3_test_pool();
 
 	EXPECT_NE(0, testPool.size());
 
@@ -278,13 +272,7 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithDataChunkCallbacks)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-	if (0 == DerivedTestVTClient::staticTestPool.size())
-	{
-		// Try a different path to mitigate differences between how IDEs run the unit test
-		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-	}
+	DerivedTestVTClient::staticTestPool = test_helpers::read_vt3_test_pool();
 
 	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
 
@@ -326,13 +314,7 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithPointer)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-	if (0 == testPool.size())
-	{
-		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-	}
+	std::vector<std::uint8_t> testPool = test_helpers::read_vt3_test_pool();
 
 	EXPECT_NE(0, testPool.size());
 
