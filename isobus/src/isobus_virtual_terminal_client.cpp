@@ -3223,7 +3223,7 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand):
 						{
 							// J.7.5 defines 14 data bytes, padded to 16 bytes by 4.6.26.
-							if ((16 == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							if (((14 == message.get_data_length()) || (16 == message.get_data_length())) && parentVT->auxiliaryFunctionsEnabled &&
 							    (nullptr != parentVT->partnerControlFunction) && (0 == parentVT->partnerControlFunction->get_NAME().get_function_instance()) &&
 							    (message.get_source_control_function() == parentVT->partnerControlFunction))
 							{
