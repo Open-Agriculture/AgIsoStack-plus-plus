@@ -389,8 +389,7 @@ TEST_F(VirtualTerminalTest, PopulatedPreferredAssignmentsIncludePacketPadding)
 		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 		auxiliary_maintenance(client, auxiliary_device(name, 0x21), 0x3344);
 		update_auxiliary_client(client);
-		std::vector<std::uint8_t> expected = { 0x22, 1, 1, 2, 3, 4, 5, 6, 7, 8, 0x44, 0x33,
-		                                       static_cast<std::uint8_t>(twoFunctions ? 2 : 1), 1, 1, 0x34, 0x12 };
+		std::vector<std::uint8_t> expected = { 0x22, 1, 1, 2, 3, 4, 5, 6, 7, 8, 0x44, 0x33, static_cast<std::uint8_t>(twoFunctions ? 2 : 1), 1, 1, 0x34, 0x12 };
 		if (twoFunctions)
 		{
 			expected.insert(expected.end(), { 2, 1, 0x78, 0x56 });
