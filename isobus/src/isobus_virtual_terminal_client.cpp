@@ -1347,6 +1347,11 @@ namespace isobus
 					{
 						set_state(StateMachineState::SendWorkingSetMasterMessage);
 					}
+					else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						LOG_ERROR("[VT]: Timed out waiting for the VT Status message.");
+					}
 				}
 				break;
 
