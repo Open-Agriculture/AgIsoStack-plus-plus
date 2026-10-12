@@ -1463,15 +1463,68 @@ TEST_F(VirtualTerminalServerMessagingTest, RepeatedInitiatingMessageRestartsTheW
 	const bool managedAfterRestart = is_managed(internalECU, client, testPlugin);
 	// Store Version is NACKed when there is no object pool, so this shows the old pool was discarded
 	const bool storeVersionNacked = is_nacked(internalECU, client, testPlugin, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	// The application is told from update(), not from the thread that received the message
+	const std::size_t shutdownsBeforeUpdate = serverUnderTest.shutdownReasons.size();
+	serverUnderTest.run_update();
 	CANHardwareInterface::stop();
 
 	ASSERT_TRUE(poolLoaded);
+	EXPECT_EQ(0U, shutdownsBeforeUpdate);
 	ASSERT_EQ(1U, serverUnderTest.shutdownReasons.size());
 	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::RepeatedInitiatingMessage, serverUnderTest.shutdownReasons.front());
 	ASSERT_TRUE(foundStatusAfterRestart);
 	EXPECT_EQ(NULL_CAN_ADDRESS, statusAfterRestart.data[1]);
 	EXPECT_TRUE(managedAfterRestart);
 	EXPECT_TRUE(storeVersionNacked);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, WorkingSetThatShutsDownWhileParsingIsReportedOnceParsingFinishes)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x66, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB7, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = read_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	// Load Version starts parsing the stored pool, then the client restarts before the VT has answered
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	const auto parsingWorkingSet = serverUnderTest.managedWorkingSetList.front();
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Handling the restart must not wait for the parsing thread, so the large pool is still being parsed here
+	const auto stateAfterRestart = parsingWorkingSet->get_object_pool_processing_state();
+	const bool managedAfterRestart = is_managed(internalECU, client, testPlugin);
+
+	bool loadVersionResponseSent = false;
+	for (std::uint_fast16_t attempt = 0; (attempt < 400) && serverUnderTest.shutdownReasons.empty(); attempt++)
+	{
+		CANMessageFrame frame = {};
+		serverUnderTest.run_update();
+		time_source.update_for_ms(1);
+		while (testPlugin.read_frame(frame, 1))
+		{
+			loadVersionResponseSent |= (0xE6 == get_pdu_format(frame)) && (0xD1 == frame.data[0]);
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	}
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running, stateAfterRestart);
+	EXPECT_TRUE(managedAfterRestart);
+	ASSERT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::RepeatedInitiatingMessage, serverUnderTest.shutdownReasons.front());
+	EXPECT_EQ(parsingWorkingSet, serverUnderTest.shutDownWorkingSets.front());
+	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined, parsingWorkingSet->get_object_pool_processing_state());
+	EXPECT_FALSE(loadVersionResponseSent);
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, Version2ClientMaintenanceMessagesDoNotRestartTheWorkingSet)

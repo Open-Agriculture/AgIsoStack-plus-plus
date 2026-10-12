@@ -16,6 +16,9 @@
 #include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
+
+#include <utility>
 
 namespace isobus
 {
@@ -242,9 +245,10 @@ namespace isobus
 		virtual bool delete_object_pool(NAME clientNAME) = 0;
 
 		/// @brief This function is called when a working set master has shut down unexpectedly (ISO 11783-6 4.6.9).
-		/// @details Before calling this, the server has stopped managing the working set, so its volatile object pool is discarded and
-		/// any further message from it is NACKed until it sends a new Working Set Maintenance message with the Initiating bit set.
-		/// If it was the active working set, the server has also cleared the active working set reported in the VT Status message.
+		/// @details As soon as the shutdown is detected, the server stops managing the working set, so its volatile object pool is discarded
+		/// and any further message from it is NACKed until it sends a new Working Set Maintenance message with the Initiating bit set.
+		/// If it was the active working set, the server also clears the active working set reported in the VT Status message.
+		/// This function is called afterwards from update(), once any object pool parsing for the working set has finished.
 		/// You should inform the operator (unless an exception in 4.6.9 applies), stop presenting this working set and remove its
 		/// auxiliary assignments. Selecting another working set to be active is up to you.
 		/// @param[in] workingSet The working set that shut down, which the server no longer manages
@@ -892,10 +896,18 @@ namespace isobus
 		/// @param[in] message The Working Set Maintenance message
 		void process_working_set_maintenance_message(const CANMessage &message);
 
-		/// @brief Stops managing a working set whose master shut down unexpectedly, and lets the application know (ISO 11783-6 4.6.9)
+		/// @brief Stops managing a working set whose master shut down unexpectedly (ISO 11783-6 4.6.9),
+		/// and queues it for report_shut_down_working_sets()
 		/// @param[in] workingSet The working set to stop managing
 		/// @param[in] reason How the unexpected shutdown was detected
 		void shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason);
+
+		/// @brief Passes each shut down working set whose object pool parsing has finished to handle_unexpected_working_set_shutdown()
+		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking the CAN thread or update()
+		void report_shut_down_working_sets();
+
+		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
+		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns, which both the CAN thread and update() add to
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP

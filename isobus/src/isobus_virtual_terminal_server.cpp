@@ -157,6 +157,13 @@ namespace isobus
 			                                                                                          process_rx_message,
 			                                                                                          this);
 		}
+
+		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
+		LOCK_GUARD(Mutex, pendingShutdownsMutex);
+		for (const auto &shutDown : pendingShutdowns)
+		{
+			shutDown.first->join_parsing_thread();
+		}
 	}
 
 	void VirtualTerminalServer::initialize()
@@ -317,9 +324,6 @@ namespace isobus
 
 	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
 	{
-		// The parsing thread uses the working set, so it has to finish before the working set can be released
-		workingSet->join_parsing_thread();
-
 		if ((activeWorkingSet == workingSet) ||
 		    (workingSet->get_control_function()->get_address() == activeWorkingSetMasterAddress))
 		{
@@ -337,7 +341,28 @@ namespace isobus
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
 
-		handle_unexpected_working_set_shutdown(workingSet, reason);
+		LOCK_GUARD(Mutex, pendingShutdownsMutex);
+		pendingShutdowns.emplace_back(workingSet, reason);
+	}
+
+	void VirtualTerminalServer::report_shut_down_working_sets()
+	{
+		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> parsedWorkingSets;
+		{
+			LOCK_GUARD(Mutex, pendingShutdownsMutex);
+			auto stillParsing = std::stable_partition(pendingShutdowns.begin(), pendingShutdowns.end(), [](const std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason> &shutDown) {
+				return VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == shutDown.first->get_object_pool_processing_state();
+			});
+			parsedWorkingSets.assign(stillParsing, pendingShutdowns.end());
+			pendingShutdowns.erase(stillParsing, pendingShutdowns.end());
+		}
+
+		for (const auto &shutDown : parsedWorkingSets)
+		{
+			// The parsing thread uses the working set, so it has to be joined before the working set can be released
+			shutDown.first->join_parsing_thread();
+			handle_unexpected_working_set_shutdown(shutDown.first, shutDown.second);
+		}
 	}
 
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
@@ -2965,6 +2990,7 @@ namespace isobus
 			LOG_WARNING("[VT Server]: Client %u has not sent a working set maintenance message for %u ms, treating it as an unexpected shutdown", ws->get_control_function()->get_address(), WORKING_SET_MAINTENANCE_TIMEOUT_MS);
 			shut_down_working_set(ws, UnexpectedShutdownReason::MaintenanceTimeout);
 		}
+		report_shut_down_working_sets();
 
 		if ((isobus::SystemTiming::time_expired_ms(statusMessageTimestamp_ms, 1000)) &&
 		    (send_status_message()))
