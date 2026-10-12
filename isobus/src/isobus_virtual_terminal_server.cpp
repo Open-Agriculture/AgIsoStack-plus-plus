@@ -611,6 +611,7 @@ namespace isobus
 					auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
 					if (!loadedVersion.empty())
 					{
+						managedWorkingSet->clear_object_pool_data({});
 						managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
 						managedWorkingSet->add_iop_raw_data(loadedVersion);
 						managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, isExtended, {});
@@ -2945,10 +2946,14 @@ namespace isobus
 						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
 					}
 
-					if ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
-					    (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable()))
+					const std::uint8_t workingSetAddress = ws->get_control_function()->get_address();
+
+					// A Load Version can replace the pool of the active working set, so its mask has to be refreshed
+					if ((workingSetAddress == activeWorkingSetMasterAddress) ||
+					    ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
+					     (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable())))
 					{
-						activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
+						activeWorkingSetMasterAddress = workingSetAddress;
 						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();
 					}
 				}

@@ -99,6 +99,9 @@ namespace isobus
 		/// @param[in] extendedVersionLabel True when the restoring command was an Extended Load Version Command
 		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, bool extendedVersionLabel, CANLibBadge<VirtualTerminalServer>);
 
+		/// @brief Discards the object pool so that a loaded version can overwrite it, keeping the callback handles
+		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
+
 		/// @brief Sets the object ID of the currently focused object
 		/// @param[in] objectID The object ID to set as the focused object
 		void set_object_focus(std::uint16_t objectID);
