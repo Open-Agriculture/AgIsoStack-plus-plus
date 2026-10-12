@@ -242,9 +242,9 @@ static void auxiliary_maintenance(DerivedTestVTClient &client, const std::shared
 	receive_auxiliary(client, source, { 0x23, static_cast<std::uint8_t>(model), static_cast<std::uint8_t>(model >> 8), ready, 0xFF, 0xFF, 0xFF, 0xFF });
 }
 
-static void auxiliary_assignment(DerivedTestVTClient &client, const std::shared_ptr<ControlFunction> &vt, std::uint64_t name, std::uint16_t function, std::uint16_t input, std::uint8_t flags = 0x84)
+static void auxiliary_assignment(DerivedTestVTClient &client, const std::shared_ptr<ControlFunction> &vt, std::uint64_t name, std::uint16_t function, std::uint16_t input, std::uint8_t flags = 0x84, std::size_t length = 16)
 {
-	std::vector<std::uint8_t> bytes(16, 0xFF);
+	std::vector<std::uint8_t> bytes(length, 0xFF);
 	bytes[0] = 0x24;
 	for (std::size_t i = 0; i < 8; ++i)
 	{
@@ -910,6 +910,41 @@ TEST_F(VirtualTerminalTest, PersistentAssignmentWaitsForOutstandingPreferenceLoa
 	EXPECT_EQ(0x0101, preferences.byName[701][0].functionObjectID);
 	EXPECT_EQ(0x0102, preferences.byName[701][1].functionObjectID);
 	expect_assignment_response(can, 0x0102, 0);
+}
+
+TEST_F(VirtualTerminalTest, PaddedAndUnpaddedAssignmentsAreAcknowledgedStoredAndRemoved)
+{
+	for (const std::size_t length : { 14, 16 })
+	{
+		SCOPED_TRACE(length);
+		AuxiliaryTestCAN can(time_source);
+		AuxiliaryPreferences preferences;
+		DerivedTestVTClient client(can.partner, can.ecu);
+		client.set_auxiliary_functions_enabled(true);
+		client.set_auxiliary_assignment_callbacks(load_auxiliary_preferences, store_auxiliary_preferences, &preferences);
+		client.test_wrapper_set_vt_version(6);
+		const auto device = auxiliary_device(501, 0x21);
+		auxiliary_maintenance(client, device, 0x3344);
+		auxiliary_assignment(client, can.partner, 501, 0x0101, 0x1234, 0x04, length);
+		update_auxiliary_client(client);
+		expect_assignment_response(can, 0x0101, 0);
+		ASSERT_EQ(1U, preferences.byName[501].size());
+		EXPECT_EQ(0x0101, preferences.byName[501][0].functionObjectID);
+		EXPECT_EQ(0x1234, preferences.byName[501][0].inputObjectID);
+
+		std::vector<std::uint16_t> events;
+		client.get_auxiliary_function_event_dispatcher().add_listener([&](const auto &event) { events.push_back(event.function.functionObjectID); });
+		auxiliary_status(client, device, 0x1234);
+		EXPECT_EQ((std::vector<std::uint16_t>{ 0x0101 }), events);
+
+		auxiliary_assignment(client, can.partner, 0xFFFFFFFFFFFFFFFFULL, 0x0101, NULL_OBJECT_ID, 0x1F, length);
+		update_auxiliary_client(client);
+		expect_assignment_response(can, 0x0101, 0);
+		EXPECT_TRUE(preferences.byName[501].empty());
+		events.clear();
+		auxiliary_status(client, device, 0x1234);
+		EXPECT_TRUE(events.empty());
+	}
 }
 
 TEST_F(VirtualTerminalTest, AuxiliaryStatusUsesSourceNameAndDispatchesEveryMatchingFunction)
