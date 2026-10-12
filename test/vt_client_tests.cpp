@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "isobus//utility/iop_file_interface.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
@@ -9,6 +8,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/object_pool_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
 using namespace isobus;
@@ -181,7 +181,7 @@ TEST_F(VirtualTerminalTest, VTStatusMessage)
 	                         0xFF, // Busy codes
 	                         1, // VT Function code that is being executed
 	                       },
-	                       nullptr,
+	                       vtPartner,
 	                       nullptr,
 	                       0);
 
@@ -223,13 +223,7 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithVector)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-	if (0 == testPool.size())
-	{
-		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-	}
+	std::vector<std::uint8_t> testPool = test_helpers::read_vt3_test_pool();
 
 	EXPECT_NE(0, testPool.size());
 
@@ -278,13 +272,7 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithDataChunkCallbacks)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-	if (0 == DerivedTestVTClient::staticTestPool.size())
-	{
-		// Try a different path to mitigate differences between how IDEs run the unit test
-		DerivedTestVTClient::staticTestPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-	}
+	DerivedTestVTClient::staticTestPool = test_helpers::read_vt3_test_pool();
 
 	EXPECT_NE(0, DerivedTestVTClient::staticTestPool.size());
 
@@ -326,13 +314,7 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithPointer)
 	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
 
 	// Actual tests start here
-	std::vector<std::uint8_t> testPool = isobus::IOPFileInterface::read_iop_file("../../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-
-	if (0 == testPool.size())
-	{
-		// Try a different path to mitigate differences between how IDEs run the unit test
-		testPool = isobus::IOPFileInterface::read_iop_file("../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop");
-	}
+	std::vector<std::uint8_t> testPool = test_helpers::read_vt3_test_pool();
 
 	EXPECT_NE(0, testPool.size());
 
@@ -1163,6 +1145,55 @@ TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 	time_source.simulate_delay_ms(5001);
 	clientUnderTest.update();
 	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusMessages)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x26);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	clientUnderTest.connectedVTVersion = 3;
+
+	const auto receive_status = [&](bool parsing) {
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x27);
+		CANMessage message(CANMessage::Type::Receive,
+		                   identifier,
+		                   { 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, static_cast<std::uint8_t>(parsing ? 0x10 : 0x00), 0xFF },
+		                   vtPartner,
+		                   nullptr,
+		                   0);
+		clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+		clientUnderTest.update();
+	};
+
+	for (const auto waitState : { State::WaitForEndOfObjectPoolResponse, State::WaitForLoadVersionResponse })
+	{
+		SCOPED_TRACE(static_cast<int>(waitState));
+		clientUnderTest.test_wrapper_set_state(waitState);
+
+		// Parsing can exceed the old three-second response timeout while VT status stays fresh.
+		for (int seconds = 0; seconds < 4; ++seconds)
+		{
+			time_source.simulate_delay_ms(1000);
+			receive_status(true);
+			EXPECT_EQ(waitState, clientUnderTest.state);
+		}
+
+		receive_status(false);
+		receive_status(false);
+		EXPECT_EQ(waitState, clientUnderTest.state);
+		receive_status(true); // Parsing resumes, resetting the consecutive idle count.
+		receive_status(false);
+		receive_status(false);
+		EXPECT_EQ(waitState, clientUnderTest.state);
+		receive_status(false);
+		EXPECT_EQ(State::Failed, clientUnderTest.state);
+	}
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
