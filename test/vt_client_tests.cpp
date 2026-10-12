@@ -181,7 +181,7 @@ TEST_F(VirtualTerminalTest, VTStatusMessage)
 	                         0xFF, // Busy codes
 	                         1, // VT Function code that is being executed
 	                       },
-	                       nullptr,
+	                       vtPartner,
 	                       nullptr,
 	                       0);
 
