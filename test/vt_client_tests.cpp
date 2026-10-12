@@ -1167,3 +1167,52 @@ TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
+
+TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusMessages)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x26);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	clientUnderTest.connectedVTVersion = 3;
+
+	const auto receive_status = [&](bool parsing) {
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x27);
+		CANMessage message(CANMessage::Type::Receive,
+		                   identifier,
+		                   { 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, static_cast<std::uint8_t>(parsing ? 0x10 : 0x00), 0xFF },
+		                   vtPartner,
+		                   nullptr,
+		                   0);
+		clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+		clientUnderTest.update();
+	};
+
+	for (const auto waitState : { State::WaitForEndOfObjectPoolResponse, State::WaitForLoadVersionResponse })
+	{
+		SCOPED_TRACE(static_cast<int>(waitState));
+		clientUnderTest.test_wrapper_set_state(waitState);
+
+		// Parsing can exceed the old three-second response timeout while VT status stays fresh.
+		for (int seconds = 0; seconds < 4; ++seconds)
+		{
+			time_source.simulate_delay_ms(1000);
+			receive_status(true);
+			EXPECT_EQ(waitState, clientUnderTest.state);
+		}
+
+		receive_status(false);
+		receive_status(false);
+		EXPECT_EQ(waitState, clientUnderTest.state);
+		receive_status(true); // Parsing resumes, resetting the consecutive idle count.
+		receive_status(false);
+		receive_status(false);
+		EXPECT_EQ(waitState, clientUnderTest.state);
+		receive_status(false);
+		EXPECT_EQ(State::Failed, clientUnderTest.state);
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
