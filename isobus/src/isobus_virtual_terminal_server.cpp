@@ -260,43 +260,84 @@ namespace isobus
 		return languageCommandInterface;
 	}
 
-	bool VirtualTerminalServer::check_if_source_is_managed(const CANMessage &message)
+	bool VirtualTerminalServer::check_if_source_is_managed(const CANMessage &message) const
 	{
-		// Check if we're managing this CF
-		bool retVal = false;
+		return (nullptr != get_managed_working_set(message.get_source_control_function()));
+	}
 
-		// This is the static callback for the instance.
-		// See if we need to set up a new managed working set.
-		for (const auto &cf : managedWorkingSetList)
+	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> VirtualTerminalServer::get_managed_working_set(std::shared_ptr<ControlFunction> controlFunction) const
+	{
+		for (const auto &ws : managedWorkingSetList)
 		{
-			if (cf->get_control_function() == message.get_source_control_function())
+			if (ws->get_control_function() == controlFunction)
 			{
-				// Found a match
-				retVal = true;
-				break;
+				return ws;
+			}
+		}
+		return nullptr;
+	}
+
+	void VirtualTerminalServer::process_working_set_maintenance_message(const CANMessage &message)
+	{
+		const auto &data = message.get_data();
+		const bool initiating = (0 != (data[1] & 0x01));
+		const std::uint8_t clientVersion = data[2];
+		auto workingSet = get_managed_working_set(message.get_source_control_function());
+
+		if (nullptr != workingSet)
+		{
+			// VT version 2 and prior clients have no Initiating bit, they send 0xFF there,
+			// so only a version 3 or later client can tell us it has restarted.
+			if (initiating && (clientVersion >= 3) && (0xFF != clientVersion))
+			{
+				LOG_WARNING("[VT Server]: Client %u sent another initiating working set maintenance message, treating it as an unexpected shutdown", workingSet->get_control_function()->get_address());
+				shut_down_working_set(workingSet, UnexpectedShutdownReason::RepeatedInitiatingMessage);
+				workingSet = nullptr;
+			}
+			else
+			{
+				workingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 			}
 		}
 
-		if (!retVal)
+		if ((nullptr == workingSet) && initiating)
 		{
-			const auto &data = message.get_data();
-			if ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
-			    (data[1] & 0x01)) // Init bit is set
-			{
-				// This CF is probably trying to initiate communication with us.
-				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
-				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				managedWorkingSetList.emplace_back(newWorkingSet);
+			// This CF is trying to initiate communication with us.
+			auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
+			newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+			managedWorkingSetList.emplace_back(newWorkingSet);
 
-				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), data[2]);
-				if (data[2] > get_vt_version_byte(get_version()))
-				{
-					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
-				}
-				retVal = true;
+			LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), clientVersion);
+			if (clientVersion > get_vt_version_byte(get_version()))
+			{
+				LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), clientVersion, get_vt_version_byte(get_version()));
 			}
 		}
-		return retVal;
+	}
+
+	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
+	{
+		// The parsing thread uses the working set, so it has to finish before the working set can be released
+		workingSet->join_parsing_thread();
+
+		if ((activeWorkingSet == workingSet) ||
+		    (workingSet->get_control_function()->get_address() == activeWorkingSetMasterAddress))
+		{
+			activeWorkingSet = nullptr;
+			activeWorkingSetMasterAddress = NULL_CAN_ADDRESS;
+			activeWorkingSetDataMaskObjectID = NULL_OBJECT_ID;
+			activeWorkingSetSoftkeyMaskObjectID = NULL_OBJECT_ID;
+
+			if (send_status_message())
+			{
+				statusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
+			}
+		}
+
+		managedWorkingSetIopLoadStateMap.erase(workingSet);
+		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
+
+		handle_unexpected_working_set_shutdown(workingSet, reason);
 	}
 
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
@@ -741,10 +782,7 @@ namespace isobus
 
 			case Function::WorkingSetMaintenanceMessage:
 			{
-				if (0 != managedWorkingSet->get_working_set_maintenance_message_timestamp_ms())
-				{
-					managedWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				}
+				// Already handled by process_working_set_maintenance_message()
 			}
 			break;
 
@@ -1959,6 +1997,11 @@ namespace isobus
 		{
 			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
 			{
+				if (static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage) == message.get_uint8_at(0))
+				{
+					parentServer->process_working_set_maintenance_message(message);
+				}
+
 				bool responseSent = parentServer->process_stateless_messages(message);
 				bool isManaged = parentServer->check_if_source_is_managed(message);
 				if (!isManaged && !responseSent)
@@ -2908,6 +2951,21 @@ namespace isobus
 
 	void VirtualTerminalServer::update()
 	{
+		// Timeouts are handled first, so the status message never reports a working set that has already shut down
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> timedOutWorkingSets;
+		for (const auto &ws : managedWorkingSetList)
+		{
+			if (SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS))
+			{
+				timedOutWorkingSets.push_back(ws);
+			}
+		}
+		for (const auto &ws : timedOutWorkingSets)
+		{
+			LOG_WARNING("[VT Server]: Client %u has not sent a working set maintenance message for %u ms, treating it as an unexpected shutdown", ws->get_control_function()->get_address(), WORKING_SET_MAINTENANCE_TIMEOUT_MS);
+			shut_down_working_set(ws, UnexpectedShutdownReason::MaintenanceTimeout);
+		}
+
 		if ((isobus::SystemTiming::time_expired_ms(statusMessageTimestamp_ms, 1000)) &&
 		    (send_status_message()))
 		{

@@ -26,6 +26,9 @@
 
 using namespace isobus;
 
+/// @brief Just over the 3 second working set maintenance timeout of ISO 11783-6 4.6.9
+static constexpr std::uint32_t JUST_PAST_MAINTENANCE_TIMEOUT_MS = 3001;
+
 class DerivedTestVTServer : public VirtualTerminalServer
 {
 public:
@@ -133,6 +136,12 @@ public:
 		return true;
 	}
 
+	void handle_unexpected_working_set_shutdown(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason) override
+	{
+		shutDownWorkingSets.push_back(workingSet);
+		shutdownReasons.push_back(reason);
+	}
+
 	void run_update()
 	{
 		update();
@@ -175,6 +184,8 @@ public:
 	std::uint8_t deletedAllVersionsLabelLength = 0;
 	std::vector<std::array<std::uint8_t, 32>> extendedVersions;
 	std::vector<std::uint8_t> lastVersionLabel;
+	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> shutDownWorkingSets;
+	std::vector<UnexpectedShutdownReason> shutdownReasons;
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -314,6 +325,44 @@ protected:
 			foundStatus = (0xFE == statusFrame.data[0]);
 		}
 		return foundStatus;
+	}
+
+	bool is_nacked(std::shared_ptr<InternalControlFunction> server,
+	               std::shared_ptr<ControlFunction> client,
+	               VirtualCANPlugin &plugin,
+	               std::initializer_list<std::uint8_t> data)
+	{
+		CANMessageFrame frame = {};
+		bool foundNack = false;
+
+		plugin.clear_queue();
+		receive_from_client(server, client, data);
+		time_source.update_for_ms(5);
+		while ((!foundNack) && plugin.read_frame(frame, 10))
+		{
+			foundNack = (0xE8 == get_pdu_format(frame)) && (0x01 == frame.data[0]);
+		}
+		return foundNack;
+	}
+
+	// A managed working set without an object pool gets no response to an End of Object Pool message, an unmanaged one gets a NACK
+	bool is_managed(std::shared_ptr<InternalControlFunction> server, std::shared_ptr<ControlFunction> client, VirtualCANPlugin &plugin)
+	{
+		return !is_nacked(server, client, plugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	}
+
+	bool connect_with_selectable_object_pool(DerivedTestVTServer &server,
+	                                         VirtualCANPlugin &plugin,
+	                                         std::shared_ptr<InternalControlFunction> serverCF,
+	                                         std::shared_ptr<ControlFunction> client)
+	{
+		CANMessageFrame response = {};
+
+		receive_from_client(serverCF, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		receive_tp_from_client(serverCF, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+		receive_from_client(serverCF, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		plugin.clear_queue();
+		return poll_for_response(server, plugin, 0x12, response) && (0x00 == response.data[1]);
 	}
 
 	bool read_status_busy_codes(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, std::uint8_t &busyCodes)
@@ -1261,6 +1310,201 @@ TEST_F(VirtualTerminalServerMessagingTest, DeleteVersionWildcardDeletesAllVersio
 	EXPECT_EQ(32U, otherLabelSize);
 	ASSERT_TRUE(foundFailedWildcardResponse);
 	EXPECT_EQ(0x08, failedWildcardFrame.data[5]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, WorkingSetShutsDownWhenMaintenanceMessagesStop)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x60, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB0, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(2000);
+	receive_from_client(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(2000);
+	serverUnderTest.run_update();
+	const std::size_t shutdownsWhileMaintained = serverUnderTest.shutDownWorkingSets.size();
+	const bool managedWhileMaintained = is_managed(internalECU, client, testPlugin);
+
+	time_source.simulate_delay_ms(JUST_PAST_MAINTENANCE_TIMEOUT_MS);
+	serverUnderTest.run_update();
+	const bool managedAfterTimeout = is_managed(internalECU, client, testPlugin);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(0U, shutdownsWhileMaintained);
+	EXPECT_TRUE(managedWhileMaintained);
+	ASSERT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::MaintenanceTimeout, serverUnderTest.shutdownReasons.front());
+	EXPECT_EQ(client, serverUnderTest.shutDownWorkingSets.front()->get_control_function());
+	EXPECT_FALSE(managedAfterTimeout);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, OtherMessagesDoNotKeepAWorkingSetAlive)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x61, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB1, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(2000);
+	receive_from_client(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF }); // Get Memory
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }); // End of Object Pool
+	time_source.simulate_delay_ms(1001);
+	serverUnderTest.run_update();
+	CANHardwareInterface::stop();
+
+	ASSERT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::MaintenanceTimeout, serverUnderTest.shutdownReasons.front());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, TimedOutWorkingSetIsManagedAgainAfterAnInitiatingMessage)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x62, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB2, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(JUST_PAST_MAINTENANCE_TIMEOUT_MS);
+	serverUnderTest.run_update();
+
+	// Until it initiates again, even its maintenance messages are NACKed
+	const bool maintenanceNacked = is_nacked(internalECU, client, testPlugin, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool managedAfterInitiating = is_managed(internalECU, client, testPlugin);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	EXPECT_TRUE(maintenanceNacked);
+	EXPECT_TRUE(managedAfterInitiating);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ActiveWorkingSetIsClearedWhenItTimesOut)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x63, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame statusWhileConnected = {};
+	CANMessageFrame statusAfterTimeout = {};
+
+	const bool poolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, client);
+	const bool foundStatusWhileConnected = read_status_message(serverUnderTest, testPlugin, statusWhileConnected);
+	time_source.simulate_delay_ms(JUST_PAST_MAINTENANCE_TIMEOUT_MS);
+	serverUnderTest.run_update();
+	const bool foundStatusAfterTimeout = read_status_message(serverUnderTest, testPlugin, statusAfterTimeout);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolLoaded);
+	ASSERT_TRUE(foundStatusWhileConnected);
+	EXPECT_EQ(0xB3, statusWhileConnected.data[1]);
+	EXPECT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	ASSERT_TRUE(foundStatusAfterTimeout);
+	EXPECT_EQ(NULL_CAN_ADDRESS, statusAfterTimeout.data[1]);
+	EXPECT_EQ(NULL_OBJECT_ID, statusAfterTimeout.data[2] | (statusAfterTimeout.data[3] << 8));
+	EXPECT_EQ(NULL_OBJECT_ID, statusAfterTimeout.data[4] | (statusAfterTimeout.data[5] << 8));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, RepeatedInitiatingMessageRestartsTheWorkingSet)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x64, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB4, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame statusAfterRestart = {};
+
+	const bool poolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, client);
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x04, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool foundStatusAfterRestart = read_status_message(serverUnderTest, testPlugin, statusAfterRestart);
+	const bool managedAfterRestart = is_managed(internalECU, client, testPlugin);
+	// Store Version is NACKed when there is no object pool, so this shows the old pool was discarded
+	const bool storeVersionNacked = is_nacked(internalECU, client, testPlugin, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolLoaded);
+	ASSERT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::RepeatedInitiatingMessage, serverUnderTest.shutdownReasons.front());
+	ASSERT_TRUE(foundStatusAfterRestart);
+	EXPECT_EQ(NULL_CAN_ADDRESS, statusAfterRestart.data[1]);
+	EXPECT_TRUE(managedAfterRestart);
+	EXPECT_TRUE(storeVersionNacked);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, Version2ClientMaintenanceMessagesDoNotRestartTheWorkingSet)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x65, 0, time_source);
+	auto reservedVersionClient = test_helpers::force_claim_partnered_control_function(0xB5, 0);
+	auto version2Client = test_helpers::force_claim_partnered_control_function(0xB6, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	// Version 2 and prior clients have no Initiating bit, so bit 0 is set in every maintenance message
+	for (std::uint_fast8_t i = 0; i < 3; i++)
+	{
+		receive_from_client(internalECU, reservedVersionClient, { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		receive_from_client(internalECU, version2Client, { 0xFF, 0x01, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		time_source.simulate_delay_ms(1000);
+		serverUnderTest.run_update();
+	}
+	const bool reservedVersionClientManaged = is_managed(internalECU, reservedVersionClient, testPlugin);
+	const bool version2ClientManaged = is_managed(internalECU, version2Client, testPlugin);
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(0U, serverUnderTest.shutdownReasons.size());
+	EXPECT_TRUE(reservedVersionClientManaged);
+	EXPECT_TRUE(version2ClientManaged);
 }
 
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet
