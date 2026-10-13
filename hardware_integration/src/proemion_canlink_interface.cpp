@@ -24,6 +24,7 @@
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -49,9 +50,25 @@ namespace
 		closesocket(socketHandle);
 	}
 
+	std::string describe_socket_error(int code)
+	{
+		return "Winsock error " + std::to_string(code);
+	}
+
 	std::string get_socket_error()
 	{
-		return "Winsock error " + std::to_string(WSAGetLastError());
+		return describe_socket_error(WSAGetLastError());
+	}
+
+	void set_socket_blocking(NativeSocket socketHandle, bool blocking)
+	{
+		u_long nonBlocking = blocking ? 0 : 1;
+		ioctlsocket(socketHandle, FIONBIO, &nonBlocking);
+	}
+
+	bool is_connect_in_progress()
+	{
+		return WSAGetLastError() == WSAEWOULDBLOCK;
 	}
 
 	std::string get_resolve_error(int status)
@@ -74,9 +91,25 @@ namespace
 		::close(socketHandle);
 	}
 
+	std::string describe_socket_error(int code)
+	{
+		return std::strerror(code);
+	}
+
 	std::string get_socket_error()
 	{
-		return std::strerror(errno);
+		return describe_socket_error(errno);
+	}
+
+	void set_socket_blocking(NativeSocket socketHandle, bool blocking)
+	{
+		const int flags = fcntl(socketHandle, F_GETFL, 0);
+		fcntl(socketHandle, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+	}
+
+	bool is_connect_in_progress()
+	{
+		return errno == EINPROGRESS;
 	}
 
 	std::string get_resolve_error(int status)
@@ -84,6 +117,22 @@ namespace
 		return gai_strerror(status);
 	}
 #endif
+
+	std::string to_hex(const std::vector<std::uint8_t> &bytes)
+	{
+		static const char digits[] = "0123456789ABCDEF";
+		std::string text;
+		for (const auto byte : bytes)
+		{
+			if (!text.empty())
+			{
+				text += ' ';
+			}
+			text += digits[byte >> 4];
+			text += digits[byte & 0x0F];
+		}
+		return text;
+	}
 }
 
 namespace isobus
@@ -229,13 +278,48 @@ namespace isobus
 				continue;
 			}
 
-			if (connect(candidate, address->ai_addr, static_cast<int>(address->ai_addrlen)) == 0)
+			// Connect without blocking, so an unreachable device fails after CONNECT_TIMEOUT_MS instead of the OS default
+			set_socket_blocking(candidate, false);
+			bool connected = (connect(candidate, address->ai_addr, static_cast<int>(address->ai_addrlen)) == 0);
+
+			if (!connected && is_connect_in_progress())
 			{
+				pollfd descriptor = {};
+				descriptor.fd = candidate;
+				descriptor.events = POLLOUT;
+				const auto pollResult = poll_socket(&descriptor, CONNECT_TIMEOUT_MS);
+
+				if (pollResult > 0)
+				{
+					int socketError = 0;
+					socklen_t socketErrorLength = sizeof(socketError);
+					getsockopt(candidate, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError), &socketErrorLength);
+					connected = (0 == socketError);
+					if (!connected)
+					{
+						connectError = describe_socket_error(socketError);
+					}
+				}
+				else if (0 == pollResult)
+				{
+					connectError = "no answer within " + std::to_string(CONNECT_TIMEOUT_MS / 1000) + " s";
+				}
+				else
+				{
+					connectError = get_socket_error();
+				}
+			}
+			else if (!connected)
+			{
+				connectError = get_socket_error();
+			}
+
+			if (connected)
+			{
+				set_socket_blocking(candidate, true);
 				break;
 			}
 
-			// Read before closing the socket, which resets the error on Windows
-			connectError = get_socket_error();
 			close_socket(candidate);
 			socketFd = -1;
 		}
@@ -482,8 +566,12 @@ namespace isobus
 		if ((descriptor.revents & POLLIN) == 0)
 		{
 			// Only an error or hang up is pending, which poll would report straight away from now on
+			int socketError = 0;
+			socklen_t socketErrorLength = sizeof(socketError);
+			getsockopt(static_cast<NativeSocket>(socketFd), SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError), &socketErrorLength);
+			const std::string reason = (0 != socketError) ? describe_socket_error(socketError) : ((descriptor.revents & POLLHUP) ? "the device hung up" : "poll flags " + std::to_string(descriptor.revents));
 			close();
-			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort));
+			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
 			return false;
 		}
 
@@ -494,8 +582,9 @@ namespace isobus
 		if (received <= 0)
 		{
 			// Zero means the device closed the connection, which recv would keep reporting from now on
+			const std::string reason = (0 == received) ? "the device closed the connection" : get_socket_error();
 			close();
-			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort));
+			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
 			return false;
 		}
 
@@ -513,9 +602,15 @@ namespace isobus
 			return false;
 		}
 
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+		return wait_for_bitrate_reply(bitrate);
+	}
 
-		while (std::chrono::steady_clock::now() < deadline)
+	bool ProemionCANLinkInterface::wait_for_bitrate_reply(BitrateKeys &bitrate)
+	{
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(BITRATE_REPLY_TIMEOUT_MS);
+		int otherMessagesLogged = 0;
+
+		while (get_is_valid() && (std::chrono::steady_clock::now() < deadline))
 		{
 			std::vector<std::uint8_t> response;
 
@@ -524,16 +619,26 @@ namespace isobus
 				continue;
 			}
 
-			// Minimum bitrate response: SOF LEN 0x56 BITRATE CHECKSUM EOF
-			if (response.size() < 6)
+			CANMessageFrame frame = {};
+			if (decode_can_frame(response, frame))
 			{
+				canFramesSeenWhileConfiguring++;
 				continue;
 			}
 
-			if ((response[2] == COMMAND_GET_BITRATE) && (response[1] == 2))
+			// The manual says a settings reply carries the same command byte as the request and the new
+			// settings, the rate key first. Either bitrate command is accepted, as both report the rate the same way.
+			if ((response.size() >= 6) &&
+			    ((response[2] == COMMAND_GET_BITRATE) || (response[2] == COMMAND_SET_BITRATE)))
 			{
 				bitrate = static_cast<BitrateKeys>(response[3]);
 				return true;
+			}
+
+			if (otherMessagesLogged < 10)
+			{
+				otherMessagesLogged++;
+				LOG_INFO("[ProemionCANLink] Unexpected message while configuring the bitrate: " + to_hex(response));
 			}
 		}
 
@@ -550,49 +655,53 @@ namespace isobus
 			return false;
 		}
 
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
-
-		while (std::chrono::steady_clock::now() < deadline)
+		// Expected response for 250 kbit/s: 43 02 57 04 XX 0D
+		BitrateKeys reportedBitrate = Bitrate_Custom;
+		if (!wait_for_bitrate_reply(reportedBitrate))
 		{
-			std::vector<std::uint8_t> response;
-
-			if (!receive_pdu(response, 100))
-			{
-				continue;
-			}
-
-			// Expected response for 250 kbit/s: 43 02 57 04 XX 0D
-			if ((response.size() >= 6) &&
-			    (response[2] == COMMAND_SET_BITRATE) &&
-			    (response[1] == 2) &&
-			    (response[3] == bitrate))
-			{
-				return true;
-			}
+			return false;
 		}
-
-		return false;
+		if (reportedBitrate != bitrate)
+		{
+			LOG_WARNING("[ProemionCANLink] The device reported bitrate key " + std::to_string(static_cast<int>(reportedBitrate)) + " after being set to " + std::to_string(static_cast<int>(bitrate)));
+			return false;
+		}
+		return true;
 	}
 
 	bool ProemionCANLinkInterface::configure_isobus_bitrate()
 	{
 		BitrateKeys currentBitrate = Bitrate_Custom;
+		canFramesSeenWhileConfiguring = 0;
 
 		if (request_current_bitrate(currentBitrate))
 		{
 			if (currentBitrate == Bitrate_250kb)
 			{
-				LOG_DEBUG("[ProemionCANLink] CAN bitrate is already 250 kbit/s");
+				LOG_INFO("[ProemionCANLink] CAN bitrate is already 250 kbit/s");
 				return true;
 			}
+			LOG_INFO("[ProemionCANLink] CAN bitrate key is " + std::to_string(static_cast<int>(currentBitrate)) + ", changing it to 250 kbit/s");
 		}
 		else
 		{
-			LOG_WARNING("[ProemionCANLink] Unable to read current CAN bitrate, attempting to set 250 kbit/s");
+			LOG_WARNING("[ProemionCANLink] No reply to the bitrate request, attempting to set 250 kbit/s");
 		}
 
-		LOG_INFO("[ProemionCANLink] Changing CAN bitrate to 250 kbit/s");
-		return set_bitrate(Bitrate_250kb);
+		if (set_bitrate(Bitrate_250kb))
+		{
+			LOG_INFO("[ProemionCANLink] CAN bitrate set to 250 kbit/s");
+			return true;
+		}
+
+		// A CAN controller only receives valid frames at the bus's own bitrate, so if they arrive the device is
+		// usable as it is, even though it did not confirm the setting
+		if (get_is_valid() && (canFramesSeenWhileConfiguring > 0))
+		{
+			LOG_WARNING("[ProemionCANLink] The device did not confirm the bitrate, but " + std::to_string(canFramesSeenWhileConfiguring) + " CAN frames arrived meanwhile, so it is listening at the bus's bitrate. Continuing.");
+			return true;
+		}
+		return false;
 	}
 
 	std::uint64_t ProemionCANLinkInterface::get_timestamp_us()

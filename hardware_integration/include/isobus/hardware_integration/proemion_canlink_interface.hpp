@@ -129,6 +129,11 @@ namespace isobus
 		/// @brief Message type for set bitrate command
 		static constexpr std::uint8_t COMMAND_SET_BITRATE = 0x57;
 
+		/// @brief How long to wait for the TCP connection, so a missing device does not block the caller for the OS default of ~20 s
+		static constexpr int CONNECT_TIMEOUT_MS = 3000;
+		/// @brief How long to wait for the reply to a bitrate command. Generous, since the first round trip over WiFi can be slow.
+		static constexpr int BITRATE_REPLY_TIMEOUT_MS = 1500;
+
 		/**
 		 * @brief parse_interface Parse the hostname:port supplied by the user
 		 * @return True if the interface string matches the expected format
@@ -160,6 +165,14 @@ namespace isobus
 		 * @return
 		 */
 		bool set_bitrate(BitrateKeys bitrate);
+
+		/**
+		 * @brief wait_for_bitrate_reply Waits for the device to report its bitrate, counting the CAN frames that arrive meanwhile
+		 * and logging any other message, so unexpected replies can be diagnosed
+		 * @param bitrate [out] The bitrate the device reported
+		 * @return True if the device reported its bitrate in time
+		 */
+		bool wait_for_bitrate_reply(BitrateKeys &bitrate);
 
 		/**
 		 * @brief create_pdu Creates a valid PDU from the data provided (adds message boundaries, checksum)
@@ -245,6 +258,12 @@ namespace isobus
 		 * @brief receiveBuffer Buffer for the received data over TCP
 		 */
 		std::vector<std::uint8_t> receiveBuffer;
+
+		/**
+		 * @brief canFramesSeenWhileConfiguring Valid CAN frames received while the bitrate was being configured,
+		 * which proves the device already listens at the bus's bitrate
+		 */
+		std::size_t canFramesSeenWhileConfiguring = 0;
 
 		/**
 		 * @brief transmitMutex Mutex for CAN transmission, also held while the socket is closed
