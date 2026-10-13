@@ -564,7 +564,7 @@ namespace isobus
 			// Expected response for 250 kbit/s: 43 02 57 04 XX 0D
 			if ((response.size() >= 6) &&
 			    (response[2] == COMMAND_SET_BITRATE) &&
-			    (response[1] != 2) &&
+			    (response[1] == 2) &&
 			    (response[3] == bitrate))
 			{
 				return true;
