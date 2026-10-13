@@ -25,12 +25,6 @@ namespace isobus
 	  channel(channel),
 	  baudrate(baudrate)
 	{
-		if (nullptr == driverInstance)
-		{
-			driverInstance = std::unique_ptr<InnoMakerUsb2CanLib>(new InnoMakerUsb2CanLib());
-			driverInstance->setup();
-			driverInstance->scanInnoMakerDevice();
-		}
 		txContexts = std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can>(new InnoMakerUsb2CanLib::innomaker_can());
 	}
 
@@ -44,14 +38,21 @@ namespace isobus
 		return "INNO-Maker USB2CAN";
 	}
 
+	InnoMakerUsb2CanLib::InnoMakerDevice *InnoMakerUSB2CANWindowsPlugin::get_device() const
+	{
+		return (nullptr != driverInstance) ? driverInstance->getInnoMakerDevice(channel) : nullptr;
+	}
+
 	bool InnoMakerUSB2CANWindowsPlugin::get_is_valid() const
 	{
-		return nullptr != driverInstance->getInnoMakerDevice(channel) && driverInstance->getInnoMakerDevice(channel)->isOpen;
+		const InnoMakerUsb2CanLib::InnoMakerDevice *device = get_device();
+
+		return (nullptr != device) && device->isOpen;
 	}
 
 	void InnoMakerUSB2CANWindowsPlugin::close()
 	{
-		InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
+		InnoMakerUsb2CanLib::InnoMakerDevice *device = get_device();
 
 		if (nullptr != device && device->isOpen)
 		{
@@ -80,7 +81,31 @@ namespace isobus
 
 	void InnoMakerUSB2CANWindowsPlugin::open()
 	{
-		InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
+		lastError.clear();
+
+		// close() destroys the driver once the last channel closes, so it cannot only be created in the constructor
+		if (nullptr == driverInstance)
+		{
+			driverInstance = std::unique_ptr<InnoMakerUsb2CanLib>(new InnoMakerUsb2CanLib());
+			if (!driverInstance->setup())
+			{
+				lastError = "Unable to initialize the InnoMaker USB2CAN driver.";
+				LOG_ERROR("[InnoMaker-Windows] " + lastError);
+				driverInstance.reset();
+				return;
+			}
+
+			if (!driverInstance->scanInnoMakerDevice())
+			{
+				lastError = "Unable to scan for InnoMaker USB2CAN adapters.";
+				LOG_ERROR("[InnoMaker-Windows] " + lastError);
+				driverInstance->setdown();
+				driverInstance.reset();
+				return;
+			}
+		}
+
+		InnoMakerUsb2CanLib::InnoMakerDevice *device = get_device();
 
 		if (nullptr != device)
 		{
@@ -243,23 +268,34 @@ namespace isobus
 
 				default:
 				{
-					LOG_ERROR("[InnoMaker-Windows] Unsupported baudrate with index " + isobus::to_string(baudrate) + " in InnoMakerUSB2CANWindowsPlugin::Baudrate enum.");
+					lastError = "Unable to open InnoMaker channel " + isobus::to_string(channel) + ", the configured baud rate is not supported (index " + isobus::to_string(baudrate) + ")";
+					LOG_ERROR("[InnoMaker-Windows] " + lastError);
 					return;
 				}
 				break;
 			}
-			driverInstance->urbSetupDevice(device, CAN_MODE, bitTiming);
-			driverInstance->openInnoMakerDevice(device);
+			if (!driverInstance->urbSetupDevice(device, CAN_MODE, bitTiming))
+			{
+				driverInstance->closeInnoMakerDevice(device);
+				lastError = "Unable to open InnoMaker channel " + isobus::to_string(channel) + ", the adapter was found but could not be opened or configured. It may be in use by another program.";
+				LOG_ERROR("[InnoMaker-Windows] " + lastError);
+			}
 		}
 		else
 		{
-			LOG_ERROR("[InnoMaker-Windows] No device found on channel " + isobus::to_string(channel));
+			lastError = "Unable to open InnoMaker channel " + isobus::to_string(channel) + ", no adapter on that channel (found " + isobus::to_string(driverInstance->getInnoMakerDeviceCount()) + " InnoMaker USB2CAN adapters)";
+			LOG_ERROR("[InnoMaker-Windows] " + lastError);
 		}
+	}
+
+	std::string InnoMakerUSB2CANWindowsPlugin::get_last_error() const
+	{
+		return lastError;
 	}
 
 	bool InnoMakerUSB2CANWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)
 	{
-		InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
+		InnoMakerUsb2CanLib::InnoMakerDevice *device = get_device();
 
 		if (nullptr == device)
 		{
@@ -306,7 +342,7 @@ namespace isobus
 
 	bool InnoMakerUSB2CANWindowsPlugin::write_frame(const isobus::CANMessageFrame &canFrame)
 	{
-		InnoMakerUsb2CanLib::InnoMakerDevice *device = driverInstance->getInnoMakerDevice(channel);
+		InnoMakerUsb2CanLib::InnoMakerDevice *device = get_device();
 		if (nullptr == device)
 		{
 			return false;

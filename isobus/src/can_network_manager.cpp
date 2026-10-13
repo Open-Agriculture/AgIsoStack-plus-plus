@@ -531,17 +531,7 @@ namespace isobus
 
 		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
 		{
-			auto receive_message_callback = [this, i](const CANMessage &message) {
-				// TODO: hack port_index for now, once network manager isn't a singleton, this can be removed
-				CANMessage tempMessage(CANMessage::Type::Receive,
-				                       message.get_identifier(),
-				                       message.get_data(),
-				                       message.get_source_control_function(),
-				                       message.get_destination_control_function(),
-				                       i,
-				                       message.get_timestamp_us());
-				this->protocol_message_callback(message);
-			};
+			auto receive_message_callback = [this](const CANMessage &message) { this->protocol_message_callback(message); };
 			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));

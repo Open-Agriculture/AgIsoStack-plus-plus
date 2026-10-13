@@ -184,6 +184,41 @@ TEST_F(TimeDateTest, ReceivesDaySPN962WithQuarterDayScaling)
 	}
 }
 
+TEST_F(TimeDateTest, DestroyedInterfaceNoLongerReceivesMessages)
+{
+	{
+		// Without removing its callback from the network manager, this interface would still be
+		// called for the message below after it was destroyed.
+		TimeDateInterface destroyedInterface;
+		initialize_time_date_interface(destroyedInterface);
+	}
+
+	TimeDateInterface timeDateInterfaceUnderTest;
+	initialize_time_date_interface(timeDateInterfaceUnderTest);
+	test_helpers::force_claim_partnered_control_function(0x47, 0);
+	add_time_date_rx_listener(timeDateInterfaceUnderTest);
+	CANNetworkManager::CANNetwork.update();
+
+	CANMessageFrame testFrame;
+	memset(&testFrame, 0, sizeof(testFrame));
+	testFrame.isExtendedFrame = true;
+	testFrame.identifier = 0x18FEE647;
+	testFrame.dataLength = 8;
+	testFrame.data[0] = 0xA4;
+	testFrame.data[1] = 0x31;
+	testFrame.data[2] = 0x16;
+	testFrame.data[3] = 0x08;
+	testFrame.data[4] = 0x1C;
+	testFrame.data[5] = 0x26;
+	testFrame.data[6] = 0x7D;
+	testFrame.data[7] = 0x78;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_TRUE(isRxCallbackCalled);
+	EXPECT_EQ(testTimeDateInformation.timeAndDate.year, 2023);
+}
+
 TEST_F(TimeDateTest, TransmitMessages)
 {
 	auto testInternalControlFunction = test_helpers::claim_internal_control_function(0x44, 0, time_source);

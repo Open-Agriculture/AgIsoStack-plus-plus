@@ -53,7 +53,8 @@ namespace isobus
 		/// @brief Assigns a CAN driver to a channel
 		/// @param[in] channelIndex The channel to assign to
 		/// @param[in] canDriver The driver to assign to the channel
-		/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
+		/// @note The function will fail if the channel is already assigned to a driver, if the driver is
+		/// already assigned to a different channel, or if the interface is already started
 		/// @returns `true` if the driver was assigned to the channel, otherwise `false`
 		static bool assign_can_channel_frame_handler(std::uint8_t channelIndex, std::shared_ptr<CANHardwarePlugin> canDriver);
 
@@ -73,7 +74,10 @@ namespace isobus
 		/// the worker thread for the hardware layer is started. Typically you'll want to leave this as true.
 		/// However, if you want to drive the hardware layer yourself by calling update manually, you can
 		/// pass this in as false to not spawn the worker thread.
-		/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
+		/// @returns `true` if every channel with a frame handler assigned started, otherwise `false`.
+		/// On `false` the interface still counts as started and any channels that did open stay open,
+		/// so call stop() if a partial start is not good enough. A failed channel's driver may say why
+		/// through `get_assigned_can_channel_frame_handler(channelIndex)->get_last_error()`.
 		static bool start(bool start_thread = true);
 
 		/// @brief Stops all CAN management threads and discards all remaining messages in the Tx and Rx queues.

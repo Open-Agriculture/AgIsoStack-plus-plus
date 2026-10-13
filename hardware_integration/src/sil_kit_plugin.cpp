@@ -244,4 +244,5 @@ namespace isobus
 			return false;
 		}
 	}
+
 } // namespace isobus

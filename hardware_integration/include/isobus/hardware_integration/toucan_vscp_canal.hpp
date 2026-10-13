@@ -57,6 +57,10 @@ namespace isobus
 		/// @brief Connects to the hardware
 		void open() override;
 
+		/// @brief Returns why the last call to open() failed
+		/// @returns A description of the failure, or an empty string if the last open() succeeded
+		std::string get_last_error() const override;
+
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
@@ -89,6 +93,7 @@ namespace isobus
 		std::uint32_t handle = 0; ///< The handle that the driver returns to us for the open hardware
 		std::uint32_t openResult = CANAL_ERROR_NOT_OPEN; ///< Stores the result of the call to begin CAN communication. Used for is_valid check later.
 		std::uint32_t currentlyConfiguredSerialNumber = 0; ///< The serial number of the device that is being used
+		std::string lastError; ///< Why the last open() failed
 	};
 }
 #endif // TOUCAN_VSCP_CANAL_PLUGIN_HPP

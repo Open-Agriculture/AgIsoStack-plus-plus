@@ -70,3 +70,21 @@ TEST(VirtualTerminalServerTest, AlreadyParsedIOPSegmentIsNotReparsed)
 	// Make sure that it was not reconstructed/replaced at all.
 	EXPECT_EQ(firstObject.get(), firstObjectAfterSecondParse.get());
 }
+
+TEST(VirtualTerminalServerTest, ParsingStateIsNotIdleOnceTheParsingThreadHasStarted)
+{
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	std::vector<std::uint8_t> segment = {
+		0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x64, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00
+	};
+
+	workingSet.add_iop_raw_data(segment);
+	workingSet.start_parsing_thread();
+
+	// The status bit and the pool command guard both read this before the worker thread runs
+	const auto state = workingSet.get_object_pool_processing_state();
+	EXPECT_NE(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::None, state);
+	EXPECT_NE(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined, state);
+
+	workingSet.join_parsing_thread();
+}
