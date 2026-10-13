@@ -13,23 +13,122 @@
 #include <cstring>
 #include <limits>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <cerrno>
+#endif
+
+namespace
+{
+	// The small differences between Winsock and BSD sockets, so the driver itself can stay the same on both
+#ifdef _WIN32
+	using NativeSocket = SOCKET;
+
+	constexpr int SHUTDOWN_BOTH = SD_BOTH;
+
+	int poll_socket(pollfd *descriptor, int timeoutMs)
+	{
+		return WSAPoll(descriptor, 1, timeoutMs);
+	}
+
+	void close_socket(NativeSocket socketHandle)
+	{
+		closesocket(socketHandle);
+	}
+
+	std::string get_socket_error()
+	{
+		return "Winsock error " + std::to_string(WSAGetLastError());
+	}
+
+	std::string get_resolve_error(int status)
+	{
+		// The plain name maps to the wide character version when UNICODE is defined
+		return gai_strerrorA(status);
+	}
+#else
+	using NativeSocket = int;
+
+	constexpr int SHUTDOWN_BOTH = SHUT_RDWR;
+
+	int poll_socket(pollfd *descriptor, int timeoutMs)
+	{
+		return poll(descriptor, 1, timeoutMs);
+	}
+
+	void close_socket(NativeSocket socketHandle)
+	{
+		::close(socketHandle);
+	}
+
+	std::string get_socket_error()
+	{
+		return std::strerror(errno);
+	}
+
+	std::string get_resolve_error(int status)
+	{
+		return gai_strerror(status);
+	}
+#endif
+}
 
 namespace isobus
 {
 	ProemionCANLinkInterface::ProemionCANLinkInterface(const std::string &interface) :
 	  interfaceString(interface)
 	{
+#ifdef _WIN32
+		// Winsock counts these, so every instance can start and clean up its own use of it
+		WSADATA wsaData;
+		WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 		parse_interface();
 	}
 
 	ProemionCANLinkInterface::~ProemionCANLinkInterface()
 	{
 		close();
+#ifdef _WIN32
+		WSACleanup();
+#endif
+	}
+
+	std::string ProemionCANLinkInterface::get_last_error() const
+	{
+		std::lock_guard<std::mutex> lock(lastErrorMutex);
+		return lastError;
+	}
+
+	void ProemionCANLinkInterface::set_last_error(const std::string &error)
+	{
+		LOG_ERROR("[ProemionCANLink] " + error);
+		std::lock_guard<std::mutex> lock(lastErrorMutex);
+		lastError = error;
+	}
+
+	void ProemionCANLinkInterface::set_interface(const std::string &interface)
+	{
+		interfaceString = interface;
+		parse_interface();
+	}
+
+	std::string ProemionCANLinkInterface::get_interface() const
+	{
+		return interfaceString;
 	}
 
 	std::string ProemionCANLinkInterface::get_name() const
@@ -112,29 +211,41 @@ namespace isobus
 
 		if (status != 0)
 		{
+			set_last_error("Unable to resolve " + ipAddress + ": " + get_resolve_error(status));
 			return false;
 		}
 
+		std::string connectError = "no address found";
+
 		for (auto address = result; address != nullptr; address = address->ai_next)
 		{
-			socketFd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+			const NativeSocket candidate = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+			socketFd = static_cast<std::intptr_t>(candidate);
 
 			if (socketFd < 0)
 			{
+				connectError = get_socket_error();
+				socketFd = -1;
 				continue;
 			}
 
-			if (connect(socketFd, address->ai_addr, address->ai_addrlen) == 0)
+			if (connect(candidate, address->ai_addr, static_cast<int>(address->ai_addrlen)) == 0)
 			{
 				break;
 			}
 
-			::close(socketFd);
+			// Read before closing the socket, which resets the error on Windows
+			connectError = get_socket_error();
+			close_socket(candidate);
 			socketFd = -1;
 		}
 
 		freeaddrinfo(result);
 
+		if (socketFd < 0)
+		{
+			set_last_error("Failed to connect to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + connectError + ")");
+		}
 		return socketFd >= 0;
 	}
 
@@ -142,16 +253,19 @@ namespace isobus
 	{
 		close();
 
+		{
+			std::lock_guard<std::mutex> lock(lastErrorMutex);
+			lastError.clear();
+		}
+
 		if (!parse_interface())
 		{
-			LOG_ERROR("[ProemionCANLink] Invalid interface: " + interfaceString);
-
+			set_last_error("Invalid device address \"" + interfaceString + "\", expected an IP address with an optional :port");
 			return;
 		}
 
 		if (!connect_tcp())
 		{
-			LOG_ERROR("[ProemionCANLink] Failed to connect to " + ipAddress + ":" + std::to_string(tcpPort));
 			return;
 		}
 
@@ -159,8 +273,8 @@ namespace isobus
 
 		if (!configure_isobus_bitrate())
 		{
-			LOG_ERROR("[ProemionCANLink] Failed to configure CAN bitrate to 250 kbit/s");
 			close();
+			set_last_error("Connected to " + ipAddress + ":" + std::to_string(tcpPort) + ", but failed to configure the CAN bitrate to 250 kbit/s");
 			return;
 		}
 
@@ -169,10 +283,13 @@ namespace isobus
 
 	void ProemionCANLinkInterface::close()
 	{
+		std::lock_guard<std::mutex> lock(transmitMutex);
+
 		if (socketFd >= 0)
 		{
-			shutdown(socketFd, SHUT_RDWR);
-			::close(socketFd);
+			const auto socketHandle = static_cast<NativeSocket>(socketFd);
+			shutdown(socketHandle, SHUTDOWN_BOTH);
+			close_socket(socketHandle);
 			socketFd = -1;
 		}
 
@@ -234,9 +351,13 @@ namespace isobus
 		{
 			const auto result =
 			  send(
-			    socketFd,
-			    pdu.data() + offset,
+			    static_cast<NativeSocket>(socketFd),
+			    reinterpret_cast<const char *>(pdu.data() + offset),
+#ifdef _WIN32
+			    static_cast<int>(pdu.size() - offset),
+#else
 			    pdu.size() - offset,
+#endif
 #ifdef MSG_NOSIGNAL
 			    MSG_NOSIGNAL
 #else
@@ -339,28 +460,42 @@ namespace isobus
 			return true;
 		}
 
-		struct pollfd descriptor = {};
-		descriptor.fd = socketFd;
+		pollfd descriptor = {};
+		descriptor.fd = static_cast<NativeSocket>(socketFd);
 		descriptor.events = POLLIN;
 
-		const auto pollResult = poll(&descriptor, 1, timeoutMs);
+		const auto pollResult = poll_socket(&descriptor, timeoutMs);
 
-		if (pollResult <= 0)
+		if (pollResult < 0)
+		{
+			const auto reason = get_socket_error();
+			close();
+			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+			return false;
+		}
+
+		if (pollResult == 0)
 		{
 			return false;
 		}
 
-		if (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))
+		if ((descriptor.revents & POLLIN) == 0)
 		{
+			// Only an error or hang up is pending, which poll would report straight away from now on
+			close();
+			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort));
 			return false;
 		}
 
-		std::uint8_t buffer[1024];
+		char buffer[1024];
 
-		const auto received = recv(socketFd, buffer, sizeof(buffer), 0);
+		const auto received = recv(static_cast<NativeSocket>(socketFd), buffer, sizeof(buffer), 0);
 
 		if (received <= 0)
 		{
+			// Zero means the device closed the connection, which recv would keep reporting from now on
+			close();
+			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort));
 			return false;
 		}
 

@@ -94,6 +94,18 @@ namespace isobus
 		/// @returns true if the frame was accepted by the TCP socket
 		bool write_frame(const CANMessageFrame &canFrame) override;
 
+		/// @brief Returns why the connection last failed, suitable to show to the user
+		/// @returns A description of the last failure, or an empty string if there is none
+		std::string get_last_error() const override;
+
+		/// @brief Changes the device address. Only takes effect the next time the interface is opened.
+		/// @param[in] interface Interface specification in the form IP or IP:port
+		void set_interface(const std::string &interface);
+
+		/// @brief Returns the device address as it was given
+		/// @returns The interface specification in the form IP or IP:port
+		std::string get_interface() const;
+
 	private:
 		/// @brief DEFAULT_TCP_PORT The default TCP port
 		static constexpr std::uint16_t DEFAULT_TCP_PORT = 30000;
@@ -197,6 +209,12 @@ namespace isobus
 		static std::uint8_t calculate_checksum(const std::uint8_t *data, std::size_t length);
 
 		/**
+		 * @brief set_last_error Stores why the connection failed and logs it
+		 * @param error Description of the failure
+		 */
+		void set_last_error(const std::string &error);
+
+		/**
 		 * @brief get_timestamp_us Helper function to return the host device uptime in us
 		 * @return Uptime in us
 		 */
@@ -218,9 +236,10 @@ namespace isobus
 		std::uint16_t tcpPort = DEFAULT_TCP_PORT;
 
 		/**
-		 * @brief socketFd Socket descriptor
+		 * @brief socketFd Socket descriptor, or -1 when closed.
+		 * Wide enough to hold a Winsock SOCKET handle, whose INVALID_SOCKET value is also -1 in this type.
 		 */
-		int socketFd = -1;
+		std::intptr_t socketFd = -1;
 
 		/**
 		 * @brief receiveBuffer Buffer for the received data over TCP
@@ -228,9 +247,19 @@ namespace isobus
 		std::vector<std::uint8_t> receiveBuffer;
 
 		/**
-		 * @brief transmitMutex Mutex for CAN transmission
+		 * @brief transmitMutex Mutex for CAN transmission, also held while the socket is closed
 		 */
 		std::mutex transmitMutex;
+
+		/**
+		 * @brief lastError Why the connection last failed, read by other threads
+		 */
+		std::string lastError;
+
+		/**
+		 * @brief lastErrorMutex Protects lastError
+		 */
+		mutable std::mutex lastErrorMutex;
 	};
 }
 
