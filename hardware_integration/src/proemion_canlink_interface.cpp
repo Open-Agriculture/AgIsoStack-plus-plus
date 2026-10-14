@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstring>
 #include <limits>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -186,12 +187,65 @@ namespace isobus
 		const auto connectedSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - connectedAt).count();
 		const auto lastDataMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastDataReceivedAt).count();
 
-		close();
+		disconnect();
 		set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
 		LOG_INFO("[ProemionCANLink] The connection lasted " + std::to_string(connectedSeconds) + " s, " +
 		         std::to_string(framesReceived) + " frames received, " + std::to_string(framesSent.load()) + " sent, " +
 		         "longest pause in reading " + std::to_string(longestReadPauseMs) + " ms, " +
 		         "last data from the device " + std::to_string(lastDataMs) + " ms before the loss");
+
+		// Only a connection which worked is recovered, so a wrong address is still reported when opening
+		if (keepConnected)
+		{
+			if (!reconnecting)
+			{
+				reconnectDelayMs = FIRST_RECONNECT_DELAY_MS;
+				reconnecting = true;
+			}
+			nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
+			LOG_INFO("[ProemionCANLink] Reconnecting in " + std::to_string(reconnectDelayMs / 1000) + " s");
+		}
+	}
+
+	void ProemionCANLinkInterface::on_connected()
+	{
+		connectedAt = std::chrono::steady_clock::now();
+		lastDataReceivedAt = connectedAt;
+		lastReadCallAt = {};
+		longestReadPauseMs = 0;
+		framesReceived = 0;
+		framesSent = 0;
+	}
+
+	void ProemionCANLinkInterface::try_reconnect()
+	{
+		const auto now = std::chrono::steady_clock::now();
+		if (now < nextReconnectAt)
+		{
+			std::this_thread::sleep_for(std::min<std::chrono::steady_clock::duration>(nextReconnectAt - now, std::chrono::milliseconds(100)));
+			return;
+		}
+
+		LOG_INFO("[ProemionCANLink] Reconnecting to " + ipAddress + ":" + std::to_string(tcpPort));
+		if (connect_tcp())
+		{
+			on_connected();
+			if (configure_isobus_bitrate())
+			{
+				reconnecting = false;
+				LOG_INFO("[ProemionCANLink] Reconnected to " + ipAddress + ":" + std::to_string(tcpPort));
+				return;
+			}
+			disconnect();
+			set_last_error("Connected to " + ipAddress + ":" + std::to_string(tcpPort) + ", but failed to configure the CAN bitrate to 250 kbit/s");
+		}
+
+		if (reconnecting)
+		{
+			reconnectDelayMs = std::min(reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS);
+			nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
+			LOG_WARNING("[ProemionCANLink] Reconnecting failed, trying again in " + std::to_string(reconnectDelayMs / 1000) + " s");
+		}
 	}
 
 	std::string ProemionCANLinkInterface::get_name() const
@@ -201,7 +255,7 @@ namespace isobus
 
 	bool ProemionCANLinkInterface::get_is_valid() const
 	{
-		return socketFd >= 0;
+		return (socketFd >= 0) || reconnecting;
 	}
 
 	bool ProemionCANLinkInterface::parse_interface()
@@ -369,23 +423,27 @@ namespace isobus
 
 		receiveBuffer.clear();
 
+		on_connected();
+
 		if (!configure_isobus_bitrate())
 		{
-			close();
+			disconnect();
 			set_last_error("Connected to " + ipAddress + ":" + std::to_string(tcpPort) + ", but failed to configure the CAN bitrate to 250 kbit/s");
 			return;
 		}
 
-		connectedAt = std::chrono::steady_clock::now();
-		lastDataReceivedAt = connectedAt;
-		lastReadCallAt = {};
-		longestReadPauseMs = 0;
-		framesReceived = 0;
-		framesSent = 0;
+		keepConnected = true;
 		LOG_INFO("[ProemionCANLink] Connected to " + ipAddress + ":" + std::to_string(tcpPort));
 	}
 
 	void ProemionCANLinkInterface::close()
+	{
+		keepConnected = false;
+		reconnecting = false;
+		disconnect();
+	}
+
+	void ProemionCANLinkInterface::disconnect()
 	{
 		std::lock_guard<std::mutex> lock(transmitMutex);
 
@@ -858,8 +916,12 @@ namespace isobus
 	bool ProemionCANLinkInterface::read_frame(
 	  CANMessageFrame &canFrame)
 	{
-		if (!get_is_valid())
+		if (socketFd < 0)
 		{
+			if (reconnecting)
+			{
+				try_reconnect();
+			}
 			return false;
 		}
 

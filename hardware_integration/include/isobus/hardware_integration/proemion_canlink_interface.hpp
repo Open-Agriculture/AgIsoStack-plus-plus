@@ -77,13 +77,13 @@ namespace isobus
 		std::string get_name() const override;
 
 		/// @brief Returns whether the TCP connection is currently valid
-		/// @returns true if connected
+		/// @returns true if connected, or while reconnecting after a connection that worked was lost
 		bool get_is_valid() const override;
 
 		/// @brief Opens the TCP connection and configures the CAN bitrate to 250 kbit/s
 		void open() override;
 
-		/// @brief Closes the TCP connection
+		/// @brief Closes the TCP connection and stops reconnecting
 		void close() override;
 
 		/// @brief Reads one CAN frame from the CANlink device
@@ -135,6 +135,10 @@ namespace isobus
 		static constexpr int CONNECT_TIMEOUT_MS = 3000;
 		/// @brief How long to wait for the reply to a bitrate command. Generous, since the first round trip over WiFi can be slow.
 		static constexpr int BITRATE_REPLY_TIMEOUT_MS = 1500;
+		/// @brief How long to wait before the first attempt to reconnect after the connection was lost. Doubles after each failed attempt.
+		static constexpr int FIRST_RECONNECT_DELAY_MS = 1000;
+		/// @brief The longest wait between attempts to reconnect
+		static constexpr int MAX_RECONNECT_DELAY_MS = 10000;
 
 		/**
 		 * @brief parse_interface Parse the hostname:port supplied by the user
@@ -182,6 +186,21 @@ namespace isobus
 		 * @param reason Why the connection was lost
 		 */
 		void report_lost_connection(const std::string &reason);
+
+		/**
+		 * @brief disconnect Closes the socket, without changing whether the driver should reconnect
+		 */
+		void disconnect();
+
+		/**
+		 * @brief on_connected Resets the statistics of the connection that was just made
+		 */
+		void on_connected();
+
+		/**
+		 * @brief try_reconnect Reconnects once the backoff delay has passed, otherwise waits a little so the caller does not spin
+		 */
+		void try_reconnect();
 
 		/**
 		 * @brief create_pdu Creates a valid PDU from the data provided (adds message boundaries, checksum)
@@ -261,7 +280,7 @@ namespace isobus
 		 * @brief socketFd Socket descriptor, or -1 when closed.
 		 * Wide enough to hold a Winsock SOCKET handle, whose INVALID_SOCKET value is also -1 in this type.
 		 */
-		std::intptr_t socketFd = -1;
+		std::atomic<std::intptr_t> socketFd{ -1 };
 
 		/**
 		 * @brief receiveBuffer Buffer for the received data over TCP
@@ -280,6 +299,11 @@ namespace isobus
 		std::int64_t longestReadPauseMs = 0; ///< Longest gap between read_frame calls on the current connection
 		std::uint64_t framesReceived = 0; ///< CAN frames received on the current connection
 		std::atomic<std::uint64_t> framesSent{ 0 }; ///< CAN frames sent on the current connection, counted by the transmit thread
+
+		std::atomic<bool> keepConnected{ false }; ///< Whether the connection was opened successfully and not closed since, so a loss should be recovered from
+		std::atomic<bool> reconnecting{ false }; ///< Whether a working connection was lost and is being made again
+		int reconnectDelayMs = FIRST_RECONNECT_DELAY_MS; ///< How long to wait after the next failed attempt to reconnect
+		std::chrono::steady_clock::time_point nextReconnectAt; ///< When to try reconnecting next
 
 		/**
 		 * @brief transmitMutex Mutex for CAN transmission, also held while the socket is closed
