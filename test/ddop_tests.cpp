@@ -766,3 +766,38 @@ TEST(DDOP_TESTS, ISOXMLOutputPadsShortStructureLabel)
 	ASSERT_TRUE(testDDOP.generate_task_data_iso_xml(isoxml));
 	EXPECT_NE(std::string::npos, isoxml.find(R"(F="20202020204241")"));
 }
+
+TEST(DDOP_TESTS, DeviceElementChildObjectIDsSpanCoversOnlyTheChildren)
+{
+	task_controller_object::DeviceElementObject element("Boom", 2, 1, task_controller_object::DeviceElementObject::Type::Function, 3);
+	const std::vector<std::uint16_t> children = { 100, 101, 112, 134 };
+	for (auto child : children)
+	{
+		element.add_reference_to_child_object(child);
+	}
+
+	auto span = element.get_child_object_ids();
+	ASSERT_EQ(children.size(), span.size());
+	EXPECT_EQ(children.size(), static_cast<std::size_t>(span.end() - span.begin()));
+
+	std::vector<std::uint16_t> iterated;
+	for (auto child : span)
+	{
+		iterated.push_back(child);
+	}
+	EXPECT_EQ(children, iterated);
+
+	for (std::size_t i = 0; i < children.size(); i++)
+	{
+		EXPECT_EQ(children[i], span[i]);
+	}
+}
+
+TEST(DDOP_TESTS, DataSpanOfBytesIsUnchanged)
+{
+	std::uint8_t bytes[] = { 1, 2, 3 };
+	DataSpan<const std::uint8_t> span(bytes, 3);
+	EXPECT_EQ(3u, span.size());
+	EXPECT_EQ(3, span.end() - span.begin());
+	EXPECT_EQ(3, span[2]);
+}
