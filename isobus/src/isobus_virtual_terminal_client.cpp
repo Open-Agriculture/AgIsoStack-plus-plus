@@ -3470,7 +3470,8 @@ namespace isobus
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
-				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0]);
+				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
+				retVal &= (0 != objectSize);
 				if (retVal)
 				{
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
@@ -3948,7 +3949,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer)
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
 		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
@@ -4156,8 +4157,22 @@ namespace isobus
 
 			case VirtualTerminalObjectType::ExtendedInputAttributes:
 			{
-				const std::uint32_t numberOfCodePlanes = buffer[5];
-				retVal += (numberOfCodePlanes * 2); // Doesn't include the character ranges, need to handle those externally
+				constexpr std::uint32_t CODE_PLANE_HEADER_LENGTH = 2;
+				constexpr std::uint32_t CHARACTER_RANGE_LENGTH = 4;
+				const std::uint32_t numberOfCodePlanes = (retVal <= bufferLength) ? buffer[4] : 0;
+				std::uint32_t codePlanesWalked = 0;
+
+				while ((codePlanesWalked < numberOfCodePlanes) && ((retVal + CODE_PLANE_HEADER_LENGTH) <= bufferLength))
+				{
+					retVal += CODE_PLANE_HEADER_LENGTH + (CHARACTER_RANGE_LENGTH * buffer[retVal + 1]);
+					codePlanesWalked++;
+				}
+
+				if ((codePlanesWalked < numberOfCodePlanes) || (retVal > bufferLength))
+				{
+					LOG_ERROR("[VT]: Extended Input Attributes object " + isobus::to_string(static_cast<int>(buffer[0] | (buffer[1] << 8))) + " runs past the end of the object pool");
+					retVal = 0;
+				}
 			}
 			break;
 

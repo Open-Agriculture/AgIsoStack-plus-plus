@@ -32,6 +32,22 @@ class CoreTest : public AgIsoStackTestFixture
 	// Wrapper to give tests a more meaningful name - no content.
 };
 
+static CANMessageFrame create_address_claim_frame(std::uint8_t channel, std::uint8_t address, const NAME &name)
+{
+	CANMessageFrame addressClaim = {};
+	addressClaim.channel = channel;
+	addressClaim.identifier = 0x18EEFF00 | address;
+	addressClaim.isExtendedFrame = true;
+	addressClaim.dataLength = 8;
+
+	const std::uint64_t fullName = name.get_full_name();
+	for (std::uint8_t byteIndex = 0; byteIndex < addressClaim.dataLength; byteIndex++)
+	{
+		addressClaim.data[byteIndex] = static_cast<std::uint8_t>(fullName >> (8 * byteIndex));
+	}
+	return addressClaim;
+}
+
 TEST_F(CoreTest, TestCreateAndDestroyPartners)
 {
 	std::vector<isobus::NAMEFilter> vtNameFilters;
@@ -348,6 +364,45 @@ TEST_F(CoreTest, PartnerCreatedAfterExternalClaimHasValidAddress)
 	EXPECT_EQ(claimedName.get_full_name(), partner->get_NAME().get_full_name());
 
 	isobus::CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
+TEST_F(CoreTest, RestoredControlFunctionSurvivesTheNextPrune)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t DEPARTED_ADDRESS = 0x98;
+	constexpr std::uint8_t RETURNING_ADDRESS = 0x99;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const NAME departedName = test_helpers::find_available_name(TEST_CHANNEL);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, DEPARTED_ADDRESS, departedName));
+	const NAME returningName = test_helpers::find_available_name(TEST_CHANNEL);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, RETURNING_ADDRESS, returningName));
+	CANNetworkManager::CANNetwork.update();
+	auto returningCF = CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, RETURNING_ADDRESS);
+	ASSERT_NE(nullptr, returningCF);
+	ASSERT_EQ(returningName, returningCF->get_NAME());
+
+	// Neither CF answers a request for address claim, so both are pruned, the departed one first
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1000);
+	CANNetworkManager::CANNetwork.update();
+	ASSERT_FALSE(returningCF->get_address_valid());
+
+	// The returning CF answers the next request, which restores it to the table
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, RETURNING_ADDRESS, returningName));
+	CANNetworkManager::CANNetwork.update();
+	ASSERT_TRUE(returningCF->get_address_valid());
+
+	// It claimed after that request, so it must survive the prune when the request's timer runs out
+	time_source.update_for_ms(1000);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(returningCF->get_address_valid());
+	EXPECT_EQ(returningCF, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, RETURNING_ADDRESS));
 }
 
 TEST_F(CoreTest, SimilarControlFunctions)
