@@ -333,6 +333,7 @@ namespace isobus
 		}
 
 		std::string connectError = "no address found";
+		lastConnectTimedOut = false;
 
 		for (auto address = result; address != nullptr; address = address->ai_next)
 		{
@@ -371,6 +372,7 @@ namespace isobus
 				else if (0 == pollResult)
 				{
 					connectError = "no answer within " + std::to_string(CONNECT_TIMEOUT_MS / 1000) + " s";
+					lastConnectTimedOut = true;
 				}
 				else
 				{
@@ -418,6 +420,16 @@ namespace isobus
 
 		if (!connect_tcp())
 		{
+			// No answer usually means the device is not on the network yet, like when the computer's WiFi is still
+			// connecting after it starts, so keep trying. A refused connection or an unknown name is reported straight away.
+			if (lastConnectTimedOut)
+			{
+				keepConnected = true;
+				reconnecting = true;
+				reconnectDelayMs = FIRST_RECONNECT_DELAY_MS;
+				nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
+				LOG_WARNING("[ProemionCANLink] " + ipAddress + ":" + std::to_string(tcpPort) + " did not answer, it may not be on the network yet. Retrying in the background.");
+			}
 			return;
 		}
 
