@@ -257,6 +257,17 @@ namespace isobus
 			const auto &rxMessage = rxMessageQueue.front();
 			auto &rxData = rxMessage.get_data();
 
+			if (nullptr == rxMessage.get_source_control_function())
+			{
+				// The sender's address has no control function, for example because it was marked offline
+				// while it was claiming its address again. Such a message cannot be attributed to a client or
+				// answered, and most of the handling below dereferences the source.
+				LOG_WARNING("[TC Server]: Ignoring a message from address 0x%02X, which has no control function.",
+				            rxMessage.get_identifier().get_source_address());
+				rxMessageQueue.pop_front();
+				continue;
+			}
+
 			switch (rxMessage.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData):
