@@ -1954,18 +1954,17 @@ TEST_F(TaskControllerServerTest, IgnoresMessagesWithoutSourceControlFunction)
 	                         .with_tc_geo_with_position_based_control());
 	server.initialize();
 
-	// A client that was marked offline while claiming its address again keeps sending, but the
-	// network manager has no control function for it, so its messages arrive without a source.
+	// Source control functions are null, as for a client that was pruned while still sending
 	const std::vector<std::uint8_t> workingSetMaster = { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 	CANMessage workingSetMasterMessage(CANMessage::Type::Receive, CANIdentifier(0x18FE0D9E), workingSetMaster, nullptr, nullptr, 0);
 	server.test_receive_message(workingSetMasterMessage, &server);
 
-	// Measurement commands are handled without checking for an active client first
+	// Not checked against the active clients
 	const std::vector<std::uint8_t> measurementCommand = { 0x44, 0x00, 0x8D, 0x00, 0xE8, 0x03, 0x00, 0x00 };
 	CANMessage measurementMessage(CANMessage::Type::Receive, CANIdentifier(0x14CB9D9E), measurementCommand, nullptr, internalECU, 0);
 	server.test_receive_message(measurementMessage, &server);
 
-	server.update(); // Crashed in ControlFunction::get_address() before
+	server.update();
 	EXPECT_EQ(0u, server.get_number_of_active_clients());
 
 	CANHardwareInterface::stop();
