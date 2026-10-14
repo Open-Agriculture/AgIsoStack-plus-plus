@@ -1540,8 +1540,9 @@ namespace isobus
 
 		/// @brief Returns the total number of bytes in the VT object located at the specified memory location
 		/// @param[in] buffer A pointer to the start of the VT object
-		/// @returns The total number of bytes present in the VT object at the specified location
-		static std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer);
+		/// @param[in] bufferLength The number of bytes that can be read from buffer
+		/// @returns The total number of bytes present in the VT object at the specified location, or 0 if it can't be sized
+		static std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength);
 
 		/// @brief Resizes the most common VT object format by some scale factor
 		/// @param[in] buffer A pointer to the start of the VT object

@@ -56,9 +56,9 @@ public:
 		return VirtualTerminalClient::get_minimum_object_length(type);
 	}
 
-	std::uint32_t test_wrapper_get_number_bytes_in_object(std::uint8_t *buffer)
+	std::uint32_t test_wrapper_get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
-		return VirtualTerminalClient::get_number_bytes_in_object(buffer);
+		return VirtualTerminalClient::get_number_bytes_in_object(buffer, bufferLength);
 	}
 
 	bool test_wrapper_resize_object(std::uint8_t *buffer, float scaleFactor, VirtualTerminalObjectType type)
@@ -763,15 +763,15 @@ TEST_F(VirtualTerminalTest, ResizeOutputList)
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	// Check object length
-	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
 	// Add a macro and re-check the length
 	testObject[11] = 1;
-	EXPECT_EQ(14, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+	EXPECT_EQ(14, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
 	// Add a full list of child objects and re-check the length
 	testObject[10] = 255;
-	EXPECT_EQ(524, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+	EXPECT_EQ(524, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputList));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -806,15 +806,51 @@ TEST_F(VirtualTerminalTest, ResizeInputBoolean)
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
 	// Check object length
-	EXPECT_EQ(13, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+	EXPECT_EQ(13, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
 	// Add a macro and re-check the length
 	testObject[12] = 1;
-	EXPECT_EQ(15, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+	EXPECT_EQ(15, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
 	// Cant really resize these since the width is a max value. Should remain the same.
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 2.0f, VirtualTerminalObjectType::InputBoolean));
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
+}
+
+TEST_F(VirtualTerminalTest, NumberBytesInExtendedInputAttributes)
+{
+	// clang-format off
+	std::uint8_t testPool[] = {
+		0xD2, 0x04, // Object ID 1234
+		0x26, // Extended Input Attributes
+		0x00, // Valid characters are listed
+		0x02, // 2 code planes
+		0x00, // Code plane 0
+		0x03, // 3 ranges
+		0x30, 0x00, 0x39, 0x00, // '0'..'9'
+		0x41, 0x00, 0x5A, 0x00, // 'A'..'Z'
+		0x61, 0x00, 0x7A, 0x00, // 'a'..'z'
+		0x01, // Code plane 1
+		0x02, // 2 ranges
+		0x00, 0x00, 0xFF, 0x00,
+		0x00, 0x01, 0xFF, 0x01,
+		0xD3, 0x04, // Object ID 1235
+		0x0E, // Output Rectangle
+		0x00, 0x00, 0x64, 0x00, 0x32, 0x00, 0x00, 0xFF, 0xFF, 0x00
+	};
+	// clang-format on
+
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	const std::uint32_t extendedInputAttributesSize = clientUnderTest.test_wrapper_get_number_bytes_in_object(testPool, sizeof(testPool));
+	ASSERT_EQ(29, extendedInputAttributesSize);
+	EXPECT_EQ(1235, testPool[extendedInputAttributesSize] | (testPool[extendedInputAttributesSize + 1] << 8));
+	EXPECT_EQ(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputRectangle), testPool[extendedInputAttributesSize + 2]);
+	EXPECT_EQ(13, clientUnderTest.test_wrapper_get_number_bytes_in_object(&testPool[extendedInputAttributesSize], sizeof(testPool) - extendedInputAttributesSize));
+
+	// Cut off inside the second code plane's ranges, then inside its header
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testPool, 28));
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testPool, 20));
 }
 
 TEST_F(VirtualTerminalTest, TestNumberBytesInInvalidObjects)
@@ -829,7 +865,7 @@ TEST_F(VirtualTerminalTest, TestNumberBytesInInvalidObjects)
 			0x01,
 			i
 		};
-		EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject));
+		EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 	}
 }
 
