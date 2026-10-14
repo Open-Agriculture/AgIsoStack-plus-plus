@@ -38,7 +38,7 @@ namespace isobus
 		/// @return The element at the given index.
 		T &operator[](std::size_t index)
 		{
-			return ptr[index * sizeof(T)];
+			return ptr[index];
 		}
 
 		/// @brief Get the element at the given index.
@@ -46,7 +46,7 @@ namespace isobus
 		/// @return The element at the given index.
 		T const &operator[](std::size_t index) const
 		{
-			return ptr[index * sizeof(T)];
+			return ptr[index];
 		}
 
 		/// @brief Get the size of the data span.
@@ -67,7 +67,7 @@ namespace isobus
 		/// @return The end iterator.
 		T *end() const
 		{
-			return ptr + _size * sizeof(T);
+			return ptr + _size;
 		}
 
 	private:
