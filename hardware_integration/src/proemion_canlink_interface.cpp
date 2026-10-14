@@ -180,6 +180,20 @@ namespace isobus
 		return interfaceString;
 	}
 
+	void ProemionCANLinkInterface::report_lost_connection(const std::string &reason)
+	{
+		const auto now = std::chrono::steady_clock::now();
+		const auto connectedSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - connectedAt).count();
+		const auto lastDataMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastDataReceivedAt).count();
+
+		close();
+		set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+		LOG_INFO("[ProemionCANLink] The connection lasted " + std::to_string(connectedSeconds) + " s, " +
+		         std::to_string(framesReceived) + " frames received, " + std::to_string(framesSent.load()) + " sent, " +
+		         "longest pause in reading " + std::to_string(longestReadPauseMs) + " ms, " +
+		         "last data from the device " + std::to_string(lastDataMs) + " ms before the loss");
+	}
+
 	std::string ProemionCANLinkInterface::get_name() const
 	{
 		return "Proemion CANlink";
@@ -362,6 +376,12 @@ namespace isobus
 			return;
 		}
 
+		connectedAt = std::chrono::steady_clock::now();
+		lastDataReceivedAt = connectedAt;
+		lastReadCallAt = {};
+		longestReadPauseMs = 0;
+		framesReceived = 0;
+		framesSent = 0;
 		LOG_INFO("[ProemionCANLink] Connected to " + ipAddress + ":" + std::to_string(tcpPort));
 	}
 
@@ -553,8 +573,7 @@ namespace isobus
 		if (pollResult < 0)
 		{
 			const auto reason = get_socket_error();
-			close();
-			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+			report_lost_connection(reason);
 			return false;
 		}
 
@@ -570,8 +589,7 @@ namespace isobus
 			socklen_t socketErrorLength = sizeof(socketError);
 			getsockopt(static_cast<NativeSocket>(socketFd), SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError), &socketErrorLength);
 			const std::string reason = (0 != socketError) ? describe_socket_error(socketError) : ((descriptor.revents & POLLHUP) ? "the device hung up" : "poll flags " + std::to_string(descriptor.revents));
-			close();
-			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+			report_lost_connection(reason);
 			return false;
 		}
 
@@ -583,11 +601,11 @@ namespace isobus
 		{
 			// Zero means the device closed the connection, which recv would keep reporting from now on
 			const std::string reason = (0 == received) ? "the device closed the connection" : get_socket_error();
-			close();
-			set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+			report_lost_connection(reason);
 			return false;
 		}
 
+		lastDataReceivedAt = std::chrono::steady_clock::now();
 		receiveBuffer.insert(receiveBuffer.end(), buffer, buffer + received);
 
 		return extract_pdu_from_receive_buffer(pdu);
@@ -845,6 +863,19 @@ namespace isobus
 			return false;
 		}
 
+		// The stack stops calling this while its receive queue is full, and meanwhile the device's buffer fills up
+		const auto callTime = std::chrono::steady_clock::now();
+		if (lastReadCallAt != std::chrono::steady_clock::time_point{})
+		{
+			const auto pauseMs = std::chrono::duration_cast<std::chrono::milliseconds>(callTime - lastReadCallAt).count();
+			longestReadPauseMs = std::max<std::int64_t>(longestReadPauseMs, pauseMs);
+			if (pauseMs >= 1000)
+			{
+				LOG_WARNING("[ProemionCANLink] No frames were read for " + std::to_string(pauseMs) + " ms, so they queued up in the device");
+			}
+		}
+		lastReadCallAt = callTime;
+
 		const auto deadline =
 		  std::chrono::steady_clock::now() +
 		  std::chrono::milliseconds(100);
@@ -873,6 +904,7 @@ namespace isobus
 
 			if (decode_can_frame(pdu, canFrame))
 			{
+				framesReceived++;
 				return true;
 			}
 		}
@@ -952,6 +984,11 @@ namespace isobus
 
 		const auto pdu = create_pdu(command, payload.data(), payload.size());
 
-		return send_pdu(pdu);
+		if (!send_pdu(pdu))
+		{
+			return false;
+		}
+		framesSent++;
+		return true;
 	}
 }

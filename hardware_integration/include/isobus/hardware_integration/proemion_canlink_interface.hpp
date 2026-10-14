@@ -16,6 +16,8 @@
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -175,6 +177,13 @@ namespace isobus
 		bool wait_for_bitrate_reply(BitrateKeys &bitrate);
 
 		/**
+		 * @brief report_lost_connection Closes the socket and reports why, with statistics that tell a drop by the
+		 * device apart from the reader falling behind
+		 * @param reason Why the connection was lost
+		 */
+		void report_lost_connection(const std::string &reason);
+
+		/**
 		 * @brief create_pdu Creates a valid PDU from the data provided (adds message boundaries, checksum)
 		 * @param command Command code
 		 * @param data Payload data
@@ -264,6 +273,13 @@ namespace isobus
 		 * which proves the device already listens at the bus's bitrate
 		 */
 		std::size_t canFramesSeenWhileConfiguring = 0;
+
+		std::chrono::steady_clock::time_point connectedAt; ///< When the current connection was made
+		std::chrono::steady_clock::time_point lastDataReceivedAt; ///< When data last arrived from the device
+		std::chrono::steady_clock::time_point lastReadCallAt; ///< When read_frame was last called, to spot the reader falling behind
+		std::int64_t longestReadPauseMs = 0; ///< Longest gap between read_frame calls on the current connection
+		std::uint64_t framesReceived = 0; ///< CAN frames received on the current connection
+		std::atomic<std::uint64_t> framesSent{ 0 }; ///< CAN frames sent on the current connection, counted by the transmit thread
 
 		/**
 		 * @brief transmitMutex Mutex for CAN transmission, also held while the socket is closed
