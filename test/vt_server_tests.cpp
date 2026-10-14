@@ -203,6 +203,16 @@ protected:
 		CANNetworkManager::CANNetwork.update();
 	}
 
+	// Version 2 and prior clients have to send this before they can be managed
+	static void receive_working_set_master_from_client(std::shared_ptr<ControlFunction> client)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+		                                                                                                             client,
+		                                                                                                             { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+		CANNetworkManager::CANNetwork.update();
+	}
+
 	static void receive_tp_from_client(std::shared_ptr<InternalControlFunction> server,
 	                                   std::shared_ptr<ControlFunction> client,
 	                                   const std::vector<std::uint8_t> &payload)
@@ -865,6 +875,7 @@ TEST_F(VirtualTerminalServerMessagingTest, StatusMessageDoesNotReportParsingOnVe
 	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version2OrOlder;
 	serverUnderTest.initialize();
 
+	receive_working_set_master_from_client(client);
 	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	receive_from_client(internalECU, client, { 0x11, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA });
 	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
@@ -1531,6 +1542,9 @@ TEST_F(VirtualTerminalServerMessagingTest, Version2ClientMaintenanceMessagesDoNo
 	DerivedTestVTServer serverUnderTest(internalECU);
 	serverUnderTest.initialize();
 
+	receive_working_set_master_from_client(reservedVersionClient);
+	receive_working_set_master_from_client(version2Client);
+
 	// Version 2 and prior clients have no Initiating bit, so bit 0 is set in every maintenance message
 	for (std::uint_fast8_t i = 0; i < 3; i++)
 	{
@@ -1546,6 +1560,52 @@ TEST_F(VirtualTerminalServerMessagingTest, Version2ClientMaintenanceMessagesDoNo
 	EXPECT_EQ(0U, serverUnderTest.shutdownReasons.size());
 	EXPECT_TRUE(reservedVersionClientManaged);
 	EXPECT_TRUE(version2ClientManaged);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, Version2ClientIsOnlyManagedAfterAWorkingSetMasterMessage)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x67, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xB8, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	const bool nackedBeforeWorkingSetMaster = is_nacked(internalECU, client, testPlugin, { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool managedBeforeWorkingSetMaster = is_managed(internalECU, client, testPlugin);
+
+	receive_working_set_master_from_client(client);
+	receive_from_client(internalECU, client, { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool managedAfterWorkingSetMaster = is_managed(internalECU, client, testPlugin);
+
+	// A managed working set master also answers requests for this message, which must not let it back in after a timeout
+	receive_working_set_master_from_client(client);
+	time_source.simulate_delay_ms(JUST_PAST_MAINTENANCE_TIMEOUT_MS);
+	serverUnderTest.run_update();
+
+	// Its maintenance messages look like initiating ones, but its object pool is gone
+	const bool nackedAfterTimeout = is_nacked(internalECU, client, testPlugin, { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool managedAfterTimeout = is_managed(internalECU, client, testPlugin);
+
+	receive_working_set_master_from_client(client);
+	receive_from_client(internalECU, client, { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool managedAfterRestart = is_managed(internalECU, client, testPlugin);
+	CANHardwareInterface::stop();
+
+	EXPECT_TRUE(nackedBeforeWorkingSetMaster);
+	EXPECT_FALSE(managedBeforeWorkingSetMaster);
+	EXPECT_TRUE(managedAfterWorkingSetMaster);
+	ASSERT_EQ(1U, serverUnderTest.shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::MaintenanceTimeout, serverUnderTest.shutdownReasons.front());
+	EXPECT_TRUE(nackedAfterTimeout);
+	EXPECT_FALSE(managedAfterTimeout);
+	EXPECT_TRUE(managedAfterRestart);
 }
 
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet

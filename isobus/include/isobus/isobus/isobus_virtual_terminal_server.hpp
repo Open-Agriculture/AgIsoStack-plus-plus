@@ -896,6 +896,11 @@ namespace isobus
 		/// @param[in] message The Working Set Maintenance message
 		void process_working_set_maintenance_message(const CANMessage &message);
 
+		/// @brief Remembers a Working Set Master message from a control function this server does not manage,
+		/// which a version 2 or prior client has to send before it can be managed
+		/// @param[in] message The Working Set Master message
+		void process_working_set_master_message(const CANMessage &message);
+
 		/// @brief Stops managing a working set whose master shut down unexpectedly (ISO 11783-6 4.6.9),
 		/// and queues it for report_shut_down_working_sets()
 		/// @param[in] workingSet The working set to stop managing
@@ -908,6 +913,7 @@ namespace isobus
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
 		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns, which both the CAN thread and update() add to
+		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP

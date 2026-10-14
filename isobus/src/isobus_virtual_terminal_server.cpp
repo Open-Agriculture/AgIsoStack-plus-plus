@@ -156,6 +156,9 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 			                                                                                          process_rx_message,
 			                                                                                          this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+			                                                                                          process_rx_message,
+			                                                                                          this);
 		}
 
 		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
@@ -171,6 +174,9 @@ namespace isobus
 		if (!initialized)
 		{
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+			                                                                                       process_rx_message,
+			                                                                                       this);
+			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
 			                                                                                       process_rx_message,
 			                                                                                       this);
 			initialized = true;
@@ -289,13 +295,15 @@ namespace isobus
 		const auto &data = message.get_data();
 		const bool initiating = (0 != (data[1] & 0x01));
 		const std::uint8_t clientVersion = data[2];
+		// VT version 2 and prior clients have no Initiating bit, they send 0xFF there,
+		// so every maintenance message they send looks like an initiating one.
+		const bool isVersion2OrPriorClient = ((clientVersion < 3) || (0xFF == clientVersion));
 		auto workingSet = get_managed_working_set(message.get_source_control_function());
 
 		if (nullptr != workingSet)
 		{
-			// VT version 2 and prior clients have no Initiating bit, they send 0xFF there,
-			// so only a version 3 or later client can tell us it has restarted.
-			if (initiating && (clientVersion >= 3) && (0xFF != clientVersion))
+			// Only a version 3 or later client can tell us it has restarted
+			if (initiating && !isVersion2OrPriorClient)
 			{
 				LOG_WARNING("[VT Server]: Client %u sent another initiating working set maintenance message, treating it as an unexpected shutdown", workingSet->get_control_function()->get_address());
 				shut_down_working_set(workingSet, UnexpectedShutdownReason::RepeatedInitiatingMessage);
@@ -309,16 +317,44 @@ namespace isobus
 
 		if ((nullptr == workingSet) && initiating)
 		{
-			// This CF is trying to initiate communication with us.
-			auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
-			newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-			managedWorkingSetList.emplace_back(newWorkingSet);
+			auto announcement = std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), message.get_source_control_function());
 
-			LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), clientVersion);
-			if (clientVersion > get_vt_version_byte(get_version()))
+			// A version 2 or prior client sends a Working Set Master message when it really starts up.
+			// Without one, this is a working set that timed out and still thinks its object pool is loaded.
+			if (isVersion2OrPriorClient && (announcedWorkingSetMasters.end() == announcement))
 			{
-				LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), clientVersion, get_vt_version_byte(get_version()));
+				LOG_DEBUG("[VT Server]: Ignoring a version 2 or prior working set maintenance message from client %u, it has not sent a Working Set Master message", message.get_source_control_function()->get_address());
 			}
+			else
+			{
+				if (announcedWorkingSetMasters.end() != announcement)
+				{
+					announcedWorkingSetMasters.erase(announcement);
+				}
+
+				// This CF is trying to initiate communication with us.
+				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
+				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+				managedWorkingSetList.emplace_back(newWorkingSet);
+
+				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), clientVersion);
+				if (clientVersion > get_vt_version_byte(get_version()))
+				{
+					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), clientVersion, get_vt_version_byte(get_version()));
+				}
+			}
+		}
+	}
+
+	void VirtualTerminalServer::process_working_set_master_message(const CANMessage &message)
+	{
+		const auto source = message.get_source_control_function();
+
+		// A managed working set master also sends this when another node requests it, which is not a restart
+		if ((nullptr == get_managed_working_set(source)) &&
+		    (announcedWorkingSetMasters.end() == std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), source)))
+		{
+			announcedWorkingSetMasters.push_back(source);
 		}
 	}
 
@@ -2020,7 +2056,11 @@ namespace isobus
 		    ((CAN_DATA_LENGTH <= message.get_data_length()) ||
 		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0))))) // Technically this message can be 6 bytes
 		{
-			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
+			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster) == message.get_identifier().get_parameter_group_number())
+			{
+				parentServer->process_working_set_master_message(message);
+			}
+			else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
 			{
 				if (static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage) == message.get_uint8_at(0))
 				{
