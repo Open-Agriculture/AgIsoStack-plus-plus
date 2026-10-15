@@ -266,6 +266,9 @@ namespace isobus
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
 
+		/// @brief Unregisters every internal control function's PGN request protocol while the callback list still exists, since a protocol can outlive this object
+		~CANNetworkManager();
+
 		/// @brief Factory function to create an external control function, also automatically assigns it to the lookup table.
 		/// @param[in] desiredName The NAME of the control function
 		/// @param[in] address The address of the control function
