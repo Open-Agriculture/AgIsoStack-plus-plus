@@ -187,14 +187,9 @@ namespace isobus
 		const auto connectedSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - connectedAt).count();
 		const auto lastDataMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastDataReceivedAt).count();
 
-		disconnect();
-		set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
-		LOG_INFO("[ProemionCANLink] The connection lasted " + std::to_string(connectedSeconds) + " s, " +
-		         std::to_string(framesReceived) + " frames received, " + std::to_string(framesSent.load()) + " sent, " +
-		         "longest pause in reading " + std::to_string(longestReadPauseMs) + " ms, " +
-		         "last data from the device " + std::to_string(lastDataMs) + " ms before the loss");
-
-		// Only a connection which worked is recovered, so a wrong address is still reported when opening
+		// Only a connection which worked is recovered, so a wrong address is still reported when opening.
+		// This is decided before the socket is closed, so get_is_valid() never reads false in between: an
+		// application which stops the interface when the driver turns invalid would otherwise stop it here.
 		if (keepConnected)
 		{
 			if (!reconnecting)
@@ -202,7 +197,18 @@ namespace isobus
 				reconnectDelayMs = FIRST_RECONNECT_DELAY_MS;
 				reconnecting = true;
 			}
-			nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
+			nextReconnectAt = now + std::chrono::milliseconds(reconnectDelayMs);
+		}
+
+		disconnect();
+		set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+		LOG_INFO("[ProemionCANLink] The connection lasted " + std::to_string(connectedSeconds) + " s, " +
+		         std::to_string(framesReceived) + " frames received, " + std::to_string(framesSent.load()) + " sent, " +
+		         "longest pause in reading " + std::to_string(longestReadPauseMs) + " ms, " +
+		         "last data from the device " + std::to_string(lastDataMs) + " ms before the loss");
+
+		if (reconnecting)
+		{
 			LOG_INFO("[ProemionCANLink] Reconnecting in " + std::to_string(reconnectDelayMs / 1000) + " s");
 		}
 	}

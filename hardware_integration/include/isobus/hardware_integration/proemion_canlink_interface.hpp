@@ -137,8 +137,8 @@ namespace isobus
 		static constexpr int BITRATE_REPLY_TIMEOUT_MS = 1500;
 		/// @brief How long to wait before the first attempt to reconnect after the connection was lost. Doubles after each failed attempt.
 		static constexpr int FIRST_RECONNECT_DELAY_MS = 1000;
-		/// @brief The longest wait between attempts to reconnect
-		static constexpr int MAX_RECONNECT_DELAY_MS = 10000;
+		/// @brief The longest wait between attempts to reconnect. Short, since an attempt only costs a name lookup and a TCP connect.
+		static constexpr int MAX_RECONNECT_DELAY_MS = 3000;
 
 		/**
 		 * @brief parse_interface Parse the hostname:port supplied by the user
