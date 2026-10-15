@@ -251,56 +251,6 @@ TEST_F(VirtualTerminalTest, SendChangeStringValueRejectsStringOver65535Character
 	EXPECT_FALSE(clientUnderTest.send_change_string_value(1234, 4, nullptr));
 }
 
-TEST_F(VirtualTerminalTest, SendChangeStringValueRejectsStringLongerThanPoolLength)
-{
-	// clang-format off
-	const std::vector<std::uint8_t> pool = {
-		// Input Attributes 1004, length 1
-		0xEC, 0x03, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputAttributes), 0, 1, 'a', 0,
-		// String Variable 1001, length 3
-		0xE9, 0x03, static_cast<std::uint8_t>(VirtualTerminalObjectType::StringVariable), 3, 0, 'a', 'b', 'c',
-		// Output String 1000, length 4
-		0xE8, 0x03, static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputString), 0x10, 0x00, 0x10, 0x00, 0, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0, 4, 0, 'a', 'b', 'c', 'd', 0,
-		// Input String 1002, length 2
-		0xEA, 0x03, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputString), 0x10, 0x00, 0x10, 0x00, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0, 2, 'a', 'b', 1, 0
-	};
-	// clang-format on
-
-	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
-	clientUnderTest.set_object_pool(0, &pool);
-
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1000, "abcd"));
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1000, "a"));
-	EXPECT_FALSE(clientUnderTest.send_change_string_value(1000, "abcde"));
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1001, "abc"));
-	EXPECT_FALSE(clientUnderTest.send_change_string_value(1001, "abcd"));
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1002, "ab"));
-	EXPECT_FALSE(clientUnderTest.send_change_string_value(1002, "abc"));
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1004, "a"));
-	EXPECT_FALSE(clientUnderTest.send_change_string_value(1004, "ab"));
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1003, "not in the pool"));
-
-	DerivedTestVTClient pointerClient(nullptr, nullptr);
-	pointerClient.set_object_pool(0, pool.data(), static_cast<std::uint32_t>(pool.size()));
-	EXPECT_FALSE(pointerClient.send_change_string_value(1002, "abc"));
-}
-
-TEST_F(VirtualTerminalTest, SendChangeStringValueStopsAtTruncatedPoolObject)
-{
-	// clang-format off
-	const std::vector<std::uint8_t> pool = {
-		// Input String 1, length 255, truncated before its value
-		0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputString), 0x10, 0x00, 0x10, 0x00, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0, 255, 0, 0
-	};
-	// clang-format on
-
-	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
-	clientUnderTest.set_object_pool(0, &pool);
-
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(1, std::string(256, 'a')));
-	EXPECT_TRUE(clientUnderTest.send_change_string_value(2, "a"));
-}
-
 class CapturingLogger : public CANStackLogger
 {
 public:

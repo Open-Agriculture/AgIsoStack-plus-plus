@@ -1541,14 +1541,7 @@ namespace isobus
 		/// @brief Returns the total number of bytes in the VT object located at the specified memory location
 		/// @param[in] buffer A pointer to the start of the VT object
 		/// @returns The total number of bytes present in the VT object at the specified location
-		static std::uint32_t get_number_bytes_in_object(const std::uint8_t *buffer);
-
-		/// @brief Looks up the length attribute of an Input String, Output String, String Variable or Input Attributes object in the registered object pools
-		/// @details Pools registered with a data chunk callback are not searched, since the client doesn't hold their bytes.
-		/// @param[in] objectID The object ID to look up
-		/// @param[out] length The length attribute of the object, in bytes
-		/// @returns true if a string object with that ID was found, otherwise false
-		bool get_string_object_length(std::uint16_t objectID, std::uint16_t &length) const;
+		static std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer);
 
 		/// @brief Resizes the most common VT object format by some scale factor
 		/// @param[in] buffer A pointer to the start of the VT object
