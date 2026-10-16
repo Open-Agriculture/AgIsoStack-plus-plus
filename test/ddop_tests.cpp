@@ -754,3 +754,15 @@ TEST(DDOP_TESTS, ISOXMLOutputSanitizesStrings)
 	EXPECT_NE(std::string::npos, isoxml.find(R"(D="Width "/>)"));
 	EXPECT_NE(std::string::npos, isoxml.find("E=\"m\xC2\xB3/ha \xF0\x9F\x8C\xBE\"/>"));
 }
+
+TEST(DDOP_TESTS, ISOXMLOutputPadsShortStructureLabel)
+{
+	DeviceDescriptorObjectPool testDDOP(4);
+	LanguageCommandInterface testLanguageInterface(nullptr, nullptr);
+	std::string isoxml;
+
+	ASSERT_TRUE(testDDOP.add_device("Sprayer", "1.0", "1", "AB", testLanguageInterface.get_localization_raw_data(), std::vector<std::uint8_t>(), 0));
+
+	ASSERT_TRUE(testDDOP.generate_task_data_iso_xml(isoxml));
+	EXPECT_NE(std::string::npos, isoxml.find(R"(F="20202020204241")"));
+}
