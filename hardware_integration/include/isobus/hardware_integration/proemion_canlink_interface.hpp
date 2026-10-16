@@ -304,7 +304,7 @@ namespace isobus
 		std::atomic<bool> reconnecting{ false }; ///< Whether a working connection was lost and is being made again
 		int reconnectDelayMs = FIRST_RECONNECT_DELAY_MS; ///< How long to wait after the next failed attempt to reconnect
 		std::chrono::steady_clock::time_point nextReconnectAt; ///< When to try reconnecting next
-		bool lastConnectTimedOut = false; ///< Whether the last connection attempt failed because the device did not answer
+		bool lastConnectMayBeTemporary = false; ///< Whether the last connection attempt failed because the device could not be found or did not answer
 
 		/**
 		 * @brief transmitMutex Mutex for CAN transmission, also held while the socket is closed

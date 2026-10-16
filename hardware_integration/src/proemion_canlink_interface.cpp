@@ -330,16 +330,18 @@ namespace isobus
 
 		const auto portString = std::to_string(tcpPort);
 
+		lastConnectMayBeTemporary = false;
 		const auto status = getaddrinfo(ipAddress.c_str(), portString.c_str(), &hints, &result);
 
 		if (status != 0)
 		{
+			// A name like device.local only resolves once the device has joined the network
+			lastConnectMayBeTemporary = true;
 			set_last_error("Unable to resolve " + ipAddress + ": " + get_resolve_error(status));
 			return false;
 		}
 
 		std::string connectError = "no address found";
-		lastConnectTimedOut = false;
 
 		for (auto address = result; address != nullptr; address = address->ai_next)
 		{
@@ -378,7 +380,7 @@ namespace isobus
 				else if (0 == pollResult)
 				{
 					connectError = "no answer within " + std::to_string(CONNECT_TIMEOUT_MS / 1000) + " s";
-					lastConnectTimedOut = true;
+					lastConnectMayBeTemporary = true;
 				}
 				else
 				{
@@ -426,15 +428,15 @@ namespace isobus
 
 		if (!connect_tcp())
 		{
-			// No answer usually means the device is not on the network yet, like when the computer's WiFi is still
-			// connecting after it starts, so keep trying. A refused connection or an unknown name is reported straight away.
-			if (lastConnectTimedOut)
+			// An unresolved name or no answer usually means the device is not on the network yet, like when it or the
+			// computer's WiFi is still starting, so keep trying. A refused connection is reported straight away.
+			if (lastConnectMayBeTemporary)
 			{
 				keepConnected = true;
 				reconnecting = true;
 				reconnectDelayMs = FIRST_RECONNECT_DELAY_MS;
 				nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
-				LOG_WARNING("[ProemionCANLink] " + ipAddress + ":" + std::to_string(tcpPort) + " did not answer, it may not be on the network yet. Retrying in the background.");
+				LOG_WARNING("[ProemionCANLink] " + ipAddress + ":" + std::to_string(tcpPort) + " could not be reached, it may not be on the network yet. Retrying in the background.");
 			}
 			return;
 		}
