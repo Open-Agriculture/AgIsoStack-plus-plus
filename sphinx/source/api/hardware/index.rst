@@ -45,6 +45,7 @@ When compiling with CMake, a default CAN driver plug-in will be selected for you
 - :code:`-DCAN_DRIVER=TWAI` for the ESP TWAI driver (This is the preferred ESP32 driver)
 - :code:`-DCAN_DRIVER=MCP2515` for the MCP2515 CAN controller
 - :code:`-DCAN_DRIVER=WindowsInnoMakerUSB2CAN` for the InnoMaker USB2CAN adapter (Windows)
+- :code:`-DCAN_DRIVER=WindowsCandleLight` for candleLight/gs_usb adapters using WinUSB, including WeAct USB2CAN (Windows)
 - :code:`-DCAN_DRIVER=TouCAN` for the Rusoku TouCAN (Windows)
 - :code:`-DCAN_DRIVER=SYS_TEC` for a SYS TEC sysWORXX USB CAN adapter (Windows)
 - :code:`-DCAN_DRIVER=NTCAN` for the NTCAN driver (Windows)
@@ -54,6 +55,34 @@ Or specify multiple using a semicolon separated list: :code:`-DCAN_DRIVER="<driv
 If your target hardware is not listed above, you can easily integrate your own hardware by :ref:`implementing a few simple functions <writing-your-own-can-driver>`.
 
 You can include the header file :code:`isobus/hardware_integration/available_can_drivers.hpp` to get access to the CAN drivers that have been included via your CMake configuration.
+
+candleLight / gs_usb on Windows
+------------------------------
+
+Select :code:`-DCAN_DRIVER=WindowsCandleLight` and construct
+:code:`isobus::CandleLightWindowsPlugin(0, 250000, 0)` for USB device index 0,
+250 kbit/s and device CAN channel 0. The default constructor uses those values.
+The plugin implements the same :code:`CANHardwarePlugin` interface as the other
+drivers and is exported through :code:`available_can_drivers.hpp` when enabled.
+
+The adapter must run candleLight/gs_usb firmware and expose a WinUSB interface
+with GUID :code:`{c15b4308-04d3-11e6-b3ea-6057189e6443}`. SLCAN firmware uses a
+serial port and is incompatible. The hardware used during development was a
+WeActStudio USB2CANFD v1 running the candleLight variant of
+`Elmue's CANable firmware <https://github.com/Elmue/CANable-2.5-firmware-Slcan-and-Candlelight>`_.
+The tester identified the installed image as
+:code:`STM32G0B1-Candlelight2.5-WeActSudioV1.dfu` (candleLight 2.5).
+Other firmware builds and adapters exposing this interface require separate
+validation. This driver does not bundle or flash firmware.
+Only classic CAN data frames (up to eight bytes) are supported. Transmit echoes,
+CAN controller error reports, remote frames and CAN FD frames are filtered.
+
+The plugin uses Windows SetupAPI/WinUSB system libraries and opens the adapter
+exclusively. Close other programs using the adapter first. It discovers bulk
+endpoints and calculates exact bit timing from the device's advertised limits,
+preferring an 87.5 percent sample point. Failures are reported through
+:code:`get_last_error()` and the stack logger. Setting the environment variable
+:code:`CANDLELIGHT_RAW_DUMP=1` prints raw USB receive traffic to stderr.
 
 Using the Hardware Interface
 ----------------------------

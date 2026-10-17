@@ -65,7 +65,7 @@ jobs:
       - name: Compile
         run: |
           mkdir build
-          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} "-DCAN_DRIVER=WindowsPCANBasic;WindowsCandleLight"
           cmake --build build --config ${{ env.BUILD_TYPE }}
       - name: Test
         run: |
