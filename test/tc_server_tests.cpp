@@ -1722,6 +1722,48 @@ TEST_F(TaskControllerServerTest, DDOPHelper_SubBoomWidthPriorityWithProcessData)
 	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.editable()); // Settable in DPD
 }
 
+TEST_F(TaskControllerServerTest, DDOPHelper_WidthEditableFollowsActualWorkingWidth)
+{
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("Section1", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 2);
+	ddop.add_device_element("Section2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 3);
+	ddop.add_device_element("Section3", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
+
+	ddop.add_device_process_data("S1_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 20);
+	ddop.add_device_process_data("S2_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 21);
+	ddop.add_device_property("S2_MaxWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 22);
+	ddop.add_device_process_data("S3_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 0, 0, 23);
+	ddop.add_device_process_data("S3_MaxWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 24);
+
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(3));
+	auto section3 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	ASSERT_NE(nullptr, section1);
+	ASSERT_NE(nullptr, section2);
+	ASSERT_NE(nullptr, section3);
+	section1->add_reference_to_child_object(20);
+	section2->add_reference_to_child_object(21);
+	section2->add_reference_to_child_object(22);
+	section3->add_reference_to_child_object(23);
+	section3->add_reference_to_child_object(24);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(3, implement.booms.at(0).sections.size());
+
+	EXPECT_FALSE(implement.booms.at(0).sections.at(0).width_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).width_mm.editable());
+
+	EXPECT_EQ(3000, implement.booms.at(0).sections.at(1).width_mm.get());
+	EXPECT_TRUE(implement.booms.at(0).sections.at(1).width_mm.editable());
+
+	EXPECT_FALSE(implement.booms.at(0).sections.at(2).width_mm.editable());
+}
+
 TEST_F(TaskControllerServerTest, B6CommandBusyStateTracking)
 {
 	VirtualCANPlugin testPlugin;
