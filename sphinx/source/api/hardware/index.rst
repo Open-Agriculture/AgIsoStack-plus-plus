@@ -57,7 +57,7 @@ If your target hardware is not listed above, you can easily integrate your own h
 You can include the header file :code:`isobus/hardware_integration/available_can_drivers.hpp` to get access to the CAN drivers that have been included via your CMake configuration.
 
 candleLight / gs_usb on Windows
-------------------------------
+-------------------------------
 
 Select :code:`-DCAN_DRIVER=WindowsCandleLight` and construct
 :code:`isobus::CandleLightWindowsPlugin(0, 250000, 0)` for USB device index 0,
@@ -82,7 +82,12 @@ exclusively. Close other programs using the adapter first. It discovers bulk
 endpoints and calculates exact bit timing from the device's advertised limits,
 preferring an 87.5 percent sample point. Failures are reported through
 :code:`get_last_error()` and the stack logger. Setting the environment variable
-:code:`CANDLELIGHT_RAW_DUMP=1` prints raw USB receive traffic to stderr.
+:code:`CANDLELIGHT_RAW_DUMP=1` sends raw USB receive traffic to the stack's debug
+logger; configure the logger to include debug messages when using this option.
+Receive polling leaves one overlapped USB read pending across idle timeouts.
+The read is cancelled and reaped when the plugin is closed, before its buffer
+and event are released. The CAN channel is reset before initialization so a
+previous process leaving it started does not prevent bit-timing configuration.
 
 Using the Hardware Interface
 ----------------------------

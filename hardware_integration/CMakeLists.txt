@@ -43,7 +43,7 @@ if("WindowsCandleLight" IN_LIST CAN_DRIVER)
     message(FATAL_ERROR "WindowsCandleLight requires Windows and WinUSB")
   endif()
   list(APPEND HARDWARE_INTEGRATION_SRC "candlelight_windows_plugin.cpp"
-       "candlelight_bittiming.hpp")
+       "candlelight_bittiming.hpp" "candlelight_overlapped.hpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "candlelight_windows_plugin.hpp")
 endif()
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
