@@ -10,8 +10,10 @@
 #include "isobus/isobus/isobus_virtual_terminal_working_set_base.hpp"
 
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace isobus
@@ -2025,19 +2027,29 @@ namespace isobus
 										commandLength = 9;
 										break;
 									case Macro::Command::GraphicsContextCommand:
-										// FIXME
+									{
+										// Padded with 0xFF to 8 bytes if shorter
+										switch (static_cast<VirtualTerminalBase::GraphicsContextSubCommandID>(iopData[3]))
+										{
+											case VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon:
+												commandLength = std::max(8, 5 + 4 * iopData[4]);
+												break;
+											case VirtualTerminalBase::GraphicsContextSubCommandID::DrawText:
+												commandLength = std::max(8, 6 + iopData[5]);
+												break;
+											case VirtualTerminalBase::GraphicsContextSubCommandID::PanAndZoomViewport:
+												commandLength = 12;
+												break;
+											default:
+												break;
+										}
+										retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
 										break;
+									}
 									case Macro::Command::ChangeStringValue:
 									{
-										// Change string value has variable length
-										std::vector<std::uint8_t> command;
-										auto stringLength = get_little_endian_uint16(iopData, 3);
-										for (int i = 0; i < (stringLength + 5); i++)
-										{
-											command.push_back(iopData[i]);
-										}
-										retVal = tempObject->add_command_packet(command);
-										commandLength = 5 + stringLength;
+										commandLength = std::max(8, 5 + get_little_endian_uint16(iopData, 3));
+										retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
 										break;
 									}
 									default:

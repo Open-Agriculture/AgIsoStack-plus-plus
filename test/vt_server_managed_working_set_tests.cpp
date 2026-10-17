@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
 using namespace isobus;
@@ -87,4 +88,58 @@ TEST(VirtualTerminalServerTest, ParsingStateIsNotIdleOnceTheParsingThreadHasStar
 	EXPECT_NE(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined, state);
 
 	workingSet.join_parsing_thread();
+}
+
+TEST(VirtualTerminalServerTest, MacroSkipsThePaddingOfAShortChangeStringValue)
+{
+	VirtualTerminalServerManagedWorkingSet workingSet;
+
+	// Macro 5 holds a Change String Value of 2 bytes, padded with 0xFF to 8 bytes, then a Hide/Show Object
+	std::vector<std::uint8_t> segment = {
+		0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x10, 0x00, static_cast<std::uint8_t>(Macro::Command::ChangeStringValue), 0x34, 0x12, 0x02, 0x00, 'O', 'K', 0xFF, static_cast<std::uint8_t>(Macro::Command::HideShowObject), 0x34, 0x12, 0x01, 0xFF, 0xFF, 0xFF, 0xFF
+	};
+
+	workingSet.add_iop_raw_data(segment);
+
+	workingSet.start_parsing_thread();
+	workingSet.join_parsing_thread();
+
+	auto object = workingSet.get_object_by_id(5);
+	ASSERT_NE(nullptr, object);
+	ASSERT_EQ(VirtualTerminalObjectType::Macro, object->get_object_type());
+
+	auto macro = std::static_pointer_cast<Macro>(object);
+	ASSERT_EQ(2, macro->get_number_of_commands());
+
+	std::vector<std::uint8_t> command;
+	ASSERT_TRUE(macro->get_command_packet(1, command));
+	EXPECT_EQ(static_cast<std::uint8_t>(Macro::Command::HideShowObject), command.at(0));
+}
+
+TEST(VirtualTerminalServerTest, MacroReadsEachGraphicsContextCommandAtItsOwnLength)
+{
+	VirtualTerminalServerManagedWorkingSet workingSet;
+
+	// Macro 5 holds a Draw Text of 1 character padded with 0xFF to 8 bytes, a 12 byte Pan and Zoom Viewport, then a Hide/Show Object
+	std::vector<std::uint8_t> segment = {
+		0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x1C, 0x00, static_cast<std::uint8_t>(Macro::Command::GraphicsContextCommand), 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalBase::GraphicsContextSubCommandID::DrawText), 0x00, 0x01, 'A', 0xFF, static_cast<std::uint8_t>(Macro::Command::GraphicsContextCommand), 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalBase::GraphicsContextSubCommandID::PanAndZoomViewport), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3F, static_cast<std::uint8_t>(Macro::Command::HideShowObject), 0x34, 0x12, 0x01, 0xFF, 0xFF, 0xFF, 0xFF
+	};
+
+	workingSet.add_iop_raw_data(segment);
+
+	workingSet.start_parsing_thread();
+	workingSet.join_parsing_thread();
+
+	auto object = workingSet.get_object_by_id(5);
+	ASSERT_NE(nullptr, object);
+	ASSERT_EQ(VirtualTerminalObjectType::Macro, object->get_object_type());
+
+	auto macro = std::static_pointer_cast<Macro>(object);
+	ASSERT_EQ(3, macro->get_number_of_commands());
+
+	std::vector<std::uint8_t> command;
+	ASSERT_TRUE(macro->get_command_packet(1, command));
+	EXPECT_EQ(12, command.size());
+	ASSERT_TRUE(macro->get_command_packet(2, command));
+	EXPECT_EQ(static_cast<std::uint8_t>(Macro::Command::HideShowObject), command.at(0));
 }
