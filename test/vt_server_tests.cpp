@@ -475,6 +475,58 @@ TEST_F(VirtualTerminalServerMessagingTest, FirstSelectableWorkingSetIsSelectedAu
 	EXPECT_EQ(0x03E8, statusAfterSelectable.data[2] | (statusAfterSelectable.data[3] << 8));
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, ChangeActiveMaskRejectsObjectsOfTheWrongType)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3F, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9C, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame poolResponse = {};
+	CANMessageFrame workingSetIsObjectPointerResponse = {};
+	CANMessageFrame maskIsObjectPointerResponse = {};
+	CANMessageFrame maskIsDataMaskResponse = {};
+	CANMessageFrame unknownMaskResponse = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Working Set 0 and Data Mask 1000, each with Object Pointer 1 as its child
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	const bool poolAnswered = poll_for_response(serverUnderTest, testPlugin, 0x12, poolResponse);
+
+	receive_from_client(internalECU, client, { 0xAD, 0x01, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF });
+	const bool workingSetIsObjectPointerAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, workingSetIsObjectPointerResponse);
+	receive_from_client(internalECU, client, { 0xAD, 0x00, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF });
+	const bool maskIsObjectPointerAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, maskIsObjectPointerResponse);
+	receive_from_client(internalECU, client, { 0xAD, 0x00, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF });
+	const bool maskIsDataMaskAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, maskIsDataMaskResponse);
+	const auto objectCountBeforeUnknownMask = serverUnderTest.managedWorkingSetList.front()->get_object_tree().size();
+	receive_from_client(internalECU, client, { 0xAD, 0x01, 0x00, 0xD0, 0x07, 0xFF, 0xFF, 0xFF });
+	const bool unknownMaskAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, unknownMaskResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolAnswered);
+	EXPECT_EQ(0x00, poolResponse.data[1]);
+	ASSERT_TRUE(workingSetIsObjectPointerAnswered);
+	EXPECT_EQ(0x01, workingSetIsObjectPointerResponse.data[3]);
+	ASSERT_TRUE(maskIsObjectPointerAnswered);
+	EXPECT_EQ(0x02, maskIsObjectPointerResponse.data[3]);
+	ASSERT_TRUE(maskIsDataMaskAnswered);
+	EXPECT_EQ(0x00, maskIsDataMaskResponse.data[3]);
+	ASSERT_TRUE(unknownMaskAnswered);
+	EXPECT_EQ(0x01, unknownMaskResponse.data[3]);
+	EXPECT_EQ(objectCountBeforeUnknownMask, serverUnderTest.managedWorkingSetList.front()->get_object_tree().size());
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, LoadVersionResponseIsSentWhenARestoredObjectPoolParses)
 {
 	VirtualCANPlugin testPlugin;

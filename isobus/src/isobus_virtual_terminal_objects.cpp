@@ -313,47 +313,10 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
+	bool WorkingSet::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
-		bool retVal = false;
-
-		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
-		{
-			switch (static_cast<AttributeName>(attributeID))
-			{
-				case AttributeName::BackgroundColour:
-				{
-					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
-					retVal = true;
-				}
-				break;
-
-				case AttributeName::Selectable:
-				{
-					set_selectable(0 != rawAttributeData);
-					retVal = true;
-				}
-				break;
-
-				case AttributeName::ActiveMask:
-				{
-					set_active_mask(static_cast<std::uint16_t>(rawAttributeData));
-					retVal = true;
-				}
-				break;
-
-				default:
-				{
-					returnedError = AttributeError::InvalidAttributeID;
-				}
-				break;
-			}
-		}
-		else
-		{
-			returnedError = AttributeError::InvalidAttributeID;
-		}
-		return retVal;
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
 	}
 
 	bool WorkingSet::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const

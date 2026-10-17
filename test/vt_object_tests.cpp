@@ -53,19 +53,22 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, WorkingSetTests)
 	ws->set_selectable(true);
 	EXPECT_TRUE(ws->get_selectable());
 
+	ws->set_background_color(41);
+
 	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 4321, objects, error));
-	EXPECT_EQ(ws->get_active_mask(), 4321);
+	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 4321, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidAttributeID, error);
+	EXPECT_EQ(ws->get_active_mask(), 1234);
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 1, objects, error));
-	EXPECT_EQ(ws->get_selectable(), true);
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 0, objects, error));
-	EXPECT_EQ(ws->get_selectable(), false);
+	error = VTObject::AttributeError::AnyOtherError;
+	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 0, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidAttributeID, error);
+	EXPECT_TRUE(ws->get_selectable());
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 41, objects, error));
+	error = VTObject::AttributeError::AnyOtherError;
+	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 0, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidAttributeID, error);
 	EXPECT_EQ(ws->get_background_color(), 41);
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 0, objects, error));
-	EXPECT_EQ(ws->get_background_color(), 0);
 
 	// Setting the type attribute should always fail
 	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Type), 4, objects, error));
@@ -108,17 +111,14 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, WorkingSetTests)
 	EXPECT_NEAR(white.g, 0.5f, 0.0001f);
 	EXPECT_NEAR(white.b, 0.5f, 0.0001f);
 
-	// Test setting and getting all attributes
+	// Test getting all attributes
 	std::uint32_t testValue = 0;
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 1234, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), testValue));
 	EXPECT_EQ(testValue, 1234);
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 1, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), testValue));
 	EXPECT_EQ(testValue, 1);
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 41, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 41);
 

@@ -1033,9 +1033,13 @@ namespace isobus
 				auto newActiveMaskObjectId = get_little_endian_uint16(data, 3);
 				auto workingSetObject = managedWorkingSet->get_object_by_id(workingSetObjectId);
 
-				if (nullptr != workingSetObject)
+				if ((nullptr != workingSetObject) && (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()))
 				{
-					if (nullptr != managedWorkingSet->get_object_by_id(newActiveMaskObjectId))
+					auto newActiveMaskObject = managedWorkingSet->get_object_by_id(newActiveMaskObjectId);
+
+					if ((nullptr != newActiveMaskObject) &&
+					    ((VirtualTerminalObjectType::DataMask == newActiveMaskObject->get_object_type()) ||
+					     (VirtualTerminalObjectType::AlarmMask == newActiveMaskObject->get_object_type())))
 					{
 						std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
 						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
