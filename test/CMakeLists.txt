@@ -46,6 +46,7 @@ set(TEST_SRC
     can_name_tests.cpp
     hardware_interface_tests.cpp
     candlelight_bittiming_tests.cpp
+    candlelight_io_tests.cpp
     vt_client_tests.cpp
     vt_server_tests.cpp
     language_command_interface_tests.cpp

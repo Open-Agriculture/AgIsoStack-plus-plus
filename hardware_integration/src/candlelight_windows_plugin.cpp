@@ -18,6 +18,7 @@
 //================================================================================================
 #include "isobus/hardware_integration/candlelight_windows_plugin.hpp"
 #include "candlelight_bittiming.hpp"
+#include "candlelight_overlapped.hpp"
 
 #include "isobus/isobus/can_stack_logger.hpp"
 
@@ -33,8 +34,9 @@
 #include <usb100.h>
 #include <winusb.h>
 
-#include <cstdio>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 #include <vector>
 
@@ -66,6 +68,8 @@ namespace isobus
 		MODE_START = 1
 	};
 	static constexpr std::uint32_t MODE_FLAG_HW_TIMESTAMP = (1u << 4);
+	static constexpr std::uint32_t FEATURE_HW_TIMESTAMP = (1u << 4);
+	static constexpr std::uint8_t GS_CAN_FLAG_FD = (1u << 1);
 
 #pragma pack(push, 1)
 	struct HostConfig
@@ -106,6 +110,9 @@ namespace isobus
 		HANDLE readEvent = nullptr;
 		HANDLE writeEvent = nullptr;
 		HANDLE controlEvent = nullptr;
+		OVERLAPPED readOperation = {};
+		std::uint8_t readBuffer[sizeof(HostFrame)] = {};
+		bool readPending = false;
 		std::uint8_t pipeIn = 0;
 		std::uint8_t pipeOut = 0;
 		std::atomic<std::uint32_t> nextEchoId = { 0 };
@@ -119,6 +126,14 @@ namespace isobus
 
 		void release()
 		{
+			// CANHardwareInterface has stopped its receive thread before close().
+			// The persistent read's storage must outlive cancellation/completion.
+			if (readPending)
+			{
+				DWORD ignored = 0;
+				detail::cancel_and_reap(fileHandle, readOperation, ignored);
+				readPending = false;
+			}
 			if (nullptr != winusb)
 			{
 				WinUsb_Free(winusb);
@@ -264,12 +279,13 @@ namespace isobus
 				}
 				if (WAIT_OBJECT_0 != WaitForSingleObject(controlEvent, CONTROL_TIMEOUT_MS))
 				{
-					CancelIoEx(fileHandle, &overlapped);
-					GetOverlappedResult(fileHandle, &overlapped, &transferred, TRUE);
-					errorOut = "Control transfer (request " + std::to_string(bRequest) + ") timed out";
-					return false;
+					if (!detail::cancel_and_reap(fileHandle, overlapped, transferred))
+					{
+						errorOut = "Control transfer (request " + std::to_string(bRequest) + ") did not complete before cancellation (error " + std::to_string(GetLastError()) + ")";
+						return false;
+					}
 				}
-				if (!GetOverlappedResult(fileHandle, &overlapped, &transferred, FALSE))
+				else if (!GetOverlappedResult(fileHandle, &overlapped, &transferred, FALSE))
 				{
 					errorOut = "Control transfer (request " + std::to_string(bRequest) + ") failed (error " + std::to_string(GetLastError()) + ")";
 					return false;
@@ -283,55 +299,55 @@ namespace isobus
 			return true;
 		}
 
-		/// @brief Reads exactly one host frame. USB bulk transfers legitimately arrive as a
-		/// "short packet": the device commonly sends only the base 20 byte frame (no hardware
-		/// timestamp trailer) even though the full struct is 24 bytes, and that is NOT an error
-		/// -- the real reference driver explicitly handles this (treats anything from 20 to 24
-		/// bytes as valid, zeroing the timestamp field when the trailer wasn't present). Requiring
-		/// an exact 24 byte read, as an earlier version of this function did, silently corrupts
-		/// every frame once the device starts sending 20 byte packets.
+		/// @brief Polls one persistent USB read. A timeout leaves the request pending.
+		/// @details Host frames may contain 20-24 bytes; absent timestamp bytes are zeroed.
 		bool fill_rx(HostFrame &frame)
 		{
 			static constexpr std::size_t MIN_FRAME_SIZE = sizeof(HostFrame) - sizeof(frame.timestampUs);
-			std::uint8_t rawBuffer[sizeof(HostFrame)];
 			DWORD received = 0;
-			OVERLAPPED overlapped = {};
-			overlapped.hEvent = readEvent;
-			ResetEvent(readEvent);
-
-			if (!WinUsb_ReadPipe(winusb, pipeIn, rawBuffer, static_cast<ULONG>(sizeof(rawBuffer)), &received, &overlapped))
+			if (!readPending)
 			{
-				if (ERROR_IO_PENDING != GetLastError())
+				readOperation = {};
+				readOperation.hEvent = readEvent;
+				ResetEvent(readEvent);
+				if (!WinUsb_ReadPipe(winusb, pipeIn, readBuffer, static_cast<ULONG>(sizeof(readBuffer)), &received, &readOperation))
 				{
 					const DWORD error = GetLastError();
-					LOG_ERROR("[candleLight] USB read failed to start (Windows error " + std::to_string(error) + ")");
-					ioError = true;
+					if (ERROR_IO_PENDING != error)
+					{
+						LOG_ERROR("[candleLight] USB read failed to start (Windows error " + std::to_string(error) + ")");
+						ioError = true;
+						return false;
+					}
+					readPending = true;
+				}
+			}
+			if (readPending)
+			{
+				DWORD error = 0;
+				const auto result = detail::poll_overlapped(fileHandle, readOperation, READ_TIMEOUT_MS, received, error);
+				if (detail::TransferPollResult::Pending == result)
+				{
 					return false;
 				}
-				const DWORD waitResult = WaitForSingleObject(readEvent, READ_TIMEOUT_MS);
-				if (WAIT_OBJECT_0 != waitResult)
+				if (detail::TransferPollResult::Failed == result && !detail::cancel_and_reap(fileHandle, readOperation, received))
 				{
-					WinUsb_AbortPipe(winusb, pipeIn);
-					GetOverlappedResult(fileHandle, &overlapped, &received, TRUE); // Reap the cancelled request
-					return false; // Just a timeout, not necessarily an error
-				}
-				if (!GetOverlappedResult(fileHandle, &overlapped, &received, FALSE))
-				{
-					const DWORD error = GetLastError();
+					readPending = false;
 					LOG_ERROR("[candleLight] USB read completion failed (Windows error " + std::to_string(error) + ")");
 					ioError = true;
 					return false;
 				}
+				readPending = false;
 			}
 			if (debugRawDump)
 			{
-				std::fprintf(stderr, "[candleLight RAW] received=%lu bytes:", static_cast<unsigned long>(received));
+				std::ostringstream dump;
+				dump << "[candleLight RAW] received=" << received << " bytes:" << std::hex << std::setfill('0');
 				for (DWORD i = 0; i < received; i++)
 				{
-					std::fprintf(stderr, " %02X", rawBuffer[i]);
+					dump << ' ' << std::setw(2) << static_cast<unsigned>(readBuffer[i]);
 				}
-				std::fprintf(stderr, "\n");
-				std::fflush(stderr);
+				LOG_DEBUG("%s", dump.str().c_str());
 			}
 
 			if (received < MIN_FRAME_SIZE)
@@ -340,12 +356,11 @@ namespace isobus
 			}
 
 			frame = HostFrame{}; // Zero first, so a missing timestamp trailer reads back as 0, not garbage
-			std::memcpy(&frame, rawBuffer, (received < sizeof(HostFrame)) ? received : sizeof(HostFrame));
+			std::memcpy(&frame, readBuffer, (received < sizeof(HostFrame)) ? received : sizeof(HostFrame));
 			return true;
 		}
 
-		/// Set to true (e.g. via an environment variable check in open()) to print every raw USB
-		/// read to stderr before any interpretation -- a ground-truth diagnostic, not for normal use.
+		/// Enabled by CANDLELIGHT_RAW_DUMP in open(); raw reads use the stack debug logger.
 		bool debugRawDump = false;
 	};
 
@@ -454,6 +469,17 @@ namespace isobus
 			return;
 		}
 
+		// A previous process may have exited without stopping the channel.
+		// Reset it before changing bit timing, including after an I/O failure.
+		DeviceMode resetMode = { MODE_RESET, 0 };
+		if (!impl->control_transfer(BM_REQUEST_OUT, BREQ_MODE, channel, 0, &resetMode, sizeof(resetMode), impl->lastError))
+		{
+			lastError = "Resetting the CAN channel failed: " + impl->lastError;
+			LOG_ERROR("[candleLight] " + lastError);
+			impl.reset();
+			return;
+		}
+
 		// --- The setup handshake, matching candle_api's sequence ---
 		HostConfig hostConfig = { 0x0000beefu };
 		if (!impl->control_transfer(BM_REQUEST_OUT, BREQ_HOST_FORMAT, 1, 0, &hostConfig, sizeof(hostConfig), impl->lastError))
@@ -497,7 +523,7 @@ namespace isobus
 			return;
 		}
 
-		const bool hasTimestamps = (0 != (btConst.feature & MODE_FLAG_HW_TIMESTAMP));
+		const bool hasTimestamps = (0 != (btConst.feature & FEATURE_HW_TIMESTAMP));
 		DeviceMode startMode = { MODE_START, hasTimestamps ? MODE_FLAG_HW_TIMESTAMP : 0u };
 		if (!impl->control_transfer(BM_REQUEST_OUT, BREQ_MODE, channel, 0, &startMode, sizeof(startMode), impl->lastError))
 		{
@@ -537,8 +563,7 @@ namespace isobus
 			{
 				if (impl->debugRawDump)
 				{
-					std::fprintf(stderr, "[candleLight RAW] discarded as TX echo: echoID=%u canID=%08X canDLC=%u channel=%u\n", frame.echoID, frame.canID, frame.canDLC, frame.channel);
-					std::fflush(stderr);
+					LOG_DEBUG("[candleLight RAW] discarded as TX echo: echoID=%u canID=%08X canDLC=%u channel=%u", frame.echoID, frame.canID, frame.canDLC, frame.channel);
 				}
 				continue; // This is a TX-confirmation echo of our own earlier write_frame(), not incoming data
 			}
@@ -553,15 +578,14 @@ namespace isobus
 				// bus yet) and are logged for visibility, then the frame is discarded.
 				if (impl->debugRawDump)
 				{
-					std::fprintf(stderr, "[candleLight RAW] discarded as CAN error frame: errorBits=%08X data=%02X %02X %02X %02X %02X %02X %02X %02X\n", frame.canID & ~ID_FLAG_ERR, frame.data[0], frame.data[1], frame.data[2], frame.data[3], frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
-					std::fflush(stderr);
+					LOG_DEBUG("[candleLight RAW] discarded as CAN error frame: errorBits=%08X data=%02X %02X %02X %02X %02X %02X %02X %02X", frame.canID & ~ID_FLAG_ERR, frame.data[0], frame.data[1], frame.data[2], frame.data[3], frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
 				}
 				continue;
 			}
 
 			// The stack accepts classic data frames only, from this adapter channel.
 			if ((frame.channel != channel) || (frame.canID & ID_FLAG_RTR) ||
-			    (frame.flags & (1u << 1)) || (frame.canDLC > 8))
+			    (frame.flags & GS_CAN_FLAG_FD) || (frame.canDLC > 8))
 			{
 				continue;
 			}
@@ -615,15 +639,15 @@ namespace isobus
 				valid = false;
 				return false;
 			}
-			if (WAIT_OBJECT_0 != WaitForSingleObject(impl->writeEvent, WRITE_TIMEOUT_MS))
-			{
-				WinUsb_AbortPipe(impl->winusb, impl->pipeOut);
-				GetOverlappedResult(impl->fileHandle, &overlapped, &written, TRUE);
-				return false; // Timed out, but not necessarily a dead connection
-			}
-			if (!GetOverlappedResult(impl->fileHandle, &overlapped, &written, FALSE))
+			const DWORD waitResult = WaitForSingleObject(impl->writeEvent, WRITE_TIMEOUT_MS);
+			const bool completed = (WAIT_OBJECT_0 == waitResult) ? (0 != GetOverlappedResult(impl->fileHandle, &overlapped, &written, FALSE)) : detail::cancel_and_reap(impl->fileHandle, overlapped, written);
+			if (!completed)
 			{
 				const DWORD error = GetLastError();
+				if (WAIT_TIMEOUT == waitResult && ERROR_OPERATION_ABORTED == error)
+				{
+					return false;
+				}
 				LOG_ERROR("[candleLight] USB write completion failed (Windows error " + std::to_string(error) + ")");
 				impl->ioError = true;
 				valid = false;
