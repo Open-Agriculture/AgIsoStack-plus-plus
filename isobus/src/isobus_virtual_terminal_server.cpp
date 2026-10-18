@@ -2832,6 +2832,7 @@ namespace isobus
 	bool VirtualTerminalServer::send_supported_objects(std::shared_ptr<ControlFunction> destination) const
 	{
 		auto supportedObjects = get_supported_objects();
+		std::sort(supportedObjects.begin(), supportedObjects.end());
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::GetSupportedObjectsMessage),
 			                                   static_cast<std::uint8_t>(supportedObjects.size()) };
 
@@ -2839,9 +2840,10 @@ namespace isobus
 		{
 			buffer.push_back(supportedObject);
 		}
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      serverInternalControlFunction,
 		                                                      destination,
 		                                                      get_priority());
