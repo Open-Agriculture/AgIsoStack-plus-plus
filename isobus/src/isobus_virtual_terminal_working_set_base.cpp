@@ -81,6 +81,27 @@ namespace isobus
 		return faultingObjectID;
 	}
 
+	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_parent_object_id()
+	{
+		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		std::uint16_t retVal = NULL_OBJECT_ID;
+
+		if (NULL_OBJECT_ID != faultingObjectID)
+		{
+			for (auto object = vtObjectTree.cbegin(); (vtObjectTree.cend() != object) && (NULL_OBJECT_ID == retVal); object++)
+			{
+				for (std::uint16_t i = 0; (nullptr != object->second) && (i < object->second->get_number_children()); i++)
+				{
+					if (faultingObjectID == object->second->get_child_id(i))
+					{
+						retVal = object->first;
+					}
+				}
+			}
+		}
+		return retVal;
+	}
+
 	void VirtualTerminalWorkingSetBase::add_iop_raw_data(const std::vector<std::uint8_t> &dataToAdd)
 	{
 		transferredIopSize += dataToAdd.size();

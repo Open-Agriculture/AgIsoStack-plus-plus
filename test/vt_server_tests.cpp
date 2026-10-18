@@ -436,6 +436,69 @@ TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsAnError
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsTheParentOfTheFaultyObject)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x41, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9E, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Working Set 258 with child 1, then object 1 of an unknown type
+	receive_tp_from_client(internalECU, client, { 0x11, 0x02, 0x01, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0xAA, 0xAA });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[1]);
+	EXPECT_EQ(258, responseFrame.data[2] | (responseFrame.data[3] << 8));
+	EXPECT_EQ(1, responseFrame.data[4] | (responseFrame.data[5] << 8));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsNoParentWhenTheFaultyObjectHasNoID)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x42, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9F, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Input List 2 with one NULL item, then 3 bytes, too short to hold an object
+	receive_tp_from_client(internalECU, client, { 0x11, 0x02, 0x00, 0x0A, 0x10, 0x00, 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00, 0x01 });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[1]);
+	EXPECT_EQ(NULL_OBJECT_ID, responseFrame.data[2] | (responseFrame.data[3] << 8));
+	EXPECT_EQ(NULL_OBJECT_ID, responseFrame.data[4] | (responseFrame.data[5] << 8));
+	EXPECT_NE(nullptr, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2));
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, FirstSelectableWorkingSetIsSelectedAutomatically)
 {
 	VirtualCANPlugin testPlugin;
