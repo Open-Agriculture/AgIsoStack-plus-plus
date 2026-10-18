@@ -419,14 +419,13 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
-		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @brief Rejects every attribute, because all Working Set attributes are read-only.
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
 		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
-		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
-		/// returns true, this value is undefined.
-		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		/// @param[out] returnedError Always set to AttributeError::InvalidAttributeID
+		/// @returns Always false
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
