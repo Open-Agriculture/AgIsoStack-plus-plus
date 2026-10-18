@@ -143,3 +143,35 @@ TEST(VirtualTerminalServerTest, MacroReadsEachGraphicsContextCommandAtItsOwnLeng
 	ASSERT_TRUE(macro->get_command_packet(2, command));
 	EXPECT_EQ(static_cast<std::uint8_t>(Macro::Command::HideShowObject), command.at(0));
 }
+
+TEST(VirtualTerminalServerTest, ObjectPoolTransferDropsThePaddingOfASingleFrame)
+{
+	VirtualTerminalServerManagedWorkingSet workingSet;
+
+	// Object Pointer 0x1234 to the NULL object, padded with 0xFF to fill the 8 byte frame after the mux byte
+	workingSet.add_iop_raw_data({ 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectPointer), 0xFF, 0xFF, 0xFF, 0xFF });
+
+	workingSet.start_parsing_thread();
+	workingSet.join_parsing_thread();
+
+	auto object = workingSet.get_object_by_id(0x1234);
+	ASSERT_NE(nullptr, object);
+	EXPECT_EQ(NULL_OBJECT_ID, std::static_pointer_cast<ObjectPointer>(object)->get_value());
+
+	std::vector<std::uint8_t> withoutPadding = { 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectPointer), 0xFF, 0xFF };
+	EXPECT_EQ(withoutPadding, workingSet.get_iop_raw_data(0));
+}
+
+TEST(VirtualTerminalServerTest, ObjectPoolTransferAcceptsAtMostSevenBytesOfPadding)
+{
+	// Object Pointer 0x1234 to the NULL object, then 7 bytes of 0xFF
+	std::vector<std::uint8_t> segment = {
+		0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectPointer), 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+	};
+	VirtualTerminalServerManagedWorkingSet sevenBytes;
+	EXPECT_TRUE(sevenBytes.parse_iop_into_objects(segment.data(), static_cast<std::uint32_t>(segment.size())));
+
+	segment.push_back(0xFF);
+	VirtualTerminalServerManagedWorkingSet eightBytes;
+	EXPECT_FALSE(eightBytes.parse_iop_into_objects(segment.data(), static_cast<std::uint32_t>(segment.size())));
+}

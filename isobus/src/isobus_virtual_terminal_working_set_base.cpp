@@ -2644,7 +2644,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength)
+	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength, std::uint32_t *objectsLength)
 	{
 		std::uint32_t remainingLength = iopLength;
 		std::uint8_t *currentIopPointer = iopData;
@@ -2652,7 +2652,10 @@ namespace isobus
 
 		if (iopLength > 0)
 		{
-			while (remainingLength > 0)
+			// Padding is at most 7 bytes of 0xFF, and no object ID is 0xFFFF
+			while ((remainingLength >= CAN_DATA_LENGTH) ||
+			       ((remainingLength > 0) &&
+			        !std::all_of(currentIopPointer, currentIopPointer + remainingLength, [](std::uint8_t dataByte) { return 0xFF == dataByte; })))
 			{
 				if (!parse_next_object(currentIopPointer, remainingLength))
 				{
@@ -2665,6 +2668,11 @@ namespace isobus
 		else
 		{
 			retVal = false;
+		}
+
+		if (nullptr != objectsLength)
+		{
+			*objectsLength = iopLength - remainingLength;
 		}
 		return retVal;
 	}
