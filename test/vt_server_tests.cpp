@@ -104,7 +104,7 @@ public:
 
 	std::vector<std::uint8_t> get_supported_objects() const override
 	{
-		return {};
+		return supportedObjects;
 	}
 
 	std::vector<std::uint8_t> load_version(const std::vector<std::uint8_t> &versionLabel, NAME) override
@@ -186,6 +186,7 @@ public:
 	std::vector<std::uint8_t> lastVersionLabel;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> shutDownWorkingSets;
 	std::vector<UnexpectedShutdownReason> shutdownReasons;
+	std::vector<std::uint8_t> supportedObjects;
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -277,12 +278,13 @@ protected:
 
 		if (foundRequestToSend)
 		{
-			size = static_cast<std::uint16_t>(frame.data[1] | (frame.data[2] << 8));
+			const CANMessageFrame requestToSend = frame;
+			size = static_cast<std::uint16_t>(requestToSend.data[1] | (requestToSend.data[2] << 8));
 			CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
 			                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement),
 			                                                                                                   server,
 			                                                                                                   client,
-			                                                                                                   { 0x11, frame.data[3], 0x01, 0xFF, 0xFF, frame.data[5], frame.data[6], frame.data[7] }));
+			                                                                                                   { 0x11, requestToSend.data[3], 0x01, 0xFF, 0xFF, requestToSend.data[5], requestToSend.data[6], requestToSend.data[7] }));
 
 			for (std::uint_fast8_t attempt = 0; (attempt < 50) && (payload.size() < size); attempt++)
 			{
@@ -297,6 +299,13 @@ protected:
 				}
 			}
 			payload.resize(std::min<std::size_t>(payload.size(), size));
+			// Without this ack the server refuses the next session
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
+			                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement),
+			                                                                                                   server,
+			                                                                                                   client,
+			                                                                                                   { 0x13, requestToSend.data[1], requestToSend.data[2], requestToSend.data[3], 0xFF, requestToSend.data[5], requestToSend.data[6], requestToSend.data[7] }));
+			CANNetworkManager::CANNetwork.update();
 		}
 		return foundRequestToSend && (payload.size() == size);
 	}
@@ -486,6 +495,69 @@ TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsAnError
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsTheParentOfTheFaultyObject)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x41, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9E, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Working Set 258 with child 1, then object 1 of an unknown type
+	receive_tp_from_client(internalECU, client, { 0x11, 0x02, 0x01, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0xAA, 0xAA });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[1]);
+	EXPECT_EQ(258, responseFrame.data[2] | (responseFrame.data[3] << 8));
+	EXPECT_EQ(1, responseFrame.data[4] | (responseFrame.data[5] << 8));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsNoParentWhenTheFaultyObjectHasNoID)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x42, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9F, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Input List 2 with one NULL item, then 3 bytes, too short to hold an object
+	receive_tp_from_client(internalECU, client, { 0x11, 0x02, 0x00, 0x0A, 0x10, 0x00, 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00, 0x01 });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundResponse);
+	EXPECT_EQ(0x01, responseFrame.data[1]);
+	EXPECT_EQ(NULL_OBJECT_ID, responseFrame.data[2] | (responseFrame.data[3] << 8));
+	EXPECT_EQ(NULL_OBJECT_ID, responseFrame.data[4] | (responseFrame.data[5] << 8));
+	EXPECT_NE(nullptr, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2));
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, FirstSelectableWorkingSetIsSelectedAutomatically)
 {
 	VirtualCANPlugin testPlugin;
@@ -532,6 +604,118 @@ TEST_F(VirtualTerminalServerMessagingTest, FirstSelectableWorkingSetIsSelectedAu
 	ASSERT_TRUE(foundStatusAfterSelectable);
 	EXPECT_EQ(0x9B, statusAfterSelectable.data[1]);
 	EXPECT_EQ(0x03E8, statusAfterSelectable.data[2] | (statusAfterSelectable.data[3] << 8));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ChangeActiveMaskRejectsObjectsOfTheWrongType)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x3F, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9C, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame poolResponse = {};
+	CANMessageFrame workingSetIsObjectPointerResponse = {};
+	CANMessageFrame maskIsObjectPointerResponse = {};
+	CANMessageFrame maskIsDataMaskResponse = {};
+	CANMessageFrame unknownMaskResponse = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Working Set 0 and Data Mask 1000, each with Object Pointer 1 as its child
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	const bool poolAnswered = poll_for_response(serverUnderTest, testPlugin, 0x12, poolResponse);
+
+	receive_from_client(internalECU, client, { 0xAD, 0x01, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF });
+	const bool workingSetIsObjectPointerAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, workingSetIsObjectPointerResponse);
+	receive_from_client(internalECU, client, { 0xAD, 0x00, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF });
+	const bool maskIsObjectPointerAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, maskIsObjectPointerResponse);
+	receive_from_client(internalECU, client, { 0xAD, 0x00, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF });
+	const bool maskIsDataMaskAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, maskIsDataMaskResponse);
+	const auto objectCountBeforeUnknownMask = serverUnderTest.managedWorkingSetList.front()->get_object_tree().size();
+	receive_from_client(internalECU, client, { 0xAD, 0x01, 0x00, 0xD0, 0x07, 0xFF, 0xFF, 0xFF });
+	const bool unknownMaskAnswered = poll_for_response(serverUnderTest, testPlugin, 0xAD, unknownMaskResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolAnswered);
+	EXPECT_EQ(0x00, poolResponse.data[1]);
+	ASSERT_TRUE(workingSetIsObjectPointerAnswered);
+	EXPECT_EQ(0x01, workingSetIsObjectPointerResponse.data[3]);
+	ASSERT_TRUE(maskIsObjectPointerAnswered);
+	EXPECT_EQ(0x02, maskIsObjectPointerResponse.data[3]);
+	ASSERT_TRUE(maskIsDataMaskAnswered);
+	EXPECT_EQ(0x00, maskIsDataMaskResponse.data[3]);
+	ASSERT_TRUE(unknownMaskAnswered);
+	EXPECT_EQ(0x01, unknownMaskResponse.data[3]);
+	EXPECT_EQ(objectCountBeforeUnknownMask, serverUnderTest.managedWorkingSetList.front()->get_object_tree().size());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, GetSupportedObjectsResponseIsASortedListOfVariableLength)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x40, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0x9D, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame emptyResponse = {};
+	CANMessageFrame shortResponse = {};
+	CANMessageFrame sixTypesResponse = {};
+	std::vector<std::uint8_t> sevenTypesResponse;
+	std::vector<std::uint8_t> longResponse;
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	serverUnderTest.supportedObjects = {};
+	receive_from_client(internalECU, client, { 0xC5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool emptyAnswered = poll_for_response(serverUnderTest, testPlugin, 0xC5, emptyResponse);
+
+	serverUnderTest.supportedObjects = { 3, 1 };
+	receive_from_client(internalECU, client, { 0xC5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool shortAnswered = poll_for_response(serverUnderTest, testPlugin, 0xC5, shortResponse);
+
+	serverUnderTest.supportedObjects = { 6, 5, 4, 3, 2, 1 };
+	receive_from_client(internalECU, client, { 0xC5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool sixTypesAnswered = poll_for_response(serverUnderTest, testPlugin, 0xC5, sixTypesResponse);
+
+	serverUnderTest.supportedObjects = { 7, 6, 5, 4, 3, 2, 1 };
+	receive_from_client(internalECU, client, { 0xC5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool sevenTypesAnswered = read_tp_from_server(testPlugin, internalECU, client, sevenTypesResponse);
+
+	serverUnderTest.supportedObjects = { 39, 37, 7, 6, 5, 4, 3, 2, 1, 0 };
+	receive_from_client(internalECU, client, { 0xC5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool longAnswered = read_tp_from_server(testPlugin, internalECU, client, longResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(emptyAnswered);
+	EXPECT_EQ(8, emptyResponse.dataLength);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC5, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), std::vector<std::uint8_t>(emptyResponse.data, emptyResponse.data + 8));
+	ASSERT_TRUE(shortAnswered);
+	EXPECT_EQ(8, shortResponse.dataLength);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC5, 2, 1, 3, 0xFF, 0xFF, 0xFF, 0xFF }), std::vector<std::uint8_t>(shortResponse.data, shortResponse.data + 8));
+	ASSERT_TRUE(sixTypesAnswered);
+	EXPECT_EQ(8, sixTypesResponse.dataLength);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC5, 6, 1, 2, 3, 4, 5, 6 }), std::vector<std::uint8_t>(sixTypesResponse.data, sixTypesResponse.data + 8));
+	ASSERT_TRUE(sevenTypesAnswered);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC5, 7, 1, 2, 3, 4, 5, 6, 7 }), sevenTypesResponse);
+	ASSERT_TRUE(longAnswered);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC5, 10, 0, 1, 2, 3, 4, 5, 6, 7, 37, 39 }), longResponse);
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, LoadVersionResponseIsSentWhenARestoredObjectPoolParses)

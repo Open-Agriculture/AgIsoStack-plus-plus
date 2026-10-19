@@ -53,19 +53,22 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, WorkingSetTests)
 	ws->set_selectable(true);
 	EXPECT_TRUE(ws->get_selectable());
 
+	ws->set_background_color(41);
+
 	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 4321, objects, error));
-	EXPECT_EQ(ws->get_active_mask(), 4321);
+	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 4321, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidAttributeID, error);
+	EXPECT_EQ(ws->get_active_mask(), 1234);
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 1, objects, error));
-	EXPECT_EQ(ws->get_selectable(), true);
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 0, objects, error));
-	EXPECT_EQ(ws->get_selectable(), false);
+	error = VTObject::AttributeError::AnyOtherError;
+	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 0, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidAttributeID, error);
+	EXPECT_TRUE(ws->get_selectable());
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 41, objects, error));
+	error = VTObject::AttributeError::AnyOtherError;
+	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 0, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidAttributeID, error);
 	EXPECT_EQ(ws->get_background_color(), 41);
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 0, objects, error));
-	EXPECT_EQ(ws->get_background_color(), 0);
 
 	// Setting the type attribute should always fail
 	EXPECT_FALSE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Type), 4, objects, error));
@@ -108,17 +111,14 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, WorkingSetTests)
 	EXPECT_NEAR(white.g, 0.5f, 0.0001f);
 	EXPECT_NEAR(white.b, 0.5f, 0.0001f);
 
-	// Test setting and getting all attributes
+	// Test getting all attributes
 	std::uint32_t testValue = 0;
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), 1234, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::ActiveMask), testValue));
 	EXPECT_EQ(testValue, 1234);
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), 1, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::Selectable), testValue));
 	EXPECT_EQ(testValue, 1);
 
-	EXPECT_TRUE(ws->set_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), 41, objects, error));
 	EXPECT_TRUE(ws->get_attribute(static_cast<std::uint8_t>(WorkingSet::AttributeName::BackgroundColour), testValue));
 	EXPECT_EQ(testValue, 41);
 
@@ -196,6 +196,7 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, DataMaskTests)
 	EXPECT_EQ(testValue, 41);
 
 	EXPECT_FALSE(dataMask2->set_attribute(static_cast<std::uint8_t>(DataMask::AttributeName::SoftKeyMask), 50, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidValue, error);
 	EXPECT_TRUE(dataMask2->get_attribute(static_cast<std::uint8_t>(DataMask::AttributeName::SoftKeyMask), testValue));
 	EXPECT_EQ(testValue, 100);
 
@@ -349,6 +350,9 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, AlarmMaskTests)
 
 	// Attempt to change the soft key mask to the other one, which is ID 100
 	EXPECT_TRUE(alarmMask2->change_soft_key_mask(100, objects));
+	EXPECT_FALSE(alarmMask2->set_attribute(static_cast<std::uint8_t>(AlarmMask::AttributeName::SoftKeyMask), 300, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidValue, error);
+	EXPECT_EQ(100, alarmMask2->get_soft_key_mask());
 
 	std::uint32_t testValue = 0;
 	EXPECT_TRUE(alarmMask2->get_attribute(static_cast<std::uint8_t>(AlarmMask::AttributeName::SoftKeyMask), testValue));
@@ -702,6 +706,33 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, KeyGroupTests)
 
 	EXPECT_TRUE(keyGroup->get_attribute(static_cast<std::uint8_t>(KeyGroup::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::KeyGroup));
+}
+
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, KeyGroupNameMustReferenceAnExistingObject)
+{
+	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
+	auto keyGroup = std::make_shared<KeyGroup>();
+	auto name = std::make_shared<OutputString>();
+	auto danglingPointer = std::make_shared<ObjectPointer>();
+	VTObject::AttributeError error = VTObject::AttributeError::AnyOtherError;
+
+	keyGroup->set_id(100);
+	objects[keyGroup->get_id()] = keyGroup;
+	name->set_id(200);
+	objects[name->get_id()] = name;
+	keyGroup->set_name_object_id(name->get_id());
+	danglingPointer->set_id(300);
+	danglingPointer->add_child(400, 0, 0);
+	objects[danglingPointer->get_id()] = danglingPointer;
+
+	EXPECT_FALSE(keyGroup->set_attribute(static_cast<std::uint8_t>(KeyGroup::AttributeName::Name), 400, objects, error));
+	EXPECT_EQ(VTObject::AttributeError::InvalidValue, error);
+	EXPECT_FALSE(keyGroup->set_attribute(static_cast<std::uint8_t>(KeyGroup::AttributeName::Name), NULL_OBJECT_ID, objects, error));
+	EXPECT_FALSE(keyGroup->set_attribute(static_cast<std::uint8_t>(KeyGroup::AttributeName::Name), danglingPointer->get_id(), objects, error));
+	EXPECT_EQ(name->get_id(), keyGroup->get_name_object_id());
+
+	keyGroup->set_name_object_id(400);
+	EXPECT_FALSE(keyGroup->get_is_valid(objects));
 }
 
 TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputBooleanTests)
@@ -2999,6 +3030,13 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ExternalObjectPointerTests)
 
 	EXPECT_TRUE(externalObject->get_attribute(static_cast<std::uint8_t>(ExternalObjectPointer::AttributeName::Type), testValue));
 	EXPECT_EQ(testValue, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExternalObjectPointer));
+
+	EXPECT_TRUE(externalObject->get_is_valid(objects));
+	externalObject->set_default_object_id(1234);
+	EXPECT_FALSE(externalObject->get_is_valid(objects));
+	externalObject->set_default_object_id(NULL_OBJECT_ID);
+	externalObject->set_external_reference_name_id(50);
+	EXPECT_FALSE(externalObject->get_is_valid(objects));
 }
 
 TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, ObjectPointerTests)

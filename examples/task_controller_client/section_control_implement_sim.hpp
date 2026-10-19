@@ -141,11 +141,11 @@ public:
 
 	/// @brief Returns the current prescription control state
 	/// @returns The current prescription control state (always 1)
-	constexpr std::uint32_t get_prescription_control_state() const;
+	std::uint32_t get_prescription_control_state() const;
 
 	/// @brief Returns the current section control state
 	/// @returns The current section control state (always 1)
-	constexpr std::uint32_t get_section_control_state() const;
+	std::uint32_t get_section_control_state() const;
 
 	/// @brief Generates a DDOP to send to the TC
 	/// @param[in] poolToPopulate A pointer to the DDOP that will be populated

@@ -1132,9 +1132,13 @@ namespace isobus
 				auto newActiveMaskObjectId = get_little_endian_uint16(data, 3);
 				auto workingSetObject = managedWorkingSet->get_object_by_id(workingSetObjectId);
 
-				if (nullptr != workingSetObject)
+				if ((nullptr != workingSetObject) && (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()))
 				{
-					if (nullptr != managedWorkingSet->get_object_by_id(newActiveMaskObjectId))
+					auto newActiveMaskObject = managedWorkingSet->get_object_by_id(newActiveMaskObjectId);
+
+					if ((nullptr != newActiveMaskObject) &&
+					    ((VirtualTerminalObjectType::DataMask == newActiveMaskObject->get_object_type()) ||
+					     (VirtualTerminalObjectType::AlarmMask == newActiveMaskObject->get_object_type())))
 					{
 						std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
 						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
@@ -2936,6 +2940,7 @@ namespace isobus
 	bool VirtualTerminalServer::send_supported_objects(std::shared_ptr<ControlFunction> destination) const
 	{
 		auto supportedObjects = get_supported_objects();
+		std::sort(supportedObjects.begin(), supportedObjects.end());
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::GetSupportedObjectsMessage),
 			                                   static_cast<std::uint8_t>(supportedObjects.size()) };
 
@@ -2943,9 +2948,10 @@ namespace isobus
 		{
 			buffer.push_back(supportedObject);
 		}
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      serverInternalControlFunction,
 		                                                      destination,
 		                                                      get_priority());
@@ -3091,8 +3097,7 @@ namespace isobus
 				}
 				else
 				{
-					///  @todo Get the parent object ID of the faulting object
-					send_end_of_object_pool_response(false, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
 				}
 			}
 		}

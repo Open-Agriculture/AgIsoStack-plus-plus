@@ -405,6 +405,42 @@ TEST_F(CoreTest, RestoredControlFunctionSurvivesTheNextPrune)
 	EXPECT_EQ(returningCF, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, RETURNING_ADDRESS));
 }
 
+TEST_F(CoreTest, PartnerCreatedAfterItsDeviceAnsweredARequestSurvivesThePrune)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t CLAIMED_ADDRESS = 0x9A;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const NAME claimedName = test_helpers::find_available_name(TEST_CHANNEL);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, CLAIMED_ADDRESS, claimedName));
+	CANNetworkManager::CANNetwork.update();
+
+	// The device answers a request for address claim before the application creates a partner for it
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, CLAIMED_ADDRESS, claimedName));
+	CANNetworkManager::CANNetwork.update();
+
+	const std::vector<NAMEFilter> nameFilters{
+		NAMEFilter(NAME::NAMEParameters::IdentityNumber, claimedName.get_identity_number()),
+		NAMEFilter(NAME::NAMEParameters::ManufacturerCode, claimedName.get_manufacturer_code()),
+		NAMEFilter(NAME::NAMEParameters::FunctionCode, claimedName.get_function_code()),
+		NAMEFilter(NAME::NAMEParameters::EcuInstance, claimedName.get_ecu_instance())
+	};
+	auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(TEST_CHANNEL, nameFilters);
+	ASSERT_TRUE(partner->get_address_valid());
+
+	// The device claimed after that request, so its partner must survive the prune when the request's timer runs out
+	time_source.update_for_ms(1000);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, CLAIMED_ADDRESS));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
 TEST_F(CoreTest, SimilarControlFunctions)
 {
 	CANNetworkManager::CANNetwork.update();
