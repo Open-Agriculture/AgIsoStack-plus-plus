@@ -1210,6 +1210,36 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	CANHardwareInterface::stop();
 }
 
+TEST_F(TaskControllerServerTest, WorkingSetMasterFromUnknownSource)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xA5, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18FE0DA6, { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18FE0DA6, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	EXPECT_EQ(0xFF, server.get_client_version(nullptr));
+
+	CANHardwareInterface::stop();
+}
+
 TEST_F(TaskControllerServerTest, ClientVersionTracking)
 {
 	VirtualCANPlugin testPlugin;
