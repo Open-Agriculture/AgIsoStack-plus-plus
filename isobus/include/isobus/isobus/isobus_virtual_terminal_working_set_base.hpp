@@ -62,6 +62,10 @@ namespace isobus
 		/// @returns The object ID of the faulting object if parsing the object pool failed
 		std::uint16_t get_object_pool_faulting_object_id();
 
+		/// @brief Returns the lowest object ID among the parsed objects that list the faulting object as a child
+		/// @returns The parent of the faulting object, or NULL_OBJECT_ID if no object parsed before it lists it
+		std::uint16_t get_object_pool_faulting_parent_object_id();
+
 	protected:
 		/// @brief Adds an object to the object tree, and replaces an object
 		/// if there's already one in the tree with the same ID.
@@ -104,12 +108,24 @@ namespace isobus
 		                                  std::uint8_t *&iopData,
 		                                  std::uint32_t &iopLength) const;
 
+		/// @brief A class to hold together IOP data and a processing state flag
+		class IopDataComponent
+		{
+		public:
+			///< Constructor where the IOP data can be passed
+			/// @param[in] d A pointer to the object pool data
+			explicit IopDataComponent(const std::vector<std::uint8_t> &d) :
+			  data(d) {}
+			bool processed = false; ///< This variable is set to true after this IOP section is being parset
+			std::vector<std::uint8_t> data; ///< Stores the raw IOP data
+		};
+
 		std::mutex managedWorkingSetMutex; ///< A mutex to protect the interface of the managed working set
 		VTColourTable workingSetColourTable; ///< This working set's colour table
 		std::uint32_t iopSize = 0; ///< Total size of the IOP in bytes
 		std::uint32_t transferredIopSize = 0; ///< Total number of IOP bytes transferred
 		std::map<std::uint16_t, std::shared_ptr<VTObject>> vtObjectTree; ///< The C++ object representation (deserialized) of the object pool being managed
-		std::vector<std::vector<std::uint8_t>> iopFilesRawData; ///< Raw IOP File data from the client
+		std::vector<IopDataComponent> iopFilesRawData; ///< Raw IOP data from the client
 		std::uint16_t workingSetID = NULL_OBJECT_ID; ///< Stores the object ID of the working set object itself
 		std::uint16_t faultingObjectID = NULL_OBJECT_ID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
 	};

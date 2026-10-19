@@ -49,9 +49,13 @@ namespace isobus
 
 	std::shared_ptr<PartneredControlFunction> CANNetworkManager::create_partnered_control_function(std::uint8_t CANPort, const std::vector<NAMEFilter> &NAMEFilters)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
-		auto controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
-		partneredControlFunctions.push_back(controlFunction);
+		auto controlFunction = std::shared_ptr<PartneredControlFunction>{};
+		{
+			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
+			partneredControlFunctions.push_back(controlFunction);
+		}
+		update_new_partners();
 		return controlFunction;
 	}
 
@@ -292,7 +296,8 @@ namespace isobus
 		                                            rxFrame.dataLength,
 		                                            get_control_function(rxFrame.channel, identifier.get_source_address()),
 		                                            get_control_function(rxFrame.channel, identifier.get_destination_address()),
-		                                            rxFrame.channel);
+		                                            rxFrame.channel,
+		                                            rxFrame.timestamp_us);
 
 		update_busload(rxFrame.channel, rxFrame.get_number_bits_in_message());
 
@@ -313,7 +318,8 @@ namespace isobus
 		                                            txFrame.dataLength,
 		                                            get_control_function(txFrame.channel, identifier.get_source_address()),
 		                                            get_control_function(txFrame.channel, identifier.get_destination_address()),
-		                                            txFrame.channel);
+		                                            txFrame.channel,
+		                                            txFrame.timestamp_us);
 
 		if (initialized)
 		{
@@ -525,16 +531,7 @@ namespace isobus
 
 		for (std::uint8_t i = 0; i < CAN_PORT_MAXIMUM; i++)
 		{
-			auto receive_message_callback = [this, i](const CANMessage &message) {
-				// TODO: hack port_index for now, once network manager isn't a singleton, this can be removed
-				CANMessage tempMessage(CANMessage::Type::Receive,
-				                       message.get_identifier(),
-				                       message.get_data(),
-				                       message.get_source_control_function(),
-				                       message.get_destination_control_function(),
-				                       i);
-				this->protocol_message_callback(message);
-			};
+			auto receive_message_callback = [this](const CANMessage &message) { this->protocol_message_callback(message); };
 			transportProtocols.at(i).reset(new TransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
@@ -593,6 +590,11 @@ namespace isobus
 				if (result != inactiveControlFunctions.end())
 				{
 					targetControlFunction = *result;
+					// This CF is being restored to the table precisely because it just announced its
+					// address, so credit it for this roll-call. Without this it re-enters the table with
+					// the flag still false and is eligible for pruning again on the very next roll-call,
+					// which turns a single eviction into an unbroken offline/online cycle.
+					targetControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
 
 					LOG_DEBUG("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
 					          targetControlFunction->get_type_string().c_str(),
@@ -613,14 +615,9 @@ namespace isobus
 			{
 				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = SystemTiming::get_timestamp_ms();
 
-				// Reset the claimedAddressSinceLastAddressClaimRequest flag for all control functions on the port
-				auto result = std::find_if(inactiveControlFunctions.begin(), inactiveControlFunctions.end(), [channelIndex](std::shared_ptr<ControlFunction> controlFunction) {
-					return (channelIndex == controlFunction->get_can_port());
-				});
-				if (result != inactiveControlFunctions.end())
-				{
-					(*result)->claimedAddressSinceLastAddressClaimRequest = true;
-				}
+				// Reset the claimedAddressSinceLastAddressClaimRequest flag for all control functions in the table on the port.
+				// Inactive CFs are left alone: the prune only looks at the table, and an inactive CF is credited when
+				// its own address claim restores it to the table.
 				std::for_each(controlFunctionTable[channelIndex].begin(), controlFunctionTable[channelIndex].end(), [](std::shared_ptr<ControlFunction> controlFunction) {
 					if (nullptr != controlFunction)
 					{
@@ -896,6 +893,8 @@ namespace isobus
 						partner->address = currentActiveControlFunction->get_address();
 						partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
 						partner->initialized = true;
+						// The partner replaces this CF in the table, so it must not lose credit for a claim the CF already made
+						partner->claimedAddressSinceLastAddressClaimRequest = currentActiveControlFunction->claimedAddressSinceLastAddressClaimRequest;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
 						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
 

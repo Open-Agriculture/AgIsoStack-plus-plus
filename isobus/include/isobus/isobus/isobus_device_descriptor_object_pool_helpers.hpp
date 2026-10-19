@@ -90,23 +90,38 @@ namespace isobus
 			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the bin, which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 
+	private:
+		/// @brief Common class for SubBoom and Section to deduplicate code used for width calculation
+		class DeviceDescriptorObjectWithWidth
+		{
+		public:
+			/// @brief Gets the width value with priority order: Actual > Maximum > Default
+			/// @returns The width value with the highest priority, or an empty ObjectPoolValue if none are set
+			ObjectPoolValue get_width_with_priority() const;
+
+			ObjectPoolValue actualWorkingWidth_mm; ///< The actual working width in mm.
+			ObjectPoolValue maximumWorkingWidth_mm; ///< The maximum working width in mm.
+			ObjectPoolValue defaultWorkingWidth_mm; ///< The default working width in mm.
+			ObjectPoolValue width_mm; ///< The width in mm (set based on priority: Actual > Maximum > Default).
+		};
+
+	public:
 		/// @brief A helper class that describes an individual section of a boom.
 		/// This is used to describe the sections of a boom. Units are defined in mm as specified
 		/// in the ISO 11783-10 standard. X offsets are fore/aft. Y offsets are left/right again as
 		/// defined in the ISO 11783-10 standard.
-		class Section
+		class Section : public DeviceDescriptorObjectWithWidth
 		{
 		public:
 			ObjectPoolValue xOffset_mm; ///< The x offset of the section in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the section in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the section in mm. Z offsets are up+/down-.
-			ObjectPoolValue width_mm; ///< The width of the section in mm.
 			std::vector<ProductControlInformation> rates; ///< If the section has rates, this will contain the associated data needed to control the product.
 			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the section, which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 
 		/// @brief A helper class that describes a sub boom (not all devices support this)
-		class SubBoom
+		class SubBoom : public DeviceDescriptorObjectWithWidth
 		{
 		public:
 			std::vector<Section> sections; ///< The sections of the sub boom
@@ -114,7 +129,6 @@ namespace isobus
 			ObjectPoolValue xOffset_mm; ///< The x offset of the sub boom in mm. X offsets are fore+/aft-.
 			ObjectPoolValue yOffset_mm; ///< The y offset of the sub boom in mm. Y offsets are left-/right+.
 			ObjectPoolValue zOffset_mm; ///< The z offset of the sub boom in mm. Z offsets are up+/down-.
-			ObjectPoolValue width_mm; ///< The width of the sub boom in mm
 			std::uint16_t elementNumber = NULL_OBJECT_ID; ///< The element number of the sub boom , which can be used to avoid further parsing of the DDOP when issuing commands.
 		};
 

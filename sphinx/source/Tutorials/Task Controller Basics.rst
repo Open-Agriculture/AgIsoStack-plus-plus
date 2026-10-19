@@ -115,7 +115,7 @@ On a self-propelled rear-mounted implement, it would be the center of the rear a
 .. warning::
 
 	Make sure you understand the link between a DDI and the DPT or DPD using it! If you are looking at an ISOBUS CAN trace, and are looking at the various DDIs being sent across the bus, you MUST know the entire structure of the DDOP to understand what the data means.
-    For example, if you have an implement with 10 sections, each section may have a DPT with DDI 134, and each will likely have a different value. This means, in order to know what section any DDI 134 value is referring to, you must know the section's element number number, and other context from the DDOP.
+    For example, if you have an implement with 10 sections, each section may have a DPT with DDI 134, and each will likely have a different value. This means, in order to know what section any DDI 134 value is referring to, you must know the section's element number and other context from the DDOP.
     This means it is very difficult to sniff another devices' connection with the TC with any confidence in what the data means, unless you have the DDOP that was uploaded to the TC!
 
 
@@ -162,9 +162,36 @@ The device element object has a designator of "My Implement", an element number 
 
 The device process data object has a designator of "Total Time", a DDI of 119, a presentation object ID of 0xFFFF (which means it has no associated DVP object), no special properties (0), a trigger method of Total, and a unique object ID of 2.
 
-In theory, you could now provide this DDOP to the AgIsoStack TC client, and it would upload it to the TC, and the TC would all this information about our fictional implement!
+In theory, you could now provide this DDOP to the AgIsoStack TC client, and it would upload it to the TC, and the TC would have all this information about our fictional implement!
 
 We'll cover use of the TC client in a later tutorial, but knowing how to create a DDOP is the first step to using it.
+
+Saving a DDOP to a .ddop File
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The code above builds :code:`OurDDOP` as a tree of C++ objects in memory. It does not create a file. If you want a .ddop file, you have to serialize that tree into bytes yourself, and write those bytes out in binary mode:
+
+.. code-block:: c++
+
+    #include <fstream>
+
+    std::vector<std::uint8_t> binaryPool;
+    if (!OurDDOP.generate_binary_object_pool(binaryPool))
+    {
+        return 1;
+    }
+
+    std::ofstream outputFile("OurDDOP.ddop", std::ios::binary);
+    outputFile.write(reinterpret_cast<const char *>(binaryPool.data()), static_cast<std::streamsize>(binaryPool.size()));
+    if (!outputFile)
+    {
+        return 1;
+    }
+
+The extension is only a naming convention. ISO 11783 defines the binary layout of a DDOP, not the name of the file you keep it in, so :code:`.ddop` is a convention for telling DDOPs apart from the :code:`.iop` VT object pools they used to share an extension with. AgIsoDDOPGenerator opens either one.
+
+Writing a file is a separate step, and it is optional. A DDOP can just as well be handed straight to a :code:`TaskControllerClient` in memory and uploaded to the TC without ever touching the disk, which is what our seeder example does.
+Keep the file handling in your own :code:`main()`, after whatever function builds the DDOP has returned, rather than putting it inside that function.
 
 A One Product, One Section Seeder
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -184,5 +211,12 @@ AgIsoDDOPGenerator
 ^^^^^^^^^^^^^^^^^^
 
 Open-Agriculture has created a tool called `AgIsoDDOPGenerator <https://github.com/Open-Agriculture/AgIsoDDOPGenerator>`_, which can help create, view, and edit binary DDOPs for your implements. Using this tool to view the heierarchies of DDOP objects can be very helpful in understanding how they are structured.
+
+If you saved a .ddop file in the previous section, you can select **File** and then **Open** in AgIsoDDOPGenerator to load it and inspect its object tree.
+
+.. note::
+
+	The open dialog asks you which TC version to read the file as, and it defaults to **Version 3**. We created :code:`OurDDOP` with the default constructor, which makes it a version 4 pool, so you must select **Version 4** to open it.
+	Reading a pool at the wrong version fails with "There were errors loading the DDOP". That looks like the file is corrupt, but usually it just means the version you picked doesn't match the version the pool was created with.
 
 DDOPs created with AgIsoDDOPGenerator can be used with AgIsoStack, and can be uploaded to a TC using the AgIsoStack TC client.

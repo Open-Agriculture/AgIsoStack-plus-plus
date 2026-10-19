@@ -62,9 +62,9 @@ namespace test_helpers
 		return identifier;
 	}
 
-	isobus::CANMessage create_message(std::uint8_t priority, std::uint32_t parameterGroupNumber, std::shared_ptr<isobus::ControlFunction> destination, std::shared_ptr<isobus::ControlFunction> source, std::initializer_list<std::uint8_t> data)
+	isobus::CANMessage create_message(std::uint8_t priority, std::uint32_t parameterGroupNumber, std::shared_ptr<isobus::ControlFunction> destination, std::shared_ptr<isobus::ControlFunction> source, std::initializer_list<std::uint8_t> data, std::uint64_t timestamp_us)
 	{
-		return create_message(priority, parameterGroupNumber, destination, source, data.begin(), data.size());
+		return create_message(priority, parameterGroupNumber, destination, source, data.begin(), data.size(), timestamp_us);
 	}
 
 	CANMessage create_message(std::uint8_t priority,
@@ -72,7 +72,8 @@ namespace test_helpers
 	                          std::shared_ptr<ControlFunction> destination,
 	                          std::shared_ptr<ControlFunction> source,
 	                          const std::uint8_t *dataBuffer,
-	                          std::uint32_t dataLength)
+	                          std::uint32_t dataLength,
+	                          std::uint64_t timestamp_us)
 	{
 		EXPECT_NE(source, nullptr);
 		EXPECT_TRUE(source->get_address_valid());
@@ -86,20 +87,22 @@ namespace test_helpers
 		                   dataLength,
 		                   source,
 		                   destination,
-		                   0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
+		                   0, //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
+		                   timestamp_us);
 		return message;
 	}
 
-	isobus::CANMessage create_message_broadcast(std::uint8_t priority, std::uint32_t parameterGroupNumber, std::shared_ptr<isobus::ControlFunction> source, std::initializer_list<std::uint8_t> data)
+	isobus::CANMessage create_message_broadcast(std::uint8_t priority, std::uint32_t parameterGroupNumber, std::shared_ptr<isobus::ControlFunction> source, std::initializer_list<std::uint8_t> data, std::uint64_t timestamp_us)
 	{
-		return create_message_broadcast(priority, parameterGroupNumber, source, data.begin(), data.size());
+		return create_message_broadcast(priority, parameterGroupNumber, source, data.begin(), data.size(), timestamp_us);
 	}
 
 	CANMessage create_message_broadcast(std::uint8_t priority,
 	                                    std::uint32_t parameterGroupNumber,
 	                                    std::shared_ptr<ControlFunction> source,
 	                                    const std::uint8_t *dataBuffer,
-	                                    std::uint32_t dataLength)
+	                                    std::uint32_t dataLength,
+	                                    std::uint64_t timestamp_us)
 	{
 		EXPECT_NE(source, nullptr);
 		EXPECT_TRUE(source->get_address_valid());
@@ -111,7 +114,8 @@ namespace test_helpers
 		                   dataLength,
 		                   source,
 		                   nullptr,
-		                   0); //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
+		                   0, //! TODO: hack for now, will be fixed when we remove CANNetwork Singleton
+		                   timestamp_us);
 		return message;
 	}
 

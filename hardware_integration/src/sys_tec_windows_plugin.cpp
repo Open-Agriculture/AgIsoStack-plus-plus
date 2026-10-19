@@ -12,10 +12,68 @@
 #include "isobus/hardware_integration/sys_tec_windows_plugin.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 
+#include <sstream>
 #include <thread>
 
 namespace isobus
 {
+	/// @brief Describes a UCANRET error code returned by the SYS TEC library
+	/// @param[in] result The code returned by the library
+	/// @returns A short readable reason for the failure
+	static std::string describe_sys_tec_error(UCANRET result)
+	{
+		std::string retVal;
+
+		switch (result)
+		{
+			case USBCAN_ERR_ILLHW:
+			{
+				retVal = "the adapter is not connected";
+			}
+			break;
+
+			case USBCAN_ERR_HWINUSE:
+			{
+				retVal = "the adapter is already in use";
+			}
+			break;
+
+			case USBCAN_ERR_MAXMODULES:
+			case USBCAN_ERR_MAXINSTANCES:
+			{
+				retVal = "too many SYS TEC adapters or programs are open";
+			}
+			break;
+
+			case USBCAN_ERR_NOHWCLASS:
+			{
+				retVal = "the needed device class does not exist, is the SYS TEC driver installed?";
+			}
+			break;
+
+			case USBCAN_ERR_ILLCHANNEL:
+			{
+				retVal = "the CAN channel is not valid for this adapter";
+			}
+			break;
+
+			case USBCAN_ERRCMD_ILLBDR:
+			{
+				retVal = "the baud rate is not supported";
+			}
+			break;
+
+			default:
+			{
+				std::ostringstream message;
+				message << "error code 0x" << std::hex << std::uppercase << static_cast<unsigned>(result);
+				retVal = message.str();
+			}
+			break;
+		}
+		return retVal;
+	}
+
 	SysTecWindowsPlugin::SysTecWindowsPlugin(std::uint8_t channel, std::uint32_t baudrate) :
 	  baudrateConstant(baudrate),
 	  channelIndex(channel)
@@ -60,16 +118,20 @@ namespace isobus
 
 	void SysTecWindowsPlugin::open()
 	{
+		lastError.clear();
 		if (!get_is_valid())
 		{
+			UCANRET result = USBCAN_SUCCESSFUL;
+
 			if (0 == serialNumber)
 			{
-				openResult = (USBCAN_SUCCESSFUL == UcanInitHardwareEx(&handle, channelIndex, NULL, this));
+				result = UcanInitHardwareEx(&handle, channelIndex, NULL, this);
 			}
 			else
 			{
-				openResult = (USBCAN_SUCCESSFUL == UcanInitHardwareEx2(&handle, serialNumber, NULL, this));
+				result = UcanInitHardwareEx2(&handle, serialNumber, NULL, this);
 			}
+			openResult = (USBCAN_SUCCESSFUL == result);
 
 			if (openResult && (USBCAN_INVALID_HANDLE != handle))
 			{
@@ -88,22 +150,34 @@ namespace isobus
 				initCANParameters.m_wNrOfRxBufferEntries = USBCAN_DEFAULT_BUFFER_ENTRIES;
 				initCANParameters.m_wNrOfTxBufferEntries = USBCAN_DEFAULT_BUFFER_ENTRIES;
 
-				openResult = (USBCAN_SUCCESSFUL == UcanInitCanEx2(this->handle, channelIndex, &initCANParameters));
+				result = UcanInitCanEx2(this->handle, channelIndex, &initCANParameters);
+				openResult = (USBCAN_SUCCESSFUL == result);
 
 				if (!openResult)
 				{
-					LOG_CRITICAL("[SYSTEC]: Error trying to configure a SYS TEC probe channel");
+					UcanDeinitHardware(handle);
+					handle = USBCAN_INVALID_HANDLE;
+					lastError = "Unable to open CAN channel " + std::to_string(channelIndex) + " of the SYS TEC adapter, " + describe_sys_tec_error(result);
+					LOG_CRITICAL("[SYSTEC]: " + lastError);
 				}
 			}
 			else
 			{
-				LOG_CRITICAL("[SYSTEC]: Error trying to connect to SYS TEC probe");
+				const std::string adapter = (0 == serialNumber) ? ("number " + std::to_string(channelIndex)) : ("with serial number " + std::to_string(serialNumber));
+				const std::string reason = openResult ? "the driver returned no handle" : describe_sys_tec_error(result);
+				lastError = "Unable to open SYS TEC adapter " + adapter + ", " + reason;
+				LOG_CRITICAL("[SYSTEC]: " + lastError);
 			}
 		}
 		else
 		{
 			LOG_WARNING("[SYSTEC]: CAN Adapter already initialized.");
 		}
+	}
+
+	std::string SysTecWindowsPlugin::get_last_error() const
+	{
+		return lastError;
 	}
 
 	bool SysTecWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)

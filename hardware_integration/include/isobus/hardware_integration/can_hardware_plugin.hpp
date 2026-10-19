@@ -51,6 +51,14 @@ namespace isobus
 		/// @param[in] canFrame The frame to write to the bus
 		/// @returns `true` if the frame was written, otherwise `false`
 		virtual bool write_frame(const isobus::CANMessageFrame &canFrame) = 0;
+
+		/// @brief Returns why the driver last failed, in a format which is suitable to be displayed to the user
+		/// @returns A description of the last failure, or an empty string if there is none
+		/// @details The default implementation always returns an empty string, for drivers which don't report failure reasons
+		virtual std::string get_last_error() const
+		{
+			return {};
+		}
 	};
 }
 #endif // CAN_HARDEWARE_PLUGIN_HPP

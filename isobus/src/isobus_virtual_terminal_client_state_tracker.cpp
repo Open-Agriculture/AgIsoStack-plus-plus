@@ -42,6 +42,39 @@ namespace isobus
 		CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_or_tx_message, this);
 	}
 
+	void VirtualTerminalClientStateTracker::add_tracked_container_shown(std::uint16_t objectId, bool initialValue)
+	{
+		if (shownStates.find(objectId) != shownStates.end())
+		{
+			LOG_WARNING("[VTStateHelper] add_tracked_container_shown: objectId '%lu' already tracked", objectId);
+			return;
+		}
+
+		shownStates[objectId] = initialValue;
+	}
+
+	void VirtualTerminalClientStateTracker::remove_tracked_container_shown(std::uint16_t objectId)
+	{
+		if (shownStates.find(objectId) == shownStates.end())
+		{
+			LOG_WARNING("[VTStateHelper] remove_tracked_container_shown: objectId '%lu' was not tracked", objectId);
+			return;
+		}
+
+		shownStates.erase(objectId);
+	}
+
+	bool VirtualTerminalClientStateTracker::get_container_shown(std::uint16_t objectId) const
+	{
+		if (shownStates.find(objectId) == shownStates.end())
+		{
+			LOG_WARNING("[VTStateHelper] get_container_shown: objectId '%lu' not tracked", objectId);
+			return 0;
+		}
+
+		return shownStates.at(objectId);
+	}
+
 	void VirtualTerminalClientStateTracker::add_tracked_numeric_value(std::uint16_t objectId, std::uint32_t initialValue)
 	{
 		if (numericValueStates.find(objectId) != numericValueStates.end())
