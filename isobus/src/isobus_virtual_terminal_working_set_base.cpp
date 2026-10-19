@@ -2008,65 +2008,49 @@ namespace isobus
 
 							while (numberBytesProcessed < numberBytesToFollow)
 							{
-								auto commandLength = 8;
-								switch (static_cast<Macro::Command>(iopData[0]))
+								const int bytesLeft = numberBytesToFollow - numberBytesProcessed;
+								int commandLength = 8;
+
+								if (bytesLeft >= commandLength)
 								{
-									case Macro::Command::ChangeChildPosition:
-										// special case: 9 bytes
-										retVal = tempObject->add_command_packet({
-										  iopData[0],
-										  iopData[1],
-										  iopData[2],
-										  iopData[3],
-										  iopData[4],
-										  iopData[5],
-										  iopData[6],
-										  iopData[7],
-										  iopData[8],
-										});
-										commandLength = 9;
-										break;
-									case Macro::Command::GraphicsContextCommand:
+									switch (static_cast<Macro::Command>(iopData[0]))
 									{
-										// Padded with 0xFF to 8 bytes if shorter
-										switch (static_cast<VirtualTerminalBase::GraphicsContextSubCommandID>(iopData[3]))
-										{
-											case VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon:
-												commandLength = std::max(8, 5 + 4 * iopData[4]);
-												break;
-											case VirtualTerminalBase::GraphicsContextSubCommandID::DrawText:
-												commandLength = std::max(8, 6 + iopData[5]);
-												break;
-											case VirtualTerminalBase::GraphicsContextSubCommandID::PanAndZoomViewport:
-												commandLength = 12;
-												break;
-											default:
-												break;
-										}
-										retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
-										break;
+										case Macro::Command::ChangeChildPosition:
+											commandLength = 9;
+											break;
+										case Macro::Command::GraphicsContextCommand:
+											// Padded with 0xFF to 8 bytes if shorter
+											switch (static_cast<VirtualTerminalBase::GraphicsContextSubCommandID>(iopData[3]))
+											{
+												case VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon:
+													commandLength = std::max(8, 5 + 4 * iopData[4]);
+													break;
+												case VirtualTerminalBase::GraphicsContextSubCommandID::DrawText:
+													commandLength = std::max(8, 6 + iopData[5]);
+													break;
+												case VirtualTerminalBase::GraphicsContextSubCommandID::PanAndZoomViewport:
+													commandLength = 12;
+													break;
+												default:
+													break;
+											}
+											break;
+										case Macro::Command::ChangeStringValue:
+											commandLength = std::max(8, 5 + get_little_endian_uint16(iopData, 3));
+											break;
+										default:
+											break;
 									}
-									case Macro::Command::ChangeStringValue:
-									{
-										commandLength = std::max(8, 5 + get_little_endian_uint16(iopData, 3));
-										retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
-										break;
-									}
-									default:
-										// all other macro commands are 8 byte long
-										retVal = tempObject->add_command_packet({
-										  iopData[0],
-										  iopData[1],
-										  iopData[2],
-										  iopData[3],
-										  iopData[4],
-										  iopData[5],
-										  iopData[6],
-										  iopData[7],
-										});
-										commandLength = 8;
-										break;
 								}
+
+								if (bytesLeft < commandLength)
+								{
+									LOG_ERROR("[WS]: Macro object %u cannot be parsed because a command is longer than the bytes left in the macro.", decodedID);
+									retVal = false;
+									break;
+								}
+
+								retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
 								iopLength -= commandLength;
 								iopData += commandLength;
 								numberBytesProcessed += commandLength;

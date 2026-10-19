@@ -175,3 +175,20 @@ TEST(VirtualTerminalServerTest, ObjectPoolTransferAcceptsAtMostSevenBytesOfPaddi
 	VirtualTerminalServerManagedWorkingSet eightBytes;
 	EXPECT_FALSE(eightBytes.parse_iop_into_objects(segment.data(), static_cast<std::uint32_t>(segment.size())));
 }
+
+TEST(VirtualTerminalServerTest, MacroRejectsACommandLongerThanTheMacro)
+{
+	// Macro 5 of 8 bytes holding a Draw Polygon of 255 points
+	std::vector<std::uint8_t> polygon = {
+		0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x08, 0x00, static_cast<std::uint8_t>(Macro::Command::GraphicsContextCommand), 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon), 0xFF, 0xFF, 0xFF, 0xFF
+	};
+	VirtualTerminalServerManagedWorkingSet polygonWorkingSet;
+	EXPECT_FALSE(polygonWorkingSet.parse_iop_into_objects(polygon.data(), static_cast<std::uint32_t>(polygon.size())));
+
+	// Macro 5 of 8 bytes holding a Change String Value of 65535 bytes
+	std::vector<std::uint8_t> string = {
+		0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x08, 0x00, static_cast<std::uint8_t>(Macro::Command::ChangeStringValue), 0x34, 0x12, 0xFF, 0xFF, 'O', 'K', 0xFF
+	};
+	VirtualTerminalServerManagedWorkingSet stringWorkingSet;
+	EXPECT_FALSE(stringWorkingSet.parse_iop_into_objects(string.data(), static_cast<std::uint32_t>(string.size())));
+}
