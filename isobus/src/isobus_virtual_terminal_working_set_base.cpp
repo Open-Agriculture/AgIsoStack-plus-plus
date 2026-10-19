@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 namespace isobus
 {
@@ -727,9 +728,8 @@ namespace isobus
 						iopLength -= 9;
 						iopData += 9;
 
-						const std::int64_t iopLengthRemaining = iopLength - numberChildrenToFollow * 2;
-
-						if (iopLength >= iopLengthRemaining)
+						// The children are followed by the macro count byte
+						if (iopLength > static_cast<std::uint32_t>(numberChildrenToFollow * 2))
 						{
 							if (numberChildrenToFollow <= KeyGroup::MAX_CHILD_KEYS)
 							{
@@ -994,7 +994,7 @@ namespace isobus
 						iopData += 16;
 						iopLength -= 16;
 
-						if (iopLength >= stringLengthToFollow)
+						if (iopLength > stringLengthToFollow)
 						{
 							for (std::uint_fast16_t i = 0; i < stringLengthToFollow; i++)
 							{
@@ -1445,7 +1445,13 @@ namespace isobus
 						tempObject->set_width(get_little_endian_uint16(iopData, 3));
 						tempObject->set_actual_width(get_little_endian_uint16(iopData, 5));
 						tempObject->set_actual_height(get_little_endian_uint16(iopData, 7));
-						tempObject->set_height(static_cast<std::uint16_t>(tempObject->get_actual_height() * (static_cast<float>(tempObject->get_width()) / static_cast<float>(tempObject->get_actual_width()))));
+						const std::uint32_t actualWidth = tempObject->get_actual_width();
+						bool pixelDataParsed = false;
+
+						if (0 != actualWidth)
+						{
+							tempObject->set_height(static_cast<std::uint16_t>(std::min<std::uint32_t>(tempObject->get_actual_height() * static_cast<std::uint32_t>(tempObject->get_width()) / actualWidth, std::numeric_limits<std::uint16_t>::max())));
+						}
 
 						if (iopData[9] <= static_cast<std::uint8_t>(PictureGraphic::Format::EightBitColour))
 						{
@@ -1463,8 +1469,13 @@ namespace isobus
 								{
 									LOG_ERROR("[WS]: Picture graphic has RLE but an odd number of data bytes. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 								}
+								else if (iopLength < tempObject->get_number_of_bytes_in_raw_data())
+								{
+									LOG_ERROR("[WS]: Not enough IOP data to deserialize picture graphic's pixel data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+								}
 								else
 								{
+									pixelDataParsed = true;
 									// Decode the RLE
 									std::size_t lineAmountLeft = tempObject->get_actual_width();
 									for (std::uint_fast32_t i = 0; i < (tempObject->get_number_of_bytes_in_raw_data() / 2); i++)
@@ -1535,6 +1546,8 @@ namespace isobus
 							{
 								if (iopLength >= tempObject->get_number_of_bytes_in_raw_data())
 								{
+									pixelDataParsed = true;
+
 									switch (tempObject->get_format())
 									{
 										case PictureGraphic::Format::EightBitColour:
@@ -1608,15 +1621,15 @@ namespace isobus
 								}
 							}
 
-							retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
-
-							if (tempObject->get_raw_data().size() == tempObject->get_actual_width() * tempObject->get_actual_height())
+							if (pixelDataParsed)
 							{
-								retVal = true;
+								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
-							else
+
+							if (retVal && (tempObject->get_raw_data().size() != actualWidth * tempObject->get_actual_height()))
 							{
 								LOG_ERROR("[WS]: Picture graphic object has invalid dimensions compared to its data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
+								retVal = false;
 							}
 						}
 						else
@@ -1831,7 +1844,7 @@ namespace isobus
 						iopData += 5;
 						iopLength -= 5;
 
-						if (iopLength >= validationStringLength)
+						if (iopLength > validationStringLength)
 						{
 							std::string tempValidationString;
 							tempValidationString.reserve(validationStringLength);
@@ -1910,9 +1923,13 @@ namespace isobus
 					{
 						tempObject->set_id(decodedID);
 						auto numberOfIndexes = get_little_endian_uint16(iopData, 3);
-						if ((2 == numberOfIndexes) ||
-						    (16 == numberOfIndexes) ||
-						    (256 == numberOfIndexes))
+						if (iopLength < 5U + numberOfIndexes)
+						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse colour map object %u", decodedID);
+						}
+						else if ((2 == numberOfIndexes) ||
+						         (16 == numberOfIndexes) ||
+						         (256 == numberOfIndexes))
 						{
 							tempObject->set_number_of_colour_indexes(numberOfIndexes);
 
@@ -2107,7 +2124,7 @@ namespace isobus
 							tempObject->set_function_type(static_cast<AuxiliaryFunctionType1::FunctionType>(iopData[4]));
 
 							const std::uint8_t numberOfObjectsToFollow = iopData[5];
-							const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+							const auto numberOfBytesToFollow = static_cast<std::uint16_t>(numberOfObjectsToFollow * 6);
 							iopData += 6;
 							iopLength -= 6;
 
@@ -2167,7 +2184,7 @@ namespace isobus
 								tempObject->set_input_id(iopData[5]);
 
 								const std::uint8_t numberOfObjectsToFollow = iopData[6];
-								const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+								const auto numberOfBytesToFollow = static_cast<std::uint16_t>(numberOfObjectsToFollow * 6);
 								iopData += 7;
 								iopLength -= 7;
 
@@ -2197,7 +2214,7 @@ namespace isobus
 						}
 						else
 						{
-							LOG_ERROR("[WS]: Auxiliary input type 1 object %u has an invalid function type. Function type must be 2 or less.");
+							LOG_ERROR("[WS]: Auxiliary input type 1 object %u has an invalid function type. Function type must be 2 or less.", decodedID);
 						}
 					}
 					else
@@ -2239,7 +2256,7 @@ namespace isobus
 							tempObject->set_function_attribute(AuxiliaryFunctionType2::SingleAssignment, is_bit_set(iopData[4], 0x80U));
 
 							const std::uint8_t numberOfObjectsToFollow = iopData[5];
-							const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+							const auto numberOfBytesToFollow = static_cast<std::uint16_t>(numberOfObjectsToFollow * 6);
 							iopData += 6;
 							iopLength -= 6;
 
@@ -2306,7 +2323,7 @@ namespace isobus
 							}
 
 							const std::uint8_t numberOfObjectsToFollow = iopData[5];
-							const std::uint8_t numberOfBytesToFollow = numberOfObjectsToFollow * 6;
+							const auto numberOfBytesToFollow = static_cast<std::uint16_t>(numberOfObjectsToFollow * 6);
 							iopData += 6;
 							iopLength -= 6;
 
@@ -2359,7 +2376,7 @@ namespace isobus
 						}
 						else
 						{
-							LOG_ERROR("[WS]: Auxiliary control designator type 2 object %u  has an invalid pointer type. Pointer type must be 3 or less.");
+							LOG_ERROR("[WS]: Auxiliary control designator type 2 object %u has an invalid pointer type. Pointer type must be 3 or less.", decodedID);
 						}
 					}
 					else
@@ -2456,67 +2473,49 @@ namespace isobus
 
 					if (iopLength >= tempObject->get_minumum_object_length())
 					{
+						constexpr std::uint16_t minimumBytesToFollow = 5;
+						constexpr std::uint8_t codeLength = 2;
+						constexpr std::uint8_t languagePairLength = 2 * codeLength;
+						const std::uint16_t numberOfBytesToFollow = get_little_endian_uint16(iopData, 3);
+						const std::uint8_t numberOfLanguagePairs = iopData[9];
+						const std::uint32_t languagePairsLength = static_cast<std::uint32_t>(numberOfLanguagePairs) * languagePairLength;
+						const std::uint32_t objectLength = tempObject->get_minumum_object_length() - minimumBytesToFollow + numberOfBytesToFollow;
+
 						tempObject->set_id(decodedID);
-					}
+						tempObject->set_colour_map_object_id(get_little_endian_uint16(iopData, 5));
+						tempObject->set_colour_palette_object_id(get_little_endian_uint16(iopData, 7));
 
-					constexpr std::uint16_t minimumBytesToFollow = 5;
-					std::uint16_t numberOfBytesToFollow = get_little_endian_uint16(iopData, 3);
-					const std::uint16_t colourMapObjectID = get_little_endian_uint16(iopData, 5);
-					const std::uint16_t colourMapPaletteObjectID = get_little_endian_uint16(iopData, 7);
-					const std::uint8_t numberOfLanguagePairs = iopData[9];
-
-					tempObject->set_colour_map_object_id(colourMapObjectID);
-					tempObject->set_colour_palette_object_id(colourMapPaletteObjectID);
-
-					if (numberOfBytesToFollow < (minimumBytesToFollow + (numberOfLanguagePairs * 4)))
-					{
-						LOG_ERROR("[WS]: Working set special controls object has too few bytes to follow.");
-					}
-					else
-					{
-						if (numberOfBytesToFollow > (minimumBytesToFollow + (numberOfLanguagePairs * 4)))
+						if (numberOfBytesToFollow < (minimumBytesToFollow + languagePairsLength))
 						{
-							LOG_WARNING("[WS]: Working set special controls object has too many bytes to follow. Technically this is allowed, but it may indicate a problem.");
+							LOG_ERROR("[WS]: Working set special controls object has too few bytes to follow.");
 						}
-
-						iopLength -= tempObject->get_minumum_object_length();
-						iopData += tempObject->get_minumum_object_length();
-						numberOfBytesToFollow -= minimumBytesToFollow;
-
-						if (iopLength >= (numberOfLanguagePairs * 4))
+						else if (iopLength < objectLength)
 						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse working set special controls object %u", decodedID);
+						}
+						else
+						{
+							if (numberOfBytesToFollow > (minimumBytesToFollow + languagePairsLength))
+							{
+								LOG_WARNING("[WS]: Working set special controls object has %u extra bytes to follow. Skipping ahead.", numberOfBytesToFollow - minimumBytesToFollow - languagePairsLength);
+							}
+
 							std::vector<WorkingSetSpecialControlsObject::LanguageCountryCodePair> languageCountryCodePairs;
+							const std::uint8_t *pairData = iopData + tempObject->get_minumum_object_length();
 
 							for (std::uint_fast8_t i = 0; i < numberOfLanguagePairs; i++)
 							{
 								WorkingSetSpecialControlsObject::LanguageCountryCodePair pair;
-
-								pair.languageCode.resize(2);
-								pair.countryCode.resize(2);
-
-								for (std::uint_fast8_t j = 0; j < numberOfLanguagePairs; j++)
-								{
-									pair.languageCode[0] = iopData[0];
-									pair.languageCode[1] = iopData[1];
-									pair.countryCode[0] = iopData[2];
-									pair.countryCode[1] = iopData[3];
-									iopData += 4;
-									iopLength -= 4;
-									numberOfBytesToFollow -= 4;
-									languageCountryCodePairs.push_back(pair);
-								}
+								pair.languageCode.assign(pairData, pairData + codeLength);
+								pair.countryCode.assign(pairData + codeLength, pairData + languagePairLength);
+								languageCountryCodePairs.push_back(pair);
+								pairData += languagePairLength;
 							}
 							tempObject->set_language_codes(std::move(languageCountryCodePairs));
+							iopData += objectLength;
+							iopLength -= objectLength;
+							retVal = true;
 						}
-						retVal = true;
-					}
-
-					// Skip ahead any remaining bytes
-					if (0 != numberOfBytesToFollow)
-					{
-						LOG_WARNING("[WS]: Working set special controls object has %u extra bytes to follow. Skipping ahead.", numberOfBytesToFollow);
-						iopData += numberOfBytesToFollow;
-						iopLength -= numberOfBytesToFollow;
 					}
 
 					if (retVal)
@@ -2683,6 +2682,12 @@ namespace isobus
 
 		for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
 		{
+			if (iopLength < 2)
+			{
+				LOG_ERROR("[WS]: Not enough IOP data to parse macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
+				return false;
+			}
+
 			// If the first byte is 255, then more bytes are used! 4.6.22.3
 			if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
 			{
@@ -2712,12 +2717,6 @@ namespace isobus
 			}
 			else
 			{
-				if (iopLength < 2)
-				{
-					LOG_ERROR("[WS]: Not enough IOP data to parse macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
-					return false;
-				}
-
 				if (EventID::Reserved != get_event_from_byte(iopData[0]))
 				{
 					object->add_macro({ get_event_from_byte(iopData[0]), iopData[1] });
