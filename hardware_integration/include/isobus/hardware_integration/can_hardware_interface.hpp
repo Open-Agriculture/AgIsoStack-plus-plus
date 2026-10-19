@@ -146,6 +146,16 @@ namespace isobus
 			/// @returns `true` if a frame was received, otherwise `false`
 			bool receive_can_frame();
 
+			/// @brief Adds a frame to the transmit queue of this channel
+			/// @details Safe to call from multiple threads. The transmit queue is a single-producer
+			/// single-consumer queue, so the producers are serialized here.
+			/// @param[in] frame The frame to queue for transmission
+			/// @returns `true` if the frame was queued, `false` if the queue is full
+			bool queue_frame_for_transmit(const CANMessageFrame &frame);
+
+			/// @brief Discards all frames waiting in the transmit queue of this channel
+			void clear_transmit_queue();
+
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			/// @brief Starts the receiving thread for this CAN channel
 			void start_threads();
@@ -162,6 +172,7 @@ namespace isobus
 
 			std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel
 
+			Mutex transmitQueueMutex; ///< Serializes the producers of the transmit queue
 			LockFreeQueue<CANMessageFrame> messagesToBeTransmittedQueue; ///< Transmit message queue for a CAN channel
 			LockFreeQueue<CANMessageFrame> receivedMessagesQueue; ///< Receive message queue for a CAN channel
 		};

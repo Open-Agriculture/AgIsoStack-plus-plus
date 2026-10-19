@@ -74,7 +74,7 @@ namespace isobus
 			frameHandler->close();
 			frameHandler = nullptr;
 		}
-		messagesToBeTransmittedQueue.clear();
+		clear_transmit_queue();
 		receivedMessagesQueue.clear();
 		return false;
 	}
@@ -86,6 +86,18 @@ namespace isobus
 			return true;
 		}
 		return false;
+	}
+
+	bool CANHardwareInterface::CANHardware::queue_frame_for_transmit(const CANMessageFrame &frame)
+	{
+		LOCK_GUARD(Mutex, transmitQueueMutex);
+		return messagesToBeTransmittedQueue.push(frame);
+	}
+
+	void CANHardwareInterface::CANHardware::clear_transmit_queue()
+	{
+		LOCK_GUARD(Mutex, transmitQueueMutex);
+		messagesToBeTransmittedQueue.clear();
 	}
 
 	bool CANHardwareInterface::CANHardware::receive_can_frame()
@@ -336,7 +348,7 @@ namespace isobus
 		}
 
 		if ((channel->frameHandler->get_is_valid()) &&
-		    (channel->messagesToBeTransmittedQueue.push(frame)))
+		    (channel->queue_frame_for_transmit(frame)))
 		{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 			updateThreadWakeupCondition.notify_all();
