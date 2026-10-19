@@ -1999,7 +1999,7 @@ namespace isobus
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
 		if (buffer.size() < CAN_DATA_LENGTH)
 		{
-			buffer.resize(CAN_DATA_LENGTH);
+			buffer.resize(CAN_DATA_LENGTH, 0xFF);
 		}
 		return send_message_to_vt(buffer.data(), buffer.size());
 	}
