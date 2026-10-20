@@ -105,6 +105,8 @@ namespace isobus
 #define LOCK_GUARD(type, x) const std::lock_guard<type> x##Lock(x)
 
 /// @brief A template class for a lock free queue.
+/// @details This is a single-producer single-consumer queue: only one thread may push, and only one
+/// thread may peek, pop and clear. Use MultiProducerQueue when several threads push.
 /// @tparam T The item type for the queue.
 template<typename T>
 class LockFreeQueue
@@ -202,6 +204,57 @@ private:
 };
 
 #endif
+
+/// @brief A bounded queue that any number of threads can push to, with a single consumer.
+/// @details Wraps a LockFreeQueue and serializes the producers with a mutex that is only held
+/// inside push(). peek(), pop() and clear() must only be called by the single consumer, or while
+/// the consumer is not running.
+/// @tparam T The item type for the queue.
+template<typename T>
+class MultiProducerQueue
+{
+public:
+	/// @brief Constructor for the multi-producer queue.
+	/// @param size The capacity of the queue.
+	explicit MultiProducerQueue(std::size_t size) :
+	  queue(size)
+	{
+	}
+
+	/// @brief Push an item to the queue, safe to call from any thread.
+	/// @param item The item to push to the queue.
+	/// @return True if the item was pushed to the queue, false if the queue is full.
+	bool push(const T &item)
+	{
+		LOCK_GUARD(isobus::Mutex, mutex);
+		return queue.push(item);
+	}
+
+	/// @brief Peek at the next item in the queue. Only for the consumer.
+	/// @param item The item to peek at in the queue.
+	/// @return True if the item was peeked at in the queue, false if the queue is empty.
+	bool peek(T &item)
+	{
+		return queue.peek(item);
+	}
+
+	/// @brief Pop an item from the queue. Only for the consumer.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
+	bool pop()
+	{
+		return queue.pop();
+	}
+
+	/// @brief Clear the queue. Only for the consumer.
+	void clear()
+	{
+		queue.clear();
+	}
+
+private:
+	LockFreeQueue<T> queue; ///< The underlying single-producer single-consumer queue
+	isobus::Mutex mutex; ///< Serializes the producers
+};
 
 #include <queue>
 template<typename T>
