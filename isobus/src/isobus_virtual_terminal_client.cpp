@@ -152,6 +152,9 @@ namespace isobus
 
 	void VirtualTerminalClient::restart_communication()
 	{
+		/// @todo Support automatic runtime Input reconfiguration. Input registration/removal and pool setters do not
+		/// coordinate the J.7.10 sequence, and the model identification code cannot be changed while initialized.
+		/// restart_communication() only restarts the VT session; it does not implement the reconfiguration sequence.
 		LOG_INFO("[VT]:VT Client connection restart requested. Client will now terminate and reinitialize.");
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		bool workerNeeded = (nullptr != workerThread);
@@ -294,11 +297,13 @@ namespace isobus
 
 	void VirtualTerminalClient::add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
+		/// @todo Coordinate runtime input additions with pool updates and Initializing/Ready maintenance status (J.7.10).
 		ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
 	}
 
 	void VirtualTerminalClient::remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
+		/// @todo Coordinate runtime input removal with the J.7.10 reconfiguration sequence before changing the pool.
 		if (ourAuxiliaryInputs.count(auxiliaryInputID))
 		{
 			ourAuxiliaryInputs.erase(auxiliaryInputID);
@@ -1285,6 +1290,9 @@ namespace isobus
 
 	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size, const std::string &version)
 	{
+		/// @todo For changes/deletions of existing assigned AUX-N Input objects, implement J.7.10: notify the operator
+		/// if input status was enabled, stop maintenance for more than 500 ms, resume as Initializing with a changed
+		/// model code, update the pool, then report Ready after success. The model-code setter currently requires termination.
 		if ((nullptr != pool) &&
 		    (0 != size))
 		{
@@ -1314,6 +1322,7 @@ namespace isobus
 
 	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool, const std::string &version)
 	{
+		/// @todo Coordinate AUX-N Input pool reconfiguration as described in the pointer overload (J.7.10).
 		if ((nullptr != pool) &&
 		    (!pool->empty()))
 		{
@@ -1353,6 +1362,7 @@ namespace isobus
 
 	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version)
 	{
+		/// @todo Coordinate AUX-N Input pool reconfiguration as described in set_object_pool() (J.7.10).
 		if ((nullptr != value) &&
 		    (0 != poolTotalSize))
 		{
@@ -2778,7 +2788,6 @@ namespace isobus
 		      (parentVT->partnerControlFunction == message.get_destination_control_function()))))
 		{
 			auto &auxiliaryMutex = parentVT->auxiliaryAssignmentMutex;
-			static_cast<void>(auxiliaryMutex);
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
@@ -3223,15 +3232,22 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand):
 						{
 							// J.7.5 defines 14 data bytes, padded to 16 bytes by 4.6.26.
-							if (((14 == message.get_data_length()) || (16 == message.get_data_length())) && parentVT->auxiliaryFunctionsEnabled &&
+							if (((14 == message.get_data_length()) || (16 == message.get_data_length())) &&
 							    (nullptr != parentVT->partnerControlFunction) && (0 == parentVT->partnerControlFunction->get_NAME().get_function_instance()) &&
 							    (message.get_source_control_function() == parentVT->partnerControlFunction))
 							{
-								parentVT->handle_auxiliary_assignment_command(message);
+								if (parentVT->auxiliaryFunctionsEnabled)
+								{
+									parentVT->handle_auxiliary_assignment_command(message);
+								}
+								else
+								{
+									LOG_INFO("[AUX-N]: Ignoring assignment command because AUX-N Functions are disabled. Call set_auxiliary_functions_enabled(true) before initialize() to enable them.");
+								}
 							}
 							else
 							{
-								LOG_WARNING("[AUX-N]: Ignoring assignment command with invalid source, length, or disabled handling.");
+								LOG_WARNING("[AUX-N]: Ignoring assignment command with invalid source or length.");
 							}
 						}
 						break;

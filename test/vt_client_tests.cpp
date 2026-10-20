@@ -677,7 +677,42 @@ TEST_F(VirtualTerminalTest, AuxiliaryMaintenanceReadinessFollowsPoolStates)
 	AuxiliaryTestCAN can(time_source);
 	DerivedTestVTClient client(can.partner, can.ecu);
 	client.set_auxiliary_input_model_identification_code(0x3344);
+	client.add_auxiliary_input_object_id(0x1234);
 	client.initialize(false);
+	const auto checkScheduled = [&](std::uint32_t elapsed_ms, std::uint8_t expectedReady, std::size_t expectedCount = 1) {
+		time_source.update_for_ms(elapsed_ms);
+		client.update();
+		const auto frames = auxiliary_frames(can.vt);
+		std::size_t count = 0;
+		for (const auto &frame : frames)
+		{
+			const CANIdentifier identifier(frame.identifier);
+			if ((identifier.get_parameter_group_number() == 0xE700) && (frame.data[0] == 0x23))
+			{
+				++count;
+				EXPECT_EQ(0xFF, identifier.get_destination_address());
+				EXPECT_EQ(CANIdentifier::CANPriority::Priority3, identifier.get_priority());
+				EXPECT_EQ(0x44, frame.data[1]);
+				EXPECT_EQ(0x33, frame.data[2]);
+				EXPECT_EQ(expectedReady, frame.data[3]);
+			}
+		}
+		EXPECT_EQ(expectedCount, count);
+	};
+	// Initializing maintenance starts before pool loading and repeats every 100 ms.
+	checkScheduled(100, 0);
+	checkScheduled(99, 0, 0);
+	checkScheduled(1, 0);
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	checkScheduled(100, 1);
+	// Ordinary reconnection keeps maintenance running without a >500 ms reconfiguration pause.
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Disconnected);
+	checkScheduled(100, 0);
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForLoadVersionResponse);
+	receive_auxiliary(client, can.partner, { 0xD1, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF });
+	ASSERT_TRUE(client.get_is_connected());
+	checkScheduled(100, 1);
+
 	const auto check = [&](VirtualTerminalClient::StateMachineState state, std::uint8_t expectedReady) {
 		client.test_wrapper_set_state(state);
 		ASSERT_TRUE(client.test_wrapper_send_auxiliary_maintenance());

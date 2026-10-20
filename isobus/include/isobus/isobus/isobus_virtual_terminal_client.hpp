@@ -625,19 +625,16 @@ namespace isobus
 		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
 
 		/// @brief Registers callbacks for loading and storing auxiliary function assignments
-		/// @details Configure the client, set its AUX-N settings and callbacks, then call initialize() before runtime
-		/// AUX-N operation; terminate() ends that lifecycle. AUX-N is disabled by default. Callbacks cannot be changed
-		/// while initialized. AUX-N Functions are disabled by default and must be enabled explicitly with
-		/// set_auxiliary_functions_enabled(true). Registering input object IDs enables AUX-N Input maintenance
-		/// independently. Ready devices are loaded in update(); a preferred assignment arriving before loading
-		/// completes loads synchronously before modification. Reconfiguring callbacks between
-		/// lifecycles invalidates cached preferences so the new load callback is used. Store callbacks are deferred to update() or
-		/// terminate(), independently of response delivery. Accepted changes are flushed at termination. Both run without the device state lock and are
-		/// serialized with each other. Callbacks must not reenter AUX-N preference operations on this client. Callbacks must be fast and bounded,
-		/// including contention with other callbacks, to permit assignment responses within one second and maintenance
-		/// every 100 ms. Queue slow storage work asynchronously in the application. Call update() frequently enough to
-		/// meet these deadlines. Assignment responses use an eight-entry FIFO; overflow refuses the newest command
-		/// before applying it and is logged. Failed sends are retried; missed deadlines are logged as protocol failures.
+		/// @details
+		/// - Lifecycle: Configure before initialize(); callbacks cannot change until terminate(). Reconfiguration
+		///   invalidates cached preferences. Enable Functions separately with set_auxiliary_functions_enabled(true).
+		/// - Execution: Load in update() or synchronously before preference modification. Stores run in update()
+		///   or terminate(), independently of responses; termination flushes accepted changes.
+		/// - Threading: Callbacks are serialized outside the device state lock. Do not reenter AUX-N preference operations.
+		/// - Timing: Keep callbacks and contention bounded, and update() frequent, for one-second responses and
+		///   100 ms maintenance. Enqueue slow storage asynchronously.
+		/// - Responses: An eight-entry FIFO retries failed sends. Overflow refuses the newest command before applying
+		///   it; overflow and missed deadlines are logged. See the Auxiliary Control API guide for details.
 		/// @param[in] loadCallback Callback function to load stored assignments (optional)
 		/// @param[in] storeCallback Callback function to store assignments (optional)
 		/// @param[in] context User context pointer passed to callbacks (optional)
