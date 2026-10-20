@@ -4,6 +4,7 @@
 # * Run inplace clang-format on each committed *.cpp and *.hpp file
 # * Run inplace cmake-format on each committed CMakeLists.txt file
 # * Check all committed *.cpp and *.hpp file for containing calls for CANStackLogger and prevents commit if found
+# * Check all committed *.cpp and *.hpp file for added lines containing non-ASCII characters and prevents commit if found
 
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 
@@ -38,15 +39,23 @@ EXCLUDED_FILES=("can_stack_logger.cpp" "can_stack_logger.hpp")
 FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(cpp|hpp)$')
 
 error_found=0
+non_ascii_found=0
 
 for file in $FILES; do
+  added_lines=$(git diff --cached -U0 "$file" | grep '^+' | grep -v '^+++' | cut -c2-)
+
+  non_ascii_lines=$(printf '%s\n' "$added_lines" | LC_ALL=C grep $'[^\t\r -~]')
+  if [ -n "$non_ascii_lines" ]; then
+    echo "Found non-ASCII characters in $file:"
+    echo "$non_ascii_lines" | sed 's/^/  /'
+    non_ascii_found=1
+  fi
+
   for excluded in "${EXCLUDED_FILES[@]}"; do
     if [[ "$(basename "$file")" == "$excluded" ]]; then
       continue 2
     fi
   done
-
-  added_lines=$(git diff --cached -U0 "$file" | grep '^+' | grep -v '^+++' | cut -c2-)
 
   while read -r line; do
     for pattern in "${CANSTACK_LOGGER_FORBIDDEN_METHODS[@]}"; do
@@ -63,6 +72,12 @@ if [ "$error_found" -eq 1 ]; then
   echo
   echo "Please use the LOG_WARN/CRITICAL/ERROR/INFO/DEBUG macros instead of the CANStackLogger::warn/critical/error/info/debug"
   echo "Otherwise the build will be broken with disabled CAN stack logger."
+  exit 1
+fi
+
+if [ "$non_ascii_found" -eq 1 ]; then
+  echo
+  echo "Only characters of the C++ basic source character set are allowed in the source code (see CONTRIBUTING.md)."
   exit 1
 fi
 

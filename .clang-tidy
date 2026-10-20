@@ -1,0 +1,36 @@
+---
+# clang-tidy configuration for the style rules described in CONTRIBUTING.md.
+# Only built-in checks are configured here, so editors and older clang-tidy versions can use this file.
+# The project specific checks (constant on the left side of comparisons, explicit std:: qualification, ...)
+# are defined in scripts/clang_tidy/custom_checks.yaml. Use scripts/clang_tidy/run_clang_tidy.sh to run both.
+Checks: >
+  -*,
+  custom-*,
+  cppcoreguidelines-virtual-class-destructor,
+  google-explicit-constructor,
+  modernize-make-shared,
+  modernize-use-nullptr,
+  modernize-use-override,
+  readability-identifier-naming,
+  readability-make-member-function-const,
+  readability-redundant-casting
+WarningsAsErrors: ''
+HeaderFilterRegex: '((isobus|hardware_integration|utility)/include/isobus|test)/.*\.hpp$'
+CheckOptions:
+  readability-identifier-naming.NamespaceCase: lower_case
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.FunctionCase: lower_case
+  readability-identifier-naming.MethodCase: lower_case
+  # camelCase variables, allowing leading acronyms (CANPort, NAMEFilters) and unit suffixes (timestamp_ms, speed_mm_s)
+  readability-identifier-naming.VariableCase: camelBack
+  readability-identifier-naming.VariableIgnoredRegexp: '^([A-Z]{2,}[A-Za-z0-9]*|[a-z][A-Za-z0-9]*(_(us|ms|s|seconds|minutes|hours|mm|cm|m|km|mm_s|m_s|km_h|deg|rad|percent|hz|bytes|bits))+)$'
+  readability-identifier-naming.ParameterCase: camelBack
+  readability-identifier-naming.ParameterIgnoredRegexp: '^([A-Z]{2,}[A-Za-z0-9]*|[a-z][A-Za-z0-9]*(_(us|ms|s|seconds|minutes|hours|mm|cm|m|km|mm_s|m_s|km_h|deg|rad|percent|hz|bytes|bits))+)$'
+  readability-identifier-naming.MemberCase: camelBack
+  readability-identifier-naming.MemberIgnoredRegexp: '^([A-Z]{2,}[A-Za-z0-9]*|[a-z][A-Za-z0-9]*(_(us|ms|s|seconds|minutes|hours|mm|cm|m|km|mm_s|m_s|km_h|deg|rad|percent|hz|bytes|bits))+)$'
+  # CAPITALIZED_SNAKE for global and static constants
+  readability-identifier-naming.GlobalConstantCase: UPPER_CASE
+  readability-identifier-naming.StaticConstantCase: UPPER_CASE
