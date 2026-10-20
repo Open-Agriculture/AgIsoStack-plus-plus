@@ -206,13 +206,16 @@ namespace isobus
 					continue;
 				}
 
-				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size())))
+				std::uint32_t objectsLength = 0;
+				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
 				{
 					lSuccess = false;
 					break;
 				}
 				else
 				{
+					// Load Version parses the stored transfers joined together, where this padding would read as objects
+					iopFilesRawData[i].data.resize(objectsLength);
 					iopFilesRawData[i].processed = true;
 				}
 			}
