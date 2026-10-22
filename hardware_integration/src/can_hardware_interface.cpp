@@ -192,7 +192,7 @@ namespace isobus
 
 		if (channelIndex >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
-			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(channelIndex) +
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(static_cast<int>(channelIndex)) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set. " +
 			          "Use set_number_of_can_channels() to increase the number of channels before assigning frame handlers.");
 			return false;
@@ -200,7 +200,7 @@ namespace isobus
 
 		if (nullptr != hardwareChannels[channelIndex]->frameHandler)
 		{
-			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(channelIndex) + ", because it is already assigned.");
+			LOG_ERROR("[HardwareInterface] Unable to set frame handler at channel " + to_string(static_cast<int>(channelIndex)) + ", because it is already assigned.");
 			return false;
 		}
 
@@ -232,14 +232,14 @@ namespace isobus
 
 		if (channelIndex >= static_cast<std::uint8_t>(hardwareChannels.size()))
 		{
-			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(channelIndex) +
+			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(static_cast<int>(channelIndex)) +
 			          ", because there are only " + to_string(hardwareChannels.size()) + " channels set.");
 			return false;
 		}
 
 		if (nullptr == hardwareChannels[channelIndex]->frameHandler)
 		{
-			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(channelIndex) + ", because it is not assigned.");
+			LOG_ERROR("[HardwareInterface] Unable to remove frame handler at channel " + to_string(static_cast<int>(channelIndex)) + ", because it is not assigned.");
 			return false;
 		}
 
@@ -270,12 +270,18 @@ namespace isobus
 			// Ignored
 #endif
 		}
-		std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
-			channel->start();
-		});
+		bool retVal = true;
+		for (std::uint8_t i = 0; i < hardwareChannels.size(); i++)
+		{
+			if ((nullptr != hardwareChannels[i]->frameHandler) && (!hardwareChannels[i]->start()))
+			{
+				LOG_ERROR("[HardwareInterface] Channel " + to_string(static_cast<unsigned int>(i)) + " failed to start, its driver is not valid after opening.");
+				retVal = false;
+			}
+		}
 
 		started = true;
-		return true;
+		return retVal;
 	}
 
 	bool CANHardwareInterface::stop()

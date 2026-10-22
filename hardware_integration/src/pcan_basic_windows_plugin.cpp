@@ -12,6 +12,7 @@
 #include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 
+#include <sstream>
 #include <thread>
 
 namespace isobus
@@ -48,16 +49,38 @@ namespace isobus
 
 	void PCANBasicWindowsPlugin::open()
 	{
+		lastError.clear();
 		openResult = CAN_Initialize(handle, PCAN_BAUD_250K);
 
-#ifndef DISABLE_CAN_STACK_LOGGER
 		if (PCAN_ERROR_OK != openResult)
 		{
-			char strMsg[256];
-			CAN_GetErrorText(openResult, 0, strMsg);
-			LOG_CRITICAL("[PCAN]: Error trying to connect to PCAN probe, error code: %d %s", static_cast<std::uint32_t>(openResult), strMsg);
+			char errorText[256] = {};
+			CAN_GetErrorText(openResult, 0, errorText);
+
+			std::ostringstream message;
+			message << std::hex << std::uppercase;
+			message << "Unable to open PCAN channel 0x" << handle << ", " << errorText << " (error 0x" << openResult << ")";
+
+			if (PCAN_ERROR_ILLHW == openResult)
+			{
+				message << ". Is the PEAK adapter plugged in?";
+			}
+			else if (PCAN_ERROR_NODRIVER == openResult)
+			{
+				message << ". Is the PEAK driver installed?";
+			}
+			else if ((PCAN_ERROR_HWINUSE == openResult) || (PCAN_ERROR_NETINUSE == openResult))
+			{
+				message << ". Is another program, such as PCAN-View, using it?";
+			}
+			lastError = message.str();
+			LOG_CRITICAL("[PCAN]: " + lastError);
 		}
-#endif
+	}
+
+	std::string PCANBasicWindowsPlugin::get_last_error() const
+	{
+		return lastError;
 	}
 
 	bool PCANBasicWindowsPlugin::read_frame(isobus::CANMessageFrame &canFrame)

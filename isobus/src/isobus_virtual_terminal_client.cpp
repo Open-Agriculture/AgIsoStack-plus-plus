@@ -25,6 +25,19 @@
 
 namespace isobus
 {
+	/// @brief Pads a version label with spaces, or truncates it, to the label length a version command uses
+	/// @param[in] versionLabel The object pool version label
+	/// @returns The label as sent in a version command
+	template<std::size_t LABEL_LENGTH>
+	static std::array<std::uint8_t, LABEL_LENGTH> make_version_label(const std::string &versionLabel)
+	{
+		std::array<std::uint8_t, LABEL_LENGTH> retVal;
+
+		retVal.fill(' ');
+		std::copy_n(versionLabel.begin(), std::min(LABEL_LENGTH, versionLabel.size()), retVal.begin());
+		return retVal;
+	}
+
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
 	  languageCommandInterface(clientSource, partner),
 	  partnerControlFunction(partner),
@@ -1316,6 +1329,10 @@ namespace isobus
 					sendWorkingSetMaintenance = false;
 					sendAuxiliaryMaintenance = false;
 					unsupportedFunctions.clear();
+					{
+						LOCK_GUARD(Mutex, commandQueueMutex);
+						pendingExtendedVersionDeletes.clear();
+					}
 
 					if (partnerControlFunction->get_address_valid())
 					{
@@ -1329,6 +1346,11 @@ namespace isobus
 					if (0 != lastVTStatusTimestamp_ms)
 					{
 						set_state(StateMachineState::SendWorkingSetMasterMessage);
+					}
+					else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Failed);
+						LOG_ERROR("[VT]: Timed out waiting for the VT Status message.");
 					}
 				}
 				break;
@@ -1456,7 +1478,7 @@ namespace isobus
 					}
 					else if ((!objectPools.empty()) &&
 					         (!objectPools[0].versionLabel.empty()) &&
-					         (send_get_versions()))
+					         (uses_extended_versions(objectPools[0].versionLabel) ? send_extended_get_versions() : send_get_versions()))
 					{
 						set_state(StateMachineState::WaitForGetVersionsResponse);
 					}
@@ -1482,24 +1504,10 @@ namespace isobus
 					}
 					else
 					{
-						constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
-						std::array<std::uint8_t, VERSION_LABEL_LENGTH> tempVersionBuffer;
+						const std::string &versionLabel = objectPools[0].versionLabel;
+						const bool sent = uses_extended_versions(versionLabel) ? send_extended_load_version(make_version_label<32>(versionLabel)) : send_load_version(make_version_label<7>(versionLabel));
 
-						// Unused bytes filled with spaces
-						tempVersionBuffer[0] = ' ';
-						tempVersionBuffer[1] = ' ';
-						tempVersionBuffer[2] = ' ';
-						tempVersionBuffer[3] = ' ';
-						tempVersionBuffer[4] = ' ';
-						tempVersionBuffer[5] = ' ';
-						tempVersionBuffer[6] = ' ';
-
-						for (std::size_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
-						{
-							tempVersionBuffer[i] = objectPools[0].versionLabel[i];
-						}
-
-						if (send_load_version(tempVersionBuffer))
+						if (sent)
 						{
 							set_state(StateMachineState::WaitForLoadVersionResponse);
 						}
@@ -1508,11 +1516,34 @@ namespace isobus
 				break;
 
 				case StateMachineState::WaitForLoadVersionResponse:
+				case StateMachineState::WaitForEndOfObjectPoolResponse:
 				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					bool responseTimedOut;
+					if (is_vt_version_supported(VTVersion::Version3))
 					{
+						responseTimedOut = consecutiveNonParsingVTStatusMessages >= 3;
+					}
+					else
+					{
+						responseTimedOut = SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS);
+					}
+
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						set_state(StateMachineState::Disconnected);
+						LOG_ERROR("[VT]: Status Timeout");
+					}
+					else if (responseTimedOut)
+					{
+						if (StateMachineState::WaitForLoadVersionResponse == state)
+						{
+							LOG_ERROR("[VT]: Load Version Response Timeout");
+						}
+						else
+						{
+							LOG_ERROR("[VT]: Get End of Object Pool Response Timeout");
+						}
 						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Load Version Response Timeout");
 					}
 				}
 				break;
@@ -1526,24 +1557,10 @@ namespace isobus
 					}
 					else
 					{
-						constexpr std::uint8_t VERSION_LABEL_LENGTH = 7;
-						std::array<std::uint8_t, VERSION_LABEL_LENGTH> tempVersionBuffer;
+						const std::string &versionLabel = objectPools[0].versionLabel;
+						const bool sent = uses_extended_versions(versionLabel) ? send_extended_store_version(make_version_label<32>(versionLabel)) : send_store_version(make_version_label<7>(versionLabel));
 
-						// Unused bytes filled with spaces
-						tempVersionBuffer[0] = ' ';
-						tempVersionBuffer[1] = ' ';
-						tempVersionBuffer[2] = ' ';
-						tempVersionBuffer[3] = ' ';
-						tempVersionBuffer[4] = ' ';
-						tempVersionBuffer[5] = ' ';
-						tempVersionBuffer[6] = ' ';
-
-						for (std::size_t i = 0; ((i < VERSION_LABEL_LENGTH) && (i < objectPools[0].versionLabel.size())); i++)
-						{
-							tempVersionBuffer[i] = objectPools[0].versionLabel[i];
-						}
-
-						if (send_store_version(tempVersionBuffer))
+						if (sent)
 						{
 							set_state(StateMachineState::WaitForStoreVersionResponse);
 						}
@@ -1657,16 +1674,6 @@ namespace isobus
 				}
 				break;
 
-				case StateMachineState::WaitForEndOfObjectPoolResponse:
-				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
-					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Get End of Object Pool Response Timeout");
-					}
-				}
-				break;
-
 				case StateMachineState::Connected:
 				{
 					// Check for timeouts
@@ -1719,6 +1726,15 @@ namespace isobus
 		}
 		txFlags.process_all_flags();
 		process_command_queue();
+
+		{
+			// Each extended delete needs its own TP session to the VT, so they go out one at a time
+			LOCK_GUARD(Mutex, commandQueueMutex);
+			if ((!pendingExtendedVersionDeletes.empty()) && send_extended_delete_version(pendingExtendedVersionDeletes.back()))
+			{
+				pendingExtendedVersionDeletes.pop_back();
+			}
+		}
 
 		if (state == previousStateMachineState)
 		{
@@ -1911,7 +1927,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_extended_get_versions() const
 	{
-		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::ExtendedDeleteVersionCommand),
+		constexpr std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::ExtendedGetVersionsMessage),
 			                                                             0xFF,
 			                                                             0xFF,
 			                                                             0xFF,
@@ -1983,7 +1999,7 @@ namespace isobus
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
 		if (buffer.size() < CAN_DATA_LENGTH)
 		{
-			buffer.resize(CAN_DATA_LENGTH);
+			buffer.resize(CAN_DATA_LENGTH, 0xFF);
 		}
 		return send_message_to_vt(buffer.data(), buffer.size());
 	}
@@ -2113,6 +2129,11 @@ namespace isobus
 		if (value != state)
 		{
 			firstTimeInState = true;
+			if ((StateMachineState::WaitForEndOfObjectPoolResponse == value) ||
+			    (StateMachineState::WaitForLoadVersionResponse == value))
+			{
+				consecutiveNonParsingVTStatusMessages = 0;
+			}
 		}
 
 		state = value;
@@ -2766,12 +2787,31 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::VTStatusMessage):
 						{
+							if (message.get_source_control_function() != parentVT->partnerControlFunction)
+							{
+								break;
+							}
 							parentVT->lastVTStatusTimestamp_ms = SystemTiming::get_timestamp_ms();
 							parentVT->activeWorkingSetMasterAddress = message.get_uint8_at(1);
 							parentVT->activeWorkingSetDataMaskObjectID = message.get_uint16_at(2);
 							parentVT->activeWorkingSetSoftKeyMaskObjectID = message.get_uint16_at(4);
 							parentVT->busyCodesBitfield = message.get_uint8_at(6);
 							parentVT->currentCommandFunctionCode = message.get_uint8_at(7);
+
+							if (((StateMachineState::WaitForEndOfObjectPoolResponse == parentVT->state) ||
+							     (StateMachineState::WaitForLoadVersionResponse == parentVT->state)) &&
+							    parentVT->is_vt_version_supported(VTVersion::Version3))
+							{
+								// ISO 11783-6 C.2.2 and Annex E: queued status messages can precede parsing.
+								if (message.get_bool_at(6, 4))
+								{
+									parentVT->consecutiveNonParsingVTStatusMessages = 0;
+								}
+								else if (parentVT->consecutiveNonParsingVTStatusMessages < 3)
+								{
+									++parentVT->consecutiveNonParsingVTStatusMessages;
+								}
+							}
 						}
 						break;
 
@@ -2849,12 +2889,14 @@ namespace isobus
 						break;
 
 						case static_cast<std::uint8_t>(Function::GetVersionsResponse):
+						case static_cast<std::uint8_t>(Function::ExtendedGetVersionsMessage):
 						{
 							if (StateMachineState::WaitForGetVersionsResponse == parentVT->state)
 							{
 								// See if the server returned any labels
 								const std::uint8_t numberOfLabels = message.get_uint8_at(1);
-								constexpr std::size_t LABEL_LENGTH = 7;
+								const bool isExtended = (static_cast<std::uint8_t>(Function::ExtendedGetVersionsMessage) == message.get_uint8_at(0));
+								const std::size_t LABEL_LENGTH = isExtended ? 32 : 7;
 
 								if (numberOfLabels > 0)
 								{
@@ -2866,28 +2908,13 @@ namespace isobus
 									{
 										for (std::uint_fast8_t i = 0; i < numberOfLabels; i++)
 										{
-											char tempStringLabel[8] = { 0 };
-											tempStringLabel[0] = message.get_uint8_at(2 + (LABEL_LENGTH * i));
-											tempStringLabel[1] = message.get_uint8_at(3 + (LABEL_LENGTH * i));
-											tempStringLabel[2] = message.get_uint8_at(4 + (LABEL_LENGTH * i));
-											tempStringLabel[3] = message.get_uint8_at(5 + (LABEL_LENGTH * i));
-											tempStringLabel[4] = message.get_uint8_at(6 + (LABEL_LENGTH * i));
-											tempStringLabel[5] = message.get_uint8_at(7 + (LABEL_LENGTH * i));
-											tempStringLabel[6] = message.get_uint8_at(8 + (LABEL_LENGTH * i));
-											tempStringLabel[7] = '\0';
-											std::string labelDecoded(tempStringLabel);
+											std::string labelDecoded;
+											for (std::size_t j = 0; j < LABEL_LENGTH; j++)
+											{
+												labelDecoded.push_back(static_cast<char>(message.get_uint8_at(2 + (LABEL_LENGTH * i) + j)));
+											}
 											std::string tempActualLabel(parentVT->objectPools[0].versionLabel);
-
-											// Check if we need to manipulate the passed in label by padding with spaces
-											while (tempActualLabel.size() < LABEL_LENGTH)
-											{
-												tempActualLabel.push_back(' ');
-											}
-
-											if (tempActualLabel.size() > LABEL_LENGTH)
-											{
-												tempActualLabel.resize(LABEL_LENGTH);
-											}
+											tempActualLabel.resize(LABEL_LENGTH, ' ');
 
 											if (tempActualLabel == labelDecoded)
 											{
@@ -2899,16 +2926,11 @@ namespace isobus
 											else
 											{
 												LOG_INFO("[VT]: VT Server has a label for " + isobus::to_string(labelDecoded) + ". This version will be deleted.");
-												const std::array<std::uint8_t, 7> deleteBuffer = {
-													static_cast<std::uint8_t>(labelDecoded[0]),
-													static_cast<std::uint8_t>(labelDecoded[1]),
-													static_cast<std::uint8_t>(labelDecoded[2]),
-													static_cast<std::uint8_t>(labelDecoded[3]),
-													static_cast<std::uint8_t>(labelDecoded[4]),
-													static_cast<std::uint8_t>(labelDecoded[5]),
-													static_cast<std::uint8_t>(labelDecoded[6])
-												};
-												if (!parentVT->send_delete_version(deleteBuffer))
+												if (isExtended)
+												{
+													parentVT->queue_extended_version_delete(make_version_label<32>(labelDecoded));
+												}
+												else if (!parentVT->send_delete_version(make_version_label<7>(labelDecoded)))
 												{
 													LOG_WARNING("[VT]: Failed to send the delete version message for label " + isobus::to_string(labelDecoded));
 												}
@@ -2939,6 +2961,7 @@ namespace isobus
 						break;
 
 						case static_cast<std::uint8_t>(Function::LoadVersionCommand):
+						case static_cast<std::uint8_t>(Function::ExtendedLoadVersionCommand):
 						{
 							if (StateMachineState::WaitForLoadVersionResponse == parentVT->state)
 							{
@@ -2969,9 +2992,13 @@ namespace isobus
 									}
 									if (message.get_bool_at(5, 1))
 									{
-										LOG_WARNING("[VT]: Load Versions Response error: Insufficient memory.");
+										LOG_WARNING("[VT]: Load Versions Response error: Version label is not correct, or unknown.");
 									}
 									if (message.get_bool_at(5, 2))
+									{
+										LOG_WARNING("[VT]: Load Versions Response error: Insufficient memory.");
+									}
+									if (message.get_bool_at(5, 3))
 									{
 										LOG_WARNING("[VT]: Load Versions Response error: Any other error.");
 									}
@@ -2989,6 +3016,7 @@ namespace isobus
 						break;
 
 						case static_cast<std::uint8_t>(Function::StoreVersionCommand):
+						case static_cast<std::uint8_t>(Function::ExtendedStoreVersionCommand):
 						{
 							if (StateMachineState::WaitForStoreVersionResponse == parentVT->state)
 							{
@@ -3001,15 +3029,15 @@ namespace isobus
 								else
 								{
 									// At least one error is set
-									if (message.get_bool_at(5, 0))
+									if (message.get_bool_at(5, 1))
 									{
 										LOG_WARNING("[VT]: Store Versions Response error: Version label is not correct.");
 									}
-									if (message.get_bool_at(5, 1))
+									if (message.get_bool_at(5, 2))
 									{
 										LOG_WARNING("[VT]: Store Versions Response error: Insufficient memory.");
 									}
-									if (message.get_bool_at(5, 2))
+									if (message.get_bool_at(5, 3))
 									{
 										LOG_WARNING("[VT]: Store Versions Response error: Any other error.");
 									}
@@ -3023,6 +3051,7 @@ namespace isobus
 						break;
 
 						case static_cast<std::uint8_t>(Function::DeleteVersionCommand):
+						case static_cast<std::uint8_t>(Function::ExtendedDeleteVersionCommand):
 						{
 							if (0 == message.get_uint8_at(5))
 							{
@@ -3217,6 +3246,11 @@ namespace isobus
 	void VirtualTerminalClient::print_objectpool_error(std::uint8_t errorCodes, std::uint8_t objectPoolErrorCodes)
 	{
 		LOG_ERROR("Error(s) occured during the IOP parsing process:");
+		if (errorCodes & 0x1)
+		{
+			LOG_ERROR(" - Error in the object pool");
+		}
+
 		if (errorCodes & 0x2)
 		{
 			LOG_ERROR(" - VT ran out of memory during transfer");
@@ -3436,7 +3470,8 @@ namespace isobus
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
-				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0]);
+				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
+				retVal &= (0 != objectSize);
 				if (retVal)
 				{
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
@@ -3914,7 +3949,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer)
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
 		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
@@ -4122,8 +4157,22 @@ namespace isobus
 
 			case VirtualTerminalObjectType::ExtendedInputAttributes:
 			{
-				const std::uint32_t numberOfCodePlanes = buffer[5];
-				retVal += (numberOfCodePlanes * 2); // Doesn't include the character ranges, need to handle those externally
+				constexpr std::uint32_t CODE_PLANE_HEADER_LENGTH = 2;
+				constexpr std::uint32_t CHARACTER_RANGE_LENGTH = 4;
+				const std::uint32_t numberOfCodePlanes = (retVal <= bufferLength) ? buffer[4] : 0;
+				std::uint32_t codePlanesWalked = 0;
+
+				while ((codePlanesWalked < numberOfCodePlanes) && ((retVal + CODE_PLANE_HEADER_LENGTH) <= bufferLength))
+				{
+					retVal += CODE_PLANE_HEADER_LENGTH + (CHARACTER_RANGE_LENGTH * buffer[retVal + 1]);
+					codePlanesWalked++;
+				}
+
+				if ((codePlanesWalked < numberOfCodePlanes) || (retVal > bufferLength))
+				{
+					LOG_ERROR("[VT]: Extended Input Attributes object " + isobus::to_string(static_cast<int>(buffer[0] | (buffer[1] << 8))) + " runs past the end of the object pool");
+					retVal = 0;
+				}
 			}
 			break;
 
@@ -4662,6 +4711,19 @@ namespace isobus
 		}
 
 		return true;
+	}
+
+	bool VirtualTerminalClient::uses_extended_versions(const std::string &versionLabel) const
+	{
+		constexpr std::size_t VERSION_LABEL_LENGTH = 7;
+
+		return is_vt_version_supported(VTVersion::Version5) && (versionLabel.size() > VERSION_LABEL_LENGTH);
+	}
+
+	void VirtualTerminalClient::queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel)
+	{
+		LOCK_GUARD(Mutex, commandQueueMutex);
+		pendingExtendedVersionDeletes.push_back(versionLabel);
 	}
 
 	void VirtualTerminalClient::process_command_queue()

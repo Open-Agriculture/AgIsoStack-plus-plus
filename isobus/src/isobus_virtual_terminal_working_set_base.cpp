@@ -10,8 +10,10 @@
 #include "isobus/isobus/isobus_virtual_terminal_working_set_base.hpp"
 
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace isobus
@@ -79,6 +81,27 @@ namespace isobus
 	{
 		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		return faultingObjectID;
+	}
+
+	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_parent_object_id()
+	{
+		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		std::uint16_t retVal = NULL_OBJECT_ID;
+
+		if (NULL_OBJECT_ID != faultingObjectID)
+		{
+			for (auto object = vtObjectTree.cbegin(); (vtObjectTree.cend() != object) && (NULL_OBJECT_ID == retVal); object++)
+			{
+				for (std::uint16_t i = 0; (nullptr != object->second) && (i < object->second->get_number_children()); i++)
+				{
+					if (faultingObjectID == object->second->get_child_id(i))
+					{
+						retVal = object->first;
+					}
+				}
+			}
+		}
+		return retVal;
 	}
 
 	void VirtualTerminalWorkingSetBase::add_iop_raw_data(const std::vector<std::uint8_t> &dataToAdd)
@@ -1985,55 +2008,49 @@ namespace isobus
 
 							while (numberBytesProcessed < numberBytesToFollow)
 							{
-								auto commandLength = 8;
-								switch (static_cast<Macro::Command>(iopData[0]))
+								const int bytesLeft = numberBytesToFollow - numberBytesProcessed;
+								int commandLength = 8;
+
+								if (bytesLeft >= commandLength)
 								{
-									case Macro::Command::ChangeChildPosition:
-										// special case: 9 bytes
-										retVal = tempObject->add_command_packet({
-										  iopData[0],
-										  iopData[1],
-										  iopData[2],
-										  iopData[3],
-										  iopData[4],
-										  iopData[5],
-										  iopData[6],
-										  iopData[7],
-										  iopData[8],
-										});
-										commandLength = 9;
-										break;
-									case Macro::Command::GraphicsContextCommand:
-										// FIXME
-										break;
-									case Macro::Command::ChangeStringValue:
+									switch (static_cast<Macro::Command>(iopData[0]))
 									{
-										// Change string value has variable length
-										std::vector<std::uint8_t> command;
-										auto stringLength = get_little_endian_uint16(iopData, 3);
-										for (int i = 0; i < (stringLength + 5); i++)
-										{
-											command.push_back(iopData[i]);
-										}
-										retVal = tempObject->add_command_packet(command);
-										commandLength = 5 + stringLength;
-										break;
+										case Macro::Command::ChangeChildPosition:
+											commandLength = 9;
+											break;
+										case Macro::Command::GraphicsContextCommand:
+											// Padded with 0xFF to 8 bytes if shorter
+											switch (static_cast<VirtualTerminalBase::GraphicsContextSubCommandID>(iopData[3]))
+											{
+												case VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon:
+													commandLength = std::max(8, 5 + 4 * iopData[4]);
+													break;
+												case VirtualTerminalBase::GraphicsContextSubCommandID::DrawText:
+													commandLength = std::max(8, 6 + iopData[5]);
+													break;
+												case VirtualTerminalBase::GraphicsContextSubCommandID::PanAndZoomViewport:
+													commandLength = 12;
+													break;
+												default:
+													break;
+											}
+											break;
+										case Macro::Command::ChangeStringValue:
+											commandLength = std::max(8, 5 + get_little_endian_uint16(iopData, 3));
+											break;
+										default:
+											break;
 									}
-									default:
-										// all other macro commands are 8 byte long
-										retVal = tempObject->add_command_packet({
-										  iopData[0],
-										  iopData[1],
-										  iopData[2],
-										  iopData[3],
-										  iopData[4],
-										  iopData[5],
-										  iopData[6],
-										  iopData[7],
-										});
-										commandLength = 8;
-										break;
 								}
+
+								if (bytesLeft < commandLength)
+								{
+									LOG_ERROR("[WS]: Macro object %u cannot be parsed because a command is longer than the bytes left in the macro.", decodedID);
+									retVal = false;
+									break;
+								}
+
+								retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
 								iopLength -= commandLength;
 								iopData += commandLength;
 								numberBytesProcessed += commandLength;
@@ -2355,6 +2372,175 @@ namespace isobus
 				}
 				break;
 
+				case VirtualTerminalObjectType::ScaledGraphic:
+				{
+					auto tempObject = std::make_shared<ScaledGraphicObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+						tempObject->set_width((static_cast<std::uint16_t>(iopData[3]) | (static_cast<std::uint16_t>(iopData[4]) << 8)));
+						tempObject->set_height((static_cast<std::uint16_t>(iopData[5]) | (static_cast<std::uint16_t>(iopData[6]) << 8)));
+						tempObject->set_scale_type(iopData[7]);
+						tempObject->set_options(iopData[8]);
+						tempObject->set_graphic_id((static_cast<std::uint16_t>(iopData[9]) | (static_cast<std::uint16_t>(iopData[10]) << 8)));
+						const std::uint8_t numberOfMacrosToFollow = iopData[11];
+						iopData += 12;
+						iopLength -= 12;
+
+						// Next, parse macro list
+						retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse scaled graphics object");
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::GraphicData:
+				{
+					auto tempObject = std::make_shared<GraphicDataObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+
+						if (0 == iopData[3])
+						{
+							tempObject->set_format(static_cast<GraphicDataObject::Format>(iopData[3]));
+							std::uint32_t graphicDataLength = get_little_endian_uint32(iopData, 4);
+							iopLength -= 8;
+							iopData += 8;
+
+							if (iopLength >= graphicDataLength)
+							{
+								std::vector<std::uint8_t> graphicData(iopData, iopData + graphicDataLength);
+								iopData += graphicDataLength;
+								iopLength -= graphicDataLength;
+								tempObject->set_raw_data(std::move(graphicData));
+								retVal = true;
+							}
+							else
+							{
+								LOG_ERROR("[WS]: Not enough IOP data to parse graphic data object raw data");
+							}
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Graphic data object %u has an unsupported format type. Only format type 0 (PNG) is allowed.", decodedID);
+						}
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse graphic data object");
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::WorkingSetSpecialControls:
+				{
+					auto tempObject = std::make_shared<WorkingSetSpecialControlsObject>();
+
+					if (iopLength >= tempObject->get_minumum_object_length())
+					{
+						tempObject->set_id(decodedID);
+					}
+
+					constexpr std::uint16_t minimumBytesToFollow = 5;
+					std::uint16_t numberOfBytesToFollow = get_little_endian_uint16(iopData, 3);
+					const std::uint16_t colourMapObjectID = get_little_endian_uint16(iopData, 5);
+					const std::uint16_t colourMapPaletteObjectID = get_little_endian_uint16(iopData, 7);
+					const std::uint8_t numberOfLanguagePairs = iopData[9];
+
+					tempObject->set_colour_map_object_id(colourMapObjectID);
+					tempObject->set_colour_palette_object_id(colourMapPaletteObjectID);
+
+					if (numberOfBytesToFollow < (minimumBytesToFollow + (numberOfLanguagePairs * 4)))
+					{
+						LOG_ERROR("[WS]: Working set special controls object has too few bytes to follow.");
+					}
+					else
+					{
+						if (numberOfBytesToFollow > (minimumBytesToFollow + (numberOfLanguagePairs * 4)))
+						{
+							LOG_WARNING("[WS]: Working set special controls object has too many bytes to follow. Technically this is allowed, but it may indicate a problem.");
+						}
+
+						iopLength -= tempObject->get_minumum_object_length();
+						iopData += tempObject->get_minumum_object_length();
+						numberOfBytesToFollow -= minimumBytesToFollow;
+
+						if (iopLength >= (numberOfLanguagePairs * 4))
+						{
+							std::vector<WorkingSetSpecialControlsObject::LanguageCountryCodePair> languageCountryCodePairs;
+
+							for (std::uint_fast8_t i = 0; i < numberOfLanguagePairs; i++)
+							{
+								WorkingSetSpecialControlsObject::LanguageCountryCodePair pair;
+
+								pair.languageCode.resize(2);
+								pair.countryCode.resize(2);
+
+								for (std::uint_fast8_t j = 0; j < numberOfLanguagePairs; j++)
+								{
+									pair.languageCode[0] = iopData[0];
+									pair.languageCode[1] = iopData[1];
+									pair.countryCode[0] = iopData[2];
+									pair.countryCode[1] = iopData[3];
+									iopData += 4;
+									iopLength -= 4;
+									numberOfBytesToFollow -= 4;
+									languageCountryCodePairs.push_back(pair);
+								}
+							}
+							tempObject->set_language_codes(std::move(languageCountryCodePairs));
+						}
+						retVal = true;
+					}
+
+					// Skip ahead any remaining bytes
+					if (0 != numberOfBytesToFollow)
+					{
+						LOG_WARNING("[WS]: Working set special controls object has %u extra bytes to follow. Skipping ahead.", numberOfBytesToFollow);
+						iopData += numberOfBytesToFollow;
+						iopLength -= numberOfBytesToFollow;
+					}
+
+					if (retVal)
+					{
+						retVal = add_or_replace_object(tempObject);
+						// Iterate over all objects and ensure there are at most 1
+						// of the working set special controls
+						std::uint16_t numberOfWorkingSetSpecialControlsObjects = 0;
+						for (const auto &objectPair : vtObjectTree)
+						{
+							if (objectPair.second->get_object_type() == VirtualTerminalObjectType::WorkingSetSpecialControls)
+							{
+								numberOfWorkingSetSpecialControlsObjects++;
+
+								if (numberOfWorkingSetSpecialControlsObjects > 1)
+								{
+									LOG_ERROR("[WS]: Too many Working Set Special Controls Objects. Only 0 or 1 are allowed in ISO11783-6.");
+									retVal = false;
+									break;
+								}
+							}
+						}
+					}
+				}
+				break;
+
 				default:
 				{
 					LOG_ERROR("[WS]: Unsupported Object (Type: %d)", decodedType);
@@ -2442,7 +2628,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength)
+	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength, std::uint32_t *objectsLength)
 	{
 		std::uint32_t remainingLength = iopLength;
 		std::uint8_t *currentIopPointer = iopData;
@@ -2450,7 +2636,10 @@ namespace isobus
 
 		if (iopLength > 0)
 		{
-			while (remainingLength > 0)
+			// Padding is at most 7 bytes of 0xFF, and no object ID is 0xFFFF
+			while ((remainingLength >= CAN_DATA_LENGTH) ||
+			       ((remainingLength > 0) &&
+			        !std::all_of(currentIopPointer, currentIopPointer + remainingLength, [](std::uint8_t dataByte) { return 0xFF == dataByte; })))
 			{
 				if (!parse_next_object(currentIopPointer, remainingLength))
 				{
@@ -2463,6 +2652,11 @@ namespace isobus
 		else
 		{
 			retVal = false;
+		}
+
+		if (nullptr != objectsLength)
+		{
+			*objectsLength = iopLength - remainingLength;
 		}
 		return retVal;
 	}

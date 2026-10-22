@@ -73,6 +73,10 @@ namespace isobus
 		/// @brief Connects to the hardware you specified in the constructor's channel argument
 		void open() override;
 
+		/// @brief Returns why the last call to open() failed
+		/// @returns A description of the failure, or an empty string if the last open() succeeded
+		std::string get_last_error() const override;
+
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
@@ -97,6 +101,7 @@ namespace isobus
 		const int channel; ///< Stores the channel associated with this object
 		const std::uint32_t baudrate; ///< Stores the baud rate associated with this object
 		std::unique_ptr<InnoMakerUsb2CanLib::innomaker_can> txContexts; ///< Stores Tx tickets for the driver
+		std::string lastError; ///< Why the last open() failed
 	};
 }
 #endif // INNOMAKER_USB2CAN_PLUGIN_HPP

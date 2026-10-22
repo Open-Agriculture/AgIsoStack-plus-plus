@@ -9,6 +9,7 @@
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <linux/can.h>
 #include <linux/can/raw.h>
@@ -18,6 +19,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -70,45 +72,92 @@ namespace isobus
 
 	void SocketCANInterface::open()
 	{
-		fileDescriptor = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+		set_last_error("");
 
-		if (fileDescriptor >= 0)
+		// strncpy into ifr_name would silently cut a longer name short, and the cut name can match a different interface
+		if (name.size() >= IFNAMSIZ)
 		{
-			struct ifreq interfaceRequestStructure;
-			const int RECEIVE_OWN_MESSAGES = 0;
-			const int DROP_MONITOR = 1;
-			const int TIMESTAMPING = 0x58;
-			const int TIMESTAMP = 1;
-			memset(&interfaceRequestStructure, 0, sizeof(interfaceRequestStructure));
-			strncpy(interfaceRequestStructure.ifr_name, name.c_str(), sizeof(interfaceRequestStructure.ifr_name));
-			setsockopt(fileDescriptor, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS, &RECEIVE_OWN_MESSAGES, sizeof(RECEIVE_OWN_MESSAGES));
-			setsockopt(fileDescriptor, SOL_SOCKET, SO_RXQ_OVFL, &DROP_MONITOR, sizeof(DROP_MONITOR));
+			fail_open("the name is longer than " + to_string(IFNAMSIZ - 1) + " characters.");
+		}
+		else
+		{
+			fileDescriptor = socket(PF_CAN, SOCK_RAW, CAN_RAW);
 
-			if (setsockopt(fileDescriptor, SOL_SOCKET, SO_TIMESTAMPING, &TIMESTAMPING, sizeof(TIMESTAMPING)) < 0)
+			if (fileDescriptor >= 0)
 			{
-				setsockopt(fileDescriptor, SOL_SOCKET, SO_TIMESTAMP, &TIMESTAMP, sizeof(TIMESTAMP));
-			}
+				struct ifreq interfaceRequestStructure;
+				const int RECEIVE_OWN_MESSAGES = 0;
+				const int DROP_MONITOR = 1;
+				const int TIMESTAMPING = 0x58;
+				const int TIMESTAMP = 1;
+				memset(&interfaceRequestStructure, 0, sizeof(interfaceRequestStructure));
+				strncpy(interfaceRequestStructure.ifr_name, name.c_str(), sizeof(interfaceRequestStructure.ifr_name));
+				setsockopt(fileDescriptor, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS, &RECEIVE_OWN_MESSAGES, sizeof(RECEIVE_OWN_MESSAGES));
+				setsockopt(fileDescriptor, SOL_SOCKET, SO_RXQ_OVFL, &DROP_MONITOR, sizeof(DROP_MONITOR));
 
-			if (ioctl(fileDescriptor, SIOCGIFINDEX, &interfaceRequestStructure) >= 0)
-			{
-				memset(pCANDevice, 0, sizeof(sockaddr_can));
-				pCANDevice->can_family = AF_CAN;
-				pCANDevice->can_ifindex = interfaceRequestStructure.ifr_ifindex;
-
-				if (bind(fileDescriptor, (struct sockaddr *)pCANDevice, sizeof(struct sockaddr)) < 0)
+				if (setsockopt(fileDescriptor, SOL_SOCKET, SO_TIMESTAMPING, &TIMESTAMPING, sizeof(TIMESTAMPING)) < 0)
 				{
-					close();
+					setsockopt(fileDescriptor, SOL_SOCKET, SO_TIMESTAMP, &TIMESTAMP, sizeof(TIMESTAMP));
+				}
+
+				if (ioctl(fileDescriptor, SIOCGIFINDEX, &interfaceRequestStructure) >= 0)
+				{
+					memset(pCANDevice, 0, sizeof(sockaddr_can));
+					pCANDevice->can_family = AF_CAN;
+					pCANDevice->can_ifindex = interfaceRequestStructure.ifr_ifindex;
+
+					// bind() succeeds on a down interface, and the socket would then only fail later with ENETDOWN
+					if (ioctl(fileDescriptor, SIOCGIFFLAGS, &interfaceRequestStructure) < 0)
+					{
+						fail_open("ioctl(SIOCGIFFLAGS) failed: " + std::string(std::strerror(errno)));
+					}
+					else if (0 == (interfaceRequestStructure.ifr_flags & IFF_UP))
+					{
+						fail_open("the interface is down.");
+					}
+					else if (bind(fileDescriptor, (struct sockaddr *)pCANDevice, sizeof(struct sockaddr)) < 0)
+					{
+						fail_open("bind() failed: " + std::string(std::strerror(errno)));
+					}
+				}
+				else
+				{
+					fail_open("ioctl(SIOCGIFINDEX) failed: " + std::string(std::strerror(errno)));
 				}
 			}
 			else
 			{
-				close();
+				fail_open("socket() failed: " + std::string(std::strerror(errno)));
 			}
 		}
-		else
-		{
-			close();
-		}
+	}
+
+	void SocketCANInterface::fail_open(const std::string &reason)
+	{
+		close();
+		const std::string error = "Unable to open interface " + name + ", " + reason;
+		set_last_error(error);
+		LOG_ERROR("[SocketCAN] " + error);
+	}
+
+	void SocketCANInterface::close_because_down()
+	{
+		const std::string error = name + " interface is down.";
+		set_last_error(error);
+		LOG_CRITICAL("[SocketCAN] " + error);
+		close();
+	}
+
+	void SocketCANInterface::set_last_error(const std::string &error)
+	{
+		LOCK_GUARD(Mutex, lastErrorMutex);
+		lastError = error;
+	}
+
+	std::string SocketCANInterface::get_last_error() const
+	{
+		LOCK_GUARD(Mutex, lastErrorMutex);
+		return lastError;
 	}
 
 	bool SocketCANInterface::read_frame(isobus::CANMessageFrame &canFrame)
@@ -183,10 +232,9 @@ namespace isobus
 					retVal = true;
 				}
 			}
-			else if (errno == ENETDOWN)
+			else if ((ENETDOWN == errno) || (ENODEV == errno))
 			{
-				LOG_CRITICAL("[SocketCAN] " + get_device_name() + " interface is down.");
-				close();
+				close_because_down();
 			}
 		}
 		else if (pollingFileDescriptor.revents & (POLLERR | POLLHUP))
@@ -216,8 +264,7 @@ namespace isobus
 		}
 		else if (errno == ENETDOWN)
 		{
-			LOG_CRITICAL("[SocketCAN] " + get_device_name() + " interface is down.");
-			close();
+			close_because_down();
 		}
 		return retVal;
 	}

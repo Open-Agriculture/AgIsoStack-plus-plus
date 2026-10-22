@@ -32,7 +32,7 @@ endif()
 
 # Set test include files
 set(TEST_INCLUDE helpers/control_function_helpers.hpp
-                 helpers/messaging_helpers.hpp)
+                 helpers/messaging_helpers.hpp helpers/object_pool_helpers.hpp)
 
 # Set test source files
 set(TEST_SRC
@@ -45,6 +45,7 @@ set(TEST_SRC
     can_name_tests.cpp
     hardware_interface_tests.cpp
     vt_client_tests.cpp
+    vt_server_tests.cpp
     language_command_interface_tests.cpp
     tc_client_tests.cpp
     ddop_tests.cpp
@@ -61,7 +62,6 @@ set(TEST_SRC
     can_message_tests.cpp
     heartbeat_tests.cpp
     tc_server_tests.cpp
-    vt_server_tests.cpp
     helpers/test_time_source.cpp
     vt_server_managed_working_set_tests.cpp
     helpers/control_function_helpers.cpp
@@ -77,6 +77,14 @@ target_link_libraries(
   unit_tests
   PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
           ${PROJECT_NAME}::HardwareIntegration ${PROJECT_NAME}::Utility)
+
+# Read the test object pool from the source tree, so the tests work from any
+# working directory and without building the examples
+target_compile_definitions(
+  unit_tests
+  PRIVATE
+    VT3_TEST_POOL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop"
+)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)

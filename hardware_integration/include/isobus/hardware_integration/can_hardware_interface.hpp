@@ -74,7 +74,10 @@ namespace isobus
 		/// the worker thread for the hardware layer is started. Typically you'll want to leave this as true.
 		/// However, if you want to drive the hardware layer yourself by calling update manually, you can
 		/// pass this in as false to not spawn the worker thread.
-		/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
+		/// @returns `true` if every channel with a frame handler assigned started, otherwise `false`.
+		/// On `false` the interface still counts as started and any channels that did open stay open,
+		/// so call stop() if a partial start is not good enough. A failed channel's driver may say why
+		/// through `get_assigned_can_channel_frame_handler(channelIndex)->get_last_error()`.
 		static bool start(bool start_thread = true);
 
 		/// @brief Stops all CAN management threads and discards all remaining messages in the Tx and Rx queues.

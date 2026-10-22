@@ -107,7 +107,9 @@ extern "C" void app_main()
 	isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info); // Change this to Debug to see more information
 	isobus::CANHardwareInterface::set_number_of_can_channels(1);
 	isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
-	// isobus::CANHardwareInterface::set_periodic_update_interval(10); // 10ms update period matches the default FreeRTOS tick rate of 100Hz
+	// sdkconfig.defaults sets the FreeRTOS tick rate to 250Hz, which matches the default 4ms update period.
+	// If you keep the default 100Hz tick rate instead, slow the stack down to match it:
+	// isobus::CANHardwareInterface::set_periodic_update_interval(10);
 
 	if (!isobus::CANHardwareInterface::start() || !canDriver->get_is_valid())
 	{

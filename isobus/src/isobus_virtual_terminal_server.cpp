@@ -14,7 +14,9 @@
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace isobus
@@ -41,6 +43,63 @@ namespace isobus
 	static constexpr std::uint8_t get_bit(std::uint8_t bitIndex) noexcept
 	{
 		return (bitIndex < 8U) ? static_cast<std::uint8_t>(1U << bitIndex) : static_cast<std::uint8_t>(0U);
+	}
+
+	/// @brief The VT status message busy code bit index for "VT is busy parsing an object pool" (VT version 3 and later)
+	constexpr std::uint8_t BUSY_PARSING_OBJECT_POOL_BIT = 4;
+
+	/// @brief Checks if a working set's object pool parse has started but its response has not been sent yet.
+	/// @param workingSet The working set to check.
+	/// @returns true if update() has not yet joined the parsing thread and sent the response, otherwise false.
+	static bool is_object_pool_parse_unanswered(VirtualTerminalServerManagedWorkingSet &workingSet)
+	{
+		const auto state = workingSet.get_object_pool_processing_state();
+
+		return ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == state) ||
+		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
+		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state));
+	}
+
+	/// @brief Builds a get versions or extended get versions response.
+	/// @param function The response function code.
+	/// @param versions The stored version labels, of which only the first 255 fit the one byte count.
+	/// @returns The response payload, padded to at least 8 bytes.
+	template<std::size_t LABEL_LENGTH>
+	static std::vector<std::uint8_t> build_versions_response(std::uint8_t function, const std::vector<std::array<std::uint8_t, LABEL_LENGTH>> &versions)
+	{
+		const std::size_t numberOfVersions = std::min<std::size_t>(versions.size(), std::numeric_limits<std::uint8_t>::max());
+		std::vector<std::uint8_t> buffer = { function, static_cast<std::uint8_t>(numberOfVersions) };
+
+		if (numberOfVersions < versions.size())
+		{
+			LOG_WARNING("[VT Server]: get_versions returned too many versions! This client should really delete some.");
+		}
+
+		for (std::size_t i = 0; i < numberOfVersions; i++)
+		{
+			buffer.insert(buffer.end(), versions[i].begin(), versions[i].end());
+		}
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
+		return buffer;
+	}
+
+	/// @brief Reads the version label that follows the function code of a version command.
+	/// @param data The message data.
+	/// @param labelLength The label length the command uses.
+	/// @returns The version label, or an empty vector if the message is too short to hold it.
+	static std::vector<std::uint8_t> get_version_label(const std::vector<std::uint8_t> &data, std::uint8_t labelLength)
+	{
+		std::vector<std::uint8_t> versionLabel;
+
+		if (data.size() > labelLength)
+		{
+			versionLabel.assign(data.begin() + 1, data.begin() + 1 + labelLength);
+		}
+		else
+		{
+			LOG_WARNING("[VT Server]: Ignoring version command %u, it is too short to hold a %u byte version label.", data.at(0), labelLength);
+		}
+		return versionLabel;
 	}
 
 	/// @brief Extracts a byte from a 32-bit value.
@@ -107,6 +166,7 @@ namespace isobus
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 			                                                                                       process_rx_message,
 			                                                                                       this);
+			initialized = true;
 		}
 	}
 
@@ -224,14 +284,15 @@ namespace isobus
 			    (data[1] & 0x01)) // Init bit is set
 			{
 				// This CF is probably trying to initiate communication with us.
-				managedWorkingSetList.emplace_back(std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function()));
+				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
+				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+				managedWorkingSetList.emplace_back(newWorkingSet);
 
-				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2]);
+				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), data[2]);
 				if (data[2] > get_vt_version_byte(get_version()))
 				{
-					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", managedWorkingSetList.back()->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
+					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
 				}
-				managedWorkingSetList.back()->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 				retVal = true;
 			}
 		}
@@ -241,8 +302,7 @@ namespace isobus
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
 	{
 		if ((message.get_destination_control_function() == serverInternalControlFunction) &&
-		    (message.get_source_control_function() != nullptr) &&
-		    (CAN_DATA_LENGTH == message.get_data_length()))
+		    (message.get_source_control_function() != nullptr))
 		{
 			process_rx_message(message, this);
 		}
@@ -274,7 +334,7 @@ namespace isobus
 						                           workingSet->get_control_function(),
 						                           get_internal_control_function(),
 						                           workingSet->get_control_function()->get_can_port());
-						LOG_DEBUG("[VT Server]: Executing macro command %u", j);
+						LOG_DEBUG("[VT Server]: Executing macro #%u command code %u, len %u", j, commandPacket.size() > 0 ? commandPacket.at(0) : 'X', message.get_data_length());
 						execute_macro_as_rx_message(message);
 					}
 				}
@@ -480,7 +540,20 @@ namespace isobus
 	void VirtualTerminalServer::process_connection_dependent_messages(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> managedWorkingSet)
 	{
 		const auto &data = message.get_data();
-		switch (static_cast<Function>(data.at(0)))
+		const auto function = static_cast<Function>(data.at(0));
+
+		// The client must wait for the response first, and the parsing thread is still reading the pool data
+		if (((Function::ObjectPoolTransferMessage == function) ||
+		     (Function::EndOfObjectPoolMessage == function) ||
+		     (Function::LoadVersionCommand == function) ||
+		     (Function::ExtendedLoadVersionCommand == function)) &&
+		    is_object_pool_parse_unanswered(*managedWorkingSet))
+		{
+			LOG_WARNING("[VT Server]: Ignoring object pool command %u from client %u, its previous object pool has not been answered yet.", data.at(0), message.get_identifier().get_source_address());
+			return;
+		}
+
+		switch (function)
 		{
 			case Function::GetMemoryMessage:
 			{
@@ -501,33 +574,23 @@ namespace isobus
 			break;
 
 			case Function::GetVersionsMessage:
+			case Function::ExtendedGetVersionsMessage:
 			{
-				auto versions = get_versions(message.get_source_control_function()->get_NAME());
-
-				std::vector<std::uint8_t> buffer;
-				buffer.push_back(static_cast<std::uint8_t>(Function::GetVersionsResponse));
+				const NAME clientNAME = message.get_source_control_function()->get_NAME();
 
 				LOG_DEBUG("[VT Server]: Client %u requests stored versions", message.get_source_control_function()->get_address());
 
-				if (versions.size() > 255)
+				// The extended response reuses the request's function code, the standard one does not
+				std::vector<std::uint8_t> buffer;
+				if (Function::GetVersionsMessage == function)
 				{
-					LOG_WARNING("[VT Server]: get_versions returned too many versions! This client should really delete some.");
+					buffer = build_versions_response(static_cast<std::uint8_t>(Function::GetVersionsResponse), get_versions(clientNAME));
+				}
+				else
+				{
+					buffer = build_versions_response(static_cast<std::uint8_t>(Function::ExtendedGetVersionsMessage), get_extended_versions(clientNAME));
 				}
 
-				buffer.push_back(static_cast<std::uint8_t>(versions.size() & 0xFF));
-
-				for (const auto &version : versions)
-				{
-					for (const auto &versionByte : version)
-					{
-						buffer.push_back(versionByte);
-					}
-				}
-
-				while (buffer.size() < CAN_DATA_LENGTH)
-				{
-					buffer.push_back(0xFF);
-				}
 				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 				                                               buffer.data(),
 				                                               static_cast<std::uint32_t>(buffer.size()),
@@ -538,51 +601,42 @@ namespace isobus
 			break;
 
 			case Function::LoadVersionCommand:
+			case Function::ExtendedLoadVersionCommand:
 			{
-				std::vector<std::uint8_t> versionLabel;
+				const bool isExtended = (Function::ExtendedLoadVersionCommand == function);
+				const auto versionLabel = get_version_label(data, isExtended ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH);
 
-				versionLabel.reserve(VERSION_LABEL_LENGTH);
-
-				for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
+				if (!versionLabel.empty())
 				{
-					versionLabel.push_back(data[i + 1]);
-				}
-
-				auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
-				if (!loadedVersion.empty())
-				{
-					managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
-					managedWorkingSet->add_iop_raw_data(loadedVersion);
-				}
-				else
-				{
-					send_load_version_response(0x01, managedWorkingSet->get_control_function());
-					LOG_ERROR("[VT Server]: Failed to load requested object pool version");
-				}
-
-				if (managedWorkingSet->get_any_object_pools())
-				{
-					managedWorkingSet->start_parsing_thread();
-					managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, {});
-					LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
+					auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
+					if (!loadedVersion.empty())
+					{
+						managedWorkingSet->clear_object_pool_data({});
+						managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
+						managedWorkingSet->add_iop_raw_data(loadedVersion);
+						managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, isExtended, {});
+						managedWorkingSet->start_parsing_thread();
+						LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
+					}
+					else
+					{
+						send_load_version_response(function, get_bit(static_cast<std::uint8_t>(LoadVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+						LOG_ERROR("[VT Server]: Failed to load requested object pool version");
+					}
 				}
 			}
 			break;
 
 			case Function::StoreVersionCommand:
+			case Function::ExtendedStoreVersionCommand:
 			{
-				if (managedWorkingSet->get_any_object_pools())
+				const auto versionLabel = get_version_label(data, (Function::ExtendedStoreVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH);
+
+				if ((!versionLabel.empty()) && managedWorkingSet->get_any_object_pools())
 				{
 					std::ostringstream nameString;
 					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
-					std::vector<std::uint8_t> versionLabel;
 					bool allPoolsSaved = true;
-					versionLabel.reserve(VERSION_LABEL_LENGTH);
-
-					for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
-					{
-						versionLabel.push_back(data[i + 1]);
-					}
 
 					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
 					{
@@ -601,7 +655,7 @@ namespace isobus
 					}
 
 					std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
-					buffer[0] = static_cast<std::uint8_t>(Function::StoreVersionCommand);
+					buffer[0] = static_cast<std::uint8_t>(function);
 					buffer[1] = 0xFF; // Reserved
 					buffer[2] = 0xFF; // Reserved
 					buffer[3] = 0xFF; // Reserved
@@ -612,7 +666,7 @@ namespace isobus
 					}
 					else
 					{
-						buffer[5] = 0x04; // Any other error
+						buffer[5] = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::AnyOtherError));
 					}
 					buffer[6] = 0xFF; // Reserved
 					buffer[7] = 0xFF; // Reserved
@@ -623,7 +677,7 @@ namespace isobus
 					                                               message.get_source_control_function(),
 					                                               get_priority());
 				}
-				else
+				else if (!versionLabel.empty())
 				{
 					// Whomever this is appears to be behaving badly, send them a NACK
 					send_acknowledgement(AcknowledgementType::Negative, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), serverInternalControlFunction, managedWorkingSet->get_control_function());
@@ -632,28 +686,42 @@ namespace isobus
 			break;
 
 			case Function::DeleteVersionCommand:
+			case Function::ExtendedDeleteVersionCommand:
 			{
-				std::vector<std::uint8_t> versionLabel;
-				std::ostringstream nameString;
-				nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
-				versionLabel.reserve(VERSION_LABEL_LENGTH);
+				const std::uint8_t versionLabelLength = (Function::ExtendedDeleteVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
+				const auto versionLabel = get_version_label(data, versionLabelLength);
 
-				for (std::uint_fast8_t i = 0; i < VERSION_LABEL_LENGTH; i++)
+				if (!versionLabel.empty())
 				{
-					versionLabel.push_back(data[i + 1]);
-				}
+					std::ostringstream nameString;
+					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
 
-				bool wasDeleted = delete_version(versionLabel, managedWorkingSet->get_control_function()->get_NAME());
+					// The wildcard came with VT version 6, so a lower version VT treats it as an ordinary label
+					const bool isDeleteAllWildcard = (VTVersion::Version6 == get_version()) &&
+					  ('*' == versionLabel.front()) &&
+					  std::all_of(versionLabel.begin() + 1, versionLabel.end(), [](std::uint8_t character) { return ' ' == character; });
 
-				if (wasDeleted)
-				{
-					LOG_INFO("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str().c_str());
-					send_delete_version_response(0, managedWorkingSet->get_control_function());
-				}
-				else
-				{
-					LOG_WARNING("[VT Server]: Delete version failed for client NAME %s", nameString.str().c_str());
-					send_delete_version_response(get_bit(static_cast<std::uint8_t>(DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+					bool deleted = false;
+					if (isDeleteAllWildcard)
+					{
+						deleted = delete_all_versions(versionLabelLength, managedWorkingSet->get_control_function()->get_NAME());
+					}
+					else
+					{
+						deleted = delete_version(versionLabel, managedWorkingSet->get_control_function()->get_NAME());
+					}
+
+					if (deleted)
+					{
+						LOG_INFO("[VT Server]: Deleted an object pool version for client NAME %s", nameString.str().c_str());
+						send_delete_version_response(function, 0, managedWorkingSet->get_control_function());
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Delete version failed for client NAME %s", nameString.str().c_str());
+						const DeleteVersionErrorBit error = isDeleteAllWildcard ? DeleteVersionErrorBit::AnyOtherError : DeleteVersionErrorBit::VersionLabelNotCorrectOrUnknown;
+						send_delete_version_response(function, get_bit(static_cast<std::uint8_t>(error)), managedWorkingSet->get_control_function());
+					}
 				}
 			}
 			break;
@@ -965,9 +1033,13 @@ namespace isobus
 				auto newActiveMaskObjectId = get_little_endian_uint16(data, 3);
 				auto workingSetObject = managedWorkingSet->get_object_by_id(workingSetObjectId);
 
-				if (nullptr != workingSetObject)
+				if ((nullptr != workingSetObject) && (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()))
 				{
-					if (nullptr != managedWorkingSet->get_object_by_id(newActiveMaskObjectId))
+					auto newActiveMaskObject = managedWorkingSet->get_object_by_id(newActiveMaskObjectId);
+
+					if ((nullptr != newActiveMaskObject) &&
+					    ((VirtualTerminalObjectType::DataMask == newActiveMaskObject->get_object_type()) ||
+					     (VirtualTerminalObjectType::AlarmMask == newActiveMaskObject->get_object_type())))
 					{
 						std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
 						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
@@ -2326,14 +2398,14 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_load_version_response(std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const
+	bool VirtualTerminalServer::send_load_version_response(Function function, std::uint8_t errorCodes, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
 		if (nullptr != destination)
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
-				static_cast<std::uint8_t>(Function::LoadVersionCommand),
+				static_cast<std::uint8_t>(function),
 				0xFF, // Reserved
 				0xFF, // Reserved
 				0xFF, // Reserved
@@ -2501,14 +2573,33 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalServer::send_delete_version_response(std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	void VirtualTerminalServer::send_restored_object_pool_response(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint8_t errorCodes)
+	{
+		const Function function = workingSet.get_was_object_pool_loaded_with_extended_version_label() ? Function::ExtendedLoadVersionCommand : Function::LoadVersionCommand;
+
+		send_load_version_response(function, errorCodes, workingSet.get_control_function());
+		workingSet.set_was_object_pool_loaded_from_non_volatile_memory(false, false, {});
+	}
+
+	std::uint8_t VirtualTerminalServer::get_load_version_parse_error_bitfield() const
+	{
+		LoadVersionErrorBit errorBit = LoadVersionErrorBit::AnyOtherError;
+
+		if (get_vt_version_byte(get_version()) > 3)
+		{
+			errorBit = LoadVersionErrorBit::FileSystemErrorOrPoolDataCorruption;
+		}
+		return get_bit(static_cast<std::uint8_t>(errorBit));
+	}
+
+	bool VirtualTerminalServer::send_delete_version_response(Function function, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
 		if (nullptr != destination)
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
-				static_cast<std::uint8_t>(Function::DeleteVersionCommand),
+				static_cast<std::uint8_t>(function),
 				0xFF,
 				0xFF,
 				0xFF,
@@ -2583,7 +2674,7 @@ namespace isobus
 	bool VirtualTerminalServer::send_end_of_object_pool_response(bool success,
 	                                                             std::uint16_t parentIDOfFaultingObject,
 	                                                             std::uint16_t faultingObjectID,
-	                                                             std::uint8_t errorCodes,
+	                                                             std::uint8_t objectPoolErrorCodes,
 	                                                             std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
@@ -2594,7 +2685,7 @@ namespace isobus
 		buffer[3] = get_high_byte(parentIDOfFaultingObject);
 		buffer[4] = get_low_byte(faultingObjectID);
 		buffer[5] = get_high_byte(faultingObjectID);
-		buffer[6] = errorCodes;
+		buffer[6] = objectPoolErrorCodes;
 		buffer[7] = 0xFF; // Reserved
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -2709,6 +2800,18 @@ namespace isobus
 	bool VirtualTerminalServer::send_status_message() const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+		std::uint8_t busyCodes = busyCodesBitfield;
+
+		if (get_vt_version_byte(get_version()) >= 3)
+		{
+			for (const auto &ws : managedWorkingSetList)
+			{
+				if (is_object_pool_parse_unanswered(*ws))
+				{
+					busyCodes |= get_bit(BUSY_PARSING_OBJECT_POOL_BIT);
+				}
+			}
+		}
 
 		buffer[0] = static_cast<std::uint8_t>(Function::VTStatusMessage);
 		buffer[1] = activeWorkingSetMasterAddress;
@@ -2716,7 +2819,7 @@ namespace isobus
 		buffer[3] = get_high_byte(activeWorkingSetDataMaskObjectID);
 		buffer[4] = get_low_byte(activeWorkingSetSoftkeyMaskObjectID);
 		buffer[5] = get_high_byte(activeWorkingSetSoftkeyMaskObjectID);
-		buffer[6] = busyCodesBitfield;
+		buffer[6] = busyCodes;
 		buffer[7] = currentCommandFunctionCode;
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
@@ -2729,6 +2832,7 @@ namespace isobus
 	bool VirtualTerminalServer::send_supported_objects(std::shared_ptr<ControlFunction> destination) const
 	{
 		auto supportedObjects = get_supported_objects();
+		std::sort(supportedObjects.begin(), supportedObjects.end());
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::GetSupportedObjectsMessage),
 			                                   static_cast<std::uint8_t>(supportedObjects.size()) };
 
@@ -2736,9 +2840,10 @@ namespace isobus
 		{
 			buffer.push_back(supportedObject);
 		}
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
+		                                                      static_cast<std::uint32_t>(buffer.size()),
 		                                                      serverInternalControlFunction,
 		                                                      destination,
 		                                                      get_priority());
@@ -2820,18 +2925,56 @@ namespace isobus
 			if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == ws->get_object_pool_processing_state())
 			{
 				ws->join_parsing_thread();
-				send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
-				if (isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
+
+				auto workingSetObject = ws->get_working_set_object();
+
+				if (nullptr == workingSetObject)
 				{
-					activeWorkingSetMasterAddress = ws->get_control_function()->get_address();
-					activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(ws->get_working_set_object())->get_active_mask();
+					if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
+					{
+						send_restored_object_pool_response(*ws, get_load_version_parse_error_bitfield());
+						LOG_ERROR("[VT Server]: The object pool loaded from non-volatile memory contains no working set object. Rejecting the pool.");
+					}
+					else
+					{
+						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+						LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
+					}
+				}
+				else
+				{
+					if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
+					{
+						send_restored_object_pool_response(*ws, 0);
+					}
+					else
+					{
+						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
+					}
+
+					const std::uint8_t workingSetAddress = ws->get_control_function()->get_address();
+
+					// A Load Version can replace the pool of the active working set, so its mask has to be refreshed
+					if ((workingSetAddress == activeWorkingSetMasterAddress) ||
+					    ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
+					     (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable())))
+					{
+						activeWorkingSetMasterAddress = workingSetAddress;
+						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();
+					}
 				}
 			}
 			else if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == ws->get_object_pool_processing_state())
 			{
 				ws->join_parsing_thread();
-				///  @todo Get the parent object ID of the faulting object
-				send_end_of_object_pool_response(true, NULL_OBJECT_ID, ws->get_object_pool_faulting_object_id(), 0, ws->get_control_function());
+				if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
+				{
+					send_restored_object_pool_response(*ws, get_load_version_parse_error_bitfield());
+				}
+				else
+				{
+					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+				}
 			}
 		}
 	}
