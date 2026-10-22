@@ -12,24 +12,246 @@
 #include <chrono>
 #include <cstring>
 #include <limits>
+#include <thread>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <cerrno>
+#endif
+
+namespace
+{
+	// The small differences between Winsock and BSD sockets, so the driver itself can stay the same on both
+#ifdef _WIN32
+	using NativeSocket = SOCKET;
+
+	constexpr int SHUTDOWN_BOTH = SD_BOTH;
+
+	int poll_socket(pollfd *descriptor, int timeoutMs)
+	{
+		return WSAPoll(descriptor, 1, timeoutMs);
+	}
+
+	void close_socket(NativeSocket socketHandle)
+	{
+		closesocket(socketHandle);
+	}
+
+	std::string describe_socket_error(int code)
+	{
+		return "Winsock error " + std::to_string(code);
+	}
+
+	std::string get_socket_error()
+	{
+		return describe_socket_error(WSAGetLastError());
+	}
+
+	void set_socket_blocking(NativeSocket socketHandle, bool blocking)
+	{
+		u_long nonBlocking = blocking ? 0 : 1;
+		ioctlsocket(socketHandle, FIONBIO, &nonBlocking);
+	}
+
+	bool is_connect_in_progress()
+	{
+		return WSAGetLastError() == WSAEWOULDBLOCK;
+	}
+
+	std::string get_resolve_error(int status)
+	{
+		// The plain name maps to the wide character version when UNICODE is defined
+		return gai_strerrorA(status);
+	}
+#else
+	using NativeSocket = int;
+
+	constexpr int SHUTDOWN_BOTH = SHUT_RDWR;
+
+	int poll_socket(pollfd *descriptor, int timeoutMs)
+	{
+		return poll(descriptor, 1, timeoutMs);
+	}
+
+	void close_socket(NativeSocket socketHandle)
+	{
+		::close(socketHandle);
+	}
+
+	std::string describe_socket_error(int code)
+	{
+		return std::strerror(code);
+	}
+
+	std::string get_socket_error()
+	{
+		return describe_socket_error(errno);
+	}
+
+	void set_socket_blocking(NativeSocket socketHandle, bool blocking)
+	{
+		const int flags = fcntl(socketHandle, F_GETFL, 0);
+		fcntl(socketHandle, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+	}
+
+	bool is_connect_in_progress()
+	{
+		return errno == EINPROGRESS;
+	}
+
+	std::string get_resolve_error(int status)
+	{
+		return gai_strerror(status);
+	}
+#endif
+
+	std::string to_hex(const std::vector<std::uint8_t> &bytes)
+	{
+		static const char digits[] = "0123456789ABCDEF";
+		std::string text;
+		for (const auto byte : bytes)
+		{
+			if (!text.empty())
+			{
+				text += ' ';
+			}
+			text += digits[byte >> 4];
+			text += digits[byte & 0x0F];
+		}
+		return text;
+	}
+}
 
 namespace isobus
 {
 	ProemionCANLinkInterface::ProemionCANLinkInterface(const std::string &interface) :
 	  interfaceString(interface)
 	{
+#ifdef _WIN32
+		// Winsock counts these, so every instance can start and clean up its own use of it
+		WSADATA wsaData;
+		WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 		parse_interface();
 	}
 
 	ProemionCANLinkInterface::~ProemionCANLinkInterface()
 	{
 		close();
+#ifdef _WIN32
+		WSACleanup();
+#endif
+	}
+
+	std::string ProemionCANLinkInterface::get_last_error() const
+	{
+		std::lock_guard<std::mutex> lock(lastErrorMutex);
+		return lastError;
+	}
+
+	void ProemionCANLinkInterface::set_last_error(const std::string &error)
+	{
+		LOG_ERROR("[ProemionCANLink] " + error);
+		std::lock_guard<std::mutex> lock(lastErrorMutex);
+		lastError = error;
+	}
+
+	void ProemionCANLinkInterface::set_interface(const std::string &interface)
+	{
+		interfaceString = interface;
+		parse_interface();
+	}
+
+	std::string ProemionCANLinkInterface::get_interface() const
+	{
+		return interfaceString;
+	}
+
+	void ProemionCANLinkInterface::report_lost_connection(const std::string &reason)
+	{
+		const auto now = std::chrono::steady_clock::now();
+		const auto connectedSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - connectedAt).count();
+		const auto lastDataMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastDataReceivedAt).count();
+
+		// Only a connection which worked is recovered, so a wrong address is still reported when opening.
+		// This is decided before the socket is closed, so get_is_valid() never reads false in between: an
+		// application which stops the interface when the driver turns invalid would otherwise stop it here.
+		if (keepConnected)
+		{
+			if (!reconnecting)
+			{
+				reconnectDelayMs = FIRST_RECONNECT_DELAY_MS;
+				reconnecting = true;
+			}
+			nextReconnectAt = now + std::chrono::milliseconds(reconnectDelayMs);
+		}
+
+		disconnect();
+		set_last_error("Lost the connection to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + reason + ")");
+		LOG_INFO("[ProemionCANLink] The connection lasted " + std::to_string(connectedSeconds) + " s, " +
+		         std::to_string(framesReceived) + " frames received, " + std::to_string(framesSent.load()) + " sent, " +
+		         "longest pause in reading " + std::to_string(longestReadPauseMs) + " ms, " +
+		         "last data from the device " + std::to_string(lastDataMs) + " ms before the loss");
+
+		if (reconnecting)
+		{
+			LOG_INFO("[ProemionCANLink] Reconnecting in " + std::to_string(reconnectDelayMs / 1000) + " s");
+		}
+	}
+
+	void ProemionCANLinkInterface::on_connected()
+	{
+		connectedAt = std::chrono::steady_clock::now();
+		lastDataReceivedAt = connectedAt;
+		lastReadCallAt = {};
+		longestReadPauseMs = 0;
+		framesReceived = 0;
+		framesSent = 0;
+	}
+
+	void ProemionCANLinkInterface::try_reconnect()
+	{
+		const auto now = std::chrono::steady_clock::now();
+		if (now < nextReconnectAt)
+		{
+			std::this_thread::sleep_for(std::min<std::chrono::steady_clock::duration>(nextReconnectAt - now, std::chrono::milliseconds(100)));
+			return;
+		}
+
+		LOG_INFO("[ProemionCANLink] Reconnecting to " + ipAddress + ":" + std::to_string(tcpPort));
+		if (connect_tcp())
+		{
+			on_connected();
+			if (configure_isobus_bitrate())
+			{
+				reconnecting = false;
+				LOG_INFO("[ProemionCANLink] Reconnected to " + ipAddress + ":" + std::to_string(tcpPort));
+				return;
+			}
+			disconnect();
+			set_last_error("Connected to " + ipAddress + ":" + std::to_string(tcpPort) + ", but failed to configure the CAN bitrate to 250 kbit/s");
+		}
+
+		if (reconnecting)
+		{
+			reconnectDelayMs = std::min(reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS);
+			nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
+			LOG_WARNING("[ProemionCANLink] Reconnecting failed, trying again in " + std::to_string(reconnectDelayMs / 1000) + " s");
+		}
 	}
 
 	std::string ProemionCANLinkInterface::get_name() const
@@ -39,7 +261,7 @@ namespace isobus
 
 	bool ProemionCANLinkInterface::get_is_valid() const
 	{
-		return socketFd >= 0;
+		return (socketFd >= 0) || reconnecting;
 	}
 
 	bool ProemionCANLinkInterface::parse_interface()
@@ -108,33 +330,84 @@ namespace isobus
 
 		const auto portString = std::to_string(tcpPort);
 
+		lastConnectMayBeTemporary = false;
 		const auto status = getaddrinfo(ipAddress.c_str(), portString.c_str(), &hints, &result);
 
 		if (status != 0)
 		{
+			// A name like device.local only resolves once the device has joined the network
+			lastConnectMayBeTemporary = true;
+			set_last_error("Unable to resolve " + ipAddress + ": " + get_resolve_error(status));
 			return false;
 		}
 
+		std::string connectError = "no address found";
+
 		for (auto address = result; address != nullptr; address = address->ai_next)
 		{
-			socketFd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+			const NativeSocket candidate = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+			socketFd = static_cast<std::intptr_t>(candidate);
 
 			if (socketFd < 0)
 			{
+				connectError = get_socket_error();
+				socketFd = -1;
 				continue;
 			}
 
-			if (connect(socketFd, address->ai_addr, address->ai_addrlen) == 0)
+			// Connect without blocking, so an unreachable device fails after CONNECT_TIMEOUT_MS instead of the OS default
+			set_socket_blocking(candidate, false);
+			bool connected = (connect(candidate, address->ai_addr, static_cast<int>(address->ai_addrlen)) == 0);
+
+			if (!connected && is_connect_in_progress())
 			{
+				pollfd descriptor = {};
+				descriptor.fd = candidate;
+				descriptor.events = POLLOUT;
+				const auto pollResult = poll_socket(&descriptor, CONNECT_TIMEOUT_MS);
+
+				if (pollResult > 0)
+				{
+					int socketError = 0;
+					socklen_t socketErrorLength = sizeof(socketError);
+					getsockopt(candidate, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError), &socketErrorLength);
+					connected = (0 == socketError);
+					if (!connected)
+					{
+						connectError = describe_socket_error(socketError);
+					}
+				}
+				else if (0 == pollResult)
+				{
+					connectError = "no answer within " + std::to_string(CONNECT_TIMEOUT_MS / 1000) + " s";
+					lastConnectMayBeTemporary = true;
+				}
+				else
+				{
+					connectError = get_socket_error();
+				}
+			}
+			else if (!connected)
+			{
+				connectError = get_socket_error();
+			}
+
+			if (connected)
+			{
+				set_socket_blocking(candidate, true);
 				break;
 			}
 
-			::close(socketFd);
+			close_socket(candidate);
 			socketFd = -1;
 		}
 
 		freeaddrinfo(result);
 
+		if (socketFd < 0)
+		{
+			set_last_error("Failed to connect to " + ipAddress + ":" + std::to_string(tcpPort) + " (" + connectError + ")");
+		}
 		return socketFd >= 0;
 	}
 
@@ -142,37 +415,63 @@ namespace isobus
 	{
 		close();
 
+		{
+			std::lock_guard<std::mutex> lock(lastErrorMutex);
+			lastError.clear();
+		}
+
 		if (!parse_interface())
 		{
-			LOG_ERROR("[ProemionCANLink] Invalid interface: " + interfaceString);
-
+			set_last_error("Invalid device address \"" + interfaceString + "\", expected an IP address with an optional :port");
 			return;
 		}
 
 		if (!connect_tcp())
 		{
-			LOG_ERROR("[ProemionCANLink] Failed to connect to " + ipAddress + ":" + std::to_string(tcpPort));
+			// An unresolved name or no answer usually means the device is not on the network yet, like when it or the
+			// computer's WiFi is still starting, so keep trying. A refused connection is reported straight away.
+			if (lastConnectMayBeTemporary)
+			{
+				keepConnected = true;
+				reconnecting = true;
+				reconnectDelayMs = FIRST_RECONNECT_DELAY_MS;
+				nextReconnectAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(reconnectDelayMs);
+				LOG_WARNING("[ProemionCANLink] " + ipAddress + ":" + std::to_string(tcpPort) + " could not be reached, it may not be on the network yet. Retrying in the background.");
+			}
 			return;
 		}
 
 		receiveBuffer.clear();
 
+		on_connected();
+
 		if (!configure_isobus_bitrate())
 		{
-			LOG_ERROR("[ProemionCANLink] Failed to configure CAN bitrate to 250 kbit/s");
-			close();
+			disconnect();
+			set_last_error("Connected to " + ipAddress + ":" + std::to_string(tcpPort) + ", but failed to configure the CAN bitrate to 250 kbit/s");
 			return;
 		}
 
+		keepConnected = true;
 		LOG_INFO("[ProemionCANLink] Connected to " + ipAddress + ":" + std::to_string(tcpPort));
 	}
 
 	void ProemionCANLinkInterface::close()
 	{
+		keepConnected = false;
+		reconnecting = false;
+		disconnect();
+	}
+
+	void ProemionCANLinkInterface::disconnect()
+	{
+		std::lock_guard<std::mutex> lock(transmitMutex);
+
 		if (socketFd >= 0)
 		{
-			shutdown(socketFd, SHUT_RDWR);
-			::close(socketFd);
+			const auto socketHandle = static_cast<NativeSocket>(socketFd);
+			shutdown(socketHandle, SHUTDOWN_BOTH);
+			close_socket(socketHandle);
 			socketFd = -1;
 		}
 
@@ -234,9 +533,13 @@ namespace isobus
 		{
 			const auto result =
 			  send(
-			    socketFd,
-			    pdu.data() + offset,
+			    static_cast<NativeSocket>(socketFd),
+			    reinterpret_cast<const char *>(pdu.data() + offset),
+#ifdef _WIN32
+			    static_cast<int>(pdu.size() - offset),
+#else
 			    pdu.size() - offset,
+#endif
 #ifdef MSG_NOSIGNAL
 			    MSG_NOSIGNAL
 #else
@@ -339,31 +642,55 @@ namespace isobus
 			return true;
 		}
 
-		struct pollfd descriptor = {};
-		descriptor.fd = socketFd;
+		pollfd descriptor = {};
+		descriptor.fd = static_cast<NativeSocket>(socketFd);
 		descriptor.events = POLLIN;
 
-		const auto pollResult = poll(&descriptor, 1, timeoutMs);
+		const auto pollResult = poll_socket(&descriptor, timeoutMs);
 
-		if (pollResult <= 0)
+		if (pollResult < 0)
+		{
+			const auto reason = get_socket_error();
+			report_lost_connection(reason);
+			return false;
+		}
+
+		if (pollResult == 0)
 		{
 			return false;
 		}
 
-		if (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))
+		if ((descriptor.revents & POLLIN) == 0)
 		{
+			// Only an error or hang up is pending, which poll would report straight away from now on
+			int socketError = 0;
+			socklen_t socketErrorLength = sizeof(socketError);
+			getsockopt(static_cast<NativeSocket>(socketFd), SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError), &socketErrorLength);
+			const std::string reason = (0 != socketError) ? describe_socket_error(socketError) : ((descriptor.revents & POLLHUP) ? "the device hung up" : "poll flags " + std::to_string(descriptor.revents));
+			report_lost_connection(reason);
 			return false;
 		}
 
-		std::uint8_t buffer[1024];
+		char buffer[1024];
 
-		const auto received = recv(socketFd, buffer, sizeof(buffer), 0);
+		const auto received = recv(static_cast<NativeSocket>(socketFd), buffer, sizeof(buffer), 0);
 
 		if (received <= 0)
 		{
+			// Zero means the device closed the connection, which recv would keep reporting from now on
+			const std::string reason = (0 == received) ? "the device closed the connection" : get_socket_error();
+			report_lost_connection(reason);
 			return false;
 		}
 
+		const auto receivedAt = std::chrono::steady_clock::now();
+		const auto silenceMs = std::chrono::duration_cast<std::chrono::milliseconds>(receivedAt - lastDataReceivedAt).count();
+
+		if (silenceMs >= DATA_GAP_WARNING_MS)
+		{
+			LOG_WARNING("[ProemionCANLink] Nothing arrived from the device for " + std::to_string(silenceMs) + " ms");
+		}
+		lastDataReceivedAt = receivedAt;
 		receiveBuffer.insert(receiveBuffer.end(), buffer, buffer + received);
 
 		return extract_pdu_from_receive_buffer(pdu);
@@ -378,9 +705,15 @@ namespace isobus
 			return false;
 		}
 
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+		return wait_for_bitrate_reply(bitrate);
+	}
 
-		while (std::chrono::steady_clock::now() < deadline)
+	bool ProemionCANLinkInterface::wait_for_bitrate_reply(BitrateKeys &bitrate)
+	{
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(BITRATE_REPLY_TIMEOUT_MS);
+		int otherMessagesLogged = 0;
+
+		while (get_is_valid() && (std::chrono::steady_clock::now() < deadline))
 		{
 			std::vector<std::uint8_t> response;
 
@@ -389,16 +722,26 @@ namespace isobus
 				continue;
 			}
 
-			// Minimum bitrate response: SOF LEN 0x56 BITRATE CHECKSUM EOF
-			if (response.size() < 6)
+			CANMessageFrame frame = {};
+			if (decode_can_frame(response, frame))
 			{
+				canFramesSeenWhileConfiguring++;
 				continue;
 			}
 
-			if ((response[2] == COMMAND_GET_BITRATE) && (response[1] == 2))
+			// The manual says a settings reply carries the same command byte as the request and the new
+			// settings, the rate key first. Either bitrate command is accepted, as both report the rate the same way.
+			if ((response.size() >= 6) &&
+			    ((response[2] == COMMAND_GET_BITRATE) || (response[2] == COMMAND_SET_BITRATE)))
 			{
 				bitrate = static_cast<BitrateKeys>(response[3]);
 				return true;
+			}
+
+			if (otherMessagesLogged < 10)
+			{
+				otherMessagesLogged++;
+				LOG_INFO("[ProemionCANLink] Unexpected message while configuring the bitrate: " + to_hex(response));
 			}
 		}
 
@@ -415,49 +758,53 @@ namespace isobus
 			return false;
 		}
 
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
-
-		while (std::chrono::steady_clock::now() < deadline)
+		// Expected response for 250 kbit/s: 43 02 57 04 XX 0D
+		BitrateKeys reportedBitrate = Bitrate_Custom;
+		if (!wait_for_bitrate_reply(reportedBitrate))
 		{
-			std::vector<std::uint8_t> response;
-
-			if (!receive_pdu(response, 100))
-			{
-				continue;
-			}
-
-			// Expected response for 250 kbit/s: 43 02 57 04 XX 0D
-			if ((response.size() >= 6) &&
-			    (response[2] == COMMAND_SET_BITRATE) &&
-			    (response[1] != 2) &&
-			    (response[3] == bitrate))
-			{
-				return true;
-			}
+			return false;
 		}
-
-		return false;
+		if (reportedBitrate != bitrate)
+		{
+			LOG_WARNING("[ProemionCANLink] The device reported bitrate key " + std::to_string(static_cast<int>(reportedBitrate)) + " after being set to " + std::to_string(static_cast<int>(bitrate)));
+			return false;
+		}
+		return true;
 	}
 
 	bool ProemionCANLinkInterface::configure_isobus_bitrate()
 	{
 		BitrateKeys currentBitrate = Bitrate_Custom;
+		canFramesSeenWhileConfiguring = 0;
 
 		if (request_current_bitrate(currentBitrate))
 		{
 			if (currentBitrate == Bitrate_250kb)
 			{
-				LOG_DEBUG("[ProemionCANLink] CAN bitrate is already 250 kbit/s");
+				LOG_INFO("[ProemionCANLink] CAN bitrate is already 250 kbit/s");
 				return true;
 			}
+			LOG_INFO("[ProemionCANLink] CAN bitrate key is " + std::to_string(static_cast<int>(currentBitrate)) + ", changing it to 250 kbit/s");
 		}
 		else
 		{
-			LOG_WARNING("[ProemionCANLink] Unable to read current CAN bitrate, attempting to set 250 kbit/s");
+			LOG_WARNING("[ProemionCANLink] No reply to the bitrate request, attempting to set 250 kbit/s");
 		}
 
-		LOG_INFO("[ProemionCANLink] Changing CAN bitrate to 250 kbit/s");
-		return set_bitrate(Bitrate_250kb);
+		if (set_bitrate(Bitrate_250kb))
+		{
+			LOG_INFO("[ProemionCANLink] CAN bitrate set to 250 kbit/s");
+			return true;
+		}
+
+		// A CAN controller only receives valid frames at the bus's own bitrate, so if they arrive the device is
+		// usable as it is, even though it did not confirm the setting
+		if (get_is_valid() && (canFramesSeenWhileConfiguring > 0))
+		{
+			LOG_WARNING("[ProemionCANLink] The device did not confirm the bitrate, but " + std::to_string(canFramesSeenWhileConfiguring) + " CAN frames arrived meanwhile, so it is listening at the bus's bitrate. Continuing.");
+			return true;
+		}
+		return false;
 	}
 
 	std::uint64_t ProemionCANLinkInterface::get_timestamp_us()
@@ -596,10 +943,27 @@ namespace isobus
 	bool ProemionCANLinkInterface::read_frame(
 	  CANMessageFrame &canFrame)
 	{
-		if (!get_is_valid())
+		if (socketFd < 0)
 		{
+			if (reconnecting)
+			{
+				try_reconnect();
+			}
 			return false;
 		}
+
+		// The stack stops calling this while its receive queue is full, and meanwhile the device's buffer fills up
+		const auto callTime = std::chrono::steady_clock::now();
+		if (lastReadCallAt != std::chrono::steady_clock::time_point{})
+		{
+			const auto pauseMs = std::chrono::duration_cast<std::chrono::milliseconds>(callTime - lastReadCallAt).count();
+			longestReadPauseMs = std::max<std::int64_t>(longestReadPauseMs, pauseMs);
+			if (pauseMs >= 1000)
+			{
+				LOG_WARNING("[ProemionCANLink] No frames were read for " + std::to_string(pauseMs) + " ms, so they queued up in the device");
+			}
+		}
+		lastReadCallAt = callTime;
 
 		const auto deadline =
 		  std::chrono::steady_clock::now() +
@@ -629,6 +993,7 @@ namespace isobus
 
 			if (decode_can_frame(pdu, canFrame))
 			{
+				framesReceived++;
 				return true;
 			}
 		}
@@ -708,6 +1073,11 @@ namespace isobus
 
 		const auto pdu = create_pdu(command, payload.data(), payload.size());
 
-		return send_pdu(pdu);
+		if (!send_pdu(pdu))
+		{
+			return false;
+		}
+		framesSent++;
+		return true;
 	}
 }
