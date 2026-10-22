@@ -997,7 +997,14 @@ namespace isobus
 
 	void CANNetworkManager::process_can_message_for_address_violations(const CANMessage &currentMessage)
 	{
-		for (const auto &internalCF : internalControlFunctions)
+		// A copy, as for the global PGN callbacks: deactivate_control_function() erases from the list
+		// under controlFunctionsMutex, possibly on another thread, and a node this loop stands on may go.
+		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctionsCopy;
+		{
+			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			internalControlFunctionsCopy = internalControlFunctions;
+		}
+		for (const auto &internalCF : internalControlFunctionsCopy)
 		{
 			if ((nullptr != internalCF) &&
 			    internalCF->process_rx_message_for_address_violation(currentMessage))
@@ -1059,8 +1066,14 @@ namespace isobus
 		}
 		else if ((messageDestination != nullptr) && (messageDestination->get_type() == ControlFunction::Type::Internal))
 		{
-			// Message is destined to us
-			for (const auto &partner : partneredControlFunctions)
+			// Message is destined to us. A copy, as above: deactivate_control_function() erases from the
+			// list under controlFunctionsMutex, possibly on another thread, while this loop walks it.
+			std::list<std::shared_ptr<PartneredControlFunction>> partnersCopy;
+			{
+				LOCK_GUARD(Mutex, controlFunctionsMutex);
+				partnersCopy = partneredControlFunctions;
+			}
+			for (const auto &partner : partnersCopy)
 			{
 				if ((nullptr != partner) &&
 				    (partner->get_can_port() == message.get_can_port_index()) &&
