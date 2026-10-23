@@ -585,7 +585,7 @@ namespace isobus
 
 	void TransportProtocolManager::process_message(const CANMessage &message)
 	{
-		// TODO: Allow sniffing of messages to all addresses, not just the ones we normally listen to (#297)
+		// Connections between other control functions go to TransportProtocolSniffer, since this state machine would answer them
 		if (message.has_valid_source_control_function() && (message.is_destination_our_device() || message.is_broadcast()))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
