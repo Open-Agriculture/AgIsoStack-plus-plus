@@ -58,8 +58,7 @@ namespace isobus
 			return;
 		}
 
-		// Anything involving one of our own control functions is the regular manager's business, and
-		// reassembling it here as well would deliver it to the sniffing callbacks twice
+		// The regular manager handles our own traffic; reassembling it here too would deliver it twice
 		if ((ControlFunction::Type::Internal == message.get_source_control_function()->get_type()) ||
 		    (ControlFunction::Type::Internal == message.get_destination_control_function()->get_type()))
 		{
@@ -105,7 +104,7 @@ namespace isobus
 
 			case TransportProtocolManager::CLEAR_TO_SEND_MULTIPLEXOR:
 			{
-				// Travels back towards the sender, so the roles are reversed compared to the session
+				// Sent by the receiver, so source and destination are swapped
 				const auto parameterGroupNumber = message.get_uint24_at(5);
 				auto currentSession = get_session(destination, source);
 
@@ -117,8 +116,7 @@ namespace isobus
 					}
 					else
 					{
-						// A connection we never admitted is under way, so what we hold is stale. Data
-						// transfer frames carry no PGN, so its buffer would absorb the new connection
+						// We missed a request to send; keeping the session would let it absorb the new data
 						LOG_DEBUG("[TP-Sniffer]: Dropping the stale observed session for 0x%05X, a clear to send arrived for 0x%05X instead.",
 						          currentSession->parameterGroupNumber,
 						          parameterGroupNumber);
@@ -130,15 +128,14 @@ namespace isobus
 
 			case TransportProtocolManager::END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR:
 			{
-				// Only ever travels from the receiver back towards the sender, so it closes the session
-				// running the other way. Matching both ways could close an unrelated reverse transfer
+				// Sent by the receiver; matching both ways could close an unrelated reverse transfer
 				close_session(get_session(destination, source), message.get_uint24_at(5));
 			}
 			break;
 
 			case TransportProtocolManager::CONNECTION_ABORT_MULTIPLEXOR:
 			{
-				// Either end of a connection may abort it, so like the regular manager we look both ways
+				// Either end may abort
 				const auto parameterGroupNumber = message.get_uint24_at(5);
 				close_session(get_session(source, destination), parameterGroupNumber);
 				close_session(get_session(destination, source), parameterGroupNumber);
@@ -165,8 +162,7 @@ namespace isobus
 	                                            std::uint16_t totalMessageSize,
 	                                            std::uint8_t totalNumberOfPackets)
 	{
-		// Whatever we were following between these two is over. This has to happen before any check
-		// that can reject the new connection, or the old buffer would absorb the new one's packets
+		// Drop the old session even if this one is rejected, or it would absorb the new data
 		auto previousSession = get_session(message.get_source_control_function(), message.get_destination_control_function());
 		if (sessions.end() != previousSession)
 		{
@@ -192,8 +188,7 @@ namespace isobus
 
 		if (sessions.size() >= configuration->get_max_number_transport_protocol_sessions())
 		{
-			// Observed sessions get their own budget, so that traffic between other control functions
-			// can never cost us a session we need for ourselves
+			// A separate budget, so observed traffic never costs us one of our own sessions
 			LOG_DEBUG("[TP-Sniffer]: Ignoring an observed Request To Send for 0x%05X, no room left for another observed session.",
 			          parameterGroupNumber);
 			return;
@@ -243,11 +238,9 @@ namespace isobus
 		const std::size_t packetIndex = sequenceNumber - 1;
 		if (currentSession->receivedPackets[packetIndex])
 		{
-			// The sender is repeating a packet for the benefit of the real receiver. We already have it
 			return;
 		}
 
-		// An absolute packet number, so it doubles as the offset even across retransmissions
 		const std::size_t dataIndex = packetIndex * TransportProtocolManager::PROTOCOL_BYTES_PER_FRAME;
 		const std::size_t bytesToCopy = std::min(static_cast<std::size_t>(TransportProtocolManager::PROTOCOL_BYTES_PER_FRAME),
 		                                         currentSession->data.size() - dataIndex);
@@ -276,7 +269,7 @@ namespace isobus
 			          currentSession->source->get_address(),
 			          currentSession->destination->get_address());
 
-			// Drop the session before the callback runs, so that whatever it does sees a consistent list
+			// Erase first, so the callback sees a consistent list
 			sessions.erase(currentSession);
 			canMessageAssembledCallback(completedMessage);
 		}

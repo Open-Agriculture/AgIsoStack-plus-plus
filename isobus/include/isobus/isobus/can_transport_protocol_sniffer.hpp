@@ -24,15 +24,13 @@
 namespace isobus
 {
 	/// @brief Reassembles transport protocol messages exchanged between two other control functions.
-	/// @details The regular TransportProtocolManager cannot be made to follow somebody else's
-	/// connection, because reassembling a connection mode message also means replying with clear to
-	/// send, end of message acknowledgement and abort, and sending any of those for a session we are
-	/// not part of would corrupt that transfer. This class keeps its own sessions instead, has no way
-	/// to transmit anything at all, and silently drops any session it loses track of. Broadcast (BAM)
-	/// sessions are not handled here, as the regular manager already delivers those to sniffers.
-	/// @note Data transfer frames carry no PGN, so a session is only as trustworthy as the request to
-	/// send that opened it. A request to send we never observe leaves a stale session behind until the
-	/// protocol timeout expires, which is inherent to watching a connection rather than taking part.
+	/// @details TransportProtocolManager can't follow someone else's connection, because it would answer
+	/// with clear to send, end of message acknowledgement and abort, corrupting that transfer. This class
+	/// never transmits and drops any session it loses track of. BAM is left to the regular manager, which
+	/// already delivers it to sniffers.
+	/// @note Data transfer frames carry no PGN, so a missed request to send leaves a stale session until
+	/// the protocol timeout. A session completes on its last data packet, before the receiver acknowledges
+	/// it, so the receiver may still abort.
 	class TransportProtocolSniffer
 	{
 	public:

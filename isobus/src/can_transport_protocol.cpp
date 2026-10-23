@@ -585,9 +585,7 @@ namespace isobus
 
 	void TransportProtocolManager::process_message(const CANMessage &message)
 	{
-		// Messages between two other control functions are deliberately not handled here, because this
-		// state machine answers with clear to send and abort messages. TransportProtocolSniffer follows
-		// those connections instead, without transmitting anything
+		// Connections between other control functions go to TransportProtocolSniffer, since this state machine would answer them
 		if (message.has_valid_source_control_function() && (message.is_destination_our_device() || message.is_broadcast()))
 		{
 			switch (message.get_identifier().get_parameter_group_number())

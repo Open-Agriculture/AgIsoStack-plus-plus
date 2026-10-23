@@ -135,14 +135,9 @@ namespace isobus
 	bool CANNetworkManager::is_sniffed_parameter_group_number_of_interest(std::uint32_t parameterGroupNumber)
 	{
 		LOCK_GUARD(Mutex, sniffedMessageCallbacksMutex);
-		for (const auto &currentCallback : sniffedMessageCallbacks)
-		{
-			if (currentCallback.get_parameter_group_number() == parameterGroupNumber)
-			{
-				return true;
-			}
-		}
-		return false;
+		return std::any_of(sniffedMessageCallbacks.begin(), sniffedMessageCallbacks.end(), [parameterGroupNumber](const ParameterGroupNumberCallbackData &currentCallback) {
+			return currentCallback.get_parameter_group_number() == parameterGroupNumber;
+		});
 	}
 
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::get_internal_control_function(std::shared_ptr<ControlFunction> controlFunction) const
@@ -1048,8 +1043,8 @@ namespace isobus
 		std::vector<ParameterGroupNumberCallbackData> matchingCallbacks;
 
 		{
-			// Copying the matches lets a callback add or remove sniffing callbacks without deadlocking on a
-			// non-recursive mutex, and copying only the matches keeps frames nobody sniffs allocation free
+			// Call a copy so a callback can add or remove callbacks without deadlocking; copying only the
+			// matches keeps unsniffed frames allocation free
 			LOCK_GUARD(Mutex, sniffedMessageCallbacksMutex);
 			for (const auto &currentCallback : sniffedMessageCallbacks)
 			{

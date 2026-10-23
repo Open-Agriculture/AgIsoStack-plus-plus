@@ -129,8 +129,6 @@ namespace isobus
 		void remove_sniffed_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Returns if any sniffing callback has been registered for the specified PGN
-		/// @details The transport protocols use this to decide whether it is worth assembling a message
-		/// that is being transferred between two external control functions.
 		/// @param[in] parameterGroupNumber The PGN to check for
 		/// @returns true if at least one sniffing callback wants the specified PGN
 		bool is_sniffed_parameter_group_number_of_interest(std::uint32_t parameterGroupNumber);

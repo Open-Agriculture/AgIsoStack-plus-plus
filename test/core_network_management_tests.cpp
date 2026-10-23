@@ -642,8 +642,7 @@ static void send_sniffed_request_to_send(std::shared_ptr<ControlFunction> talker
 	CANNetworkManager::CANNetwork.update();
 }
 
-// Sends a connection management frame that is not a request to send. Only the multiplexor and the
-// PGN mean anything to a passive observer, so the bytes between them are left at the filler value
+// Sends a non request to send connection management frame; the observer reads only the multiplexor and PGN
 static void send_sniffed_connection_management(std::shared_ptr<ControlFunction> sender,
                                                std::shared_ptr<ControlFunction> receiver,
                                                std::uint8_t multiplexor,
@@ -667,8 +666,7 @@ static void send_sniffed_connection_management(std::shared_ptr<ControlFunction> 
 	CANNetworkManager::CANNetwork.update();
 }
 
-// The byte a correctly reassembled 17 byte message holds at the given position of the given packet,
-// or the padding the standard asks for once the payload runs out
+// The byte at the given position of the given packet, or 0xFF padding past the 17 byte payload
 static std::uint8_t sniffed_payload_byte(std::uint8_t sequenceNumber, std::uint8_t indexInPacket)
 {
 	const std::uint16_t payloadIndex = ((sequenceNumber - 1) * 7) + indexInPacket;
@@ -696,7 +694,7 @@ static void send_sniffed_data_transfer(std::shared_ptr<ControlFunction> talker, 
 
 TEST_F(CoreTest, SniffedMessageCallbacksSeeAssembledConnectionModeMessages)
 {
-	// A second device on the same virtual bus, so the test can see everything the stack transmits
+	// Sees everything the stack transmits
 	VirtualCANPlugin busObserver;
 	busObserver.open();
 
@@ -724,10 +722,10 @@ TEST_F(CoreTest, SniffedMessageCallbacksSeeAssembledConnectionModeMessages)
 
 	send_sniffed_request_to_send(talker, listener, 0xFEEC);
 
-	// Answering the request to send would make the sender transmit to us as well as to its receiver
+	// Answering would corrupt the transfer we are only watching
 	EXPECT_TRUE(busObserver.get_queue_empty());
 
-	// Out of order and repeated packets are both normal once a receiver asks for a retransmission
+	// Out of order and repeated packets happen on a retransmission
 	send_sniffed_data_transfer(talker, listener, 2);
 	send_sniffed_data_transfer(talker, listener, 2);
 	EXPECT_EQ(0, sniffedMessageCount);
@@ -744,7 +742,7 @@ TEST_F(CoreTest, SniffedMessageCallbacksSeeAssembledConnectionModeMessages)
 		EXPECT_EQ(i + 1, sniffedPayload[i]);
 	}
 
-	// The end of message acknowledgement belongs to the real receiver, and must not produce a second delivery
+	// The receiver's end of message acknowledgement must not deliver a second time
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
 	  7,
 	  0xEC00,
@@ -778,8 +776,7 @@ TEST_F(CoreTest, SniffedConnectionModeSessionSurvivesRemovingTheCallbackMidSessi
 	send_sniffed_request_to_send(talker, listener, 0xFEEC);
 	send_sniffed_data_transfer(talker, listener, 1);
 
-	// Interest is decided once, at the request to send. Unregistering half way through stops the
-	// callbacks, but the session it already started is left to finish rather than torn out
+	// Interest is decided at the request to send, so unregistering mid transfer only stops the callbacks
 	CANNetworkManager::CANNetwork.remove_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
 
 	send_sniffed_data_transfer(talker, listener, 2);
@@ -808,7 +805,7 @@ TEST_F(CoreTest, SniffedConnectionModeSessionIsDroppedWhenTheConnectionAborts)
 	send_sniffed_request_to_send(talker, listener, 0xFEEC);
 	send_sniffed_data_transfer(talker, listener, 1);
 
-	// The real receiver gives up, so the rest of the packets are never going to arrive
+	// The receiver gives up
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
 	  7,
 	  0xEC00,
@@ -826,7 +823,7 @@ TEST_F(CoreTest, SniffedConnectionModeSessionIsDroppedWhenTheConnectionAborts)
 	  }));
 	CANNetworkManager::CANNetwork.update();
 
-	// A sender that ignores the abort must not be able to complete the message we already gave up on
+	// A sender ignoring the abort must not complete the message
 	send_sniffed_data_transfer(talker, listener, 2);
 	send_sniffed_data_transfer(talker, listener, 3);
 	EXPECT_EQ(0, sniffedMessageCount);
@@ -854,8 +851,7 @@ TEST_F(CoreTest, SniffedConnectionModeSessionIsReplacedByAnUninterestedRequestTo
 	send_sniffed_request_to_send(talker, listener, 0xFEEC);
 	send_sniffed_data_transfer(talker, listener, 1);
 
-	// The same pair now starts a transfer nobody asked for. Leaving the half finished session in place
-	// would let these packets land in it, stitching the callback a payload from two different messages
+	// The same pair starts an unwanted transfer, whose packets must not land in the half finished session
 	send_sniffed_request_to_send(talker, listener, 0xEF00);
 
 	send_sniffed_data_transfer(talker, listener, 2);
@@ -893,8 +889,7 @@ TEST_F(CoreTest, SniffedConnectionModeEndOfMessageAcknowledgeLeavesTheReverseSes
 
 	send_sniffed_data_transfer(listener, talker, 1);
 
-	// This closes the transfer that just finished. Looking both ways would instead find the unrelated
-	// transfer still running in reverse and throw it away
+	// Closes only the finished transfer, not the one still running in reverse
 	send_sniffed_connection_management(listener, talker, 19, 0xFEEC);
 
 	send_sniffed_data_transfer(listener, talker, 2);
@@ -925,7 +920,7 @@ TEST_F(CoreTest, SniffedConnectionModeClearToSendIsCheckedAgainstTheSessionPgn)
 	sniffedMessageCount = 0;
 	CANNetworkManager::CANNetwork.add_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
 
-	// A clear to send for the PGN we follow is the receiver pacing the transfer, so the session lives
+	// A clear to send for the followed PGN is just pacing, so the session lives
 	send_sniffed_request_to_send(talker, listener, 0xFEEC);
 	send_sniffed_data_transfer(talker, listener, 1);
 	send_sniffed_connection_management(listener, talker, 17, 0xFEEC);
@@ -933,7 +928,7 @@ TEST_F(CoreTest, SniffedConnectionModeClearToSendIsCheckedAgainstTheSessionPgn)
 	send_sniffed_data_transfer(talker, listener, 3);
 	EXPECT_EQ(1, sniffedMessageCount);
 
-	// A clear to send for a different PGN means we missed a request to send, so our session is stale
+	// A clear to send for another PGN means we missed a request to send
 	send_sniffed_request_to_send(otherTalker, otherListener, 0xFEEC);
 	send_sniffed_data_transfer(otherTalker, otherListener, 1);
 	send_sniffed_connection_management(otherListener, otherTalker, 17, 0xEF00);
@@ -966,11 +961,10 @@ TEST_F(CoreTest, SniffedConnectionModeSessionIsDroppedAfterTheProtocolTimeout)
 	send_sniffed_request_to_send(talker, listener, 0xFEEC);
 	send_sniffed_data_transfer(talker, listener, 1);
 
-	// Nothing arrives for longer than the protocol allows the connection to go quiet
 	time_source.simulate_delay_ms(1300); // T2/T3 = 1250ms
 	CANNetworkManager::CANNetwork.update();
 
-	// Late packets belong to a connection that is over, and must not be able to complete the message
+	// Late packets must not complete the timed out message
 	send_sniffed_data_transfer(talker, listener, 2);
 	send_sniffed_data_transfer(talker, listener, 3);
 	EXPECT_EQ(0, sniffedMessageCount);
@@ -1000,7 +994,7 @@ TEST_F(CoreTest, SniffedConnectionModeCapacityIsNotSpentOnUninterestedConnection
 	sniffedMessageCount = 0;
 	CANNetworkManager::CANNetwork.add_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
 
-	// With room for only one observed session, a transfer nobody asked for must not be the one to take it
+	// With room for one observed session, an unwanted transfer must not take it
 	send_sniffed_request_to_send(otherTalker, otherListener, 0xEF00);
 	send_sniffed_data_transfer(otherTalker, otherListener, 1);
 
