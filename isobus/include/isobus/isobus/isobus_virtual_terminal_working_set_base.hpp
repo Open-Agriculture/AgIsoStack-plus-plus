@@ -24,8 +24,9 @@ namespace isobus
 		/// @brief Takes a raw block of IOP data and parses it into VT objects
 		/// @param[in] iopData A pointer to the raw IOP data
 		/// @param[in] iopLength The length of the raw IOP data
+		/// @param[out] objectsLength If not null, set to the length of the IOP data without the padding after the last object
 		/// @returns true if the IOP data was parsed successfully, otherwise false
-		bool parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength);
+		bool parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength, std::uint32_t *objectsLength = nullptr);
 
 		/// @brief Returns a colour from this working set's current colour table, by index
 		/// @param[in] colourIndex The index into the VT's colour table to retrieve

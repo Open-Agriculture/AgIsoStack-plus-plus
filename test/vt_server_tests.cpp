@@ -1847,3 +1847,20 @@ TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 	EXPECT_TRUE(server.execute_macro_for_test(macro->get_id(), workingSet));
 	EXPECT_EQ("Success         ", stringVariable->get_value());
 }
+
+TEST_F(VirtualTerminalServerMessagingTest, MacroBlanksAStringWithAnEmptyChangeStringValue)
+{
+	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
+	auto clientControlFunction = test_helpers::create_mock_control_function(0x81);
+	DerivedTestVTServer server(serverControlFunction);
+	auto workingSet = std::make_shared<TestWorkingSet>(clientControlFunction);
+
+	// String Variable 0x1234 holding "OK", then Macro 5 holding a Change String Value of 0 bytes, padded with 0xFF to 8 bytes
+	workingSet->add_iop_raw_data({ 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalObjectType::StringVariable), 0x02, 0x00, 'O', 'K', 0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x08, 0x00, static_cast<std::uint8_t>(Macro::Command::ChangeStringValue), 0x34, 0x12, 0x00, 0x00, 0xFF, 0xFF, 0xFF });
+	workingSet->start_parsing_thread();
+	workingSet->join_parsing_thread();
+	server.add_managed_working_set(workingSet);
+
+	EXPECT_TRUE(server.execute_macro_for_test(5, workingSet));
+	EXPECT_EQ("  ", std::static_pointer_cast<StringVariable>(workingSet->get_object_by_id(0x1234))->get_value());
+}
