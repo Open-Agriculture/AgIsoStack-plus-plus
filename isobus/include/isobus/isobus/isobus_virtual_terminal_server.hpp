@@ -234,19 +234,24 @@ namespace isobus
 		/// @returns True if all relevant object pools were deleted from VT non-volatile storage, otherwise false.
 		virtual bool delete_all_versions(std::uint8_t versionLabelLength, NAME clientNAME) = 0;
 
-		/// @brief This function is called when the client wants the server to deactivate its object pool.
-		/// You should treat this as a disconnection by the client, as it may be moving to another VT.
+		/// @brief This function is called when the client wants the server to delete its object pool from volatile storage.
 		/// @attention This does not mean to delete the pool from non-volatile memory!!! This only deactivates the active pool.
-		/// @details This command is used to delete the entire object pool of this Working Set from volatile storage.
-		/// This command can be used by an implement when it wants to move its object pool to another VT,
+		/// @details This command can be used by an implement when it wants to move its object pool to another VT,
 		/// or when it is shutting down or during the development of object pools.
+		/// Stop presenting the working set and do not inform the operator (ISO 11783-6 4.6.9).
+		/// When you return true, the server clears the active working set if it was this one and deletes the object pool,
+		/// but keeps managing the working set, so the client can transfer a new object pool.
+		/// The server rejects the command without calling this while the working set's object pool is being parsed.
 		/// @param[in] clientNAME The NAME of the client that is requesting deletion
-		/// @returns True if the client's active object pool was deactivated and removed from volatile storage, otherwise false.
+		/// @returns True if the client's object pool can be deleted, otherwise false.
 		virtual bool delete_object_pool(NAME clientNAME) = 0;
 
 		/// @brief This function is called when a working set master has shut down unexpectedly (ISO 11783-6 4.6.9).
 		/// @details As soon as the shutdown is detected, the server stops managing the working set, so its volatile object pool is discarded
-		/// and any further message from it is NACKed until it sends a new Working Set Maintenance message with the Initiating bit set.
+		/// and any further message from it is NACKed until it sends a new Working Set Maintenance message with the Initiating bit set
+		/// (a version 2 or prior client has to send a Working Set Master message first).
+		/// The client can already be managed again as a new working set when this is called, so compare the workingSet pointer,
+		/// not its control function or NAME, to find what to remove.
 		/// If it was the active working set, the server also clears the active working set reported in the VT Status message.
 		/// This function is called afterwards from update(), once any object pool parsing for the working set has finished.
 		/// You should inform the operator (unless an exception in 4.6.9 applies), stop presenting this working set and remove its
@@ -299,6 +304,13 @@ namespace isobus
 		/// Useful to save IOP data for debugging purposes in the case if the parsing would lead to a crash
 		/// @param[in] ws the working set which object pool processing is about to be started
 		virtual void transferred_object_pool_parse_start(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &ws) const;
+
+		/// @brief This function is called from update() once a transferred or restored object pool has been parsed and answered
+		/// @details If no working set was active and this one is selectable, the server has already made it the active working set,
+		/// which you can check with get_active_working_set().
+		/// @param[in] workingSet The working set whose object pool was parsed
+		/// @param[in] success True if the object pool was accepted, false if the response reported an error
+		virtual void object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool success);
 
 		//-------------- Callbacks/Event driven interface ---------------------
 
@@ -485,7 +497,7 @@ namespace isobus
 		enum class DeleteObjectPoolErrorBit : std::uint8_t
 		{
 			DeletionError = 0,
-			AnyOtherError = 8
+			AnyOtherError = 4
 		};
 
 		/// @brief Enumerates the bit indices of the Object Pool Error Codes field in an end of object pool response
@@ -906,6 +918,10 @@ namespace isobus
 		/// @param[in] workingSet The working set to stop managing
 		/// @param[in] reason How the unexpected shutdown was detected
 		void shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason);
+
+		/// @brief If this is the active working set, clears it and sends the VT Status message
+		/// @param[in] workingSet The working set to deactivate
+		void deactivate_working_set(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet);
 
 		/// @brief Passes each shut down working set whose object pool parsing has finished to handle_unexpected_working_set_shutdown()
 		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking the CAN thread or update()
