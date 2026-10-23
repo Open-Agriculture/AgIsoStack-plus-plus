@@ -1045,21 +1045,25 @@ namespace isobus
 
 	void CANNetworkManager::process_sniffed_message_callbacks(const CANMessage &currentMessage)
 	{
-		std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
+		std::vector<ParameterGroupNumberCallbackData> matchingCallbacks;
 
 		{
-			// The copy lets a callback add or remove sniffing callbacks without deadlocking on a non-recursive mutex
+			// Copying the matches lets a callback add or remove sniffing callbacks without deadlocking on a
+			// non-recursive mutex, and copying only the matches keeps frames nobody sniffs allocation free
 			LOCK_GUARD(Mutex, sniffedMessageCallbacksMutex);
-			callbacksCopy = sniffedMessageCallbacks;
+			for (const auto &currentCallback : sniffedMessageCallbacks)
+			{
+				if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
+				    (nullptr != currentCallback.get_callback()))
+				{
+					matchingCallbacks.push_back(currentCallback);
+				}
+			}
 		}
 
-		for (const auto &currentCallback : callbacksCopy)
+		for (const auto &currentCallback : matchingCallbacks)
 		{
-			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
-			    (nullptr != currentCallback.get_callback()))
-			{
-				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
-			}
+			currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
 		}
 	}
 

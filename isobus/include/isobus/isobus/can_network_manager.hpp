@@ -115,6 +115,8 @@ namespace isobus
 		/// @brief Registers a callback for sniffing the associated PGN, regardless of who the message was addressed to
 		/// @details Unlike add_any_control_function_parameter_group_number_callback, this callback is not filtered
 		/// by destination, so it also reports traffic exchanged between two external control functions.
+		/// @note A transport protocol message between two other control functions is reported on its last data
+		/// packet, before the receiver acknowledges it, so the receiver may still abort it.
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is observed on the bus
 		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.
