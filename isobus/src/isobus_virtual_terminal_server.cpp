@@ -246,6 +246,17 @@ namespace isobus
 	{
 	}
 
+	void VirtualTerminalServer::object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)
+	{
+	}
+
+	void VirtualTerminalServer::select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		activeWorkingSet = workingSet;
+		activeWorkingSetMasterAddress = workingSet->get_control_function()->get_address();
+		activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSet->get_working_set_object())->get_active_mask();
+	}
+
 	std::uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
 	{
 		LOG_ERROR("[VT Server]: The Get User Layout Datamask background color is not implemented, returning with black");
@@ -1975,6 +1986,10 @@ namespace isobus
 					deactivate_working_set(managedWorkingSet);
 					managedWorkingSetIopLoadStateMap.erase(managedWorkingSet);
 					managedWorkingSet->clear_object_pool_data({});
+					{
+						LOCK_GUARD(Mutex, pendingShutdownsMutex);
+						pendingObjectPoolDeletions.push_back(managedWorkingSet);
+					}
 					LOG_INFO("[VT Server]: Client %u object pool has been deleted.", managedWorkingSet->get_control_function()->get_address());
 					send_delete_object_pool_response(0, message.get_source_control_function());
 				}
@@ -3038,6 +3053,16 @@ namespace isobus
 
 	void VirtualTerminalServer::update()
 	{
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
+		{
+			LOCK_GUARD(Mutex, pendingShutdownsMutex);
+			deletedObjectPools.swap(pendingObjectPoolDeletions);
+		}
+		for (const auto &ws : deletedObjectPools)
+		{
+			object_pool_deleted(ws);
+		}
+
 		// Timeouts are handled first, so the status message never reports a working set that has already shut down
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> timedOutWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
@@ -3061,9 +3086,18 @@ namespace isobus
 		}
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, bool>> parsedWorkingSets;
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> selectableWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
 		{
-			if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == ws->get_object_pool_processing_state())
+			const auto processingState = ws->get_object_pool_processing_state();
+			bool deletionPending = false;
+			{
+				// Read after the state, so a deletion that came before this parse is found and reported before it
+				LOCK_GUARD(Mutex, pendingShutdownsMutex);
+				deletionPending = (pendingObjectPoolDeletions.end() != std::find(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), ws));
+			}
+
+			if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == processingState))
 			{
 				ws->join_parsing_thread();
 				bool success = false;
@@ -3095,21 +3129,20 @@ namespace isobus
 						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
 					}
 
-					const std::uint8_t workingSetAddress = ws->get_control_function()->get_address();
-
 					// A Load Version can replace the pool of the active working set, so its mask has to be refreshed
-					if ((workingSetAddress == activeWorkingSetMasterAddress) ||
-					    ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
-					     (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable())))
+					if (ws->get_control_function()->get_address() == activeWorkingSetMasterAddress)
 					{
 						activeWorkingSet = ws;
-						activeWorkingSetMasterAddress = workingSetAddress;
 						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();
+					}
+					else if (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable())
+					{
+						selectableWorkingSets.push_back(ws);
 					}
 				}
 				parsedWorkingSets.emplace_back(ws, success);
 			}
-			else if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == ws->get_object_pool_processing_state())
+			else if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == processingState))
 			{
 				ws->join_parsing_thread();
 				if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
@@ -3124,7 +3157,14 @@ namespace isobus
 			}
 		}
 
-		// Called after the loop, so the application can change the working set list
+		// Called after the loop, so the application can change the working set list. Offers first, as a parse callback can delete a pool
+		for (const auto &ws : selectableWorkingSets)
+		{
+			if (NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
+			{
+				select_working_set(ws);
+			}
+		}
 		for (const auto &parsed : parsedWorkingSets)
 		{
 			object_pool_parse_finished(parsed.first, parsed.second);
