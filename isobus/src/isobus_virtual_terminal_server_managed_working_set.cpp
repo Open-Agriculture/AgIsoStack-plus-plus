@@ -113,6 +113,7 @@ namespace isobus
 		workingSetID = NULL_OBJECT_ID;
 		focusedObject = NULL_OBJECT_ID;
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
+		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
