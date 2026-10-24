@@ -192,3 +192,28 @@ TEST(VirtualTerminalServerTest, MacroRejectsACommandLongerThanTheMacro)
 	VirtualTerminalServerManagedWorkingSet stringWorkingSet;
 	EXPECT_FALSE(stringWorkingSet.parse_iop_into_objects(string.data(), static_cast<std::uint32_t>(string.size())));
 }
+
+TEST(VirtualTerminalServerTest, AlarmMaskKeepsItsAcousticSignal)
+{
+	// Alarm Mask 0x1234: white, no soft key mask, low priority, the acoustic signal under test,
+	// no children, no macros. The signal is 0 highest, 1 medium, 2 lowest, 3 none.
+	const auto alarmMask = [](std::uint8_t signal) {
+		return std::vector<std::uint8_t>{ 0x34, 0x12, static_cast<std::uint8_t>(VirtualTerminalObjectType::AlarmMask), 0x01, 0xFF, 0xFF, 0x02, signal, 0x00, 0x00 };
+	};
+	const AlarmMask::AcousticSignal expected[] = { AlarmMask::AcousticSignal::Highest, AlarmMask::AcousticSignal::Medium, AlarmMask::AcousticSignal::Lowest, AlarmMask::AcousticSignal::None };
+
+	for (std::uint8_t signal = 0; signal < 4; signal++)
+	{
+		auto segment = alarmMask(signal);
+		VirtualTerminalServerManagedWorkingSet workingSet;
+		ASSERT_TRUE(workingSet.parse_iop_into_objects(segment.data(), static_cast<std::uint32_t>(segment.size())));
+		auto object = std::static_pointer_cast<AlarmMask>(workingSet.get_object_by_id(0x1234));
+		ASSERT_NE(nullptr, object);
+		EXPECT_EQ(expected[signal], object->get_signal_priority());
+		EXPECT_EQ(signal, static_cast<std::uint8_t>(object->get_signal_priority()));
+	}
+
+	auto outOfRange = alarmMask(4);
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	EXPECT_FALSE(workingSet.parse_iop_into_objects(outOfRange.data(), static_cast<std::uint32_t>(outOfRange.size())));
+}
