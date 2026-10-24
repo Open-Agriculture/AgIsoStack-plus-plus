@@ -136,11 +136,23 @@ namespace isobus
 
 			shouldTerminate = true;
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if (nullptr != workerThread)
+			// One caller at a time joins the worker. terminate() also runs on the client's own error paths
+			// (from a PGN callback on the hardware update thread) and may coincide with the owner's
+			// call: a second join on a thread the first caller has joined and freed never returns, and a
+			// caller that skipped the join would return to an owner that destroys the client while the
+			// first caller is still inside it. The worker itself never joins (it exits after this update)
+			// and never waits here, or it could not exit while the owner joins it.
+			std::thread *thread = workerThread.load();
+			if ((nullptr != thread) && (thread->get_id() != std::this_thread::get_id()))
 			{
-				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
+				LOCK_GUARD(Mutex, workerThreadMutex);
+				thread = workerThread.load();
+				if (nullptr != thread)
+				{
+					thread->join();
+					delete thread;
+					workerThread = nullptr;
+				}
 			}
 #endif
 			initialized = false;

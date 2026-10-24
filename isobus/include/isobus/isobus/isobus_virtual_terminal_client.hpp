@@ -26,6 +26,7 @@
 #include <vector>
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <atomic>
 #include <thread>
 #endif
 
@@ -1846,7 +1847,8 @@ namespace isobus
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
+		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
+		Mutex workerThreadMutex; ///< Lets one terminate() caller at a time join the worker thread
 #endif
 		bool firstTimeInState = false; ///< Stores if the current update cycle is the first time a state machine state has been processed
 		bool initialized = false; ///< Stores the client initialization state
