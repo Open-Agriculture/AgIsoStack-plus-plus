@@ -34,6 +34,11 @@ namespace isobus
 		}
 	}
 
+	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
+	{
+		join_parsing_thread();
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
 	{
 		if (nullptr == objectPoolProcessingThread)
