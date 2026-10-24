@@ -300,6 +300,8 @@ namespace isobus
 
 							if (iopData[7] <= static_cast<std::uint8_t>(AlarmMask::AcousticSignal::None))
 							{
+								tempObject->set_signal_priority(static_cast<AlarmMask::AcousticSignal>(iopData[7]));
+
 								// Now add child objects
 								const std::uint8_t childrenToFollow = iopData[8];
 								const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
