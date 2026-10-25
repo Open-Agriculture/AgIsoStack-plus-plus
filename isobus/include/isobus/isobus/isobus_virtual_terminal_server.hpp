@@ -306,11 +306,23 @@ namespace isobus
 		virtual void transferred_object_pool_parse_start(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &ws) const;
 
 		/// @brief This function is called from update() once a transferred or restored object pool has been parsed and answered
-		/// @details If no working set was active and this one is selectable, the server has already made it the active working set,
-		/// which you can check with get_active_working_set().
+		/// @details If no working set was active and this one is selectable, select_working_set() has already been called for it.
 		/// @param[in] workingSet The working set whose object pool was parsed
 		/// @param[in] success True if the object pool was accepted, false if the response reported an error
 		virtual void object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool success);
+
+		/// @brief This function is called from update() when an object pool is accepted while no working set is active,
+		/// and its Working Set object is selectable
+		/// @details By default the server makes it the active working set. If an override leaves it inactive, the next accepted pool is offered too.
+		/// It is called before object_pool_parse_finished() of the same update(), and not when the active working set's pool is extended or replaced.
+		/// @param[in] workingSet The working set that can become active
+		virtual void select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
+		/// @brief This function is called from update() after the server deleted an object pool because delete_object_pool() returned true
+		/// @details Unlike delete_object_pool(), which can run on the CAN thread, this is the place to stop presenting the working set.
+		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
+		/// @param[in] workingSet The working set whose object pool was deleted
+		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
 		//-------------- Callbacks/Event driven interface ---------------------
 
@@ -928,7 +940,8 @@ namespace isobus
 		void report_shut_down_working_sets();
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
-		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns, which both the CAN thread and update() add to
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
+		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 	};
 } // namespace isobus
