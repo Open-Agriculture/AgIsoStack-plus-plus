@@ -262,6 +262,16 @@ namespace isobus
 	{
 		LOCK_GUARD(Mutex, hardwareChannelsMutex);
 
+		if (!started)
+		{
+			// A transmit that passed its started check just before stop() can still queue a frame after stop() cleared the queue.
+			// Producers are refused until started is set, so only such old frames are dropped here
+			for (const auto &channel : hardwareChannels)
+			{
+				channel->messagesToBeTransmittedQueue.clear();
+			}
+		}
+
 		if (start_thread)
 		{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
