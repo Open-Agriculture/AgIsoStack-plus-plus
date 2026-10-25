@@ -321,7 +321,7 @@ namespace isobus
 		/// @brief This function is called from update() after the server deleted an object pool because delete_object_pool() returned true
 		/// @details Unlike delete_object_pool(), which can run on the CAN thread, this is the place to stop presenting the working set.
 		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
-		/// @param[in] workingSet The working set whose object pool was deleted, which the server keeps managing
+		/// @param[in] workingSet The working set whose object pool was deleted
 		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
 		//-------------- Callbacks/Event driven interface ---------------------
