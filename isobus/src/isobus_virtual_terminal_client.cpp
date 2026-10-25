@@ -1696,6 +1696,9 @@ namespace isobus
 
 					if (firstTimeInState)
 					{
+						// The result of a transfer from an earlier connection may never have arrived
+						currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+
 						if (get_any_pool_needs_scaling())
 						{
 							// Scale object pools before upload.
@@ -1755,6 +1758,9 @@ namespace isobus
 								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 								LOG_ERROR("[VT]: An object pool failed to upload. Resetting connection to VT.");
 								set_state(StateMachineState::Disconnected);
+								// Don't start the next pool's transfer while the connection is reset
+								allPoolsProcessed = false;
+								break;
 							}
 							else
 							{

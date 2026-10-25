@@ -117,6 +117,7 @@ public:
 	}
 
 	using VirtualTerminalClient::connectedVTVersion;
+	using VirtualTerminalClient::currentObjectPoolState;
 	using VirtualTerminalClient::pendingExtendedVersionDeletes;
 	using VirtualTerminalClient::state;
 };
@@ -2218,6 +2219,77 @@ TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusM
 		receive_status(false);
 		EXPECT_EQ(State::Failed, clientUnderTest.state);
 	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, ObjectPoolInSeveralPartsRecoversFromAFailedTransfer)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x46, 0);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	const std::vector<std::uint8_t> firstPart(20, 0x00);
+	const std::vector<std::uint8_t> secondPart(30, 0x00);
+	clientUnderTest.set_object_pool(0, firstPart.data(), static_cast<std::uint32_t>(firstPart.size()));
+	clientUnderTest.set_object_pool(1, secondPart.data(), static_cast<std::uint32_t>(secondPart.size()));
+
+	// The sizes of the object pool transfers the VT is asked to receive (TP.CM RTS), mux byte included
+	const auto read_requests_to_send = [&]() {
+		std::vector<std::uint16_t> sizes;
+		CANMessageFrame frame = {};
+		while (serverVT.read_frame(frame))
+		{
+			if ((0xEC == ((frame.identifier >> 16) & 0xFF)) && (0x10 == frame.data[0]))
+			{
+				sizes.push_back(static_cast<std::uint16_t>(frame.data[1] | (frame.data[2] << 8)));
+			}
+		}
+		return sizes;
+	};
+	read_requests_to_send(); // Address claims
+
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(std::vector<std::uint16_t>{ 21 }, read_requests_to_send());
+
+	// The VT never answers, the first part's transfer times out and the connection is reset
+	time_source.update_for_ms(1500);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(State::Disconnected, clientUnderTest.state);
+	EXPECT_EQ(decltype(clientUnderTest.currentObjectPoolState)::Uninitialized, clientUnderTest.currentObjectPoolState);
+	EXPECT_TRUE(read_requests_to_send().empty()); // The second part isn't started meanwhile
+
+	// The next connection starts over with the first part
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(std::vector<std::uint16_t>{ 21 }, read_requests_to_send());
+
+	// The connection is reset while that transfer runs, so its result never reaches the upload
+	clientUnderTest.test_wrapper_set_state(State::Disconnected);
+	time_source.update_for_ms(1500);
+	read_requests_to_send();
+
+	// The connection after that isn't stuck waiting for it
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(std::vector<std::uint16_t>{ 21 }, read_requests_to_send());
+
+	serverVT.close();
+	CANHardwareInterface::stop();
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
