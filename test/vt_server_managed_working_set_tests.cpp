@@ -90,6 +90,13 @@ TEST(VirtualTerminalServerTest, ParsingStateIsNotIdleOnceTheParsingThreadHasStar
 	workingSet.join_parsing_thread();
 }
 
+TEST(VirtualTerminalServerTest, WorkingSetJoinsItsParsingThreadWhenDestroyed)
+{
+	// No assertion: a joinable std::thread left in the destructor aborts the binary
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	workingSet.start_parsing_thread();
+}
+
 TEST(VirtualTerminalServerTest, MacroSkipsThePaddingOfAShortChangeStringValue)
 {
 	VirtualTerminalServerManagedWorkingSet workingSet;

@@ -47,8 +47,8 @@ namespace isobus
 		/// @param[in] associatedControlFunction The control function to associate with this working set
 		VirtualTerminalServerManagedWorkingSet(std::shared_ptr<ControlFunction> associatedControlFunction);
 
-		/// @brief Destructor
-		~VirtualTerminalServerManagedWorkingSet() = default;
+		/// @brief Destructor, joins the parsing thread if it is still running
+		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
 		void start_parsing_thread();
