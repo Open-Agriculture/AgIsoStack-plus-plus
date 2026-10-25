@@ -748,6 +748,10 @@ namespace isobus
 					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
 					bool allPoolsSaved = true;
 
+					// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
+					// The result is not checked, as nothing may be stored under the label yet
+					delete_version(versionLabel, message.get_source_control_function()->get_NAME());
+
 					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
 					{
 						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());

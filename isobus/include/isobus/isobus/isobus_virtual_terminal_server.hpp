@@ -204,8 +204,9 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to save an object pool
 		/// to the VT's non-volatile memory.
 		/// If the object pool is saved successfully, return true, otherwise return false.
-		/// @note This may be called multiple times with the same version, but different data. When this
-		/// happens, the expectation is that you will append each objectPool together into one large file.
+		/// @note This is called once per object pool transfer, in transfer order. Before the first call of a store,
+		/// the server calls delete_version() with the same label, so the expectation is that you will append
+		/// each objectPool together into one large file, which then holds only the latest store.
 		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
 		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] objectPool The object pool data to save
@@ -217,6 +218,8 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to delete a stored object pool.
 		/// All object pool files matching the specified version label should then be deleted from the VT's
 		/// non-volatile storage.
+		/// @details The server also calls this at the start of a (Extended) Store Version command, before save_version(),
+		/// so a store replaces the version with the same label. Return false when nothing is stored under the label.
 		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
 		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] versionLabel The version label for the object pool(s) to delete
