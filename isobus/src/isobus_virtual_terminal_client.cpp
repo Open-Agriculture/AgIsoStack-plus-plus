@@ -3586,6 +3586,10 @@ namespace isobus
 									{
 										LOG_WARNING("[VT]: Store Versions Response error: Any other error.");
 									}
+
+									// The pool is already uploaded and in use; only storing it failed,
+									// so it will be uploaded again next time. Carry on.
+									parentVT->set_state(StateMachineState::Connected);
 								}
 							}
 							else
