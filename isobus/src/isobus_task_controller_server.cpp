@@ -278,7 +278,7 @@ namespace isobus
 										if (serverControlFunction == rxMessage.get_destination_control_function())
 										{
 											send_version(rxMessage.get_source_control_function());
-											send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion), rxMessage.get_source_control_function());
+											request_client_version(rxMessage.get_source_control_function());
 										}
 									}
 									break;
@@ -338,6 +338,15 @@ namespace isobus
 								    (nullptr != rxMessage.get_source_control_function()) &&
 								    (nullptr != rxMessage.get_destination_control_function()))
 								{
+									// A version 4 client asks for our version first, so one that didn't is older and we ask it
+									auto activeClient = get_active_client(rxMessage.get_source_control_function());
+									if ((serverControlFunction == rxMessage.get_destination_control_function()) &&
+									    (nullptr != activeClient) &&
+									    (!activeClient->isVersionRequested))
+									{
+										request_client_version(rxMessage.get_source_control_function());
+									}
+
 									switch (static_cast<DeviceDescriptorCommandParameters>(rxData[0] >> 4))
 									{
 										case DeviceDescriptorCommandParameters::RequestStructureLabel:
@@ -774,11 +783,7 @@ namespace isobus
 						if (nullptr == get_active_client(rxMessage.get_source_control_function()))
 						{
 							activeClients.push_back(std::make_shared<ActiveClient>(rxMessage.get_source_control_function()));
-							LOG_INFO("[TC Server]: New client 0x%02X detected via WorkingSetMaster. Requesting version.",
-							         rxMessage.get_source_control_function()->get_address());
-							// Proactively request version information from the new client
-							send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
-							                                          rxMessage.get_source_control_function());
+							LOG_INFO("[TC Server]: New client 0x%02X detected via WorkingSetMaster.", rxMessage.get_source_control_function()->get_address());
 						}
 					}
 					else
@@ -907,8 +912,15 @@ namespace isobus
 		}
 
 		LOG_INFO("[TC Server]: Requesting version from client 0x%02X", clientControlFunction->get_address());
-		return send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
-		                                                 clientControlFunction);
+		bool retVal = send_generic_process_data_default_payload(static_cast<std::uint8_t>(TechnicalDataCommandParameters::RequestVersion),
+		                                                        clientControlFunction);
+
+		auto activeClient = get_active_client(clientControlFunction);
+		if (retVal && (nullptr != activeClient))
+		{
+			activeClient->isVersionRequested = true;
+		}
+		return retVal;
 	}
 
 	std::shared_ptr<TaskControllerServer::ActiveClient> TaskControllerServer::get_active_client(std::shared_ptr<ControlFunction> clientControlFunction) const

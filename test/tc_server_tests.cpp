@@ -505,18 +505,8 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	CANNetworkManager::CANNetwork.update();
 	server.update();
 
-	// After working set master, server should now proactively request version from client
-	// Skip the automatic version request message
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
-	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
-	EXPECT_EQ(0x00, testFrame.data[0]); // RequestVersion command
-	EXPECT_EQ(0xFF, testFrame.data[1]);
-	EXPECT_EQ(0xFF, testFrame.data[2]);
-	EXPECT_EQ(0xFF, testFrame.data[3]);
-	EXPECT_EQ(0xFF, testFrame.data[4]);
-	EXPECT_EQ(0xFF, testFrame.data[5]);
-	EXPECT_EQ(0xFF, testFrame.data[6]);
-	EXPECT_EQ(0xFF, testFrame.data[7]);
+	// No Request Version until the client asks for ours
+	EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 	// Request structure label
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
@@ -535,6 +525,12 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
+
+	// The client never asked, so the server asks once
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
+	EXPECT_EQ(0x00, testFrame.data[0]);
+
 	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
@@ -1282,11 +1278,6 @@ TEST_F(TaskControllerServerTest, ClientVersionTracking)
 	CANNetworkManager::CANNetwork.update();
 	server.update();
 
-	// Skip the automatic version request that gets sent
-	time_source.update_for_ms(5);
-	CANMessageFrame testFrame = {};
-	testPlugin.read_frame(testFrame);
-
 	// Initially, client version should be 0 (default before receiving version info)
 	EXPECT_EQ(0x00, server.get_client_version(partnerClient));
 	EXPECT_FALSE(server.lastClientVersionReceived);
@@ -1344,6 +1335,96 @@ TEST_F(TaskControllerServerTest, ClientVersionTracking)
 	EXPECT_TRUE(server.lastClientVersionReceived);
 	EXPECT_EQ(0x03, server.lastClientVersion);
 	EXPECT_EQ(0x03, server.get_client_version(partnerClient));
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, ClientVersionRequestedOnlyAfterClientAsks)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x96, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x97, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	testPlugin.clear_queue();
+	CANMessageFrame testFrame = {};
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+
+	// The server answers (0x10), then asks back (0x00)
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x14CB9796, testFrame.identifier);
+	EXPECT_EQ(0x10, testFrame.data[0]);
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x14CB9796, testFrame.identifier);
+	EXPECT_EQ(0x00, testFrame.data[0]);
+
+	// No second Request Version
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x14CB9796, testFrame.identifier);
+	EXPECT_EQ(0x11, testFrame.data[0]);
+	EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, ClientVersionNotRequestedForAnotherServer)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xA2, 0, time_source);
+	auto otherServerECU = test_helpers::claim_internal_control_function(0xA3, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0xA4, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	testPlugin.clear_queue();
+	CANMessageFrame testFrame = {};
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, otherServerECU, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	while (readFrameFilterStatus(testPlugin, testFrame, time_source))
+	{
+		EXPECT_FALSE((0x14CBA4A2 == testFrame.identifier) && (0x00 == testFrame.data[0]));
+	}
 
 	CANHardwareInterface::stop();
 }
