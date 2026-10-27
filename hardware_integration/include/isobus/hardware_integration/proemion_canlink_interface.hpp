@@ -139,8 +139,6 @@ namespace isobus
 		static constexpr int FIRST_RECONNECT_DELAY_MS = 1000;
 		/// @brief The longest wait between attempts to reconnect. Short, since an attempt only costs a name lookup and a TCP connect.
 		static constexpr int MAX_RECONNECT_DELAY_MS = 3000;
-		/// @brief A pause in the data from the device at least this long is logged, as the bus is rarely that quiet
-		static constexpr int DATA_GAP_WARNING_MS = 1000;
 
 		/**
 		 * @brief parse_interface Parse the hostname:port supplied by the user

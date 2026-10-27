@@ -683,14 +683,7 @@ namespace isobus
 			return false;
 		}
 
-		const auto receivedAt = std::chrono::steady_clock::now();
-		const auto silenceMs = std::chrono::duration_cast<std::chrono::milliseconds>(receivedAt - lastDataReceivedAt).count();
-
-		if (silenceMs >= DATA_GAP_WARNING_MS)
-		{
-			LOG_WARNING("[ProemionCANLink] Nothing arrived from the device for " + std::to_string(silenceMs) + " ms");
-		}
-		lastDataReceivedAt = receivedAt;
+		lastDataReceivedAt = std::chrono::steady_clock::now();
 		receiveBuffer.insert(receiveBuffer.end(), buffer, buffer + received);
 
 		return extract_pdu_from_receive_buffer(pdu);
