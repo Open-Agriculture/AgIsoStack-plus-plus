@@ -102,6 +102,8 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
 			initialized = true;
 		}
@@ -2797,6 +2799,7 @@ namespace isobus
 		      (parentVT->partnerControlFunction == message.get_destination_control_function()))))
 		{
 			auto &auxiliaryMutex = parentVT->auxiliaryAssignmentMutex;
+			(void)auxiliaryMutex;
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
