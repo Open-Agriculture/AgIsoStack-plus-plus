@@ -2220,6 +2220,42 @@ public:
 	}
 };
 
+TEST_F(VirtualTerminalServerMessagingTest, ESCMessageIsSentToTheWorkingSet)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA2, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	testPlugin.clear_queue();
+
+	ASSERT_TRUE(serverUnderTest.send_esc_message(0x1234, 0, client));
+
+	CANMessageFrame frame = {};
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+
+	EXPECT_EQ(0xE6, get_pdu_format(frame)); // VT to ECU
+	EXPECT_EQ(client->get_address(), static_cast<std::uint8_t>(frame.identifier >> 8));
+	EXPECT_EQ(0x04, frame.data[0]);
+	EXPECT_EQ(0x34, frame.data[1]);
+	EXPECT_EQ(0x12, frame.data[2]);
+	EXPECT_EQ(0x00, frame.data[3]);
+	EXPECT_EQ(0xFF, frame.data[4]);
+	EXPECT_EQ(0xFF, frame.data[5]);
+	EXPECT_EQ(0xFF, frame.data[6]);
+	EXPECT_EQ(0xFF, frame.data[7]);
+
+	CANHardwareInterface::stop();
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 {
 	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
