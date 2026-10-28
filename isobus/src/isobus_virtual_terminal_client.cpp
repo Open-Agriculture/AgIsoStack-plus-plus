@@ -1599,10 +1599,19 @@ namespace isobus
 
 				case StateMachineState::WaitForGetVersionsResponse:
 				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Get Versions Response Timeout");
+						set_state(StateMachineState::Disconnected);
+						LOG_ERROR("[VT]: Status Timeout");
+					}
+					else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					{
+						{
+							LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+							skipVersionStorage = true;
+						}
+						set_state(StateMachineState::UploadObjectPool);
+						LOG_WARNING("[VT]: Get Versions Response Timeout. Uploading without version storage for this connection.");
 					}
 				}
 				break;
@@ -2567,6 +2576,7 @@ namespace isobus
 
 		if (StateMachineState::Disconnected == value)
 		{
+			skipVersionStorage = false;
 			lastVTStatusTimestamp_ms = 0;
 			++auxiliaryAssignmentSessionGeneration;
 			auxiliaryAssignmentTransaction.reset();
@@ -3639,7 +3649,12 @@ namespace isobus
 									}
 
 									// Check if we need to store this pool
-									if (!parentVT->objectPools[0].versionLabel.empty())
+									bool skipStorage;
+									{
+										LOCK_GUARD(Mutex, auxiliaryMutex);
+										skipStorage = parentVT->skipVersionStorage;
+									}
+									if ((!parentVT->objectPools[0].versionLabel.empty()) && (!skipStorage))
 									{
 										parentVT->set_state(StateMachineState::SendStoreVersion);
 									}

@@ -1806,6 +1806,7 @@ namespace isobus
 		std::uint8_t consecutiveNonParsingVTStatusMessages = 0; ///< Consecutive VT status messages with parsing clear while awaiting an end of object pool or load version response, capped at three
 
 		std::uint8_t connectedVTVersion = 0; ///< The VT server's supported max version
+		bool skipVersionStorage = false; ///< Bypass storage for this connection after an unanswered versions query; protected by auxiliaryAssignmentMutex
 
 		// Softkey capabilities
 		std::uint8_t softKeyXAxisPixels = 0; ///< The size of a soft key X dimension as reported by the VT server
