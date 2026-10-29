@@ -270,6 +270,12 @@ namespace isobus
 		/// @param[in] reason How the unexpected shutdown was detected
 		virtual void handle_unexpected_working_set_shutdown(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason) = 0;
 
+		/// @brief Called when a working set sends an ESC command. Close its open input, if any, before returning, and send
+		/// VT Select Input Object as on Cancel, but not the VT ESC message. Can be called from the CAN thread.
+		/// @param[in] workingSet The working set that sent the ESC command
+		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
+		virtual std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) = 0;
+
 		//------------ Optional functions you can override --------------------
 
 		/// @brief If you want to override the graphics mode from its default 256 color mode, you can override this function.
@@ -467,6 +473,13 @@ namespace isobus
 			InvalidObjectID = 1,
 			InvalidEnableDisableCommandValue = 2,
 			CouldNotCompleteTheInputObjectIsCurrentlyBeingModified = 3,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in an ESC response
+		enum class ESCErrorBit : std::uint8_t
+		{
+			NoInputFieldOpen = 0,
 			AnyOtherError = 4
 		};
 
@@ -814,6 +827,13 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to the ESC command
+		/// @param[in] objectID The object ID where input was aborted, or NULL_OBJECT_ID if an error bit is set
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_esc_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends the VT status message broadcast. The status message
 		/// contains information such as which working set is the active one, and information about
