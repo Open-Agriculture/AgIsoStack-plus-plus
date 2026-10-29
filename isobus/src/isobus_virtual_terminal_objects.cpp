@@ -8761,12 +8761,12 @@ namespace isobus
 		return 8;
 	}
 
-	bool GraphicDataObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	bool GraphicDataObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return (format == Format::PNG);
 	}
 
-	bool GraphicDataObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool GraphicDataObject::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -8833,12 +8833,12 @@ namespace isobus
 		return 10;
 	}
 
-	bool WorkingSetSpecialControlsObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	bool WorkingSetSpecialControlsObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool WorkingSetSpecialControlsObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool WorkingSetSpecialControlsObject::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
