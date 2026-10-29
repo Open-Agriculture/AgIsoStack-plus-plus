@@ -11,6 +11,27 @@ cmake -S . -B build -DBUILD_EXAMPLES=ON
 cmake --build build
 ```
 
+To install the built examples along with the library, run:
+
+```bash
+cmake --install build --prefix install
+```
+
+The executables and their required object pool files are installed in `bin`
+under the installation prefix. Set `CMAKE_INSTALL_BINDIR` when configuring to
+choose a different directory. The virtual terminal and seeder examples load
+their object pool files from the current working directory, so run those
+examples from the installed executable directory. CAN examples still require
+the appropriate CAN driver and hardware setup.
+
+Packaging tools can stage the installation using `DESTDIR`:
+
+```bash
+DESTDIR="$PWD/staging" cmake --install build --prefix /usr
+```
+
+Examples are only installed by the top-level project when `BUILD_EXAMPLES=ON`.
+
 ## Building a single example
 
 Another approach, more akin to how most consumers would use the library, is to install the AgIsoStack first.
