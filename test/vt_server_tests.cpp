@@ -150,6 +150,11 @@ public:
 		shutdownReasons.push_back(reason);
 	}
 
+	std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) override
+	{
+		return openInputObjectID;
+	}
+
 	void object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool success) override
 	{
 		parsedWorkingSets.push_back(workingSet);
@@ -233,6 +238,7 @@ public:
 	bool selectOfferedWorkingSets = true;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> activeWorkingSetsWhenDeleted;
+	std::uint16_t openInputObjectID = NULL_OBJECT_ID;
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolParseFinished;
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolDeleted;
 	std::uint_fast8_t objectPoolDeletionRequests = 0;
@@ -2254,6 +2260,47 @@ TEST_F(VirtualTerminalServerMessagingTest, ESCMessageIsSentToTheWorkingSet)
 	EXPECT_EQ(0xFF, frame.data[7]);
 
 	CANHardwareInterface::stop();
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ESCCommandIsAnsweredWithTheObjectWhoseInputWasAborted)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame noInputOpenResponse = {};
+	CANMessageFrame inputAbortedResponse = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0x92, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool noInputOpenAnswered = poll_for_response(serverUnderTest, testPlugin, 0x92, noInputOpenResponse);
+	serverUnderTest.openInputObjectID = 0x1234;
+	receive_from_client(internalECU, client, { 0x92, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool inputAbortedAnswered = poll_for_response(serverUnderTest, testPlugin, 0x92, inputAbortedResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(noInputOpenAnswered);
+	EXPECT_EQ(0xFF, noInputOpenResponse.data[1]);
+	EXPECT_EQ(0xFF, noInputOpenResponse.data[2]);
+	EXPECT_EQ(0x01, noInputOpenResponse.data[3]);
+	ASSERT_TRUE(inputAbortedAnswered);
+	EXPECT_EQ(0x34, inputAbortedResponse.data[1]);
+	EXPECT_EQ(0x12, inputAbortedResponse.data[2]);
+	EXPECT_EQ(0x00, inputAbortedResponse.data[3]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[4]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[5]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[6]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[7]);
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
