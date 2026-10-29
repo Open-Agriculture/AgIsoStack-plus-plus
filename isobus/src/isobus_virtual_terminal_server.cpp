@@ -2476,6 +2476,33 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::VTESCMessage),
+				get_low_byte(objectId),
+				get_high_byte(objectId),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF // Reserved TODO: TAN
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_soft_key_activation_message(KeyActivationCode activationCode, std::uint16_t objectId, std::uint16_t parentObjectId, std::uint8_t keyNumber, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;

@@ -90,6 +90,13 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_select_input_object_message(std::uint16_t objectId, bool isObjectSelected, bool isObjectOpenForInput, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends the VT ESC message, when the operator or the VT aborts input
+		/// @param[in] objectId Object ID where input was aborted, or NULL_OBJECT_ID if an error bit is set
+		/// @param[in] errorBitfield 0, bit 0 if no input field is open, or bit 4 for any other error
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a key object to the Working
 		/// Set Master
 		/// @param[in] activationCode 0 for released, 1 for "pressed", 2 for "still held", or 3 for "aborted"
