@@ -50,7 +50,7 @@ namespace isobus
 
 	/// @brief Checks if a working set's object pool parse has started but its response has not been sent yet.
 	/// @param workingSet The working set to check.
-	/// @returns true if update() has not yet joined the parsing thread and sent the response, otherwise false.
+	/// @returns true if update() has not yet joined the parsing thread, otherwise false.
 	static bool is_object_pool_parse_unanswered(VirtualTerminalServerManagedWorkingSet &workingSet)
 	{
 		const auto state = workingSet.get_object_pool_processing_state();
@@ -156,6 +156,16 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
 			                                                                                          process_rx_message,
 			                                                                                          this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+			                                                                                          process_rx_message,
+			                                                                                          this);
+		}
+
+		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
+		LOCK_GUARD(Mutex, pendingShutdownsMutex);
+		for (const auto &shutDown : pendingShutdowns)
+		{
+			shutDown.first->join_parsing_thread();
 		}
 	}
 
@@ -164,6 +174,9 @@ namespace isobus
 		if (!initialized)
 		{
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+			                                                                                       process_rx_message,
+			                                                                                       this);
+			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
 			                                                                                       process_rx_message,
 			                                                                                       this);
 			initialized = true;
@@ -229,6 +242,21 @@ namespace isobus
 		(void)ws;
 	}
 
+	void VirtualTerminalServer::object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, bool)
+	{
+	}
+
+	void VirtualTerminalServer::object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)
+	{
+	}
+
+	void VirtualTerminalServer::select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		activeWorkingSet = workingSet;
+		activeWorkingSetMasterAddress = workingSet->get_control_function()->get_address();
+		activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSet->get_working_set_object())->get_active_mask();
+	}
+
 	std::uint8_t VirtualTerminalServer::get_user_layout_datamask_bg_color() const
 	{
 		LOG_ERROR("[VT Server]: The Get User Layout Datamask background color is not implemented, returning with black");
@@ -260,43 +288,136 @@ namespace isobus
 		return languageCommandInterface;
 	}
 
-	bool VirtualTerminalServer::check_if_source_is_managed(const CANMessage &message)
+	bool VirtualTerminalServer::check_if_source_is_managed(const CANMessage &message) const
 	{
-		// Check if we're managing this CF
-		bool retVal = false;
+		return (nullptr != get_managed_working_set(message.get_source_control_function()));
+	}
 
-		// This is the static callback for the instance.
-		// See if we need to set up a new managed working set.
-		for (const auto &cf : managedWorkingSetList)
+	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> VirtualTerminalServer::get_managed_working_set(std::shared_ptr<ControlFunction> controlFunction) const
+	{
+		for (const auto &ws : managedWorkingSetList)
 		{
-			if (cf->get_control_function() == message.get_source_control_function())
+			if (ws->get_control_function() == controlFunction)
 			{
-				// Found a match
-				retVal = true;
-				break;
+				return ws;
+			}
+		}
+		return nullptr;
+	}
+
+	void VirtualTerminalServer::process_working_set_maintenance_message(const CANMessage &message)
+	{
+		const auto &data = message.get_data();
+		const bool initiating = (0 != (data[1] & 0x01));
+		const std::uint8_t clientVersion = data[2];
+		// VT version 2 and prior clients have no Initiating bit, they send 0xFF there,
+		// so every maintenance message they send looks like an initiating one.
+		const bool isVersion2OrPriorClient = ((clientVersion < 3) || (0xFF == clientVersion));
+		auto workingSet = get_managed_working_set(message.get_source_control_function());
+
+		if (nullptr != workingSet)
+		{
+			// Only a version 3 or later client can tell us it has restarted
+			if (initiating && !isVersion2OrPriorClient)
+			{
+				LOG_WARNING("[VT Server]: Client %u sent another initiating working set maintenance message, treating it as an unexpected shutdown", workingSet->get_control_function()->get_address());
+				shut_down_working_set(workingSet, UnexpectedShutdownReason::RepeatedInitiatingMessage);
+				workingSet = nullptr;
+			}
+			else
+			{
+				workingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 			}
 		}
 
-		if (!retVal)
+		if ((nullptr == workingSet) && initiating)
 		{
-			const auto &data = message.get_data();
-			if ((data[0] == static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage)) &&
-			    (data[1] & 0x01)) // Init bit is set
+			auto announcement = std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), message.get_source_control_function());
+
+			// A version 2 or prior client sends a Working Set Master message when it really starts up.
+			// Without one, this is a working set that timed out and still thinks its object pool is loaded.
+			if (isVersion2OrPriorClient && (announcedWorkingSetMasters.end() == announcement))
 			{
-				// This CF is probably trying to initiate communication with us.
+				LOG_DEBUG("[VT Server]: Ignoring a version 2 or prior working set maintenance message from client %u, it has not sent a Working Set Master message", message.get_source_control_function()->get_address());
+			}
+			else
+			{
+				if (announcedWorkingSetMasters.end() != announcement)
+				{
+					announcedWorkingSetMasters.erase(announcement);
+				}
+
+				// This CF is trying to initiate communication with us.
 				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
 				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
 				managedWorkingSetList.emplace_back(newWorkingSet);
 
-				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), data[2]);
-				if (data[2] > get_vt_version_byte(get_version()))
+				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), clientVersion);
+				if (clientVersion > get_vt_version_byte(get_version()))
 				{
-					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), data[2], get_vt_version_byte(get_version()));
+					LOG_WARNING("[VT Server]: Client %u version %u is higher than our reported version, which is %u", newWorkingSet->get_control_function()->get_address(), clientVersion, get_vt_version_byte(get_version()));
 				}
-				retVal = true;
 			}
 		}
-		return retVal;
+	}
+
+	void VirtualTerminalServer::process_working_set_master_message(const CANMessage &message)
+	{
+		const auto source = message.get_source_control_function();
+
+		// A managed working set master also sends this when another node requests it, which is not a restart
+		if ((nullptr == get_managed_working_set(source)) &&
+		    (announcedWorkingSetMasters.end() == std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), source)))
+		{
+			announcedWorkingSetMasters.push_back(source);
+		}
+	}
+
+	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
+	{
+		deactivate_working_set(workingSet);
+		managedWorkingSetIopLoadStateMap.erase(workingSet);
+		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
+
+		LOCK_GUARD(Mutex, pendingShutdownsMutex);
+		pendingShutdowns.emplace_back(workingSet, reason);
+	}
+
+	void VirtualTerminalServer::deactivate_working_set(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
+		if ((activeWorkingSet == workingSet) ||
+		    (workingSet->get_control_function()->get_address() == activeWorkingSetMasterAddress))
+		{
+			activeWorkingSet = nullptr;
+			activeWorkingSetMasterAddress = NULL_CAN_ADDRESS;
+			activeWorkingSetDataMaskObjectID = NULL_OBJECT_ID;
+			activeWorkingSetSoftkeyMaskObjectID = NULL_OBJECT_ID;
+
+			if (send_status_message())
+			{
+				statusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
+			}
+		}
+	}
+
+	void VirtualTerminalServer::report_shut_down_working_sets()
+	{
+		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> parsedWorkingSets;
+		{
+			LOCK_GUARD(Mutex, pendingShutdownsMutex);
+			auto stillParsing = std::stable_partition(pendingShutdowns.begin(), pendingShutdowns.end(), [](const std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason> &shutDown) {
+				return VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == shutDown.first->get_object_pool_processing_state();
+			});
+			parsedWorkingSets.assign(stillParsing, pendingShutdowns.end());
+			pendingShutdowns.erase(stillParsing, pendingShutdowns.end());
+		}
+
+		for (const auto &shutDown : parsedWorkingSets)
+		{
+			// The parsing thread uses the working set, so it has to be joined before the working set can be released
+			shutDown.first->join_parsing_thread();
+			handle_unexpected_working_set_shutdown(shutDown.first, shutDown.second);
+		}
 	}
 
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
@@ -638,6 +759,10 @@ namespace isobus
 					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
 					bool allPoolsSaved = true;
 
+					// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
+					// The result is not checked, as nothing may be stored under the label yet
+					delete_version(versionLabel, message.get_source_control_function()->get_NAME());
+
 					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
 					{
 						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
@@ -741,10 +866,7 @@ namespace isobus
 
 			case Function::WorkingSetMaintenanceMessage:
 			{
-				if (0 != managedWorkingSet->get_working_set_maintenance_message_timestamp_ms())
-				{
-					managedWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
-				}
+				// Already handled by process_working_set_maintenance_message()
 			}
 			break;
 
@@ -1779,6 +1901,13 @@ namespace isobus
 			}
 			break;
 
+			case Function::ESCCommand:
+			{
+				auto objectID = abort_input(managedWorkingSet);
+				send_esc_response(objectID, NULL_OBJECT_ID == objectID ? get_bit(static_cast<std::uint8_t>(ESCErrorBit::NoInputFieldOpen)) : 0, message.get_source_control_function());
+			}
+			break;
+
 			case Function::AuxiliaryInputTypeTwoMaintenanceMessage:
 			{
 				// Todo? auto modelIdentificationCode = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
@@ -1858,9 +1987,21 @@ namespace isobus
 			case Function::DeleteObjectPoolCommand:
 			{
 				LOG_INFO("[VT Server]: Client %u requests deletion of object pool from volatile memory.", managedWorkingSet->get_control_function()->get_address());
-				if (delete_object_pool(managedWorkingSet->get_control_function()->get_NAME()))
+				if (is_object_pool_parse_unanswered(*managedWorkingSet))
 				{
-					LOG_INFO("[VT Server]: Client %u object pool has been deactivated.", managedWorkingSet->get_control_function()->get_address());
+					LOG_WARNING("[VT Server]: Client %u object pool can not be deleted while it is being parsed.", managedWorkingSet->get_control_function()->get_address());
+					send_delete_object_pool_response(get_bit(static_cast<std::uint8_t>(DeleteObjectPoolErrorBit::AnyOtherError)), message.get_source_control_function());
+				}
+				else if (delete_object_pool(managedWorkingSet->get_control_function()->get_NAME()))
+				{
+					deactivate_working_set(managedWorkingSet);
+					managedWorkingSetIopLoadStateMap.erase(managedWorkingSet);
+					managedWorkingSet->clear_object_pool_data({});
+					{
+						LOCK_GUARD(Mutex, pendingShutdownsMutex);
+						pendingObjectPoolDeletions.push_back(managedWorkingSet);
+					}
+					LOG_INFO("[VT Server]: Client %u object pool has been deleted.", managedWorkingSet->get_control_function()->get_address());
 					send_delete_object_pool_response(0, message.get_source_control_function());
 				}
 				else
@@ -1961,8 +2102,17 @@ namespace isobus
 		    ((CAN_DATA_LENGTH <= message.get_data_length()) ||
 		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0))))) // Technically this message can be 6 bytes
 		{
-			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
+			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster) == message.get_identifier().get_parameter_group_number())
 			{
+				parentServer->process_working_set_master_message(message);
+			}
+			else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
+			{
+				if (static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage) == message.get_uint8_at(0))
+				{
+					parentServer->process_working_set_maintenance_message(message);
+				}
+
 				bool responseSent = parentServer->process_stateless_messages(message);
 				bool isManaged = parentServer->check_if_source_is_managed(message);
 				if (!isManaged && !responseSent)
@@ -2318,6 +2468,33 @@ namespace isobus
 				get_high_byte(objectId),
 				static_cast<std::uint8_t>(isObjectSelected),
 				static_cast<std::uint8_t>(isObjectOpenForInput),
+				0xFF,
+				0xFF,
+				0xFF // Reserved TODO: TAN
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::VTESCMessage),
+				get_low_byte(objectId),
+				get_high_byte(objectId),
+				errorBitfield,
+				0xFF,
 				0xFF,
 				0xFF,
 				0xFF // Reserved TODO: TAN
@@ -2797,6 +2974,27 @@ namespace isobus
 		                                                      get_priority());
 	}
 
+	bool VirtualTerminalServer::send_esc_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+			static_cast<std::uint8_t>(Function::ESCCommand),
+			get_low_byte(objectID),
+			get_high_byte(objectID),
+			errorBitfield,
+			0xFF,
+			0xFF,
+			0xFF,
+			0xFF
+		};
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
 	bool VirtualTerminalServer::send_status_message() const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
@@ -2914,17 +3112,54 @@ namespace isobus
 
 	void VirtualTerminalServer::update()
 	{
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
+		{
+			LOCK_GUARD(Mutex, pendingShutdownsMutex);
+			deletedObjectPools.swap(pendingObjectPoolDeletions);
+		}
+		for (const auto &ws : deletedObjectPools)
+		{
+			object_pool_deleted(ws);
+		}
+
+		// Timeouts are handled first, so the status message never reports a working set that has already shut down
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> timedOutWorkingSets;
+		for (const auto &ws : managedWorkingSetList)
+		{
+			if (SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS))
+			{
+				timedOutWorkingSets.push_back(ws);
+			}
+		}
+		for (const auto &ws : timedOutWorkingSets)
+		{
+			LOG_WARNING("[VT Server]: Client %u has not sent a working set maintenance message for %u ms, treating it as an unexpected shutdown", ws->get_control_function()->get_address(), WORKING_SET_MAINTENANCE_TIMEOUT_MS);
+			shut_down_working_set(ws, UnexpectedShutdownReason::MaintenanceTimeout);
+		}
+		report_shut_down_working_sets();
+
 		if ((isobus::SystemTiming::time_expired_ms(statusMessageTimestamp_ms, 1000)) &&
 		    (send_status_message()))
 		{
 			statusMessageTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 		}
 
+		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, bool>> parsedWorkingSets;
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> selectableWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
 		{
-			if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == ws->get_object_pool_processing_state())
+			const auto processingState = ws->get_object_pool_processing_state();
+			bool deletionPending = false;
+			{
+				// Read after the state, so a deletion that came before this parse is found and reported before it
+				LOCK_GUARD(Mutex, pendingShutdownsMutex);
+				deletionPending = (pendingObjectPoolDeletions.end() != std::find(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), ws));
+			}
+
+			if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == processingState))
 			{
 				ws->join_parsing_thread();
+				bool success = false;
 
 				auto workingSetObject = ws->get_working_set_object();
 
@@ -2943,6 +3178,7 @@ namespace isobus
 				}
 				else
 				{
+					success = true;
 					if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
 					{
 						send_restored_object_pool_response(*ws, 0);
@@ -2952,19 +3188,20 @@ namespace isobus
 						send_end_of_object_pool_response(true, NULL_OBJECT_ID, NULL_OBJECT_ID, 0, ws->get_control_function());
 					}
 
-					const std::uint8_t workingSetAddress = ws->get_control_function()->get_address();
-
 					// A Load Version can replace the pool of the active working set, so its mask has to be refreshed
-					if ((workingSetAddress == activeWorkingSetMasterAddress) ||
-					    ((isobus::NULL_CAN_ADDRESS == activeWorkingSetMasterAddress) &&
-					     (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable())))
+					if (ws->get_control_function()->get_address() == activeWorkingSetMasterAddress)
 					{
-						activeWorkingSetMasterAddress = workingSetAddress;
+						activeWorkingSet = ws;
 						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();
 					}
+					else if (std::static_pointer_cast<WorkingSet>(workingSetObject)->get_selectable())
+					{
+						selectableWorkingSets.push_back(ws);
+					}
 				}
+				parsedWorkingSets.emplace_back(ws, success);
 			}
-			else if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == ws->get_object_pool_processing_state())
+			else if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == processingState))
 			{
 				ws->join_parsing_thread();
 				if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
@@ -2975,7 +3212,21 @@ namespace isobus
 				{
 					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
 				}
+				parsedWorkingSets.emplace_back(ws, false);
 			}
+		}
+
+		// Called after the loop, so the application can change the working set list. Offers first, as a parse callback can delete a pool
+		for (const auto &ws : selectableWorkingSets)
+		{
+			if (NULL_CAN_ADDRESS == activeWorkingSetMasterAddress)
+			{
+				select_working_set(ws);
+			}
+		}
+		for (const auto &parsed : parsedWorkingSets)
+		{
+			object_pool_parse_finished(parsed.first, parsed.second);
 		}
 	}
 }

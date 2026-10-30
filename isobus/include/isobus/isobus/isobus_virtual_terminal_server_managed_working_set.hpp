@@ -33,7 +33,7 @@ namespace isobus
 		/// @brief Enumerates the states of the processing thread for the object pool
 		enum class ObjectPoolProcessingThreadState
 		{
-			None, ///< Thread has never been started for this working set
+			None, ///< No object pool has been parsed for this working set, or it was deleted
 			Running, ///< We are currently parsing the object pool
 			Success, ///< We have finished parsing the pool successfully and need to respond to the working set
 			Fail, ///< The object pool is bad and we need to respond to the working set
@@ -47,8 +47,8 @@ namespace isobus
 		/// @param[in] associatedControlFunction The control function to associate with this working set
 		VirtualTerminalServerManagedWorkingSet(std::shared_ptr<ControlFunction> associatedControlFunction);
 
-		/// @brief Destructor
-		~VirtualTerminalServerManagedWorkingSet() = default;
+		/// @brief Destructor, joins the parsing thread if it is still running
+		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
 		void start_parsing_thread();
@@ -99,7 +99,7 @@ namespace isobus
 		/// @param[in] extendedVersionLabel True when the restoring command was an Extended Load Version Command
 		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, bool extendedVersionLabel, CANLibBadge<VirtualTerminalServer>);
 
-		/// @brief Discards the object pool so that a loaded version can overwrite it, keeping the callback handles
+		/// @brief Discards the object pool so that a loaded version can overwrite it or the client can transfer a new one, keeping the callback handles
 		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
 
 		/// @brief Sets the object ID of the currently focused object
