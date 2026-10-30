@@ -876,6 +876,7 @@ namespace isobus
 				auto objectId = get_little_endian_uint16(data, 1);
 				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
 				bool logSuccess = true;
+				bool valueChanged = false;
 
 				if (nullptr != lTargetObject)
 				{
@@ -883,80 +884,90 @@ namespace isobus
 					{
 						case VirtualTerminalObjectType::InputBoolean:
 						{
-							std::static_pointer_cast<InputBoolean>(lTargetObject)->set_value(get_byte(value, 0));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto inputBoolean = std::static_pointer_cast<InputBoolean>(lTargetObject);
+							valueChanged = (inputBoolean->get_value() != get_byte(value, 0));
+							inputBoolean->set_value(get_byte(value, 0));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::InputNumber:
 						{
-							std::static_pointer_cast<InputNumber>(lTargetObject)->set_value(value);
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto inputNumber = std::static_pointer_cast<InputNumber>(lTargetObject);
+							valueChanged = (inputNumber->get_value() != value);
+							inputNumber->set_value(value);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::InputList:
 						{
-							std::static_pointer_cast<InputList>(lTargetObject)->set_value(get_byte(value, 0));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto inputList = std::static_pointer_cast<InputList>(lTargetObject);
+							valueChanged = (inputList->get_value() != get_byte(value, 0));
+							inputList->set_value(get_byte(value, 0));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::OutputNumber:
 						{
-							std::static_pointer_cast<OutputNumber>(lTargetObject)->set_value(value);
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto outputNumber = std::static_pointer_cast<OutputNumber>(lTargetObject);
+							valueChanged = (outputNumber->get_value() != value);
+							outputNumber->set_value(value);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::OutputList:
 						{
-							std::static_pointer_cast<OutputList>(lTargetObject)->set_value(get_byte(value, 0));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto outputList = std::static_pointer_cast<OutputList>(lTargetObject);
+							valueChanged = (outputList->get_value() != get_byte(value, 0));
+							outputList->set_value(get_byte(value, 0));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::OutputMeter:
 						{
-							std::static_pointer_cast<OutputMeter>(lTargetObject)->set_value(get_low_16_bits(value));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto outputMeter = std::static_pointer_cast<OutputMeter>(lTargetObject);
+							valueChanged = (outputMeter->get_value() != get_low_16_bits(value));
+							outputMeter->set_value(get_low_16_bits(value));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::OutputLinearBarGraph:
 						{
-							std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject)->set_value(get_low_16_bits(value));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto linearBarGraph = std::static_pointer_cast<OutputLinearBarGraph>(lTargetObject);
+							valueChanged = (linearBarGraph->get_value() != get_low_16_bits(value));
+							linearBarGraph->set_value(get_low_16_bits(value));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::OutputArchedBarGraph:
 						{
-							std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject)->set_value(get_low_16_bits(value));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto archedBarGraph = std::static_pointer_cast<OutputArchedBarGraph>(lTargetObject);
+							valueChanged = (archedBarGraph->get_value() != get_low_16_bits(value));
+							archedBarGraph->set_value(get_low_16_bits(value));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::NumberVariable:
 						{
-							std::static_pointer_cast<NumberVariable>(lTargetObject)->set_value(value);
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto numberVariable = std::static_pointer_cast<NumberVariable>(lTargetObject);
+							valueChanged = (numberVariable->get_value() != value);
+							numberVariable->set_value(value);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
 
 						case VirtualTerminalObjectType::ObjectPointer:
 						{
-							std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(get_low_16_bits(value));
-							onRepaintEventDispatcher.call(managedWorkingSet);
+							auto objectPointer = std::static_pointer_cast<ObjectPointer>(lTargetObject);
+							valueChanged = (objectPointer->get_value() != get_low_16_bits(value));
+							objectPointer->set_value(get_low_16_bits(value));
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
 						}
 						break;
@@ -991,6 +1002,12 @@ namespace isobus
 						break;
 					}
 
+					// Working sets often send their values cyclically, so most commands repeat a value the object already has
+					if (valueChanged)
+					{
+						onRepaintEventDispatcher.call(managedWorkingSet);
+					}
+
 					if (logSuccess)
 					{
 						LOG_DEBUG("[VT Server]: Client %u change numeric value command: change object ID %u to be %u", managedWorkingSet->get_control_function()->get_address(), objectId, value);
@@ -1012,9 +1029,15 @@ namespace isobus
 
 				if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
 				{
-					std::static_pointer_cast<Container>(targetObject)->set_hidden(0 == data[3]);
+					auto container = std::static_pointer_cast<Container>(targetObject);
+					const bool visibilityChanged = (container->get_hidden() != (0 == data[3]));
+					container->set_hidden(0 == data[3]);
 					send_hide_show_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-					onRepaintEventDispatcher.call(managedWorkingSet);
+
+					if (visibilityChanged)
+					{
+						onRepaintEventDispatcher.call(managedWorkingSet);
+					}
 
 					if (0 == data[3])
 					{
@@ -1048,41 +1071,71 @@ namespace isobus
 						{
 							case VirtualTerminalObjectType::InputBoolean:
 							{
-								std::static_pointer_cast<InputBoolean>(lTargetObject)->set_enabled(0 != data[3]);
+								auto inputBoolean = std::static_pointer_cast<InputBoolean>(lTargetObject);
+								const bool stateChanged = (inputBoolean->get_enabled() != (0 != data[3]));
+								inputBoolean->set_enabled(0 != data[3]);
 								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+
+								if (stateChanged)
+								{
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
 							}
 							break;
 
 							case VirtualTerminalObjectType::InputList:
 							{
-								std::static_pointer_cast<InputList>(lTargetObject)->set_option(InputList::Options::Enabled, (0 != data[3]));
+								auto inputList = std::static_pointer_cast<InputList>(lTargetObject);
+								const bool stateChanged = (inputList->get_option(InputList::Options::Enabled) != (0 != data[3]));
+								inputList->set_option(InputList::Options::Enabled, (0 != data[3]));
 								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+
+								if (stateChanged)
+								{
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
 							}
 							break;
 
 							case VirtualTerminalObjectType::InputString:
 							{
-								std::static_pointer_cast<InputString>(lTargetObject)->set_enabled((0 != data[3]));
+								auto inputString = std::static_pointer_cast<InputString>(lTargetObject);
+								const bool stateChanged = (inputString->get_enabled() != (0 != data[3]));
+								inputString->set_enabled((0 != data[3]));
 								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+
+								if (stateChanged)
+								{
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
 							}
 							break;
 
 							case VirtualTerminalObjectType::InputNumber:
 							{
-								std::static_pointer_cast<InputNumber>(lTargetObject)->set_option2(InputNumber::Options2::Enabled, (0 != data[3]));
+								auto inputNumber = std::static_pointer_cast<InputNumber>(lTargetObject);
+								const bool stateChanged = (inputNumber->get_option2(InputNumber::Options2::Enabled) != (0 != data[3]));
+								inputNumber->set_option2(InputNumber::Options2::Enabled, (0 != data[3]));
 								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+
+								if (stateChanged)
+								{
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
 							}
 							break;
 
 							case VirtualTerminalObjectType::Button:
 							{
-								std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
+								auto button = std::static_pointer_cast<Button>(lTargetObject);
+								const bool stateChanged = (button->get_option(Button::Options::Disabled) != (0 == data[3]));
+								button->set_option(Button::Options::Disabled, (0 == data[3]));
 								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+
+								if (stateChanged)
+								{
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
 							}
 							break;
 
@@ -1350,6 +1403,7 @@ namespace isobus
 								case VirtualTerminalObjectType::WindowMask:
 								{
 									bool wasFound = false;
+									bool positionChanged = false;
 
 									// If a parent object includes the child object multiple times, then each instance will be moved
 									for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
@@ -1357,10 +1411,17 @@ namespace isobus
 										if (objectID == parentObject->get_child_id(i))
 										{
 											wasFound = true;
+											positionChanged = positionChanged ||
+											  (parentObject->get_child_x(i) != static_cast<std::int16_t>(newXPosition)) ||
+											  (parentObject->get_child_y(i) != static_cast<std::int16_t>(newYPosition));
 											parentObject->set_child_x(i, newXPosition);
 											parentObject->set_child_y(i, newYPosition);
-											onRepaintEventDispatcher.call(managedWorkingSet);
 										}
+									}
+
+									if (positionChanged)
+									{
+										onRepaintEventDispatcher.call(managedWorkingSet);
 									}
 
 									if (wasFound)
@@ -1415,11 +1476,22 @@ namespace isobus
 
 				if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
 				{
+					// Compared as stored, since some attributes are not stored the way they are sent
+					std::uint32_t storedBefore = 0;
+					const bool readBefore = targetObject->get_attribute(attributeID, storedBefore);
+
 					if (targetObject->set_attribute(attributeID, attributeData, managedWorkingSet->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
 					{
+						std::uint32_t storedAfter = 0;
+						const bool readAfter = targetObject->get_attribute(attributeID, storedAfter);
+
 						send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
 						LOG_DEBUG("[VT Server]: Client %u changed object %u attribute %u to %u", managedWorkingSet->get_control_function()->get_address(), objectID, attributeID, attributeData);
-						onRepaintEventDispatcher.call(managedWorkingSet);
+
+						if ((!readBefore) || (!readAfter) || (storedBefore != storedAfter))
+						{
+							onRepaintEventDispatcher.call(managedWorkingSet);
+						}
 						process_macro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), managedWorkingSet);
 					}
 					else

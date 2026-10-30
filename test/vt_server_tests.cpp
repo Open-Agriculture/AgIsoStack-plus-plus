@@ -1005,6 +1005,66 @@ TEST_F(VirtualTerminalServerMessagingTest, ChangeActiveMaskRejectsObjectsOfTheWr
 	EXPECT_EQ(objectCountBeforeUnknownMask, serverUnderTest.managedWorkingSetList.front()->get_object_tree().size());
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, RepaintIsOnlyRequestedWhenACommandChangesSomething)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA0, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	std::size_t repaints = 0;
+	auto repaintListener = serverUnderTest.get_on_repaint_event_dispatcher().add_listener([&repaints](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) { repaints++; });
+
+	CANMessageFrame poolResponse = {};
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Working Set 0 and Data Mask 1000 with background colour 0, each with Object Pointer 1 (value 0xFFFF) as its child
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	ASSERT_TRUE(poll_for_response(serverUnderTest, testPlugin, 0x12, poolResponse));
+	ASSERT_EQ(0x00, poolResponse.data[1]);
+	const std::size_t repaintsAfterPool = repaints;
+
+	// Change Numeric Value of the object pointer: the value it already has, a new one, then the new one again
+	std::vector<std::size_t> repaintsAfterNumericValue;
+	for (const std::uint8_t lowByte : { 0xFF, 0xE8, 0xE8 })
+	{
+		const std::uint8_t highByte = (0xFF == lowByte) ? 0xFF : 0x03;
+		receive_from_client(internalECU, client, { 0xA8, 0x01, 0x00, 0xFF, lowByte, highByte, 0x00, 0x00 });
+		ASSERT_TRUE(poll_for_response(serverUnderTest, testPlugin, 0xA8, response));
+		EXPECT_EQ(0x00, response.data[3]);
+		repaintsAfterNumericValue.push_back(repaints);
+	}
+
+	// Change Attribute of the data mask's background colour, the same way
+	std::vector<std::size_t> repaintsAfterAttribute;
+	for (const std::uint8_t colour : { 0x00, 0x05, 0x05 })
+	{
+		receive_from_client(internalECU, client, { 0xAF, 0xE8, 0x03, 0x01, colour, 0x00, 0x00, 0x00 });
+		ASSERT_TRUE(poll_for_response(serverUnderTest, testPlugin, 0xAF, response));
+		EXPECT_EQ(0x00, response.data[4]);
+		repaintsAfterAttribute.push_back(repaints);
+	}
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(repaintsAfterPool, repaintsAfterNumericValue.at(0));
+	EXPECT_EQ(repaintsAfterPool + 1, repaintsAfterNumericValue.at(1));
+	EXPECT_EQ(repaintsAfterPool + 1, repaintsAfterNumericValue.at(2));
+	EXPECT_EQ(repaintsAfterPool + 1, repaintsAfterAttribute.at(0));
+	EXPECT_EQ(repaintsAfterPool + 2, repaintsAfterAttribute.at(1));
+	EXPECT_EQ(repaintsAfterPool + 2, repaintsAfterAttribute.at(2));
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, GetSupportedObjectsResponseIsASortedListOfVariableLength)
 {
 	VirtualCANPlugin testPlugin;
