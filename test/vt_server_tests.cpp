@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <thread>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
@@ -113,15 +114,21 @@ public:
 		return versionToLoad;
 	}
 
-	bool save_version(const std::vector<std::uint8_t> &, const std::vector<std::uint8_t> &versionLabel, NAME) override
+	bool save_version(const std::vector<std::uint8_t> &objectPool, const std::vector<std::uint8_t> &versionLabel, NAME) override
 	{
 		lastVersionLabel = versionLabel;
+		if (saveSucceeds)
+		{
+			storedVersion.push_back(objectPool);
+		}
 		return saveSucceeds;
 	}
 
 	bool delete_version(const std::vector<std::uint8_t> &versionLabel, NAME) override
 	{
 		lastVersionLabel = versionLabel;
+		deletedVersionLabels.push_back(versionLabel);
+		storedVersion.clear();
 		return deleteSucceeds;
 	}
 
@@ -143,11 +150,39 @@ public:
 		shutdownReasons.push_back(reason);
 	}
 
+	std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) override
+	{
+		return openInputObjectID;
+	}
+
 	void object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool success) override
 	{
 		parsedWorkingSets.push_back(workingSet);
 		parseResults.push_back(success);
 		activeWorkingSetsWhenParsed.push_back(get_active_working_set());
+		if (onObjectPoolParseFinished)
+		{
+			onObjectPoolParseFinished(workingSet);
+		}
+	}
+
+	void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) override
+	{
+		deletedObjectPools.push_back(workingSet);
+		activeWorkingSetsWhenDeleted.push_back(get_active_working_set());
+		if (onObjectPoolDeleted)
+		{
+			onObjectPoolDeleted(workingSet);
+		}
+	}
+
+	void select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) override
+	{
+		workingSetsOfferedForSelection.push_back(workingSet);
+		if (selectOfferedWorkingSets)
+		{
+			VirtualTerminalServer::select_working_set(workingSet);
+		}
 	}
 
 	void run_update()
@@ -155,11 +190,11 @@ public:
 		update();
 	}
 
-	void wait_for_object_pool_to_parse()
+	void wait_for_object_pool_to_parse(std::size_t workingSetIndex = 0)
 	{
 		for (std::uint_fast8_t attempt = 0; attempt < 200; attempt++)
 		{
-			const auto state = managedWorkingSetList.front()->get_object_pool_processing_state();
+			const auto state = managedWorkingSetList.at(workingSetIndex)->get_object_pool_processing_state();
 
 			if ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
 			    (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state))
@@ -192,11 +227,20 @@ public:
 	std::uint8_t deletedAllVersionsLabelLength = 0;
 	std::vector<std::array<std::uint8_t, 32>> extendedVersions;
 	std::vector<std::uint8_t> lastVersionLabel;
+	std::vector<std::vector<std::uint8_t>> storedVersion;
+	std::vector<std::vector<std::uint8_t>> deletedVersionLabels;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> shutDownWorkingSets;
 	std::vector<UnexpectedShutdownReason> shutdownReasons;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> parsedWorkingSets;
 	std::vector<bool> parseResults;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> activeWorkingSetsWhenParsed;
+	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> workingSetsOfferedForSelection;
+	bool selectOfferedWorkingSets = true;
+	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
+	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> activeWorkingSetsWhenDeleted;
+	std::uint16_t openInputObjectID = NULL_OBJECT_ID;
+	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolParseFinished;
+	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolDeleted;
 	std::uint_fast8_t objectPoolDeletionRequests = 0;
 	std::vector<std::uint8_t> supportedObjects;
 };
@@ -645,6 +689,69 @@ TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolParseFinishedIsCalledWithTh
 	EXPECT_EQ(serverUnderTest.parsedWorkingSets.front(), serverUnderTest.activeWorkingSetsWhenParsed.front());
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, ApplicationCanLeaveAnAcceptedWorkingSetInactive)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x6B, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xBC, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.selectOfferedWorkingSets = false;
+	serverUnderTest.initialize();
+
+	CANMessageFrame statusFrame = {};
+
+	const bool poolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, client);
+	const bool foundStatus = read_status_message(serverUnderTest, testPlugin, statusFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolLoaded);
+	ASSERT_EQ(1U, serverUnderTest.workingSetsOfferedForSelection.size());
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.workingSetsOfferedForSelection.front());
+	ASSERT_EQ(1U, serverUnderTest.activeWorkingSetsWhenParsed.size());
+	EXPECT_EQ(nullptr, serverUnderTest.activeWorkingSetsWhenParsed.front());
+	ASSERT_TRUE(foundStatus);
+	EXPECT_EQ(NULL_CAN_ADDRESS, statusFrame.data[1]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ExtendingTheActiveObjectPoolDoesNotSelectTheWorkingSetAgain)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x6C, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xBD, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame extensionResponse = {};
+
+	const bool poolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, client);
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	const bool foundExtensionResponse = poll_for_response(serverUnderTest, testPlugin, 0x12, extensionResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolLoaded);
+	ASSERT_TRUE(foundExtensionResponse);
+	EXPECT_EQ(0x00, extensionResponse.data[1]);
+	EXPECT_EQ(2U, serverUnderTest.parseResults.size());
+	EXPECT_EQ(1U, serverUnderTest.workingSetsOfferedForSelection.size());
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.get_active_working_set());
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, DeleteObjectPoolDeletesThePoolAndKeepsTheWorkingSetManaged)
 {
 	VirtualCANPlugin testPlugin;
@@ -692,6 +799,125 @@ TEST_F(VirtualTerminalServerMessagingTest, DeleteObjectPoolDeletesThePoolAndKeep
 	EXPECT_EQ(0x00, reloadResponse.data[1]);
 	EXPECT_EQ(2U, serverUnderTest.parseResults.size());
 	EXPECT_TRUE(serverUnderTest.shutDownWorkingSets.empty());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolDeletedIsCalledFromUpdate)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x6D, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xBE, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	const bool poolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, client);
+	receive_from_client(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const std::size_t deletionsReportedBeforeUpdate = serverUnderTest.deletedObjectPools.size();
+	serverUnderTest.run_update();
+	serverUnderTest.run_update();
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolLoaded);
+	EXPECT_EQ(1U, serverUnderTest.objectPoolDeletionRequests);
+	EXPECT_EQ(0U, deletionsReportedBeforeUpdate);
+	ASSERT_EQ(1U, serverUnderTest.deletedObjectPools.size());
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.deletedObjectPools.front());
+	EXPECT_EQ(nullptr, serverUnderTest.activeWorkingSetsWhenDeleted.front());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, WorkingSetIsSelectedBeforeTheParseCallbacksOfTheSameUpdate)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x6E, 0, time_source);
+	auto notSelectableClient = test_helpers::force_claim_partnered_control_function(0xBF, 0);
+	auto selectableClient = test_helpers::force_claim_partnered_control_function(0xC0, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, notSelectableClient, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, notSelectableClient, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+	receive_from_client(internalECU, notSelectableClient, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, selectableClient, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, selectableClient, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+	receive_from_client(internalECU, selectableClient, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	serverUnderTest.wait_for_object_pool_to_parse(0);
+	serverUnderTest.wait_for_object_pool_to_parse(1);
+
+	serverUnderTest.onObjectPoolParseFinished = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		if (0xBF == workingSet->get_control_function()->get_address())
+		{
+			receive_from_client(internalECU, selectableClient, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		}
+	};
+	serverUnderTest.run_update();
+	CANHardwareInterface::stop();
+
+	ASSERT_EQ(2U, serverUnderTest.parsedWorkingSets.size());
+	EXPECT_EQ(0xBF, serverUnderTest.parsedWorkingSets.front()->get_control_function()->get_address());
+	ASSERT_EQ(1U, serverUnderTest.workingSetsOfferedForSelection.size());
+	EXPECT_EQ(0xC0, serverUnderTest.workingSetsOfferedForSelection.front()->get_control_function()->get_address());
+	EXPECT_EQ(serverUnderTest.workingSetsOfferedForSelection.front(), serverUnderTest.activeWorkingSetsWhenParsed.front());
+	EXPECT_EQ(nullptr, serverUnderTest.get_active_working_set());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ObjectPoolDeletedIsCalledBeforeTheNextPoolOfThatWorkingSetIsAccepted)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x6F, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xC1, 0);
+	auto otherClient = test_helpers::force_claim_partnered_control_function(0xC2, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.versionToLoad = test_helpers::read_vt3_test_pool();
+	ASSERT_FALSE(serverUnderTest.versionToLoad.empty());
+	serverUnderTest.initialize();
+
+	CANMessageFrame loadVersionResponse = {};
+
+	const bool poolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, client);
+	const bool otherPoolLoaded = connect_with_selectable_object_pool(serverUnderTest, testPlugin, internalECU, otherClient);
+	receive_from_client(internalECU, otherClient, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	serverUnderTest.onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		if (0xC2 == workingSet->get_control_function()->get_address())
+		{
+			receive_from_client(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+			receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+			serverUnderTest.wait_for_object_pool_to_parse();
+		}
+	};
+	testPlugin.clear_queue();
+	const bool foundLoadVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD1, loadVersionResponse);
+	serverUnderTest.run_update();
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(poolLoaded);
+	ASSERT_TRUE(otherPoolLoaded);
+	ASSERT_TRUE(foundLoadVersionResponse);
+	EXPECT_EQ(0x00, loadVersionResponse.data[5]);
+	ASSERT_EQ(2U, serverUnderTest.deletedObjectPools.size());
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.deletedObjectPools.back());
+	EXPECT_EQ(nullptr, serverUnderTest.activeWorkingSetsWhenDeleted.back());
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.get_active_working_set());
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, DeleteObjectPoolIsRejectedUntilThePoolIsAnswered)
@@ -1258,6 +1484,76 @@ TEST_F(VirtualTerminalServerMessagingTest, StoreVersionResponseReportsAnyOtherEr
 	EXPECT_EQ(0x08, responseFrame.data[5]);
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, StoreVersionReplacesTheVersionStoredUnderTheSameLabel)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA0, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 });
+	receive_from_client(internalECU, client, { 0x11, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E });
+	testPlugin.clear_queue();
+
+	CANMessageFrame firstResponse = {};
+	CANMessageFrame secondResponse = {};
+	receive_from_client(internalECU, client, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	const bool foundFirstResponse = poll_for_response(serverUnderTest, testPlugin, 0xD0, firstResponse);
+	receive_from_client(internalECU, client, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	const bool foundSecondResponse = poll_for_response(serverUnderTest, testPlugin, 0xD0, secondResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundFirstResponse);
+	EXPECT_EQ(0x00, firstResponse.data[5]);
+	ASSERT_TRUE(foundSecondResponse);
+	EXPECT_EQ(0x00, secondResponse.data[5]);
+	ASSERT_EQ(2U, serverUnderTest.deletedVersionLabels.size());
+	EXPECT_EQ((std::vector<std::uint8_t>{ 'V', 'E', 'R', 'S', 'I', 'O', 'N' }), serverUnderTest.deletedVersionLabels.back());
+	ASSERT_EQ(2U, serverUnderTest.storedVersion.size());
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 }), serverUnderTest.storedVersion.at(0));
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E }), serverUnderTest.storedVersion.at(1));
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, StoreVersionSucceedsWhenNothingIsStoredUnderTheLabelYet)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x44, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA1, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.deleteSucceeds = false;
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0x00, 0xF0, 0x15, 0x00, 0x00, 0x00, 0x00 });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+
+	CANMessageFrame responseFrame = {};
+	const bool foundStoreVersionResponse = poll_for_response(serverUnderTest, testPlugin, 0xD0, responseFrame);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundStoreVersionResponse);
+	EXPECT_EQ(0x00, responseFrame.data[5]);
+	EXPECT_EQ(1U, serverUnderTest.deletedVersionLabels.size());
+	EXPECT_EQ(1U, serverUnderTest.storedVersion.size());
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, ExtendedGetVersionsResponseWithNoVersionsIsPaddedToOneFrame)
 {
 	VirtualCANPlugin testPlugin;
@@ -1496,6 +1792,9 @@ TEST_F(VirtualTerminalServerMessagingTest, ExtendedStoreVersionStoresThePoolUnde
 	CANHardwareInterface::stop();
 
 	EXPECT_EQ(32U, serverUnderTest.lastVersionLabel.size());
+	ASSERT_EQ(1U, serverUnderTest.deletedVersionLabels.size());
+	EXPECT_EQ(serverUnderTest.lastVersionLabel, serverUnderTest.deletedVersionLabels.front());
+	EXPECT_EQ(1U, serverUnderTest.storedVersion.size());
 	ASSERT_TRUE(foundResponse);
 	EXPECT_EQ(0x00, responseFrame.data[5]);
 }
@@ -1926,6 +2225,83 @@ public:
 		return add_or_replace_object(object);
 	}
 };
+
+TEST_F(VirtualTerminalServerMessagingTest, ESCMessageIsSentToTheWorkingSet)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA2, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	testPlugin.clear_queue();
+
+	ASSERT_TRUE(serverUnderTest.send_esc_message(0x1234, 0, client));
+
+	CANMessageFrame frame = {};
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+
+	EXPECT_EQ(0xE6, get_pdu_format(frame)); // VT to ECU
+	EXPECT_EQ(client->get_address(), static_cast<std::uint8_t>(frame.identifier >> 8));
+	EXPECT_EQ(0x04, frame.data[0]);
+	EXPECT_EQ(0x34, frame.data[1]);
+	EXPECT_EQ(0x12, frame.data[2]);
+	EXPECT_EQ(0x00, frame.data[3]);
+	EXPECT_EQ(0xFF, frame.data[4]);
+	EXPECT_EQ(0xFF, frame.data[5]);
+	EXPECT_EQ(0xFF, frame.data[6]);
+	EXPECT_EQ(0xFF, frame.data[7]);
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ESCCommandIsAnsweredWithTheObjectWhoseInputWasAborted)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame noInputOpenResponse = {};
+	CANMessageFrame inputAbortedResponse = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0x92, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool noInputOpenAnswered = poll_for_response(serverUnderTest, testPlugin, 0x92, noInputOpenResponse);
+	serverUnderTest.openInputObjectID = 0x1234;
+	receive_from_client(internalECU, client, { 0x92, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool inputAbortedAnswered = poll_for_response(serverUnderTest, testPlugin, 0x92, inputAbortedResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(noInputOpenAnswered);
+	EXPECT_EQ(0xFF, noInputOpenResponse.data[1]);
+	EXPECT_EQ(0xFF, noInputOpenResponse.data[2]);
+	EXPECT_EQ(0x01, noInputOpenResponse.data[3]);
+	ASSERT_TRUE(inputAbortedAnswered);
+	EXPECT_EQ(0x34, inputAbortedResponse.data[1]);
+	EXPECT_EQ(0x12, inputAbortedResponse.data[2]);
+	EXPECT_EQ(0x00, inputAbortedResponse.data[3]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[4]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[5]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[6]);
+	EXPECT_EQ(0xFF, inputAbortedResponse.data[7]);
+}
 
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 {

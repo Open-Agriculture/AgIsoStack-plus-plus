@@ -90,6 +90,13 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_select_input_object_message(std::uint16_t objectId, bool isObjectSelected, bool isObjectOpenForInput, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends the VT ESC message, when the operator or the VT aborts input
+		/// @param[in] objectId Object ID where input was aborted, or NULL_OBJECT_ID if an error bit is set
+		/// @param[in] errorBitfield 0, bit 0 if no input field is open, or bit 4 for any other error
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a key object to the Working
 		/// Set Master
 		/// @param[in] activationCode 0 for released, 1 for "pressed", 2 for "still held", or 3 for "aborted"
@@ -204,8 +211,9 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to save an object pool
 		/// to the VT's non-volatile memory.
 		/// If the object pool is saved successfully, return true, otherwise return false.
-		/// @note This may be called multiple times with the same version, but different data. When this
-		/// happens, the expectation is that you will append each objectPool together into one large file.
+		/// @note This is called once per object pool transfer, in transfer order. Before the first call of a store,
+		/// the server calls delete_version() with the same label, so the expectation is that you will append
+		/// each objectPool together into one large file, which then holds only the latest store.
 		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
 		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] objectPool The object pool data to save
@@ -217,6 +225,8 @@ namespace isobus
 		/// @brief This function is called when the client wants the server to delete a stored object pool.
 		/// All object pool files matching the specified version label should then be deleted from the VT's
 		/// non-volatile storage.
+		/// @details The server also calls this at the start of a (Extended) Store Version command, before save_version(),
+		/// so a store replaces the version with the same label. Return false when nothing is stored under the label.
 		/// @note The label is 7 bytes for a (Load/Store/Delete) Version command and 32 bytes for an Extended Version command.
 		/// The two label sizes are separate versions, even if the padded text is the same.
 		/// @param[in] versionLabel The version label for the object pool(s) to delete
@@ -259,6 +269,12 @@ namespace isobus
 		/// @param[in] workingSet The working set that shut down, which the server no longer manages
 		/// @param[in] reason How the unexpected shutdown was detected
 		virtual void handle_unexpected_working_set_shutdown(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason) = 0;
+
+		/// @brief Called when a working set sends an ESC command. Close its open input, if any, before returning, and send
+		/// VT Select Input Object as on Cancel, but not the VT ESC message. Can be called from the CAN thread.
+		/// @param[in] workingSet The working set that sent the ESC command
+		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
+		virtual std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) = 0;
 
 		//------------ Optional functions you can override --------------------
 
@@ -306,11 +322,23 @@ namespace isobus
 		virtual void transferred_object_pool_parse_start(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &ws) const;
 
 		/// @brief This function is called from update() once a transferred or restored object pool has been parsed and answered
-		/// @details If no working set was active and this one is selectable, the server has already made it the active working set,
-		/// which you can check with get_active_working_set().
+		/// @details If no working set was active and this one is selectable, select_working_set() has already been called for it.
 		/// @param[in] workingSet The working set whose object pool was parsed
 		/// @param[in] success True if the object pool was accepted, false if the response reported an error
 		virtual void object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool success);
+
+		/// @brief This function is called from update() when an object pool is accepted while no working set is active,
+		/// and its Working Set object is selectable
+		/// @details By default the server makes it the active working set. If an override leaves it inactive, the next accepted pool is offered too.
+		/// It is called before object_pool_parse_finished() of the same update(), and not when the active working set's pool is extended or replaced.
+		/// @param[in] workingSet The working set that can become active
+		virtual void select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
+		/// @brief This function is called from update() after the server deleted an object pool because delete_object_pool() returned true
+		/// @details Unlike delete_object_pool(), which can run on the CAN thread, this is the place to stop presenting the working set.
+		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
+		/// @param[in] workingSet The working set whose object pool was deleted
+		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
 		//-------------- Callbacks/Event driven interface ---------------------
 
@@ -445,6 +473,13 @@ namespace isobus
 			InvalidObjectID = 1,
 			InvalidEnableDisableCommandValue = 2,
 			CouldNotCompleteTheInputObjectIsCurrentlyBeingModified = 3,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in an ESC response
+		enum class ESCErrorBit : std::uint8_t
+		{
+			NoInputFieldOpen = 0,
 			AnyOtherError = 4
 		};
 
@@ -793,6 +828,13 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to the ESC command
+		/// @param[in] objectID The object ID where input was aborted, or NULL_OBJECT_ID if an error bit is set
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_esc_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends the VT status message broadcast. The status message
 		/// contains information such as which working set is the active one, and information about
 		/// what the VT server is doing, such as busy flags. This message should be sent at 1 Hz.
@@ -928,7 +970,8 @@ namespace isobus
 		void report_shut_down_working_sets();
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
-		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns, which both the CAN thread and update() add to
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
+		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 	};
 } // namespace isobus
