@@ -248,7 +248,7 @@ public:
 	{
 	}
 
-	void on_client_version_received(std::shared_ptr<ControlFunction> clientCF, std::uint8_t version) override
+	void on_client_version_received(std::shared_ptr<ControlFunction>, std::uint8_t version) override
 	{
 		lastClientVersion = version;
 		lastClientVersionReceived = true;
