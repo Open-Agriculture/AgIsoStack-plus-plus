@@ -59,12 +59,12 @@ void SectionControlImplementSimulator::set_target_work_state(bool value)
 	setpointWorkState = value;
 }
 
-constexpr std::uint32_t SectionControlImplementSimulator::get_prescription_control_state() const
+std::uint32_t SectionControlImplementSimulator::get_prescription_control_state() const
 {
 	return 1; // AUTO mode
 }
 
-constexpr std::uint32_t SectionControlImplementSimulator::get_section_control_state() const
+std::uint32_t SectionControlImplementSimulator::get_section_control_state() const
 {
 	return 1; // AUTO mode
 }

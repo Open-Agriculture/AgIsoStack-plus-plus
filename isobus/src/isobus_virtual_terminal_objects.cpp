@@ -313,47 +313,10 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
+	bool WorkingSet::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
-		bool retVal = false;
-
-		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
-		{
-			switch (static_cast<AttributeName>(attributeID))
-			{
-				case AttributeName::BackgroundColour:
-				{
-					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
-					retVal = true;
-				}
-				break;
-
-				case AttributeName::Selectable:
-				{
-					set_selectable(0 != rawAttributeData);
-					retVal = true;
-				}
-				break;
-
-				case AttributeName::ActiveMask:
-				{
-					set_active_mask(static_cast<std::uint16_t>(rawAttributeData));
-					retVal = true;
-				}
-				break;
-
-				default:
-				{
-					returnedError = AttributeError::InvalidAttributeID;
-				}
-				break;
-			}
-		}
-		else
-		{
-			returnedError = AttributeError::InvalidAttributeID;
-		}
-		return retVal;
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
 	}
 
 	bool WorkingSet::get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const
@@ -517,7 +480,7 @@ namespace isobus
 
 				case DataMask::AttributeName::SoftKeyMask:
 				{
-					returnedError = AttributeError::InvalidAttributeID;
+					returnedError = AttributeError::InvalidValue;
 					retVal = change_soft_key_mask(static_cast<std::uint16_t>(rawAttributeData), objectPool);
 				}
 				break;
@@ -687,7 +650,7 @@ namespace isobus
 
 				case AlarmMask::AttributeName::SoftKeyMask:
 				{
-					returnedError = AttributeError::AnyOtherError;
+					returnedError = AttributeError::InvalidValue;
 					retVal = change_soft_key_mask(static_cast<std::uint16_t>(rawAttributeData), objectPool);
 				}
 				break;
@@ -816,7 +779,7 @@ namespace isobus
 			set_soft_key_mask(newMaskID);
 			retVal = true;
 		}
-		else if ((nullptr != objectPool.at(newMaskID)) &&
+		else if ((nullptr != get_object_by_id(newMaskID, objectPool)) &&
 		         (VirtualTerminalObjectType::SoftKeyMask == objectPool.at(newMaskID)->get_object_type()))
 		{
 			set_soft_key_mask(newMaskID);
@@ -1303,7 +1266,6 @@ namespace isobus
 					if (objectPool.find(objectID) != objectPool.end())
 					{
 						auto newName = static_cast<std::uint16_t>(rawAttributeData);
-						auto newNameObject = objectPool.at(newName);
 
 						if (validate_name(newName, objectPool))
 						{
@@ -1415,11 +1377,10 @@ namespace isobus
 
 	bool KeyGroup::validate_name(std::uint16_t nameIDToValidate, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
-		auto newNameObject = objectPool.at(nameIDToValidate);
+		auto newNameObject = get_object_by_id(nameIDToValidate, objectPool);
 		bool retVal = false;
 
-		if ((NULL_OBJECT_ID != nameIDToValidate) &&
-		    (nullptr != newNameObject) &&
+		if ((nullptr != newNameObject) &&
 		    ((VirtualTerminalObjectType::OutputString == newNameObject->get_object_type()) ||
 		     (VirtualTerminalObjectType::ObjectPointer == newNameObject->get_object_type())))
 		{
@@ -1427,7 +1388,7 @@ namespace isobus
 			{
 				if (newNameObject->get_number_children() > 0)
 				{
-					auto label = objectPool.at(std::static_pointer_cast<ObjectPointer>(newNameObject)->get_child_id(0));
+					auto label = get_object_by_id(newNameObject->get_child_id(0), objectPool);
 
 					if ((nullptr != label) &&
 					    (VirtualTerminalObjectType::OutputString == label->get_object_type()))
@@ -7147,9 +7108,9 @@ namespace isobus
 	bool ExternalObjectPointer::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool isDefaultObjectValid = (NULL_OBJECT_ID == get_default_object_id()) ||
-		  (nullptr != objectPool.at(get_default_object_id()));
+		  (nullptr != get_object_by_id(get_default_object_id(), objectPool));
 		bool isExternalNAMEIDValid = (NULL_OBJECT_ID == get_external_reference_name_id()) ||
-		  (nullptr != objectPool.at(get_external_reference_name_id()));
+		  (nullptr != get_object_by_id(get_external_reference_name_id(), objectPool));
 		return (isDefaultObjectValid && isExternalNAMEIDValid);
 	}
 
@@ -8800,12 +8761,12 @@ namespace isobus
 		return 8;
 	}
 
-	bool GraphicDataObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	bool GraphicDataObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return (format == Format::PNG);
 	}
 
-	bool GraphicDataObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool GraphicDataObject::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;
@@ -8872,12 +8833,12 @@ namespace isobus
 		return 10;
 	}
 
-	bool WorkingSetSpecialControlsObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
+	bool WorkingSetSpecialControlsObject::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &) const
 	{
 		return true;
 	}
 
-	bool WorkingSetSpecialControlsObject::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError)
+	bool WorkingSetSpecialControlsObject::set_attribute(std::uint8_t, std::uint32_t, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &, AttributeError &returnedError)
 	{
 		returnedError = AttributeError::InvalidAttributeID;
 		return false;

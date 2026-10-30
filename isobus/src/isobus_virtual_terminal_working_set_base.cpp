@@ -10,8 +10,10 @@
 #include "isobus/isobus/isobus_virtual_terminal_working_set_base.hpp"
 
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace isobus
@@ -79,6 +81,27 @@ namespace isobus
 	{
 		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		return faultingObjectID;
+	}
+
+	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_parent_object_id()
+	{
+		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		std::uint16_t retVal = NULL_OBJECT_ID;
+
+		if (NULL_OBJECT_ID != faultingObjectID)
+		{
+			for (auto object = vtObjectTree.cbegin(); (vtObjectTree.cend() != object) && (NULL_OBJECT_ID == retVal); object++)
+			{
+				for (std::uint16_t i = 0; (nullptr != object->second) && (i < object->second->get_number_children()); i++)
+				{
+					if (faultingObjectID == object->second->get_child_id(i))
+					{
+						retVal = object->first;
+					}
+				}
+			}
+		}
+		return retVal;
 	}
 
 	void VirtualTerminalWorkingSetBase::add_iop_raw_data(const std::vector<std::uint8_t> &dataToAdd)
@@ -277,6 +300,8 @@ namespace isobus
 
 							if (iopData[7] <= static_cast<std::uint8_t>(AlarmMask::AcousticSignal::None))
 							{
+								tempObject->set_signal_priority(static_cast<AlarmMask::AcousticSignal>(iopData[7]));
+
 								// Now add child objects
 								const std::uint8_t childrenToFollow = iopData[8];
 								const auto sizeOfChildren = static_cast<std::uint16_t>(childrenToFollow * 6); // ID, X, Y 2 bytes each
@@ -1985,55 +2010,49 @@ namespace isobus
 
 							while (numberBytesProcessed < numberBytesToFollow)
 							{
-								auto commandLength = 8;
-								switch (static_cast<Macro::Command>(iopData[0]))
+								const int bytesLeft = numberBytesToFollow - numberBytesProcessed;
+								int commandLength = 8;
+
+								if (bytesLeft >= commandLength)
 								{
-									case Macro::Command::ChangeChildPosition:
-										// special case: 9 bytes
-										retVal = tempObject->add_command_packet({
-										  iopData[0],
-										  iopData[1],
-										  iopData[2],
-										  iopData[3],
-										  iopData[4],
-										  iopData[5],
-										  iopData[6],
-										  iopData[7],
-										  iopData[8],
-										});
-										commandLength = 9;
-										break;
-									case Macro::Command::GraphicsContextCommand:
-										// FIXME
-										break;
-									case Macro::Command::ChangeStringValue:
+									switch (static_cast<Macro::Command>(iopData[0]))
 									{
-										// Change string value has variable length
-										std::vector<std::uint8_t> command;
-										auto stringLength = get_little_endian_uint16(iopData, 3);
-										for (int i = 0; i < (stringLength + 5); i++)
-										{
-											command.push_back(iopData[i]);
-										}
-										retVal = tempObject->add_command_packet(command);
-										commandLength = 5 + stringLength;
-										break;
+										case Macro::Command::ChangeChildPosition:
+											commandLength = 9;
+											break;
+										case Macro::Command::GraphicsContextCommand:
+											// Padded with 0xFF to 8 bytes if shorter
+											switch (static_cast<VirtualTerminalBase::GraphicsContextSubCommandID>(iopData[3]))
+											{
+												case VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon:
+													commandLength = std::max(8, 5 + 4 * iopData[4]);
+													break;
+												case VirtualTerminalBase::GraphicsContextSubCommandID::DrawText:
+													commandLength = std::max(8, 6 + iopData[5]);
+													break;
+												case VirtualTerminalBase::GraphicsContextSubCommandID::PanAndZoomViewport:
+													commandLength = 12;
+													break;
+												default:
+													break;
+											}
+											break;
+										case Macro::Command::ChangeStringValue:
+											commandLength = std::max(8, 5 + get_little_endian_uint16(iopData, 3));
+											break;
+										default:
+											break;
 									}
-									default:
-										// all other macro commands are 8 byte long
-										retVal = tempObject->add_command_packet({
-										  iopData[0],
-										  iopData[1],
-										  iopData[2],
-										  iopData[3],
-										  iopData[4],
-										  iopData[5],
-										  iopData[6],
-										  iopData[7],
-										});
-										commandLength = 8;
-										break;
 								}
+
+								if (bytesLeft < commandLength)
+								{
+									LOG_ERROR("[WS]: Macro object %u cannot be parsed because a command is longer than the bytes left in the macro.", decodedID);
+									retVal = false;
+									break;
+								}
+
+								retVal = tempObject->add_command_packet(std::vector<std::uint8_t>(iopData, iopData + commandLength));
 								iopLength -= commandLength;
 								iopData += commandLength;
 								numberBytesProcessed += commandLength;
@@ -2611,7 +2630,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength)
+	bool VirtualTerminalWorkingSetBase::parse_iop_into_objects(std::uint8_t *iopData, std::uint32_t iopLength, std::uint32_t *objectsLength)
 	{
 		std::uint32_t remainingLength = iopLength;
 		std::uint8_t *currentIopPointer = iopData;
@@ -2619,7 +2638,10 @@ namespace isobus
 
 		if (iopLength > 0)
 		{
-			while (remainingLength > 0)
+			// Padding is at most 7 bytes of 0xFF, and no object ID is 0xFFFF
+			while ((remainingLength >= CAN_DATA_LENGTH) ||
+			       ((remainingLength > 0) &&
+			        !std::all_of(currentIopPointer, currentIopPointer + remainingLength, [](std::uint8_t dataByte) { return 0xFF == dataByte; })))
 			{
 				if (!parse_next_object(currentIopPointer, remainingLength))
 				{
@@ -2632,6 +2654,11 @@ namespace isobus
 		else
 		{
 			retVal = false;
+		}
+
+		if (nullptr != objectsLength)
+		{
+			*objectsLength = iopLength - remainingLength;
 		}
 		return retVal;
 	}

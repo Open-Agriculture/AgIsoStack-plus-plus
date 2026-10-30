@@ -1019,6 +1019,7 @@ namespace isobus
 					xmlOutput << "\" F=\"";
 
 					auto lStructureLabel = rootDevice->get_structure_label();
+					lStructureLabel.resize(task_controller_object::DeviceObject::MAX_STRUCTURE_AND_LOCALIZATION_LABEL_LENGTH, ' ');
 					for (std::uint8_t j = 0; j < 7; j++)
 					{
 						auto structureByte = static_cast<std::uint8_t>(lStructureLabel.at(6 - j));
