@@ -107,11 +107,11 @@ namespace isobus
 /// @brief A template class for a lock free queue.
 /// @tparam T The item type for the queue.
 template<typename T>
-class LockFreeQueue
+class SPSCLockFreeQueue
 {
 public:
 	/// @brief Constructor for the lock free queue.
-	explicit LockFreeQueue(std::size_t size) :
+	explicit SPSCLockFreeQueue(std::size_t size) :
 	  buffer(size), capacity(size)
 	{
 		// Validate the size of the queue, if assertion is disabled, set the size to 1.
@@ -210,12 +210,52 @@ class UnsafeQueue
 public:
 	using value_type = T;
 
-	template<typename U, typename = typename std::enable_if<std::is_convertible<U, value_type>::value>::type>
-	void push(U &&item)
+	/// @brief Constructor for the queue.
+	/// @param size For backward compatibility.
+	explicit UnsafeQueue(std::size_t size)
 	{
-		queue.push(std::forward<U>(item));
+		(void)size;
 	}
 
+	UnsafeQueue() = default;
+
+	template<typename U, typename = typename std::enable_if<std::is_convertible<U, value_type>::value>::type>
+	bool push(U &&item)
+	{
+		queue.push(std::forward<U>(item));
+		return true;
+	}
+
+	/// @brief Peek at the next item in the queue.
+	/// @param item The item to peek at in the queue.
+	/// @return True if the item was peeked at in the queue, false if the queue is empty.
+	bool peek(value_type &item)
+	{
+		if (queue.empty())
+		{
+			return false;
+		}
+
+		item = queue.front();
+		return true;
+	}
+
+	/// @brief Pop an item from the queue.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
+	bool pop()
+	{
+		if (queue.empty())
+		{
+			return false;
+		}
+
+		queue.pop();
+		return true;
+	}
+
+	/// @brief Pop an item from the queue and return it.
+	/// @param item Pointer to store the popped item.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
 	bool pop(value_type *item)
 	{
 		if (queue.empty())
@@ -227,6 +267,42 @@ public:
 		return true;
 	}
 
+	/// @brief Pop an item from the queue and return it.
+	/// @param item Reference to store the popped item.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
+	bool pop(value_type &item)
+	{
+		if (queue.empty())
+		{
+			return false;
+		}
+		item = std::move(queue.front());
+		queue.pop();
+		return true;
+	}
+
+	/// @brief Check if the queue is full.
+	/// @return Always returns false, since this version of the queue is not limited in size.
+	bool is_full() const
+	{
+		return false;
+	}
+
+	/// @brief Check if the queue is empty.
+	/// @return True if the queue is empty, false otherwise.
+	bool is_empty() const
+	{
+		return queue.empty();
+	}
+
+	/// @brief Get the number of items in the queue.
+	/// @return The number of items in the queue.
+	std::size_t size() const
+	{
+		return queue.size();
+	}
+
+	/// @brief Clear the queue.
 	void clear()
 	{
 		queue = {};
@@ -251,19 +327,84 @@ class SafeQueue : private UnsafeQueue<T>
 public:
 	using value_type = T;
 
+	/// @brief Constructor for the safe queue.
+	/// @param size For backward compatibility.
+	explicit SafeQueue(std::size_t size) :
+	  Q(size) {}
+
+	SafeQueue() = default;
+
+	/// @brief Push an item to the queue
+	/// @tparam U The type of the item to push (must be convertible to value_type).
+	/// @param item The item to push to the queue.
+	/// @return True if the item was pushed to the queue.
 	template<typename U, typename = typename std::enable_if<std::is_convertible<U, value_type>::value>::type>
-	void push(U &&item)
+	bool push(U &&item)
 	{
 		std::lock_guard<std::mutex> lock(mtx);
-		Q::push(std::forward<U>(item));
+		return Q::push(std::forward<U>(item));
 	}
 
+	/// @brief Peek at the next item in the queue.
+	/// @param item The item to peek at in the queue.
+	/// @return True if the item was peeked at in the queue, false if the queue is empty.
+	bool peek(value_type &item)
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::peek(item);
+	}
+
+	/// @brief Pop an item from the queue.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
+	bool pop()
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::pop();
+	}
+
+	/// @brief Pop an item from the queue and return it.
+	/// @param item Pointer to store the popped item.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
 	bool pop(value_type *item)
 	{
 		std::lock_guard<std::mutex> lock(mtx);
 		return Q::pop(item);
 	}
 
+	/// @brief Pop an item from the queue and return it.
+	/// @param item Reference to store the popped item.
+	/// @return True if the item was popped from the queue, false if the queue is empty.
+	bool pop(value_type &item)
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::pop(item);
+	}
+
+	/// @brief Check if the queue is full.
+	/// @return Always returns false, since this version of the queue is not limited in size.(For backward compatibility.)
+	bool is_full() const
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::is_full();
+	}
+
+	/// @brief Check if the queue is empty.
+	/// @return True if the queue is empty, false otherwise.
+	bool is_empty() const
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::is_empty();
+	}
+
+	/// @brief Get the number of items in the queue.
+	/// @return The number of items in the queue.
+	std::size_t size() const
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		return Q::size();
+	}
+
+	/// @brief Clear the queue.
 	void clear()
 	{
 		std::lock_guard<std::mutex> lock(mtx);
@@ -271,8 +412,9 @@ public:
 	}
 
 private:
-	std::mutex mtx;
+	mutable std::mutex mtx;
 };
+
 template<typename T>
 using Queue = SafeQueue<T>;
 #endif
