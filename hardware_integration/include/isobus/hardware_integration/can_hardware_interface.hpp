@@ -162,8 +162,8 @@ namespace isobus
 
 			std::shared_ptr<CANHardwarePlugin> frameHandler; ///< The CAN driver to use for a CAN channel
 
-			LockFreeQueue<CANMessageFrame> messagesToBeTransmittedQueue; ///< Transmit message queue for a CAN channel
-			LockFreeQueue<CANMessageFrame> receivedMessagesQueue; ///< Receive message queue for a CAN channel
+			MPSCQueue<CANMessageFrame> messagesToBeTransmittedQueue; ///< Transmit message queue for a CAN channel, filled from any thread
+			SPSCQueue<CANMessageFrame> receivedMessagesQueue; ///< Receive message queue for a CAN channel
 		};
 
 		/// @brief Singleton instance of the CANHardwareInterface class
