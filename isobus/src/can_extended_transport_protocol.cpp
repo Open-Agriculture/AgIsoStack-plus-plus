@@ -134,7 +134,7 @@ namespace isobus
 	                                                               std::uint32_t parameterGroupNumber,
 	                                                               std::uint32_t totalMessageSize)
 	{
-		if (activeSessions.size() >= configuration->get_max_number_transport_protocol_sessions())
+		if (get_sessions().size() >= configuration->get_max_number_transport_protocol_sessions())
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
 			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.",
@@ -173,7 +173,10 @@ namespace isobus
 			newSession->set_cts_number_of_packet_limit(configuration->get_number_of_packets_per_dpo_message());
 
 			newSession->set_state(StateMachineState::SendClearToSend);
-			activeSessions.push_back(newSession);
+			{
+				LOCK_GUARD(Mutex, activeSessionsMutex);
+				activeSessions.push_back(newSession);
+			}
 			LOG_DEBUG("[ETP]: New rx session for 0x%05X. Source: %hu, destination: %hu", parameterGroupNumber, source->get_address(), destination->get_address());
 			update_state_machine(newSession);
 		}
@@ -572,17 +575,20 @@ namespace isobus
 		          source->get_address(),
 		          destination->get_address());
 
-		activeSessions.push_back(session);
+		{
+			LOCK_GUARD(Mutex, activeSessionsMutex);
+			activeSessions.push_back(session);
+		}
+
 		update_state_machine(session);
 		return true;
 	}
 
 	void ExtendedTransportProtocolManager::update()
 	{
-		// We use a fancy for loop here to allow us to remove sessions from the list while iterating
-		for (std::size_t i = activeSessions.size(); i > 0; i--)
+		// A copy, so sessions can be added (from another thread) and closed while iterating
+		for (auto &session : get_sessions())
 		{
-			auto session = activeSessions.at(i - 1);
 			if (!session->get_source()->get_address_valid())
 			{
 				LOG_WARNING("[ETP]: Closing active session as the source control function is no longer valid");
@@ -662,7 +668,11 @@ namespace isobus
 
 			case StateMachineState::SendRequestToSend:
 			{
-				if (send_request_to_send(session))
+				// Checked again and sent under the lock: the RTS can be sent by the thread that
+				// started the transmit and by update() on the stack's thread at once, and only one
+				// of them may send it.
+				LOCK_GUARD(Mutex, activeSessionsMutex);
+				if ((StateMachineState::SendRequestToSend == session->state) && send_request_to_send(session))
 				{
 					session->set_state(StateMachineState::WaitForClearToSend);
 				}
@@ -793,6 +803,8 @@ namespace isobus
 	void ExtendedTransportProtocolManager::close_session(const std::shared_ptr<ExtendedTransportProtocolSession> &session, bool successful)
 	{
 		session->complete(successful);
+
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
 		if (activeSessions.end() != sessionLocation)
 		{
@@ -921,6 +933,7 @@ namespace isobus
 
 	bool ExtendedTransportProtocolManager::has_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<ExtendedTransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
@@ -929,14 +942,16 @@ namespace isobus
 	std::shared_ptr<ExtendedTransportProtocolManager::ExtendedTransportProtocolSession> ExtendedTransportProtocolManager::get_session(std::shared_ptr<ControlFunction> source,
 	                                                                                                                                  std::shared_ptr<ControlFunction> destination)
 	{
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<ExtendedTransportProtocolSession> &session) {
 			return session->matches(source, destination);
 		});
 		return (activeSessions.end() != result) ? (*result) : nullptr;
 	}
 
-	const std::vector<std::shared_ptr<ExtendedTransportProtocolManager::ExtendedTransportProtocolSession>> &ExtendedTransportProtocolManager::get_sessions() const
+	std::vector<std::shared_ptr<ExtendedTransportProtocolManager::ExtendedTransportProtocolSession>> ExtendedTransportProtocolManager::get_sessions() const
 	{
+		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions;
 	}
 }

@@ -102,6 +102,8 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
 			initialized = true;
 		}
@@ -2807,6 +2809,7 @@ namespace isobus
 		      (parentVT->partnerControlFunction == message.get_destination_control_function()))))
 		{
 			auto &auxiliaryMutex = parentVT->auxiliaryAssignmentMutex;
+			(void)auxiliaryMutex;
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
@@ -3000,32 +3003,36 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::VTESCMessage):
 						{
 							std::uint16_t objectID = message.get_uint16_at(1);
-							std::uint8_t errorCode = message.get_uint8_at(3) & 0x1F;
-							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
-							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							std::uint8_t errorBits = message.get_uint8_at(3);
+							ESCMessageErrorCode errorCode = ESCMessageErrorCode::NoError;
+							if (0 != (errorBits & static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)))
 							{
-								std::uint8_t transactionNumber = 0xF;
-								if (parentVT->is_vt_version_supported(VTVersion::Version6))
-								{
-									// VT version is 6 or later
-									transactionNumber = message.get_uint8_at(7) >> 4;
-								}
-
-								parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, static_cast<ESCMessageErrorCode>(errorCode) });
-
-								// Send response
-								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-									static_cast<std::uint8_t>(Function::VTESCMessage),
-									static_cast<std::uint8_t>(objectID),
-									static_cast<std::uint8_t>(objectID >> 8),
-									0xFF,
-									0xFF,
-									0xFF,
-									0xFF,
-									static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
-								};
-								parentVT->send_message_to_vt(buffer.data(), buffer.size());
+								errorCode = ESCMessageErrorCode::OtherError;
 							}
+							else if (0 != (errorBits & static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							{
+								errorCode = ESCMessageErrorCode::NoInputFieldOpen;
+							}
+
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								transactionNumber = message.get_uint8_at(7) >> 4;
+							}
+
+							parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, errorCode });
+
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTESCMessage),
+								static_cast<std::uint8_t>(objectID),
+								static_cast<std::uint8_t>(objectID >> 8),
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+								static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
+							};
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 

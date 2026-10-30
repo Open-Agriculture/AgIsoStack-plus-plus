@@ -1127,6 +1127,47 @@ TEST_F(VirtualTerminalTest, VTChangeStringValueMessageLengthIsBoundsChecked)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, VTESCMessageIsReportedForEveryErrorBit)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	std::vector<VirtualTerminalClient::ESCMessageErrorCode> errorCodes;
+	clientUnderTest.get_vt_esc_message_event_dispatcher().add_listener([&errorCodes](const VirtualTerminalClient::VTESCMessageEvent &event) {
+		errorCodes.push_back(event.errorCode);
+	});
+
+	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+
+	for (std::uint8_t errorBits : std::vector<std::uint8_t>{ 0x00, 0x01, 0x10, 0x11 })
+	{
+		CANMessage escMessage(CANMessage::Type::Receive,
+		                      identifier,
+		                      { 0x04, 0xFF, 0xFF, errorBits, 0xFF, 0xFF, 0xFF, 0xFF },
+		                      vtPartner,
+		                      nullptr,
+		                      0);
+		clientUnderTest.test_wrapper_process_rx_message(escMessage, &clientUnderTest);
+	}
+
+	ASSERT_EQ(4, errorCodes.size());
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::NoError, errorCodes[0]);
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::NoInputFieldOpen, errorCodes[1]);
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::OtherError, errorCodes[2]);
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::OtherError, errorCodes[3]);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 TEST_F(VirtualTerminalTest, SendChangeStringValueRejectsStringOver65535Characters)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
