@@ -110,3 +110,23 @@ jobs:
       - name: Build (no threads)
         run: |
           cmake --build build --config ${{ env.BUILD_TYPE }}
+
+  sanitizers:
+    name: Ubuntu Build, Test (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Compile
+        run: |
+          cmake -S . -B build -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
