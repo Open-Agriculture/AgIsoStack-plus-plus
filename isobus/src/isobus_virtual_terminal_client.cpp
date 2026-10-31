@@ -4397,11 +4397,19 @@ namespace isobus
 						break;
 					}
 				}
-			}
 
-			if (retVal == originalFont)
+				// Most tables go from their lowest upscale entry straight to their first downscale entry,
+				// so a factor between the fudge and that upscale entry would pick a smaller font.
+				// Scaling up never returns a smaller font, and scaling down never a larger one.
+				if (((scaleFactor > 1.0f) && (retVal < originalFont)) ||
+				    ((scaleFactor < 1.0f) && (retVal > originalFont)))
+				{
+					retVal = originalFont;
+				}
+			}
+			else
 			{
-				// Unknown font? Newer version than we support of the ISO standard? Or scaling factor out of range?
+				// Unknown font? Newer version than we support of the ISO standard?
 				LOG_ERROR("[VT]: Unable to scale font type " + isobus::to_string(static_cast<int>(originalFont)) +
 				          " with scale factor " + isobus::to_string(scaleFactor) + ". Returning original font.");
 			}
