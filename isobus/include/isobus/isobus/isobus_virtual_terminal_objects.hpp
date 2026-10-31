@@ -3497,7 +3497,7 @@ namespace isobus
 		void set_validation_type(ValidationType newValidationType);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 6; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string validationString; ///< String containing all valid or invalid character codes
 		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string

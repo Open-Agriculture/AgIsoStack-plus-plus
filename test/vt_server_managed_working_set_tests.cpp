@@ -251,6 +251,8 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSetSpecialControls), 0x05 },
 		// Working Set Special Controls declaring one more byte than the transfer holds
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSetSpecialControls), 0x06, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 },
+		// Auxiliary Function Type 1 declaring 43 children (258 bytes, which wraps a uint8) with only one present
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryFunctionType1), 0x00, 0x00, 0x2B, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 },
 	};
 
 	for (std::size_t i = 0; i < truncatedObjects.size(); i++)
@@ -272,6 +274,30 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 		std::vector<std::uint8_t> exact = object;
 		VirtualTerminalServerManagedWorkingSet exactWorkingSet;
 		EXPECT_FALSE(exactWorkingSet.parse_iop_into_objects(exact.data(), static_cast<std::uint32_t>(exact.size())));
+	}
+}
+
+TEST(VirtualTerminalServerTest, ObjectThatEndsTheTransferIsAccepted)
+{
+	const std::uint8_t eightBitColour = static_cast<std::uint8_t>(PictureGraphic::Format::EightBitColour);
+	const std::vector<std::vector<std::uint8_t>> objects = {
+		// Input Attributes with an empty validation string
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputAttributes), 0x00, 0x00, 0x00 },
+		// Input String with an empty value
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputString), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x00 },
+		// 1x1 Picture Graphic with an extra pixel byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x07, 0x08 },
+		// Picture Graphic with an actual width of 0
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x0A, 0x00, 0x00, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	};
+
+	for (std::size_t i = 0; i < objects.size(); i++)
+	{
+		SCOPED_TRACE(i);
+		std::vector<std::uint8_t> object = objects[i];
+		VirtualTerminalServerManagedWorkingSet workingSet;
+		EXPECT_TRUE(workingSet.parse_iop_into_objects(object.data(), static_cast<std::uint32_t>(object.size())));
+		EXPECT_NE(nullptr, workingSet.get_object_by_id(1));
 	}
 }
 

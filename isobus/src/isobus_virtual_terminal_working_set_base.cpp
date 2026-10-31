@@ -824,7 +824,7 @@ namespace isobus
 						const std::size_t lengthOfStringObject = iopData[16];
 						const std::int64_t iopLengthRemaining = iopLength - 17; // Use larger signed int to detect negative rollover
 
-						if (iopLengthRemaining > static_cast<std::uint16_t>(lengthOfStringObject + 2)) // +2 is for enabled byte and number of macros to follow
+						if (iopLengthRemaining >= static_cast<std::uint16_t>(lengthOfStringObject + 2)) // +2 is for enabled byte and number of macros to follow
 						{
 							std::string tempString;
 							tempString.reserve(lengthOfStringObject);
@@ -1626,7 +1626,7 @@ namespace isobus
 								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
 
-							if (retVal && (tempObject->get_raw_data().size() != actualWidth * tempObject->get_actual_height()))
+							if (retVal && (tempObject->get_raw_data().size() < actualWidth * tempObject->get_actual_height()))
 							{
 								LOG_ERROR("[WS]: Picture graphic object has invalid dimensions compared to its data. Object: " + isobus::to_string(static_cast<int>(decodedID)));
 								retVal = false;
