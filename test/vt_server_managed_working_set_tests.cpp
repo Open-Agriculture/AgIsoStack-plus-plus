@@ -224,3 +224,121 @@ TEST(VirtualTerminalServerTest, AlarmMaskKeepsItsAcousticSignal)
 	VirtualTerminalServerManagedWorkingSet workingSet;
 	EXPECT_FALSE(workingSet.parse_iop_into_objects(outOfRange.data(), static_cast<std::uint32_t>(outOfRange.size())));
 }
+
+TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
+{
+	const std::uint8_t eightBitColour = static_cast<std::uint8_t>(PictureGraphic::Format::EightBitColour);
+	const std::vector<std::vector<std::uint8_t>> truncatedObjects = {
+		// Container with no macro count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00 },
+		// Key Group with one child and no macro count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::KeyGroup), 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x02, 0x00 },
+		// Output String whose value ends the transfer, with no macro count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputString), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x02, 0x00, 'O', 'K' },
+		// Input Attributes whose validation string ends the transfer, with no macro count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputAttributes), 0x00, 0x02, 'A', 'B' },
+		// Colour Map of 2 indexes with only 1 present
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ColourMap), 0x02, 0x00, 0x01 },
+		// Macro whose Change String Value is 9 bytes long in an 8 byte macro
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x08, 0x00, static_cast<std::uint8_t>(Macro::Command::ChangeStringValue), 0x34, 0x12, 0x04, 0x00, 'A', 'B', 'C' },
+		// 1x1 Picture Graphic with an odd RLE byte count
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, eightBitColour, 0x04, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF },
+		// 1x1 Picture Graphic with one macro reference and no bytes for it
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07 },
+		// Container of 1 macro grouping whose extended reference ends the transfer
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01, 0xFF, 0x02 },
+		// Working Set Special Controls cut off in its header
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSetSpecialControls), 0x05 },
+		// Working Set Special Controls declaring one more byte than the transfer holds
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSetSpecialControls), 0x06, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 },
+		// Auxiliary Function Type 1 declaring 43 children (258 bytes, which wraps a uint8) with only one present
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryFunctionType1), 0x00, 0x00, 0x2B, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	};
+
+	for (std::size_t i = 0; i < truncatedObjects.size(); i++)
+	{
+		SCOPED_TRACE(i);
+		const std::vector<std::uint8_t> &object = truncatedObjects[i];
+
+		// Without a sanitizer, an over-read only shows if these bytes get parsed into an accepted object
+		std::vector<std::uint8_t> guarded = object;
+		guarded.insert(guarded.end(), { 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+		VirtualTerminalServerManagedWorkingSet guardedWorkingSet;
+		std::uint32_t objectsLength = 0;
+		EXPECT_FALSE(guardedWorkingSet.parse_iop_into_objects(guarded.data(), static_cast<std::uint32_t>(object.size()), &objectsLength));
+		EXPECT_LE(objectsLength, object.size());
+		EXPECT_EQ(nullptr, guardedWorkingSet.get_object_by_id(1));
+
+		// Under ASan, any read past the transfer faults here
+		std::vector<std::uint8_t> exact = object;
+		VirtualTerminalServerManagedWorkingSet exactWorkingSet;
+		EXPECT_FALSE(exactWorkingSet.parse_iop_into_objects(exact.data(), static_cast<std::uint32_t>(exact.size())));
+	}
+}
+
+TEST(VirtualTerminalServerTest, ObjectThatEndsTheTransferIsAccepted)
+{
+	const std::uint8_t eightBitColour = static_cast<std::uint8_t>(PictureGraphic::Format::EightBitColour);
+	const std::vector<std::vector<std::uint8_t>> objects = {
+		// Input Attributes with an empty validation string
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputAttributes), 0x00, 0x00, 0x00 },
+		// Input String with an empty value
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputString), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x00 },
+		// 1x1 Picture Graphic with an extra pixel byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x07, 0x08 },
+		// Picture Graphic with an actual width of 0
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x0A, 0x00, 0x00, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	};
+
+	for (std::size_t i = 0; i < objects.size(); i++)
+	{
+		SCOPED_TRACE(i);
+		std::vector<std::uint8_t> object = objects[i];
+		VirtualTerminalServerManagedWorkingSet workingSet;
+		EXPECT_TRUE(workingSet.parse_iop_into_objects(object.data(), static_cast<std::uint32_t>(object.size())));
+		EXPECT_NE(nullptr, workingSet.get_object_by_id(1));
+	}
+}
+
+TEST(VirtualTerminalServerTest, SixteenBitMacroReferenceTakesTwoMacroGroupings)
+{
+	// 3 groupings: macro 7 on hide, macro 7000 on hide, then a second Container
+	std::vector<std::uint8_t> pool = {
+		0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x03, 0x04, 0x07, 0xFF, 0x58, 0x04, 0x1B, 0x02, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00
+	};
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	ASSERT_TRUE(workingSet.parse_iop_into_objects(pool.data(), static_cast<std::uint32_t>(pool.size())));
+
+	auto container = workingSet.get_object_by_id(1);
+	ASSERT_NE(nullptr, container);
+	ASSERT_EQ(2u, container->get_number_macros());
+	EXPECT_EQ(EventID::OnHide, container->get_macro(0).event);
+	EXPECT_EQ(7u, container->get_macro(0).macroID);
+	EXPECT_EQ(EventID::OnHide, container->get_macro(1).event);
+	EXPECT_EQ(7000u, container->get_macro(1).macroID);
+	EXPECT_NE(nullptr, workingSet.get_object_by_id(2));
+
+	// 1 grouping can't hold a 16-bit reference, even with the bytes present
+	std::vector<std::uint8_t> oneGrouping = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01, 0xFF, 0x58, 0x04, 0x1B };
+	VirtualTerminalServerManagedWorkingSet oneGroupingWorkingSet;
+	EXPECT_FALSE(oneGroupingWorkingSet.parse_iop_into_objects(oneGrouping.data(), static_cast<std::uint32_t>(oneGrouping.size())));
+}
+
+TEST(VirtualTerminalServerTest, WorkingSetSpecialControlsReadsEachLanguagePairOnce)
+{
+	std::vector<std::uint8_t> object = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSetSpecialControls), 0x0D, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x02, 'e', 'n', 'U', 'S', 'd', 'e', 'D', 'E' };
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	ASSERT_TRUE(workingSet.parse_iop_into_objects(object.data(), static_cast<std::uint32_t>(object.size())));
+
+	auto specialControls = std::static_pointer_cast<WorkingSetSpecialControlsObject>(workingSet.get_object_by_id(1));
+	ASSERT_NE(nullptr, specialControls);
+	const auto &codes = specialControls->get_language_codes();
+	ASSERT_EQ(2u, codes.size());
+	EXPECT_EQ("en", codes[0].languageCode);
+	EXPECT_EQ("US", codes[0].countryCode);
+	EXPECT_EQ("de", codes[1].languageCode);
+	EXPECT_EQ("DE", codes[1].countryCode);
+}
