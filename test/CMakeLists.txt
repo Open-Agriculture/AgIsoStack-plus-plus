@@ -39,6 +39,7 @@ set(TEST_SRC
     core_network_management_tests.cpp
     identifier_tests.cpp
     transport_protocol_tests.cpp
+    extended_transport_protocol_tests.cpp
     diagnostic_protocol_tests.cpp
     virtual_can_plugin_tests.cpp
     address_claim_tests.cpp

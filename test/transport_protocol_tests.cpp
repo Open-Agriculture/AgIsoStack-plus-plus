@@ -8,9 +8,12 @@
 #include "helpers/test_fixture.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <deque>
 #include <future>
+#include <map>
+#include <mutex>
 #include <thread>
 
 using namespace isobus;
@@ -2179,4 +2182,60 @@ TEST_F(TransportProtocolTest, DestinationSpecificOverwriteSession)
 
 	// After the transmission is finished, the sessions should be removed as indication that connection is closed
 	ASSERT_FALSE(manager.has_session(originator, receiver));
+}
+
+// A transmit started on one thread while update() runs on another, as an application thread does
+// beside the stack's own: each session sends its RTS once. Both threads used to run the first
+// state of the new session's state machine, and now and then both sent the RTS, back to back.
+TEST_F(TransportProtocolTest, TransmitFromAnotherThreadSendsOneRequestToSend)
+{
+	constexpr std::uint8_t RECEIVERS = 200;
+	constexpr std::array<std::uint8_t, 23> dataToSend = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
+
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
+	std::vector<std::shared_ptr<ControlFunction>> receivers;
+	for (std::uint8_t i = 0; i < RECEIVERS; i++)
+	{
+		receivers.push_back(test_helpers::create_mock_control_function(static_cast<std::uint8_t>(0x10 + i)));
+	}
+
+	std::mutex countsMutex;
+	std::map<std::uint8_t, int> requestsToSend; // per receiver address
+	auto sendFrameCallback = [&](std::uint32_t parameterGroupNumber,
+	                             CANDataSpan data,
+	                             std::shared_ptr<InternalControlFunction>,
+	                             std::shared_ptr<ControlFunction> destinationControlFunction,
+	                             CANIdentifier::CANPriority) {
+		if ((parameterGroupNumber == 0xEC00) && (data[0] == 16))
+		{
+			std::lock_guard<std::mutex> lock(countsMutex);
+			requestsToSend[destinationControlFunction->get_address()]++;
+		}
+		return true;
+	};
+
+	CANNetworkConfiguration configuration;
+	configuration.set_max_number_transport_protocol_sessions(RECEIVERS);
+	TransportProtocolManager manager(sendFrameCallback, nullptr, &configuration);
+
+	std::atomic<bool> stop{ false };
+	std::thread stackThread([&]() {
+		while (!stop)
+		{
+			manager.update();
+		}
+	});
+	for (auto &receiver : receivers)
+	{
+		auto data = std::unique_ptr<CANMessageData>(new CANMessageDataView(dataToSend.data(), dataToSend.size()));
+		ASSERT_TRUE(manager.protocol_transmit_message(0xFEEB, data, originator, receiver, nullptr, nullptr));
+	}
+	stop = true;
+	stackThread.join();
+
+	ASSERT_EQ(requestsToSend.size(), RECEIVERS);
+	for (const auto &entry : requestsToSend)
+	{
+		EXPECT_EQ(entry.second, 1) << "receiver 0x" << std::hex << static_cast<int>(entry.first);
+	}
 }
