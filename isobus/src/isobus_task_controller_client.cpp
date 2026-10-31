@@ -44,6 +44,22 @@ namespace isobus
 		assert(nullptr != myControlFunction);
 		assert(nullptr != partnerControlFunction);
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (std::this_thread::get_id() == workerThreadId.load())
+		{
+			LOG_ERROR("[TC]: initialize() cannot be called from the client's own worker thread.");
+			return;
+		}
+		LOCK_GUARD(Mutex, workerThreadMutex);
+		if (shouldTerminate)
+		{
+			// Stopped after an error (request_termination()): the worker has been told to exit, and is
+			// joined before a new one starts, so the old one cannot carry on beside it.
+			join_worker_thread();
+		}
+#endif
+		LOCK_GUARD(Mutex, runMutex);
+
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
 		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
@@ -67,6 +83,7 @@ namespace isobus
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
 #endif
+			runNumber++;
 			initialized = true;
 		}
 	}
@@ -256,39 +273,76 @@ namespace isobus
 
 	void TaskControllerClient::terminate()
 	{
-		if (initialized)
-		{
-			if (nullptr != partnerControlFunction)
-			{
-				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
-				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
-				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
-			}
-
-			shouldTerminate = true;
-
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			// One caller at a time joins the worker. terminate() also runs on the client's own error paths
-			// (from a PGN callback on the hardware update thread) and may coincide with the owner's
-			// call: a second join on a thread the first caller has joined and freed never returns, and a
-			// caller that skipped the join would return to an owner that destroys the client while the
-			// first caller is still inside it. The worker itself never joins (it exits after this update)
-			// and never waits here, or it could not exit while the owner joins it.
-			std::thread *thread = workerThread.load();
-			if ((nullptr != thread) && (thread->get_id() != std::this_thread::get_id()))
-			{
-				LOCK_GUARD(Mutex, workerThreadMutex);
-				thread = workerThread.load();
-				if (nullptr != thread)
-				{
-					thread->join();
-					delete thread;
-					workerThread = nullptr;
-				}
-			}
+		if (std::this_thread::get_id() == workerThreadId.load())
+		{
+			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
+			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
+			// owner's terminate() or initialize(), or the destructor, joins it.
+			request_termination(runNumber);
+			return;
+		}
+		// Held through the whole call, so a second caller waits until the first has finished: it cannot
+		// return to an owner that destroys the client while the first is still inside.
+		LOCK_GUARD(Mutex, workerThreadMutex);
 #endif
+		{
+			LOCK_GUARD(Mutex, runMutex);
+			if (initialized)
+			{
+				remove_callbacks();
+				shouldTerminate = true;
+				runNumber++;
+			}
+		}
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		// Also a worker that stopped after an error, while initialized stays set.
+		join_worker_thread();
+#endif
+	}
+
+	void TaskControllerClient::request_termination(std::uint32_t run)
+	{
+		LOCK_GUARD(Mutex, runMutex);
+		if (initialized && (!shouldTerminate) && (run == runNumber))
+		{
+			remove_callbacks();
+			shouldTerminate = true;
 		}
 	}
+
+	void TaskControllerClient::remove_callbacks()
+	{
+		if (nullptr != partnerControlFunction)
+		{
+			partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
+			partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
+			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
+		}
+	}
+
+	std::uint32_t TaskControllerClient::get_run_number() const
+	{
+		return runNumber;
+	}
+
+	bool TaskControllerClient::get_termination_requested() const
+	{
+		return shouldTerminate;
+	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	void TaskControllerClient::join_worker_thread()
+	{
+		std::thread *thread = workerThread.exchange(nullptr);
+		if (nullptr != thread)
+		{
+			thread->join();
+			delete thread;
+			workerThreadId = std::thread::id();
+		}
+	}
+#endif
 
 	std::shared_ptr<InternalControlFunction> TaskControllerClient::get_internal_control_function() const
 	{
@@ -460,6 +514,7 @@ namespace isobus
 
 	void TaskControllerClient::update()
 	{
+		const std::uint32_t run = runNumber; // An error found below stops this run only (request_termination())
 		DeviceDescriptorObjectPool *pool = nullptr;
 
 		// Check if we need to check all default process data requests before proceeding to queue/state processing.
@@ -724,7 +779,7 @@ namespace isobus
 						else
 						{
 							LOG_ERROR("[TC]: Cannot proceed with connection to TC due to invalid DDOP. Check log for [DDOP] events. TC client will now terminate.");
-							terminate();
+							request_termination(run);
 						}
 					}
 					else
@@ -745,7 +800,7 @@ namespace isobus
 						    (ddopStructureLabel.empty()))
 						{
 							LOG_ERROR("[TC]: Failed to parse the DDOP. Ensure you provided a valid device object. TC client will now terminate.");
-							terminate();
+							request_termination(run);
 						}
 					}
 					else
@@ -970,7 +1025,7 @@ namespace isobus
 				{
 					LOG_ERROR("[TC]: Timeout sending object pool deactivate. Client terminated.");
 					set_state(StateMachineState::Disconnected);
-					terminate();
+					request_termination(run);
 				}
 			}
 			break;
@@ -989,7 +1044,7 @@ namespace isobus
 					{
 						LOG_ERROR("[TC]: Timeout waiting for deactivate object pool response. Client terminated.");
 						set_state(StateMachineState::Disconnected);
-						terminate();
+						request_termination(run);
 					}
 				}
 			}
@@ -1573,6 +1628,7 @@ namespace isobus
 		    (nullptr != message.get_source_control_function()))
 		{
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
+			const std::uint32_t run = parentTC->runNumber; // An error found below stops this run only (request_termination())
 			auto &clientMutex = parentTC->clientMutex;
 			const auto &messageData = message.get_data();
 
@@ -1771,7 +1827,7 @@ namespace isobus
 										else
 										{
 											LOG_ERROR("[TC]: Server states that there is not enough memory available for our DDOP. Client will terminate.");
-											parentTC->terminate();
+											parentTC->request_termination(run);
 										}
 									}
 									else
@@ -1840,7 +1896,7 @@ namespace isobus
 											}
 											parentTC->set_state(StateMachineState::Disconnected);
 											LOG_ERROR("[TC]: Client terminated.");
-											parentTC->terminate();
+											parentTC->request_termination(run);
 										}
 									}
 									else if (StateMachineState::WaitForObjectPoolDeactivateResponse == parentTC->get_state())
@@ -1897,7 +1953,7 @@ namespace isobus
 												LOG_ERROR("[TC]: DDOP upload completed but TC had some unknown error.");
 											}
 											LOG_ERROR("[TC]: Client terminated.");
-											parentTC->terminate();
+											parentTC->request_termination(run);
 										}
 									}
 									else
@@ -2435,6 +2491,7 @@ namespace isobus
 	void TaskControllerClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		workerThreadId = std::this_thread::get_id();
 		for (;;)
 		{
 			if (shouldTerminate)

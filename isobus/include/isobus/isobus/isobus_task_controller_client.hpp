@@ -657,6 +657,30 @@ namespace isobus
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
+		/// @brief Stops the client after an error found on the worker or the network thread: removes the
+		/// callbacks and tells the worker to exit, without joining it. The owner's terminate() or
+		/// initialize(), or the destructor, joins it, so two callers never join the same thread.
+		/// @param[in] run The value of `runNumber` when the work that found the error began. Nothing happens
+		/// if the client has been terminated or initialized since, so a late error cannot stop the next run.
+		void request_termination(std::uint32_t run);
+
+		/// @brief Removes the PGN callbacks that initialize() added
+		void remove_callbacks();
+
+		/// @brief Returns the current run number, see request_termination()
+		/// @returns The current run number
+		std::uint32_t get_run_number() const;
+
+		/// @brief Returns whether the worker has been told to exit, by terminate() or request_termination()
+		/// @returns true if the worker has been told to exit
+		bool get_termination_requested() const;
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		/// @brief Joins and deletes the worker thread, if there is one. Called with `workerThreadMutex` held,
+		/// never from the worker itself.
+		void join_worker_thread();
+#endif
+
 		static constexpr std::uint32_t SIX_SECOND_TIMEOUT_MS = 6000; ///< The startup delay time defined in the standard
 		static constexpr std::uint16_t TWO_SECOND_TIMEOUT_MS = 2000; ///< Used for sending the status message to the TC
 
@@ -722,8 +746,11 @@ namespace isobus
 		Mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
-		Mutex workerThreadMutex; ///< Lets one terminate() caller at a time join the worker thread
+		std::atomic<std::thread::id> workerThreadId{ std::thread::id() }; ///< The worker's id, stored by the worker itself when it starts
+		Mutex workerThreadMutex; ///< Held through initialize() and terminate(), so one caller at a time starts or stops the worker. The worker never takes it.
 #endif
+		Mutex runMutex; ///< Makes the run checks and changes in initialize(), terminate() and request_termination() one step each
+		std::atomic<std::uint32_t> runNumber{ 0 }; ///< Changed by every initialize() that starts the client and every terminate(), so an error found in one run cannot stop the next
 		std::string ddopStructureLabel; ///< Stores a pre-parsed structure label, helps to avoid processing the whole DDOP during a CAN message callback
 		std::string previousStructureLabel; ///< Stores the last structure label we used, helps to warn the user if they aren't updating the label properly
 		std::array<std::uint8_t, 7> ddopLocalizationLabel = { 0 }; ///< Stores a pre-parsed localization label, helps to avoid processing the whole DDOP during a CAN message callback
@@ -749,8 +776,8 @@ namespace isobus
 		std::uint8_t numberBoomsSupported = 0; ///< Stores the number of booms this client supports for section control
 		std::uint8_t numberSectionsSupported = 0; ///< Stores the number of sections this client supports for section control
 		std::uint8_t numberChannelsSupportedForPositionBasedControl = 0; ///< Stores the number of channels this client supports for position based control
-		bool initialized = false; ///< Tracks the initialization state of the interface instance
-		bool shouldTerminate = false; ///< This variable tells the worker thread to exit
+		std::atomic<bool> initialized{ false }; ///< Tracks the initialization state of the interface instance
+		std::atomic<bool> shouldTerminate{ false }; ///< This variable tells the worker thread to exit
 		bool enableStatusMessage = false; ///< Enables sending the status message to the TC cyclically
 		bool supportsDocumentation = false; ///< Determines if the client reports documentation support to the TC
 		bool supportsTCGEOWithoutPositionBasedControl = false; ///< Determines if the client reports TC-GEO without position control capability to the TC

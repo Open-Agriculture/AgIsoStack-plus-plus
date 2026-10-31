@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <map>
+#include <thread>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
@@ -366,6 +367,35 @@ static void expect_assignment_response(AuxiliaryTestCAN &can, std::uint16_t func
 	ASSERT_NE(frames.end(), response);
 	EXPECT_EQ((std::vector<std::uint8_t>{ 0x24, static_cast<std::uint8_t>(function), static_cast<std::uint8_t>(function >> 8), error, 0xFF, 0xFF, 0xFF, 0xFF }),
 	          (std::vector<std::uint8_t>(response->data, response->data + response->dataLength)));
+}
+
+TEST_F(VirtualTerminalTest, ConcurrentTerminate)
+{
+	NAME clientNAME(0);
+	clientNAME.set_ecu_instance(2);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x27);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	// The owner terminates the client while another thread does too. Joining the worker twice hangs,
+	// or aborts, within a few rounds.
+	for (int round = 0; round < 20; round++)
+	{
+		DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+		clientUnderTest.initialize(true);
+
+		std::thread other([&clientUnderTest]() { clientUnderTest.terminate(); });
+		clientUnderTest.terminate();
+		other.join();
+		EXPECT_FALSE(clientUnderTest.get_is_initialized());
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST_F(VirtualTerminalTest, PopulatedPreferredAssignmentsIncludePacketPadding)
