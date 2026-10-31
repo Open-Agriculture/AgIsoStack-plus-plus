@@ -77,6 +77,11 @@ public:
 		largeFontSizesBitfield = largeFontsBitfield;
 	}
 
+	void test_wrapper_set_supported_font_styles(std::uint8_t fontStylesBitfieldValue)
+	{
+		fontStylesBitfield = fontStylesBitfieldValue;
+	}
+
 	void test_wrapper_set_state(VirtualTerminalClient::StateMachineState value)
 	{
 		VirtualTerminalClient::set_state(value);
@@ -1539,6 +1544,64 @@ TEST_F(VirtualTerminalTest, FontRemapping)
 			clientUnderTest.test_wrapper_remap_font_to_scale(static_cast<VirtualTerminalClient::FontSize>(i), j);
 		}
 	}
+}
+
+// Each font style is one bit of the font styles the VT reports. The check used to AND the style's
+// number with the bitfield instead of its bit, so Bold was never supported and the rest were wrong.
+TEST_F(VirtualTerminalTest, FontStyleSupport)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	clientUnderTest.test_wrapper_set_supported_font_styles(0x81); // Bold and proportional
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Bold));
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::ProportionalFontRendering));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::CrossedOut));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Underlined));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Italic));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::FlashingHidden));
+
+	clientUnderTest.test_wrapper_set_supported_font_styles(0x08); // Italic only
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Italic));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Bold));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::ProportionalFontRendering));
+}
+
+// The fallback keeps stepping down until it finds a font the VT has. It used to step down from
+// the original font every time, so it never finished when neither that font nor the one below it was supported.
+TEST_F(VirtualTerminalTest, FontFallbackSkipsSeveralUnsupportedFonts)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0x01, 0x00); // Only 6x8
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size32x32));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0x41, 0x00); // 6x8 and 24x32
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size24x32, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size16x24));
+}
+
+// With the proportional style bit set, the font size is a height in pixels from 8 up to the height
+// of the VT's largest font, so it is scaled as a height instead of being looked up as a FontSize.
+TEST_F(VirtualTerminalTest, ResizeProportionalFontAttributes)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0x00); // Largest font is 32x32
+
+	auto scaledHeight = [&](std::uint8_t height, float scaleFactor) {
+		std::uint8_t testObject[] = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::FontAttributes), 0x00, height, 0x00, 0x80, 0x00 };
+		EXPECT_TRUE(clientUnderTest.test_wrapper_resize_object(testObject, scaleFactor, VirtualTerminalObjectType::FontAttributes));
+		return testObject[4];
+	};
+
+	EXPECT_EQ(30, scaledHeight(20, 1.5f));
+	EXPECT_EQ(20, scaledHeight(20, 1.0f));
+	EXPECT_EQ(10, scaledHeight(20, 0.5f));
+	EXPECT_EQ(32, scaledHeight(20, 2.0f));
+	EXPECT_EQ(8, scaledHeight(20, 0.25f));
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0x01, 0x40); // Largest font is 128x192
+	EXPECT_EQ(192, scaledHeight(100, 4.0f));
 }
 
 TEST_F(VirtualTerminalTest, ResizeOutputArchedBarGraph)

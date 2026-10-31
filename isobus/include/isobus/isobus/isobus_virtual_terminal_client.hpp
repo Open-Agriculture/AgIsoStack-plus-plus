@@ -1710,6 +1710,13 @@ namespace isobus
 		/// @returns The best available font that the VT reported it has available
 		FontSize get_font_or_next_smallest_font(FontSize originalFont) const;
 
+		/// @brief Scales the height of a proportional font, keeping it between 8 pixels and the
+		/// height of the largest font the VT reported it has available
+		/// @param[in] originalHeight The original font height in pixels
+		/// @param[in] scaleFactor The factor by which to scale the font
+		/// @returns The scaled font height in pixels
+		std::uint8_t scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const;
+
 		/// @brief Remaps a font to some other font based on a scale factor
 		/// This is not a one-size-fits-all solution, but should usually result in a compatible font
 		/// @param[in] originalFont The font to scale
