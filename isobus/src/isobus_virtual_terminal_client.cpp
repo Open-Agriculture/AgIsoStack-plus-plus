@@ -4137,9 +4137,32 @@ namespace isobus
 
 		while ((!get_font_size_supported(retVal)) && (FontSize::Size6x8 != retVal))
 		{
-			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(originalFont) - 1);
+			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(retVal) - 1);
 		}
 		return retVal;
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const
+	{
+		// A proportional font can be any height from 8 pixels up to the height of the VT's largest font (ISO 11783-6 4.6.19.4)
+		static constexpr std::uint8_t MIN_PROPORTIONAL_FONT_HEIGHT = 8;
+		static constexpr std::array<std::uint8_t, 15> FONT_HEIGHTS = { 8, 8, 12, 16, 16, 24, 32, 32, 48, 64, 64, 96, 128, 128, 192 };
+		std::uint8_t maxHeight = MIN_PROPORTIONAL_FONT_HEIGHT;
+
+		for (std::uint8_t i = 0; i < FONT_HEIGHTS.size(); i++)
+		{
+			if (get_font_size_supported(static_cast<FontSize>(i)))
+			{
+				maxHeight = std::max(maxHeight, FONT_HEIGHTS[i]);
+			}
+		}
+
+		const float scaledHeight = (originalHeight * scaleFactor) + 0.5f;
+		if (scaledHeight >= maxHeight)
+		{
+			return maxHeight;
+		}
+		return std::max(MIN_PROPORTIONAL_FONT_HEIGHT, static_cast<std::uint8_t>(scaledHeight));
 	}
 
 	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor)
@@ -5054,7 +5077,15 @@ namespace isobus
 
 				case VirtualTerminalObjectType::FontAttributes:
 				{
-					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					if (0 != (buffer[6] & (1 << static_cast<std::uint8_t>(FontStyleBits::ProportionalFontRendering))))
+					{
+						// The font size is a height in pixels, not one of the FontSize values
+						buffer[4] = scale_proportional_font_height(buffer[4], scaleFactor);
+					}
+					else
+					{
+						buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					}
 					retVal = true;
 				}
 				break;
