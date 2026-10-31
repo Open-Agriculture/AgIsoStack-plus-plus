@@ -1591,10 +1591,16 @@ namespace isobus
 						LOG_ERROR("[VT]: Get Versions Timeout");
 					}
 					else if ((!objectPools.empty()) &&
-					         (!objectPools[0].versionLabel.empty()) &&
-					         (uses_extended_versions(objectPools[0].versionLabel) ? send_extended_get_versions() : send_get_versions()))
+					         (!objectPools[0].versionLabel.empty()))
 					{
-						set_state(StateMachineState::WaitForGetVersionsResponse);
+						const auto &versionLabel = objectPools[0].versionLabel;
+						const bool useExtended = uses_extended_versions(versionLabel);
+						if (useExtended ? send_extended_get_versions() : send_get_versions())
+						{
+							versionQueryFunction = useExtended ? Function::ExtendedGetVersionsMessage : Function::GetVersionsMessage;
+							set_state(StateMachineState::WaitForGetVersionsResponse);
+							LOG_INFO("[VT]: Sent %s (label length %zu).", useExtended ? "Extended Get Versions" : "Get Versions", versionLabel.size());
+						}
 					}
 				}
 				break;
@@ -1606,14 +1612,15 @@ namespace isobus
 						set_state(StateMachineState::Disconnected);
 						LOG_ERROR("[VT]: Status Timeout");
 					}
-					else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					else if (is_function_unsupported(versionQueryFunction) ||
+					         SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						{
 							LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 							skipVersionStorage = true;
 						}
 						set_state(StateMachineState::UploadObjectPool);
-						LOG_WARNING("[VT]: Get Versions Response Timeout. Uploading without version storage for this connection.");
+						LOG_WARNING(is_function_unsupported(versionQueryFunction) ? "[VT]: Versions query unsupported. Uploading without version storage for this connection." : "[VT]: Get Versions Response Timeout. Uploading without version storage for this connection.");
 					}
 				}
 				break;
@@ -3661,7 +3668,8 @@ namespace isobus
 										LOCK_GUARD(Mutex, auxiliaryMutex);
 										skipStorage = parentVT->skipVersionStorage;
 									}
-									if ((!parentVT->objectPools[0].versionLabel.empty()) && (!skipStorage))
+									if ((!parentVT->objectPools[0].versionLabel.empty()) && (!skipStorage) &&
+									    (!parentVT->is_function_unsupported(parentVT->uses_extended_versions(parentVT->objectPools[0].versionLabel) ? Function::ExtendedStoreVersionCommand : Function::StoreVersionCommand)))
 									{
 										parentVT->set_state(StateMachineState::SendStoreVersion);
 									}
