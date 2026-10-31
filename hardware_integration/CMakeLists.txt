@@ -19,7 +19,10 @@ if(NOT CAN_DRIVER)
   )
 endif()
 
-if(BUILD_TESTING AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
+# VirtualCAN needs threads; the single-threaded tests bring their own driver
+if(BUILD_TESTING
+   AND NOT CAN_STACK_DISABLE_THREADS
+   AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
   message(STATUS "Including VirtualCAN driver for testing.")
   list(APPEND CAN_DRIVER "VirtualCAN")
 endif()

@@ -105,8 +105,14 @@ jobs:
             -DCAN_STACK_DISABLE_THREADS=ON \
             -DCMAKE_CXX_STANDARD=11 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DBUILD_TESTING=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build (no threads)
         run: |
           cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Test (no threads)
+        run: |
+          cd build
+          ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
