@@ -8,6 +8,7 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 
+#include <atomic>
 #include <memory>
 #include <thread>
 
@@ -514,4 +515,46 @@ TEST_F(CoreTest, SimilarControlFunctions)
 	// Partner should never change
 	EXPECT_EQ(TestPartner->get_NAME().get_full_name(), 0xa0000F000425e9f8);
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartner);
+}
+
+TEST_F(CoreTest, DeactivatingAPartnerWhileMessagesAreProcessed)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x8C, 0, time_source);
+	auto firstPartner = test_helpers::force_claim_partnered_control_function(0x8D, 0);
+	CANHardwareInterface::stop(); // From here the thread below is the only one that updates the stack
+	const NAME partnerName = firstPartner->get_NAME();
+	const std::vector<NAMEFilter> nameFilters = {
+		NAMEFilter(NAME::NAMEParameters::IdentityNumber, partnerName.get_identity_number()),
+		NAMEFilter(NAME::NAMEParameters::ManufacturerCode, partnerName.get_manufacturer_code()),
+		NAMEFilter(NAME::NAMEParameters::FunctionCode, partnerName.get_function_code())
+	};
+	// Leaves an external control function with that NAME at 0x8D, for the partners below to match
+	CANNetworkManager::CANNetwork.deactivate_control_function(firstPartner);
+
+	// The stack runs on one thread, receiving messages from 0x8D for our control function, while the
+	// application creates and deactivates a partner for 0x8D on another: the receive path walks the
+	// partner list and reads the address table that deactivate_control_function() changes.
+	std::atomic_bool done = { false };
+	std::thread stack([&]() {
+		const auto source = test_helpers::create_mock_control_function(0x8D);
+		while (!done)
+		{
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(6, 0xEF00, internalECU, source, { 1, 2, 3, 4, 5, 6, 7, 8 }));
+			CANNetworkManager::CANNetwork.update();
+		}
+	});
+	for (int round = 0; round < 2000; round++)
+	{
+		auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, nameFilters);
+		std::this_thread::yield();
+		CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+	}
+	done = true;
+	stack.join();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANHardwareInterface::set_number_of_can_channels(0);
 }
