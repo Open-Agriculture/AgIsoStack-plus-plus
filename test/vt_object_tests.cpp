@@ -2440,6 +2440,26 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, PictureGraphicTests)
 	EXPECT_TRUE(pictureGraphic.get_is_valid(objects));
 }
 
+TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, PictureGraphicReserveIsBounded)
+{
+	PictureGraphic pictureGraphic;
+	pictureGraphic.set_number_of_bytes_in_raw_data(0xFFFFFFFF);
+	EXPECT_LT(pictureGraphic.get_raw_data().capacity(), 0xFFFFFFFFU);
+
+	pictureGraphic.set_actual_width(10);
+	pictureGraphic.set_actual_height(1);
+	pictureGraphic.reserve_raw_data(2040);
+	EXPECT_GE(pictureGraphic.get_raw_data().capacity(), 10U);
+	EXPECT_LT(pictureGraphic.get_raw_data().capacity(), 2040U);
+
+	PictureGraphic hugePicture;
+	hugePicture.set_actual_width(0xFFFF);
+	hugePicture.set_actual_height(0xFFFF);
+	hugePicture.reserve_raw_data(2040);
+	EXPECT_GE(hugePicture.get_raw_data().capacity(), 2040U);
+	EXPECT_LT(hugePicture.get_raw_data().capacity(), 0xFFFFU * 0xFFFFU);
+}
+
 TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, NumberVariableTests)
 {
 	std::map<std::uint16_t, std::shared_ptr<VTObject>> objects;
