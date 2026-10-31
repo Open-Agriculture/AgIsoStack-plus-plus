@@ -2680,20 +2680,15 @@ namespace isobus
 			return false;
 		}
 
-		for (std::uint_fast8_t i = 0; i < numberOfMacrosToFollow; i++)
+		// A 16-bit reference takes two of the 2-byte groupings in the count
+		std::uint_fast8_t i = 0;
+		while (i < numberOfMacrosToFollow)
 		{
-			if (iopLength < 2)
-			{
-				LOG_ERROR("[WS]: Not enough IOP data to parse macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
-				return false;
-			}
-
-			// If the first byte is 255, then more bytes are used! 4.6.22.3
 			if (iopData[0] == static_cast<std::uint8_t>(EventID::UseExtendedMacroReference))
 			{
-				if (iopLength < 4)
+				if (numberOfMacrosToFollow - i < 2)
 				{
-					LOG_ERROR("[WS]: Not enough IOP data to parse extended macro reference #%u for object %s", i, isobus::to_string(static_cast<int>(object->get_id())).c_str());
+					LOG_ERROR("[WS]: Extended macro reference #%u for object %s needs two of its %u macro groupings", i, isobus::to_string(static_cast<int>(object->get_id())).c_str(), numberOfMacrosToFollow);
 					return false;
 				}
 
@@ -2714,6 +2709,7 @@ namespace isobus
 				}
 				iopLength -= 4;
 				iopData += 4;
+				i += 2;
 			}
 			else
 			{
@@ -2732,6 +2728,7 @@ namespace isobus
 				}
 				iopLength -= 2;
 				iopData += 2;
+				i++;
 			}
 		}
 		return true;

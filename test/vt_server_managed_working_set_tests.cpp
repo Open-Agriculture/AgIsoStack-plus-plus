@@ -245,8 +245,8 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, eightBitColour, 0x04, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF },
 		// 1x1 Picture Graphic with one macro reference and no bytes for it
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07 },
-		// Container of 3 macro references whose two extended references end the transfer
-		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x03, 0xFF, 0x02, 0x01, 0x00, 0xFF, 0x03, 0x01, 0x00 },
+		// Container of 1 macro grouping whose extended reference ends the transfer
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01, 0xFF, 0x02 },
 		// Working Set Special Controls cut off in its header
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSetSpecialControls), 0x05 },
 		// Working Set Special Controls declaring one more byte than the transfer holds
@@ -273,6 +273,31 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 		VirtualTerminalServerManagedWorkingSet exactWorkingSet;
 		EXPECT_FALSE(exactWorkingSet.parse_iop_into_objects(exact.data(), static_cast<std::uint32_t>(exact.size())));
 	}
+}
+
+TEST(VirtualTerminalServerTest, SixteenBitMacroReferenceTakesTwoMacroGroupings)
+{
+	// 3 groupings: macro 7 on hide, macro 7000 on hide, then a second Container
+	std::vector<std::uint8_t> pool = {
+		0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x03, 0x04, 0x07, 0xFF, 0x58, 0x04, 0x1B, 0x02, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00
+	};
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	ASSERT_TRUE(workingSet.parse_iop_into_objects(pool.data(), static_cast<std::uint32_t>(pool.size())));
+
+	auto container = workingSet.get_object_by_id(1);
+	ASSERT_NE(nullptr, container);
+	ASSERT_EQ(2u, container->get_number_macros());
+	EXPECT_EQ(EventID::OnHide, container->get_macro(0).event);
+	EXPECT_EQ(7u, container->get_macro(0).macroID);
+	EXPECT_EQ(EventID::OnHide, container->get_macro(1).event);
+	EXPECT_EQ(7000u, container->get_macro(1).macroID);
+	EXPECT_NE(nullptr, workingSet.get_object_by_id(2));
+
+	// 1 grouping can't hold a 16-bit reference, even with the bytes present
+	std::vector<std::uint8_t> oneGrouping = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01, 0xFF, 0x58, 0x04, 0x1B };
+	VirtualTerminalServerManagedWorkingSet oneGroupingWorkingSet;
+	EXPECT_FALSE(oneGroupingWorkingSet.parse_iop_into_objects(oneGrouping.data(), static_cast<std::uint32_t>(oneGrouping.size())));
 }
 
 TEST(VirtualTerminalServerTest, WorkingSetSpecialControlsReadsEachLanguagePairOnce)
