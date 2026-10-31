@@ -1455,6 +1455,29 @@ TEST_F(VirtualTerminalTest, ObjectMetadataTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, FontRemappingKeepsTheFontBetweenTheFudgeAndTheFirstTableEntry)
+{
+	using FontSize = VirtualTerminalClient::FontSize;
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	for (int i = 0; i <= static_cast<int>(FontSize::Size128x192); i++)
+	{
+		const auto font = static_cast<FontSize>(i);
+
+		// No table has an entry between the 1.05 fudge and 1.30, so the font keeps its size
+		EXPECT_EQ(i, static_cast<int>(clientUnderTest.test_wrapper_remap_font_to_scale(font, 1.2f)));
+
+		// Scaling up never gives a smaller font, scaling down never a larger one
+		EXPECT_LE(i, static_cast<int>(clientUnderTest.test_wrapper_remap_font_to_scale(font, 1.5f)));
+		EXPECT_GE(i, static_cast<int>(clientUnderTest.test_wrapper_remap_font_to_scale(font, 0.8f)));
+	}
+
+	// The fonts still grow once the factor reaches their first upscale entry
+	EXPECT_EQ(FontSize::Size8x12, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size8x8, 1.5f));
+	EXPECT_EQ(FontSize::Size16x16, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size12x16, 1.3f));
+	EXPECT_EQ(FontSize::Size32x32, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size24x32, 1.3f));
+}
+
 TEST_F(VirtualTerminalTest, FontRemapping)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
@@ -2240,6 +2263,33 @@ TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 	time_source.simulate_delay_ms(5001);
 	clientUnderTest.update();
 	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, GetStateReportsTheStateMachineState)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.get_state());
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse, clientUnderTest.get_state());
+	EXPECT_FALSE(clientUnderTest.get_is_connected());
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage);
+	time_source.simulate_delay_ms(3001);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Failed, clientUnderTest.get_state());
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
