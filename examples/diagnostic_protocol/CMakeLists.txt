@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(diagnostic_protocol_example)
 
+include(GNUInstallDirs)
+
 if(NOT BUILD_EXAMPLES)
   find_package(isobus REQUIRED)
 endif()
@@ -8,6 +10,9 @@ find_package(Threads REQUIRED)
 
 add_executable(DiagnosticProtocolExample main.cpp
                                          ../common/create_can_driver.cpp)
+
+install(TARGETS DiagnosticProtocolExample
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 target_compile_features(DiagnosticProtocolExample PUBLIC cxx_std_11)
 set_target_properties(DiagnosticProtocolExample PROPERTIES CXX_EXTENSIONS OFF)
