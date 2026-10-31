@@ -67,4 +67,14 @@ namespace isobus
 	{
 		return numberOfPacketsPerCTSMessage;
 	}
+
+	void CANNetworkConfiguration::set_number_of_packets_per_etp_cts_message(std::uint8_t numberPackets)
+	{
+		numberOfPacketsPerETPCTSMessage = numberPackets;
+	}
+
+	std::uint8_t CANNetworkConfiguration::get_number_of_packets_per_etp_cts_message() const
+	{
+		return numberOfPacketsPerETPCTSMessage;
+	}
 }
