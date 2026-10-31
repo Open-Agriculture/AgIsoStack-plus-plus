@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(vt3_version_3_object_pool_example)
 
+include(GNUInstallDirs)
+
 if(NOT BUILD_EXAMPLES)
   find_package(isobus REQUIRED)
 endif()
@@ -9,6 +11,10 @@ find_package(Threads REQUIRED)
 add_executable(
   VT3ExampleTarget main.cpp ../../common/console_logger.cpp
                    ../../common/create_can_driver.cpp objectPoolObjects.h)
+
+install(TARGETS VT3ExampleTarget RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/VT3TestPool.iop"
+        DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 target_compile_features(VT3ExampleTarget PUBLIC cxx_std_11)
 set_target_properties(VT3ExampleTarget PROPERTIES CXX_EXTENSIONS OFF)

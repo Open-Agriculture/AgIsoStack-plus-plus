@@ -763,7 +763,11 @@ namespace isobus
 
 			case StateMachineState::SendBroadcastAnnounce:
 			{
-				if (send_broadcast_announce_message(session))
+				// Checked again and sent under the lock: a session's first frame can be sent by the
+				// thread that started the transmit and by update() on the stack's thread at once,
+				// and only one of them may send it.
+				LOCK_GUARD(Mutex, activeSessionsMutex);
+				if ((StateMachineState::SendBroadcastAnnounce == session->state) && send_broadcast_announce_message(session))
 				{
 					session->set_state(StateMachineState::SendDataTransferPackets);
 				}
@@ -772,7 +776,9 @@ namespace isobus
 
 			case StateMachineState::SendRequestToSend:
 			{
-				if (send_request_to_send(session))
+				// As above: only one thread sends the RTS.
+				LOCK_GUARD(Mutex, activeSessionsMutex);
+				if ((StateMachineState::SendRequestToSend == session->state) && send_request_to_send(session))
 				{
 					session->set_state(StateMachineState::WaitForClearToSend);
 				}

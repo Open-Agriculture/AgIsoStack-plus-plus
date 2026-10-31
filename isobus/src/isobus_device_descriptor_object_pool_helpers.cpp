@@ -14,21 +14,24 @@ namespace isobus
 {
 	DeviceDescriptorObjectPoolHelper::ObjectPoolValue DeviceDescriptorObjectPoolHelper::DeviceDescriptorObjectWithWidth::get_width_with_priority() const
 	{
-		// Priority order: Actual > Maximum > Default
-		// Only return values that are present (have been set) and are not zero
-		if (actualWorkingWidth_mm.exists() && 0 != actualWorkingWidth_mm.get())
+		ObjectPoolValue retVal;
+
+		if (actualWorkingWidth_mm.exists() && (0 != actualWorkingWidth_mm.get()))
 		{
-			return actualWorkingWidth_mm;
+			retVal = actualWorkingWidth_mm;
 		}
-		if (maximumWorkingWidth_mm.exists() && 0 != maximumWorkingWidth_mm.get())
+		else if (maximumWorkingWidth_mm.exists() && (0 != maximumWorkingWidth_mm.get()))
 		{
-			return maximumWorkingWidth_mm;
+			retVal = maximumWorkingWidth_mm;
 		}
-		if (defaultWorkingWidth_mm.exists() && 0 != defaultWorkingWidth_mm.get())
+		else if (defaultWorkingWidth_mm.exists() && (0 != defaultWorkingWidth_mm.get()))
 		{
-			return defaultWorkingWidth_mm;
+			retVal = defaultWorkingWidth_mm;
 		}
-		return ObjectPoolValue(); // Return empty if none are set or all are zero
+
+		// The TC can only set a width through Actual Working Width
+		retVal.isSettable = actualWorkingWidth_mm.isSettable;
+		return retVal;
 	}
 
 	DeviceDescriptorObjectPoolHelper::ObjectPoolValue::operator bool() const

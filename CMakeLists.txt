@@ -119,37 +119,11 @@ if(BUILD_EXAMPLES)
     # Cannot build without threading as vt server is multi-threaded
     add_subdirectory("examples/virtual_terminal/iop_parser_tester")
     add_subdirectory("examples/virtual_terminal/iop_load_tester")
-    install(TARGETS iop_parser iop_loader
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   endif()
   add_subdirectory("examples/task_controller_client")
   add_subdirectory("examples/task_controller_server")
   add_subdirectory("examples/guidance")
   add_subdirectory("examples/seeder_example")
-
-  install(
-    TARGETS TransportLayerExampleTarget
-            DiagnosticProtocolExample
-            PGNRequestExampleTarget
-            NMEA2KFastPacketTarget
-            NMEA2KGeneratorTarget
-            NMEA2KParserTarget
-            VT3ExampleTarget
-            VTAuxFunctionsExample
-            VTAuxInputsExample
-            TaskControllerClientExample
-            TaskControllerServerExample
-            GuidanceExampleTarget
-            SeederExample
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-  # These examples load their object pools from the current working directory.
-  install(
-    FILES examples/virtual_terminal/version3_object_pool/VT3TestPool.iop
-          examples/virtual_terminal/aux_functions/aux_functions_pooldata.iop
-          examples/virtual_terminal/aux_inputs/aux_inputs_pooldata.iop
-          examples/seeder_example/BasePool.iop
-    DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if(BUILD_TESTING)

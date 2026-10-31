@@ -66,6 +66,8 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
 			initialized = true;
 		}
@@ -1562,6 +1564,7 @@ namespace isobus
 		{
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
 			auto &clientMutex = parentTC->clientMutex;
+			(void)clientMutex;
 			const auto &messageData = message.get_data();
 
 			switch (message.get_identifier().get_parameter_group_number())
