@@ -39,7 +39,7 @@ namespace isobus
 
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		auto controlFunction = std::make_shared<InternalControlFunction>(desiredName, preferredAddress, CANPort);
 		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction));
 		internalControlFunctions.push_back(controlFunction);
@@ -51,7 +51,7 @@ namespace isobus
 	{
 		auto controlFunction = std::shared_ptr<PartneredControlFunction>{};
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
 			partneredControlFunctions.push_back(controlFunction);
 		}
@@ -61,7 +61,7 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		// We need to unregister the control function from the interfaces managed by the network manager first.
 		controlFunction->pgnRequestProtocol.reset();
 		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
@@ -71,7 +71,7 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<PartneredControlFunction> controlFunction)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
 	}
@@ -395,19 +395,19 @@ namespace isobus
 
 	std::list<std::shared_ptr<InternalControlFunction>> CANNetworkManager::get_internal_control_functions() const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		return internalControlFunctions;
 	}
 
 	std::list<std::shared_ptr<PartneredControlFunction>> CANNetworkManager::get_partnered_control_functions() const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		return partneredControlFunctions;
 	}
 
 	std::list<std::shared_ptr<ControlFunction>> isobus::CANNetworkManager::get_control_functions(bool includingOffline) const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		std::list<std::shared_ptr<ControlFunction>> retVal;
 
 		for (std::uint8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
@@ -556,7 +556,7 @@ namespace isobus
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
 		    (channelIndex < CAN_PORT_MAXIMUM))
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			std::uint8_t claimedAddress = message.get_identifier().get_source_address();
 			auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
 
@@ -630,7 +630,7 @@ namespace isobus
 
 	void CANNetworkManager::update_internal_cfs()
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (const auto &currentInternalControlFunction : internalControlFunctions)
 		{
 			if (currentInternalControlFunction->update_address_claiming())
@@ -663,7 +663,7 @@ namespace isobus
 
 	void CANNetworkManager::process_rx_message_for_address_claiming(const CANMessage &message) const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (const auto &internalCF : internalControlFunctions)
 		{
 			internalCF->process_rx_message_for_address_claiming(message);
@@ -705,7 +705,7 @@ namespace isobus
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
 		    (rxFrame.channel < CAN_PORT_MAXIMUM))
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 
 			std::uint64_t claimedNAME;
 			std::shared_ptr<ControlFunction> foundControlFunction = nullptr;
@@ -865,7 +865,7 @@ namespace isobus
 
 	void CANNetworkManager::update_new_partners()
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (const auto &partner : partneredControlFunctions)
 		{
 			if (!partner->initialized)
@@ -976,6 +976,9 @@ namespace isobus
 
 		if ((address < NULL_CAN_ADDRESS) && (channelIndex < CAN_PORT_MAXIMUM))
 		{
+			// Under the lock: copying a shared_ptr while deactivate_control_function() assigns the same
+			// slot on another thread is a data race.
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			retVal = controlFunctionTable[channelIndex][address];
 		}
 		return retVal;
@@ -999,9 +1002,11 @@ namespace isobus
 	{
 		// A copy, as for the global PGN callbacks: deactivate_control_function() erases from the list
 		// under controlFunctionsMutex, possibly on another thread, and a node this loop stands on may go.
+		// The copy is deliberate: it costs an allocation per received message, which is small for the
+		// handful of control functions an application has, and it keeps the lock out of the callbacks.
 		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctionsCopy;
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			internalControlFunctionsCopy = internalControlFunctions;
 		}
 		for (const auto &internalCF : internalControlFunctionsCopy)
@@ -1070,7 +1075,7 @@ namespace isobus
 			// list under controlFunctionsMutex, possibly on another thread, while this loop walks it.
 			std::list<std::shared_ptr<PartneredControlFunction>> partnersCopy;
 			{
-				LOCK_GUARD(Mutex, controlFunctionsMutex);
+				LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 				partnersCopy = partneredControlFunctions;
 			}
 			for (const auto &partner : partnersCopy)
@@ -1126,7 +1131,7 @@ namespace isobus
 	{
 		constexpr std::uint32_t MAX_ADDRESS_CLAIM_RESOLUTION_TIME = 755; // This is 250ms + RTxD + 250ms
 
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
 		{
 			auto &lastAddressClaimRequestTime = lastAddressClaimRequestTimestamp_ms[channelIndex];
