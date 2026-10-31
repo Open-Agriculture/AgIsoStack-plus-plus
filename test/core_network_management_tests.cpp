@@ -232,7 +232,20 @@ TEST_F(CoreTest, InvalidatingControlFunctions)
 	  nullptr));
 	CANNetworkManager::CANNetwork.update();
 
-	// Now, if we wait a while, that partner didn't claim again, so it should be invalid.
+	// The partner doesn't claim again, but one missed request is not enough to take it offline
+	time_source.update_for_ms(2000);
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_TRUE(testPartner->get_address_valid());
+	EXPECT_FALSE(wasTestStateCallbackHit && (testControlFunction == testPartner));
+	wasTestStateCallbackHit = false;
+
+	// It misses the next request as well, so now it should be invalid.
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(
+	  0xEE00, // Address Claim PGN
+	  nullptr,
+	  nullptr));
+	CANNetworkManager::CANNetwork.update();
 	time_source.update_for_ms(2000);
 	CANNetworkManager::CANNetwork.update();
 
@@ -384,13 +397,16 @@ TEST_F(CoreTest, RestoredControlFunctionSurvivesTheNextPrune)
 	ASSERT_NE(nullptr, returningCF);
 	ASSERT_EQ(returningName, returningCF->get_NAME());
 
-	// Neither CF answers a request for address claim, so both are pruned, the departed one first
+	// Neither CF answers two requests for address claim in a row, so both are pruned, the departed one first
 	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
 	request.channel = TEST_CHANNEL;
-	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(1000);
-	CANNetworkManager::CANNetwork.update();
+	for (std::uint8_t i = 0; i < 2; i++)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	}
 	ASSERT_FALSE(returningCF->get_address_valid());
 
 	// The returning CF answers the next request, which restores it to the table
@@ -400,10 +416,106 @@ TEST_F(CoreTest, RestoredControlFunctionSurvivesTheNextPrune)
 	ASSERT_TRUE(returningCF->get_address_valid());
 
 	// It claimed after that request, so it must survive the prune when the request's timer runs out
-	time_source.update_for_ms(1000);
+	time_source.update_for_ms(1500);
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_TRUE(returningCF->get_address_valid());
 	EXPECT_EQ(returningCF, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, RETURNING_ADDRESS));
+
+	// Restored with a clean record: one missed request after that does not take it offline again
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1500);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(returningCF->get_address_valid());
+}
+
+TEST_F(CoreTest, ControlFunctionThatSkipsOneRequestStaysOnline)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t SKIPPING_ADDRESS = 0x9B;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const NAME skippingName = test_helpers::find_available_name(TEST_CHANNEL);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SKIPPING_ADDRESS, skippingName));
+	CANNetworkManager::CANNetwork.update();
+	auto skippingCF = CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SKIPPING_ADDRESS);
+	ASSERT_NE(nullptr, skippingCF);
+
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	auto missRequest = [&]() {
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	};
+	auto answerRequest = [&]() {
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SKIPPING_ADDRESS, skippingName));
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	};
+
+	// Skipping every other request never takes it offline: each claim clears the missed request
+	missRequest();
+	EXPECT_TRUE(skippingCF->get_address_valid());
+	answerRequest();
+	EXPECT_TRUE(skippingCF->get_address_valid());
+	missRequest();
+	EXPECT_TRUE(skippingCF->get_address_valid());
+	answerRequest();
+	EXPECT_TRUE(skippingCF->get_address_valid());
+
+	// Two misses in a row do
+	missRequest();
+	EXPECT_TRUE(skippingCF->get_address_valid());
+	missRequest();
+	EXPECT_FALSE(skippingCF->get_address_valid());
+	EXPECT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SKIPPING_ADDRESS));
+}
+
+TEST_F(CoreTest, AnswerWithinTheResponseTimeoutCounts)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t SLOW_ADDRESS = 0x9C;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const NAME slowName = test_helpers::find_available_name(TEST_CHANNEL);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SLOW_ADDRESS, slowName));
+	CANNetworkManager::CANNetwork.update();
+	auto slowCF = CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SLOW_ADDRESS);
+	ASSERT_NE(nullptr, slowCF);
+
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+
+	// One missed request
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1500);
+	CANNetworkManager::CANNetwork.update();
+	ASSERT_TRUE(slowCF->get_address_valid());
+
+	// The next one is answered after 1 s: later than the 755 ms address claim timing, but within
+	// the 1.25 s a CF waits for a response (ISO 11783-3 T3), so it is not a second miss
+	wasTestStateCallbackHit = false;
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1000);
+	CANNetworkManager::CANNetwork.update();
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SLOW_ADDRESS, slowName));
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(500);
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_TRUE(slowCF->get_address_valid());
+	EXPECT_FALSE(wasTestStateCallbackHit && (testControlFunction == slowCF));
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
+	testControlFunction.reset();
 }
 
 TEST_F(CoreTest, PartnerCreatedAfterItsDeviceAnsweredARequestSurvivesThePrune)
