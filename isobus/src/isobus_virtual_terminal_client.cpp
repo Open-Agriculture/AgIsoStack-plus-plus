@@ -1174,7 +1174,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_font_style_supported(FontStyleBits value) const
 	{
-		return (0 != (static_cast<std::uint8_t>(value) & fontStylesBitfield));
+		return (0 != ((1 << static_cast<std::uint8_t>(value)) & fontStylesBitfield));
 	}
 
 	VirtualTerminalClient::GraphicMode VirtualTerminalClient::get_graphic_mode() const

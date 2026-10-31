@@ -77,6 +77,11 @@ public:
 		largeFontSizesBitfield = largeFontsBitfield;
 	}
 
+	void test_wrapper_set_supported_font_styles(std::uint8_t fontStylesBitfieldValue)
+	{
+		fontStylesBitfield = fontStylesBitfieldValue;
+	}
+
 	void test_wrapper_set_state(VirtualTerminalClient::StateMachineState value)
 	{
 		VirtualTerminalClient::set_state(value);
@@ -1539,6 +1544,26 @@ TEST_F(VirtualTerminalTest, FontRemapping)
 			clientUnderTest.test_wrapper_remap_font_to_scale(static_cast<VirtualTerminalClient::FontSize>(i), j);
 		}
 	}
+}
+
+// Each font style is one bit of the font styles the VT reports. The check used to AND the style's
+// number with the bitfield instead of its bit, so Bold was never supported and the rest were wrong.
+TEST_F(VirtualTerminalTest, FontStyleSupport)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	clientUnderTest.test_wrapper_set_supported_font_styles(0x81); // Bold and proportional
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Bold));
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::ProportionalFontRendering));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::CrossedOut));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Underlined));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Italic));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::FlashingHidden));
+
+	clientUnderTest.test_wrapper_set_supported_font_styles(0x08); // Italic only
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Italic));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Bold));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::ProportionalFontRendering));
 }
 
 // The fallback keeps stepping down until it finds a font the VT has. It used to step down from
