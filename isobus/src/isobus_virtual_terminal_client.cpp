@@ -116,6 +116,8 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
 			initialized = true;
 		}
@@ -578,8 +580,17 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, const std::string &value)
 	{
-		assert(value.length() < std::numeric_limits<std::uint16_t>::max()); // You can't send more than 65535 characters!
-		return send_change_string_value(objectID, static_cast<std::uint16_t>(value.size()), value.c_str());
+		bool retVal = false;
+
+		if (value.length() <= std::numeric_limits<std::uint16_t>::max())
+		{
+			retVal = send_change_string_value(objectID, static_cast<std::uint16_t>(value.size()), value.c_str());
+		}
+		else
+		{
+			LOG_ERROR("[VT]: Cannot change string value of object " + isobus::to_string(static_cast<int>(objectID)) + ", the string is longer than 65535 characters.");
+		}
+		return retVal;
 	}
 
 	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction)
@@ -2836,6 +2847,7 @@ namespace isobus
 		      (parentVT->partnerControlFunction == message.get_destination_control_function()))))
 		{
 			auto &auxiliaryMutex = parentVT->auxiliaryAssignmentMutex;
+			(void)auxiliaryMutex;
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
@@ -3029,32 +3041,36 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::VTESCMessage):
 						{
 							std::uint16_t objectID = message.get_uint16_at(1);
-							std::uint8_t errorCode = message.get_uint8_at(3) & 0x1F;
-							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
-							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							std::uint8_t errorBits = message.get_uint8_at(3);
+							ESCMessageErrorCode errorCode = ESCMessageErrorCode::NoError;
+							if (0 != (errorBits & static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)))
 							{
-								std::uint8_t transactionNumber = 0xF;
-								if (parentVT->is_vt_version_supported(VTVersion::Version6))
-								{
-									// VT version is 6 or later
-									transactionNumber = message.get_uint8_at(7) >> 4;
-								}
-
-								parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, static_cast<ESCMessageErrorCode>(errorCode) });
-
-								// Send response
-								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-									static_cast<std::uint8_t>(Function::VTESCMessage),
-									static_cast<std::uint8_t>(objectID),
-									static_cast<std::uint8_t>(objectID >> 8),
-									0xFF,
-									0xFF,
-									0xFF,
-									0xFF,
-									static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
-								};
-								parentVT->send_message_to_vt(buffer.data(), buffer.size());
+								errorCode = ESCMessageErrorCode::OtherError;
 							}
+							else if (0 != (errorBits & static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							{
+								errorCode = ESCMessageErrorCode::NoInputFieldOpen;
+							}
+
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								transactionNumber = message.get_uint8_at(7) >> 4;
+							}
+
+							parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, errorCode });
+
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTESCMessage),
+								static_cast<std::uint8_t>(objectID),
+								static_cast<std::uint8_t>(objectID >> 8),
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+								static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
+							};
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -3163,22 +3179,30 @@ namespace isobus
 						{
 							std::uint16_t objectID = message.get_uint16_at(1);
 							std::uint8_t stringLength = message.get_uint8_at(3);
-							std::string value = std::string(message.get_data().begin() + 4, message.get_data().begin() + 4 + stringLength);
 
-							parentVT->changeStringValueEventDispatcher.invoke({ value, parentVT, objectID });
+							if (message.get_data_length() >= (4U + stringLength))
+							{
+								std::string value = std::string(message.get_data().begin() + 4, message.get_data().begin() + 4 + stringLength);
 
-							// Send response
-							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-								static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
-								0xFF,
-								0xFF,
-								static_cast<std::uint8_t>(objectID),
-								static_cast<std::uint8_t>(objectID >> 8),
-								0xFF,
-								0xFF,
-								0xFF
-							};
-							parentVT->send_message_to_vt(buffer.data(), buffer.size());
+								parentVT->changeStringValueEventDispatcher.invoke({ value, parentVT, objectID });
+
+								// Send response
+								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+									static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
+									0xFF,
+									0xFF,
+									static_cast<std::uint8_t>(objectID),
+									static_cast<std::uint8_t>(objectID >> 8),
+									0xFF,
+									0xFF,
+									0xFF
+								};
+								parentVT->send_message_to_vt(buffer.data(), buffer.size());
+							}
+							else
+							{
+								LOG_WARNING("[VT]: Ignoring VT Change String Value message, its string length is longer than the message.");
+							}
 						}
 						break;
 
@@ -3617,6 +3641,10 @@ namespace isobus
 									{
 										LOG_WARNING("[VT]: Store Versions Response error: Any other error.");
 									}
+
+									// The pool is already uploaded and in use; only storing it failed,
+									// so it will be uploaded again next time. Carry on.
+									parentVT->set_state(StateMachineState::Connected);
 								}
 							}
 							else
@@ -3729,6 +3757,17 @@ namespace isobus
 							if ((parentVT->myControlFunction == message.get_destination_control_function()) &&
 							    (parentVT->partnerControlFunction == message.get_source_control_function()))
 							{
+								if ((static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0)) &&
+								    (0 != message.get_uint8_at(5)))
+								{
+									const std::uint8_t errorCodes = message.get_uint8_at(5);
+									LOG_ERROR("[VT]: The VT rejected Change String Value for object " + isobus::to_string(static_cast<int>(message.get_uint16_at(3))) +
+									          ", error code " + isobus::to_string(static_cast<int>(errorCodes)) +
+									          ((0 != (errorCodes & 0x02)) ? " (invalid object ID)" : "") +
+									          ((0 != (errorCodes & 0x04)) ? " (string too long)" : "") +
+									          ((0 != (errorCodes & 0x08)) ? " (any other error)" : "") +
+									          ((0 != (errorCodes & 0x10)) ? " (value in use)" : ""));
+								}
 								parentVT->commandAwaitingResponse = false;
 								parentVT->process_command_queue();
 							}
@@ -4401,6 +4440,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::SoftKeyMask:
 			case VirtualTerminalObjectType::ColourMap:
+			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 6;
 			}
@@ -4408,7 +4448,6 @@ namespace isobus
 
 			case VirtualTerminalObjectType::Key:
 			case VirtualTerminalObjectType::NumberVariable:
-			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 7;
 			}

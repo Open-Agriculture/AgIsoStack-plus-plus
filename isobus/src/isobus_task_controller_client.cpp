@@ -82,6 +82,8 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
 			runNumber++;
 			initialized = true;
@@ -1630,6 +1632,7 @@ namespace isobus
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
 			const std::uint32_t run = parentTC->runNumber; // An error found below stops this run only (request_termination())
 			auto &clientMutex = parentTC->clientMutex;
+			(void)clientMutex;
 			const auto &messageData = message.get_data();
 
 			switch (message.get_identifier().get_parameter_group_number())

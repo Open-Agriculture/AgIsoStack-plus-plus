@@ -438,7 +438,10 @@ namespace isobus
 			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
 		}
 
-		retVal.insert(retVal.end(), extendedTransportProtocols[canPortIndex]->get_sessions().begin(), extendedTransportProtocols[canPortIndex]->get_sessions().end());
+		{
+			auto sessions = extendedTransportProtocols[canPortIndex]->get_sessions();
+			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
+		}
 		return retVal;
 	}
 

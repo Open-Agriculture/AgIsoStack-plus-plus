@@ -8,6 +8,7 @@
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -1113,6 +1114,140 @@ TEST_F(VirtualTerminalTest, VTStatusMessage)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, VTChangeStringValueMessageLengthIsBoundsChecked)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	std::vector<std::string> receivedStrings;
+	clientUnderTest.get_vt_change_string_value_event_dispatcher().add_listener([&receivedStrings](const VirtualTerminalClient::VTChangeStringValueEvent &event) {
+		receivedStrings.push_back(event.value);
+	});
+
+	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+
+	CANMessage validMessage(CANMessage::Type::Receive,
+	                        identifier,
+	                        { 0x08, 0xD2, 0x04, 4, 'T', 'e', 's', 't' },
+	                        vtPartner,
+	                        nullptr,
+	                        0);
+	clientUnderTest.test_wrapper_process_rx_message(validMessage, &clientUnderTest);
+	ASSERT_EQ(1, receivedStrings.size());
+	EXPECT_EQ("Test", receivedStrings.back());
+
+	CANMessage overlongMessage(CANMessage::Type::Receive,
+	                           identifier,
+	                           { 0x08, 0xD2, 0x04, 200, 'T', 'e', 's', 't' },
+	                           vtPartner,
+	                           nullptr,
+	                           0);
+	clientUnderTest.test_wrapper_process_rx_message(overlongMessage, &clientUnderTest);
+	EXPECT_EQ(1, receivedStrings.size());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, VTESCMessageIsReportedForEveryErrorBit)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	std::vector<VirtualTerminalClient::ESCMessageErrorCode> errorCodes;
+	clientUnderTest.get_vt_esc_message_event_dispatcher().add_listener([&errorCodes](const VirtualTerminalClient::VTESCMessageEvent &event) {
+		errorCodes.push_back(event.errorCode);
+	});
+
+	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+
+	for (std::uint8_t errorBits : std::vector<std::uint8_t>{ 0x00, 0x01, 0x10, 0x11 })
+	{
+		CANMessage escMessage(CANMessage::Type::Receive,
+		                      identifier,
+		                      { 0x04, 0xFF, 0xFF, errorBits, 0xFF, 0xFF, 0xFF, 0xFF },
+		                      vtPartner,
+		                      nullptr,
+		                      0);
+		clientUnderTest.test_wrapper_process_rx_message(escMessage, &clientUnderTest);
+	}
+
+	ASSERT_EQ(4, errorCodes.size());
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::NoError, errorCodes[0]);
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::NoInputFieldOpen, errorCodes[1]);
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::OtherError, errorCodes[2]);
+	EXPECT_EQ(VirtualTerminalClient::ESCMessageErrorCode::OtherError, errorCodes[3]);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, SendChangeStringValueRejectsStringOver65535Characters)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	EXPECT_FALSE(clientUnderTest.send_change_string_value(1234, std::string(65536, 'a')));
+	EXPECT_FALSE(clientUnderTest.send_change_string_value(1234, 4, nullptr));
+}
+
+class CapturingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel, const std::string &text) override
+	{
+		logs.push_back(text);
+	}
+
+	std::vector<std::string> logs;
+};
+
+TEST_F(VirtualTerminalTest, ChangeStringValueErrorResponseIsLogged)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	CapturingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
+
+	CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0, 0);
+	const std::string expectedLog = "[VT]: The VT rejected Change String Value for object 1234, error code 4 (string too long)";
+
+	CANMessage acceptedResponse(CANMessage::Type::Receive, identifier, { 0xB3, 0xFF, 0xFF, 0xD2, 0x04, 0x00, 0xFF, 0xFF }, vtPartner, internalECU, 0);
+	clientUnderTest.test_wrapper_process_rx_message(acceptedResponse, &clientUnderTest);
+	EXPECT_EQ(logger.logs.end(), std::find(logger.logs.begin(), logger.logs.end(), expectedLog));
+
+	CANMessage rejectedResponse(CANMessage::Type::Receive, identifier, { 0xB3, 0xFF, 0xFF, 0xD2, 0x04, 0x04, 0xFF, 0xFF }, vtPartner, internalECU, 0);
+	clientUnderTest.test_wrapper_process_rx_message(rejectedResponse, &clientUnderTest);
+	EXPECT_NE(logger.logs.end(), std::find(logger.logs.begin(), logger.logs.end(), expectedLog));
+
+	CANStackLogger::set_can_stack_logger_sink(nullptr);
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithVector)
 {
 	NAME clientNAME(0);
@@ -1299,7 +1434,7 @@ TEST_F(VirtualTerminalTest, ObjectMetadataTests)
 	EXPECT_EQ(8, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::FontAttributes));
 	EXPECT_EQ(8, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::LineAttributes));
 	EXPECT_EQ(8, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::FillAttributes));
-	EXPECT_EQ(7, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::InputAttributes));
+	EXPECT_EQ(6, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::InputAttributes));
 	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExtendedInputAttributes));
 	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ObjectPointer));
 	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::Macro));
@@ -1967,6 +2102,16 @@ TEST_F(VirtualTerminalTest, ExtendedVersionResponsesDriveTheConnectStateMachine)
 
 	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForStoreVersionResponse);
 	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD4, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	// A VT that could not store the pool (any other error) still has it loaded: stay connected
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForStoreVersionResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD4, 0xFF, 0xFF, 0xFF, 0xFF, 0x08, 0xFF, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	// Insufficient memory, likewise
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForStoreVersionResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD4, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0xFF, 0xFF }), &clientUnderTest);
 	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);

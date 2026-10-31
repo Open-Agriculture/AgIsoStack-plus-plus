@@ -564,8 +564,8 @@ namespace isobus
 		{
 			Highest = 0, ///< Most aggressive beeping
 			Medium = 1, ///< Medium beeping
-			Lowest = 3, ///< Low beeping
-			None = 4 ///< No beeping
+			Lowest = 2, ///< Low beeping
+			None = 3 ///< No beeping
 		};
 
 		/// @brief Constructor for a alarm mask object
