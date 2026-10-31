@@ -231,8 +231,8 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 	const std::vector<std::vector<std::uint8_t>> truncatedObjects = {
 		// Container with no macro count byte
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00 },
-		// Key Group with one child and no macro count byte
-		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::KeyGroup), 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x02, 0x00 },
+		// Key Group with one child, cut off after its first byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::KeyGroup), 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x34 },
 		// Output String whose value ends the transfer, with no macro count byte
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputString), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x02, 0x00, 'O', 'K' },
 		// Input Attributes whose validation string ends the transfer, with no macro count byte
@@ -299,6 +299,23 @@ TEST(VirtualTerminalServerTest, ObjectThatEndsTheTransferIsAccepted)
 		EXPECT_TRUE(workingSet.parse_iop_into_objects(object.data(), static_cast<std::uint32_t>(object.size())));
 		EXPECT_NE(nullptr, workingSet.get_object_by_id(1));
 	}
+}
+
+TEST(VirtualTerminalServerTest, KeyGroupReadsBothCountsBeforeItsChildren)
+{
+	// 1 child (0x1234), 1 macro (5 on show)
+	std::vector<std::uint8_t> object = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::KeyGroup), 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x01, 0x34, 0x12, 0x03, 0x05 };
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	ASSERT_TRUE(workingSet.parse_iop_into_objects(object.data(), static_cast<std::uint32_t>(object.size())));
+
+	auto keyGroup = workingSet.get_object_by_id(1);
+	ASSERT_NE(nullptr, keyGroup);
+	ASSERT_EQ(1u, keyGroup->get_number_children());
+	EXPECT_EQ(0x1234u, keyGroup->get_child_id(0));
+	ASSERT_EQ(1u, keyGroup->get_number_macros());
+	EXPECT_EQ(EventID::OnShow, keyGroup->get_macro(0).event);
+	EXPECT_EQ(5u, keyGroup->get_macro(0).macroID);
 }
 
 TEST(VirtualTerminalServerTest, SixteenBitMacroReferenceTakesTwoMacroGroupings)

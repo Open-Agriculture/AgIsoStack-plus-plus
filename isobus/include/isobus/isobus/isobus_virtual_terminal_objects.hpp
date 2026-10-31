@@ -1714,7 +1714,7 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.

@@ -723,13 +723,12 @@ namespace isobus
 						tempObject->set_name_object_id(get_little_endian_uint16(iopData, 4)); // Output string for the object's name/label
 						tempObject->set_key_group_icon(get_little_endian_uint16(iopData, 6));
 
-						// Parse children
 						const std::uint8_t numberChildrenToFollow = iopData[8];
-						iopLength -= 9;
-						iopData += 9;
+						const std::uint8_t numberOfMacrosToFollow = iopData[9];
+						iopLength -= 10;
+						iopData += 10;
 
-						// The children are followed by the macro count byte
-						if (iopLength > static_cast<std::uint32_t>(numberChildrenToFollow * 2))
+						if (iopLength >= static_cast<std::uint32_t>(numberChildrenToFollow * 2))
 						{
 							if (numberChildrenToFollow <= KeyGroup::MAX_CHILD_KEYS)
 							{
@@ -739,11 +738,6 @@ namespace isobus
 									iopLength -= 2;
 									iopData += 2;
 								}
-
-								// Now parse macros
-								const std::uint8_t numberOfMacrosToFollow = iopData[0];
-								iopData++;
-								iopLength--;
 
 								retVal = parse_object_macro_reference(tempObject, numberOfMacrosToFollow, iopData, iopLength);
 							}
