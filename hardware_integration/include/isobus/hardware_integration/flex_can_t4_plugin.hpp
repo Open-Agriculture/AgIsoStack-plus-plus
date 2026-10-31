@@ -70,10 +70,16 @@ namespace isobus
 		/// @param[in] message The frame the controller received
 		void queue_received_frame(const CAN_message_t &message);
 
-		/// @brief The interrupt-side receive handlers, one per FlexCAN channel
+		/// @brief The interrupt-side receive handler for FlexCAN channel 0
 		/// @param[in] message The frame the controller received
 		static void on_receive_channel_0(const CAN_message_t &message);
+
+		/// @brief The interrupt-side receive handler for FlexCAN channel 1
+		/// @param[in] message The frame the controller received
 		static void on_receive_channel_1(const CAN_message_t &message);
+
+		/// @brief The interrupt-side receive handler for FlexCAN channel 2
+		/// @param[in] message The frame the controller received
 		static void on_receive_channel_2(const CAN_message_t &message);
 
 		static FlexCANT4Plugin *openPlugins[3]; ///< The plugin that opened each channel, for the interrupt handlers
