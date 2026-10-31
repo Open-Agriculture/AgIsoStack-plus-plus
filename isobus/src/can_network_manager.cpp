@@ -580,6 +580,7 @@ namespace isobus
 			if (targetControlFunction != nullptr)
 			{
 				targetControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
+				targetControlFunction->missedAddressClaimRequests = 0;
 			}
 			else
 			{
@@ -598,6 +599,7 @@ namespace isobus
 					// the flag still false and is eligible for pruning again on the very next roll-call,
 					// which turns a single eviction into an unbroken offline/online cycle.
 					targetControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
+					targetControlFunction->missedAddressClaimRequests = 0;
 
 					LOG_DEBUG("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
 					          targetControlFunction->get_type_string().c_str(),
@@ -898,6 +900,7 @@ namespace isobus
 						partner->initialized = true;
 						// The partner replaces this CF in the table, so it must not lose credit for a claim the CF already made
 						partner->claimedAddressSinceLastAddressClaimRequest = currentActiveControlFunction->claimedAddressSinceLastAddressClaimRequest;
+						partner->missedAddressClaimRequests = currentActiveControlFunction->missedAddressClaimRequests;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
 						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
 
@@ -1132,14 +1135,18 @@ namespace isobus
 
 	void CANNetworkManager::prune_inactive_control_functions()
 	{
-		constexpr std::uint32_t MAX_ADDRESS_CLAIM_RESOLUTION_TIME = 755; // This is 250ms + RTxD + 250ms
+		// ISO 11783-3 5.12.2: a CF expecting a response waits at least T3 (1.25 s) before giving up
+		constexpr std::uint32_t ADDRESS_CLAIM_RESPONSE_TIMEOUT = 1250;
+		// ISO 11783-5 requires a CF to answer a request for address claimed, but does not say that one
+		// which stays silent has left the network, so one missed request is not enough to take it offline
+		constexpr std::uint8_t MISSED_REQUESTS_BEFORE_OFFLINE = 2;
 
 		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
 		{
 			auto &lastAddressClaimRequestTime = lastAddressClaimRequestTimestamp_ms[channelIndex];
 			if ((0 != lastAddressClaimRequestTime) &&
-			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, MAX_ADDRESS_CLAIM_RESOLUTION_TIME)))
+			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, ADDRESS_CLAIM_RESPONSE_TIMEOUT)))
 			{
 				for (auto &tableEntry : controlFunctionTable[channelIndex])
 				{
@@ -1148,6 +1155,14 @@ namespace isobus
 					{
 						continue;
 					}
+
+					if ((tableEntry->missedAddressClaimRequests + 1) < MISSED_REQUESTS_BEFORE_OFFLINE)
+					{
+						tableEntry->missedAddressClaimRequests++;
+						LOG_DEBUG("[NM]: Control function with address %u and NAME %016llx did not answer a request for address claim on channel %u.", tableEntry->get_address(), tableEntry->get_NAME().get_full_name(), channelIndex);
+						continue;
+					}
+					tableEntry->missedAddressClaimRequests = MISSED_REQUESTS_BEFORE_OFFLINE;
 
 					auto controlFunction = tableEntry;
 					if (ControlFunction::Type::Internal != controlFunction->get_type())
