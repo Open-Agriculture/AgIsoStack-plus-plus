@@ -2294,3 +2294,140 @@ TEST_F(VirtualTerminalTest, ObjectPoolInSeveralPartsRecoversFromAFailedTransfer)
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
+
+// The sizes of the transfers the VT is asked to receive, from TP.CM RTS and ETP.CM RTS, mux byte included
+static std::vector<std::uint32_t> read_object_pool_requests_to_send(VirtualCANPlugin &serverVT)
+{
+	std::vector<std::uint32_t> sizes;
+	CANMessageFrame frame = {};
+	while (serverVT.read_frame(frame))
+	{
+		const std::uint8_t pduFormat = static_cast<std::uint8_t>((frame.identifier >> 16) & 0xFF);
+		if ((0xEC == pduFormat) && (0x10 == frame.data[0]))
+		{
+			sizes.push_back(static_cast<std::uint32_t>(frame.data[1] | (frame.data[2] << 8)));
+		}
+		else if ((0xC8 == pduFormat) && (0x14 == frame.data[0]))
+		{
+			sizes.push_back(static_cast<std::uint32_t>(frame.data[1] | (frame.data[2] << 8) | (frame.data[3] << 16) | (frame.data[4] << 24)));
+		}
+	}
+	return sizes;
+}
+
+TEST_F(VirtualTerminalTest, ObjectPoolUploadWaitsForATransferFromAnEarlierConnection)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x53, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x54, 0);
+
+	// The first part needs ETP, the second fits in TP
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	const std::vector<std::uint8_t> firstPart(2000, 0x00);
+	const std::vector<std::uint8_t> secondPart(30, 0x00);
+	clientUnderTest.set_object_pool(0, firstPart.data(), static_cast<std::uint32_t>(firstPart.size()));
+	clientUnderTest.set_object_pool(1, secondPart.data(), static_cast<std::uint32_t>(secondPart.size()));
+	read_object_pool_requests_to_send(serverVT); // Address claims
+
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(std::vector<std::uint32_t>{ 2001 }, read_object_pool_requests_to_send(serverVT));
+
+	// The connection is reset and comes back while the first part's ETP still waits for a CTS
+	clientUnderTest.test_wrapper_set_state(State::Disconnected);
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_TRUE(read_object_pool_requests_to_send(serverVT).empty()); // Neither part is started next to it
+
+	// The old ETP times out. Its failure isn't taken as the new upload's
+	time_source.update_for_ms(1300);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(State::UploadObjectPool, clientUnderTest.state);
+	EXPECT_EQ(std::vector<std::uint32_t>{ 2001 }, read_object_pool_requests_to_send(serverVT));
+
+	serverVT.close();
+	CANHardwareInterface::stop();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, ObjectPoolUploadWaitsForALaterPartFromAnEarlierConnection)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x55, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x56, 0);
+
+	// The first part fits in TP, the second needs ETP
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	const std::vector<std::uint8_t> firstPart(20, 0x00);
+	const std::vector<std::uint8_t> secondPart(2000, 0x00);
+	clientUnderTest.set_object_pool(0, firstPart.data(), static_cast<std::uint32_t>(firstPart.size()));
+	clientUnderTest.set_object_pool(1, secondPart.data(), static_cast<std::uint32_t>(secondPart.size()));
+	read_object_pool_requests_to_send(serverVT); // Address claims
+
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(std::vector<std::uint32_t>{ 21 }, read_object_pool_requests_to_send(serverVT));
+
+	// The VT receives the first part: CTS for all 3 packets, then end of message acknowledge
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7, 0xEC00, internalECU, vtPartner, { 0x11, 3, 1, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }));
+	std::uint32_t dataPackets = 0;
+	for (std::uint32_t elapsed_ms = 0; (dataPackets < 3) && (elapsed_ms < 1000); elapsed_ms += 5)
+	{
+		time_source.update_for_ms(5);
+		CANMessageFrame frame = {};
+		while (serverVT.read_frame(frame))
+		{
+			if (0xEB == ((frame.identifier >> 16) & 0xFF))
+			{
+				dataPackets++;
+			}
+		}
+	}
+	EXPECT_EQ(3u, dataPackets);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7, 0xEC00, internalECU, vtPartner, { 0x13, 21, 0, 3, 0xFF, 0x00, 0xE7, 0x00 }));
+	time_source.update_for_ms(100);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(std::vector<std::uint32_t>{ 2001 }, read_object_pool_requests_to_send(serverVT));
+
+	// The connection is reset and comes back while the second part's ETP still waits for a CTS.
+	// The first part fits in TP, which doesn't know about the ETP session.
+	clientUnderTest.test_wrapper_set_state(State::Disconnected);
+	clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_TRUE(read_object_pool_requests_to_send(serverVT).empty());
+
+	// The old ETP times out. Its failure isn't taken as the new upload's, which starts over with the first part
+	time_source.update_for_ms(1300);
+	clientUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_EQ(State::UploadObjectPool, clientUnderTest.state);
+	EXPECT_EQ(std::vector<std::uint32_t>{ 21 }, read_object_pool_requests_to_send(serverVT));
+
+	serverVT.close();
+	CANHardwareInterface::stop();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
