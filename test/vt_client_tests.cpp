@@ -2245,6 +2245,33 @@ TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, GetStateReportsTheStateMachineState)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.get_state());
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse, clientUnderTest.get_state());
+	EXPECT_FALSE(clientUnderTest.get_is_connected());
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage);
+	time_source.simulate_delay_ms(3001);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Failed, clientUnderTest.get_state());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusMessages)
 {
 	using State = VirtualTerminalClient::StateMachineState;
