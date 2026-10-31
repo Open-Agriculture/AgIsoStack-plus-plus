@@ -6091,7 +6091,7 @@ namespace isobus
 
 	void PictureGraphic::add_raw_data(std::uint8_t dataByte)
 	{
-		if (rawData.size() < (get_actual_width() * get_actual_height()))
+		if (rawData.size() < (static_cast<std::uint32_t>(get_actual_width()) * get_actual_height()))
 		{
 			rawData.push_back(dataByte);
 		}
