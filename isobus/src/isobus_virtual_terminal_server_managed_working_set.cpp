@@ -34,6 +34,11 @@ namespace isobus
 		}
 	}
 
+	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
+	{
+		join_parsing_thread();
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
 	{
 		if (nullptr == objectPoolProcessingThread)
@@ -113,6 +118,7 @@ namespace isobus
 		workingSetID = NULL_OBJECT_ID;
 		focusedObject = NULL_OBJECT_ID;
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
+		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
@@ -206,13 +212,16 @@ namespace isobus
 					continue;
 				}
 
-				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size())))
+				std::uint32_t objectsLength = 0;
+				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
 				{
 					lSuccess = false;
 					break;
 				}
 				else
 				{
+					// Load Version parses the stored transfers joined together, where this padding would read as objects
+					iopFilesRawData[i].data.resize(objectsLength);
 					iopFilesRawData[i].processed = true;
 				}
 			}

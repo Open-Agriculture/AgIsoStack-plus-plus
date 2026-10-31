@@ -438,7 +438,10 @@ namespace isobus
 			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
 		}
 
-		retVal.insert(retVal.end(), extendedTransportProtocols[canPortIndex]->get_sessions().begin(), extendedTransportProtocols[canPortIndex]->get_sessions().end());
+		{
+			auto sessions = extendedTransportProtocols[canPortIndex]->get_sessions();
+			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
+		}
 		return retVal;
 	}
 
@@ -893,6 +896,8 @@ namespace isobus
 						partner->address = currentActiveControlFunction->get_address();
 						partner->controlFunctionNAME = currentActiveControlFunction->get_NAME();
 						partner->initialized = true;
+						// The partner replaces this CF in the table, so it must not lose credit for a claim the CF already made
+						partner->claimedAddressSinceLastAddressClaimRequest = currentActiveControlFunction->claimedAddressSinceLastAddressClaimRequest;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
 						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
 

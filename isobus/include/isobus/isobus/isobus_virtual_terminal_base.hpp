@@ -150,7 +150,7 @@ namespace isobus
 		{
 			NoError = 0, ///< No error occurred
 			NoInputFieldOpen = 1, ///< No input field is open
-			OtherError = 5 ///< Error is not one of the above
+			OtherError = 16 ///< Any other error, reported even if bit 0 is also set
 		};
 
 		/// @brief Enumerates the different events that can be associated with a macro
@@ -276,6 +276,32 @@ namespace isobus
 			AuxiliaryTypeTwoFunctionType functionType; ///< The type of function
 		};
 
+		/// @brief Enumerates the command types for graphics context objects
+		enum class GraphicsContextSubCommandID : std::uint8_t
+		{
+			SetGraphicsCursor = 0x00, ///< Sets the graphics cursor x/y attributes
+			MoveGraphicsCursor = 0x01, ///< Moves the cursor relative to current location
+			SetForegroundColour = 0x02, ///< Sets the foreground colour
+			SetBackgroundColour = 0x03, ///< Sets the background colour
+			SetLineAttributesObjectID = 0x04, ///< Sets the line attribute object ID
+			SetFillAttributesObjectID = 0x05, ///< Sets the fill attribute object ID
+			SetFontAttributesObjectID = 0x06, ///< Sets the font attribute object ID
+			EraseRectangle = 0x07, ///< Erases a rectangle
+			DrawPoint = 0x08, ///< Draws a point
+			DrawLine = 0x09, ///< Draws a line
+			DrawRectangle = 0x0A, ///< Draws a rectangle
+			DrawClosedEllipse = 0x0B, ///< Draws a closed ellipse
+			DrawPolygon = 0x0C, ///< Draws polygon
+			DrawText = 0x0D, ///< Draws text
+			PanViewport = 0x0E, ///< Pans viewport
+			ZoomViewport = 0x0F, ///< Zooms the viewport
+			PanAndZoomViewport = 0x10, ///< Pan and zooms the viewport
+			ChangeViewportSize = 0x11, ///< Changes the viewport size
+			DrawVTObject = 0x12, ///< Draws a VT object
+			CopyCanvasToPictureGraphic = 0x13, ///< Copies the canvas to picture graphic object
+			CopyViewportToPictureGraphic = 0x14 ///< Copies the viewport to picture graphic object
+		};
+
 	protected:
 		/// @brief Enumerates the multiplexor byte values for VT commands
 		enum class Function : std::uint8_t
@@ -354,32 +380,6 @@ namespace isobus
 			UnsupportedVTFunctionMessage = 0xFD,
 			VTStatusMessage = 0xFE,
 			WorkingSetMaintenanceMessage = 0xFF
-		};
-
-		/// @brief Enumerates the command types for graphics context objects
-		enum class GraphicsContextSubCommandID : std::uint8_t
-		{
-			SetGraphicsCursor = 0x00, ///< Sets the graphics cursor x/y attributes
-			MoveGraphicsCursor = 0x01, ///< Moves the cursor relative to current location
-			SetForegroundColour = 0x02, ///< Sets the foreground colour
-			SetBackgroundColour = 0x03, ///< Sets the background colour
-			SetLineAttributesObjectID = 0x04, ///< Sets the line attribute object ID
-			SetFillAttributesObjectID = 0x05, ///< Sets the fill attribute object ID
-			SetFontAttributesObjectID = 0x06, ///< Sets the font attribute object ID
-			EraseRectangle = 0x07, ///< Erases a rectangle
-			DrawPoint = 0x08, ///< Draws a point
-			DrawLine = 0x09, ///< Draws a line
-			DrawRectangle = 0x0A, ///< Draws a rectangle
-			DrawClosedEllipse = 0x0B, ///< Draws a closed ellipse
-			DrawPolygon = 0x0C, ///< Draws polygon
-			DrawText = 0x0D, ///< Draws text
-			PanViewport = 0x0E, ///< Pans viewport
-			ZoomViewport = 0x0F, ///< Zooms the viewport
-			PanAndZoomViewport = 0x10, ///< Pan and zooms the viewport
-			ChangeViewportSize = 0x11, ///< Changes the viewport size
-			DrawVTObject = 0x12, ///< Draws a VT object
-			CopyCanvasToPictureGraphic = 0x13, ///< Copies the canvas to picture graphic object
-			CopyViewportToPictureGraphic = 0x14 ///< Copies the viewport to picture graphic object
 		};
 	};
 } // namespace isobus
