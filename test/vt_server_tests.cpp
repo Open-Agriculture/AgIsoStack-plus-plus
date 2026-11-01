@@ -185,6 +185,18 @@ public:
 		}
 	}
 
+	void control_audio_signal(std::uint8_t activations, std::uint16_t frequencyHz, std::uint16_t onTimeMs, std::uint16_t offTimeMs, std::shared_ptr<ControlFunction> source) override
+	{
+		audioSignals.push_back({ activations, frequencyHz, onTimeMs, offTimeMs });
+		audioSignalSources.push_back(source);
+	}
+
+	void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source) override
+	{
+		audioVolumes.push_back(volumePercent);
+		audioVolumeSources.push_back(source);
+	}
+
 	void run_update()
 	{
 		update();
@@ -243,6 +255,10 @@ public:
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolDeleted;
 	std::uint_fast8_t objectPoolDeletionRequests = 0;
 	std::vector<std::uint8_t> supportedObjects;
+	std::vector<std::array<std::uint16_t, 4>> audioSignals;
+	std::vector<std::shared_ptr<ControlFunction>> audioSignalSources;
+	std::vector<std::uint8_t> audioVolumes;
+	std::vector<std::shared_ptr<ControlFunction>> audioVolumeSources;
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -2360,4 +2376,45 @@ TEST_F(VirtualTerminalServerMessagingTest, MacroBlanksAStringWithAnEmptyChangeSt
 
 	EXPECT_TRUE(server.execute_macro_for_test(5, workingSet));
 	EXPECT_EQ("  ", std::static_pointer_cast<StringVariable>(workingSet->get_object_by_id(0x1234))->get_value());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, AudioCommandsAreForwardedToTheApplication)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x4A, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA6, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame audioSignalResponse = {};
+	CANMessageFrame audioVolumeResponse = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	// 3 activations of 880 Hz, 200 ms on and 100 ms off
+	receive_from_client(internalECU, client, { 0xA3, 0x03, 0x70, 0x03, 0xC8, 0x00, 0x64, 0x00 });
+	const bool audioSignalAnswered = poll_for_response(serverUnderTest, testPlugin, 0xA3, audioSignalResponse);
+	receive_from_client(internalECU, client, { 0xA4, 0x4B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool audioVolumeAnswered = poll_for_response(serverUnderTest, testPlugin, 0xA4, audioVolumeResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_EQ(1U, serverUnderTest.audioSignals.size());
+	EXPECT_EQ(3, serverUnderTest.audioSignals.front()[0]);
+	EXPECT_EQ(880, serverUnderTest.audioSignals.front()[1]);
+	EXPECT_EQ(200, serverUnderTest.audioSignals.front()[2]);
+	EXPECT_EQ(100, serverUnderTest.audioSignals.front()[3]);
+	EXPECT_EQ(client, serverUnderTest.audioSignalSources.front());
+	ASSERT_EQ(1U, serverUnderTest.audioVolumes.size());
+	EXPECT_EQ(75, serverUnderTest.audioVolumes.front());
+	EXPECT_EQ(client, serverUnderTest.audioVolumeSources.front());
+	ASSERT_TRUE(audioSignalAnswered);
+	EXPECT_EQ(0x00, audioSignalResponse.data[1]);
+	ASSERT_TRUE(audioVolumeAnswered);
 }

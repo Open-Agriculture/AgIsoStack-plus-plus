@@ -251,6 +251,14 @@ namespace isobus
 	{
 	}
 
+	void VirtualTerminalServer::control_audio_signal(std::uint8_t, std::uint16_t, std::uint16_t, std::uint16_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
+	void VirtualTerminalServer::set_audio_volume(std::uint8_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
 	void VirtualTerminalServer::select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
 		activeWorkingSet = workingSet;
@@ -2054,12 +2062,18 @@ namespace isobus
 
 			case Function::ControlAudioSignalCommand:
 			{
+				control_audio_signal(data[1],
+				                     get_little_endian_uint16(data, 2),
+				                     get_little_endian_uint16(data, 4),
+				                     get_little_endian_uint16(data, 6),
+				                     message.get_source_control_function());
 				send_audio_signal_successful(message.get_source_control_function());
 			}
 			break;
 
 			case Function::SetAudioVolumeCommand:
 			{
+				set_audio_volume(data[1], message.get_source_control_function());
 				send_audio_volume_response(message.get_source_control_function());
 			}
 			break;
