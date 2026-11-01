@@ -20,6 +20,9 @@
 namespace isobus
 {
 	/// @brief An interface for using FlexCAN_T4 on a Teensy4/4.1 device
+	/// @details The plugin receives through FlexCAN_T4's FIFO interrupt. Don't call `events()` on a
+	/// FlexCAN_T4 bus this plugin uses: once `events()` has been called, FlexCAN_T4 hands received
+	/// frames to the handler only from `events()`, and this plugin stops receiving without an error.
 	class FlexCANT4Plugin : public CANHardwarePlugin
 	{
 	public:

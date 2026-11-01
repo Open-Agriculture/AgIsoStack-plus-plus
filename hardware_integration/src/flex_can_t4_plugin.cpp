@@ -59,18 +59,22 @@ namespace isobus
 		isOpen = false;
 	}
 
-	// Receive by interrupt (#248 in NeptuneGPS_Triton): the FIFO keeps the order frames
-	// arrived in, and its interrupt copies each one into receiveQueue at once. Polled
-	// mailboxes (FlexCAN_T4's default after begin()) hold only 4 frames with 29-bit
-	// identifiers and are read round-robin, so a burst on the bus while the application
-	// was busy lost frames, and more mailboxes would not keep transport-protocol frames
-	// in order.
+	// Receive by interrupt: the FIFO keeps the order frames arrived in, and its interrupt
+	// copies each one into receiveQueue at once. Polled mailboxes (FlexCAN_T4's default
+	// after begin()) hold only 4 frames with 29-bit identifiers and are read round-robin,
+	// so a burst on the bus while the application was busy lost frames, and more mailboxes
+	// would not keep transport-protocol frames in order.
 	void FlexCANT4Plugin::open()
 	{
+		// After an earlier open() the interrupt still hands frames to this plugin: stop that before
+		// resetting the queue, and hand the channel back only once the reset is done
+		FlexCANT4Plugin::close();
+		std::atomic_signal_fence(std::memory_order_seq_cst);
 		receiveHead = 0;
 		receiveTail = 0;
 		receiveHighWater = 0;
 		receiveOverflowCount = 0;
+		std::atomic_signal_fence(std::memory_order_release);
 
 		if (0 == selectedChannel)
 		{
