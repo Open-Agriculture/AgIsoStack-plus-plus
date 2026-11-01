@@ -45,6 +45,8 @@ set(TEST_SRC
     address_claim_tests.cpp
     can_name_tests.cpp
     hardware_interface_tests.cpp
+    candlelight_bittiming_tests.cpp
+    candlelight_io_tests.cpp
     vt_client_tests.cpp
     vt_server_tests.cpp
     language_command_interface_tests.cpp
@@ -69,6 +71,8 @@ set(TEST_SRC
     helpers/messaging_helpers.cpp)
 
 add_executable(unit_tests ${TEST_SRC} ${TEST_INCLUDE})
+target_include_directories(
+  unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../hardware_integration/src)
 set_target_properties(
   unit_tests
   PROPERTIES CXX_STANDARD 11
