@@ -4058,10 +4058,17 @@ namespace isobus
 		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
 		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
 		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
-		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output string and output number: ID, type, width, height, background colour
+		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
+		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
 
 		auto read_id = [&pool](std::size_t offset) {
 			return static_cast<std::uint16_t>(pool[offset] | (pool[offset + 1] << 8));
+		};
+		auto uses_font = [](VirtualTerminalObjectType type) {
+			return (VirtualTerminalObjectType::OutputString == type) ||
+			  (VirtualTerminalObjectType::OutputNumber == type) ||
+			  (VirtualTerminalObjectType::InputString == type) ||
+			  (VirtualTerminalObjectType::InputNumber == type);
 		};
 
 		// Index the pool by object ID, and start from the children of every key
@@ -4095,7 +4102,7 @@ namespace isobus
 			offset += objectSize;
 		}
 
-		// Follow the key children down through containers, collecting the fonts they use
+		// Follow the key children down through containers and object pointers, collecting the fonts they use
 		std::set<std::uint16_t> shownOnKeys;
 		std::set<std::uint16_t> fontsOnKeys;
 
@@ -4127,6 +4134,12 @@ namespace isobus
 				}
 				break;
 
+				case VirtualTerminalObjectType::ObjectPointer:
+				{
+					pending.push_back(read_id(objectOffset + OBJECT_POINTER_VALUE_OFFSET));
+				}
+				break;
+
 				case VirtualTerminalObjectType::OutputString:
 				case VirtualTerminalObjectType::OutputNumber:
 				{
@@ -4142,9 +4155,7 @@ namespace isobus
 		// A font that is also used off the keys keeps the data mask factor
 		for (const auto &object : objectOffsets)
 		{
-			const auto type = static_cast<VirtualTerminalObjectType>(pool[object.second + 2]);
-
-			if (((VirtualTerminalObjectType::OutputString == type) || (VirtualTerminalObjectType::OutputNumber == type)) &&
+			if (uses_font(static_cast<VirtualTerminalObjectType>(pool[object.second + 2])) &&
 			    (0 == shownOnKeys.count(object.first)))
 			{
 				fontsOnKeys.erase(read_id(object.second + FONT_ATTRIBUTES_OFFSET));
