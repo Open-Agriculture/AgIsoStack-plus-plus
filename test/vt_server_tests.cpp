@@ -2403,6 +2403,7 @@ TEST_F(VirtualTerminalServerMessagingTest, AudioCommandsAreForwardedToTheApplica
 	const bool audioSignalAnswered = poll_for_response(serverUnderTest, testPlugin, 0xA3, audioSignalResponse);
 	receive_from_client(internalECU, client, { 0xA4, 0x4B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	const bool audioVolumeAnswered = poll_for_response(serverUnderTest, testPlugin, 0xA4, audioVolumeResponse);
+	receive_from_client(internalECU, client, { 0xA4, 0xFA, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	CANHardwareInterface::stop();
 
 	ASSERT_EQ(1U, serverUnderTest.audioSignals.size());
@@ -2411,8 +2412,9 @@ TEST_F(VirtualTerminalServerMessagingTest, AudioCommandsAreForwardedToTheApplica
 	EXPECT_EQ(200, serverUnderTest.audioSignals.front()[2]);
 	EXPECT_EQ(100, serverUnderTest.audioSignals.front()[3]);
 	EXPECT_EQ(client, serverUnderTest.audioSignalSources.front());
-	ASSERT_EQ(1U, serverUnderTest.audioVolumes.size());
+	ASSERT_EQ(2U, serverUnderTest.audioVolumes.size());
 	EXPECT_EQ(75, serverUnderTest.audioVolumes.front());
+	EXPECT_EQ(100, serverUnderTest.audioVolumes.back());
 	EXPECT_EQ(client, serverUnderTest.audioVolumeSources.front());
 	ASSERT_TRUE(audioSignalAnswered);
 	EXPECT_EQ(0x00, audioSignalResponse.data[1]);

@@ -356,7 +356,7 @@ namespace isobus
 
 		/// @brief This function is called when a client sends a Set Audio Volume command
 		/// @details Override it to apply the volume to subsequent audio signals. The server answers the command in any case.
-		/// @param[in] volumePercent The requested volume in percent
+		/// @param[in] volumePercent The requested volume in percent, 0 to 100. A larger value in the command is passed on as 100.
 		/// @param[in] source The control function that sent the command
 		virtual void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source);
 

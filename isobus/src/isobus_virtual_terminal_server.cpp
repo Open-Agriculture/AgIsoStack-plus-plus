@@ -2073,7 +2073,9 @@ namespace isobus
 
 			case Function::SetAudioVolumeCommand:
 			{
-				set_audio_volume(data[1], message.get_source_control_function());
+				// The volume is a percentage, so a larger value is passed on as 100 %
+				constexpr std::uint8_t MAX_AUDIO_VOLUME_PERCENT = 100;
+				set_audio_volume(std::min(data[1], MAX_AUDIO_VOLUME_PERCENT), message.get_source_control_function());
 				send_audio_volume_response(message.get_source_control_function());
 			}
 			break;
