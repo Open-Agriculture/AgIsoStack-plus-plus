@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(vt_aux_inputs_example)
 
+include(GNUInstallDirs)
+
 if(NOT BUILD_EXAMPLES)
   find_package(isobus REQUIRED)
 endif()
@@ -9,6 +11,11 @@ find_package(Threads REQUIRED)
 add_executable(
   VTAuxInputsExample main.cpp ../../common/console_logger.cpp
                      ../../common/create_can_driver.cpp object_pool_ids.h)
+
+install(TARGETS VTAuxInputsExample
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/aux_inputs_pooldata.iop"
+        DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 target_compile_features(VTAuxInputsExample PUBLIC cxx_std_11)
 set_target_properties(VTAuxInputsExample PROPERTIES CXX_EXTENSIONS OFF)

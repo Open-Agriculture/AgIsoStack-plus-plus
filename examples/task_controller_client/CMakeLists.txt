@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(task_controller_client_example)
 
+include(GNUInstallDirs)
+
 if(NOT BUILD_EXAMPLES)
   find_package(isobus REQUIRED)
 endif()
@@ -10,6 +12,9 @@ add_executable(
   TaskControllerClientExample
   main.cpp ../common/console_logger.cpp section_control_implement_sim.cpp
   section_control_implement_sim.hpp ../common/create_can_driver.cpp)
+
+install(TARGETS TaskControllerClientExample
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 target_compile_features(TaskControllerClientExample PUBLIC cxx_std_11)
 set_target_properties(TaskControllerClientExample PROPERTIES CXX_EXTENSIONS OFF)
