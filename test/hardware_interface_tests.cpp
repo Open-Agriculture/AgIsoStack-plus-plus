@@ -8,9 +8,11 @@
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #endif
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <thread>
+#include <vector>
 
 using namespace isobus;
 
@@ -45,6 +47,80 @@ TEST(HARDWARE_INTERFACE_TESTS, SendMessageToHardware)
 
 	CANHardwareInterface::stop();
 }
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST(HARDWARE_INTERFACE_TESTS, MultipleThreadsCanTransmitWithoutLosingFrames)
+{
+	constexpr std::uint32_t PRODUCER_COUNT = 4;
+	constexpr std::uint32_t FRAMES_PER_PRODUCER = 2000;
+
+	auto sender = std::make_shared<VirtualCANPlugin>();
+	auto receiver = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, sender);
+	ASSERT_TRUE(CANHardwareInterface::start());
+
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+
+	// Every producer sends numbered frames, using its index as the identifier
+	std::vector<std::thread> producers;
+	for (std::uint32_t producer = 0; producer < PRODUCER_COUNT; producer++)
+	{
+		producers.emplace_back([producer, FRAMES_PER_PRODUCER, deadline]() {
+			for (std::uint32_t sequence = 0; sequence < FRAMES_PER_PRODUCER; sequence++)
+			{
+				CANMessageFrame frame;
+				memset(&frame, 0, sizeof(CANMessageFrame));
+				frame.identifier = producer;
+				frame.isExtendedFrame = true;
+				frame.dataLength = 4;
+				memcpy(frame.data, &sequence, sizeof(sequence));
+				frame.channel = 0;
+
+				// The queue is bounded, so a full queue is expected. Wait for the hardware thread to drain it.
+				while (!send_can_message_frame_to_hardware(frame))
+				{
+					if (std::chrono::steady_clock::now() > deadline)
+					{
+						return;
+					}
+					std::this_thread::yield();
+				}
+			}
+		});
+	}
+
+	// The queue keeps the order of each producer, so the sequence numbers must arrive one by one
+	std::vector<std::uint32_t> expectedSequence(PRODUCER_COUNT, 0);
+	std::uint32_t received = 0;
+	bool framesArrivedIntact = true;
+	while ((received < PRODUCER_COUNT * FRAMES_PER_PRODUCER) && (std::chrono::steady_clock::now() < deadline))
+	{
+		CANMessageFrame frame;
+		if (receiver->read_frame(frame, 100))
+		{
+			std::uint32_t sequence = 0;
+			memcpy(&sequence, frame.data, sizeof(sequence));
+			if ((frame.identifier >= PRODUCER_COUNT) || (4 != frame.dataLength) || (sequence != expectedSequence[frame.identifier]))
+			{
+				framesArrivedIntact = false;
+				break;
+			}
+			expectedSequence[frame.identifier]++;
+			received++;
+		}
+	}
+
+	for (auto &producer : producers)
+	{
+		producer.join();
+	}
+	CANHardwareInterface::stop();
+
+	EXPECT_TRUE(framesArrivedIntact);
+	EXPECT_EQ(received, PRODUCER_COUNT * FRAMES_PER_PRODUCER);
+}
+#endif
 
 TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 {
