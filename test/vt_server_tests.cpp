@@ -2303,6 +2303,39 @@ TEST_F(VirtualTerminalServerMessagingTest, ESCCommandIsAnsweredWithTheObjectWhos
 	EXPECT_EQ(0xFF, inputAbortedResponse.data[7]);
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, PreferredAssignmentCommandIsAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x47, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA4, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0x22, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(answered);
+	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_EQ(0xFF, response.data[2]);
+	EXPECT_EQ(0xFF, response.data[3]);
+	EXPECT_EQ(0xFF, response.data[4]);
+	EXPECT_EQ(0xFF, response.data[5]);
+	EXPECT_EQ(0xFF, response.data[6]);
+	EXPECT_EQ(0xFF, response.data[7]);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 {
 	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
