@@ -359,3 +359,11 @@ TEST(VirtualTerminalServerTest, WorkingSetSpecialControlsReadsEachLanguagePairOn
 	EXPECT_EQ("de", codes[1].languageCode);
 	EXPECT_EQ("DE", codes[1].countryCode);
 }
+
+TEST(VirtualTerminalServerTest, LookingUpAnUnknownObjectDoesNotAddItToTheObjectTree)
+{
+	VirtualTerminalServerManagedWorkingSet workingSet;
+
+	EXPECT_EQ(nullptr, workingSet.get_object_by_id(0x1234));
+	EXPECT_TRUE(workingSet.get_object_tree().empty());
+}
