@@ -498,32 +498,21 @@ namespace isobus
 		return retVal;
 	}
 
-	void VirtualTerminalServer::process_mask_visibility_macros(std::shared_ptr<VTObject> mask, EventID macroEvent, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	std::shared_ptr<VTObject> VirtualTerminalServer::get_soft_key_mask_of(const std::shared_ptr<VTObject> &mask, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
 	{
-		if (nullptr == mask)
-		{
-			return;
-		}
-
 		std::uint16_t softKeyMaskID = NULL_OBJECT_ID;
-		if (VirtualTerminalObjectType::DataMask == mask->get_object_type())
+		if (nullptr != mask)
 		{
-			softKeyMaskID = std::static_pointer_cast<DataMask>(mask)->get_soft_key_mask();
+			if (VirtualTerminalObjectType::DataMask == mask->get_object_type())
+			{
+				softKeyMaskID = std::static_pointer_cast<DataMask>(mask)->get_soft_key_mask();
+			}
+			else if (VirtualTerminalObjectType::AlarmMask == mask->get_object_type())
+			{
+				softKeyMaskID = std::static_pointer_cast<AlarmMask>(mask)->get_soft_key_mask();
+			}
 		}
-		else if (VirtualTerminalObjectType::AlarmMask == mask->get_object_type())
-		{
-			softKeyMaskID = std::static_pointer_cast<AlarmMask>(mask)->get_soft_key_mask();
-		}
-		else
-		{
-			return;
-		}
-
-		process_macro(mask, macroEvent, mask->get_object_type(), workingSet);
-		if (NULL_OBJECT_ID != softKeyMaskID)
-		{
-			process_macro(workingSet->get_object_by_id(softKeyMaskID), macroEvent, VirtualTerminalObjectType::SoftKeyMask, workingSet);
-		}
+		return (NULL_OBJECT_ID == softKeyMaskID) ? nullptr : workingSet->get_object_by_id(softKeyMaskID);
 	}
 
 	CANIdentifier::CANPriority VirtualTerminalServer::get_priority() const
@@ -1227,8 +1216,12 @@ namespace isobus
 					{
 						auto workingSet = std::static_pointer_cast<WorkingSet>(workingSetObject);
 						const std::uint16_t previousActiveMaskObjectId = workingSet->get_active_mask();
-						// The masks are only on the display while this working set is the active one, and only a different mask changes them
+						// The masks are only on the display while this working set is the active one, and only a different mask changes them.
+						// Everything the events depend on is read now, because the macros run synchronously and can change it.
 						const bool masksChangeOnTheDisplay = (managedWorkingSet == activeWorkingSet) && (previousActiveMaskObjectId != newActiveMaskObjectId);
+						const auto previousActiveMask = (NULL_OBJECT_ID == previousActiveMaskObjectId) ? nullptr : managedWorkingSet->get_object_by_id(previousActiveMaskObjectId);
+						const auto previousSoftKeyMask = get_soft_key_mask_of(previousActiveMask, managedWorkingSet);
+						const auto newSoftKeyMask = get_soft_key_mask_of(newActiveMaskObject, managedWorkingSet);
 
 						workingSet->set_active_mask(newActiveMaskObjectId);
 						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
@@ -1239,11 +1232,13 @@ namespace isobus
 						process_macro(workingSetObject, EventID::OnChangeActiveMask, VirtualTerminalObjectType::WorkingSet, managedWorkingSet);
 						if (masksChangeOnTheDisplay)
 						{
-							if (NULL_OBJECT_ID != previousActiveMaskObjectId)
+							if (nullptr != previousActiveMask)
 							{
-								process_mask_visibility_macros(managedWorkingSet->get_object_by_id(previousActiveMaskObjectId), EventID::OnHide, managedWorkingSet);
+								process_macro(previousActiveMask, EventID::OnHide, previousActiveMask->get_object_type(), managedWorkingSet);
 							}
-							process_mask_visibility_macros(newActiveMaskObject, EventID::OnShow, managedWorkingSet);
+							process_macro(previousSoftKeyMask, EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+							process_macro(newActiveMaskObject, EventID::OnShow, newActiveMaskObject->get_object_type(), managedWorkingSet);
+							process_macro(newSoftKeyMask, EventID::OnShow, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
 						}
 						LOG_DEBUG("[VT Server]: Client %u changed active mask to object %u for working set object %u", managedWorkingSet->get_control_function()->get_address(), newActiveMaskObjectId, workingSetObjectId);
 					}
@@ -1741,20 +1736,18 @@ namespace isobus
 				auto targetMask = managedWorkingSet->get_object_by_id(dataOrAlarmMaskId);
 				auto newSoftKeyMask = managedWorkingSet->get_object_by_id(newSoftKeyMaskId);
 
-				// ISO 11783-6:2018 Tables B.2 and B.3: the soft key masks are hidden and shown only if the mask is on the display
-				const auto changeVisibleSoftKeyMask = [&](std::uint16_t previousSoftKeyMaskId) {
-					const auto workingSetObject = managedWorkingSet->get_working_set_object();
-					const bool maskIsVisible = (managedWorkingSet == activeWorkingSet) &&
-					  (nullptr != workingSetObject) &&
-					  (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()) &&
-					  (dataOrAlarmMaskId == std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask());
-
-					if (maskIsVisible && (previousSoftKeyMaskId != newSoftKeyMaskId))
+				// ISO 11783-6:2018 Tables B.2 and B.3: the soft key masks are hidden and shown only if the mask is on the display.
+				// Read that now, because the On Change Soft Key Mask macros run synchronously and can change the active mask.
+				const auto workingSetObject = managedWorkingSet->get_working_set_object();
+				const bool maskIsVisible = (managedWorkingSet == activeWorkingSet) &&
+				  (nullptr != workingSetObject) &&
+				  (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()) &&
+				  (dataOrAlarmMaskId == std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask());
+				const auto previousSoftKeyMask = get_soft_key_mask_of(targetMask, managedWorkingSet);
+				const auto changeVisibleSoftKeyMask = [&]() {
+					if (maskIsVisible && (previousSoftKeyMask != newSoftKeyMask))
 					{
-						if (NULL_OBJECT_ID != previousSoftKeyMaskId)
-						{
-							process_macro(managedWorkingSet->get_object_by_id(previousSoftKeyMaskId), EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
-						}
+						process_macro(previousSoftKeyMask, EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
 						process_macro(newSoftKeyMask, EventID::OnShow, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
 					}
 				};
@@ -1767,14 +1760,13 @@ namespace isobus
 						{
 							case VirtualTerminalObjectType::AlarmMask:
 							{
-								const std::uint16_t previousSoftKeyMaskId = std::static_pointer_cast<AlarmMask>(targetMask)->get_soft_key_mask();
 								if (std::static_pointer_cast<AlarmMask>(targetMask)->change_soft_key_mask(newSoftKeyMaskId, managedWorkingSet->get_object_tree()))
 								{
 									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
 									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
 									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
 									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, managedWorkingSet);
-									changeVisibleSoftKeyMask(previousSoftKeyMaskId);
+									changeVisibleSoftKeyMask();
 								}
 								else
 								{
@@ -1786,14 +1778,13 @@ namespace isobus
 
 							case VirtualTerminalObjectType::DataMask:
 							{
-								const std::uint16_t previousSoftKeyMaskId = std::static_pointer_cast<DataMask>(targetMask)->get_soft_key_mask();
 								if (std::static_pointer_cast<DataMask>(targetMask)->change_soft_key_mask(newSoftKeyMaskId, managedWorkingSet->get_object_tree()))
 								{
 									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
 									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
 									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
 									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, managedWorkingSet);
-									changeVisibleSoftKeyMask(previousSoftKeyMaskId);
+									changeVisibleSoftKeyMask();
 								}
 								else
 								{

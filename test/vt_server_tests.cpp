@@ -3119,73 +3119,49 @@ namespace
 	// - Data Mask 1001 (Soft Key Mask 2001) runs 13 On Show and 14 On Hide
 	// - Soft Key Mask 2000 runs 15 On Show and 16 On Hide
 	// - Soft Key Mask 2001 runs 17 On Show and 18 On Hide
-	std::vector<std::uint8_t> create_mask_change_macro_pool()
+	// extraCommandsOfMacro10 are added to macro 10. A non-empty onChangeSoftKeyMaskMacroOfMask1000 becomes macro 19,
+	// which Data Mask 1000 runs On Change Soft Key Mask.
+	std::vector<std::uint8_t> create_mask_change_macro_pool(const std::vector<std::uint8_t> &extraCommandsOfMacro10 = {},
+	                                                        const std::vector<std::uint8_t> &onChangeSoftKeyMaskMacroOfMask1000 = {})
 	{
-		std::vector<std::uint8_t> pool = {
-			0x11, // Object Pool Transfer
-			0x00,
-			0x00,
-			static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet),
-			0x00,
-			0x01,
-			0xE8,
-			0x03,
-			0x00,
-			0x01,
-			0x00,
-			0x07,
-			10, // Working Set 0
-			0xE8,
-			0x03,
-			static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask),
-			0x00,
-			0xD0,
-			0x07,
-			0x00,
-			0x02,
-			0x03,
-			11,
-			0x04,
-			12, // Data Mask 1000
-			0xE9,
-			0x03,
-			static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask),
-			0x00,
-			0xD1,
-			0x07,
-			0x00,
-			0x02,
-			0x03,
-			13,
-			0x04,
-			14, // Data Mask 1001
-			0xD0,
-			0x07,
-			static_cast<std::uint8_t>(VirtualTerminalObjectType::SoftKeyMask),
-			0x00,
-			0x00,
-			0x02,
-			0x03,
-			15,
-			0x04,
-			16, // Soft Key Mask 2000
-			0xD1,
-			0x07,
-			static_cast<std::uint8_t>(VirtualTerminalObjectType::SoftKeyMask),
-			0x00,
-			0x00,
-			0x02,
-			0x03,
-			17,
-			0x04,
-			18 // Soft Key Mask 2001
-		};
+		constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
+		constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
+		constexpr auto SOFT_KEY_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::SoftKeyMask);
+		constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
+		constexpr auto MACRO = static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro);
+		constexpr auto CHANGE_NUMERIC_VALUE = static_cast<std::uint8_t>(Macro::Command::ChangeNumericValue);
+		const bool mask1000HasMacro19 = !onChangeSoftKeyMaskMacroOfMask1000.empty();
+
+		// Object Pool Transfer
+		std::vector<std::uint8_t> pool = { 0x11 };
+		// Working Set 0, active mask 1000, macro 10 On Change Active Mask
+		pool.insert(pool.end(), { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x01, 0x00, 0x07, 10 });
+		// Data Mask 1000 with Soft Key Mask 2000
+		pool.insert(pool.end(), { 0xE8, 0x03, DATA_MASK, 0x00, 0xD0, 0x07, 0x00, static_cast<std::uint8_t>(mask1000HasMacro19 ? 3 : 2), 0x03, 11, 0x04, 12 });
+		if (mask1000HasMacro19)
+		{
+			pool.insert(pool.end(), { 0x08, 19 });
+		}
+		// Data Mask 1001 with Soft Key Mask 2001
+		pool.insert(pool.end(), { 0xE9, 0x03, DATA_MASK, 0x00, 0xD1, 0x07, 0x00, 0x02, 0x03, 13, 0x04, 14 });
+		// Soft Key Masks 2000 and 2001
+		pool.insert(pool.end(), { 0xD0, 0x07, SOFT_KEY_MASK, 0x00, 0x00, 0x02, 0x03, 15, 0x04, 16 });
+		pool.insert(pool.end(), { 0xD1, 0x07, SOFT_KEY_MASK, 0x00, 0x00, 0x02, 0x03, 17, 0x04, 18 });
 
 		for (std::uint8_t i = 0; i < 9; i++)
 		{
-			const std::uint8_t variableID = static_cast<std::uint8_t>(100 + i);
-			pool.insert(pool.end(), { variableID, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x00, 0x00, 0x00, 0x00 });
-			pool.insert(pool.end(), { static_cast<std::uint8_t>(10 + i), 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x08, 0x00, static_cast<std::uint8_t>(Macro::Command::ChangeNumericValue), variableID, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00 });
+			const auto variableID = static_cast<std::uint8_t>(100 + i);
+			const std::vector<std::uint8_t> noCommands;
+			const std::vector<std::uint8_t> &extraCommands = (0 == i) ? extraCommandsOfMacro10 : noCommands;
+			const auto macroLength = static_cast<std::uint8_t>(8 + extraCommands.size());
+			pool.insert(pool.end(), { variableID, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
+			pool.insert(pool.end(), { static_cast<std::uint8_t>(10 + i), 0x00, MACRO, macroLength, 0x00, CHANGE_NUMERIC_VALUE, variableID, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00 });
+			pool.insert(pool.end(), extraCommands.begin(), extraCommands.end());
+		}
+		if (mask1000HasMacro19)
+		{
+			pool.insert(pool.end(), { 19, 0x00, MACRO, static_cast<std::uint8_t>(onChangeSoftKeyMaskMacroOfMask1000.size()), 0x00 });
+			pool.insert(pool.end(), onChangeSoftKeyMaskMacroOfMask1000.begin(), onChangeSoftKeyMaskMacroOfMask1000.end());
 		}
 		return pool;
 	}
@@ -3222,7 +3198,8 @@ protected:
 	                                       std::uint8_t clientAddress,
 	                                       bool selectWorkingSet,
 	                                       std::initializer_list<std::uint8_t> command,
-	                                       std::uint8_t &errorCode)
+	                                       std::uint8_t &errorCode,
+	                                       const std::vector<std::uint8_t> &pool = create_mask_change_macro_pool())
 	{
 		VirtualCANPlugin testPlugin;
 		testPlugin.open();
@@ -3243,7 +3220,7 @@ protected:
 		std::vector<std::uint16_t> macrosThatRan;
 
 		receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
-		receive_tp_from_client(internalECU, client, create_mask_change_macro_pool());
+		receive_tp_from_client(internalECU, client, pool);
 		receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 		testPlugin.clear_queue();
 		const bool poolAnswered = poll_for_response(serverUnderTest, testPlugin, 0x12, poolResponse);
@@ -3309,4 +3286,29 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskOfAMaskThatIsN
 
 	EXPECT_EQ(0x00, errorCode);
 	EXPECT_TRUE(macrosThatRan.empty());
+}
+
+TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskHidesTheSoftKeyMaskThatWasShownEvenIfAMacroChangesIt)
+{
+	// On Change Active Mask also gives Data Mask 1000 Soft Key Mask 2001. Soft Key Mask 2000 was the one on the display.
+	const auto pool = create_mask_change_macro_pool({ 0xAE, 0x01, 0xE8, 0x03, 0xD1, 0x07, 0xFF, 0xFF });
+	std::uint8_t errorCode = 0xFF;
+	const auto macrosThatRan = run_command(0x53, 0xAF, true, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode, pool);
+
+	EXPECT_EQ(0x00, errorCode);
+	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17 }), macrosThatRan);
+}
+
+TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibilityFromBeforeItsMacros)
+{
+	// On Change Soft Key Mask of Data Mask 1000 makes Data Mask 1001 the active mask
+	const auto pool = create_mask_change_macro_pool({}, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF });
+	std::uint8_t errorCode = 0xFF;
+	const auto macrosThatRan = run_command(0x54, 0xC3, true, { 0xAE, 0x01, 0xE8, 0x03, 0xD1, 0x07, 0xFF, 0xFF }, errorCode, pool);
+
+	EXPECT_EQ(0x00, errorCode);
+	// The macro's Change Active Mask runs On Change Active Mask, hides Data Mask 1000 with its new Soft Key Mask 2001 and
+	// shows Data Mask 1001 with Soft Key Mask 2001. Then Soft Key Mask 2000 is hidden and 2001 shown, because Data Mask 1000
+	// was on the display when the command came.
+	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
 }
