@@ -669,6 +669,13 @@ namespace isobus
 		/// @returns true if the macro was executed, otherwise false
 		bool execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
+		/// @brief Executes the On Show or On Hide macros of a Data or Alarm Mask and of its Soft Key Mask
+		/// @details A Soft Key Mask is shown and hidden together with the mask it belongs to (ISO 11783-6:2018, 4.6.18).
+		/// @param[in] mask The Data or Alarm Mask that is shown or hidden. Other objects are ignored.
+		/// @param[in] macroEvent EventID::OnShow or EventID::OnHide
+		/// @param[in] workingSet The working set that owns the mask
+		void process_mask_visibility_macros(std::shared_ptr<VTObject> mask, EventID macroEvent, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
 		/// @brief Returns the priority to use, depending on the VT version
 		/// @returns The priority to use, depending on the VT version
 		CANIdentifier::CANPriority get_priority() const;
