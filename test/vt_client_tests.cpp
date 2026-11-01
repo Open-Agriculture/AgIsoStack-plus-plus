@@ -105,6 +105,19 @@ public:
 		return update_auxiliary_input_status(objectID);
 	}
 
+	void test_wrapper_set_screen(std::uint16_t dataMaskPixels, std::uint8_t softKeyPixels)
+	{
+		xPixels = dataMaskPixels;
+		yPixels = dataMaskPixels;
+		softKeyXAxisPixels = softKeyPixels;
+		softKeyYAxisPixels = softKeyPixels;
+	}
+
+	const std::vector<std::uint8_t> &test_wrapper_get_scaled_pool(std::uint8_t poolIndex) const
+	{
+		return objectPools.at(poolIndex).scaledObjectPool;
+	}
+
 	static std::vector<std::uint8_t> staticTestPool;
 
 	static bool testWrapperDataChunkCallback(std::uint32_t,
@@ -1339,6 +1352,299 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithDataChunkCallbacks)
 
 	// Full scaling test using the example pool
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_scale_object_pools());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+namespace
+{
+	void append_u16(std::vector<std::uint8_t> &pool, std::uint16_t value)
+	{
+		pool.push_back(static_cast<std::uint8_t>(value & 0xFF));
+		pool.push_back(static_cast<std::uint8_t>(value >> 8));
+	}
+
+	void append_font_attributes(std::vector<std::uint8_t> &pool, std::uint16_t id, VirtualTerminalClient::FontSize size)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::FontAttributes));
+		pool.push_back(1); // Colour
+		pool.push_back(static_cast<std::uint8_t>(size));
+		pool.push_back(0); // Font type
+		pool.push_back(0); // Font style
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_output_string(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t width, std::uint16_t fontAttributes)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputString));
+		append_u16(pool, width);
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Background colour
+		append_u16(pool, fontAttributes);
+		pool.push_back(0); // Options
+		append_u16(pool, 0xFFFF); // No variable reference
+		pool.push_back(1); // Justification
+		append_u16(pool, 4); // Length
+		for (char c : { 'T', 'E', 'X', 'T' })
+		{
+			pool.push_back(static_cast<std::uint8_t>(c));
+		}
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_key(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::Key));
+		pool.push_back(0); // Background colour
+		pool.push_back(1); // Key code
+		pool.push_back(1); // Number of objects
+		pool.push_back(0); // Number of macros
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
+	void append_input_string(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t width, std::uint16_t fontAttributes)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputString));
+		append_u16(pool, width);
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Background colour
+		append_u16(pool, fontAttributes);
+		append_u16(pool, 0xFFFF); // No input attributes
+		pool.push_back(0); // Options
+		append_u16(pool, 0xFFFF); // No variable reference
+		pool.push_back(1); // Justification
+		pool.push_back(4); // Length
+		for (char c : { 'T', 'E', 'X', 'T' })
+		{
+			pool.push_back(static_cast<std::uint8_t>(c));
+		}
+		pool.push_back(1); // Enabled
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_input_number(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t width, std::uint16_t fontAttributes)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputNumber));
+		append_u16(pool, width);
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Background colour
+		append_u16(pool, fontAttributes);
+		pool.push_back(0); // Options
+		append_u16(pool, 0xFFFF); // No variable reference
+		for (std::uint32_t value : { 0u, 0u, 100u, 0u, 0x3F800000u }) // Value, minimum, maximum, offset, scale 1.0
+		{
+			append_u16(pool, static_cast<std::uint16_t>(value & 0xFFFF));
+			append_u16(pool, static_cast<std::uint16_t>(value >> 16));
+		}
+		pool.push_back(0); // Number of decimals
+		pool.push_back(0); // Format
+		pool.push_back(1); // Justification
+		pool.push_back(1); // Options 2: enabled
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_object_pointer(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t value)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectPointer));
+		append_u16(pool, value);
+	}
+
+	// The object with this ID in an uploaded pool: its offset, or -1.
+	int find_object(const std::vector<std::uint8_t> &pool, std::uint16_t id, DerivedTestVTClient &client)
+	{
+		std::vector<std::uint8_t> copy(pool);
+		std::size_t offset = 0;
+		while (offset + 3 <= copy.size())
+		{
+			if ((copy[offset] | (copy[offset + 1] << 8)) == id)
+			{
+				return static_cast<int>(offset);
+			}
+			std::uint32_t size = client.test_wrapper_get_number_bytes_in_object(&copy[offset], static_cast<std::uint32_t>(copy.size() - offset));
+			if (0 == size)
+			{
+				break;
+			}
+			offset += size;
+		}
+		return -1;
+	}
+} // namespace
+
+// A Key is sized by the soft key designator, but the label it shows is a separate object in
+// the pool, and so is that label's font. Scaled with the data mask factor, a label on a
+// 60 px key designed for a 200 px mask grows to 144 px and a much larger font on a 480 px
+// mask with 62 px keys, and spills off the key. Objects a Key shows, and fonts only they use,
+// must follow the soft key factor.
+TEST_F(VirtualTerminalTest, AutoscalingSoftKeyLabelsFollowTheKey)
+{
+	NAME clientNAME(0);
+	clientNAME.set_arbitrary_address_capable(true);
+	clientNAME.set_industry_group(1);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::OilSystemMonitor));
+	clientNAME.set_identity_number(2);
+	clientNAME.set_manufacturer_code(69);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x27);
+	std::vector<isobus::NAMEFilter> vtNameFilters = { isobus::NAMEFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	constexpr std::uint16_t KEY_FONT = 100;
+	constexpr std::uint16_t MASK_FONT = 101;
+	constexpr std::uint16_t KEY_LABEL = 200;
+	constexpr std::uint16_t MASK_LABEL = 201;
+	constexpr std::uint16_t KEY_LABEL_SHARED_FONT = 202;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, KEY_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_font_attributes(pool, MASK_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, KEY_LABEL, 60, KEY_FONT);
+	append_output_string(pool, MASK_LABEL, 60, MASK_FONT);
+	append_output_string(pool, KEY_LABEL_SHARED_FONT, 60, MASK_FONT);
+	append_key(pool, 300, KEY_LABEL);
+	append_key(pool, 301, KEY_LABEL_SHARED_FONT);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	// 62 px keys keep the soft key factor (62 / 60) inside remap_font_to_scale()'s 5 % fudge,
+	// so the key font is expected to stay 8x8 whatever the font tables do above 1.05
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	auto width_of = [&](std::uint16_t id) {
+		int offset = find_object(scaled, id, clientUnderTest);
+		EXPECT_GE(offset, 0);
+		return (offset < 0) ? 0 : (scaled[offset + 3] | (scaled[offset + 4] << 8));
+	};
+	auto font_size_of = [&](std::uint16_t id) {
+		int offset = find_object(scaled, id, clientUnderTest);
+		EXPECT_GE(offset, 0);
+		return (offset < 0) ? VirtualTerminalClient::FontSize::Size6x8 : static_cast<VirtualTerminalClient::FontSize>(scaled[offset + 4]);
+	};
+
+	// Labels on keys: the soft key factor (62 / 60), so they still fit the 62 px key.
+	EXPECT_EQ(62, width_of(KEY_LABEL));
+	EXPECT_EQ(62, width_of(KEY_LABEL_SHARED_FONT));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, font_size_of(KEY_FONT));
+	// The data mask label and its font: the data mask factor (480 / 200), as before.
+	EXPECT_EQ(144, width_of(MASK_LABEL));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(MASK_FONT));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+// Input strings and numbers use a font too, and can't be on a key (ISO 11783-6 Table A.2), so a
+// font a key label shares with one of them must keep the data mask factor, like a font shared
+// with an output string on a mask.
+TEST_F(VirtualTerminalTest, AutoscalingKeepsTheDataMaskFactorForFontsSharedWithInputFields)
+{
+	NAME clientNAME(0);
+	clientNAME.set_arbitrary_address_capable(true);
+	clientNAME.set_industry_group(1);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::OilSystemMonitor));
+	clientNAME.set_identity_number(3);
+	clientNAME.set_manufacturer_code(69);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x28);
+	std::vector<isobus::NAMEFilter> vtNameFilters = { isobus::NAMEFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	constexpr std::uint16_t STRING_FONT = 110;
+	constexpr std::uint16_t NUMBER_FONT = 111;
+	constexpr std::uint16_t KEY_LABEL_STRING_FONT = 210;
+	constexpr std::uint16_t KEY_LABEL_NUMBER_FONT = 211;
+	constexpr std::uint16_t MASK_INPUT_STRING = 220;
+	constexpr std::uint16_t MASK_INPUT_NUMBER = 221;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, STRING_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_font_attributes(pool, NUMBER_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, KEY_LABEL_STRING_FONT, 60, STRING_FONT);
+	append_output_string(pool, KEY_LABEL_NUMBER_FONT, 60, NUMBER_FONT);
+	append_input_string(pool, MASK_INPUT_STRING, 60, STRING_FONT);
+	append_input_number(pool, MASK_INPUT_NUMBER, 60, NUMBER_FONT);
+	append_key(pool, 310, KEY_LABEL_STRING_FONT);
+	append_key(pool, 311, KEY_LABEL_NUMBER_FONT);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	auto width_of = [&](std::uint16_t id) {
+		int offset = find_object(scaled, id, clientUnderTest);
+		EXPECT_GE(offset, 0);
+		return (offset < 0) ? 0 : (scaled[offset + 3] | (scaled[offset + 4] << 8));
+	};
+	auto font_size_of = [&](std::uint16_t id) {
+		int offset = find_object(scaled, id, clientUnderTest);
+		EXPECT_GE(offset, 0);
+		return (offset < 0) ? VirtualTerminalClient::FontSize::Size6x8 : static_cast<VirtualTerminalClient::FontSize>(scaled[offset + 4]);
+	};
+
+	// The key labels themselves still follow the key.
+	EXPECT_EQ(62, width_of(KEY_LABEL_STRING_FONT));
+	EXPECT_EQ(62, width_of(KEY_LABEL_NUMBER_FONT));
+	// The input fields and the fonts they share with the labels: the data mask factor (480 / 200).
+	EXPECT_EQ(144, width_of(MASK_INPUT_STRING));
+	EXPECT_EQ(144, width_of(MASK_INPUT_NUMBER));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(STRING_FONT));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(NUMBER_FONT));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+// An Object Pointer on a key (VT 2+) shows the object it points at on that key, so that object
+// and its font follow the soft key factor too. A null pointer shows nothing.
+TEST_F(VirtualTerminalTest, AutoscalingFollowsObjectPointersOnKeys)
+{
+	NAME clientNAME(0);
+	clientNAME.set_arbitrary_address_capable(true);
+	clientNAME.set_industry_group(1);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::OilSystemMonitor));
+	clientNAME.set_identity_number(4);
+	clientNAME.set_manufacturer_code(69);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x29);
+	std::vector<isobus::NAMEFilter> vtNameFilters = { isobus::NAMEFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	constexpr std::uint16_t POINTED_FONT = 120;
+	constexpr std::uint16_t POINTED_LABEL = 230;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, POINTED_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, POINTED_LABEL, 60, POINTED_FONT);
+	append_object_pointer(pool, 240, POINTED_LABEL);
+	append_object_pointer(pool, 241, 0xFFFF);
+	append_key(pool, 320, 240);
+	append_key(pool, 321, 241);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	int labelOffset = find_object(scaled, POINTED_LABEL, clientUnderTest);
+	int fontOffset = find_object(scaled, POINTED_FONT, clientUnderTest);
+	ASSERT_GE(labelOffset, 0);
+	ASSERT_GE(fontOffset, 0);
+	EXPECT_EQ(62, scaled[labelOffset + 3] | (scaled[labelOffset + 4] << 8));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, static_cast<VirtualTerminalClient::FontSize>(scaled[fontOffset + 4]));
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);

@@ -4053,6 +4053,121 @@ namespace isobus
 		return retVal;
 	}
 
+	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(std::vector<std::uint8_t> &pool)
+	{
+		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
+		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
+		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
+		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
+		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
+
+		auto read_id = [&pool](std::size_t offset) {
+			return static_cast<std::uint16_t>(pool[offset] | (pool[offset + 1] << 8));
+		};
+		auto uses_font = [](VirtualTerminalObjectType type) {
+			return (VirtualTerminalObjectType::OutputString == type) ||
+			  (VirtualTerminalObjectType::OutputNumber == type) ||
+			  (VirtualTerminalObjectType::InputString == type) ||
+			  (VirtualTerminalObjectType::InputNumber == type);
+		};
+
+		// Index the pool by object ID, and start from the children of every key
+		std::map<std::uint16_t, std::size_t> objectOffsets;
+		std::vector<std::uint16_t> pending;
+		std::size_t offset = 0;
+
+		while ((offset + 3) <= pool.size())
+		{
+			const std::uint32_t objectSize = get_number_bytes_in_object(&pool[offset], static_cast<std::uint32_t>(pool.size() - offset));
+
+			if ((0 == objectSize) || ((offset + objectSize) > pool.size()))
+			{
+				break;
+			}
+			objectOffsets[read_id(offset)] = offset;
+
+			if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(pool[offset + 2])) &&
+			    (objectSize > 5))
+			{
+				for (std::size_t i = 0; i < pool[offset + 5]; i++)
+				{
+					const std::size_t childOffset = offset + KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+					if ((childOffset + 2) <= (offset + objectSize))
+					{
+						pending.push_back(read_id(childOffset));
+					}
+				}
+			}
+			offset += objectSize;
+		}
+
+		// Follow the key children down through containers and object pointers, collecting the fonts they use
+		std::set<std::uint16_t> shownOnKeys;
+		std::set<std::uint16_t> fontsOnKeys;
+
+		while (!pending.empty())
+		{
+			const std::uint16_t objectID = pending.back();
+			pending.pop_back();
+
+			auto location = objectOffsets.find(objectID);
+			if ((!shownOnKeys.insert(objectID).second) || (objectOffsets.end() == location))
+			{
+				continue;
+			}
+			const std::size_t objectOffset = location->second;
+
+			switch (static_cast<VirtualTerminalObjectType>(pool[objectOffset + 2]))
+			{
+				case VirtualTerminalObjectType::Container:
+				{
+					for (std::size_t i = 0; i < pool[objectOffset + 8]; i++)
+					{
+						const std::size_t childOffset = objectOffset + CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+						if ((childOffset + 2) <= pool.size())
+						{
+							pending.push_back(read_id(childOffset));
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::ObjectPointer:
+				{
+					pending.push_back(read_id(objectOffset + OBJECT_POINTER_VALUE_OFFSET));
+				}
+				break;
+
+				case VirtualTerminalObjectType::OutputString:
+				case VirtualTerminalObjectType::OutputNumber:
+				{
+					fontsOnKeys.insert(read_id(objectOffset + FONT_ATTRIBUTES_OFFSET));
+				}
+				break;
+
+				default:
+					break;
+			}
+		}
+
+		// A font that is also used off the keys keeps the data mask factor
+		for (const auto &object : objectOffsets)
+		{
+			if (uses_font(static_cast<VirtualTerminalObjectType>(pool[object.second + 2])) &&
+			    (0 == shownOnKeys.count(object.first)))
+			{
+				fontsOnKeys.erase(read_id(object.second + FONT_ATTRIBUTES_OFFSET));
+			}
+		}
+
+		std::vector<std::uint16_t> retVal(shownOnKeys.begin(), shownOnKeys.end());
+		retVal.insert(retVal.end(), fontsOnKeys.begin(), fontsOnKeys.end());
+		std::sort(retVal.begin(), retVal.end());
+		return retVal;
+	}
+
 	bool VirtualTerminalClient::scale_object_pools()
 	{
 		bool retVal = true;
@@ -4085,13 +4200,19 @@ namespace isobus
 				}
 			}
 
-			// Step 2, Parse the pool and resize each object as we iterate through it
+			// Step 2, Find the objects drawn on soft keys, which scale like the keys
+			const std::vector<std::uint16_t> softKeyObjectIDs = get_soft_key_scaled_object_ids(objectPool.scaledObjectPool);
+
+			// Step 3, Parse the pool and resize each object as we iterate through it
 			auto poolIterator = objectPool.scaledObjectPool.begin();
 
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
-				if (VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2]))
+				const std::uint16_t objectID = static_cast<std::uint16_t>(poolIterator[0] | (poolIterator[1] << 8));
+
+				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
+				    std::binary_search(softKeyObjectIDs.begin(), softKeyObjectIDs.end(), objectID))
 				{
 					retVal &= resize_object(&poolIterator[0],
 					                        static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight),
