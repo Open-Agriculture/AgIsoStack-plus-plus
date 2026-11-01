@@ -12,11 +12,13 @@
 #include <chrono>
 #include <functional>
 #include <thread>
+#include <utility>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_server.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -2301,6 +2303,140 @@ TEST_F(VirtualTerminalServerMessagingTest, ESCCommandIsAnsweredWithTheObjectWhos
 	EXPECT_EQ(0xFF, inputAbortedResponse.data[5]);
 	EXPECT_EQ(0xFF, inputAbortedResponse.data[6]);
 	EXPECT_EQ(0xFF, inputAbortedResponse.data[7]);
+}
+
+class VTServerCapturingLogger : public CANStackLogger
+{
+public:
+	VTServerCapturingLogger() :
+	  previousLevel(get_log_level())
+	{
+		set_log_level(LoggingLevel::Debug);
+		set_can_stack_logger_sink(this);
+	}
+	~VTServerCapturingLogger() override
+	{
+		set_can_stack_logger_sink(nullptr);
+		set_log_level(previousLevel);
+	}
+	void sink_CAN_stack_log(LoggingLevel, const std::string &text) override
+	{
+		logs.push_back(text);
+	}
+	std::vector<std::string> logs;
+
+private:
+	LoggingLevel previousLevel;
+};
+
+class VirtualTerminalStringLoggingTest : public VirtualTerminalServerMessagingTest
+  , public ::testing::WithParamInterface<VirtualTerminalObjectType>
+{
+};
+
+TEST_P(VirtualTerminalStringLoggingTest, ChangedValuesPreserveBytesWithoutLoggingTheirEncoding)
+{
+	const std::vector<std::pair<std::string, std::string>> payloads = {
+		{ "ASCII", "ASCII" },
+		{ std::string("\xDCzem", 4), "\\xDCzem" },
+		{ std::string("\xFF\xFE\xDC\0z\0", 6), "\\xFF\\xFE\\xDC\\x00z\\x00" },
+		{ "", "" },
+		{ "%s%s%s%s%s%s%s%s%s%s%s%s", "%s%s%s%s%s%s%s%s%s%s%s%s" },
+		{ "\\xDC", "\\\\xDC" },
+		{ std::string("\x1F !~\x7F\x80", 6), "\\x1F !~\\x7F\\x80" }
+	};
+	for (const auto &testCase : payloads)
+	{
+		const auto &payload = testCase.first;
+		SCOPED_TRACE(payload.size());
+		auto serverCF = test_helpers::create_mock_internal_control_function(0x80);
+		auto clientCF = test_helpers::create_mock_control_function(0x81);
+		DerivedTestVTServer server(serverCF);
+		auto workingSet = std::make_shared<TestWorkingSet>(clientCF);
+		std::shared_ptr<VTObject> object;
+		std::string objectType;
+		if (VirtualTerminalObjectType::StringVariable == GetParam())
+		{
+			auto stringObject = std::make_shared<StringVariable>();
+			stringObject->set_value("original");
+			object = stringObject;
+			objectType = "string variable";
+		}
+		else if (VirtualTerminalObjectType::OutputString == GetParam())
+		{
+			auto stringObject = std::make_shared<OutputString>();
+			stringObject->set_value("original");
+			object = stringObject;
+			objectType = "output string";
+		}
+		else
+		{
+			auto stringObject = std::make_shared<InputString>();
+			stringObject->set_value("original");
+			object = stringObject;
+			objectType = "input string";
+		}
+		object->set_id(0x1234);
+		ASSERT_TRUE(workingSet->add_object(object));
+		auto macro = std::make_shared<Macro>();
+		macro->set_id(0x5678);
+		std::vector<std::uint8_t> command = { static_cast<std::uint8_t>(Macro::Command::ChangeStringValue), 0x34, 0x12, static_cast<std::uint8_t>(payload.size()), 0 };
+		command.insert(command.end(), payload.begin(), payload.end());
+		command.resize(std::max<std::size_t>(8, command.size()), 0xFF);
+		ASSERT_TRUE(macro->add_command_packet(command));
+		ASSERT_TRUE(workingSet->add_object(macro));
+		server.add_managed_working_set(workingSet);
+		VTServerCapturingLogger logger;
+		EXPECT_TRUE(server.execute_macro_for_test(macro->get_id(), workingSet));
+		std::string expectedValue = payload;
+		expectedValue.resize(std::max<std::size_t>(8, payload.size()), ' ');
+		if (VirtualTerminalObjectType::StringVariable == GetParam())
+		{
+			EXPECT_EQ(expectedValue, std::static_pointer_cast<StringVariable>(object)->get_value());
+		}
+		else if (VirtualTerminalObjectType::OutputString == GetParam())
+		{
+			EXPECT_EQ(expectedValue, std::static_pointer_cast<OutputString>(object)->get_value());
+		}
+		else
+		{
+			EXPECT_EQ(expectedValue, std::static_pointer_cast<InputString>(object)->get_value());
+		}
+		const auto padding = std::string(payload.size() < 8 ? 8 - payload.size() : 0, ' ');
+		const auto expectedLog = "[VT Server]: Client 129 change string value command for " + objectType + " object 4660. Value: " + testCase.second + padding;
+		EXPECT_NE(logger.logs.end(), std::find(logger.logs.begin(), logger.logs.end(), expectedLog));
+	}
+}
+
+INSTANTIATE_TEST_SUITE_P(StringObjects, VirtualTerminalStringLoggingTest, ::testing::Values(VirtualTerminalObjectType::StringVariable, VirtualTerminalObjectType::OutputString, VirtualTerminalObjectType::InputString));
+
+TEST_F(VirtualTerminalServerMessagingTest, TruncatedInputWarnsWithoutLoggingTheEncodedValue)
+{
+	VirtualCANPlugin plugin;
+	plugin.open();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto serverCF = test_helpers::claim_internal_control_function(0x80, 0, time_source);
+	auto clientCF = test_helpers::force_claim_partnered_control_function(0x81, 0);
+	DerivedTestVTServer server(serverCF);
+	VTServerCapturingLogger logger;
+	plugin.clear_queue();
+	std::string value;
+	std::string escapedValue;
+	for (std::size_t i = 0; i < 44; ++i)
+	{
+		value += std::string("A%\\\0\xDC\n", 6);
+		escapedValue += "A%\\\\\\x00\\xDC\\x0A";
+	}
+	EXPECT_TRUE(server.send_change_string_value_message(0x1234, value, clientCF));
+	time_source.update_for_ms(5);
+	const std::string expectedLog = "[VT Server] Truncated user input string value to the maximum of 255. The string was: " + escapedValue;
+	EXPECT_NE(logger.logs.end(), std::find(logger.logs.begin(), logger.logs.end(), expectedLog));
+	CANHardwareInterface::stop();
+	plugin.close();
+	CANNetworkManager::CANNetwork.deactivate_control_function(clientCF);
+	CANNetworkManager::CANNetwork.deactivate_control_function(serverCF);
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)

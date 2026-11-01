@@ -22,6 +22,35 @@
 
 namespace isobus
 {
+#ifndef DISABLE_CAN_STACK_LOGGER
+	/// @brief Represents arbitrary string bytes as printable ASCII for logging.
+	/// @param value The original bytes, without assuming a text encoding.
+	/// @returns Printable bytes unchanged, backslashes doubled and other bytes as hexadecimal escapes.
+	static std::string escape_string_for_logging(const std::string &value)
+	{
+		constexpr char HEX_DIGITS[] = "0123456789ABCDEF";
+		std::string escaped;
+		for (const unsigned char byte : value)
+		{
+			if ('\\' == byte)
+			{
+				escaped += "\\\\";
+			}
+			else if ((0x20 <= byte) && (0x7E >= byte))
+			{
+				escaped.push_back(static_cast<char>(byte));
+			}
+			else
+			{
+				escaped += "\\x";
+				escaped.push_back(HEX_DIGITS[byte >> 4]);
+				escaped.push_back(HEX_DIGITS[byte & 0x0F]);
+			}
+		}
+		return escaped;
+	}
+#endif
+
 	/// @brief Extracts the low byte from a 16-bit value.
 	/// @param value The value to extract the low byte from.
 	/// @returns The low byte of the value.
@@ -1222,7 +1251,7 @@ namespace isobus
 								stringVariable->set_value(newStringValue);
 								send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
 								onRepaintEventDispatcher.call(managedWorkingSet);
-								LOG_DEBUG("[VT Server]: Client %u change string value command for string variable object %u. Value: " + newStringValue, managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+								LOG_DEBUG("[VT Server]: Client %u change string value command for string variable object %u. Value: %s", managedWorkingSet->get_control_function()->get_address(), objectIdToChange, escape_string_for_logging(newStringValue).c_str());
 							}
 							break;
 
@@ -1239,7 +1268,7 @@ namespace isobus
 								outputString->set_value(newStringValue);
 								send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
 								onRepaintEventDispatcher.call(managedWorkingSet);
-								LOG_DEBUG("[VT Server]: Client %u change string value command for output string object %u. Value: " + newStringValue, managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+								LOG_DEBUG("[VT Server]: Client %u change string value command for output string object %u. Value: %s", managedWorkingSet->get_control_function()->get_address(), objectIdToChange, escape_string_for_logging(newStringValue).c_str());
 							}
 							break;
 
@@ -1256,7 +1285,7 @@ namespace isobus
 								inputString->set_value(newStringValue);
 								send_change_string_value_response(objectIdToChange, 0, message.get_source_control_function());
 								onRepaintEventDispatcher.call(managedWorkingSet);
-								LOG_DEBUG("[VT Server]: Client %u change string value command for input string object %u. Value: " + newStringValue, managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+								LOG_DEBUG("[VT Server]: Client %u change string value command for input string object %u. Value: %s", managedWorkingSet->get_control_function()->get_address(), objectIdToChange, escape_string_for_logging(newStringValue).c_str());
 							}
 							break;
 
@@ -2546,7 +2575,7 @@ namespace isobus
 		{
 			if (value.length() > 255)
 			{
-				LOG_WARNING("[VT Server] Truncated user input string value to the maximum of 255. The string was: " + value);
+				LOG_WARNING("[VT Server] Truncated user input string value to the maximum of 255. The string was: %s", escape_string_for_logging(value).c_str());
 			}
 
 			std::vector<std::uint8_t> buffer = {
