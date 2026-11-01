@@ -77,6 +77,13 @@ std::shared_ptr<isobus::CANHardwarePlugin> CANDriverFactory::create(const std::s
 #endif
 	}
 
+	if (driver == "proemion")
+	{
+#if defined(ISOBUS_PROEMION_AVAILABLE)
+		canDriver = std::make_shared<isobus::ProemionCANLinkInterface>(interfaceName);
+#endif
+	}
+
 	if (nullptr == canDriver)
 	{
 		if (!driver.empty())
@@ -133,6 +140,9 @@ void CANDriverFactory::printAvailableDriverList()
 #elif defined(__linux__)
 #ifdef ISOBUS_SOCKETCAN_AVAILABLE
 	std::cout << " * socketcan - SocketCAN driver" << std::endl;
+#endif
+#ifdef ISOBUS_PROEMION_AVAILABLE
+	std::cout << " * proemion  - driver for Proemion CanLink Wifi-CAN devices over TCP" << std::endl;
 #endif
 #endif
 #if defined(ISOBUS_VIRTUALCAN_AVAILABLE)
