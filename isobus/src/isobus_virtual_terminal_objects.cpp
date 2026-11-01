@@ -6097,6 +6097,11 @@ namespace isobus
 		}
 	}
 
+	void PictureGraphic::reserve_raw_data(std::uint64_t pixels)
+	{
+		rawData.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(pixels, static_cast<std::uint32_t>(get_actual_width()) * get_actual_height())));
+	}
+
 	std::uint32_t PictureGraphic::get_number_of_bytes_in_raw_data() const
 	{
 		return numberOfBytesInRawData;
@@ -6105,7 +6110,6 @@ namespace isobus
 	void PictureGraphic::set_number_of_bytes_in_raw_data(std::uint32_t value)
 	{
 		numberOfBytesInRawData = value;
-		rawData.reserve(value);
 	}
 
 	std::uint16_t PictureGraphic::get_actual_width() const
