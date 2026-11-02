@@ -1917,6 +1917,27 @@ namespace isobus
 			}
 			break;
 
+			case Function::PreferredAssignmentCommand:
+			{
+				const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+					static_cast<std::uint8_t>(Function::PreferredAssignmentCommand),
+					0x00,
+					get_low_byte(NULL_OBJECT_ID),
+					get_high_byte(NULL_OBJECT_ID),
+					0xFF,
+					0xFF,
+					0xFF,
+					0xFF
+				};
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
 			case Function::ExecuteMacroCommand:
 			{
 				auto objectID = static_cast<std::uint16_t>(data[1]);
