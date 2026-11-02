@@ -26,6 +26,7 @@
 #include <vector>
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <atomic>
 #include <thread>
 #endif
 
@@ -419,6 +420,10 @@ namespace isobus
 		/// @brief Check whether the client is connected to the VT server
 		/// @returns true if connected, false otherwise
 		bool get_is_connected() const;
+
+		/// @brief Returns the current state machine state
+		/// @returns The current internal state machine state
+		StateMachineState get_state() const;
 
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
@@ -1710,6 +1715,13 @@ namespace isobus
 		/// @returns The best available font that the VT reported it has available
 		FontSize get_font_or_next_smallest_font(FontSize originalFont) const;
 
+		/// @brief Scales the height of a proportional font, keeping it between 8 pixels and the
+		/// height of the largest font the VT reported it has available
+		/// @param[in] originalHeight The original font height in pixels
+		/// @param[in] scaleFactor The factor by which to scale the font
+		/// @returns The scaled font height in pixels
+		std::uint8_t scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const;
+
 		/// @brief Remaps a font to some other font based on a scale factor
 		/// This is not a one-size-fits-all solution, but should usually result in a compatible font
 		/// @param[in] originalFont The font to scale
@@ -1779,6 +1791,17 @@ namespace isobus
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
+		/// @brief The body of terminate(): removes the callbacks, tells the worker to exit and marks the client
+		/// disconnected
+		/// @param[in] joinWorker Whether to join the worker thread; false when called from the worker itself
+		void stop(bool joinWorker);
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		/// @brief Joins and deletes the worker thread, if there is one. Called with `workerThreadMutex` held,
+		/// never from the worker itself.
+		void join_worker_thread();
+#endif
+
 		/// @brief A method to print the End of Object pool response message error field with LOG_ERROR
 		/// @param[in] errorCodes byte 2 from the End of Object Pool response
 		/// @param[in] objectPoolErrorCodes byte 7 from the End of Object Pool response
@@ -1846,12 +1869,14 @@ namespace isobus
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
+		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
+		std::atomic<std::thread::id> workerThreadId{ std::thread::id() }; ///< The worker's id, stored by the worker itself when it starts
+		Mutex workerThreadMutex; ///< Held through initialize() and terminate(), so one caller at a time starts or stops the worker. The worker never takes it.
 #endif
 		bool firstTimeInState = false; ///< Stores if the current update cycle is the first time a state machine state has been processed
-		bool initialized = false; ///< Stores the client initialization state
+		std::atomic<bool> initialized{ false }; ///< Stores the client initialization state
 		bool sendWorkingSetMaintenance = false; ///< Used internally to enable and disable cyclic sending of the working set maintenance message
-		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
+		std::atomic<bool> shouldTerminate{ false }; ///< Used to determine if the client should exit and join the worker thread
 
 		// Command queue
 		std::vector<std::vector<std::uint8_t>> commandQueue; ///< A queue of commands to send to the VT server

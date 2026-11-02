@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <map>
+#include <thread>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
@@ -75,6 +76,11 @@ public:
 	{
 		smallFontSizesBitfield = smallFontsBitfield;
 		largeFontSizesBitfield = largeFontsBitfield;
+	}
+
+	void test_wrapper_set_supported_font_styles(std::uint8_t fontStylesBitfieldValue)
+	{
+		fontStylesBitfield = fontStylesBitfieldValue;
 	}
 
 	void test_wrapper_set_state(VirtualTerminalClient::StateMachineState value)
@@ -367,6 +373,35 @@ static void expect_assignment_response(AuxiliaryTestCAN &can, std::uint16_t func
 	ASSERT_NE(frames.end(), response);
 	EXPECT_EQ((std::vector<std::uint8_t>{ 0x24, static_cast<std::uint8_t>(function), static_cast<std::uint8_t>(function >> 8), error, 0xFF, 0xFF, 0xFF, 0xFF }),
 	          (std::vector<std::uint8_t>(response->data, response->data + response->dataLength)));
+}
+
+TEST_F(VirtualTerminalTest, ConcurrentTerminate)
+{
+	NAME clientNAME(0);
+	clientNAME.set_ecu_instance(2);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x27);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	// The owner terminates the client while another thread does too. Joining the worker twice hangs,
+	// or aborts, within a few rounds.
+	for (int round = 0; round < 20; round++)
+	{
+		DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+		clientUnderTest.initialize(true);
+
+		std::thread other([&clientUnderTest]() { clientUnderTest.terminate(); });
+		clientUnderTest.terminate();
+		other.join();
+		EXPECT_FALSE(clientUnderTest.get_is_initialized());
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST_F(VirtualTerminalTest, PopulatedPreferredAssignmentsIncludePacketPadding)
@@ -1425,6 +1460,29 @@ TEST_F(VirtualTerminalTest, ObjectMetadataTests)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, FontRemappingKeepsTheFontBetweenTheFudgeAndTheFirstTableEntry)
+{
+	using FontSize = VirtualTerminalClient::FontSize;
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	for (int i = 0; i <= static_cast<int>(FontSize::Size128x192); i++)
+	{
+		const auto font = static_cast<FontSize>(i);
+
+		// No table has an entry between the 1.05 fudge and 1.30, so the font keeps its size
+		EXPECT_EQ(i, static_cast<int>(clientUnderTest.test_wrapper_remap_font_to_scale(font, 1.2f)));
+
+		// Scaling up never gives a smaller font, scaling down never a larger one
+		EXPECT_LE(i, static_cast<int>(clientUnderTest.test_wrapper_remap_font_to_scale(font, 1.5f)));
+		EXPECT_GE(i, static_cast<int>(clientUnderTest.test_wrapper_remap_font_to_scale(font, 0.8f)));
+	}
+
+	// The fonts still grow once the factor reaches their first upscale entry
+	EXPECT_EQ(FontSize::Size8x12, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size8x8, 1.5f));
+	EXPECT_EQ(FontSize::Size16x16, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size12x16, 1.3f));
+	EXPECT_EQ(FontSize::Size32x32, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size24x32, 1.3f));
+}
+
 TEST_F(VirtualTerminalTest, FontRemapping)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
@@ -1539,6 +1597,64 @@ TEST_F(VirtualTerminalTest, FontRemapping)
 			clientUnderTest.test_wrapper_remap_font_to_scale(static_cast<VirtualTerminalClient::FontSize>(i), j);
 		}
 	}
+}
+
+// Each font style is one bit of the font styles the VT reports. The check used to AND the style's
+// number with the bitfield instead of its bit, so Bold was never supported and the rest were wrong.
+TEST_F(VirtualTerminalTest, FontStyleSupport)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	clientUnderTest.test_wrapper_set_supported_font_styles(0x81); // Bold and proportional
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Bold));
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::ProportionalFontRendering));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::CrossedOut));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Underlined));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Italic));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::FlashingHidden));
+
+	clientUnderTest.test_wrapper_set_supported_font_styles(0x08); // Italic only
+	EXPECT_TRUE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Italic));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::Bold));
+	EXPECT_FALSE(clientUnderTest.get_font_style_supported(VirtualTerminalClient::FontStyleBits::ProportionalFontRendering));
+}
+
+// The fallback keeps stepping down until it finds a font the VT has. It used to step down from
+// the original font every time, so it never finished when neither that font nor the one below it was supported.
+TEST_F(VirtualTerminalTest, FontFallbackSkipsSeveralUnsupportedFonts)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0x01, 0x00); // Only 6x8
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size32x32));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0x41, 0x00); // 6x8 and 24x32
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size24x32, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size128x192));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size6x8, clientUnderTest.test_wrapper_get_font_or_next_smallest_font(VirtualTerminalClient::FontSize::Size16x24));
+}
+
+// With the proportional style bit set, the font size is a height in pixels from 8 up to the height
+// of the VT's largest font, so it is scaled as a height instead of being looked up as a FontSize.
+TEST_F(VirtualTerminalTest, ResizeProportionalFontAttributes)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0x00); // Largest font is 32x32
+
+	auto scaledHeight = [&](std::uint8_t height, float scaleFactor) {
+		std::uint8_t testObject[] = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::FontAttributes), 0x00, height, 0x00, 0x80, 0x00 };
+		EXPECT_TRUE(clientUnderTest.test_wrapper_resize_object(testObject, scaleFactor, VirtualTerminalObjectType::FontAttributes));
+		return testObject[4];
+	};
+
+	EXPECT_EQ(30, scaledHeight(20, 1.5f));
+	EXPECT_EQ(20, scaledHeight(20, 1.0f));
+	EXPECT_EQ(10, scaledHeight(20, 0.5f));
+	EXPECT_EQ(32, scaledHeight(20, 2.0f));
+	EXPECT_EQ(8, scaledHeight(20, 0.25f));
+
+	clientUnderTest.test_wrapper_set_supported_fonts(0x01, 0x40); // Largest font is 128x192
+	EXPECT_EQ(192, scaledHeight(100, 4.0f));
 }
 
 TEST_F(VirtualTerminalTest, ResizeOutputArchedBarGraph)
@@ -2210,6 +2326,33 @@ TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 	time_source.simulate_delay_ms(5001);
 	clientUnderTest.update();
 	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, GetStateReportsTheStateMachineState)
+{
+	NAME clientNAME(0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x26);
+
+	std::vector<isobus::NAMEFilter> vtNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::VirtualTerminal));
+	vtNameFilters.push_back(testFilter);
+
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Disconnected, clientUnderTest.get_state());
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse);
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForEndOfObjectPoolResponse, clientUnderTest.get_state());
+	EXPECT_FALSE(clientUnderTest.get_is_connected());
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForPartnerVTStatusMessage);
+	time_source.simulate_delay_ms(3001);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Failed, clientUnderTest.get_state());
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
