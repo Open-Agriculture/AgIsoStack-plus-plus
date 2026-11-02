@@ -202,7 +202,7 @@ TEST_F(EventManagerBool, ClearListenersWithinNestedCall)
 
 TEST_F(EventManagerBool, ConcurrentAddListenerGivesUniqueIds)
 {
-	constexpr std::size_t LISTENERS_PER_THREAD = 10000;
+	static constexpr std::size_t LISTENERS_PER_THREAD = 10000;
 	auto addListeners = [this]() {
 		for (std::size_t i = 0; i < LISTENERS_PER_THREAD; i++)
 		{
