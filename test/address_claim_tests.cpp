@@ -61,6 +61,17 @@ TEST_F(AddressClaimTest, AddressClaim_PartneredClaim)
 	auto secondPartneredFirstEcu = CANNetworkManager::CANNetwork.create_partnered_control_function(1, { filterFirst });
 
 	time_source.update_for_ms(500);
+
+	// Each channel receives frames on its own thread, which runs in real time. On a busy machine it can fall
+	// behind the simulated time, so give it a chance to deliver the other device's address claim.
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while ((!firstPartneredSecondECU->get_address_valid() || !secondPartneredFirstEcu->get_address_valid()) &&
+	       (std::chrono::steady_clock::now() < deadline))
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		time_source.update_for_ms(1);
+	}
+
 	EXPECT_TRUE(firstInternalECU->get_address_valid());
 	EXPECT_TRUE(secondInternalECU2->get_address_valid());
 	EXPECT_TRUE(firstPartneredSecondECU->get_address_valid());

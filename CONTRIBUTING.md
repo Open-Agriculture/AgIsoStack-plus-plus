@@ -30,7 +30,7 @@ Our code style rules and PR reviews are based loosely on Autosar's `Guidelines f
 * Doxygen should compile with no warnings when run at the root of the project with the command `doxygen doxyfile`
 * Absolutely no code shall be added that is under a more strict license than MIT or which has not had conditions met to be distributed under our license
 * Builds must pass the compilation github action
-* Only features present in C++14 can be used to help provide the maximum compatibility to all "modern" compilers
+* Only features present in C++11 can be used to help provide the maximum compatibility to all "modern" compilers
 * Aim for 80% code coverage on new code, but prioritize effective high-quality tests over achieving this percentage.
 
 These rules are not meant to be exclusionary or difficult to follow. Our only goal is to maximize the code quality in the project. It's also OK if you miss some of these items in your PR on your first or second try, we'll help you get your PR up to this standard. We want your contributions!

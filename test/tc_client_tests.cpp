@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <thread>
+
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -103,6 +105,21 @@ public:
 	void test_wrapper_process_labels_from_ddop()
 	{
 		TaskControllerClient::process_labels_from_ddop();
+	}
+
+	void test_wrapper_request_termination(std::uint32_t run)
+	{
+		TaskControllerClient::request_termination(run);
+	}
+
+	std::uint32_t test_wrapper_get_run_number() const
+	{
+		return TaskControllerClient::get_run_number();
+	}
+
+	bool test_wrapper_get_termination_requested() const
+	{
+		return TaskControllerClient::get_termination_requested();
 	}
 
 	static const std::uint8_t testBinaryDDOP[];
@@ -1375,6 +1392,79 @@ TEST_F(TaskControllerClientTest, WorkerThread)
 
 	EXPECT_NO_THROW(interfaceUnderTest.terminate());
 	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner); // Account for the pointer in the TC client and the language interface
+}
+
+TEST_F(TaskControllerClientTest, ConcurrentTerminate)
+{
+	NAME clientNAME(0);
+	clientNAME.set_industry_group(2);
+	clientNAME.set_ecu_instance(2);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x87);
+
+	std::vector<isobus::NAMEFilter> tcNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	tcNameFilters.push_back(testFilter);
+
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, tcNameFilters);
+
+	CANNetworkManager::CANNetwork.update();
+
+	// The owner terminates the client while another thread does too (as the client's own error paths
+	// did, from a PGN callback). Joining the worker twice hangs, or aborts, within a few rounds.
+	for (int round = 0; round < 20; round++)
+	{
+		DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
+		interfaceUnderTest.initialize(true);
+
+		std::thread other([&interfaceUnderTest]() { interfaceUnderTest.terminate(); });
+		interfaceUnderTest.terminate();
+		other.join();
+		EXPECT_TRUE(interfaceUnderTest.test_wrapper_get_termination_requested());
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(TaskControllerClientTest, LateErrorDoesNotStopTheNextRun)
+{
+	NAME clientNAME(0);
+	clientNAME.set_industry_group(2);
+	clientNAME.set_ecu_instance(3);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x88);
+
+	std::vector<isobus::NAMEFilter> tcNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	tcNameFilters.push_back(testFilter);
+
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, tcNameFilters);
+
+	CANNetworkManager::CANNetwork.update();
+
+	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
+	interfaceUnderTest.initialize(true);
+	const std::uint32_t firstRun = interfaceUnderTest.test_wrapper_get_run_number();
+
+	// The owner restarts the client while an error found during the first run is still on its way
+	// (a PGN callback that saw the client disconnect, held up before it stops the client).
+	interfaceUnderTest.terminate();
+	interfaceUnderTest.initialize(true);
+	interfaceUnderTest.test_wrapper_request_termination(firstRun);
+	EXPECT_FALSE(interfaceUnderTest.test_wrapper_get_termination_requested());
+
+	// An error found during the current run stops it, and initialize() starts it again, joining the
+	// worker that was told to exit before it starts a new one.
+	interfaceUnderTest.test_wrapper_request_termination(interfaceUnderTest.test_wrapper_get_run_number());
+	EXPECT_TRUE(interfaceUnderTest.test_wrapper_get_termination_requested());
+	interfaceUnderTest.initialize(true);
+	EXPECT_FALSE(interfaceUnderTest.test_wrapper_get_termination_requested());
+	EXPECT_TRUE(interfaceUnderTest.get_is_initialized());
+
+	interfaceUnderTest.terminate();
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 static bool valueRequested = false;

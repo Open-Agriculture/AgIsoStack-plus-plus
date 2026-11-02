@@ -419,14 +419,13 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
-		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @brief Rejects every attribute, because all Working Set attributes are read-only.
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
 		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
-		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
-		/// returns true, this value is undefined.
-		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		/// @param[out] returnedError Always set to AttributeError::InvalidAttributeID
+		/// @returns Always false
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
@@ -565,8 +564,8 @@ namespace isobus
 		{
 			Highest = 0, ///< Most aggressive beeping
 			Medium = 1, ///< Medium beeping
-			Lowest = 3, ///< Low beeping
-			None = 4 ///< No beeping
+			Lowest = 2, ///< Low beeping
+			None = 3 ///< No beeping
 		};
 
 		/// @brief Constructor for a alarm mask object
@@ -714,7 +713,7 @@ namespace isobus
 		void set_hidden(bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 9; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
 		bool hidden = false; ///< The hidden attribute state for this container object. True means it will be hidden when rendered.
 	};
@@ -1715,7 +1714,7 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
@@ -3498,7 +3497,7 @@ namespace isobus
 		void set_validation_type(ValidationType newValidationType);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 6; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string validationString; ///< String containing all valid or invalid character codes
 		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string

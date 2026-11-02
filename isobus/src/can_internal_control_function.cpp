@@ -162,8 +162,6 @@ namespace isobus
 						deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(get_can_port(), preferredAddress);
 					}
 
-					const std::uint8_t arbitrationRangeEnd = get_end_arbitration_address_for_industry_group(static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()));
-
 					// Time to find a free address
 					if ((nullptr == deviceAtOurPreferredAddress) && (NULL_CAN_ADDRESS != preferredAddress))
 					{

@@ -35,7 +35,7 @@ jobs:
       - name: Run build-wrapper
         run: |
           mkdir build
-          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=11 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCAN_DRIVER=SocketCAN -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config ${{ env.BUILD_TYPE }}
       - name: Run
         working-directory: ${{github.workspace}}/build
@@ -103,6 +103,8 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCAN_STACK_DISABLE_THREADS=ON \
+            -DCMAKE_CXX_STANDARD=11 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build (no threads)
