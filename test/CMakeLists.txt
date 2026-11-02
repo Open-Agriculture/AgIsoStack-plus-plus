@@ -71,7 +71,7 @@ set(TEST_SRC
 add_executable(unit_tests ${TEST_SRC} ${TEST_INCLUDE})
 set_target_properties(
   unit_tests
-  PROPERTIES CXX_STANDARD 11
+  PROPERTIES CXX_STANDARD 17
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 target_link_libraries(
