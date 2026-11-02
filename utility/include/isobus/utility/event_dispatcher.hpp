@@ -127,33 +127,43 @@ namespace isobus
 		void call(const E &...args)
 		{
 			{
-				// A depth rather than a flag, so a nested or concurrent call() can not apply
-				// the queued modifications while an outer call() is still iterating
 				LOCK_GUARD(Mutex, callbacksMutex);
 				executionDepth += 1;
 			}
 
-			// Execute the callbacks
+			// So a throwing callback still ends the call()
+			struct EndCallGuard
+			{
+				EventDispatcher &dispatcher;
+				~EndCallGuard()
+				{
+					dispatcher.end_call();
+				}
+			};
+			EndCallGuard guard{ *this };
+
 			for (const auto &callback : callbacks)
 			{
 				callback.second(args...);
 			}
-
-			{
-				LOCK_GUARD(Mutex, callbacksMutex);
-				executionDepth -= 1;
-
-				while ((0 == executionDepth) && (!modifications.empty()))
-				{
-					modifications.front()();
-					modifications.pop();
-				}
-			}
 		}
 
 	private:
+		/// @brief Ends a call(), and applies the queued modifications if no other call() is iterating
+		void end_call()
+		{
+			LOCK_GUARD(Mutex, callbacksMutex);
+			executionDepth -= 1;
+
+			while ((0 == executionDepth) && (!modifications.empty()))
+			{
+				modifications.front()();
+				modifications.pop();
+			}
+		}
+
 		std::unordered_map<EventCallbackHandle, Callback> callbacks; ///< The list of callbacks
-		std::size_t executionDepth = 0; ///< How many call()s are currently iterating the callbacks, nested or on other threads
+		std::size_t executionDepth = 0; ///< How many call()s are iterating the callbacks, nested or concurrent
 		std::queue<std::function<void()>> modifications; ///< The modifications to the callbacks list
 		Mutex callbacksMutex; ///< The mutex to protect the object from (unwanted) concurrent access
 		EventCallbackHandle nextId = 0; // Counter for generating unique IDs

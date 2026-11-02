@@ -418,5 +418,5 @@ TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerRemovesItsListenersOnDestruction)
 
 	EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners);
 	EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners);
-	std::remove(fileName.c_str());
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
 }

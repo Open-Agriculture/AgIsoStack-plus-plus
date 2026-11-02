@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 
 using namespace isobus;
@@ -174,7 +175,7 @@ TEST_F(EventManagerBool, RemoveCallbackWithinCallback)
 	EXPECT_EQ(callbackToBeRemovedExecuted, 1); // Ensure the removed callback did not execute again
 }
 
-// A nested call() must not apply the queued clear while the outer call() still iterates (use-after-free under ASan)
+// Use-after-free under ASan if the inner call() applies the queued clear
 TEST_F(EventManagerBool, ClearListenersWithinNestedCall)
 {
 	int outerCallbackExecuted = 0;
@@ -215,4 +216,21 @@ TEST_F(EventManagerBool, ConcurrentAddListenerGivesUniqueIds)
 	second.join();
 
 	EXPECT_EQ(dispatcher.get_listener_count(), 2 * LISTENERS_PER_THREAD);
+}
+
+TEST_F(EventManagerBool, ThrowingCallbackDoesNotBlockLaterModifications)
+{
+	bool shouldThrow = true;
+	dispatcher.add_listener([&](bool) {
+		if (shouldThrow)
+		{
+			shouldThrow = false;
+			throw std::runtime_error("callback failed");
+		}
+	});
+
+	EXPECT_THROW(dispatcher.invoke(true), std::runtime_error);
+	dispatcher.clear_listeners();
+	dispatcher.invoke(true);
+	EXPECT_EQ(dispatcher.get_listener_count(), 0);
 }
