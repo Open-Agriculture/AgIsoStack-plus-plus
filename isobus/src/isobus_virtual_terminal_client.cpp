@@ -77,6 +77,20 @@ namespace isobus
 
 	void VirtualTerminalClient::initialize(bool spawnThread)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (std::this_thread::get_id() == workerThreadId.load())
+		{
+			LOG_ERROR("[VT]: initialize() cannot be called from the client's own worker thread.");
+			return;
+		}
+		LOCK_GUARD(Mutex, workerThreadMutex);
+		if (shouldTerminate)
+		{
+			// A worker that terminated the client from one of its own callbacks has been told to exit,
+			// and is joined before a new one starts, so the old one cannot carry on beside it.
+			join_worker_thread();
+		}
+#endif
 		if (shouldTerminate)
 		{
 			shouldTerminate = false;
@@ -119,7 +133,30 @@ namespace isobus
 		return (StateMachineState::Connected == state);
 	}
 
+	VirtualTerminalClient::StateMachineState VirtualTerminalClient::get_state() const
+	{
+		return state;
+	}
+
 	void VirtualTerminalClient::terminate()
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (std::this_thread::get_id() == workerThreadId.load())
+		{
+			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
+			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
+			// owner's terminate() or initialize(), or the destructor, joins it.
+			stop(false);
+			return;
+		}
+		// Held through the whole call, so a second caller waits until the first has finished: it cannot
+		// return to an owner that destroys the client while the first is still inside.
+		LOCK_GUARD(Mutex, workerThreadMutex);
+#endif
+		stop(true);
+	}
+
+	void VirtualTerminalClient::stop(bool joinWorker)
 	{
 		if (initialized)
 		{
@@ -135,22 +172,38 @@ namespace isobus
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
 			}
-
 			shouldTerminate = true;
+		}
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if (nullptr != workerThread)
-			{
-				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
-			}
+		if (joinWorker)
+		{
+			// Also a worker that terminated the client from one of its own callbacks earlier.
+			join_worker_thread();
+		}
+#else
+		(void)joinWorker;
 #endif
+		if (initialized)
+		{
 			initialized = false;
 			set_state(StateMachineState::Disconnected);
 			LOG_INFO("[VT]: VT Client connection has been terminated.");
 		}
 		store_pending_auxiliary_preferences();
 	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	void VirtualTerminalClient::join_worker_thread()
+	{
+		std::thread *thread = workerThread.exchange(nullptr);
+		if (nullptr != thread)
+		{
+			thread->join();
+			delete thread;
+			workerThreadId = std::thread::id();
+		}
+	}
+#endif
 
 	void VirtualTerminalClient::restart_communication()
 	{
@@ -1174,7 +1227,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_font_style_supported(FontStyleBits value) const
 	{
-		return (0 != (static_cast<std::uint8_t>(value) & fontStylesBitfield));
+		return (0 != ((1 << static_cast<std::uint8_t>(value)) & fontStylesBitfield));
 	}
 
 	VirtualTerminalClient::GraphicMode VirtualTerminalClient::get_graphic_mode() const
@@ -4160,9 +4213,32 @@ namespace isobus
 
 		while ((!get_font_size_supported(retVal)) && (FontSize::Size6x8 != retVal))
 		{
-			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(originalFont) - 1);
+			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(retVal) - 1);
 		}
 		return retVal;
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const
+	{
+		// A proportional font can be any height from 8 pixels up to the height of the VT's largest font (ISO 11783-6 4.6.19.4)
+		static constexpr std::uint8_t MIN_PROPORTIONAL_FONT_HEIGHT = 8;
+		static constexpr std::array<std::uint8_t, 15> FONT_HEIGHTS = { 8, 8, 12, 16, 16, 24, 32, 32, 48, 64, 64, 96, 128, 128, 192 };
+		std::uint8_t maxHeight = MIN_PROPORTIONAL_FONT_HEIGHT;
+
+		for (std::uint8_t i = 0; i < FONT_HEIGHTS.size(); i++)
+		{
+			if (get_font_size_supported(static_cast<FontSize>(i)))
+			{
+				maxHeight = std::max(maxHeight, FONT_HEIGHTS[i]);
+			}
+		}
+
+		const float scaledHeight = (originalHeight * scaleFactor) + 0.5f;
+		if (scaledHeight >= maxHeight)
+		{
+			return maxHeight;
+		}
+		return std::max(MIN_PROPORTIONAL_FONT_HEIGHT, static_cast<std::uint8_t>(scaledHeight));
 	}
 
 	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor)
@@ -4367,11 +4443,19 @@ namespace isobus
 						break;
 					}
 				}
-			}
 
-			if (retVal == originalFont)
+				// Most tables go from their lowest upscale entry straight to their first downscale entry,
+				// so a factor between the fudge and that upscale entry would pick a smaller font.
+				// Scaling up never returns a smaller font, and scaling down never a larger one.
+				if (((scaleFactor > 1.0f) && (retVal < originalFont)) ||
+				    ((scaleFactor < 1.0f) && (retVal > originalFont)))
+				{
+					retVal = originalFont;
+				}
+			}
+			else
 			{
-				// Unknown font? Newer version than we support of the ISO standard? Or scaling factor out of range?
+				// Unknown font? Newer version than we support of the ISO standard?
 				LOG_ERROR("[VT]: Unable to scale font type " + isobus::to_string(static_cast<int>(originalFont)) +
 				          " with scale factor " + isobus::to_string(scaleFactor) + ". Returning original font.");
 			}
@@ -5077,7 +5161,15 @@ namespace isobus
 
 				case VirtualTerminalObjectType::FontAttributes:
 				{
-					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					if (0 != (buffer[6] & (1 << static_cast<std::uint8_t>(FontStyleBits::ProportionalFontRendering))))
+					{
+						// The font size is a height in pixels, not one of the FontSize values
+						buffer[4] = scale_proportional_font_height(buffer[4], scaleFactor);
+					}
+					else
+					{
+						buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					}
 					retVal = true;
 				}
 				break;
@@ -5353,6 +5445,7 @@ namespace isobus
 	void VirtualTerminalClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		workerThreadId = std::this_thread::get_id();
 		for (;;)
 		{
 			if (shouldTerminate)

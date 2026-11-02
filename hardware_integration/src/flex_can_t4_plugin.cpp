@@ -7,6 +7,8 @@
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
+// Teensy 4.x only: the Teensy 3.x declarations in the header use bus names FlexCAN_T4 rejects there
+#if defined(__IMXRT1062__)
 #include "isobus/hardware_integration/flex_can_t4_plugin.hpp"
 #include "FlexCAN_T4.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -129,3 +131,4 @@ namespace isobus
 		return retVal;
 	}
 }
+#endif // __IMXRT1062__
