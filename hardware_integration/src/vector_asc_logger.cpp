@@ -47,7 +47,7 @@ namespace isobus
 		if (logFileStream)
 		{
 			isobus::CANHardwareInterface::get_can_frame_received_event_dispatcher().remove_listener(canFrameReceivedListener);
-			isobus::CANHardwareInterface::get_can_frame_received_event_dispatcher().remove_listener(canFrameSentListener);
+			isobus::CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().remove_listener(canFrameSentListener);
 			logFileStream.close();
 		}
 	}

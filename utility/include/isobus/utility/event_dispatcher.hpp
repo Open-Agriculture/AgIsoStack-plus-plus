@@ -33,11 +33,10 @@ namespace isobus
 		/// @return A unique identifier for the callback, which can be used to remove the listener.
 		EventCallbackHandle add_listener(const Callback &callback)
 		{
+			LOCK_GUARD(Mutex, callbacksMutex);
 			EventCallbackHandle id = nextId;
 			nextId += 1;
-
-			LOCK_GUARD(Mutex, callbacksMutex);
-			if (isExecuting)
+			if (0 != executionDepth)
 			{
 				modifications.push([this, id, callback]() { callbacks[id] = callback; });
 			}
@@ -82,7 +81,7 @@ namespace isobus
 		void remove_listener(EventCallbackHandle id) noexcept
 		{
 			LOCK_GUARD(Mutex, callbacksMutex);
-			if (isExecuting)
+			if (0 != executionDepth)
 			{
 				modifications.push([this, id]() { callbacks.erase(id); });
 			}
@@ -96,7 +95,7 @@ namespace isobus
 		void clear_listeners() noexcept
 		{
 			LOCK_GUARD(Mutex, callbacksMutex);
-			if (isExecuting)
+			if (0 != executionDepth)
 			{
 				modifications.push([this]() { callbacks.clear(); });
 			}
@@ -128,10 +127,10 @@ namespace isobus
 		void call(const E &...args)
 		{
 			{
-				// Set flag to indicate we will be reading the list of callbacks, and
-				// prevent other threads from modifying the list directly during this time
+				// A depth rather than a flag, so a nested or concurrent call() can not apply
+				// the queued modifications while an outer call() is still iterating
 				LOCK_GUARD(Mutex, callbacksMutex);
-				isExecuting = true;
+				executionDepth += 1;
 			}
 
 			// Execute the callbacks
@@ -142,10 +141,9 @@ namespace isobus
 
 			{
 				LOCK_GUARD(Mutex, callbacksMutex);
-				isExecuting = false;
+				executionDepth -= 1;
 
-				// Apply pending modifications to the callbacks list
-				while (!modifications.empty())
+				while ((0 == executionDepth) && (!modifications.empty()))
 				{
 					modifications.front()();
 					modifications.pop();
@@ -155,7 +153,7 @@ namespace isobus
 
 	private:
 		std::unordered_map<EventCallbackHandle, Callback> callbacks; ///< The list of callbacks
-		bool isExecuting = false; ///< Whether the dispatcher is currently executing an event
+		std::size_t executionDepth = 0; ///< How many call()s are currently iterating the callbacks, nested or on other threads
 		std::queue<std::function<void()>> modifications; ///< The modifications to the callbacks list
 		Mutex callbacksMutex; ///< The mutex to protect the object from (unwanted) concurrent access
 		EventCallbackHandle nextId = 0; // Counter for generating unique IDs

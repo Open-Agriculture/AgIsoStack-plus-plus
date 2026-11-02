@@ -173,3 +173,46 @@ TEST_F(EventManagerBool, RemoveCallbackWithinCallback)
 	dispatcher.invoke(true);
 	EXPECT_EQ(callbackToBeRemovedExecuted, 1); // Ensure the removed callback did not execute again
 }
+
+// A nested call() must not apply the queued clear while the outer call() still iterates (use-after-free under ASan)
+TEST_F(EventManagerBool, ClearListenersWithinNestedCall)
+{
+	int outerCallbackExecuted = 0;
+
+	dispatcher.add_listener([&](bool outer) {
+		if (outer)
+		{
+			outerCallbackExecuted++;
+			dispatcher.call(false);
+		}
+	});
+	dispatcher.add_listener([&](bool outer) {
+		if (!outer)
+		{
+			dispatcher.clear_listeners();
+		}
+	});
+	dispatcher.add_listener([](bool) {});
+
+	dispatcher.invoke(true);
+	EXPECT_EQ(outerCallbackExecuted, 1);
+	EXPECT_EQ(dispatcher.get_listener_count(), 0);
+}
+
+TEST_F(EventManagerBool, ConcurrentAddListenerGivesUniqueIds)
+{
+	constexpr std::size_t LISTENERS_PER_THREAD = 10000;
+	auto addListeners = [this]() {
+		for (std::size_t i = 0; i < LISTENERS_PER_THREAD; i++)
+		{
+			dispatcher.add_listener([](bool) {});
+		}
+	};
+
+	std::thread first(addListeners);
+	std::thread second(addListeners);
+	first.join();
+	second.join();
+
+	EXPECT_EQ(dispatcher.get_listener_count(), 2 * LISTENERS_PER_THREAD);
+}
