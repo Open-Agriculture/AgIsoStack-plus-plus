@@ -132,15 +132,14 @@ namespace isobus
 			}
 
 			// So a throwing callback still ends the call()
-			struct EndCallGuard
+			struct EndCall
 			{
-				EventDispatcher &dispatcher;
-				~EndCallGuard()
+				void operator()(EventDispatcher *dispatcher) const
 				{
-					dispatcher.end_call();
+					dispatcher->end_call();
 				}
 			};
-			EndCallGuard guard{ *this };
+			const std::unique_ptr<EventDispatcher, EndCall> guard(this);
 
 			for (const auto &callback : callbacks)
 			{
