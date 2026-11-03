@@ -10,6 +10,7 @@
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
+#include "isobus/utility/system_timing.hpp"
 
 #include <deque>
 
@@ -69,6 +70,22 @@ public:
 	std::deque<CANMessageFrame> frames;
 };
 
+/// @brief A driver whose read_frame() takes a while for each frame, like one that waits for the next frame on a bus with sparse traffic
+class SlowFramesPlugin : public QueuedFramesPlugin
+{
+public:
+	bool read_frame(CANMessageFrame &canFrame) override
+	{
+		const std::uint32_t readStart = SystemTiming::get_timestamp_ms();
+		while (!SystemTiming::time_expired_ms(readStart, READ_TIME_MS))
+		{
+		}
+		return QueuedFramesPlugin::read_frame(canFrame);
+	}
+
+	static constexpr std::uint32_t READ_TIME_MS = 2;
+};
+
 TEST(HARDWARE_INTERFACE_SINGLE_THREAD_TESTS, UpdateTakesEveryFrameTheDriverHolds)
 {
 	auto driver = std::make_shared<QueuedFramesPlugin>();
@@ -88,6 +105,7 @@ TEST(HARDWARE_INTERFACE_SINGLE_THREAD_TESTS, UpdateTakesEveryFrameTheDriverHolds
 	EXPECT_EQ(std::vector<std::uint8_t>({ 0, 1, 2, 3, 4, 5, 6 }), received);
 	EXPECT_TRUE(driver->frames.empty());
 
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().remove_listener(listener);
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
 }
@@ -114,6 +132,45 @@ TEST(HARDWARE_INTERFACE_SINGLE_THREAD_TESTS, UpdateTakesNoMoreThanTheReceiveQueu
 	EXPECT_EQ(std::vector<std::uint8_t>({ 0, 1, 2, 3, 4, 5 }), received);
 	EXPECT_TRUE(driver->frames.empty());
 
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().remove_listener(listener);
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(0);
+}
+
+TEST(HARDWARE_INTERFACE_SINGLE_THREAD_TESTS, UpdateStopsReceivingAfterOneUpdateInterval)
+{
+	auto driver = std::make_shared<SlowFramesPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, driver);
+	CANHardwareInterface::start();
+	const std::uint32_t originalInterval = CANHardwareInterface::get_periodic_update_interval();
+	CANHardwareInterface::set_periodic_update_interval(10);
+
+	std::vector<std::uint8_t> received;
+	auto listener = CANHardwareInterface::get_can_frame_received_event_dispatcher().add_listener([&received](const CANMessageFrame &frame) {
+		received.push_back(frame.data[0]);
+	});
+
+	// 20 frames at 2 ms each would hold up update() for 40 ms: it stops after the 10 ms interval
+	driver->queue_frames(20);
+	CANHardwareInterface::update();
+	EXPECT_FALSE(received.empty());
+	EXPECT_LT(received.size(), 20u);
+
+	// The rest arrives in the next updates, in order
+	for (int i = 0; (i < 20) && !driver->frames.empty(); i++)
+	{
+		CANHardwareInterface::update();
+	}
+	std::vector<std::uint8_t> expected;
+	for (std::uint8_t i = 0; i < 20; i++)
+	{
+		expected.push_back(i);
+	}
+	EXPECT_EQ(expected, received);
+
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().remove_listener(listener);
+	CANHardwareInterface::set_periodic_update_interval(originalInterval);
 	CANHardwareInterface::stop();
 	CANHardwareInterface::set_number_of_can_channels(0);
 }

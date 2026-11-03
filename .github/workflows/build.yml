@@ -91,7 +91,7 @@ jobs:
           ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
 
   linux_no_threads_build:
-    name: Ubuntu Build (no std threads)
+    name: Ubuntu Build, Test (no std threads)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

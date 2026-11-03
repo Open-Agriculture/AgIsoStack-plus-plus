@@ -381,15 +381,21 @@ namespace isobus
 				for (std::uint8_t i = 0; i < hardwareChannels.size(); i++)
 				{
 #if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
-					// If we don't have threads, we need to poll the hardware for messages here.
-					// Take everything the driver holds, not one frame per update: with one
-					// frame per call, a burst on the bus (several frames back to back) piles
-					// up in the controller, and a driver with few receive buffers drops the
-					// overflow whenever one update cycle is slower than the burst.
-					// Without threads the receive queue has no size limit, so stop after one
-					// queue capacity's worth of frames; the rest waits for the next update.
-					for (std::size_t framesReceived = 0; (framesReceived < hardwareChannels[i]->maxFramesReceivedPerUpdate) && hardwareChannels[i]->receive_can_frame(); framesReceived++)
+					// Without threads, poll the driver here. Take every frame it holds, so a burst
+					// doesn't overflow its receive buffers, but at most one queue's worth and one
+					// update interval, since some drivers wait for the next frame.
+					const std::uint32_t receiveStart = SystemTiming::get_timestamp_ms();
+					std::size_t framesReceived = 0;
+
+					while ((framesReceived < hardwareChannels[i]->maxFramesReceivedPerUpdate) &&
+					       hardwareChannels[i]->receive_can_frame())
 					{
+						framesReceived++;
+
+						if (SystemTiming::time_expired_ms(receiveStart, periodicUpdateInterval))
+						{
+							break;
+						}
 					}
 #endif
 
