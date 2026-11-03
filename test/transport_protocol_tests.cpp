@@ -278,11 +278,11 @@ TEST_F(TransportProtocolTest, BroadcastConcurrentMessaging)
 	constexpr std::array<std::uint8_t, 17> dataToReceive1 = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 	constexpr std::array<std::uint8_t, 12> dataToReceive2 = { 0xAC, 0xAB, 0xAA, 0xA9, 0xA8, 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1 };
 
-	auto originator1 = test_helpers::create_mock_control_function(0x01);
-	auto originator2 = test_helpers::create_mock_control_function(0x02);
-	auto originator3 = test_helpers::create_mock_control_function(0x03);
-	auto originator4 = test_helpers::create_mock_control_function(0x04);
-	auto originator5 = test_helpers::create_mock_control_function(0x05);
+	auto originator1 = test_helpers::create_mock_internal_control_function(0x01);
+	auto originator2 = test_helpers::create_mock_internal_control_function(0x02);
+	auto originator3 = test_helpers::create_mock_internal_control_function(0x03);
+	auto originator4 = test_helpers::create_mock_internal_control_function(0x04);
+	auto originator5 = test_helpers::create_mock_internal_control_function(0x05);
 
 	std::array<bool, 5> messagesReceived = { false };
 	auto receiveMessageCallback = [&](const CANMessage &message) {
@@ -593,7 +593,7 @@ TEST_F(TransportProtocolTest, BroadcastMessageSending)
 	constexpr std::uint32_t pgnToSent = 0xFEEC;
 	constexpr std::array<std::uint8_t, 17> dataToSent = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11 };
 
-	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto originator = test_helpers::create_mock_internal_control_function(0x01);
 
 	std::size_t frameCount = 0;
 	std::uint32_t frameTime = 0;
