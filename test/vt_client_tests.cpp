@@ -2297,6 +2297,128 @@ TEST_F(VirtualTerminalTest, ExtendedVersionCommandsAreOnlySentForLongLabelsOnVer
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+TEST_F(VirtualTerminalTest, ObjectPoolUploadRecoversAfterFailure)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	constexpr std::uint32_t TP_CM_PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement);
+	constexpr std::uint32_t TP_DT_PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolDataTransfer);
+	constexpr std::uint8_t TP_RTS = 0x10;
+	constexpr std::uint8_t TP_CTS = 0x11;
+	constexpr std::uint8_t TP_EOMA = 0x13;
+	constexpr std::uint8_t TP_ABORT = 0xFF;
+	constexpr std::uint32_t UPDATE_TIME_MS = 10;
+	constexpr std::uint32_t TP_PACKET_DATA_SIZE = CAN_DATA_LENGTH - 1;
+	const std::vector<std::vector<std::uint8_t>> pools = {
+		std::vector<std::uint8_t>(2 * TP_PACKET_DATA_SIZE - 1, 0xAA),
+		std::vector<std::uint8_t>(3 * TP_PACKET_DATA_SIZE - 1, 0xBB)
+	};
+	VirtualCANPlugin serverVT;
+	serverVT.open();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
+	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x46, 0);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	clientUnderTest.initialize(false);
+	for (std::uint8_t i = 0; i < pools.size(); ++i)
+	{
+		clientUnderTest.set_object_pool(i, pools[i].data(), static_cast<std::uint32_t>(pools[i].size()));
+	}
+	time_source.update_for_ms(UPDATE_TIME_MS);
+	serverVT.clear_queue();
+
+	CANMessageFrame frame = {};
+	const auto read_frame = [&](std::uint32_t pgn) {
+		bool found = false;
+		while (serverVT.read_frame(frame, 0))
+		{
+			if (pgn == CANIdentifier(frame.identifier).get_parameter_group_number())
+			{
+				found = true;
+				break;
+			}
+		}
+		return found;
+	};
+	const auto receive_tp = [&](std::initializer_list<std::uint8_t> data) {
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6), TP_CM_PGN, internalECU, vtPartner, data));
+		time_source.update_for_ms(UPDATE_TIME_MS);
+	};
+
+	const auto complete_upload = [&](const std::vector<std::uint8_t> &pool) {
+		SCOPED_TRACE(pool.size());
+		time_source.update_for_ms(UPDATE_TIME_MS);
+		ASSERT_TRUE(read_frame(TP_CM_PGN));
+		ASSERT_EQ(TP_RTS, frame.data[0]);
+		const auto transferSize = static_cast<std::uint8_t>(pool.size() + 1);
+		const auto packetCount = static_cast<std::uint8_t>(transferSize / TP_PACKET_DATA_SIZE);
+		EXPECT_EQ(transferSize, frame.data[1]);
+		EXPECT_EQ(packetCount, frame.data[3]);
+		receive_tp({ TP_CTS, packetCount, 1, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
+		std::vector<std::uint8_t> received;
+		for (std::uint8_t packet = 1; packet <= packetCount; ++packet)
+		{
+			ASSERT_TRUE(read_frame(TP_DT_PGN));
+			EXPECT_EQ(packet, frame.data[0]);
+			received.insert(received.end(), &frame.data[1], &frame.data[CAN_DATA_LENGTH]);
+		}
+		std::vector<std::uint8_t> expected = { static_cast<std::uint8_t>(VirtualTerminalClient::Function::ObjectPoolTransferMessage) };
+		expected.insert(expected.end(), pool.begin(), pool.end());
+		EXPECT_EQ(expected, received);
+		receive_tp({ TP_EOMA, transferSize, 0, packetCount, 0xFF, 0x00, 0xE7, 0x00 });
+		clientUnderTest.update();
+	};
+
+	for (const bool nack : { true, false })
+	{
+		SCOPED_TRACE(nack ? "NACK during upload" : "TP abort after the first pool");
+		clientUnderTest.test_wrapper_set_state(State::Disconnected);
+		clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+		clientUnderTest.update();
+		if (!nack)
+		{
+			ASSERT_NO_FATAL_FAILURE(complete_upload(pools.front()));
+		}
+		time_source.update_for_ms(UPDATE_TIME_MS);
+		ASSERT_TRUE(read_frame(TP_CM_PGN));
+		ASSERT_EQ(TP_RTS, frame.data[0]);
+		ASSERT_EQ((nack ? pools.front().size() : pools.back().size()) + 1, frame.data[1]);
+		if (nack)
+		{
+			const auto message = test_helpers::create_message(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
+			                                                  static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
+			                                                  internalECU,
+			                                                  vtPartner,
+			                                                  { 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
+			clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+			ASSERT_EQ(State::Disconnected, clientUnderTest.state);
+		}
+		// After a NACK, the old TP completes outside the upload state and its callback is ignored.
+		receive_tp({ TP_ABORT, 1, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
+		if (!nack)
+		{
+			clientUnderTest.update();
+		}
+		ASSERT_EQ(State::Disconnected, clientUnderTest.state);
+		time_source.update_for_ms(UPDATE_TIME_MS);
+		EXPECT_FALSE(read_frame(TP_CM_PGN));
+
+		clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+		clientUnderTest.update();
+		for (const auto &pool : pools)
+		{
+			ASSERT_NO_FATAL_FAILURE(complete_upload(pool));
+		}
+		clientUnderTest.update();
+		EXPECT_EQ(State::SendEndOfObjectPool, clientUnderTest.state);
+	}
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 {
 	NAME clientNAME(0);
