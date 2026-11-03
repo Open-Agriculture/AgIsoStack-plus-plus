@@ -49,6 +49,9 @@ namespace isobus
 	/// @brief The VT status message busy code bit index for "VT is busy parsing an object pool" (VT version 3 and later)
 	constexpr std::uint8_t BUSY_PARSING_OBJECT_POOL_BIT = 4;
 
+	/// @brief The VT status message busy code bit index for "Auxiliary controls learn mode active" (VT version 3 and later)
+	constexpr std::uint8_t AUXILIARY_LEARN_MODE_BIT = 6;
+
 	/// @brief Checks if a working set's object pool parse has started but its response has not been sent yet.
 	/// @param workingSet The working set to check.
 	/// @returns true if update() has not yet joined the parsing thread, otherwise false.
@@ -520,6 +523,101 @@ namespace isobus
 		return onAuxiliaryAssignmentEventDispatcher;
 	}
 
+	void VirtualTerminalServer::set_auxiliary_learn_mode(bool active)
+	{
+		if (active != isAuxiliaryLearnModeActive.exchange(active))
+		{
+			LOG_INFO("[VT Server]: Auxiliary controls learn mode is now %s.", active ? "on" : "off");
+			if (send_status_message())
+			{
+				statusMessageTimestamp_ms = SystemTiming::get_timestamp_ms();
+			}
+		}
+	}
+
+	bool VirtualTerminalServer::get_auxiliary_learn_mode() const
+	{
+		return isAuxiliaryLearnModeActive;
+	}
+
+	EventDispatcher<VirtualTerminalServer::AuxiliaryInputStatus> &VirtualTerminalServer::get_on_auxiliary_input_status_event_dispatcher()
+	{
+		return onAuxiliaryInputStatusEventDispatcher;
+	}
+
+	void VirtualTerminalServer::process_auxiliary_input_status_message(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		const auto &data = message.get_data();
+		AuxiliaryInputStatus status;
+		status.inputWorkingSet = workingSet;
+		status.inputObjectID = get_little_endian_uint16(data, 1);
+		status.value1 = get_little_endian_uint16(data, 3);
+		status.value2 = get_little_endian_uint16(data, 5);
+		status.isActivated = (0 != (data[7] & 0x02));
+		status.isLocked = (0 != (data[7] & 0x04));
+		status.isInteractionDetectedWhileLocked = (0 != (data[7] & 0x08));
+
+		// Outside of learn mode the status is meant for the implements, which receive it globally (ISO 11783-6 J.7.9)
+		if (isAuxiliaryLearnModeActive && has_object_of_type(*workingSet, status.inputObjectID, VirtualTerminalObjectType::AuxiliaryInputType2))
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			pendingAuxiliaryInputStatuses.push_back(status);
+		}
+	}
+
+	/// @brief Groups the auxiliary objects of one type in a working set's object pool into the sets of an Auxiliary Capabilities response.
+	/// @param workingSet The working set to list.
+	/// @param type AuxiliaryInputType2 or AuxiliaryFunctionType2.
+	/// @param assignments The assignments the server made, to fill in the assigned attribute.
+	/// @returns Three bytes per set: the number of instances, the function attribute and the assigned attribute (ISO 11783-6 Table J.8).
+	static std::vector<std::uint8_t> get_auxiliary_capability_sets(VirtualTerminalServerManagedWorkingSet &workingSet, VirtualTerminalObjectType type, const std::vector<VirtualTerminalServer::AuxiliaryAssignment> &assignments)
+	{
+		const bool isFunction = (VirtualTerminalObjectType::AuxiliaryFunctionType2 == type);
+		std::vector<std::uint8_t> sets;
+
+		// Only object pools the VT has answered count as sent (ISO 11783-6 J.7.14)
+		if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined == workingSet.get_object_pool_processing_state())
+		{
+			for (const auto &object : workingSet.get_object_tree())
+			{
+				std::uint32_t functionAttribute = 0;
+
+				// Both object types have their function attributes as attribute 2
+				if ((nullptr != object.second) &&
+				    (type == object.second->get_object_type()) &&
+				    object.second->get_attribute(static_cast<std::uint8_t>(AuxiliaryInputType2::AttributeName::FunctionAttributes), functionAttribute))
+				{
+					bool isAssigned = false;
+
+					for (const auto &assignment : assignments)
+					{
+						const auto &assignedWorkingSet = isFunction ? assignment.functionWorkingSet : assignment.inputWorkingSet;
+						const auto assignedObjectID = isFunction ? assignment.functionObjectID : assignment.inputObjectID;
+						isAssigned = isAssigned || ((&workingSet == assignedWorkingSet.get()) && (object.first == assignedObjectID) && assignment.isAcknowledged && (!assignment.hasFailed) && (nullptr != assignment.inputWorkingSet));
+					}
+
+					const auto assignedAttribute = static_cast<std::uint8_t>((isFunction ? 0x01 : 0x00) | (isAssigned ? 0x02 : 0x00));
+					bool isCounted = false;
+
+					for (std::size_t i = 0; (i < sets.size()) && (!isCounted); i += 3)
+					{
+						isCounted = (static_cast<std::uint8_t>(functionAttribute) == sets[i + 1]) && (assignedAttribute == sets[i + 2]) && (sets[i] < 0xFF);
+						if (isCounted)
+						{
+							sets[i]++;
+						}
+					}
+
+					if ((!isCounted) && (sets.size() < (3 * 0xFF)))
+					{
+						sets.insert(sets.end(), { 1, static_cast<std::uint8_t>(functionAttribute), assignedAttribute });
+					}
+				}
+			}
+		}
+		return sets;
+	}
+
 	bool VirtualTerminalServer::get_is_primary_vt() const
 	{
 		return (nullptr != serverInternalControlFunction) && (0 == serverInternalControlFunction->get_NAME().get_function_instance());
@@ -954,6 +1052,7 @@ namespace isobus
 	{
 		std::vector<AuxiliaryCommand> commands;
 		std::vector<std::pair<AuxiliaryAssignment, AuxiliaryAssignmentEvent>> events;
+		std::vector<AuxiliaryInputStatus> inputStatuses;
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 			std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> silentInputUnits;
@@ -986,6 +1085,7 @@ namespace isobus
 			collect_auxiliary_assignment_commands_locked(commands);
 			collect_auxiliary_input_commands_locked(commands);
 			events.swap(pendingAuxiliaryAssignmentEvents);
+			inputStatuses.swap(pendingAuxiliaryInputStatuses);
 		}
 
 		// Sent outside of the lock, as the application can be waiting for it to make an assignment
@@ -1004,6 +1104,11 @@ namespace isobus
 		for (const auto &event : events)
 		{
 			onAuxiliaryAssignmentEventDispatcher.call(event.first, event.second);
+		}
+
+		for (const auto &status : inputStatuses)
+		{
+			onAuxiliaryInputStatusEventDispatcher.call(status);
 		}
 	}
 
@@ -1422,6 +1527,17 @@ namespace isobus
 			{
 				send_get_window_mask_data_response(message.get_source_control_function());
 				retVal = true;
+			}
+			break;
+
+			case Function::AuxiliaryCapabilitiesRequest:
+			{
+				// Any control function can ask, in VT version 5 and later (ISO 11783-6 J.7.13)
+				if (get_vt_version_byte(get_version()) >= 5)
+				{
+					send_auxiliary_capabilities_response(data.at(1), message.get_source_control_function());
+					retVal = true;
+				}
 			}
 			break;
 
@@ -2707,6 +2823,12 @@ namespace isobus
 			}
 			break;
 
+			case Function::AuxiliaryInputTypeTwoStatusMessage:
+			{
+				process_auxiliary_input_status_message(message, managedWorkingSet);
+			}
+			break;
+
 			case Function::ExecuteMacroCommand:
 			{
 				auto objectID = static_cast<std::uint16_t>(data[1]);
@@ -3822,6 +3944,46 @@ namespace isobus
 		                                                      get_priority());
 	}
 
+	bool VirtualTerminalServer::send_auxiliary_capabilities_response(std::uint8_t requestType, std::shared_ptr<ControlFunction> destination) const
+	{
+		constexpr std::uint8_t FUNCTION_UNITS_REQUEST = 1;
+		const auto type = (FUNCTION_UNITS_REQUEST == requestType) ? VirtualTerminalObjectType::AuxiliaryFunctionType2 : VirtualTerminalObjectType::AuxiliaryInputType2;
+		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryCapabilitiesRequest), 0 };
+
+		// An invalid request type lists no units (ISO 11783-6 J.7.14)
+		if (requestType <= FUNCTION_UNITS_REQUEST)
+		{
+			const auto assignments = get_auxiliary_assignments();
+
+			for (const auto &workingSet : managedWorkingSetList)
+			{
+				const auto sets = get_auxiliary_capability_sets(*workingSet, type, assignments);
+
+				if ((!sets.empty()) && (buffer[1] < 0xFF))
+				{
+					const std::uint64_t name = workingSet->get_control_function()->get_NAME().get_full_name();
+
+					for (std::uint8_t i = 0; i < 8; i++)
+					{
+						buffer.push_back(static_cast<std::uint8_t>(name >> (8 * i)));
+					}
+					buffer.push_back(static_cast<std::uint8_t>(sets.size() / 3));
+					buffer.insert(buffer.end(), sets.begin(), sets.end());
+					buffer[1]++;
+				}
+			}
+		}
+
+		// Padded to the 8 byte boundary (ISO 11783-6 4.6.26)
+		buffer.resize(((buffer.size() + CAN_DATA_LENGTH - 1) / CAN_DATA_LENGTH) * CAN_DATA_LENGTH, 0xFF);
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
 	bool VirtualTerminalServer::send_auxiliary_input_status_enable_command(std::uint16_t inputObjectID, bool enable, std::shared_ptr<ControlFunction> destination) const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
@@ -3877,6 +4039,11 @@ namespace isobus
 				{
 					busyCodes |= get_bit(BUSY_PARSING_OBJECT_POOL_BIT);
 				}
+			}
+
+			if (isAuxiliaryLearnModeActive)
+			{
+				busyCodes |= get_bit(AUXILIARY_LEARN_MODE_BIT);
 			}
 		}
 
