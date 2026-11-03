@@ -1751,6 +1751,9 @@ namespace isobus
 
 					if (firstTimeInState)
 					{
+						// The result of a transfer from an earlier connection may never have arrived
+						currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+
 						if (get_any_pool_needs_scaling())
 						{
 							// Scale object pools before upload.
@@ -1759,6 +1762,22 @@ namespace isobus
 								set_state(StateMachineState::Failed);
 							}
 						}
+					}
+
+					// A reset doesn't end a transfer that is still running. Its data would come from the pool we upload
+					// next and its result would be taken as that pool's, so wait for it to end.
+					if ((waitingForPreviousTransfer || (CurrentObjectPoolUploadState::Uninitialized == currentObjectPoolState)) &&
+					    get_is_transfer_to_vt_in_progress())
+					{
+						waitingForPreviousTransfer = true;
+						currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+						break;
+					}
+					if (waitingForPreviousTransfer)
+					{
+						// A session reports its result before it ends, so the result is already here
+						waitingForPreviousTransfer = false;
+						currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 					}
 
 					for (std::uint32_t i = 0; i < objectPools.size(); i++)
@@ -1790,6 +1809,11 @@ namespace isobus
 									{
 										currentObjectPoolState = CurrentObjectPoolUploadState::InProgress;
 									}
+									else
+									{
+										// Try this pool again, the next one's transfer would read this one's data
+										break;
+									}
 								}
 								else
 								{
@@ -1810,6 +1834,9 @@ namespace isobus
 								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 								LOG_ERROR("[VT]: An object pool failed to upload. Resetting connection to VT.");
 								set_state(StateMachineState::Disconnected);
+								// Don't start the next pool's transfer while the connection is reset
+								allPoolsProcessed = false;
+								break;
 							}
 							else
 							{
@@ -4031,6 +4058,26 @@ namespace isobus
 							memcpy(chunkBuffer, &parentVTClient->objectPools[poolIndex].objectPoolDataPointer[bytesOffset - 1], numberOfBytesNeeded);
 						}
 					}
+				}
+			}
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::get_is_transfer_to_vt_in_progress() const
+	{
+		bool retVal = false;
+
+		if ((nullptr != myControlFunction) && (nullptr != partnerControlFunction))
+		{
+			for (const auto &session : CANNetworkManager::CANNetwork.get_active_transport_protocol_sessions(myControlFunction->get_can_port()))
+			{
+				if ((nullptr != session) &&
+				    (session->get_source() == myControlFunction) &&
+				    (session->get_destination() == partnerControlFunction))
+				{
+					retVal = true;
+					break;
 				}
 			}
 		}

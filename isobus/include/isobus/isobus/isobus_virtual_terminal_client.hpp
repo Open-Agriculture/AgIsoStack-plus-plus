@@ -1701,6 +1701,10 @@ namespace isobus
 		/// @returns true if any pool has both data mask and softkey scaling configured
 		bool get_any_pool_needs_scaling() const;
 
+		/// @brief Returns if a transport protocol session from us to the VT is still running
+		/// @returns true if a TP or ETP session from us to the VT is active
+		bool get_is_transfer_to_vt_in_progress() const;
+
 		/// @brief Iterates through each object pool and scales each object in the pool automatically
 		/// @returns true if all object pools scaled with no error
 		bool scale_object_pools();
@@ -1850,6 +1854,7 @@ namespace isobus
 		// Internal client state variables
 		StateMachineState state = StateMachineState::Disconnected; ///< The current client state machine state
 		CurrentObjectPoolUploadState currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized; ///< The current upload state of the object pool being processed
+		bool waitingForPreviousTransfer = false; ///< Stores if the upload is waiting for an earlier transfer to the VT to end
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp from the last state machine update
 		std::uint32_t auxiliaryAssignmentSessionGeneration = 0; ///< Rejects callback results and commands from an ended VT session
 		AuxiliaryAssignmentTransaction auxiliaryAssignmentTransaction; ///< Current command snapshot and retry state
