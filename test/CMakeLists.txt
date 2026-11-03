@@ -36,6 +36,7 @@ set(TEST_INCLUDE helpers/control_function_helpers.hpp
 
 # Set test source files
 set(TEST_SRC
+    utility_queue_tests.cpp
     core_network_management_tests.cpp
     identifier_tests.cpp
     transport_protocol_tests.cpp
