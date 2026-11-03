@@ -36,7 +36,7 @@ namespace isobus
 	CANHardwareInterface CANHardwareInterface::SINGLETON;
 
 	CANHardwareInterface::CANHardware::CANHardware(std::size_t queueCapacity) :
-	  messagesToBeTransmittedQueue(queueCapacity), receivedMessagesQueue(queueCapacity)
+	  messagesToBeTransmittedQueue(queueCapacity), receivedMessagesQueue(queueCapacity), maxFramesReceivedPerUpdate(queueCapacity)
 	{
 	}
 
@@ -381,8 +381,22 @@ namespace isobus
 				for (std::uint8_t i = 0; i < hardwareChannels.size(); i++)
 				{
 #if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
-					// If we don't have threads, we need to poll the hardware for messages here
-					hardwareChannels[i]->receive_can_frame();
+					// Without threads, poll the driver here. Take every frame it holds, so a burst
+					// doesn't overflow its receive buffers, but at most one queue's worth and one
+					// update interval, since some drivers wait for the next frame.
+					const std::uint32_t receiveStart = SystemTiming::get_timestamp_ms();
+					std::size_t framesReceived = 0;
+
+					while ((framesReceived < hardwareChannels[i]->maxFramesReceivedPerUpdate) &&
+					       hardwareChannels[i]->receive_can_frame())
+					{
+						framesReceived++;
+
+						if (SystemTiming::time_expired_ms(receiveStart, periodicUpdateInterval))
+						{
+							break;
+						}
+					}
 #endif
 
 					isobus::CANMessageFrame frame;
