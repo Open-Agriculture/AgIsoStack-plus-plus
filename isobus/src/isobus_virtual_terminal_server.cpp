@@ -2106,13 +2106,60 @@ namespace isobus
 			case Function::VTChangeActiveMaskMessage:
 			case Function::VTChangeStringValueMessage:
 			case Function::VTControlAudioSignalTerminationMessage:
+			case Function::VTChangeSoftKeyMaskMessage:
+			case Function::VTOnUserLayoutHideShowMessage:
+			case Function::AuxiliaryAssignmentTypeOneCommand:
+			case Function::AuxiliaryAssignmentTypeTwoCommand:
+			case Function::AuxiliaryInputStatusTypeTwoEnableCommand:
+			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
 			}
 			break;
 
-			default:
+			// Already answered by process_stateless_messages, and a received 0xFD must never be answered
+			case Function::GetSupportedWidecharsMessage:
+			case Function::GetNumberOfSoftKeysMessage:
+			case Function::GetTextFontDataMessage:
+			case Function::GetWindowMaskDataMessage:
+			case Function::GetHardwareMessage:
+			case Function::UnsupportedVTFunctionMessage:
 				break;
+
+			// TODO: implement these, until then they are answered as unsupported
+			case Function::ChangeEndPointCommand:
+			case Function::LockUnlockMaskCommand:
+			case Function::ChangeObjectLabelCommand:
+			case Function::ChangePolygonScaleCommand:
+			case Function::GetAttributeValueMessage:
+			case Function::SelectColourMapCommand:
+			case Function::GraphicsContextCommand:
+			case Function::AuxiliaryCapabilitiesRequest:
+			case Function::SelectActiveWorkingSet:
+			default:
+			{
+				// A VT before version 5 had no defined response to an unknown function
+				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()))
+				{
+					const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+						static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
+						data.at(0),
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF
+					};
+					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+					                                               buffer.data(),
+					                                               CAN_DATA_LENGTH,
+					                                               serverInternalControlFunction,
+					                                               message.get_source_control_function(),
+					                                               get_priority());
+				}
+			}
+			break;
 		}
 	}
 
