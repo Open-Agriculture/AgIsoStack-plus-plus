@@ -15,6 +15,13 @@
 #define MCP23017_I2C_SCL_PIN  22
 #define MCP23017_I2C_CLOCK_HZ 100000
 
+struct MCP23017RegisterWrite
+{
+    std::uint8_t address;
+    std::uint8_t reg;
+    std::uint8_t value;
+};
+
 class MCP23017OutputLock
 {
 public:

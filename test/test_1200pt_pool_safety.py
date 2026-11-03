@@ -11,6 +11,7 @@ POOL_IOP = REPOSITORY_ROOT / "examples/1200PT/src/object_pool/object_pool.iop"
 POOL_HEADER = REPOSITORY_ROOT / "examples/1200PT/include/objectPoolObjects.h"
 MAIN_CPP = (REPOSITORY_ROOT / "examples/1200PT/src/main.cpp").read_text()
 FOLD_CPP = (REPOSITORY_ROOT / "examples/1200PT/src/fold_sequence.cpp").read_text()
+LOCKOUT_HEADER = (REPOSITORY_ROOT / "examples/1200PT/include/lockout_feedback.h").read_text()
 
 
 class PoolSafetyTests(unittest.TestCase):
@@ -61,9 +62,18 @@ class PoolSafetyTests(unittest.TestCase):
                 action_body.index("apply_solenoid_states("),
             )
 
-    def test_fault_or_startup_inhibits_and_cancels_hydraulic_actions(self):
-        # The interlock still returns before anything actuates; the only addition is
-        # display-only lockout feedback ahead of the return.
+    def test_fan_vac_faults_and_power_states_cannot_gate_hydraulics(self):
+        self.assertIn(
+            "const bool hydraulicControlAvailable = !mcp23017_output_health().has_fault();",
+            MAIN_CPP,
+        )
+        self.assertNotRegex(
+            MAIN_CPP,
+            r"hydraulicControlAvailable\s*=\s*[^;]*(?:fan_vac_get_state|FanVacState|fanFault|vacFault)",
+        )
+        self.assertNotRegex(LOCKOUT_HEADER, r"FanVacState|FanVacStatus|fanFault|vacFault")
+
+    def test_board_fault_inhibit_returns_before_hydraulic_actions(self):
         for group in ("Unfold", "Fold"):
             self.assertIn(
                 "if (hydraulic_actuation_inhibited())\n"
@@ -74,6 +84,11 @@ class PoolSafetyTests(unittest.TestCase):
                 MAIN_CPP,
             )
         self.assertEqual(MAIN_CPP.count("if (hydraulic_actuation_inhibited())"), 2)
+        for direction in ("unfold", "fold"):
+            body = MAIN_CPP.split(f"void handle_{direction}_action_button(uint8_t actionIndex)\n{{\n", 1)[1].split("\n}\n", 1)[0]
+            blocked_return = body.index("return;", body.index("if (hydraulic_actuation_inhibited())"))
+            for action in ("is_action_group_active(", "is_action_lit(", "fold_sequence_", "press_action_visual("):
+                self.assertGreater(body.index(action), blocked_return, action)
         self.assertIn(
             "hydraulicActuationInhibited.exchange(!hydraulicControlAvailable)",
             MAIN_CPP,

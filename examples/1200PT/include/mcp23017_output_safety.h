@@ -18,6 +18,12 @@ inline std::uint8_t relay_output_byte(std::uint8_t logicalOutputs, bool activeLo
 class OutputBoardHealth
 {
 public:
+    OutputBoardHealth()
+    {
+        boardFound[0].store(false);
+        boardFound[1].store(false);
+    }
+
     void record_probe(std::size_t boardIndex, bool found)
     {
         if (boardIndex >= 2) return;
@@ -46,7 +52,7 @@ public:
     }
 
 private:
-    std::atomic<bool> boardFound[2] = { false, false };
+    std::atomic<bool> boardFound[2];
     std::atomic<bool> faulted{false};
 };
 } // namespace hardware

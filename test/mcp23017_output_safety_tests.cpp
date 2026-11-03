@@ -38,8 +38,7 @@ TEST(MCP23017OutputSafetyTest, BothBoardsAndHealthyWritesDoNotCreateFault)
     EXPECT_TRUE(health.board_found(0));
     EXPECT_TRUE(health.board_found(1));
     EXPECT_FALSE(health.has_fault());
-    EXPECT_EQ(ui::InhibitReason::None,
-              ui::classify_inhibit(FanVacState::RUNNING, false, false, health.has_fault()));
+    EXPECT_EQ(ui::InhibitReason::None, ui::classify_inhibit(health.has_fault()));
 }
 
 TEST(MCP23017OutputSafetyTest, EitherMissingBoardSelectsOutputBoardLockout)
@@ -50,8 +49,7 @@ TEST(MCP23017OutputSafetyTest, EitherMissingBoardSelectsOutputBoardLockout)
         health.record_probe(0, missingBoard != 0);
         health.record_probe(1, missingBoard != 1);
         EXPECT_TRUE(health.has_fault());
-        EXPECT_EQ(ui::InhibitReason::OutputBoardMissing,
-                  ui::classify_inhibit(FanVacState::RUNNING, false, false, health.has_fault()));
+        EXPECT_EQ(ui::InhibitReason::OutputBoardMissing, ui::classify_inhibit(health.has_fault()));
         EXPECT_STREQ("LOCKED: OUTPUT BOARD MISSING",
                      ui::lockout_message(ui::InhibitReason::OutputBoardMissing));
     }
@@ -64,8 +62,7 @@ TEST(MCP23017OutputSafetyTest, FailedOutputWriteLatchesTheOutputBoardLockout)
     health.record_probe(1, true);
     health.record_write_failure();
     EXPECT_TRUE(health.has_fault());
-    EXPECT_EQ(ui::InhibitReason::OutputBoardMissing,
-              ui::classify_inhibit(FanVacState::RUNNING, false, false, health.has_fault()));
+    EXPECT_EQ(ui::InhibitReason::OutputBoardMissing, ui::classify_inhibit(health.has_fault()));
 }
 
 TEST(MCP23017OutputSafetyTest, LaterHealthyProbeDoesNotClearLatchedFault)

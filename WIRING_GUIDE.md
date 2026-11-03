@@ -29,6 +29,8 @@ For the first bring-up, power both MCP23017 chips from **3.3 V**. The MCP23017 s
 
 Tie each MCP23017 RESET pin high to its 3.3 V supply. **Do not leave RESET floating.** The firmware probes both addresses during startup and reports whether each chip was found.
 
+Fold, unfold and plant hydraulic actuation is inhibited only by an MCP23017 output-board fault. Fan or vacuum power state, sensor readings and faults do not gate hydraulic outputs.
+
 ## 3. Relay boards and solenoid channel map
 
 The confirmed relay hardware is two 8-channel opto-isolated boards and one 4-channel opto-isolated board:
