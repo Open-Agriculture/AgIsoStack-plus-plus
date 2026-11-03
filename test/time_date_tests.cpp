@@ -84,7 +84,6 @@ protected:
 	bool isRxCallbackCalled = false;
 };
 
-
 TEST_F(TimeDateTest, ReceivingMessages)
 {
 	TimeDateInterface timeDateInterfaceUnderTest;
