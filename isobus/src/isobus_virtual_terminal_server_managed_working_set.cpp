@@ -120,6 +120,11 @@ namespace isobus
 		focusedObject = NULL_OBJECT_ID;
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
 		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
+
+		// A new object pool has to be followed by a new Preferred Assignment command (ISO 11783-6 J.7.7)
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		preferredAuxiliaryAssignments.clear();
+		wasPreferredAssignmentReceived = false;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
@@ -140,6 +145,44 @@ namespace isobus
 	std::uint32_t VirtualTerminalServerManagedWorkingSet::get_auxiliary_input_maintenance_timestamp_ms() const
 	{
 		return auxiliaryInputMaintenanceMessageTimestamp_ms;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_auxiliary_input_maintenance_status(std::uint16_t modelIdentificationCode, bool ready)
+	{
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		auxiliaryInputModelIdentificationCode = modelIdentificationCode;
+		isAuxiliaryInputReady = ready;
+	}
+
+	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_auxiliary_input_model_identification_code() const
+	{
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		return auxiliaryInputModelIdentificationCode;
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::get_is_auxiliary_input_ready() const
+	{
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		return isAuxiliaryInputReady;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_preferred_auxiliary_assignments(const std::vector<PreferredAuxiliaryAssignment> &assignments, CANLibBadge<VirtualTerminalServer>)
+	{
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		preferredAuxiliaryAssignments = assignments;
+		wasPreferredAssignmentReceived = true;
+	}
+
+	std::vector<VirtualTerminalServerManagedWorkingSet::PreferredAuxiliaryAssignment> VirtualTerminalServerManagedWorkingSet::get_preferred_auxiliary_assignments() const
+	{
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		return preferredAuxiliaryAssignments;
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::get_was_preferred_assignment_received() const
+	{
+		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
+		return wasPreferredAssignmentReceived;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::request_deletion()
