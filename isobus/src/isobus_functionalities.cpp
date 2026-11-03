@@ -482,7 +482,7 @@ namespace isobus
 
 		if ((supportedFunctionalities.end() != existingFunctionality) && (optionBit < std::numeric_limits<std::uint8_t>::digits))
 		{
-			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), 1 << optionBit, optionState);
+			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), static_cast<std::uint8_t>(1 << optionBit), optionState);
 		}
 	}
 
