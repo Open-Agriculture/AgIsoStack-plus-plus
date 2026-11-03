@@ -307,7 +307,7 @@ static void auxiliary_vt_status(DerivedTestVTClient &client, const std::shared_p
 	receive_auxiliary(client, vt, { 0xFE, 0x26, 0xFF, 0xFF, 0xFF, 0xFF, busyCodes, 0x01 });
 }
 
-static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can, test_helpers::TestTimeSource &clock)
+static std::vector<std::uint8_t> receive_ecu_to_vt_payload(AuxiliaryTestCAN &can, test_helpers::TestTimeSource &clock)
 {
 	CANNetworkManager::CANNetwork.update();
 	clock.update_for_ms(10);
@@ -338,7 +338,7 @@ static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can
 			EXPECT_EQ(static_cast<std::size_t>(packets) * 7, payload.size());
 			if (payload.size() < length)
 			{
-				ADD_FAILURE() << "Incomplete Preferred Assignment transport";
+				ADD_FAILURE() << "Incomplete ECU to VT transport";
 				return {};
 			}
 			payload.resize(length);
@@ -349,7 +349,7 @@ static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can
 			return payload;
 		}
 	}
-	ADD_FAILURE() << "No Preferred Assignment command transmitted";
+	ADD_FAILURE() << "No ECU to VT message transmitted";
 	return {};
 }
 
@@ -431,7 +431,7 @@ TEST_F(VirtualTerminalTest, PopulatedPreferredAssignmentsIncludePacketPadding)
 			expected.insert(expected.end(), { 2, 1, 0x78, 0x56 });
 		}
 		expected.resize(24, 0xFF);
-		EXPECT_EQ(expected, receive_preferred_payload(can, time_source));
+		EXPECT_EQ(expected, receive_ecu_to_vt_payload(can, time_source));
 	}
 }
 
@@ -599,7 +599,7 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentRetriesThreeTimesThenReportsFailu
 			time_source.update_for_ms(1990); // Payload capture advances time by 10 ms.
 			update_auxiliary_client(client);
 		}
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		EXPECT_TRUE(failures.empty());
 	}
 	time_source.update_for_ms(2000);
@@ -634,7 +634,7 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentRejectionReportsAllDefinedReasons
 		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
 		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 		update_auxiliary_client(client);
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		auxiliary_response(client, can.partner, entry.first);
 		ASSERT_EQ(1U, failures.size());
 		EXPECT_EQ(&client, failures.front().parentPointer);
@@ -659,7 +659,7 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentIgnoresInvalidAndUnsolicitedRespo
 	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 	auxiliary_response(client, can.partner, 0x01); // No active transaction.
 	update_auxiliary_client(client);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 	auxiliary_response(client, auxiliary_device(99, 0x22), 0x01);
 	receive_auxiliary(client, can.partner, { 0x22, 0x01 });
 	EXPECT_TRUE(failures.empty());
@@ -689,7 +689,7 @@ TEST_F(VirtualTerminalTest, InvalidPreferredAssignmentsReportInvalidPreferences)
 		client.initialize(false);
 		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 		update_auxiliary_client(client);
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		auxiliary_response(client, can.partner);
 		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
 		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
@@ -802,7 +802,7 @@ TEST_F(VirtualTerminalTest, EmptyPreferredAssignmentWaitsForCorrectVTResponse)
 	auxiliary_maintenance(client, auxiliary_device(600, 0x20), 0x3344, 0);
 	update_auxiliary_client(client);
 	EXPECT_EQ(1U, preferences.loadCalls);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 	auxiliary_response(client, auxiliary_device(99, 0x22));
 	update_auxiliary_client(client);
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
@@ -867,7 +867,7 @@ TEST_F(VirtualTerminalTest, StaleInitializingDeviceReleasesPendingInitialSync)
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
 	time_source.update_for_ms(301);
 	update_auxiliary_client(client);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 }
 
 TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
@@ -886,7 +886,7 @@ TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
 		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
 		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 		update_auxiliary_client(client);
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		auxiliary_response(client, can.partner);
 		update_auxiliary_client(client);
 		auxiliary_frames(can.vt);
@@ -951,7 +951,7 @@ TEST_F(VirtualTerminalTest, PersistentAssignmentWaitsForOutstandingPreferenceLoa
 	client.initialize(false);
 	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 	update_auxiliary_client(client);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 
 	const auto device = auxiliary_device(701, 0x25);
 	auxiliary_maintenance(client, device, 0x3344, 1);
@@ -2297,78 +2297,31 @@ TEST_F(VirtualTerminalTest, ExtendedVersionCommandsAreOnlySentForLongLabelsOnVer
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+static std::vector<std::uint8_t> object_pool_transfer(const std::vector<std::uint8_t> &pool)
+{
+	std::vector<std::uint8_t> message = { static_cast<std::uint8_t>(VirtualTerminalClient::Function::ObjectPoolTransferMessage) };
+	message.insert(message.end(), pool.begin(), pool.end());
+	return message;
+}
+
 TEST_F(VirtualTerminalTest, ObjectPoolUploadRecoversAfterFailure)
 {
 	using State = VirtualTerminalClient::StateMachineState;
 	constexpr std::uint32_t TP_CM_PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement);
-	constexpr std::uint32_t TP_DT_PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolDataTransfer);
 	constexpr std::uint8_t TP_RTS = 0x10;
-	constexpr std::uint8_t TP_CTS = 0x11;
-	constexpr std::uint8_t TP_EOMA = 0x13;
 	constexpr std::uint8_t TP_ABORT = 0xFF;
-	constexpr std::uint32_t UPDATE_TIME_MS = 10;
 	constexpr std::uint32_t TP_PACKET_DATA_SIZE = CAN_DATA_LENGTH - 1;
 	const std::vector<std::vector<std::uint8_t>> pools = {
 		std::vector<std::uint8_t>(2 * TP_PACKET_DATA_SIZE - 1, 0xAA),
 		std::vector<std::uint8_t>(3 * TP_PACKET_DATA_SIZE - 1, 0xBB)
 	};
-	VirtualCANPlugin serverVT;
-	serverVT.open();
-	CANHardwareInterface::set_number_of_can_channels(1);
-	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start(false);
-	auto internalECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
-	auto vtPartner = test_helpers::force_claim_partnered_control_function(0x46, 0);
-	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient clientUnderTest(can.partner, can.ecu);
 	clientUnderTest.initialize(false);
 	for (std::uint8_t i = 0; i < pools.size(); ++i)
 	{
 		clientUnderTest.set_object_pool(i, pools[i].data(), static_cast<std::uint32_t>(pools[i].size()));
 	}
-	time_source.update_for_ms(UPDATE_TIME_MS);
-	serverVT.clear_queue();
-
-	CANMessageFrame frame = {};
-	const auto read_frame = [&](std::uint32_t pgn) {
-		bool found = false;
-		while (serverVT.read_frame(frame, 0))
-		{
-			if (pgn == CANIdentifier(frame.identifier).get_parameter_group_number())
-			{
-				found = true;
-				break;
-			}
-		}
-		return found;
-	};
-	const auto receive_tp = [&](std::initializer_list<std::uint8_t> data) {
-		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6), TP_CM_PGN, internalECU, vtPartner, data));
-		time_source.update_for_ms(UPDATE_TIME_MS);
-	};
-
-	const auto complete_upload = [&](const std::vector<std::uint8_t> &pool) {
-		SCOPED_TRACE(pool.size());
-		time_source.update_for_ms(UPDATE_TIME_MS);
-		ASSERT_TRUE(read_frame(TP_CM_PGN));
-		ASSERT_EQ(TP_RTS, frame.data[0]);
-		const auto transferSize = static_cast<std::uint8_t>(pool.size() + 1);
-		const auto packetCount = static_cast<std::uint8_t>(transferSize / TP_PACKET_DATA_SIZE);
-		EXPECT_EQ(transferSize, frame.data[1]);
-		EXPECT_EQ(packetCount, frame.data[3]);
-		receive_tp({ TP_CTS, packetCount, 1, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
-		std::vector<std::uint8_t> received;
-		for (std::uint8_t packet = 1; packet <= packetCount; ++packet)
-		{
-			ASSERT_TRUE(read_frame(TP_DT_PGN));
-			EXPECT_EQ(packet, frame.data[0]);
-			received.insert(received.end(), &frame.data[1], &frame.data[CAN_DATA_LENGTH]);
-		}
-		std::vector<std::uint8_t> expected = { static_cast<std::uint8_t>(VirtualTerminalClient::Function::ObjectPoolTransferMessage) };
-		expected.insert(expected.end(), pool.begin(), pool.end());
-		EXPECT_EQ(expected, received);
-		receive_tp({ TP_EOMA, transferSize, 0, packetCount, 0xFF, 0x00, 0xE7, 0x00 });
-		clientUnderTest.update();
-	};
 
 	for (const bool nack : { true, false })
 	{
@@ -2378,45 +2331,41 @@ TEST_F(VirtualTerminalTest, ObjectPoolUploadRecoversAfterFailure)
 		clientUnderTest.update();
 		if (!nack)
 		{
-			ASSERT_NO_FATAL_FAILURE(complete_upload(pools.front()));
+			EXPECT_EQ(object_pool_transfer(pools.front()), receive_ecu_to_vt_payload(can, time_source));
+			clientUnderTest.update();
 		}
-		time_source.update_for_ms(UPDATE_TIME_MS);
-		ASSERT_TRUE(read_frame(TP_CM_PGN));
-		ASSERT_EQ(TP_RTS, frame.data[0]);
-		ASSERT_EQ((nack ? pools.front().size() : pools.back().size()) + 1, frame.data[1]);
+		time_source.update_for_ms(10);
+		const auto rts = auxiliary_frames(can.vt);
+		ASSERT_EQ(1, rts.size());
+		ASSERT_EQ(TP_RTS, rts[0].data[0]);
+		ASSERT_EQ((nack ? pools.front().size() : pools.back().size()) + 1, rts[0].data[1]);
 		if (nack)
 		{
-			const auto message = test_helpers::create_message(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
-			                                                  static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
-			                                                  internalECU,
-			                                                  vtPartner,
-			                                                  { 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
+			const auto message = test_helpers::create_message(6, static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), can.ecu, can.partner, { 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
 			clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
 			ASSERT_EQ(State::Disconnected, clientUnderTest.state);
 		}
 		// After a NACK, the old TP completes outside the upload state and its callback is ignored.
-		receive_tp({ TP_ABORT, 1, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(6, TP_CM_PGN, can.ecu, can.partner, { TP_ABORT, 1, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }));
+		time_source.update_for_ms(10);
 		if (!nack)
 		{
 			clientUnderTest.update();
 		}
 		ASSERT_EQ(State::Disconnected, clientUnderTest.state);
-		time_source.update_for_ms(UPDATE_TIME_MS);
-		EXPECT_FALSE(read_frame(TP_CM_PGN));
+		time_source.update_for_ms(10);
+		EXPECT_TRUE(auxiliary_frames(can.vt).empty());
 
 		clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
 		clientUnderTest.update();
 		for (const auto &pool : pools)
 		{
-			ASSERT_NO_FATAL_FAILURE(complete_upload(pool));
+			EXPECT_EQ(object_pool_transfer(pool), receive_ecu_to_vt_payload(can, time_source));
+			clientUnderTest.update();
 		}
 		clientUnderTest.update();
 		EXPECT_EQ(State::SendEndOfObjectPool, clientUnderTest.state);
 	}
-
-	CANHardwareInterface::stop();
-	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
-	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
 TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
