@@ -2319,6 +2319,39 @@ TEST_F(VirtualTerminalServerMessagingTest, ESCCommandIsAnsweredWithTheObjectWhos
 	EXPECT_EQ(0xFF, inputAbortedResponse.data[7]);
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, PreferredAssignmentCommandIsAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x47, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA4, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0x22, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(answered);
+	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_EQ(0xFF, response.data[2]);
+	EXPECT_EQ(0xFF, response.data[3]);
+	EXPECT_EQ(0xFF, response.data[4]);
+	EXPECT_EQ(0xFF, response.data[5]);
+	EXPECT_EQ(0xFF, response.data[6]);
+	EXPECT_EQ(0xFF, response.data[7]);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 {
 	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
@@ -2419,4 +2452,126 @@ TEST_F(VirtualTerminalServerMessagingTest, AudioCommandsAreForwardedToTheApplica
 	ASSERT_TRUE(audioSignalAnswered);
 	EXPECT_EQ(0x00, audioSignalResponse.data[1]);
 	ASSERT_TRUE(audioVolumeAnswered);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, UnsupportedFunctionSentDestinationSpecificIsAnsweredWithUnsupportedVTFunction)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0x50, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xFD, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(answered);
+	EXPECT_EQ(0x50, response.data[1]);
+	EXPECT_EQ(0xFF, response.data[2]);
+	EXPECT_EQ(0xFF, response.data[3]);
+	EXPECT_EQ(0xFF, response.data[4]);
+	EXPECT_EQ(0xFF, response.data[5]);
+	EXPECT_EQ(0xFF, response.data[6]);
+	EXPECT_EQ(0xFF, response.data[7]);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, UnsupportedFunctionSentToTheGlobalAddressIsNotAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(7,
+	                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+	                                                                                                             client,
+	                                                                                                             { 0x50, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xFD, response);
+	CANHardwareInterface::stop();
+
+	EXPECT_FALSE(answered);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, UnsupportedFunctionIsNotAnsweredByAVersion4VT)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version4;
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x04, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0x50, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xFD, response);
+	CANHardwareInterface::stop();
+
+	EXPECT_FALSE(answered);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, FunctionsTheVTAcceptsWithoutAnAnswerOrAnswersElsewhereAreNotReportedUnsupported)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	for (const std::uint8_t function : { 0x07, 0x09, 0x20, 0x24, 0x25, 0x26, 0xC1, 0xC2, 0xC3, 0xC4, 0xC7, 0xFD })
+	{
+		receive_from_client(internalECU, client, { function, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	}
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xFD, response);
+	CANHardwareInterface::stop();
+
+	EXPECT_FALSE(answered);
 }
