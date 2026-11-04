@@ -2467,7 +2467,7 @@ protected:
 
 TEST_F(VirtualTerminalServerAuxiliaryControlTest, AuxiliaryInputMaintenanceMessageIsStored)
 {
-	ASSERT_TRUE(start(0x4A, 0xC3, 0xC4));
+	ASSERT_TRUE(start(0x52, 0xC3, 0xC4));
 	const auto inputUnitWorkingSet = get_working_set(inputUnit);
 	ASSERT_NE(nullptr, inputUnitWorkingSet);
 	EXPECT_EQ(MODEL_IDENTIFICATION_CODE, inputUnitWorkingSet->get_auxiliary_input_model_identification_code());
