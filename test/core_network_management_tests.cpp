@@ -6,9 +6,13 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 
 #include <atomic>
+#include <chrono>
+#include <functional>
+#include <future>
 #include <memory>
 #include <thread>
 
@@ -667,6 +671,161 @@ TEST_F(CoreTest, DeactivatingAPartnerWhileMessagesAreProcessed)
 	done = true;
 	stack.join();
 
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANHardwareInterface::set_number_of_can_channels(0);
+}
+
+// A callback that deadlocks never returns, so the work runs on a thread the test can abandon.
+static bool returns_within_a_second(std::function<void()> work)
+{
+	auto finished = std::make_shared<std::promise<void>>();
+	std::future<void> result = finished->get_future();
+	std::thread([work, finished]() {
+		work();
+		finished->set_value();
+	}).detach();
+	return std::future_status::ready == result.wait_for(std::chrono::seconds(1));
+}
+
+static std::uint32_t laterCallbackHits = 0;
+
+static void later_callback(const CANMessage &, void *)
+{
+	laterCallbackHits++;
+}
+
+static void reregistering_any_control_function_callback(const CANMessage &, void *)
+{
+	CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(0xFF00, later_callback, nullptr);
+	CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(0xFF00, reregistering_any_control_function_callback, nullptr);
+}
+
+TEST_F(CoreTest, AnyControlFunctionCallbackCanChangeTheCallbacks)
+{
+	laterCallbackHits = 0;
+	CANNetworkManager::CANNetwork.update(); // Make sure the network manager is initialized
+	auto source = test_helpers::force_claim_partnered_control_function(0x90, 0);
+	CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(0xFF00, reregistering_any_control_function_callback, nullptr);
+	const CANMessageFrame frame = test_helpers::create_message_frame_broadcast(6, 0xFF00, source, { 1, 2, 3, 4, 5, 6, 7, 8 });
+
+	ASSERT_TRUE(returns_within_a_second([frame]() {
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(frame);
+		CANNetworkManager::CANNetwork.update();
+	}));
+	EXPECT_EQ(0u, laterCallbackHits);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(frame);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(1u, laterCallbackHits);
+
+	CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(0xFF00, later_callback, nullptr);
+	CANNetworkManager::CANNetwork.deactivate_control_function(source);
+}
+
+static std::uint32_t removingStateCallbackHits = 0;
+
+static void removing_state_callback(std::shared_ptr<ControlFunction>, ControlFunctionState)
+{
+	removingStateCallbackHits++;
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(removing_state_callback);
+}
+
+TEST_F(CoreTest, ControlFunctionStateCallbackCanRemoveItself)
+{
+	removingStateCallbackHits = 0;
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(removing_state_callback);
+	auto partners = std::make_shared<std::vector<std::shared_ptr<PartneredControlFunction>>>();
+
+	ASSERT_TRUE(returns_within_a_second([partners]() {
+		partners->push_back(test_helpers::force_claim_partnered_control_function(0x92, 0));
+	}));
+	EXPECT_EQ(1u, removingStateCallbackHits);
+
+	partners->push_back(test_helpers::force_claim_partnered_control_function(0x93, 0));
+	EXPECT_EQ(1u, removingStateCallbackHits);
+
+	for (const auto &partner : *partners)
+	{
+		CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+	}
+}
+
+static bool later_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
+{
+	laterCallbackHits++;
+	return false;
+}
+
+static bool reregistering_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *parent)
+{
+	auto protocol = static_cast<ParameterGroupNumberRequestProtocol *>(parent);
+	protocol->register_pgn_request_callback(0xFF02, later_pgn_request_callback, nullptr);
+	protocol->remove_pgn_request_callback(0xFF02, reregistering_pgn_request_callback, parent);
+	return false;
+}
+
+TEST_F(CoreTest, PgnRequestCallbackCanChangeTheCallbacks)
+{
+	laterCallbackHits = 0;
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x94, 0, time_source);
+	auto requester = test_helpers::force_claim_partnered_control_function(0x95, 0);
+	CANHardwareInterface::stop();
+	auto protocol = internalECU->get_pgn_request_protocol().lock();
+	ASSERT_NE(nullptr, protocol);
+	protocol->register_pgn_request_callback(0xFF02, reregistering_pgn_request_callback, protocol.get());
+	const CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xFF02, requester, internalECU);
+
+	ASSERT_TRUE(returns_within_a_second([request]() {
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.update();
+	}));
+	EXPECT_EQ(0u, laterCallbackHits);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(1u, laterCallbackHits);
+
+	protocol->remove_pgn_request_callback(0xFF02, later_pgn_request_callback, nullptr);
+	CANNetworkManager::CANNetwork.deactivate_control_function(requester);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANHardwareInterface::set_number_of_can_channels(0);
+}
+
+static std::shared_ptr<InternalControlFunction> otherInternalControlFunction = nullptr;
+
+static bool deactivating_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
+{
+	// Destroys its ParameterGroupNumberRequestProtocol, which removes that protocol's network manager callbacks
+	CANNetworkManager::CANNetwork.deactivate_control_function(otherInternalControlFunction);
+	return false;
+}
+
+TEST_F(CoreTest, PgnRequestCallbackCanDeactivateAnotherInternalControlFunction)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0x96, 0, time_source);
+	auto requester = test_helpers::force_claim_partnered_control_function(0x97, 0);
+	CANHardwareInterface::stop();
+	otherInternalControlFunction = CANNetworkManager::CANNetwork.create_internal_control_function(test_helpers::find_available_name(0), 0, 0x98);
+	auto protocol = internalECU->get_pgn_request_protocol().lock();
+	ASSERT_NE(nullptr, protocol);
+	protocol->register_pgn_request_callback(0xFF01, deactivating_pgn_request_callback, nullptr);
+	const CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xFF01, requester, internalECU);
+
+	ASSERT_TRUE(returns_within_a_second([request]() {
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.update();
+	}));
+	EXPECT_EQ(nullptr, otherInternalControlFunction->get_pgn_request_protocol().lock());
+
+	protocol->remove_pgn_request_callback(0xFF01, deactivating_pgn_request_callback, nullptr);
+	otherInternalControlFunction = nullptr;
+	CANNetworkManager::CANNetwork.deactivate_control_function(requester);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 	CANHardwareInterface::set_number_of_can_channels(0);
 }

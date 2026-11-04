@@ -992,8 +992,13 @@ namespace isobus
 
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)
 	{
-		LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
-		for (const auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
+		// Called on a copy, unlocked, so that a callback can add or remove callbacks without deadlocking.
+		std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
+		{
+			LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
+			callbacksCopy = anyControlFunctionParameterGroupNumberCallbacks;
+		}
+		for (const auto &currentCallback : callbacksCopy)
 		{
 			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
 			    ((nullptr == currentMessage.get_destination_control_function()) ||
@@ -1027,8 +1032,12 @@ namespace isobus
 
 	void CANNetworkManager::process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
 	{
-		LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
-		for (const auto &callback : controlFunctionStateCallbacks)
+		std::list<ControlFunctionStateCallback> callbacksCopy;
+		{
+			LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
+			callbacksCopy = controlFunctionStateCallbacks;
+		}
+		for (const auto &callback : callbacksCopy)
 		{
 			callback(controlFunction, state);
 		}
@@ -1036,8 +1045,12 @@ namespace isobus
 
 	void CANNetworkManager::process_protocol_pgn_callbacks(const CANMessage &currentMessage)
 	{
-		LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
-		for (const auto &currentCallback : protocolPGNCallbacks)
+		std::list<ParameterGroupNumberCallbackData> callbacksCopy;
+		{
+			LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
+			callbacksCopy = protocolPGNCallbacks;
+		}
+		for (const auto &currentCallback : callbacksCopy)
 		{
 			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
 			{

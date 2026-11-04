@@ -177,8 +177,13 @@ namespace isobus
 					{
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 						std::uint16_t requestedRate = message.get_uint16_at(3);
-						LOCK_GUARD(Mutex, pgnRequestMutex);
-						for (const auto &repetitionRateCallback : repetitionRateCallbacks)
+						// Called on a copy, unlocked, so that a callback can register or remove callbacks without deadlocking.
+						std::vector<PGNRequestForRepetitionRateCallbackInfo> callbacksCopy;
+						{
+							LOCK_GUARD(Mutex, pgnRequestMutex);
+							callbacksCopy = repetitionRateCallbacks;
+						}
+						for (const auto &repetitionRateCallback : callbacksCopy)
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
@@ -211,8 +216,12 @@ namespace isobus
 
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 
-						LOCK_GUARD(Mutex, pgnRequestMutex);
-						for (const auto &pgnRequestCallback : pgnRequestCallbacks)
+						std::vector<PGNRequestCallbackInfo> callbacksCopy;
+						{
+							LOCK_GUARD(Mutex, pgnRequestMutex);
+							callbacksCopy = pgnRequestCallbacks;
+						}
+						for (const auto &pgnRequestCallback : callbacksCopy)
 						{
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&

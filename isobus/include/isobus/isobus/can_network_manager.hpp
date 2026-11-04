@@ -69,6 +69,8 @@ namespace isobus
 
 		/// @brief Removes an internal control function from the network manager, making it inactive
 		/// @param[in] controlFunction The control function to deactivate
+		/// @details Don't call this from one of the control function's own PGN request callbacks:
+		/// it destroys the ParameterGroupNumberRequestProtocol that is running that callback.
 		void deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction);
 
 		/// @brief Removes a partnered control function from the network manager, making it inactive
@@ -92,6 +94,9 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN of the callback to remove
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		/// @details This stops future calls only. A call already running on another thread can finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Registers a callback for ANY control function sending the associated PGN
@@ -104,6 +109,9 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN of the callback to remove
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		/// @details This stops future calls only. A call already running on another thread can finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Returns the network manager's event dispatcher for notifying consumers whenever a
@@ -168,6 +176,9 @@ namespace isobus
 
 		/// @brief Used to remove callbacks added with add_control_function_status_change_callback
 		/// @param[in] callback The callback you want to remove
+		/// @details This stops future calls only. A call already running on another thread can finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_control_function_status_change_callback(ControlFunctionStateCallback callback);
 
 		/// @brief Gets all the internal control functions that are currently registered in the network manager
