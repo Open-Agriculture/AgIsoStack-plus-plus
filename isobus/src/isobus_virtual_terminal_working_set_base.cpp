@@ -1457,6 +1457,15 @@ namespace isobus
 							const std::uint8_t numberOfMacrosToFollow = iopData[16];
 							iopData += 17;
 							iopLength -= 17;
+							std::uint64_t pixelsPerByte = 1;
+							if (PictureGraphic::Format::Monochrome == tempObject->get_format())
+							{
+								pixelsPerByte = 8;
+							}
+							else if (PictureGraphic::Format::FourBitColour == tempObject->get_format())
+							{
+								pixelsPerByte = 2;
+							}
 
 							if (tempObject->get_option(PictureGraphic::Options::RunLengthEncoded))
 							{
@@ -1471,7 +1480,12 @@ namespace isobus
 								else
 								{
 									pixelDataParsed = true;
-									// Decode the RLE
+									std::uint64_t runLengthTotal = 0;
+									for (std::uint_fast32_t i = 0; i < tempObject->get_number_of_bytes_in_raw_data(); i += 2)
+									{
+										runLengthTotal += iopData[i];
+									}
+									tempObject->reserve_raw_data(runLengthTotal * pixelsPerByte);
 									std::size_t lineAmountLeft = tempObject->get_actual_width();
 									for (std::uint_fast32_t i = 0; i < (tempObject->get_number_of_bytes_in_raw_data() / 2); i++)
 									{
@@ -1542,6 +1556,7 @@ namespace isobus
 								if (iopLength >= tempObject->get_number_of_bytes_in_raw_data())
 								{
 									pixelDataParsed = true;
+									tempObject->reserve_raw_data(tempObject->get_number_of_bytes_in_raw_data() * pixelsPerByte);
 
 									switch (tempObject->get_format())
 									{
