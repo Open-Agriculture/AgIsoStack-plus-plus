@@ -117,6 +117,27 @@ jobs:
           cd build
           ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
 
+  thread_sanitizer:
+    name: Ubuntu Build, Test (TSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Build-time test discovery would run the binary before the sysctl in the Test step
+      - name: Compile
+        run: |
+          cmake -S . -B build -DBUILD_TESTING=ON -DBUILD_COVERAGE=OFF -DCAN_DRIVER=SocketCAN -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread" \
+            -DCMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE=PRE_TEST
+          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: |
+          sudo sysctl vm.mmap_rnd_bits=28
+          ctest -C ${{ env.BUILD_TYPE }} --output-on-failure -E Death
+
   sanitizers:
     name: Ubuntu Build, Test (ASan + UBSan)
     runs-on: ubuntu-latest
