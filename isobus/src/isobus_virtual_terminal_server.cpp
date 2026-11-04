@@ -3017,7 +3017,6 @@ namespace isobus
 			case Function::VTChangeSoftKeyMaskMessage:
 			case Function::VTOnUserLayoutHideShowMessage:
 			case Function::AuxiliaryAssignmentTypeOneCommand:
-			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
 			}
@@ -3029,6 +3028,7 @@ namespace isobus
 			case Function::GetTextFontDataMessage:
 			case Function::GetWindowMaskDataMessage:
 			case Function::GetHardwareMessage:
+			case Function::AuxiliaryCapabilitiesRequest:
 			case Function::UnsupportedVTFunctionMessage:
 				break;
 
@@ -3040,7 +3040,6 @@ namespace isobus
 			case Function::GetAttributeValueMessage:
 			case Function::SelectColourMapCommand:
 			case Function::GraphicsContextCommand:
-			case Function::AuxiliaryCapabilitiesRequest:
 			case Function::SelectActiveWorkingSet:
 			default:
 			{
