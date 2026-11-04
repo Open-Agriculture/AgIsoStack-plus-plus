@@ -410,6 +410,14 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change end point response
+		enum class ChangeEndPointErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidLineDirection = 1,
+			AnyOtherError = 4
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a change fill attributes response
 		enum class ChangeFillAttributesErrorBit : std::uint8_t
 		{
@@ -546,6 +554,13 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidPointIndex = 1,
 			AnyOtherError = 2
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change polygon scale response
+		enum class ChangePolygonScaleErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			AnyOtherError = 4
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a delete object pool response
@@ -702,6 +717,13 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to a change end point command
+		/// @param[in] objectID The object ID of the output line
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_end_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to a change child position command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
 		/// @param[in] objectID The object ID for the object to move
@@ -754,6 +776,15 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to a change polygon scale command
+		/// @param[in] objectID The object ID of the output polygon
+		/// @param[in] width The new width attribute from the command
+		/// @param[in] height The new height attribute from the command
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_polygon_scale_response(std::uint16_t objectID, std::uint16_t width, std::uint16_t height, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change size command
 		/// @param[in] objectID The object ID for the object whose size was meant to be changed
