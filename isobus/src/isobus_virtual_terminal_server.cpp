@@ -154,14 +154,14 @@ namespace isobus
 		  (static_cast<std::uint64_t>(get_little_endian_uint32(data, index + 4)) << 32);
 	}
 
-	/// @brief Checks if a working set's answered object pool holds an object of the given type.
+	/// @brief Checks if a working set's parsed object pool has an object of the given type.
 	/// @param workingSet The working set to look in.
 	/// @param objectID The object ID to look for.
 	/// @param type The type the object must have.
-	/// @returns true if the object exists and has the given type, false if not or if the object pool has not been answered yet.
+	/// @returns true if it does, otherwise false.
 	static bool has_object_of_type(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint16_t objectID, VirtualTerminalObjectType type)
 	{
-		// The parsing thread builds the object tree, so it can only be read once that thread has been joined
+		// The object tree is only safe to read once the parsing thread is joined
 		if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined != workingSet.get_object_pool_processing_state())
 		{
 			return false;
@@ -399,7 +399,7 @@ namespace isobus
 			const std::uint8_t numberOfAssignments = data[offset + 10];
 			const auto inputUnit = get_managed_working_set(inputUnitName);
 			const bool isInputUnitValid = (nullptr != inputUnit) && (modelIdentificationCode == inputUnit->get_auxiliary_input_model_identification_code());
-			// Inputs of a unit that is not Ready yet are reported as not valid, not the unit itself (ISO 11783-6 J.7.7)
+			// A unit that is not Ready gets its inputs reported, not itself (ISO 11783-6 J.7.7)
 			const bool isInputUnitReady = isInputUnitValid && inputUnit->get_is_auxiliary_input_ready();
 			offset += INPUT_UNIT_LENGTH;
 

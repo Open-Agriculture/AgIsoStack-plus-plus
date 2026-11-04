@@ -564,10 +564,10 @@ namespace isobus
 			ObjectPoolWasDeletedFromVolatileMemory = 3
 		};
 
-		/// @brief Enumerates the bit indices of the error fields that can be set in a preferred assignment response
+		/// @brief The error bits of a Preferred Assignment response
 		enum class PreferredAssignmentErrorBit : std::uint8_t
 		{
-			AuxiliaryInputUnitNotValid = 0, ///< The NAME or Model Identification Code of an Auxiliary Input unit is not valid
+			AuxiliaryInputUnitNotValid = 0, ///< Unknown input unit NAME or Model Identification Code
 			FunctionObjectIDNotValid = 1,
 			InputObjectIDNotValid = 2,
 			DuplicateFunctionObjectID = 3,
@@ -851,8 +851,8 @@ namespace isobus
 		bool send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to the preferred assignment command
-		/// @param[in] errorBitfield A bitfield of PreferredAssignmentErrorBit, or 0 if the command was accepted
-		/// @param[in] faultyFunctionObjectID The Auxiliary Function of the first faulty assignment, or NULL_OBJECT_ID if there are no errors
+		/// @param[in] errorBitfield The PreferredAssignmentErrorBit flags, 0 if accepted
+		/// @param[in] faultyFunctionObjectID The first faulty function, or NULL_OBJECT_ID
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_preferred_assignment_response(std::uint8_t errorBitfield, std::uint16_t faultyFunctionObjectID, std::shared_ptr<ControlFunction> destination) const;
@@ -985,20 +985,20 @@ namespace isobus
 
 		/// @brief Returns the managed working set whose master has the given NAME
 		/// @param[in] name The 64-bit NAME to look for
-		/// @returns The managed working set, or nullptr if this server does not manage one with that NAME
+		/// @returns The managed working set, or nullptr if none has that NAME
 		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> get_managed_working_set(std::uint64_t name) const;
 
-		/// @brief Validates a Preferred Assignment command, answers it, and stores its assignments if it is valid (ISO 11783-6 J.5, J.7.7)
+		/// @brief Validates, answers and stores a Preferred Assignment command
 		/// @param[in] message The Preferred Assignment command
-		/// @param[in] workingSet The working set that sent the command, which provides the Auxiliary Functions
+		/// @param[in] workingSet The working set that sent the command
 		void process_preferred_assignment_command(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief Reads the assignments of a Preferred Assignment command and checks that each of them refers to existing objects
-		/// @param[in] data The command data, which can be padded with 0xFF
-		/// @param[in] workingSet The working set that sent the command, which provides the Auxiliary Functions
+		/// @brief Reads and checks the assignments of a Preferred Assignment command
+		/// @param[in] data The command data
+		/// @param[in] workingSet The working set that sent the command
 		/// @param[out] assignments The assignments of the command
-		/// @param[out] faultyFunctionObjectID The Auxiliary Function of the first faulty assignment, or NULL_OBJECT_ID if there are no errors
-		/// @returns A bitfield of PreferredAssignmentErrorBit, or 0 if the command is valid
+		/// @param[out] faultyFunctionObjectID The first faulty function, or NULL_OBJECT_ID
+		/// @returns The PreferredAssignmentErrorBit flags, 0 if valid
 		std::uint8_t validate_preferred_assignment_command(const std::vector<std::uint8_t> &data,
 		                                                   VirtualTerminalServerManagedWorkingSet &workingSet,
 		                                                   std::vector<VirtualTerminalServerManagedWorkingSet::PreferredAuxiliaryAssignment> &assignments,

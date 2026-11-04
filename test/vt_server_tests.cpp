@@ -2352,7 +2352,7 @@ TEST_F(VirtualTerminalServerMessagingTest, PreferredAssignmentCommandIsAnswered)
 	EXPECT_EQ(0xFF, response.data[7]);
 }
 
-/// @brief Connects an implement with one Auxiliary Function and an auxiliary input unit with one Auxiliary Input to a server
+/// @brief A server with an implement and an auxiliary input unit
 class VirtualTerminalServerAuxiliaryControlTest : public VirtualTerminalServerMessagingTest
 {
 protected:
@@ -2368,7 +2368,7 @@ protected:
 		VirtualTerminalServerMessagingTest::TearDown();
 	}
 
-	/// @brief Starts the server and connects the implement and the input unit, whose maintenance message reports it as ready
+	/// @brief Starts the server and connects the implement and a Ready input unit
 	bool start(std::uint8_t serverAddress, std::uint8_t implementAddress, std::uint8_t inputUnitAddress)
 	{
 		testPlugin.open();
@@ -2388,7 +2388,7 @@ protected:
 		return connected;
 	}
 
-	/// @brief A selectable Working Set object, followed by one auxiliary object of the Boolean non-latching type without attributes
+	/// @brief A Working Set object followed by one auxiliary object
 	static std::vector<std::uint8_t> object_pool_with_auxiliary_object(std::uint16_t objectID, VirtualTerminalObjectType type)
 	{
 		return { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, static_cast<std::uint8_t>(objectID & 0xFF), static_cast<std::uint8_t>(objectID >> 8), static_cast<std::uint8_t>(type), 0x00, BOOLEAN_NON_LATCHING, 0x00 };
@@ -2410,7 +2410,7 @@ protected:
 		receive_from_client(serverCF, inputUnit, { 0x23, static_cast<std::uint8_t>(modelIdentificationCode & 0xFF), static_cast<std::uint8_t>(modelIdentificationCode >> 8), static_cast<std::uint8_t>(ready ? 0x01 : 0x00), 0xFF, 0xFF, 0xFF, 0xFF });
 	}
 
-	/// @brief A Preferred Assignment command with one input unit and the given assignments, each a function and an input object ID
+	/// @brief A Preferred Assignment command for one input unit, as function and input object ID pairs
 	static std::vector<std::uint8_t> preferred_assignment_command(std::uint64_t inputUnitName, std::uint16_t modelIdentificationCode, const std::vector<std::pair<std::uint16_t, std::uint16_t>> &assignments)
 	{
 		std::vector<std::uint8_t> command = { 0x22, 0x01 };
@@ -2437,7 +2437,7 @@ protected:
 		return preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, INPUT_OBJECT_ID } });
 	}
 
-	/// @brief Sends a Preferred Assignment command from the implement, padded to the 8 byte boundary (ISO 11783-6 4.6.26), and reads the response
+	/// @brief Sends a padded Preferred Assignment command and reads the response
 	bool send_preferred_assignment(std::vector<std::uint8_t> command, CANMessageFrame &response)
 	{
 		command.resize(((command.size() + CAN_DATA_LENGTH - 1) / CAN_DATA_LENGTH) * CAN_DATA_LENGTH, 0xFF);
@@ -2543,7 +2543,7 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsObje
 	CANMessageFrame missingFunction = {};
 	CANMessageFrame missingInput = {};
 	ASSERT_TRUE(start(0x4F, 0xCD, 0xCE));
-	// The Working Set object 0 exists in both object pools, but is not an Auxiliary Function or Input
+	// Object 0 is the Working Set object, not an auxiliary object
 	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { 0, INPUT_OBJECT_ID } }), missingFunction));
 	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, 0 } }), missingInput));
 

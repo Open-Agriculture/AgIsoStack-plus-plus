@@ -40,16 +40,16 @@ namespace isobus
 			Joined ///< We have sent our response to the working set master and are done parsing
 		};
 
-		/// @brief One assignment of a Preferred Assignment command (ISO 11783-6 J.7.7)
+		/// @brief One assignment of a Preferred Assignment command
 		struct PreferredAuxiliaryAssignment
 		{
-			std::uint64_t inputUnitName = 0; ///< The NAME of the working set that provides the Auxiliary Input
-			std::uint16_t inputUnitModelIdentificationCode = 0; ///< The Model Identification Code the input unit is expected to have
-			std::uint16_t functionObjectID = NULL_OBJECT_ID; ///< The Auxiliary Function Type 2 object of this working set
-			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input Type 2 object of the input unit
+			std::uint64_t inputUnitName = 0; ///< The NAME of the input unit
+			std::uint16_t inputUnitModelIdentificationCode = 0; ///< The expected Model Identification Code of the input unit
+			std::uint16_t functionObjectID = NULL_OBJECT_ID; ///< The Auxiliary Function object ID
+			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input object ID
 		};
 
-		static constexpr std::uint16_t NO_MODEL_IDENTIFICATION_CODE = 0xFFFF; ///< Reported until an Auxiliary Input Type 2 Maintenance message is received, as the valid codes end at 0xFFFE
+		static constexpr std::uint16_t NO_MODEL_IDENTIFICATION_CODE = 0xFFFF; ///< Until an Auxiliary Input Maintenance message is received
 
 		/// @brief Default constructor
 		VirtualTerminalServerManagedWorkingSet();
@@ -131,30 +131,29 @@ namespace isobus
 		/// @returns The timestamp for when we received the last auxiliary input maintenance message
 		std::uint32_t get_auxiliary_input_maintenance_timestamp_ms() const;
 
-		/// @brief Stores the contents of the last Auxiliary Input Type 2 Maintenance message from the client (ISO 11783-6 J.7.10)
-		/// @param[in] modelIdentificationCode The Model Identification Code of the auxiliary input unit
-		/// @param[in] ready True if the unit reported its Auxiliary Inputs as ready for assignment
+		/// @brief Stores the last Auxiliary Input Type 2 Maintenance message from the client
+		/// @param[in] modelIdentificationCode The Model Identification Code of the input unit
+		/// @param[in] ready True if the status is Ready
 		void set_auxiliary_input_maintenance_status(std::uint16_t modelIdentificationCode, bool ready);
 
-		/// @brief Returns the Model Identification Code from the last Auxiliary Input Type 2 Maintenance message
-		/// @returns The Model Identification Code, or NO_MODEL_IDENTIFICATION_CODE if the client has not sent the message
+		/// @brief Returns the Model Identification Code of the input unit
+		/// @returns The code, or NO_MODEL_IDENTIFICATION_CODE if none was received
 		std::uint16_t get_auxiliary_input_model_identification_code() const;
 
-		/// @brief Returns if the last Auxiliary Input Type 2 Maintenance message reported the Auxiliary Inputs as ready for assignment
-		/// @returns True if the status was Ready, false if it was Initializing or no message was received
+		/// @brief Returns if the input unit reported its status as Ready
+		/// @returns True if Ready, otherwise false
 		bool get_is_auxiliary_input_ready() const;
 
-		/// @brief Stores the assignments of a valid Preferred Assignment command from the client (ISO 11783-6 J.7.7)
-		/// @param[in] assignments The complete set of preferred assignments, as functions that are not listed are to be unassigned
+		/// @brief Stores the assignments of a valid Preferred Assignment command
+		/// @param[in] assignments All preferred assignments of the working set
 		void set_preferred_auxiliary_assignments(const std::vector<PreferredAuxiliaryAssignment> &assignments, CANLibBadge<VirtualTerminalServer>);
 
-		/// @brief Returns the assignments of the last valid Preferred Assignment command from the client
-		/// @returns The preferred assignments, which are empty until a valid command is received for the current object pool
+		/// @brief Returns the assignments of the last valid Preferred Assignment command
+		/// @returns The preferred assignments, empty if none was received
 		std::vector<PreferredAuxiliaryAssignment> get_preferred_auxiliary_assignments() const;
 
-		/// @brief Returns if the client sent a valid Preferred Assignment command for its current object pool
-		/// @details The operator may only assign the Auxiliary Functions of a working set once it has (ISO 11783-6 J.6)
-		/// @returns True if a valid Preferred Assignment command was received since the object pool was last cleared
+		/// @brief Returns if a valid Preferred Assignment command was received for the current object pool
+		/// @returns True if one was received, otherwise false
 		bool get_was_preferred_assignment_received() const;
 
 		/// @brief Marks the working set for deletion/deactivation by the server.
@@ -190,14 +189,14 @@ namespace isobus
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		std::vector<PreferredAuxiliaryAssignment> preferredAuxiliaryAssignments; ///< The assignments of the last valid Preferred Assignment command
-		mutable std::mutex auxiliaryControlMutex; ///< Protects the auxiliary control state, which the CAN thread sets and the application reads
+		mutable std::mutex auxiliaryControlMutex; ///< Protects the auxiliary input and preferred assignment state
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
-		std::uint16_t auxiliaryInputModelIdentificationCode = NO_MODEL_IDENTIFICATION_CODE; ///< The Model Identification Code of the last Auxiliary Input Type 2 Maintenance message
+		std::uint16_t auxiliaryInputModelIdentificationCode = NO_MODEL_IDENTIFICATION_CODE; ///< The Model Identification Code of the input unit
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
-		bool isAuxiliaryInputReady = false; ///< True if the last Auxiliary Input Type 2 Maintenance message reported the status as Ready
-		bool wasPreferredAssignmentReceived = false; ///< True once a valid Preferred Assignment command is received for the current object pool
+		bool isAuxiliaryInputReady = false; ///< True if the input unit reported its status as Ready
+		bool wasPreferredAssignmentReceived = false; ///< True once a valid Preferred Assignment command is received
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
