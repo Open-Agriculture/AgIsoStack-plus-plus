@@ -78,7 +78,7 @@ namespace isobus
 		/// @param[in] callback The callback function to remove
 		/// @param[in] parentPointer Generic context variable, usually the `this` pointer of the class that registered the callback
 		/// @returns true if the callback was removed, false if no callback matched the parameters
-		/// @details This stops future calls only. A call already running on another thread can finish after this returns,
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
 		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
 		/// or once that thread is stopped. A callback may remove itself.
 		bool remove_pgn_request_callback(std::uint32_t pgn, PGNRequestCallback callback, void *parentPointer);
@@ -88,7 +88,7 @@ namespace isobus
 		/// @param[in] callback The callback function to remove
 		/// @param[in] parentPointer Generic context variable, usually the `this` pointer of the class that registered the callback
 		/// @returns true if the callback was registered, false if the callback is nullptr or is already registered for the same PGN
-		/// @details This stops future calls only. A call already running on another thread can finish after this returns,
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
 		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
 		/// or once that thread is stopped. A callback may remove itself.
 		bool remove_request_for_repetition_rate_callback(std::uint32_t pgn, PGNRequestForRepetitionRateCallback callback, void *parentPointer);

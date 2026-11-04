@@ -246,9 +246,8 @@ namespace isobus
 
 		update_new_partners();
 
-		// A partner can also come online in create_partnered_control_function(), so its callback is made here, to keep
-		// every state callback on the thread that calls update(). Taken one at a time, so that a partner deactivated by
-		// an earlier callback is skipped.
+		// A partner can also come online in create_partnered_control_function(), on the application's thread, so its
+		// callback is made here instead. Taken one at a time, so that a partner deactivated by an earlier callback is skipped.
 		bool partnerCameOnline = true;
 		while (partnerCameOnline)
 		{
