@@ -1173,6 +1173,41 @@ TEST_F(VirtualTerminalServerMessagingTest, ChangePolygonScaleRejectsAPointThatWo
 	EXPECT_EQ(17, polygon->get_point(2).yValue);
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, ChangePolygonPointMovesThePointAndRepaints)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x50, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCA, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	std::uint32_t repaints = 0;
+	serverUnderTest.get_on_repaint_event_dispatcher().add_listener([&repaints](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) { repaints++; });
+
+	CANMessageFrame response = {};
+
+	const bool connected = connect_with_polygon_and_line_pool(serverUnderTest, testPlugin, internalECU, client);
+	const std::uint32_t repaintsBeforeChange = repaints;
+	receive_from_client(internalECU, client, { 0xB6, 0x02, 0x00, 0x02, 0x28, 0x00, 0x1E, 0x00 });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xB6, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(connected);
+	ASSERT_TRUE(answered);
+	EXPECT_EQ(0x00, response.data[3]);
+	EXPECT_EQ(repaintsBeforeChange + 1, repaints);
+
+	auto polygon = std::static_pointer_cast<OutputPolygon>(serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2));
+	EXPECT_EQ(40, polygon->get_point(2).xValue);
+	EXPECT_EQ(30, polygon->get_point(2).yValue);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, ChangePolygonScaleInAShortFrameIsIgnored)
 {
 	VirtualCANPlugin testPlugin;

@@ -2059,6 +2059,7 @@ namespace isobus
 						if (polygon->change_point(polygonPointIndex, newXValue, newYValue))
 						{
 							LOG_DEBUG("[VT Server]: Client %u change polygon id %u point index %u. X = %u, Y = %u", managedWorkingSet->get_control_function()->get_address(), objectID, polygonPointIndex, newXValue, newYValue);
+							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_polygon_point_response(objectID, 0, message.get_source_control_function());
 						}
 						else
