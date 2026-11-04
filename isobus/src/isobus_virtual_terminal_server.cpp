@@ -251,6 +251,14 @@ namespace isobus
 	{
 	}
 
+	void VirtualTerminalServer::control_audio_signal(std::uint8_t, std::uint16_t, std::uint16_t, std::uint16_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
+	void VirtualTerminalServer::set_audio_volume(std::uint8_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
 	void VirtualTerminalServer::select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
 		activeWorkingSet = workingSet;
@@ -1917,6 +1925,27 @@ namespace isobus
 			}
 			break;
 
+			case Function::PreferredAssignmentCommand:
+			{
+				const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+					static_cast<std::uint8_t>(Function::PreferredAssignmentCommand),
+					0x00,
+					get_low_byte(NULL_OBJECT_ID),
+					get_high_byte(NULL_OBJECT_ID),
+					0xFF,
+					0xFF,
+					0xFF,
+					0xFF
+				};
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
 			case Function::ExecuteMacroCommand:
 			{
 				auto objectID = static_cast<std::uint16_t>(data[1]);
@@ -2054,12 +2083,20 @@ namespace isobus
 
 			case Function::ControlAudioSignalCommand:
 			{
+				control_audio_signal(data[1],
+				                     get_little_endian_uint16(data, 2),
+				                     get_little_endian_uint16(data, 4),
+				                     get_little_endian_uint16(data, 6),
+				                     message.get_source_control_function());
 				send_audio_signal_successful(message.get_source_control_function());
 			}
 			break;
 
 			case Function::SetAudioVolumeCommand:
 			{
+				// The volume is a percentage, so a larger value is passed on as 100 %
+				constexpr std::uint8_t MAX_AUDIO_VOLUME_PERCENT = 100;
+				set_audio_volume(std::min(data[1], MAX_AUDIO_VOLUME_PERCENT), message.get_source_control_function());
 				send_audio_volume_response(message.get_source_control_function());
 			}
 			break;
@@ -2085,13 +2122,60 @@ namespace isobus
 			case Function::VTChangeActiveMaskMessage:
 			case Function::VTChangeStringValueMessage:
 			case Function::VTControlAudioSignalTerminationMessage:
+			case Function::VTChangeSoftKeyMaskMessage:
+			case Function::VTOnUserLayoutHideShowMessage:
+			case Function::AuxiliaryAssignmentTypeOneCommand:
+			case Function::AuxiliaryAssignmentTypeTwoCommand:
+			case Function::AuxiliaryInputStatusTypeTwoEnableCommand:
+			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
 			}
 			break;
 
-			default:
+			// Already answered by process_stateless_messages, and a received 0xFD must never be answered
+			case Function::GetSupportedWidecharsMessage:
+			case Function::GetNumberOfSoftKeysMessage:
+			case Function::GetTextFontDataMessage:
+			case Function::GetWindowMaskDataMessage:
+			case Function::GetHardwareMessage:
+			case Function::UnsupportedVTFunctionMessage:
 				break;
+
+			// TODO: implement these, until then they are answered as unsupported
+			case Function::ChangeEndPointCommand:
+			case Function::LockUnlockMaskCommand:
+			case Function::ChangeObjectLabelCommand:
+			case Function::ChangePolygonScaleCommand:
+			case Function::GetAttributeValueMessage:
+			case Function::SelectColourMapCommand:
+			case Function::GraphicsContextCommand:
+			case Function::AuxiliaryCapabilitiesRequest:
+			case Function::SelectActiveWorkingSet:
+			default:
+			{
+				// A VT before version 5 had no defined response to an unknown function
+				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()))
+				{
+					const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+						static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
+						data.at(0),
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF
+					};
+					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+					                                               buffer.data(),
+					                                               CAN_DATA_LENGTH,
+					                                               serverInternalControlFunction,
+					                                               message.get_source_control_function(),
+					                                               get_priority());
+				}
+			}
+			break;
 		}
 	}
 
