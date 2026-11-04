@@ -2912,6 +2912,10 @@ namespace isobus
 		/// @param[in] dataByte One byte of bitmap data
 		void add_raw_data(std::uint8_t dataByte);
 
+		/// @brief Reserves space for decoded pixels, at most actual width times actual height
+		/// @param[in] pixels The most pixels the encoded data can decode to
+		void reserve_raw_data(std::uint64_t pixels);
+
 		/// @brief Returns the number of bytes in the raw data that comprises the underlying bitmap
 		/// @returns The number of bytes in the raw data that comprises the underlying bitmap
 		std::uint32_t get_number_of_bytes_in_raw_data() const;
