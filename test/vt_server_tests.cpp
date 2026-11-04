@@ -2480,7 +2480,7 @@ protected:
 		return nullptr;
 	}
 
-	/// @brief Runs the server's update, keeping the input unit alive with its 100 ms maintenance message unless told otherwise
+	/// @brief Runs the server's update, keeping the input unit alive unless told otherwise
 	void run_server_update(bool isInputUnitAlive = true)
 	{
 		if (isInputUnitAlive)
@@ -2522,7 +2522,7 @@ protected:
 		return foundCommand;
 	}
 
-	/// @brief Runs the server and reads the Auxiliary Assignment Type 2 command it sends to the implement with the transport protocol
+	/// @brief Runs the server and reads its Auxiliary Assignment Type 2 command to the implement
 	bool read_assignment_command(std::vector<std::uint8_t> &command)
 	{
 		run_server_update();
@@ -2539,7 +2539,7 @@ protected:
 		receive_from_client(serverCF, implement, { 0x24, static_cast<std::uint8_t>(functionObjectID & 0xFF), static_cast<std::uint8_t>(functionObjectID >> 8), errorBitfield, 0xFF, 0xFF, 0xFF, 0xFF });
 	}
 
-	/// @brief Sends a Preferred Assignment command without assignments, which lets the operator assign the implement's functions
+	/// @brief Sends an empty Preferred Assignment, so the operator may assign
 	bool send_empty_preferred_assignment()
 	{
 		CANMessageFrame response = {};
@@ -2548,7 +2548,7 @@ protected:
 		testPlugin.clear_queue();
 		receive_from_client(serverCF, implement, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 		const bool accepted = poll_for_response(*server, testPlugin, 0x22, response) && (0x00 == response.data[1]);
-		// Each function without an assignment has its assignment removed once (ISO 11783-6 J.5 step 9)
+		// Each unassigned function gets one removal (ISO 11783-6 J.5 step 9)
 		bool removalsAnswered = true;
 		for (std::size_t i = 0; i < server->get_auxiliary_assignments().size(); i++)
 		{
@@ -2559,7 +2559,7 @@ protected:
 		return accepted && removalsAnswered;
 	}
 
-	/// @brief Answers the enable and assignment commands that follow the assignment of the function to the input
+	/// @brief Answers the enable and assignment commands for the input
 	bool answer_assignment_of_the_input(std::vector<std::uint8_t> &assignmentCommand)
 	{
 		CANMessageFrame enableCommand = {};
@@ -2743,7 +2743,7 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentEnablesTheI
 	{
 		EXPECT_EQ(static_cast<std::uint8_t>(inputUnit->get_NAME().get_full_name() >> (8 * i)), assignmentCommand[1 + i]);
 	}
-	// Not stored as the preferred assignment, as it comes from the Preferred Assignment command (ISO 11783-6 J.5 step 8)
+	// Not stored as preferred, as it comes from the Preferred Assignment (ISO 11783-6 J.5 step 8)
 	EXPECT_EQ(0x80 | BOOLEAN_NON_LATCHING, assignmentCommand[9]);
 	EXPECT_EQ(INPUT_OBJECT_ID, assignmentCommand[10] | (assignmentCommand[11] << 8));
 	EXPECT_EQ(FUNCTION_OBJECT_ID, assignmentCommand[12] | (assignmentCommand[13] << 8));
@@ -2874,7 +2874,7 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, InputUnitWithoutMaintenanceMes
 	ASSERT_TRUE(read_assignment_command(removal));
 
 	EXPECT_FALSE(isReadyAfterSilence);
-	// Not stored as the preferred assignment, as the input unit went away (ISO 11783-6 J.7.5, J.7.10)
+	// Not stored as preferred, as the input unit went away (ISO 11783-6 J.7.10)
 	EXPECT_EQ(0x80 | 0x1F, removal.at(9));
 	EXPECT_EQ(FUNCTION_OBJECT_ID, removal.at(12) | (removal.at(13) << 8));
 	ASSERT_EQ(1U, events.size());

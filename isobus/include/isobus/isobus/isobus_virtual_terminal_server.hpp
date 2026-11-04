@@ -381,97 +381,93 @@ namespace isobus
 
 		//-------------- Auxiliary control (ISO 11783-6 Annex J) -------------------
 
-		/// @brief Enumerates what happened to the assignment of an Auxiliary Function, so the VT can inform the operator
+		/// @brief What happened to the assignment of an Auxiliary Function
 		enum class AuxiliaryAssignmentEvent : std::uint8_t
 		{
-			Assigned, ///< The working set of the function accepted the assignment
-			Unassigned, ///< The working set of the function accepted the removal of an assignment that the operator removed
-			Removed, ///< The assignment was removed because of a conflict, or because its input is gone, so the operator has to assign the function again (J.5)
-			Rejected, ///< The working set of the function rejected the assignment (J.7.6)
-			NotAvailable ///< The working set of the function or of the input did not answer three times, or the input unit refused the input (J.7.5, J.7.11)
+			Assigned, ///< The function's working set accepted the assignment
+			Unassigned, ///< The function's working set accepted the removal
+			Removed, ///< Removed by a conflict or a lost input, the operator has to assign it again
+			Rejected, ///< The function's working set rejected the assignment
+			NotAvailable ///< A working set did not answer, or the input unit refused the input
 		};
 
-		/// @brief Enumerates the reasons an Auxiliary Function cannot be assigned to an Auxiliary Input (ISO 11783-6 J.5, J.6)
+		/// @brief Why an Auxiliary Function cannot be assigned to an Auxiliary Input
 		enum class AuxiliaryAssignmentResult : std::uint8_t
 		{
 			Allowed, ///< The assignment can be made
-			NotPrimaryVT, ///< Only the VT with function instance 0 makes assignments (J.3.1)
-			NoPreferredAssignment, ///< The working set of the function has not sent a valid Preferred Assignment command yet (J.6)
-			InvalidFunction, ///< The object is not an Auxiliary Function Type 2 in an answered object pool
-			InvalidInput, ///< The object is not an Auxiliary Input Type 2 in an answered object pool, or its unit is not Ready
-			TypeMismatch, ///< The function and the input have different Auxiliary Function types
-			CriticalControl, ///< The function needs an input with the Critical Control attribute
-			AssignmentRestriction, ///< The function may only be assigned to the input of its Preferred Assignment command
-			SingleAssignment ///< The function, the input or another function on that input does not allow the input to drive more than one function
+			NotPrimaryVT, ///< Only the VT with function instance 0 makes assignments
+			NoPreferredAssignment, ///< The function's working set has not sent a valid Preferred Assignment yet
+			InvalidFunction, ///< Not a known Auxiliary Function Type 2
+			InvalidInput, ///< Not a known Auxiliary Input Type 2, or its unit is not Ready
+			TypeMismatch, ///< The function and the input have different types
+			CriticalControl, ///< The function needs a Critical Control input
+			AssignmentRestriction, ///< The function may only use its preferred input
+			SingleAssignment ///< The input may only drive one function
 		};
 
-		/// @brief The assignment of one Auxiliary Function, as the server makes it
+		/// @brief The assignment of one Auxiliary Function
 		struct AuxiliaryAssignment
 		{
-			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet; ///< The working set that provides the Auxiliary Function
-			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set that provides the Auxiliary Input, or nullptr if the function is unassigned
-			std::uint16_t functionObjectID = NULL_OBJECT_ID; ///< The Auxiliary Function Type 2 object
-			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input Type 2 object, or NULL_OBJECT_ID if the function is unassigned
-			bool isMadeByOperator = false; ///< True if the operator made it, so the working set stores it as its preferred assignment
-			bool isAcknowledged = false; ///< True once the working set of the function accepted it
-			bool hasFailed = false; ///< True if it was rejected, or a working set did not answer
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet; ///< The working set of the function
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set of the input, nullptr if unassigned
+			std::uint16_t functionObjectID = NULL_OBJECT_ID; ///< The Auxiliary Function object ID
+			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input object ID, NULL_OBJECT_ID if unassigned
+			bool isMadeByOperator = false; ///< True if the operator made it
+			bool isAcknowledged = false; ///< True once the function's working set accepted it
+			bool hasFailed = false; ///< True if it was rejected or not answered
 		};
 
-		/// @brief Checks if the operator can assign an Auxiliary Function to an Auxiliary Input, for example to offer only the inputs that fit
-		/// @param[in] functionWorkingSet The working set that provides the Auxiliary Function
-		/// @param[in] functionObjectID The Auxiliary Function Type 2 object
-		/// @param[in] inputWorkingSet The working set that provides the Auxiliary Input
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object
-		/// @returns Allowed, or the reason the assignment cannot be made
+		/// @brief Checks if the operator can assign an Auxiliary Function to an Auxiliary Input
+		/// @param[in] functionWorkingSet The working set of the function
+		/// @param[in] functionObjectID The Auxiliary Function object ID
+		/// @param[in] inputWorkingSet The working set of the input
+		/// @param[in] inputObjectID The Auxiliary Input object ID
+		/// @returns Allowed, or why it cannot be assigned
 		AuxiliaryAssignmentResult check_auxiliary_assignment(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet,
 		                                                     std::uint16_t functionObjectID,
 		                                                     std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet,
 		                                                     std::uint16_t inputObjectID) const;
 
-		/// @brief Assigns an Auxiliary Function to an Auxiliary Input on behalf of the operator (ISO 11783-6 J.6)
-		/// @details The server enables the status message of the input, then sends the assignment from update(),
-		/// and reports the outcome to the auxiliary assignment event dispatcher. A previous assignment of the function is replaced.
-		/// @param[in] functionWorkingSet The working set that provides the Auxiliary Function
-		/// @param[in] functionObjectID The Auxiliary Function Type 2 object
-		/// @param[in] inputWorkingSet The working set that provides the Auxiliary Input
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object
-		/// @returns Allowed if the assignment will be made, or the reason it cannot be
+		/// @brief Assigns an Auxiliary Function to an Auxiliary Input for the operator
+		/// @details update() sends it, and the event dispatcher reports the outcome.
+		/// @param[in] functionWorkingSet The working set of the function
+		/// @param[in] functionObjectID The Auxiliary Function object ID
+		/// @param[in] inputWorkingSet The working set of the input
+		/// @param[in] inputObjectID The Auxiliary Input object ID
+		/// @returns Allowed, or why it cannot be assigned
 		AuxiliaryAssignmentResult assign_auxiliary_function(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet,
 		                                                    std::uint16_t functionObjectID,
 		                                                    std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet,
 		                                                    std::uint16_t inputObjectID);
 
-		/// @brief Removes the assignment of an Auxiliary Function on behalf of the operator, which is allowed even with the Assignment Restriction attribute (J.1)
-		/// @param[in] functionWorkingSet The working set that provides the Auxiliary Function
-		/// @param[in] functionObjectID The Auxiliary Function Type 2 object
-		/// @returns Allowed if the removal will be sent, or the reason it cannot be
+		/// @brief Removes the assignment of an Auxiliary Function for the operator
+		/// @param[in] functionWorkingSet The working set of the function
+		/// @param[in] functionObjectID The Auxiliary Function object ID
+		/// @returns Allowed, or why it cannot be removed
 		AuxiliaryAssignmentResult unassign_auxiliary_function(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet, std::uint16_t functionObjectID);
 
-		/// @brief Returns the assignment of each Auxiliary Function of the working sets that sent a valid Preferred Assignment command
+		/// @brief Returns the assignment of each known Auxiliary Function
 		/// @returns The assignments, including unassigned functions
 		std::vector<AuxiliaryAssignment> get_auxiliary_assignments() const;
 
-		/// @brief Returns the event dispatcher that reports what happened to an assignment, so the VT can inform the operator
-		/// @details It is called from update().
+		/// @brief Returns the event dispatcher for auxiliary assignment events, called from update()
 		/// @returns The event dispatcher for auxiliary assignment events
 		EventDispatcher<AuxiliaryAssignment, AuxiliaryAssignmentEvent> &get_on_auxiliary_assignment_event_dispatcher();
 
-		/// @brief The status of an Auxiliary Input, as its unit sends it to the VT while learn mode is active (ISO 11783-6 J.7.9)
+		/// @brief The status of an Auxiliary Input, as sent to the VT in learn mode
 		struct AuxiliaryInputStatus
 		{
-			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set that provides the Auxiliary Input
-			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input Type 2 object
-			std::uint16_t value1 = 0; ///< Value 1, whose meaning depends on the Auxiliary Function type (Table J.5)
-			std::uint16_t value2 = 0; ///< Value 2, whose meaning depends on the Auxiliary Function type (Table J.5)
-			bool isActivated = false; ///< True if the operator activated the input in learn mode
-			bool isLocked = false; ///< True if the input is locked (VT version 6 and later)
-			bool isInteractionDetectedWhileLocked = false; ///< True if the input was operated while locked (VT version 6 and later)
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set of the input
+			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input object ID
+			std::uint16_t value1 = 0; ///< Value 1, its meaning depends on the function type
+			std::uint16_t value2 = 0; ///< Value 2, its meaning depends on the function type
+			bool isActivated = false; ///< True if the operator activated the input
+			bool isLocked = false; ///< True if the input is locked (VT 6+)
+			bool isInteractionDetectedWhileLocked = false; ///< True if operated while locked (VT 6+)
 		};
 
-		/// @brief Turns the auxiliary controls learn mode on or off, so the operator can assign a function by operating an input (ISO 11783-6 J.8)
-		/// @details Only turn it on while the auxiliary assignment screen is shown. While it is on, the VT Status message reports it
-		/// (VT version 3 and later), the input units send their status to the VT, and the implements do not act on it.
-		/// The VT Status message is sent right away when the mode changes.
+		/// @brief Turns the auxiliary controls learn mode on or off
+		/// @details Only turn it on while the assignment screen is shown. The VT Status message is sent right away.
 		/// @param[in] active True to turn learn mode on, false to turn it off
 		void set_auxiliary_learn_mode(bool active);
 
@@ -479,8 +475,7 @@ namespace isobus
 		/// @returns True if learn mode is on
 		bool get_auxiliary_learn_mode() const;
 
-		/// @brief Returns the event dispatcher for the status of the Auxiliary Inputs, which is only reported while learn mode is on
-		/// @details It is called from update().
+		/// @brief Returns the event dispatcher for learn mode input statuses, called from update()
 		/// @returns The event dispatcher for auxiliary input status events
 		EventDispatcher<AuxiliaryInputStatus> &get_on_auxiliary_input_status_event_dispatcher();
 
@@ -963,13 +958,13 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_preferred_assignment_response(std::uint8_t errorBitfield, std::uint16_t faultyFunctionObjectID, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends an Auxiliary Assignment Type 2 command, which assigns an Auxiliary Input to an Auxiliary Function or removes the assignment (ISO 11783-6 J.7.5)
-		/// @param[in] inputUnitName The NAME of the working set that provides the input, or 0xFFFFFFFFFFFFFFFF to remove the assignment
-		/// @param[in] storeAsPreferredAssignment True if the operator made the assignment, so the working set stores it as its preferred assignment
-		/// @param[in] functionType The Auxiliary Function type of the input, or 0x1F to remove the assignment
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object, or NULL_OBJECT_ID to remove the assignment
-		/// @param[in] functionObjectID The Auxiliary Function Type 2 object, or NULL_OBJECT_ID to remove the assignment of all functions
-		/// @param[in] destination The working set that provides the function
+		/// @brief Sends an Auxiliary Assignment Type 2 command
+		/// @param[in] inputUnitName The NAME of the input unit, all 0xFF to remove
+		/// @param[in] storeAsPreferredAssignment True to store it as the preferred assignment
+		/// @param[in] functionType The Auxiliary Function type, 0x1F to remove
+		/// @param[in] inputObjectID The Auxiliary Input object ID, NULL_OBJECT_ID to remove
+		/// @param[in] functionObjectID The Auxiliary Function object ID, NULL_OBJECT_ID for all functions
+		/// @param[in] destination The working set of the function
 		/// @returns True if the message was sent, otherwise false
 		bool send_auxiliary_assignment_command(std::uint64_t inputUnitName,
 		                                       bool storeAsPreferredAssignment,
@@ -978,15 +973,15 @@ namespace isobus
 		                                       std::uint16_t functionObjectID,
 		                                       std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends an Auxiliary Input Status Type 2 Enable command (ISO 11783-6 J.7.11)
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object, or NULL_OBJECT_ID for all inputs, which can only be disabled
-		/// @param[in] enable True to enable the status message of the input, false to disable it
-		/// @param[in] destination The working set that provides the input
+		/// @brief Sends an Auxiliary Input Status Type 2 Enable command
+		/// @param[in] inputObjectID The Auxiliary Input object ID, NULL_OBJECT_ID for all (disable only)
+		/// @param[in] enable True to enable the input's status message, false to disable it
+		/// @param[in] destination The working set of the input
 		/// @returns True if the message was sent, otherwise false
 		bool send_auxiliary_input_status_enable_command(std::uint16_t inputObjectID, bool enable, std::shared_ptr<ControlFunction> destination) const;
 
-		/// @brief Sends an Auxiliary Capabilities response, which lists the auxiliary units that sent their object pools (ISO 11783-6 J.7.14)
-		/// @param[in] requestType 0 for the Auxiliary Input units, 1 for the Auxiliary Function units, other values list no units
+		/// @brief Sends an Auxiliary Capabilities response
+		/// @param[in] requestType 0 for input units, 1 for function units, others list none
 		/// @param[in] destination The control function that sent the request
 		/// @returns True if the message was sent, otherwise false
 		bool send_auxiliary_capabilities_response(std::uint8_t requestType, std::shared_ptr<ControlFunction> destination) const;
@@ -1095,138 +1090,136 @@ namespace isobus
 		};
 
 		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
-		static constexpr std::uint32_t AUXILIARY_COMMAND_TIMEOUT_MS = 2000; ///< An auxiliary command without a response is sent again after this long (ISO 11783-6 J.7.5, J.7.11)
-		static constexpr std::uint8_t AUXILIARY_COMMAND_ATTEMPTS = 3; ///< After this many unanswered auxiliary commands the operator is alerted (ISO 11783-6 J.7.5, J.7.11)
-		static constexpr std::uint32_t AUXILIARY_INPUT_MAINTENANCE_TIMEOUT_MS = 300; ///< An input unit without an Auxiliary Input Type 2 Maintenance message for this long loses its assignments (ISO 11783-6 J.7.10)
-		static constexpr std::uint8_t REMOVE_ASSIGNMENT_FUNCTION_TYPE = 0x1F; ///< The Auxiliary Function type of an Auxiliary Assignment Type 2 command that removes the assignment
+		static constexpr std::uint32_t AUXILIARY_COMMAND_TIMEOUT_MS = 2000; ///< Resend an unanswered auxiliary command after this long
+		static constexpr std::uint8_t AUXILIARY_COMMAND_ATTEMPTS = 3; ///< Give up on an auxiliary command after this many tries
+		static constexpr std::uint32_t AUXILIARY_INPUT_MAINTENANCE_TIMEOUT_MS = 300; ///< An input unit this long without maintenance loses its assignments
+		static constexpr std::uint8_t REMOVE_ASSIGNMENT_FUNCTION_TYPE = 0x1F; ///< The function type that removes an assignment
 
 		/// @brief The progress of the assignment of one Auxiliary Function
 		struct AuxiliaryFunctionState
 		{
 			AuxiliaryAssignment assignment; ///< The assignment the server is making
-			std::uint32_t commandTimestamp_ms = 0; ///< When the last command for it was sent
-			std::uint8_t functionType = REMOVE_ASSIGNMENT_FUNCTION_TYPE; ///< The Auxiliary Function type to send, kept so update() does not read an object pool that can be parsing
-			std::uint8_t attempts = 0; ///< The number of commands sent for the current assignment
-			bool isAwaitingResponse = false; ///< True while a command for it is unanswered
-			bool isChangedWhileAwaitingResponse = false; ///< True if the unanswered command is for a previous assignment
+			std::uint32_t commandTimestamp_ms = 0; ///< When the last command was sent
+			std::uint8_t functionType = REMOVE_ASSIGNMENT_FUNCTION_TYPE; ///< The function type to send, cached from the object pool
+			std::uint8_t attempts = 0; ///< Commands sent for the current assignment
+			bool isAwaitingResponse = false; ///< True while a command is unanswered
+			bool isChangedWhileAwaitingResponse = false; ///< True if the unanswered command is outdated
 		};
 
-		/// @brief The progress of enabling or disabling the status message of one Auxiliary Input
+		/// @brief The progress of enabling or disabling one Auxiliary Input
 		struct AuxiliaryInputState
 		{
-			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set that provides the input
-			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input Type 2 object
-			std::uint32_t commandTimestamp_ms = 0; ///< When the last command for it was sent
-			std::uint8_t attempts = 0; ///< The number of commands sent since the wanted state last changed
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set of the input
+			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input object ID
+			std::uint32_t commandTimestamp_ms = 0; ///< When the last command was sent
+			std::uint8_t attempts = 0; ///< Commands sent for the wanted state
 			bool shouldBeEnabled = false; ///< True while an assignment uses the input
 			bool isEnabled = false; ///< The state the input unit last confirmed
-			bool isAwaitingResponse = false; ///< True while a command for it is unanswered
-			bool hasFailed = false; ///< True if the input unit refused the input or did not answer three times
+			bool isAwaitingResponse = false; ///< True while a command is unanswered
+			bool hasFailed = false; ///< True if refused or not answered
 		};
 
-		/// @brief A message to send once the auxiliary assignment mutex is released
+		/// @brief A command to send once the auxiliary assignment mutex is released
 		struct AuxiliaryCommand
 		{
 			std::shared_ptr<ControlFunction> destination; ///< The working set to send it to
 			std::uint64_t inputUnitName = 0; ///< See send_auxiliary_assignment_command()
-			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input of the command
-			std::uint16_t functionObjectID = NULL_OBJECT_ID; ///< The Auxiliary Function of an assignment command
+			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input object ID
+			std::uint16_t functionObjectID = NULL_OBJECT_ID; ///< The Auxiliary Function object ID
 			std::uint8_t functionType = REMOVE_ASSIGNMENT_FUNCTION_TYPE; ///< See send_auxiliary_assignment_command()
-			bool isAssignment = false; ///< True for an Auxiliary Assignment Type 2 command, false for an Auxiliary Input Status Type 2 Enable command
-			bool flag = false; ///< Store as preferred assignment for an assignment command, enable for an enable command
+			bool isAssignment = false; ///< True for an assignment command, false for an enable command
+			bool flag = false; ///< Store as preferred, or enable
 		};
 
-		/// @brief Returns if this VT makes auxiliary assignments, which only the VT with function instance 0 does (ISO 11783-6 J.3.1)
-		/// @returns True if the function instance of the server's NAME is 0
+		/// @brief Returns if this VT makes auxiliary assignments (function instance 0)
+		/// @returns True if this is the primary VT
 		bool get_is_primary_vt() const;
 
-		/// @brief Assigns the Auxiliary Functions of a working set as its valid Preferred Assignment command asks, removing the conflicting ones (ISO 11783-6 J.5)
+		/// @brief Applies a working set's valid Preferred Assignment and removes conflicts
 		/// @param[in] functionWorkingSet The working set that sent the command
 		void apply_preferred_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet);
 
-		/// @brief Removes the assignments that a working set takes part in, after it shut down or its object pool was deleted (ISO 11783-6 J.5 step 6 VII)
+		/// @brief Removes the assignments of a working set that shut down or deleted its object pool
 		/// @param[in] workingSet The working set that is gone
 		void remove_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief Removes the assignments that a new object pool of a working set invalidates (ISO 11783-6 J.5)
+		/// @brief Removes the assignments a new object pool invalidates
 		/// @param[in] workingSet The working set whose object pool was parsed
 		void revalidate_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief Handles an Auxiliary Assignment Type 2 response (ISO 11783-6 J.7.6)
+		/// @brief Handles an Auxiliary Assignment Type 2 response
 		/// @param[in] message The response
 		/// @param[in] workingSet The working set that sent it
 		void process_auxiliary_assignment_response(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief Handles an Auxiliary Input Status Type 2 Enable response (ISO 11783-6 J.7.12)
+		/// @brief Handles an Auxiliary Input Status Type 2 Enable response
 		/// @param[in] message The response
 		/// @param[in] workingSet The working set that sent it
 		void process_auxiliary_input_status_enable_response(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief Handles an Auxiliary Input Type 2 Status message sent to the VT, which an input unit only does in learn mode (ISO 11783-6 J.7.9)
+		/// @brief Handles an Auxiliary Input Type 2 Status message sent to the VT in learn mode
 		/// @param[in] message The status message
 		/// @param[in] workingSet The working set that sent it
 		void process_auxiliary_input_status_message(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief Sends the auxiliary commands that are due, handles their timeouts and reports the auxiliary events. Called from update().
+		/// @brief Sends due auxiliary commands, handles timeouts and reports events. Called from update().
 		void update_auxiliary_assignments();
 
-		/// @brief Checks an assignment against the rules of ISO 11783-6 J.5 and J.6. The auxiliary assignment mutex must be held.
-		/// @param[in] functionWorkingSet The working set that provides the Auxiliary Function
-		/// @param[in] functionObjectID The Auxiliary Function Type 2 object
-		/// @param[in] inputWorkingSet The working set that provides the Auxiliary Input
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object
-		/// @param[in] isMadeByOperator True to also apply the rules that only limit the operator
-		/// @returns Allowed, or the reason the assignment cannot be made
+		/// @brief Checks an assignment against the J.5 and J.6 rules
+		/// @param[in] functionWorkingSet The working set of the function
+		/// @param[in] functionObjectID The Auxiliary Function object ID
+		/// @param[in] inputWorkingSet The working set of the input
+		/// @param[in] inputObjectID The Auxiliary Input object ID
+		/// @param[in] isMadeByOperator True to also apply the operator-only rules
+		/// @returns Allowed, or why it cannot be assigned
 		AuxiliaryAssignmentResult check_auxiliary_assignment_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &functionWorkingSet,
 		                                                            std::uint16_t functionObjectID,
 		                                                            const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet,
 		                                                            std::uint16_t inputObjectID,
 		                                                            bool isMadeByOperator) const;
 
-		/// @brief Returns the progress of the assignment of an Auxiliary Function, adding it if it is new. The auxiliary assignment mutex must be held.
-		/// @param[in] functionWorkingSet The working set that provides the Auxiliary Function
-		/// @param[in] functionObjectID The Auxiliary Function Type 2 object
+		/// @brief Returns the progress of an Auxiliary Function's assignment, adding it if new
+		/// @param[in] functionWorkingSet The working set of the function
+		/// @param[in] functionObjectID The Auxiliary Function object ID
 		/// @returns The progress of the assignment
 		AuxiliaryFunctionState &get_auxiliary_function_state_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &functionWorkingSet, std::uint16_t functionObjectID);
 
-		/// @brief Changes the assignment of an Auxiliary Function, so update() sends it. The auxiliary assignment mutex must be held.
-		/// @details An unchanged assignment that does not come from the operator is not sent again (ISO 11783-6 J.5 step 8).
+		/// @brief Changes the assignment of an Auxiliary Function, for update() to send
 		/// @param[in] state The progress of the assignment to change
-		/// @param[in] inputWorkingSet The working set that provides the Auxiliary Input, or nullptr to remove the assignment
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object, or NULL_OBJECT_ID to remove the assignment
+		/// @param[in] inputWorkingSet The working set of the input, nullptr to remove
+		/// @param[in] inputObjectID The Auxiliary Input object ID, NULL_OBJECT_ID to remove
 		/// @param[in] isMadeByOperator True if the operator made the change
 		void set_auxiliary_assignment_locked(AuxiliaryFunctionState &state, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID, bool isMadeByOperator);
 
-		/// @brief Removes an assignment the operator has to make again, and reports it as removed. The auxiliary assignment mutex must be held.
+		/// @brief Removes an assignment and reports it as Removed
 		/// @param[in] state The progress of the assignment to remove
-		/// @param[in] inputWorkingSet The working set of the input the function was, or was going to be, assigned to, for the event
-		/// @param[in] inputObjectID The input the function was, or was going to be, assigned to, for the event
+		/// @param[in] inputWorkingSet The working set of the input, for the event
+		/// @param[in] inputObjectID The Auxiliary Input object ID, for the event
 		void remove_auxiliary_assignment_locked(AuxiliaryFunctionState &state, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID);
 
-		/// @brief Removes the assignments to the inputs of a unit, and forgets the state of its inputs. The auxiliary assignment mutex must be held.
-		/// @details The removal is not stored as the preferred assignment, as it is an error condition (ISO 11783-6 J.7.5, J.7.10).
-		/// @param[in] inputWorkingSet The working set that provides the inputs
+		/// @brief Removes the assignments to an input unit's inputs and forgets those inputs
+		/// @param[in] inputWorkingSet The working set of the inputs
 		void remove_auxiliary_assignments_of_input_unit_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet);
 
-		/// @brief Marks the assignments that use an input whose status message could not be enabled as failed. The auxiliary assignment mutex must be held.
+		/// @brief Marks the assignments that use a failed input as failed
 		/// @param[in] input The input that failed
 		void fail_auxiliary_assignments_of_input_locked(const AuxiliaryInputState &input);
 
-		/// @brief Enables the status message of each input an assignment uses, and disables the others. The auxiliary assignment mutex must be held.
+		/// @brief Enables the inputs that assignments use and disables the others
 		void update_auxiliary_input_states_locked();
 
-		/// @brief Collects the Auxiliary Input Status Type 2 Enable commands that are due. The auxiliary assignment mutex must be held.
+		/// @brief Collects the due Auxiliary Input Status Type 2 Enable commands
 		/// @param[in,out] commands The commands to send
 		void collect_auxiliary_input_commands_locked(std::vector<AuxiliaryCommand> &commands);
 
-		/// @brief Collects the Auxiliary Assignment Type 2 commands that are due, one per working set at a time (J.7.5). The auxiliary assignment mutex must be held.
+		/// @brief Collects the due Auxiliary Assignment Type 2 commands, one per working set
 		/// @param[in,out] commands The commands to send
 		void collect_auxiliary_assignment_commands_locked(std::vector<AuxiliaryCommand> &commands);
 
-		/// @brief Returns if the status message of an Auxiliary Input is confirmed as enabled. The auxiliary assignment mutex must be held.
-		/// @param[in] inputWorkingSet The working set that provides the Auxiliary Input
-		/// @param[in] inputObjectID The Auxiliary Input Type 2 object
-		/// @returns True if the input unit confirmed that the status message is enabled
+		/// @brief Returns if the input unit confirmed an Auxiliary Input as enabled
+		/// @param[in] inputWorkingSet The working set of the input
+		/// @param[in] inputObjectID The Auxiliary Input object ID
+		/// @returns True if enabled, otherwise false
 		bool get_is_auxiliary_input_enabled_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID) const;
 
 		/// @brief Sends a response to a load version or extended load version command
@@ -1298,14 +1291,14 @@ namespace isobus
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
 		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
-		std::vector<AuxiliaryFunctionState> auxiliaryFunctionStates; ///< The assignment of each Auxiliary Function of the working sets that sent a valid Preferred Assignment command
-		std::vector<AuxiliaryInputState> auxiliaryInputStates; ///< The status message state of each Auxiliary Input that is or was used by an assignment
-		std::vector<std::pair<AuxiliaryAssignment, AuxiliaryAssignmentEvent>> pendingAuxiliaryAssignmentEvents; ///< Events that update() passes to the event dispatcher
-		std::vector<AuxiliaryInputStatus> pendingAuxiliaryInputStatuses; ///< Input status received in learn mode, which update() passes to the event dispatcher
-		mutable Mutex auxiliaryAssignmentMutex; ///< Protects the auxiliary assignment state, which the CAN thread, update() and the application use
+		std::vector<AuxiliaryFunctionState> auxiliaryFunctionStates; ///< The assignment of each known Auxiliary Function
+		std::vector<AuxiliaryInputState> auxiliaryInputStates; ///< The enable state of each Auxiliary Input in use
+		std::vector<std::pair<AuxiliaryAssignment, AuxiliaryAssignmentEvent>> pendingAuxiliaryAssignmentEvents; ///< Events for update() to dispatch
+		std::vector<AuxiliaryInputStatus> pendingAuxiliaryInputStatuses; ///< Learn mode input statuses for update() to dispatch
+		mutable Mutex auxiliaryAssignmentMutex; ///< Protects the auxiliary assignment state
 		EventDispatcher<AuxiliaryAssignment, AuxiliaryAssignmentEvent> onAuxiliaryAssignmentEventDispatcher; ///< Event dispatcher for auxiliary assignment events
-		EventDispatcher<AuxiliaryInputStatus> onAuxiliaryInputStatusEventDispatcher; ///< Event dispatcher for the input status received in learn mode
-		std::atomic<bool> isAuxiliaryLearnModeActive = { false }; ///< True while the auxiliary controls learn mode is on, which the application sets and the CAN thread reads
+		EventDispatcher<AuxiliaryInputStatus> onAuxiliaryInputStatusEventDispatcher; ///< Event dispatcher for learn mode input statuses
+		std::atomic<bool> isAuxiliaryLearnModeActive = { false }; ///< True while the auxiliary controls learn mode is on
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP

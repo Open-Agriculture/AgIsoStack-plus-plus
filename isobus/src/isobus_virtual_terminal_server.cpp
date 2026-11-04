@@ -565,7 +565,7 @@ namespace isobus
 		status.isLocked = (0 != (data[7] & 0x04));
 		status.isInteractionDetectedWhileLocked = (0 != (data[7] & 0x08));
 
-		// Outside of learn mode the status is meant for the implements, which receive it globally (ISO 11783-6 J.7.9)
+		// Outside of learn mode the status is for the implements (ISO 11783-6 J.7.9)
 		if (isAuxiliaryLearnModeActive && has_object_of_type(*workingSet, status.inputObjectID, VirtualTerminalObjectType::AuxiliaryInputType2))
 		{
 			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
@@ -573,11 +573,11 @@ namespace isobus
 		}
 	}
 
-	/// @brief Groups the auxiliary objects of one type in a working set's object pool into the sets of an Auxiliary Capabilities response.
+	/// @brief Groups a working set's auxiliary objects of one type into Auxiliary Capabilities sets.
 	/// @param workingSet The working set to list.
 	/// @param type AuxiliaryInputType2 or AuxiliaryFunctionType2.
-	/// @param assignments The assignments the server made, to fill in the assigned attribute.
-	/// @returns Three bytes per set: the number of instances, the function attribute and the assigned attribute (ISO 11783-6 Table J.8).
+	/// @param assignments The current assignments, for the assigned attribute.
+	/// @returns Three bytes per set: instances, function attribute and assigned attribute.
 	static std::vector<std::uint8_t> get_auxiliary_capability_sets(VirtualTerminalServerManagedWorkingSet &workingSet, VirtualTerminalObjectType type, const std::vector<VirtualTerminalServer::AuxiliaryAssignment> &assignments)
 	{
 		const bool isFunction = (VirtualTerminalObjectType::AuxiliaryFunctionType2 == type);
@@ -631,41 +631,41 @@ namespace isobus
 		return (nullptr != serverInternalControlFunction) && (0 == serverInternalControlFunction->get_NAME().get_function_instance());
 	}
 
-	/// @brief Checks if an assignment drives a function with an input.
+	/// @brief Checks if a working assignment uses an input.
 	/// @param assignment The assignment to check.
-	/// @param inputWorkingSet The working set that provides the input.
-	/// @param inputObjectID The Auxiliary Input Type 2 object.
-	/// @returns true if the assignment uses the input and has not failed, otherwise false.
+	/// @param inputWorkingSet The working set of the input.
+	/// @param inputObjectID The Auxiliary Input object ID.
+	/// @returns true if it does, otherwise false.
 	static bool get_does_assignment_use_input(const VirtualTerminalServer::AuxiliaryAssignment &assignment, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID)
 	{
 		return (!assignment.hasFailed) && (nullptr != inputWorkingSet) && (inputWorkingSet == assignment.inputWorkingSet) && (inputObjectID == assignment.inputObjectID);
 	}
 
-	/// @brief Checks if the function of an assignment is missing from the new object pool of its working set.
+	/// @brief Checks if an assignment's function is missing from a new object pool.
 	/// @param assignment The assignment to check.
 	/// @param workingSet The working set whose object pool was parsed.
-	/// @returns true if the assignment is for a function of the working set that is no longer an Auxiliary Function Type 2, otherwise false.
+	/// @returns true if it is missing, otherwise false.
 	static bool get_is_function_gone_from_object_pool(const VirtualTerminalServer::AuxiliaryAssignment &assignment, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
 	{
 		return (workingSet == assignment.functionWorkingSet) && (!has_object_of_type(*workingSet, assignment.functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2));
 	}
 
 	/// @brief Checks if an Auxiliary Function has the Single Assignment attribute.
-	/// @param workingSet The working set that provides the function.
-	/// @param functionObjectID The Auxiliary Function Type 2 object.
-	/// @returns true if the function exists and has the attribute, otherwise false.
+	/// @param workingSet The working set of the function.
+	/// @param functionObjectID The Auxiliary Function object ID.
+	/// @returns true if it does, otherwise false.
 	static bool get_is_single_assignment_function(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint16_t functionObjectID)
 	{
 		return has_object_of_type(workingSet, functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2) &&
 		  std::static_pointer_cast<AuxiliaryFunctionType2>(workingSet.get_object_by_id(functionObjectID))->get_function_attribute(AuxiliaryFunctionType2::SingleAssignment);
 	}
 
-	/// @brief Checks if a Preferred Assignment command assigned a function to an input.
-	/// @param functionWorkingSet The working set that provides the function.
-	/// @param functionObjectID The Auxiliary Function Type 2 object.
-	/// @param inputWorkingSet The working set that provides the input.
-	/// @param inputObjectID The Auxiliary Input Type 2 object.
-	/// @returns true if the last valid Preferred Assignment command of the function's working set holds the assignment, otherwise false.
+	/// @brief Checks if the Preferred Assignment assigns a function to an input.
+	/// @param functionWorkingSet The working set of the function.
+	/// @param functionObjectID The Auxiliary Function object ID.
+	/// @param inputWorkingSet The working set of the input.
+	/// @param inputObjectID The Auxiliary Input object ID.
+	/// @returns true if it does, otherwise false.
 	static bool get_is_preferred_assignment(VirtualTerminalServerManagedWorkingSet &functionWorkingSet, std::uint16_t functionObjectID, VirtualTerminalServerManagedWorkingSet &inputWorkingSet, std::uint16_t inputObjectID)
 	{
 		const std::uint64_t inputUnitName = inputWorkingSet.get_control_function()->get_NAME().get_full_name();
@@ -750,7 +750,7 @@ namespace isobus
 			}
 		}
 
-		// A new function starts unassigned but unacknowledged, so the removal is sent once (ISO 11783-6 J.5 step 9)
+		// A new function sends its removal once (ISO 11783-6 J.5 step 9)
 		AuxiliaryFunctionState newState;
 		newState.assignment.functionWorkingSet = functionWorkingSet;
 		newState.assignment.functionObjectID = functionObjectID;
@@ -763,7 +763,7 @@ namespace isobus
 		auto &assignment = state.assignment;
 		const bool isUnchanged = (inputWorkingSet == assignment.inputWorkingSet) && (inputObjectID == assignment.inputObjectID) && (!assignment.hasFailed);
 
-		// An unchanged assignment from a Preferred Assignment command is not sent again, one from the operator is (ISO 11783-6 J.5 step 8)
+		// Only the operator resends an unchanged assignment (ISO 11783-6 J.5 step 8)
 		if ((!isUnchanged) || isMadeByOperator)
 		{
 			assignment.inputWorkingSet = inputWorkingSet;
@@ -780,7 +780,7 @@ namespace isobus
 				state.functionType = static_cast<std::uint8_t>(std::static_pointer_cast<AuxiliaryFunctionType2>(assignment.functionWorkingSet->get_object_by_id(assignment.functionObjectID))->get_function_type());
 			}
 
-			// An input that was refused gets another chance when a function is assigned to it again
+			// A refused input is retried when it is assigned again
 			for (auto &input : auxiliaryInputStates)
 			{
 				if ((nullptr != inputWorkingSet) && (inputWorkingSet == input.inputWorkingSet) && (inputObjectID == input.inputObjectID) && input.hasFailed)
@@ -798,6 +798,7 @@ namespace isobus
 		removedAssignment.inputWorkingSet = inputWorkingSet;
 		removedAssignment.inputObjectID = inputObjectID;
 
+		// Not stored as preferred, as it is an error condition (ISO 11783-6 J.7.10)
 		set_auxiliary_assignment_locked(state, nullptr, NULL_OBJECT_ID, false);
 		pendingAuxiliaryAssignmentEvents.emplace_back(removedAssignment, AuxiliaryAssignmentEvent::Removed);
 	}
@@ -831,7 +832,7 @@ namespace isobus
 
 	void VirtualTerminalServer::apply_preferred_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet)
 	{
-		// Other VTs parse the auxiliary objects, but do not use them for assignments (ISO 11783-6 J.3.1)
+		// Only the primary VT makes assignments (ISO 11783-6 J.3.1)
 		if (get_is_primary_vt())
 		{
 			const auto preferredAssignments = functionWorkingSet->get_preferred_auxiliary_assignments();
@@ -869,7 +870,7 @@ namespace isobus
 						}
 						else
 						{
-							// A conflicting assignment is removed, and the operator has to make it again (ISO 11783-6 J.5 step 7)
+							// Conflicts are removed for the operator to redo (ISO 11783-6 J.5 step 7)
 							LOG_WARNING("[VT Server]: Client %u preferred assignment of function %u to input %u conflicts (reason %u), removing it.", functionWorkingSet->get_control_function()->get_address(), object.first, inputObjectID, static_cast<std::uint8_t>(result));
 							remove_auxiliary_assignment_locked(state, inputWorkingSet, inputObjectID);
 						}
@@ -989,7 +990,7 @@ namespace isobus
 			}
 		}
 
-		// An input that no assignment uses is forgotten once it is disabled, or could not be enabled
+		// Unused inputs are forgotten once disabled or failed
 		auxiliaryInputStates.erase(std::remove_if(auxiliaryInputStates.begin(), auxiliaryInputStates.end(), [](const AuxiliaryInputState &input) { return (!input.shouldBeEnabled) && (!input.isAwaitingResponse) && ((!input.isEnabled) || input.hasFailed); }),
 		                           auxiliaryInputStates.end());
 	}
@@ -1031,7 +1032,7 @@ namespace isobus
 			  (!state.isAwaitingResponse) &&
 			  ((nullptr == assignment.inputWorkingSet) || get_is_auxiliary_input_enabled_locked(assignment.inputWorkingSet, assignment.inputObjectID));
 
-			// A working set only has one assignment command to answer at a time (ISO 11783-6 J.7.5)
+			// One unanswered assignment command per working set (ISO 11783-6 J.7.5)
 			if (isDue && (busyWorkingSets.end() == std::find(busyWorkingSets.begin(), busyWorkingSets.end(), assignment.functionWorkingSet)))
 			{
 				AuxiliaryCommand command;
@@ -1079,7 +1080,7 @@ namespace isobus
 
 			for (const auto &inputWorkingSet : silentInputUnits)
 			{
-				// It may have shut down or be reconfiguring, so it has to report Ready again before its inputs are assigned (ISO 11783-6 J.7.10)
+				// It has to report Ready again before its inputs are assigned (ISO 11783-6 J.7.10)
 				LOG_WARNING("[VT Server]: Client %u has not sent an auxiliary input maintenance message for %u ms, removing the assignments to its inputs.", inputWorkingSet->get_control_function()->get_address(), AUXILIARY_INPUT_MAINTENANCE_TIMEOUT_MS);
 				inputWorkingSet->set_auxiliary_input_maintenance_status(inputWorkingSet->get_auxiliary_input_model_identification_code(), false);
 				remove_auxiliary_assignments_of_input_unit_locked(inputWorkingSet);
@@ -1089,14 +1090,14 @@ namespace isobus
 				update_auxiliary_input_states_locked();
 			}
 
-			// An assignment is removed before its input is disabled (ISO 11783-6 J.6 rule 9), and only made once its input is enabled
+			// Removals go before disables (ISO 11783-6 J.6 rule 9)
 			collect_auxiliary_assignment_commands_locked(commands);
 			collect_auxiliary_input_commands_locked(commands);
 			events.swap(pendingAuxiliaryAssignmentEvents);
 			inputStatuses.swap(pendingAuxiliaryInputStatuses);
 		}
 
-		// Sent outside of the lock, as the application can be waiting for it to make an assignment
+		// Sent outside the lock, which the application may be waiting for
 		for (const auto &command : commands)
 		{
 			if (command.isAssignment)
@@ -1124,7 +1125,7 @@ namespace isobus
 	{
 		const auto &data = message.get_data();
 		const std::uint16_t functionObjectID = get_little_endian_uint16(data, 1);
-		// Bit 1 of VT version 5 and prior only tells that the function was already assigned to that input, which is not an error (J.7.6)
+		// Up to VT version 5, bit 1 only means already assigned, not an error (J.7.6)
 		const bool isRejected = (0 != (data[3] & 0x01));
 		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 
@@ -1135,7 +1136,7 @@ namespace isobus
 				state.isAwaitingResponse = false;
 				if (state.isChangedWhileAwaitingResponse)
 				{
-					// This answers a previous assignment, the current one is sent next
+					// It answers an outdated command, the current one is sent next
 					state.isChangedWhileAwaitingResponse = false;
 				}
 				else if (isRejected)
