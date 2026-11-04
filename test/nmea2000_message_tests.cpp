@@ -713,7 +713,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 		memcpy(lastFastPacketPayload.data() + 34, &testFrame.data[1], 7);
 		time_source.update_for_ms(51);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame)); // FP Payload 7
-		memcpy(lastFastPacketPayload.data() + 41, &testFrame.data[1], 5);
+		memcpy(lastFastPacketPayload.data() + 41, &testFrame.data[1], 6);
 
 		for (std::uint8_t i = 0; i < 47; i++)
 		{
@@ -751,7 +751,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 
 		testFrame.data[0] = 0x06;
 		testFrame.data[7] = 0xFF;
-		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 41, 7);
+		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 41, 6);
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasGNSSPositionDataCallbackHit);

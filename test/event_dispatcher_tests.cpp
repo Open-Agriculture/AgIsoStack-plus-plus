@@ -101,8 +101,8 @@ TEST_F(EventManagerBool, InvokeUnsafeContextEvent)
 		count += 1;
 	};
 
-	int *context_ptr = new int(42);
-	dispatcher.add_unsafe_listener<int>(callback, context_ptr);
+	int context = 42;
+	dispatcher.add_unsafe_listener<int>(callback, &context);
 
 	dispatcher.invoke(true);
 	ASSERT_EQ(count, 1);
