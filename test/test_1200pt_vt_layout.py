@@ -23,15 +23,11 @@ RUNTIME_STRINGS = {
                             "START PLANT MUST BE >= STOP PLANT", "STOP PLANT MUST BE <= START PLANT"],
     "Str_MarkerDetail": ["OFF", "LEFT", "RIGHT", "LEFT + RIGHT", "AUTO"],
     "Str_FoldInstruction": ["SEQUENCE COMPLETE", "SELECT FOLD OR UNFOLD", "HYDRAULICS SAFE - IDLE",
-                            "LOCKED: FAN/VAC FAULT", "LOCKED: FAN/VAC NOT RUNNING",
                             "LOCKED: OUTPUT BOARD MISSING"],
     "Str_UnfoldInstruction": ["SEQUENCE COMPLETE", "SELECT FOLD OR UNFOLD", "HYDRAULICS SAFE - IDLE",
-                              "LOCKED: FAN/VAC FAULT", "LOCKED: FAN/VAC NOT RUNNING",
                               "LOCKED: OUTPUT BOARD MISSING"],
-    "Str_FoldLockReason": [" ", "REASON: FAN/VAC IDLE", "REASON: FAN FAULT", "REASON: VAC FAULT",
-                           "REASON: OUTPUT BOARD MISSING"],
-    "Str_UnfoldLockReason": [" ", "REASON: FAN/VAC IDLE", "REASON: FAN FAULT", "REASON: VAC FAULT",
-                             "REASON: OUTPUT BOARD MISSING"],
+    "Str_FoldLockReason": [" ", "REASON: OUTPUT BOARD"],
+    "Str_UnfoldLockReason": [" ", "REASON: OUTPUT BOARD"],
     "Str_CalBulkHeadland": ["ON", "OFF"],
 }
 

@@ -13,10 +13,23 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 
 namespace isobus
 {
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	namespace
+	{
+		// Limit queue work per update pass so the worker thread yields CPU regularly under heavy traffic.
+		static constexpr std::size_t MAX_RX_FRAMES_PER_CHANNEL_PER_UPDATE = 24;
+		static constexpr std::size_t MAX_TX_FRAMES_PER_CHANNEL_PER_UPDATE = 24;
+
+		// After a few empty receive attempts, sleep briefly instead of only yielding to avoid RTOS idle starvation.
+		static constexpr std::uint8_t MAX_EMPTY_RECEIVE_POLLS_BEFORE_SLEEP = 4;
+	}
+#endif
+
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 	std::unique_ptr<std::thread> CANHardwareInterface::updateThread;
 	std::condition_variable CANHardwareInterface::updateThreadWakeupCondition;
@@ -131,17 +144,30 @@ namespace isobus
 
 	void CANHardwareInterface::CANHardware::receive_thread_function()
 	{
+		std::uint8_t emptyReceivePollCounter = 0;
+
 		while (receiveThreadRunning)
 		{
 			if ((nullptr != frameHandler) && frameHandler->get_is_valid())
 			{
 				if (!receive_can_frame())
 				{
-					// There was no frame to receive, so if any other thread wants to do something, let it.
-					std::this_thread::yield();
+					// There was no frame (or the queue is full). Yield quickly a few times for responsiveness,
+					// then sleep briefly to ensure lower-priority RTOS tasks (including idle) can run.
+					++emptyReceivePollCounter;
+					if (emptyReceivePollCounter >= MAX_EMPTY_RECEIVE_POLLS_BEFORE_SLEEP)
+					{
+						emptyReceivePollCounter = 0;
+						std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					}
+					else
+					{
+						std::this_thread::yield();
+					}
 				}
 				else
 				{
+					emptyReceivePollCounter = 0;
 					CANHardwareInterface::updateThreadWakeupCondition.notify_all();
 				}
 			}
@@ -372,12 +398,15 @@ namespace isobus
 #endif
 
 					isobus::CANMessageFrame frame;
-					while (hardwareChannels[i]->receivedMessagesQueue.peek(frame))
+					std::size_t receiveBatchCount = 0;
+					while ((receiveBatchCount < MAX_RX_FRAMES_PER_CHANNEL_PER_UPDATE) &&
+					       hardwareChannels[i]->receivedMessagesQueue.peek(frame))
 					{
 						frame.channel = i;
 						frameReceivedEventDispatcher.invoke(frame);
 						receive_can_message_frame_from_hardware(frame);
 						hardwareChannels[i]->receivedMessagesQueue.pop();
+						++receiveBatchCount;
 					}
 				}
 			}
@@ -395,13 +424,16 @@ namespace isobus
 				LOCK_GUARD(Mutex, hardwareChannelsMutex);
 				std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
 					isobus::CANMessageFrame frame;
-					while (channel->messagesToBeTransmittedQueue.peek(frame))
+					std::size_t transmitBatchCount = 0;
+					while ((transmitBatchCount < MAX_TX_FRAMES_PER_CHANNEL_PER_UPDATE) &&
+					       channel->messagesToBeTransmittedQueue.peek(frame))
 					{
 						if (channel->transmit_can_frame(frame))
 						{
 							frameTransmittedEventDispatcher.invoke(frame);
 							on_transmit_can_message_frame_from_hardware(frame);
 							channel->messagesToBeTransmittedQueue.pop();
+							++transmitBatchCount;
 						}
 						else
 						{

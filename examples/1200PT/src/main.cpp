@@ -34,6 +34,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 // ─── ISOBUS CLIENT INSTANCES ───────────────────────────────────────────
 static std::shared_ptr<isobus::VirtualTerminalClient> virtualTerminalClient = nullptr;
@@ -580,8 +581,7 @@ static void restore_lockout_text(ui::ActionGroup group)
 // selected nor actuated.
 static void show_blocked_press(ui::ActionGroup group)
 {
-    const ui::InhibitReason reason =
-        ui::classify_inhibit(fan_vac_get_status(), mcp23017_output_health().has_fault());
+    const ui::InhibitReason reason = ui::classify_inhibit(mcp23017_output_health().has_fault());
     bool show;
     {
         std::lock_guard<std::mutex> lock(uiMutex);
@@ -596,8 +596,7 @@ static void show_blocked_press(ui::ActionGroup group)
 // Called every main-loop iteration; logs only when the reason changes.
 static void update_lockout_feedback()
 {
-    const ui::InhibitReason reason =
-        ui::classify_inhibit(fan_vac_get_status(), mcp23017_output_health().has_fault());
+    const ui::InhibitReason reason = ui::classify_inhibit(mcp23017_output_health().has_fault());
     ui::LockoutFeedback::Update update;
     {
         std::lock_guard<std::mutex> lock(uiMutex);
@@ -1361,8 +1360,7 @@ extern "C" void app_main()
         wasVtConnected = vtConnected;
 
         fan_vac_update();
-        const bool hydraulicControlAvailable =
-            fan_vac_get_state() == FanVacState::RUNNING && !mcp23017_output_health().has_fault();
+        const bool hydraulicControlAvailable = !mcp23017_output_health().has_fault();
         const bool wasActuationInhibited = hydraulicActuationInhibited.exchange(!hydraulicControlAvailable);
         if (!hydraulicControlAvailable && !wasActuationInhibited)
         {
