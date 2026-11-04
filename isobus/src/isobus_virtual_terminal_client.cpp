@@ -1757,6 +1757,7 @@ namespace isobus
 							if (!scale_object_pools())
 							{
 								set_state(StateMachineState::Failed);
+								break;
 							}
 						}
 					}
@@ -1807,9 +1808,9 @@ namespace isobus
 							}
 							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
 							{
-								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 								LOG_ERROR("[VT]: An object pool failed to upload. Resetting connection to VT.");
 								set_state(StateMachineState::Disconnected);
+								break;
 							}
 							else
 							{
@@ -1825,7 +1826,7 @@ namespace isobus
 						}
 					}
 
-					if (allPoolsProcessed)
+					if (allPoolsProcessed && (StateMachineState::UploadObjectPool == state))
 					{
 						set_state(StateMachineState::SendEndOfObjectPool);
 					}
@@ -2606,6 +2607,10 @@ namespace isobus
 
 		if (value != state)
 		{
+			if (StateMachineState::UploadObjectPool == state)
+			{
+				currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+			}
 			firstTimeInState = true;
 			if ((StateMachineState::WaitForEndOfObjectPoolResponse == value) ||
 			    (StateMachineState::WaitForLoadVersionResponse == value))
