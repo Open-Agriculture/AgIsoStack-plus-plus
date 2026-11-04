@@ -564,7 +564,7 @@ namespace isobus
 			ObjectPoolWasDeletedFromVolatileMemory = 3
 		};
 
-		/// @brief The error bits of a Preferred Assignment response
+		/// @brief Enumerates the bit indices of the error fields that can be set in a preferred assignment response
 		enum class PreferredAssignmentErrorBit : std::uint8_t
 		{
 			AuxiliaryInputUnitNotValid = 0, ///< Unknown input unit NAME or Model Identification Code
