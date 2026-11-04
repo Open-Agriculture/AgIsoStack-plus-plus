@@ -18,6 +18,18 @@
 
 namespace isobus
 {
+	/// @brief Checks under the registry's lock whether a callback is still registered, as one removed during a dispatch must not be called from the copy.
+	/// @param[in] registryMutex The mutex that guards the registry
+	/// @param[in] registry The list of registered callbacks
+	/// @param[in] callback The callback to look for
+	/// @returns true if the callback is still in the registry
+	template<typename Container>
+	static bool is_registered(Mutex &registryMutex, const Container &registry, const typename Container::value_type &callback)
+	{
+		(void)registryMutex; // Unused when threads are disabled
+		LOCK_GUARD(Mutex, registryMutex);
+		return (registry.end() != std::find(registry.begin(), registry.end(), callback));
+	}
 
 	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
 	  myControlFunction(internalControlFunction)
@@ -164,6 +176,8 @@ namespace isobus
 
 	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message)
 	{
+		// Keeps this protocol alive while a callback deactivates its control function, which destroys the protocol
+		const auto keepAlive = myControlFunction->get_pgn_request_protocol().lock();
 		if (((nullptr == message.get_destination_control_function()) &&
 		     (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
 		    (message.get_destination_control_function() == myControlFunction))
@@ -187,6 +201,7 @@ namespace isobus
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
+							    is_registered(pgnRequestMutex, repetitionRateCallbacks, repetitionRateCallback) &&
 							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), requestedRate, repetitionRateCallback.parent)))
 							{
 								// If the callback was able to process the PGN request, stop processing more.
@@ -225,6 +240,7 @@ namespace isobus
 						{
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&
+							    is_registered(pgnRequestMutex, pgnRequestCallbacks, pgnRequestCallback) &&
 							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
 							{
 								// If we're here, the callback was able to process the PGN request.

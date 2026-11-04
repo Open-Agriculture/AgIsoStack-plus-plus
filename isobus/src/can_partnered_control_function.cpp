@@ -176,8 +176,15 @@ namespace isobus
 			    ((nullptr == callback.get_internal_control_function()) ||
 			     (callback.get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
 			{
-				// We have a callback matching this message
-				callback.get_callback()(message, callback.get_parent());
+				bool stillRegistered = false;
+				{
+					LOCK_GUARD(Mutex, parameterGroupNumberCallbacksMutex);
+					stillRegistered = (parameterGroupNumberCallbacks.end() != std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), callback));
+				}
+				if (stillRegistered)
+				{
+					callback.get_callback()(message, callback.get_parent());
+				}
 			}
 		}
 	}

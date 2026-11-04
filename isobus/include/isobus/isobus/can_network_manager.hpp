@@ -69,8 +69,8 @@ namespace isobus
 
 		/// @brief Removes an internal control function from the network manager, making it inactive
 		/// @param[in] controlFunction The control function to deactivate
-		/// @details Don't call this from one of the control function's own PGN request callbacks:
-		/// it destroys the ParameterGroupNumberRequestProtocol that is running that callback.
+		/// @details It may be called from one of the control function's own PGN request callbacks. Call it on the thread
+		/// that calls update(), or once that thread is stopped, as a PGN request being handled there uses what it destroys.
 		void deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction);
 
 		/// @brief Removes a partnered control function from the network manager, making it inactive
@@ -400,6 +400,7 @@ namespace isobus
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
 		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctions; ///< A list of the internal control functions
 		std::list<std::shared_ptr<PartneredControlFunction>> partneredControlFunctions; ///< A list of the partnered control functions
+		std::vector<std::shared_ptr<PartneredControlFunction>> partnersComingOnline; ///< Partners that came online since the last update(), whose state callbacks it still has to make
 		mutable RecursiveMutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions. Recursive, because the address claiming that runs under it looks up the table through get_control_function().
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
