@@ -6,6 +6,7 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 
 #include <atomic>
@@ -87,6 +88,38 @@ TEST_F(CoreTest, TestCreateAndDestroyICFs)
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(testICF1);
 	CANNetworkManager::CANNetwork.deactivate_control_function(testICF3);
+}
+
+TEST_F(CoreTest, PGNRequestProtocolDoesNotKeepItsICFAlive)
+{
+	auto internalECU = std::make_shared<InternalControlFunction>(NAME(0), 0x80, 0);
+	std::weak_ptr<InternalControlFunction> weakInternalECU = internalECU;
+	ParameterGroupNumberRequestProtocol protocol(internalECU);
+
+	internalECU.reset();
+	EXPECT_TRUE(weakInternalECU.expired());
+}
+
+TEST_F(CoreTest, PGNRequestProtocolCanOutliveTheNetworkManager)
+{
+	// The listener keeps both protocols alive until the network manager's members are destroyed, after its callback list.
+	// Only a sanitizer catches that use-after-free; threadsafe style keeps other tests' leaks out of the child's exit code.
+	::testing::GTEST_FLAG(death_test_style) = "threadsafe";
+	EXPECT_EXIT(
+	  {
+		  {
+			  auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x80);
+			  auto deactivatedECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x81);
+			  auto protocol = internalECU->get_pgn_request_protocol().lock();
+			  auto deactivatedProtocol = deactivatedECU->get_pgn_request_protocol().lock();
+			  internalECU->get_address_claimed_event_dispatcher().add_listener([protocol, deactivatedProtocol](const std::uint8_t &) {});
+			  CANNetworkManager::CANNetwork.deactivate_control_function(deactivatedECU);
+		  }
+		  std::exit(0);
+	  },
+	  ::testing::ExitedWithCode(0),
+	  "");
+	::testing::GTEST_FLAG(death_test_style) = "fast";
 }
 
 TEST_F(CoreTest, BusloadTest)

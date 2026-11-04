@@ -22,15 +22,14 @@ namespace isobus
 	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
 	  myControlFunction(internalControlFunction)
 	{
-		assert(nullptr != myControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");
+		assert(nullptr != internalControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
 	}
 
 	ParameterGroupNumberRequestProtocol::~ParameterGroupNumberRequestProtocol()
 	{
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
+		unregister_from_network();
 	}
 
 	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
@@ -164,9 +163,10 @@ namespace isobus
 
 	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message)
 	{
+		auto internalControlFunction = myControlFunction.lock();
 		if (((nullptr == message.get_destination_control_function()) &&
 		     (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
-		    (message.get_destination_control_function() == myControlFunction))
+		    ((nullptr != internalControlFunction) && (message.get_destination_control_function() == internalControlFunction)))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
@@ -286,10 +286,20 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction,
+			                                                        myControlFunction.lock(),
 			                                                        nullptr);
 		}
 		return retVal;
+	}
+
+	void ParameterGroupNumberRequestProtocol::unregister_from_network()
+	{
+		if (registeredWithNetwork)
+		{
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
+			registeredWithNetwork = false;
+		}
 	}
 
 } // namespace isobus
