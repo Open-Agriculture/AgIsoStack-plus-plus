@@ -154,14 +154,14 @@ namespace isobus
 		  (static_cast<std::uint64_t>(get_little_endian_uint32(data, index + 4)) << 32);
 	}
 
-	/// @brief Checks if a working set's answered object pool holds an object of the given type.
+	/// @brief Checks if a working set's parsed object pool has an object of the given type.
 	/// @param workingSet The working set to look in.
 	/// @param objectID The object ID to look for.
 	/// @param type The type the object must have.
-	/// @returns true if the object exists and has the given type, false if not or if the object pool has not been answered yet.
+	/// @returns true if it does, otherwise false.
 	static bool has_object_of_type(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint16_t objectID, VirtualTerminalObjectType type)
 	{
-		// The parsing thread builds the object tree, so it can only be read once that thread has been joined
+		// The object tree is only safe to read once the parsing thread is joined
 		if (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Joined != workingSet.get_object_pool_processing_state())
 		{
 			return false;
@@ -275,6 +275,14 @@ namespace isobus
 	}
 
 	void VirtualTerminalServer::object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)
+	{
+	}
+
+	void VirtualTerminalServer::control_audio_signal(std::uint8_t, std::uint16_t, std::uint16_t, std::uint16_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
+	void VirtualTerminalServer::set_audio_volume(std::uint8_t, std::shared_ptr<ControlFunction>)
 	{
 	}
 
@@ -392,7 +400,7 @@ namespace isobus
 			const std::uint8_t numberOfAssignments = data[offset + 10];
 			const auto inputUnit = get_managed_working_set(inputUnitName);
 			const bool isInputUnitValid = (nullptr != inputUnit) && (modelIdentificationCode == inputUnit->get_auxiliary_input_model_identification_code());
-			// Inputs of a unit that is not Ready yet are reported as not valid, not the unit itself (ISO 11783-6 J.7.7)
+			// A unit that is not Ready gets its inputs reported, not itself (ISO 11783-6 J.7.7)
 			const bool isInputUnitReady = isInputUnitValid && inputUnit->get_is_auxiliary_input_ready();
 			offset += INPUT_UNIT_LENGTH;
 
@@ -2845,12 +2853,20 @@ namespace isobus
 
 			case Function::ControlAudioSignalCommand:
 			{
+				control_audio_signal(data[1],
+				                     get_little_endian_uint16(data, 2),
+				                     get_little_endian_uint16(data, 4),
+				                     get_little_endian_uint16(data, 6),
+				                     message.get_source_control_function());
 				send_audio_signal_successful(message.get_source_control_function());
 			}
 			break;
 
 			case Function::SetAudioVolumeCommand:
 			{
+				// The volume is a percentage, so a larger value is passed on as 100 %
+				constexpr std::uint8_t MAX_AUDIO_VOLUME_PERCENT = 100;
+				set_audio_volume(std::min(data[1], MAX_AUDIO_VOLUME_PERCENT), message.get_source_control_function());
 				send_audio_volume_response(message.get_source_control_function());
 			}
 			break;
@@ -2876,13 +2892,58 @@ namespace isobus
 			case Function::VTChangeActiveMaskMessage:
 			case Function::VTChangeStringValueMessage:
 			case Function::VTControlAudioSignalTerminationMessage:
+			case Function::VTChangeSoftKeyMaskMessage:
+			case Function::VTOnUserLayoutHideShowMessage:
+			case Function::AuxiliaryAssignmentTypeOneCommand:
+			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
 			}
 			break;
 
-			default:
+			// Already answered by process_stateless_messages, and a received 0xFD must never be answered
+			case Function::GetSupportedWidecharsMessage:
+			case Function::GetNumberOfSoftKeysMessage:
+			case Function::GetTextFontDataMessage:
+			case Function::GetWindowMaskDataMessage:
+			case Function::GetHardwareMessage:
+			case Function::UnsupportedVTFunctionMessage:
 				break;
+
+			// TODO: implement these, until then they are answered as unsupported
+			case Function::ChangeEndPointCommand:
+			case Function::LockUnlockMaskCommand:
+			case Function::ChangeObjectLabelCommand:
+			case Function::ChangePolygonScaleCommand:
+			case Function::GetAttributeValueMessage:
+			case Function::SelectColourMapCommand:
+			case Function::GraphicsContextCommand:
+			case Function::AuxiliaryCapabilitiesRequest:
+			case Function::SelectActiveWorkingSet:
+			default:
+			{
+				// A VT before version 5 had no defined response to an unknown function
+				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()))
+				{
+					const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+						static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
+						data.at(0),
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF
+					};
+					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+					                                               buffer.data(),
+					                                               CAN_DATA_LENGTH,
+					                                               serverInternalControlFunction,
+					                                               message.get_source_control_function(),
+					                                               get_priority());
+				}
+			}
+			break;
 		}
 	}
 
