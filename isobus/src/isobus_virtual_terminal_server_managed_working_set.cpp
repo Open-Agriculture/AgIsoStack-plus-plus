@@ -121,7 +121,7 @@ namespace isobus
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
 		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
 
-		// A new object pool has to be followed by a new Preferred Assignment command (ISO 11783-6 J.7.7)
+		// A new object pool needs a new Preferred Assignment (ISO 11783-6 J.7.7)
 		const std::lock_guard<std::mutex> lock(auxiliaryControlMutex);
 		preferredAuxiliaryAssignments.clear();
 		wasPreferredAssignmentReceived = false;
