@@ -2675,6 +2675,598 @@ TEST_F(VirtualTerminalServerMessagingTest, PreferredAssignmentCommandIsAnswered)
 	EXPECT_EQ(0xFF, response.data[7]);
 }
 
+/// @brief A server with an implement and an auxiliary input unit
+class VirtualTerminalServerAuxiliaryControlTest : public VirtualTerminalServerMessagingTest
+{
+protected:
+	static constexpr std::uint16_t FUNCTION_OBJECT_ID = 20;
+	static constexpr std::uint16_t INPUT_OBJECT_ID = 10;
+	static constexpr std::uint16_t MODEL_IDENTIFICATION_CODE = 23;
+	static constexpr std::uint8_t BOOLEAN_LATCHING = 0;
+	static constexpr std::uint8_t BOOLEAN_NON_LATCHING = 2;
+	static constexpr std::uint8_t CRITICAL_CONTROL = 0x20;
+	static constexpr std::uint8_t ASSIGNMENT_RESTRICTION = 0x40;
+	static constexpr std::uint8_t SINGLE_ASSIGNMENT = 0x80;
+
+	/// @brief An auxiliary object without child objects
+	struct AuxiliaryObject
+	{
+		std::uint16_t objectID;
+		std::uint8_t functionTypeAndAttributes;
+	};
+
+	void TearDown() override
+	{
+		server.reset();
+		CANHardwareInterface::stop();
+		VirtualTerminalServerMessagingTest::TearDown();
+	}
+
+	/// @brief Starts the server and connects the implement and a Ready input unit
+	bool start(std::uint8_t serverAddress,
+	           std::uint8_t implementAddress,
+	           std::uint8_t inputUnitAddress,
+	           const std::vector<AuxiliaryObject> &functions = { { FUNCTION_OBJECT_ID, BOOLEAN_NON_LATCHING } },
+	           const std::vector<AuxiliaryObject> &inputs = { { INPUT_OBJECT_ID, BOOLEAN_NON_LATCHING } })
+	{
+		testPlugin.open();
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+		CANHardwareInterface::start(false);
+
+		serverCF = test_helpers::claim_internal_control_function(serverAddress, 0, time_source);
+		implement = test_helpers::force_claim_partnered_control_function(implementAddress, 0);
+		inputUnit = test_helpers::force_claim_partnered_control_function(inputUnitAddress, 0);
+		server = std::unique_ptr<DerivedTestVTServer>(new DerivedTestVTServer(serverCF));
+		server->initialize();
+		eventHandle = server->get_on_auxiliary_assignment_event_dispatcher().add_listener([this](const VirtualTerminalServer::AuxiliaryAssignment &assignment, const VirtualTerminalServer::AuxiliaryAssignmentEvent &event) { events.emplace_back(assignment, event); });
+
+		const bool connected = connect_with_object_pool(implement, object_pool_with_auxiliary_objects(VirtualTerminalObjectType::AuxiliaryFunctionType2, functions)) &&
+		  connect_with_object_pool(inputUnit, object_pool_with_auxiliary_objects(VirtualTerminalObjectType::AuxiliaryInputType2, inputs));
+		receive_auxiliary_input_maintenance(MODEL_IDENTIFICATION_CODE, true);
+		return connected;
+	}
+
+	/// @brief A Working Set object followed by auxiliary objects of one type
+	static std::vector<std::uint8_t> object_pool_with_auxiliary_objects(VirtualTerminalObjectType type, const std::vector<AuxiliaryObject> &objects)
+	{
+		std::vector<std::uint8_t> objectPool = { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF };
+
+		for (const auto &object : objects)
+		{
+			objectPool.insert(objectPool.end(), { static_cast<std::uint8_t>(object.objectID & 0xFF), static_cast<std::uint8_t>(object.objectID >> 8), static_cast<std::uint8_t>(type), 0x00, object.functionTypeAndAttributes, 0x00 });
+		}
+		return objectPool;
+	}
+
+	bool connect_with_object_pool(std::shared_ptr<ControlFunction> client, const std::vector<std::uint8_t> &objectPool)
+	{
+		CANMessageFrame response = {};
+
+		receive_from_client(serverCF, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		receive_tp_from_client(serverCF, client, objectPool);
+		receive_from_client(serverCF, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		testPlugin.clear_queue();
+		return poll_for_response(*server, testPlugin, 0x12, response) && (0x00 == response.data[1]);
+	}
+
+	void receive_auxiliary_input_maintenance(std::uint16_t modelIdentificationCode, bool ready)
+	{
+		receive_from_client(serverCF, inputUnit, { 0x23, static_cast<std::uint8_t>(modelIdentificationCode & 0xFF), static_cast<std::uint8_t>(modelIdentificationCode >> 8), static_cast<std::uint8_t>(ready ? 0x01 : 0x00), 0xFF, 0xFF, 0xFF, 0xFF });
+	}
+
+	/// @brief A Preferred Assignment command for one input unit, as function and input object ID pairs
+	static std::vector<std::uint8_t> preferred_assignment_command(std::uint64_t inputUnitName, std::uint16_t modelIdentificationCode, const std::vector<std::pair<std::uint16_t, std::uint16_t>> &assignments)
+	{
+		std::vector<std::uint8_t> command = { 0x22, 0x01 };
+
+		for (std::uint8_t i = 0; i < 8; i++)
+		{
+			command.push_back(static_cast<std::uint8_t>(inputUnitName >> (8 * i)));
+		}
+		command.push_back(static_cast<std::uint8_t>(modelIdentificationCode & 0xFF));
+		command.push_back(static_cast<std::uint8_t>(modelIdentificationCode >> 8));
+		command.push_back(static_cast<std::uint8_t>(assignments.size()));
+		for (const auto &assignment : assignments)
+		{
+			command.push_back(static_cast<std::uint8_t>(assignment.first & 0xFF));
+			command.push_back(static_cast<std::uint8_t>(assignment.first >> 8));
+			command.push_back(static_cast<std::uint8_t>(assignment.second & 0xFF));
+			command.push_back(static_cast<std::uint8_t>(assignment.second >> 8));
+		}
+		return command;
+	}
+
+	std::vector<std::uint8_t> preferred_assignment_of_the_input() const
+	{
+		return preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, INPUT_OBJECT_ID } });
+	}
+
+	/// @brief Sends a padded Preferred Assignment command and reads the response
+	bool send_preferred_assignment(std::vector<std::uint8_t> command, CANMessageFrame &response)
+	{
+		command.resize(((command.size() + CAN_DATA_LENGTH - 1) / CAN_DATA_LENGTH) * CAN_DATA_LENGTH, 0xFF);
+		testPlugin.clear_queue();
+		receive_tp_from_client(serverCF, implement, command);
+		return poll_for_response(*server, testPlugin, 0x22, response);
+	}
+
+	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> get_working_set(std::shared_ptr<ControlFunction> client) const
+	{
+		for (const auto &workingSet : server->managedWorkingSetList)
+		{
+			if (client->get_address() == workingSet->get_control_function()->get_address())
+			{
+				return workingSet;
+			}
+		}
+		return nullptr;
+	}
+
+	/// @brief Runs the server's update, keeping the input unit alive unless told otherwise
+	void run_server_update(bool isInputUnitAlive = true)
+	{
+		if (isInputUnitAlive)
+		{
+			receive_auxiliary_input_maintenance(MODEL_IDENTIFICATION_CODE, true);
+		}
+		server->run_update();
+	}
+
+	/// @brief Lets time pass in 100 ms steps, keeping both working sets connected
+	void advance_time(std::uint32_t milliseconds, bool isInputUnitAlive = true)
+	{
+		for (std::uint32_t elapsed = 0; elapsed < milliseconds; elapsed += 100)
+		{
+			if (0 == (elapsed % 1000))
+			{
+				receive_from_client(serverCF, implement, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+				receive_from_client(serverCF, inputUnit, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+			}
+			time_source.update_for_ms(100);
+			run_server_update(isInputUnitAlive);
+		}
+	}
+
+	/// @brief Runs the server until it sends a single frame command to a client
+	bool read_command(std::shared_ptr<ControlFunction> client, std::uint8_t function, CANMessageFrame &command)
+	{
+		bool foundCommand = false;
+
+		for (std::uint_fast8_t attempt = 0; (attempt < 20) && (!foundCommand); attempt++)
+		{
+			run_server_update();
+			time_source.update_for_ms(5);
+			while ((!foundCommand) && testPlugin.read_frame(command, 10))
+			{
+				foundCommand = (0xE6 == get_pdu_format(command)) && (client->get_address() == static_cast<std::uint8_t>(command.identifier >> 8)) && (function == command.data[0]);
+			}
+		}
+		return foundCommand;
+	}
+
+	/// @brief Runs the server and reads its Auxiliary Assignment Type 2 command to the implement
+	bool read_assignment_command(std::vector<std::uint8_t> &command)
+	{
+		run_server_update();
+		return read_tp_from_server(testPlugin, serverCF, implement, command) && (0x24 == command.at(0));
+	}
+
+	void receive_status_enable_response(std::uint16_t inputObjectID, bool isEnabled, std::uint8_t errorBitfield = 0)
+	{
+		receive_from_client(serverCF, inputUnit, { 0x25, static_cast<std::uint8_t>(inputObjectID & 0xFF), static_cast<std::uint8_t>(inputObjectID >> 8), static_cast<std::uint8_t>(isEnabled ? 0x01 : 0x00), errorBitfield, 0xFF, 0xFF, 0xFF });
+	}
+
+	void receive_assignment_response(std::uint16_t functionObjectID, std::uint8_t errorBitfield = 0)
+	{
+		receive_from_client(serverCF, implement, { 0x24, static_cast<std::uint8_t>(functionObjectID & 0xFF), static_cast<std::uint8_t>(functionObjectID >> 8), errorBitfield, 0xFF, 0xFF, 0xFF, 0xFF });
+	}
+
+	/// @brief Sends an empty Preferred Assignment, so the operator may assign
+	bool send_empty_preferred_assignment()
+	{
+		CANMessageFrame response = {};
+		std::vector<std::uint8_t> removal;
+
+		testPlugin.clear_queue();
+		receive_from_client(serverCF, implement, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		const bool accepted = poll_for_response(*server, testPlugin, 0x22, response) && (0x00 == response.data[1]);
+		// Each unassigned function gets one removal (ISO 11783-6 J.5 step 9)
+		bool removalsAnswered = true;
+		for (std::size_t i = 0; i < server->get_auxiliary_assignments().size(); i++)
+		{
+			removal.clear();
+			removalsAnswered = removalsAnswered && read_assignment_command(removal);
+			receive_assignment_response(removal.size() > 12 ? static_cast<std::uint16_t>(removal[12] | (removal[13] << 8)) : NULL_OBJECT_ID);
+		}
+		return accepted && removalsAnswered;
+	}
+
+	/// @brief Answers the enable and assignment commands for the input
+	bool answer_assignment_of_the_input(std::vector<std::uint8_t> &assignmentCommand)
+	{
+		CANMessageFrame enableCommand = {};
+		const bool enabled = read_command(inputUnit, 0x25, enableCommand);
+
+		receive_status_enable_response(INPUT_OBJECT_ID, true);
+		const bool assigned = read_assignment_command(assignmentCommand);
+		receive_assignment_response(FUNCTION_OBJECT_ID);
+		run_server_update();
+		return enabled && assigned;
+	}
+
+	VirtualCANPlugin testPlugin;
+	std::shared_ptr<InternalControlFunction> serverCF;
+	std::shared_ptr<ControlFunction> implement;
+	std::shared_ptr<ControlFunction> inputUnit;
+	std::unique_ptr<DerivedTestVTServer> server;
+	EventCallbackHandle eventHandle;
+	std::vector<std::pair<VirtualTerminalServer::AuxiliaryAssignment, VirtualTerminalServer::AuxiliaryAssignmentEvent>> events;
+};
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, AuxiliaryInputMaintenanceMessageIsStored)
+{
+	ASSERT_TRUE(start(0x52, 0xC3, 0xC4));
+	const auto inputUnitWorkingSet = get_working_set(inputUnit);
+	ASSERT_NE(nullptr, inputUnitWorkingSet);
+	EXPECT_EQ(MODEL_IDENTIFICATION_CODE, inputUnitWorkingSet->get_auxiliary_input_model_identification_code());
+	EXPECT_TRUE(inputUnitWorkingSet->get_is_auxiliary_input_ready());
+
+	receive_auxiliary_input_maintenance(MODEL_IDENTIFICATION_CODE + 1, false);
+	EXPECT_EQ(MODEL_IDENTIFICATION_CODE + 1, inputUnitWorkingSet->get_auxiliary_input_model_identification_code());
+	EXPECT_FALSE(inputUnitWorkingSet->get_is_auxiliary_input_ready());
+
+	const auto implementWorkingSet = get_working_set(implement);
+	ASSERT_NE(nullptr, implementWorkingSet);
+	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::NO_MODEL_IDENTIFICATION_CODE, implementWorkingSet->get_auxiliary_input_model_identification_code());
+	EXPECT_FALSE(implementWorkingSet->get_is_auxiliary_input_ready());
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentIsAcceptedWhenItsObjectsExist)
+{
+	CANMessageFrame response = {};
+	ASSERT_TRUE(start(0x4B, 0xC5, 0xC6));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+
+	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_EQ(0xFF, response.data[2]);
+	EXPECT_EQ(0xFF, response.data[3]);
+	EXPECT_EQ(0xFF, response.data[4]);
+	EXPECT_EQ(0xFF, response.data[7]);
+
+	const auto implementWorkingSet = get_working_set(implement);
+	ASSERT_NE(nullptr, implementWorkingSet);
+	EXPECT_TRUE(implementWorkingSet->get_was_preferred_assignment_received());
+	const auto assignments = implementWorkingSet->get_preferred_auxiliary_assignments();
+	ASSERT_EQ(1U, assignments.size());
+	EXPECT_EQ(inputUnit->get_NAME().get_full_name(), assignments.front().inputUnitName);
+	EXPECT_EQ(MODEL_IDENTIFICATION_CODE, assignments.front().inputUnitModelIdentificationCode);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, assignments.front().functionObjectID);
+	EXPECT_EQ(INPUT_OBJECT_ID, assignments.front().inputObjectID);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsAnInputUnitThatIsNotOnTheNetwork)
+{
+	CANMessageFrame response = {};
+	ASSERT_TRUE(start(0x4C, 0xC7, 0xC8));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(0xA00081000000ABCDULL, MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, INPUT_OBJECT_ID } }), response));
+
+	EXPECT_EQ(0x01, response.data[1]);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, response.data[2] | (response.data[3] << 8));
+	EXPECT_FALSE(get_working_set(implement)->get_was_preferred_assignment_received());
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsADifferentModelIdentificationCode)
+{
+	CANMessageFrame response = {};
+	ASSERT_TRUE(start(0x4D, 0xC9, 0xCA));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE + 1, { { FUNCTION_OBJECT_ID, INPUT_OBJECT_ID } }), response));
+
+	EXPECT_EQ(0x01, response.data[1]);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, response.data[2] | (response.data[3] << 8));
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsTheInputsOfAnInputUnitThatIsNotReady)
+{
+	CANMessageFrame response = {};
+	ASSERT_TRUE(start(0x4E, 0xCB, 0xCC));
+	receive_auxiliary_input_maintenance(MODEL_IDENTIFICATION_CODE, false);
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+
+	EXPECT_EQ(0x04, response.data[1]);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, response.data[2] | (response.data[3] << 8));
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsObjectsThatAreNotAuxiliaryObjects)
+{
+	CANMessageFrame missingFunction = {};
+	CANMessageFrame missingInput = {};
+	ASSERT_TRUE(start(0x4F, 0xCD, 0xCE));
+	// Object 0 is the Working Set object, not an auxiliary object
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { 0, INPUT_OBJECT_ID } }), missingFunction));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, 0 } }), missingInput));
+
+	EXPECT_EQ(0x02, missingFunction.data[1]);
+	EXPECT_EQ(0x00, missingFunction.data[2]);
+	EXPECT_EQ(0x00, missingFunction.data[3]);
+	EXPECT_EQ(0x04, missingInput.data[1]);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, missingInput.data[2] | (missingInput.data[3] << 8));
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsADuplicateFunction)
+{
+	CANMessageFrame response = {};
+	ASSERT_TRUE(start(0x50, 0xCF, 0xD0));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, INPUT_OBJECT_ID }, { FUNCTION_OBJECT_ID, INPUT_OBJECT_ID } }), response));
+
+	EXPECT_EQ(0x08, response.data[1]);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, response.data[2] | (response.data[3] << 8));
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentReportsACommandThatEndsTooEarly)
+{
+	CANMessageFrame response = {};
+	ASSERT_TRUE(start(0x53, 0xD1, 0xD2));
+	auto command = preferred_assignment_of_the_input();
+	// Three assignments do not fit the 24 bytes the command is padded to
+	command[12] = 3;
+	ASSERT_TRUE(send_preferred_assignment(command, response));
+
+	EXPECT_NE(0x00, response.data[1] & 0x10);
+	EXPECT_FALSE(get_working_set(implement)->get_was_preferred_assignment_received());
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, RejectedPreferredAssignmentKeepsTheLastValidOne)
+{
+	CANMessageFrame accepted = {};
+	CANMessageFrame rejected = {};
+	ASSERT_TRUE(start(0x54, 0xD3, 0xD4));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), accepted));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_command(inputUnit->get_NAME().get_full_name(), MODEL_IDENTIFICATION_CODE, { { FUNCTION_OBJECT_ID, 0 } }), rejected));
+
+	EXPECT_EQ(0x00, accepted.data[1]);
+	EXPECT_EQ(0x04, rejected.data[1]);
+	const auto assignments = get_working_set(implement)->get_preferred_auxiliary_assignments();
+	ASSERT_EQ(1U, assignments.size());
+	EXPECT_EQ(INPUT_OBJECT_ID, assignments.front().inputObjectID);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, DeletingTheObjectPoolClearsThePreferredAssignment)
+{
+	CANMessageFrame accepted = {};
+	CANMessageFrame deleted = {};
+	ASSERT_TRUE(start(0x55, 0xD5, 0xD6));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), accepted));
+	testPlugin.clear_queue();
+	receive_from_client(serverCF, implement, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0xB2, deleted));
+
+	const auto implementWorkingSet = get_working_set(implement);
+	EXPECT_FALSE(implementWorkingSet->get_was_preferred_assignment_received());
+	EXPECT_TRUE(implementWorkingSet->get_preferred_auxiliary_assignments().empty());
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentEnablesTheInputThenAssignsTheFunction)
+{
+	CANMessageFrame response = {};
+	CANMessageFrame enableCommand = {};
+	std::vector<std::uint8_t> assignmentCommand;
+	ASSERT_TRUE(start(0x56, 0xD7, 0xD8));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+	ASSERT_TRUE(read_command(inputUnit, 0x25, enableCommand));
+	receive_status_enable_response(INPUT_OBJECT_ID, true);
+	ASSERT_TRUE(read_assignment_command(assignmentCommand));
+	receive_assignment_response(FUNCTION_OBJECT_ID);
+	run_server_update();
+
+	EXPECT_EQ(INPUT_OBJECT_ID, enableCommand.data[1] | (enableCommand.data[2] << 8));
+	EXPECT_EQ(0x01, enableCommand.data[3]);
+	ASSERT_EQ(16U, assignmentCommand.size());
+	for (std::uint8_t i = 0; i < 8; i++)
+	{
+		EXPECT_EQ(static_cast<std::uint8_t>(inputUnit->get_NAME().get_full_name() >> (8 * i)), assignmentCommand[1 + i]);
+	}
+	// Not stored as preferred, as it comes from the Preferred Assignment (ISO 11783-6 J.5 step 8)
+	EXPECT_EQ(0x80 | BOOLEAN_NON_LATCHING, assignmentCommand[9]);
+	EXPECT_EQ(INPUT_OBJECT_ID, assignmentCommand[10] | (assignmentCommand[11] << 8));
+	EXPECT_EQ(FUNCTION_OBJECT_ID, assignmentCommand[12] | (assignmentCommand[13] << 8));
+	EXPECT_EQ(0xFF, assignmentCommand[14]);
+	EXPECT_EQ(0xFF, assignmentCommand[15]);
+
+	const auto assignments = server->get_auxiliary_assignments();
+	ASSERT_EQ(1U, assignments.size());
+	EXPECT_EQ(get_working_set(inputUnit), assignments.front().inputWorkingSet);
+	EXPECT_EQ(INPUT_OBJECT_ID, assignments.front().inputObjectID);
+	EXPECT_TRUE(assignments.front().isAcknowledged);
+	EXPECT_FALSE(assignments.front().isMadeByOperator);
+	ASSERT_EQ(1U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Assigned, events.front().second);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, FunctionWithoutAPreferredAssignmentIsUnassignedOnce)
+{
+	std::vector<std::uint8_t> removal;
+	std::vector<std::uint8_t> repeatedRemoval;
+	ASSERT_TRUE(start(0x57, 0xD9, 0xDA));
+	testPlugin.clear_queue();
+	receive_from_client(serverCF, implement, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(read_assignment_command(removal));
+	receive_assignment_response(FUNCTION_OBJECT_ID);
+	run_server_update();
+	// The same command again changes nothing, so nothing is sent (ISO 11783-6 J.5 footnote 10)
+	testPlugin.clear_queue();
+	receive_from_client(serverCF, implement, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool isRemovedAgain = read_assignment_command(repeatedRemoval);
+
+	ASSERT_EQ(16U, removal.size());
+	for (std::uint8_t i = 1; i < 9; i++)
+	{
+		EXPECT_EQ(0xFF, removal[i]);
+	}
+	EXPECT_EQ(0x80 | 0x1F, removal[9]);
+	EXPECT_EQ(0xFF, removal[10]);
+	EXPECT_EQ(0xFF, removal[11]);
+	EXPECT_EQ(FUNCTION_OBJECT_ID, removal[12] | (removal[13] << 8));
+	EXPECT_FALSE(isRemovedAgain);
+	ASSERT_EQ(1U, server->get_auxiliary_assignments().size());
+	EXPECT_TRUE(server->get_auxiliary_assignments().front().isAcknowledged);
+	EXPECT_EQ(nullptr, server->get_auxiliary_assignments().front().inputWorkingSet);
+	EXPECT_TRUE(events.empty());
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, OperatorAssignmentIsStoredAsThePreferredAssignment)
+{
+	std::vector<std::uint8_t> assignmentCommand;
+	std::vector<std::uint8_t> removal;
+	ASSERT_TRUE(start(0x58, 0xDB, 0xDC));
+	// No manual assignment before the Preferred Assignment command (ISO 11783-6 J.6 rule 1)
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentResult::NoPreferredAssignment, server->assign_auxiliary_function(get_working_set(implement), FUNCTION_OBJECT_ID, get_working_set(inputUnit), INPUT_OBJECT_ID));
+	ASSERT_TRUE(send_empty_preferred_assignment());
+	ASSERT_EQ(VirtualTerminalServer::AuxiliaryAssignmentResult::Allowed, server->assign_auxiliary_function(get_working_set(implement), FUNCTION_OBJECT_ID, get_working_set(inputUnit), INPUT_OBJECT_ID));
+	ASSERT_TRUE(answer_assignment_of_the_input(assignmentCommand));
+	ASSERT_EQ(VirtualTerminalServer::AuxiliaryAssignmentResult::Allowed, server->unassign_auxiliary_function(get_working_set(implement), FUNCTION_OBJECT_ID));
+	ASSERT_TRUE(read_assignment_command(removal));
+	receive_assignment_response(FUNCTION_OBJECT_ID);
+	run_server_update();
+
+	EXPECT_EQ(BOOLEAN_NON_LATCHING, assignmentCommand.at(9));
+	EXPECT_EQ(0x1F, removal.at(9));
+	ASSERT_EQ(2U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Assigned, events.front().second);
+	EXPECT_TRUE(events.front().first.isMadeByOperator);
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Unassigned, events.back().second);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, RejectedAssignmentDisablesTheInput)
+{
+	CANMessageFrame enableCommand = {};
+	CANMessageFrame disableCommand = {};
+	std::vector<std::uint8_t> assignmentCommand;
+	ASSERT_TRUE(start(0x59, 0xDD, 0xDE));
+	ASSERT_TRUE(send_empty_preferred_assignment());
+	ASSERT_EQ(VirtualTerminalServer::AuxiliaryAssignmentResult::Allowed, server->assign_auxiliary_function(get_working_set(implement), FUNCTION_OBJECT_ID, get_working_set(inputUnit), INPUT_OBJECT_ID));
+	ASSERT_TRUE(read_command(inputUnit, 0x25, enableCommand));
+	receive_status_enable_response(INPUT_OBJECT_ID, true);
+	ASSERT_TRUE(read_assignment_command(assignmentCommand));
+	receive_assignment_response(FUNCTION_OBJECT_ID, 0x01);
+	ASSERT_TRUE(read_command(inputUnit, 0x25, disableCommand));
+
+	EXPECT_EQ(0x00, disableCommand.data[3]);
+	EXPECT_TRUE(server->get_auxiliary_assignments().front().hasFailed);
+	ASSERT_EQ(1U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Rejected, events.front().second);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, UnansweredAssignmentIsSentThreeTimes)
+{
+	CANMessageFrame enableCommand = {};
+	CANMessageFrame frame = {};
+	std::uint_fast8_t requestsToSend = 0;
+	ASSERT_TRUE(start(0x5A, 0xE0, 0xE1));
+	ASSERT_TRUE(send_empty_preferred_assignment());
+	ASSERT_EQ(VirtualTerminalServer::AuxiliaryAssignmentResult::Allowed, server->assign_auxiliary_function(get_working_set(implement), FUNCTION_OBJECT_ID, get_working_set(inputUnit), INPUT_OBJECT_ID));
+	ASSERT_TRUE(read_command(inputUnit, 0x25, enableCommand));
+	receive_status_enable_response(INPUT_OBJECT_ID, true);
+	testPlugin.clear_queue();
+	advance_time(7000);
+	while (testPlugin.read_frame(frame, 10))
+	{
+		if ((0xEC == get_pdu_format(frame)) && (0x10 == frame.data[0]) && (implement->get_address() == static_cast<std::uint8_t>(frame.identifier >> 8)))
+		{
+			requestsToSend++;
+		}
+	}
+
+	EXPECT_EQ(3U, requestsToSend);
+	EXPECT_TRUE(server->get_auxiliary_assignments().front().hasFailed);
+	ASSERT_EQ(1U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::NotAvailable, events.front().second);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, InputUnitWithoutMaintenanceMessagesLosesItsAssignments)
+{
+	CANMessageFrame response = {};
+	std::vector<std::uint8_t> assignmentCommand;
+	std::vector<std::uint8_t> removal;
+	ASSERT_TRUE(start(0x5B, 0xE2, 0xE3));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+	ASSERT_TRUE(answer_assignment_of_the_input(assignmentCommand));
+	events.clear();
+	advance_time(400, false);
+	const bool isReadyAfterSilence = get_working_set(inputUnit)->get_is_auxiliary_input_ready();
+	ASSERT_TRUE(read_assignment_command(removal));
+
+	EXPECT_FALSE(isReadyAfterSilence);
+	// Not stored as preferred, as the input unit went away (ISO 11783-6 J.7.10)
+	EXPECT_EQ(0x80 | 0x1F, removal.at(9));
+	EXPECT_EQ(FUNCTION_OBJECT_ID, removal.at(12) | (removal.at(13) << 8));
+	ASSERT_EQ(1U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Removed, events.front().second);
+	EXPECT_EQ(INPUT_OBJECT_ID, events.front().first.inputObjectID);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, DeletingTheObjectPoolOfTheInputUnitRemovesItsAssignments)
+{
+	CANMessageFrame response = {};
+	CANMessageFrame deleted = {};
+	std::vector<std::uint8_t> assignmentCommand;
+	std::vector<std::uint8_t> removal;
+	ASSERT_TRUE(start(0x5C, 0xE4, 0xE5));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+	ASSERT_TRUE(answer_assignment_of_the_input(assignmentCommand));
+	events.clear();
+	testPlugin.clear_queue();
+	receive_from_client(serverCF, inputUnit, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0xB2, deleted));
+	ASSERT_TRUE(read_assignment_command(removal));
+
+	EXPECT_EQ(0x80 | 0x1F, removal.at(9));
+	ASSERT_EQ(1U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Removed, events.front().second);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, ConflictingPreferredAssignmentIsRemoved)
+{
+	CANMessageFrame response = {};
+	std::vector<std::uint8_t> removal;
+	// A latching function and a non-latching input do not match (ISO 11783-6 J.5 step 6 I)
+	ASSERT_TRUE(start(0x5D, 0xE6, 0xE7, { { FUNCTION_OBJECT_ID, BOOLEAN_LATCHING } }));
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+	ASSERT_TRUE(read_assignment_command(removal));
+	receive_assignment_response(FUNCTION_OBJECT_ID);
+	run_server_update();
+
+	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_EQ(0x80 | 0x1F, removal.at(9));
+	ASSERT_EQ(1U, events.size());
+	EXPECT_EQ(VirtualTerminalServer::AuxiliaryAssignmentEvent::Removed, events.front().second);
+	EXPECT_EQ(get_working_set(inputUnit), events.front().first.inputWorkingSet);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, CheckAuxiliaryAssignmentAppliesTheAssignmentRules)
+{
+	using Result = VirtualTerminalServer::AuxiliaryAssignmentResult;
+	ASSERT_TRUE(start(0x5E,
+	                  0xE8,
+	                  0xE9,
+	                  { { 20, BOOLEAN_NON_LATCHING }, { 21, BOOLEAN_LATCHING }, { 22, BOOLEAN_NON_LATCHING | CRITICAL_CONTROL }, { 23, BOOLEAN_NON_LATCHING | ASSIGNMENT_RESTRICTION }, { 24, BOOLEAN_NON_LATCHING | SINGLE_ASSIGNMENT } },
+	                  { { 10, BOOLEAN_NON_LATCHING }, { 11, BOOLEAN_NON_LATCHING | CRITICAL_CONTROL } }));
+	ASSERT_TRUE(send_empty_preferred_assignment());
+	const auto functions = get_working_set(implement);
+	const auto inputs = get_working_set(inputUnit);
+
+	EXPECT_EQ(Result::Allowed, server->check_auxiliary_assignment(functions, 20, inputs, 10));
+	EXPECT_EQ(Result::InvalidFunction, server->check_auxiliary_assignment(functions, 0, inputs, 10));
+	EXPECT_EQ(Result::InvalidInput, server->check_auxiliary_assignment(functions, 20, inputs, 0));
+	EXPECT_EQ(Result::TypeMismatch, server->check_auxiliary_assignment(functions, 21, inputs, 10));
+	EXPECT_EQ(Result::CriticalControl, server->check_auxiliary_assignment(functions, 22, inputs, 10));
+	EXPECT_EQ(Result::Allowed, server->check_auxiliary_assignment(functions, 22, inputs, 11));
+	EXPECT_EQ(Result::AssignmentRestriction, server->check_auxiliary_assignment(functions, 23, inputs, 10));
+	ASSERT_EQ(Result::Allowed, server->assign_auxiliary_function(functions, 20, inputs, 10));
+	EXPECT_EQ(Result::SingleAssignment, server->check_auxiliary_assignment(functions, 24, inputs, 10));
+	EXPECT_EQ(Result::Allowed, server->check_auxiliary_assignment(functions, 24, inputs, 11));
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 {
 	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
