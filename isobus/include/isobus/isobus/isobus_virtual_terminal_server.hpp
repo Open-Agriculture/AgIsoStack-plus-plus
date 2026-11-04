@@ -340,6 +340,26 @@ namespace isobus
 		/// @param[in] workingSet The working set whose object pool was deleted
 		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
+		/// @brief This function is called when a client sends a valid Control Audio Signal command
+		/// @details Override it to play the tone. The server answers the command as successful in any case.
+		/// An activation count of 0 means the client wants the current audio signal to stop.
+		/// @param[in] activations The number of times the tone shall be played, 0 to stop the current signal
+		/// @param[in] frequencyHz The tone frequency in Hz
+		/// @param[in] onTimeMs How long each tone is played, in ms
+		/// @param[in] offTimeMs The pause between two tones, in ms
+		/// @param[in] source The control function that sent the command
+		virtual void control_audio_signal(std::uint8_t activations,
+		                                  std::uint16_t frequencyHz,
+		                                  std::uint16_t onTimeMs,
+		                                  std::uint16_t offTimeMs,
+		                                  std::shared_ptr<ControlFunction> source);
+
+		/// @brief This function is called when a client sends a Set Audio Volume command
+		/// @details Override it to apply the volume to subsequent audio signals. The server answers the command in any case.
+		/// @param[in] volumePercent The requested volume in percent, 0 to 100. A larger value in the command is passed on as 100.
+		/// @param[in] source The control function that sent the command
+		virtual void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source);
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events
