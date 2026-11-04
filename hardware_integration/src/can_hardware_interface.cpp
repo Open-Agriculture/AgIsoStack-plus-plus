@@ -21,7 +21,7 @@ namespace isobus
 	std::unique_ptr<std::thread> CANHardwareInterface::updateThread;
 	std::condition_variable CANHardwareInterface::updateThreadWakeupCondition;
 #endif
-	std::uint32_t CANHardwareInterface::periodicUpdateInterval = PERIODIC_UPDATE_INTERVAL;
+	std::atomic<std::uint32_t> CANHardwareInterface::periodicUpdateInterval = { PERIODIC_UPDATE_INTERVAL };
 	std::uint32_t CANHardwareInterface::lastUpdateTimestamp;
 
 	EventDispatcher<const CANMessageFrame &> CANHardwareInterface::frameReceivedEventDispatcher;
@@ -470,7 +470,7 @@ namespace isobus
 		while (started)
 		{
 			std::unique_lock<std::mutex> threadLock(updateMutex);
-			updateThreadWakeupCondition.wait_for(threadLock, std::chrono::milliseconds(periodicUpdateInterval)); // Update with at least the periodic interval
+			updateThreadWakeupCondition.wait_for(threadLock, std::chrono::milliseconds(periodicUpdateInterval.load())); // Update with at least the periodic interval
 			update();
 		}
 	}

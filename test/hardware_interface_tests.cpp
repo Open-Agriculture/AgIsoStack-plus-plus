@@ -62,7 +62,7 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	fakeFrame.data[0] = 0x01;
 	fakeFrame.channel = 0;
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> receivedCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -137,7 +137,7 @@ TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
 	CANMessageFrame receiveFrame;
 	memset(&receiveFrame, 0, sizeof(CANMessageFrame));
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> sendCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -161,7 +161,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateEventListener)
 {
 	CANHardwareInterface::start();
 
-	int updateCount = 0;
+	std::atomic_int updateCount = { 0 };
 	std::function<void()> periodicCallback = [&updateCount]() {
 		updateCount += 1;
 	};

@@ -204,6 +204,8 @@ TEST_F(CoreTest, CommandedAddress)
 
 TEST_F(CoreTest, InvalidatingControlFunctions)
 {
+	wasTestStateCallbackHit = false;
+	testControlFunctionState = ControlFunctionState::Offline;
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start(false);
@@ -556,6 +558,52 @@ TEST_F(CoreTest, PartnerCreatedAfterItsDeviceAnsweredARequestSurvivesThePrune)
 	CANNetworkManager::CANNetwork.update();
 	EXPECT_TRUE(partner->get_address_valid());
 	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, CLAIMED_ADDRESS));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
+TEST_F(CoreTest, PartnerCreatedWhileTwoMatchingDevicesAreOfflineGetsTheOneThatReturns)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t FIRST_ADDRESS = 0x9E;
+	constexpr std::uint8_t SECOND_ADDRESS = 0x9F;
+	constexpr std::uint8_t DEVICE_CLASS_INSTANCE = 9; // No other test uses it, so only these two devices match the partner
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	NAME firstName = test_helpers::find_available_name(TEST_CHANNEL);
+	firstName.set_device_class_instance(DEVICE_CLASS_INSTANCE);
+	NAME secondName = firstName;
+	secondName.set_identity_number(firstName.get_identity_number() + 1);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, FIRST_ADDRESS, firstName));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+
+	// Neither device answers two requests for address claim in a row, so both go offline
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	for (std::uint8_t i = 0; i < 2; i++)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	}
+	ASSERT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, FIRST_ADDRESS));
+	ASSERT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+
+	const std::vector<NAMEFilter> nameFilters{
+		NAMEFilter(NAME::NAMEParameters::ManufacturerCode, firstName.get_manufacturer_code()),
+		NAMEFilter(NAME::NAMEParameters::FunctionCode, firstName.get_function_code()),
+		NAMEFilter(NAME::NAMEParameters::DeviceClassInstance, DEVICE_CLASS_INSTANCE)
+	};
+	auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(TEST_CHANNEL, nameFilters);
+	CANNetworkManager::CANNetwork.update();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(secondName, partner->get_NAME());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
 }

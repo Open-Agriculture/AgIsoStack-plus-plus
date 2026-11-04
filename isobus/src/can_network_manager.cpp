@@ -922,17 +922,12 @@ namespace isobus
 		{
 			if (!partner->initialized)
 			{
-				// Remove any inactive CF that matches the partner's name
-				for (auto currentInactiveControlFunction = inactiveControlFunctions.begin(); currentInactiveControlFunction != inactiveControlFunctions.end(); currentInactiveControlFunction++)
-				{
-					if ((partner->check_matches_name((*currentInactiveControlFunction)->get_NAME())) &&
-					    (partner->get_can_port() == (*currentInactiveControlFunction)->get_can_port()) &&
-					    (ControlFunction::Type::External == (*currentInactiveControlFunction)->get_type()))
-					{
-						inactiveControlFunctions.erase(currentInactiveControlFunction);
-						break;
-					}
-				}
+				// Remove every inactive CF that matches, as an inactive CF is restored ahead of a partner when it claims again
+				inactiveControlFunctions.remove_if([&partner](const std::shared_ptr<ControlFunction> &inactiveControlFunction) {
+					return (partner->check_matches_name(inactiveControlFunction->get_NAME())) &&
+					  (partner->get_can_port() == inactiveControlFunction->get_can_port()) &&
+					  (ControlFunction::Type::External == inactiveControlFunction->get_type());
+				});
 
 				for (const auto &currentActiveControlFunction : controlFunctionTable[partner->get_can_port()])
 				{
