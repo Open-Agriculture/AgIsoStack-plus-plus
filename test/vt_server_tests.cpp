@@ -518,6 +518,45 @@ TEST_F(VirtualTerminalServerMessagingTest, NackForUnmanagedWorkingSetIsSentToThe
 	CANHardwareInterface::stop();
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, BroadcastFromUnmanagedClientIsNotNacked)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x51, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCB, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	testPlugin.clear_queue();
+
+	// An input unit broadcasts its Auxiliary Input Type 2 Maintenance message before it connects (ISO 11783-6 J.7.10).
+	// A NACK makes it drop the connection it is starting.
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(3,
+	                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+	                                                                                                             client,
+	                                                                                                             { 0x23, 0x34, 0x12, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
+
+	CANMessageFrame frame = {};
+	bool foundNack = false;
+	while (testPlugin.read_frame(frame, 10))
+	{
+		foundNack = foundNack || ((0xE8 == get_pdu_format(frame)) && (0x01 == frame.data[0]));
+	}
+	EXPECT_FALSE(foundNack);
+
+	// The same client is still NACKed for a message sent to the VT
+	EXPECT_TRUE(is_nacked(internalECU, client, testPlugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+
+	CANHardwareInterface::stop();
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolFailsToParse)
 {
 	VirtualCANPlugin testPlugin;
