@@ -170,7 +170,7 @@ namespace isobus
 			                                                                     nullptr);
 
 			// Request the maximum number of packets per DPO via the CTS message
-			newSession->set_cts_number_of_packet_limit(configuration->get_number_of_packets_per_dpo_message());
+			newSession->set_cts_number_of_packet_limit(configuration->get_number_of_packets_per_etp_cts_message());
 
 			newSession->set_state(StateMachineState::SendClearToSend);
 			{
@@ -878,7 +878,7 @@ namespace isobus
 		}
 		if (packetsThisSegment > configuration->get_number_of_packets_per_dpo_message())
 		{
-			LOG_DEBUG("[TP]: Received Request To Send (RTS) with a CTS packet count of %hu, which is greater than the configured maximum of %hu, using the configured maximum instead.",
+			LOG_DEBUG("[ETP]: Received Clear To Send (CTS) allows %hu packets, which is greater than the configured maximum of %hu per DPO, using the configured maximum instead.",
 			          packetsThisSegment,
 			          configuration->get_number_of_packets_per_dpo_message());
 			packetsThisSegment = configuration->get_number_of_packets_per_dpo_message();
