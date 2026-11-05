@@ -14,6 +14,10 @@
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #endif
 
+#ifdef ISOBUS_WINDOWSCANDLELIGHT_AVAILABLE
+#include "isobus/hardware_integration/candlelight_windows_plugin.hpp"
+#endif
+
 #ifdef ISOBUS_WINDOWSPCANBASIC_AVAILABLE
 #include "isobus/hardware_integration/pcan_basic_windows_plugin.hpp"
 #endif
