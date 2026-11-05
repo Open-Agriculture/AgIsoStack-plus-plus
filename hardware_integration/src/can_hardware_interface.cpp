@@ -138,9 +138,7 @@ namespace isobus
 			{
 				if (receivedMessagesQueue.is_full())
 				{
-					// Wait for the update thread to process the queued frames. Don't yield: on FreeRTOS that only
-					// lets tasks of the same or higher priority run, so retrying in a loop starves the idle task
-					// and trips the task watchdog.
+					// Let the update thread drain the queue. Yielding here starves lower priority FreeRTOS tasks.
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}
 				else if (!receive_can_frame())

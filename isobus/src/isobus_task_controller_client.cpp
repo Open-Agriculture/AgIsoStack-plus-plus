@@ -26,9 +26,7 @@
 namespace isobus
 {
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-	/// @brief The client whose worker thread is running on this thread, set by the worker when it starts.
-	/// @details Not `std::this_thread::get_id()`: on ESP-IDF that is `pthread_self()`, which aborts when it is
-	/// called from a FreeRTOS task that was not started as a pthread, such as `app_main`.
+	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
 	static thread_local const TaskControllerClient *workerThreadOwner = nullptr;
 #endif
 
