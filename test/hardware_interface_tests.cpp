@@ -159,6 +159,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 
 	CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
 
+	const std::uint32_t originalInterval = CANHardwareInterface::get_periodic_update_interval();
 	CANHardwareInterface::set_periodic_update_interval(10);
 	EXPECT_EQ(CANHardwareInterface::get_periodic_update_interval(), 10);
 
@@ -177,6 +178,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+	CANHardwareInterface::set_periodic_update_interval(originalInterval);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, StopSetsStartedFalseInNonThreadingMode)
