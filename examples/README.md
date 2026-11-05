@@ -11,6 +11,30 @@ cmake -S . -B build -DBUILD_EXAMPLES=ON
 cmake --build build
 ```
 
+To install the built examples along with the library, run:
+
+```bash
+cmake --install build --prefix install
+```
+
+The executables and their required object pool files are installed in `bin`
+under the installation prefix. Set `CMAKE_INSTALL_BINDIR` when configuring to
+choose a different relative directory, for example `libexec/agisostack-examples`,
+to keep the optional examples out of a shared `bin`. The virtual terminal and seeder examples load
+their object pool files from the current working directory, so run those
+examples from the installed executable directory. CAN examples still require
+the appropriate CAN driver and hardware setup.
+
+Packaging tools can stage the installation using `DESTDIR`:
+
+```bash
+DESTDIR="$PWD/staging" cmake --install build --prefix /usr
+```
+
+Examples are only installed by the top-level project when `BUILD_EXAMPLES=ON`.
+Each example defines its own installation rules, so the same rules also apply
+when that example is built as a standalone project.
+
 ## Building a single example
 
 Another approach, more akin to how most consumers would use the library, is to install the AgIsoStack first.
@@ -36,6 +60,18 @@ cd examples/diagnostic_protocol
 cmake -S . -B build -DCMAKE_PREFIX_PATH=../../install
 cmake --build build
 ```
+
+The standalone example can also be installed with its own required object pool,
+if any:
+
+```bash
+cmake --install build --prefix "$PWD/example-install"
+```
+
+Its destination defaults to `bin`, or the relative `CMAKE_INSTALL_BINDIR` selected
+when configuring that standalone build. Run pool-loading examples from that
+installed directory, just as for the top-level install. `--prefix` and `DESTDIR`
+can be used with either build method.
 
 Then, run the example. The name of the executable will be different depending on which example you built.
 
