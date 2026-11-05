@@ -1705,7 +1705,7 @@ namespace isobus
 		/// @returns true if all object pools scaled with no error
 		bool scale_object_pools();
 
-		/// @brief Finds the objects in a pool that are drawn on soft keys, so they can be scaled like the keys
+		/// @brief Finds the objects in the working set's pools that are drawn on soft keys, so they can be scaled like the keys
 		/// @details A Key is sized by the soft key designator, but the objects it shows (label strings,
 		/// numbers, containers of those) are separate objects in the pool, and so are the fonts they use.
 		/// Scaled with the data mask factor they outgrow the key whenever the data mask grows more than
@@ -1713,13 +1713,18 @@ namespace isobus
 		/// through Object Pointers (to the object a pointer holds in the pool as uploaded). It does not
 		/// follow Output Lists, Animations or Working Set objects on a Key.
 		///
-		/// Fonts that are also used by an output or input string or number outside the keys are left
-		/// out, so the data mask is not affected. No other object gets that rule: an object that is
-		/// shown both on a Key and outside the keys, such as a Picture Graphic used as a key icon and
-		/// on a data mask, is returned, and so is scaled with the soft key factor everywhere.
-		/// @param[in] pool The object pool to search
+		/// All pools are searched together, because they are uploaded as one working set: a Key in one
+		/// pool may show an object from another, and a font may be used by a Key in one pool and by a
+		/// data mask in another. Pass every pool, including ones that are not auto-scaled.
+		///
+		/// Fonts that are also used by an output or input string or number outside the keys, in any
+		/// pool, are left out, so the data mask is not affected. No other object gets that rule: an
+		/// object that is shown both on a Key and outside the keys, such as a Picture Graphic used as a
+		/// key icon and on a data mask, is returned, and so is scaled with the soft key factor everywhere.
+		/// IDs that are not in any pool, such as the null object ID, are never returned.
+		/// @param[in] pools The object pools of the working set to search
 		/// @returns The sorted IDs of the objects shown on keys, and of the fonts only those objects use
-		static std::vector<std::uint16_t> get_soft_key_scaled_object_ids(std::vector<std::uint8_t> &pool);
+		static std::vector<std::uint16_t> get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools);
 
 		/// @brief Returns if the specified object type can be scaled
 		/// @param[in] type The object type to check

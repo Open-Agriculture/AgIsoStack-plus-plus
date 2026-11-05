@@ -4058,7 +4058,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(std::vector<std::uint8_t> &pool)
+	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools)
 	{
 		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
 		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
@@ -4066,8 +4066,20 @@ namespace isobus
 		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
 		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
 
-		auto read_id = [&pool](std::size_t offset) {
-			return static_cast<std::uint16_t>(pool[offset] | (pool[offset + 1] << 8));
+		/// Where an object is: the pool holding it, and its offset in that pool
+		struct ObjectLocation
+		{
+			std::vector<std::uint8_t> *pool;
+			std::size_t offset;
+			std::uint32_t size;
+		};
+
+		auto read_id = [](const ObjectLocation &object, std::size_t relativeOffset) {
+			const std::vector<std::uint8_t> &pool = *object.pool;
+			return static_cast<std::uint16_t>(pool[object.offset + relativeOffset] | (pool[object.offset + relativeOffset + 1] << 8));
+		};
+		auto type_of = [](const ObjectLocation &object) {
+			return static_cast<VirtualTerminalObjectType>((*object.pool)[object.offset + 2]);
 		};
 		auto uses_font = [](VirtualTerminalObjectType type) {
 			return (VirtualTerminalObjectType::OutputString == type) ||
@@ -4076,35 +4088,44 @@ namespace isobus
 			  (VirtualTerminalObjectType::InputNumber == type);
 		};
 
-		// Index the pool by object ID, and start from the children of every key
-		std::map<std::uint16_t, std::size_t> objectOffsets;
+		// Index every pool of the working set by object ID, and start from the children of every key.
+		// A key in one pool may show objects from another, so the search has to see all of them.
+		std::map<std::uint16_t, ObjectLocation> objects;
 		std::vector<std::uint16_t> pending;
-		std::size_t offset = 0;
 
-		while ((offset + 3) <= pool.size())
+		for (auto pool : pools)
 		{
-			const std::uint32_t objectSize = get_number_bytes_in_object(&pool[offset], static_cast<std::uint32_t>(pool.size() - offset));
-
-			if ((0 == objectSize) || ((offset + objectSize) > pool.size()))
+			if (nullptr == pool)
 			{
-				break;
+				continue;
 			}
-			objectOffsets[read_id(offset)] = offset;
+			std::size_t offset = 0;
 
-			if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(pool[offset + 2])) &&
-			    (objectSize > 5))
+			while ((offset + 3) <= pool->size())
 			{
-				for (std::size_t i = 0; i < pool[offset + 5]; i++)
-				{
-					const std::size_t childOffset = offset + KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+				const std::uint32_t objectSize = get_number_bytes_in_object(&(*pool)[offset], static_cast<std::uint32_t>(pool->size() - offset));
 
-					if ((childOffset + 2) <= (offset + objectSize))
+				if ((0 == objectSize) || ((offset + objectSize) > pool->size()))
+				{
+					break;
+				}
+				const ObjectLocation object{ pool, offset, objectSize };
+				objects.emplace(read_id(object, 0), object);
+
+				if ((VirtualTerminalObjectType::Key == type_of(object)) && (objectSize > 5))
+				{
+					for (std::size_t i = 0; i < (*pool)[offset + 5]; i++)
 					{
-						pending.push_back(read_id(childOffset));
+						const std::size_t childOffset = KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+						if ((childOffset + 2) <= objectSize)
+						{
+							pending.push_back(read_id(object, childOffset));
+						}
 					}
 				}
+				offset += objectSize;
 			}
-			offset += objectSize;
 		}
 
 		// Follow the key children down through containers and object pointers, collecting the fonts they use
@@ -4116,24 +4137,28 @@ namespace isobus
 			const std::uint16_t objectID = pending.back();
 			pending.pop_back();
 
-			auto location = objectOffsets.find(objectID);
-			if ((!shownOnKeys.insert(objectID).second) || (objectOffsets.end() == location))
+			auto location = objects.find(objectID);
+			if ((objects.end() == location) || (!shownOnKeys.insert(objectID).second))
 			{
+				// Not an object in any pool (such as the null ID), or already visited
 				continue;
 			}
-			const std::size_t objectOffset = location->second;
+			const ObjectLocation &object = location->second;
 
-			switch (static_cast<VirtualTerminalObjectType>(pool[objectOffset + 2]))
+			switch (type_of(object))
 			{
 				case VirtualTerminalObjectType::Container:
 				{
-					for (std::size_t i = 0; i < pool[objectOffset + 8]; i++)
+					if (object.size > 8)
 					{
-						const std::size_t childOffset = objectOffset + CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
-
-						if ((childOffset + 2) <= pool.size())
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + 8]; i++)
 						{
-							pending.push_back(read_id(childOffset));
+							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + 2) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
 						}
 					}
 				}
@@ -4141,14 +4166,20 @@ namespace isobus
 
 				case VirtualTerminalObjectType::ObjectPointer:
 				{
-					pending.push_back(read_id(objectOffset + OBJECT_POINTER_VALUE_OFFSET));
+					if ((OBJECT_POINTER_VALUE_OFFSET + 2) <= object.size)
+					{
+						pending.push_back(read_id(object, OBJECT_POINTER_VALUE_OFFSET));
+					}
 				}
 				break;
 
 				case VirtualTerminalObjectType::OutputString:
 				case VirtualTerminalObjectType::OutputNumber:
 				{
-					fontsOnKeys.insert(read_id(objectOffset + FONT_ATTRIBUTES_OFFSET));
+					if ((FONT_ATTRIBUTES_OFFSET + 2) <= object.size)
+					{
+						fontsOnKeys.insert(read_id(object, FONT_ATTRIBUTES_OFFSET));
+					}
 				}
 				break;
 
@@ -4157,19 +4188,37 @@ namespace isobus
 			}
 		}
 
-		// A font that is also used off the keys keeps the data mask factor
-		for (const auto &object : objectOffsets)
+		// A font that is also used off the keys, in any pool, keeps the data mask factor
+		for (const auto &entry : objects)
 		{
-			if (uses_font(static_cast<VirtualTerminalObjectType>(pool[object.second + 2])) &&
-			    (0 == shownOnKeys.count(object.first)))
+			const ObjectLocation &object = entry.second;
+
+			if (uses_font(type_of(object)) &&
+			    ((FONT_ATTRIBUTES_OFFSET + 2) <= object.size) &&
+			    (0 == shownOnKeys.count(entry.first)))
 			{
-				fontsOnKeys.erase(read_id(object.second + FONT_ATTRIBUTES_OFFSET));
+				const std::uint16_t fontID = read_id(object, FONT_ATTRIBUTES_OFFSET);
+
+				if (0 != fontsOnKeys.erase(fontID))
+				{
+					LOG_DEBUG("[VT]: Font attributes " + isobus::to_string(static_cast<int>(fontID)) +
+					          " are used on a soft key and by object " + isobus::to_string(static_cast<int>(entry.first)) +
+					          " outside the soft keys, so they keep the data mask scale factor");
+				}
 			}
 		}
 
+		// Only fonts that exist in a pool are reported
 		std::vector<std::uint16_t> retVal(shownOnKeys.begin(), shownOnKeys.end());
-		retVal.insert(retVal.end(), fontsOnKeys.begin(), fontsOnKeys.end());
+		for (const auto fontID : fontsOnKeys)
+		{
+			if (objects.end() != objects.find(fontID))
+			{
+				retVal.push_back(fontID);
+			}
+		}
 		std::sort(retVal.begin(), retVal.end());
+		retVal.erase(std::unique(retVal.begin(), retVal.end()), retVal.end());
 		return retVal;
 	}
 
@@ -4177,9 +4226,10 @@ namespace isobus
 	{
 		bool retVal = true;
 
+		// Step 1: Make a read/write copy of every pool, including the ones that are not auto-scaled,
+		// because the pools are uploaded as one working set and may reference each other's objects
 		for (auto &objectPool : objectPools)
 		{
-			// Step 1: Make a read/write copy of the pool
 			if (nullptr != objectPool.objectPoolDataPointer)
 			{
 				objectPool.scaledObjectPool.resize(objectPool.objectPoolSize);
@@ -4201,14 +4251,32 @@ namespace isobus
 
 				if (!retVal)
 				{
-					break;
+					return false;
 				}
 			}
+		}
 
-			// Step 2, Find the objects drawn on soft keys, which scale like the keys
-			const std::vector<std::uint16_t> softKeyObjectIDs = get_soft_key_scaled_object_ids(objectPool.scaledObjectPool);
+		// Step 2, Find the objects drawn on soft keys across the whole working set, which scale like the keys
+		std::vector<std::vector<std::uint8_t> *> allPools;
+		allPools.reserve(objectPools.size());
+		for (auto &objectPool : objectPools)
+		{
+			allPools.push_back(&objectPool.scaledObjectPool);
+		}
+		const std::vector<std::uint16_t> softKeyObjectIDs = get_soft_key_scaled_object_ids(allPools);
 
-			// Step 3, Parse the pool and resize each object as we iterate through it
+		// Step 3, Parse each auto-scaled pool and resize each object with that pool's factors
+		for (auto &objectPool : objectPools)
+		{
+			if ((0 == objectPool.autoScaleDataMaskOriginalDimension) ||
+			    (0 == objectPool.autoScaleSoftKeyDesignatorOriginalHeight))
+			{
+				// Not auto-scaled: the pool is uploaded as given, the copy was only needed for the search above
+				objectPool.scaledObjectPool.clear();
+				objectPool.scaledObjectPool.shrink_to_fit();
+				continue;
+			}
+
 			auto poolIterator = objectPool.scaledObjectPool.begin();
 
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
