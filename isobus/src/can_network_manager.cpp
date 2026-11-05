@@ -63,6 +63,11 @@ namespace isobus
 	{
 		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		// We need to unregister the control function from the interfaces managed by the network manager first.
+		if (nullptr != controlFunction->pgnRequestProtocol)
+		{
+			// Someone else may still hold the protocol, and the destructor's sweep only reaches listed ICFs
+			controlFunction->pgnRequestProtocol->unregister_from_network();
+		}
 		controlFunction->pgnRequestProtocol.reset();
 		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
 		internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
@@ -539,6 +544,15 @@ namespace isobus
 			extendedTransportProtocols.at(i).reset(new ExtendedTransportProtocolManager(send_frame_callback, receive_message_callback, &configuration));
 			fastPacketProtocol.at(i).reset(new FastPacketProtocol(send_frame_callback));
 			heartBeatInterfaces.at(i).reset(new HeartbeatInterface(send_frame_callback));
+		}
+	}
+
+	CANNetworkManager::~CANNetworkManager()
+	{
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+		for (const auto &internalControlFunction : internalControlFunctions)
+		{
+			internalControlFunction->pgnRequestProtocol->unregister_from_network();
 		}
 	}
 

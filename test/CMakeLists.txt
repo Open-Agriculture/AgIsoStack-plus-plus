@@ -70,12 +70,19 @@ set(TEST_SRC
     helpers/control_function_helpers.cpp
     helpers/messaging_helpers.cpp)
 
+if(CAN_STACK_DISABLE_THREADS)
+  # Most tests run on the VirtualCAN driver, which needs threads. Without
+  # threads, build the tests for the single-threaded code paths only.
+  set(TEST_SRC hardware_interface_single_thread_tests.cpp)
+  set(TEST_INCLUDE "")
+endif()
+
 add_executable(unit_tests ${TEST_SRC} ${TEST_INCLUDE})
 target_include_directories(
   unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../hardware_integration/src)
 set_target_properties(
   unit_tests
-  PROPERTIES CXX_STANDARD 11
+  PROPERTIES CXX_STANDARD 17
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 target_link_libraries(
