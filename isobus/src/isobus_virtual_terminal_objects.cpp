@@ -1958,7 +1958,8 @@ namespace isobus
 
 			if (nullptr != objectToCheck)
 			{
-				if (VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type())
+				if ((VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type()) &&
+				    (VirtualTerminalObjectType::ExtendedInputAttributes != objectToCheck->get_object_type()))
 				{
 					anyWrongChildType = true;
 				}
@@ -2053,7 +2054,8 @@ namespace isobus
 
 					if ((NULL_OBJECT_ID == rawAttributeData) ||
 					    ((nullptr != inputAttributesObject) &&
-					     (VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type())))
+					     ((VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type()) ||
+					      (VirtualTerminalObjectType::ExtendedInputAttributes == inputAttributesObject->get_object_type()))))
 					{
 						set_input_attributes(static_cast<std::uint16_t>(rawAttributeData));
 						retVal = true;
@@ -3544,6 +3546,55 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
+	/// @brief Checks if an object type can be an Output List item
+	/// @param[in] type The object type to check
+	/// @returns true if the type can be an Output List item
+	static bool is_allowed_output_list_item(VirtualTerminalObjectType type)
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case VirtualTerminalObjectType::WorkingSet:
+			case VirtualTerminalObjectType::Container:
+			case VirtualTerminalObjectType::Button:
+			case VirtualTerminalObjectType::InputBoolean:
+			case VirtualTerminalObjectType::InputString:
+			case VirtualTerminalObjectType::InputNumber:
+			case VirtualTerminalObjectType::InputList:
+			case VirtualTerminalObjectType::OutputString:
+			case VirtualTerminalObjectType::OutputNumber:
+			case VirtualTerminalObjectType::OutputList:
+			case VirtualTerminalObjectType::OutputLine:
+			case VirtualTerminalObjectType::OutputRectangle:
+			case VirtualTerminalObjectType::OutputEllipse:
+			case VirtualTerminalObjectType::OutputPolygon:
+			case VirtualTerminalObjectType::OutputMeter:
+			case VirtualTerminalObjectType::OutputLinearBarGraph:
+			case VirtualTerminalObjectType::OutputArchedBarGraph:
+			case VirtualTerminalObjectType::GraphicsContext:
+			case VirtualTerminalObjectType::Animation:
+			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::ScaledGraphic:
+			case VirtualTerminalObjectType::ObjectPointer:
+			case VirtualTerminalObjectType::ExternalObjectPointer:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
+			case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
+			{
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				// Not an allowed list item
+			}
+			break;
+		}
+		return retVal;
+	}
+
 	bool OutputList::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
@@ -3571,43 +3622,9 @@ namespace isobus
 			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
-				switch (childObject->get_object_type())
+				if (!is_allowed_output_list_item(childObject->get_object_type()))
 				{
-					case VirtualTerminalObjectType::OutputString:
-					case VirtualTerminalObjectType::Macro:
-					case VirtualTerminalObjectType::WorkingSet:
-					case VirtualTerminalObjectType::Container:
-					case VirtualTerminalObjectType::Button:
-					case VirtualTerminalObjectType::KeyGroup:
-					case VirtualTerminalObjectType::InputBoolean:
-					case VirtualTerminalObjectType::InputString:
-					case VirtualTerminalObjectType::InputNumber:
-					case VirtualTerminalObjectType::InputList:
-					case VirtualTerminalObjectType::OutputLine:
-					case VirtualTerminalObjectType::OutputRectangle:
-					case VirtualTerminalObjectType::OutputEllipse:
-					case VirtualTerminalObjectType::OutputPolygon:
-					case VirtualTerminalObjectType::OutputMeter:
-					case VirtualTerminalObjectType::OutputLinearBarGraph:
-					case VirtualTerminalObjectType::OutputArchedBarGraph:
-					case VirtualTerminalObjectType::Animation:
-					case VirtualTerminalObjectType::PictureGraphic:
-					case VirtualTerminalObjectType::ScaledGraphic:
-					case VirtualTerminalObjectType::ObjectPointer:
-					case VirtualTerminalObjectType::ExternalObjectPointer:
-					case VirtualTerminalObjectType::AuxiliaryFunctionType2:
-					case VirtualTerminalObjectType::AuxiliaryInputType2:
-					case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
-					{
-						// Valid Child Object
-					}
-					break;
-
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+					anyWrongChildType = true;
 				}
 			}
 		}
@@ -3756,7 +3773,7 @@ namespace isobus
 		if ((index < children.size()) &&
 		    ((NULL_OBJECT_ID == newListItem) ||
 		     ((nullptr != get_object_by_id(newListItem, objectPool)) &&
-		      (VirtualTerminalObjectType::NumberVariable == get_object_by_id(newListItem, objectPool)->get_object_type()))))
+		      is_allowed_output_list_item(get_object_by_id(newListItem, objectPool)->get_object_type()))))
 		{
 			children.at(index).id = newListItem;
 			retVal = true;
