@@ -1911,7 +1911,29 @@ namespace isobus
 
 						const std::uint8_t numberOfCodePlanesToFollow = iopData[4];
 						tempObject->set_number_of_code_planes(numberOfCodePlanesToFollow);
-						LOG_ERROR("[WS]: Extended input attributes not supported yet (todo)");
+						iopData += 5;
+						iopLength -= 5;
+						retVal = true;
+
+						// Character ranges are skipped because input is not validated against them yet
+						for (std::uint_fast8_t i = 0; (i < numberOfCodePlanesToFollow) && retVal; i++)
+						{
+							if ((iopLength >= 2) && (iopLength >= (2U + (4U * iopData[1]))))
+							{
+								const std::uint32_t codePlaneLength = 2U + (4U * iopData[1]);
+								iopData += codePlaneLength;
+								iopLength -= codePlaneLength;
+							}
+							else
+							{
+								retVal = false;
+							}
+						}
+
+						if (!retVal)
+						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse extended input attributes code planes");
+						}
 					}
 					else
 					{

@@ -923,6 +923,14 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputStringTests)
 	objects[inputString->get_id()] = inputString;
 	EXPECT_TRUE(inputString->get_is_valid(objects));
 
+	auto extendedInputAttribute = std::make_shared<ExtendedInputAttributes>();
+	extendedInputAttribute->set_id(6);
+	objects[extendedInputAttribute->get_id()] = extendedInputAttribute;
+	EXPECT_TRUE(inputString->set_attribute(static_cast<std::uint8_t>(InputString::AttributeName::InputAttributes), extendedInputAttribute->get_id(), objects, error));
+	EXPECT_TRUE(inputString->get_is_valid(objects));
+	EXPECT_FALSE(inputString->set_attribute(static_cast<std::uint8_t>(InputString::AttributeName::InputAttributes), fontAttribute->get_id(), objects, error));
+	EXPECT_TRUE(inputString->set_attribute(static_cast<std::uint8_t>(InputString::AttributeName::InputAttributes), inputAttribute->get_id(), objects, error));
+
 	// Add an invalid object, a picture graphic
 	auto pictureGraphic = std::make_shared<PictureGraphic>();
 	pictureGraphic->set_id(200);

@@ -1958,7 +1958,8 @@ namespace isobus
 
 			if (nullptr != objectToCheck)
 			{
-				if (VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type())
+				if ((VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type()) &&
+				    (VirtualTerminalObjectType::ExtendedInputAttributes != objectToCheck->get_object_type()))
 				{
 					anyWrongChildType = true;
 				}
@@ -2053,7 +2054,8 @@ namespace isobus
 
 					if ((NULL_OBJECT_ID == rawAttributeData) ||
 					    ((nullptr != inputAttributesObject) &&
-					     (VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type())))
+					     ((VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type()) ||
+					      (VirtualTerminalObjectType::ExtendedInputAttributes == inputAttributesObject->get_object_type()))))
 					{
 						set_input_attributes(static_cast<std::uint16_t>(rawAttributeData));
 						retVal = true;
