@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <set>
 
 namespace isobus
 {
@@ -1994,7 +1995,42 @@ namespace isobus
 
 				case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 				{
-					LOG_ERROR("[WS]: Object label reference not supported yet (todo)");
+					constexpr std::uint32_t LABELLED_OBJECT_LENGTH = 7;
+
+					if (iopLength >= 5)
+					{
+						const std::uint16_t numberOfLabelledObjects = get_little_endian_uint16(iopData, 3);
+						iopData += 5;
+						iopLength -= 5;
+
+						if (iopLength >= (LABELLED_OBJECT_LENGTH * numberOfLabelledObjects))
+						{
+							// Labels are only checked, not stored, because nothing displays them yet
+							std::set<std::uint16_t> labelledObjects;
+							retVal = true;
+
+							for (std::uint_fast16_t i = 0; (i < numberOfLabelledObjects) && retVal; i++)
+							{
+								const std::uint16_t labelledObject = get_little_endian_uint16(iopData, 0);
+
+								if (!labelledObjects.insert(labelledObject).second)
+								{
+									LOG_ERROR("[WS]: Object %u is labelled more than once in object label reference list %u", labelledObject, decodedID);
+									retVal = false;
+								}
+								iopData += LABELLED_OBJECT_LENGTH;
+								iopLength -= LABELLED_OBJECT_LENGTH;
+							}
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse object label reference list %u", decodedID);
+						}
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse object label reference list object");
+					}
 				}
 				break;
 
