@@ -44,7 +44,7 @@ namespace isobus
 	{
 		if (NTCAN_NO_HANDLE != handle)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Attempting to open a connection that is already open");
+			LOG_ERROR("[NTCAN]: Attempting to open a connection that is already open");
 		}
 		std::uint32_t mode = 0;
 		std::int32_t txQueueSize = 8;
@@ -56,7 +56,7 @@ namespace isobus
 
 		if (NTCAN_SUCCESS != openResult)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to open the connection");
+			LOG_ERROR("[NTCAN]: Error trying to open the connection");
 			return;
 		}
 
@@ -65,7 +65,7 @@ namespace isobus
 		openResult = canSetBaudrate(handle, baudrate);
 		if (NTCAN_SUCCESS != openResult)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to set the baudrate");
+			LOG_ERROR("[NTCAN]: Error trying to set the baudrate");
 			close();
 			return;
 		}
@@ -73,7 +73,7 @@ namespace isobus
 		openResult = canStatus(handle, &status);
 		if (NTCAN_SUCCESS != openResult)
 		{
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to get the status");
+			LOG_ERROR("[NTCAN]: Error trying to get the status");
 			close();
 			return;
 		}
@@ -100,7 +100,7 @@ namespace isobus
 		if (NTCAN_SUCCESS == openResult && ids != (1 << 11))
 		{
 			openResult = NTCAN_INSUFFICIENT_RESOURCES;
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to add the standard ID region");
+			LOG_ERROR("[NTCAN]: Error trying to add the standard ID region");
 			close();
 			return;
 		}
@@ -110,7 +110,7 @@ namespace isobus
 		if (NTCAN_SUCCESS == openResult && ids != (1 << 29))
 		{
 			openResult = NTCAN_INSUFFICIENT_RESOURCES;
-			isobus::CANStackLogger::error("[NTCAN]: Error trying to add the extended ID region");
+			LOG_ERROR("[NTCAN]: Error trying to add the extended ID region");
 			close();
 			return;
 		}
