@@ -4302,7 +4302,7 @@ namespace isobus
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
 					{
 						LOG_DEBUG("[VT]: Resized an object: " +
-						          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+						          isobus::to_string(static_cast<int>(objectID)) +
 						          " with type " +
 						          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 						          " with size " +
@@ -4312,9 +4312,9 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[VT]: Failed to resize an object: " +
-					          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+					          isobus::to_string(static_cast<int>(objectID)) +
 					          " with type " +
-					          isobus::to_string(static_cast<int>((*poolIterator + 2))) +
+					          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 					          " with size " +
 					          isobus::to_string(static_cast<int>(objectSize)));
 				}
