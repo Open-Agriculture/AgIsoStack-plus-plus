@@ -700,7 +700,7 @@ namespace isobus
 							retVal = false;
 						}
 
-						if (binaryPool[5] > static_cast<std::uint8_t>(task_controller_object::DeviceElementObject::Type::NavigationReference))
+						if (retVal && (binaryPool[5] > static_cast<std::uint8_t>(task_controller_object::DeviceElementObject::Type::NavigationReference)))
 						{
 							LOG_ERROR("[DDOP]: Binary device element object has invalid element type.");
 							retVal = false;
