@@ -40,6 +40,14 @@ namespace isobus
 		return retVal;
 	}
 
+	/// @brief Reads a 16-bit value, such as an object ID, from an object pool, which stores values low byte first
+	/// @param[in] data The low byte, followed by the high byte
+	/// @returns The value
+	static std::uint16_t read_little_endian_uint16(const std::uint8_t *data)
+	{
+		return static_cast<std::uint16_t>(data[0] | (data[1] << 8));
+	}
+
 	/// @brief Validates preferred assignments for a single auxiliary input device
 	/// @param[in] assignments Assignments to check for valid counts, object IDs, function types, and unique function IDs
 	/// @returns true if all assignments are valid, false otherwise
@@ -4060,26 +4068,18 @@ namespace isobus
 
 	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools)
 	{
+		constexpr std::size_t OBJECT_ID_LENGTH = 2;
+		constexpr std::size_t OBJECT_TYPE_OFFSET = 2; // ID
+		constexpr std::size_t KEY_NUMBER_OF_OBJECTS_OFFSET = 5; // ID, type, background colour, key code
 		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
+		constexpr std::size_t CONTAINER_NUMBER_OF_OBJECTS_OFFSET = 8; // ID, type, width, height, hidden
 		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
 		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
 		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
 		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
 
-		/// Where an object is: the pool holding it, and its offset in that pool
-		struct ObjectLocation
-		{
-			std::vector<std::uint8_t> *pool;
-			std::size_t offset;
-			std::uint32_t size;
-		};
-
-		auto read_id = [](const ObjectLocation &object, std::size_t relativeOffset) {
-			const std::vector<std::uint8_t> &pool = *object.pool;
-			return static_cast<std::uint16_t>(pool[object.offset + relativeOffset] | (pool[object.offset + relativeOffset + 1] << 8));
-		};
-		auto type_of = [](const ObjectLocation &object) {
-			return static_cast<VirtualTerminalObjectType>((*object.pool)[object.offset + 2]);
+		auto read_id = [](const ObjectPoolEntry &object, std::size_t relativeOffset) {
+			return read_little_endian_uint16(&(*object.pool)[object.offset + relativeOffset]);
 		};
 		auto uses_font = [](VirtualTerminalObjectType type) {
 			return (VirtualTerminalObjectType::OutputString == type) ||
@@ -4090,7 +4090,7 @@ namespace isobus
 
 		// Index every pool of the working set by object ID, and start from the children of every key.
 		// A key in one pool may show objects from another, so the search has to see all of them.
-		std::map<std::uint16_t, ObjectLocation> objects;
+		std::map<std::uint16_t, ObjectPoolEntry> objects;
 		std::vector<std::uint16_t> pending;
 
 		for (auto pool : pools)
@@ -4101,7 +4101,7 @@ namespace isobus
 			}
 			std::size_t offset = 0;
 
-			while ((offset + 3) <= pool->size())
+			while ((offset + OBJECT_TYPE_OFFSET) < pool->size())
 			{
 				const std::uint32_t objectSize = get_number_bytes_in_object(&(*pool)[offset], static_cast<std::uint32_t>(pool->size() - offset));
 
@@ -4109,16 +4109,16 @@ namespace isobus
 				{
 					break;
 				}
-				const ObjectLocation object{ pool, offset, objectSize };
+				const ObjectPoolEntry object{ pool, offset, objectSize, static_cast<VirtualTerminalObjectType>((*pool)[offset + OBJECT_TYPE_OFFSET]) };
 				objects.emplace(read_id(object, 0), object);
 
-				if ((VirtualTerminalObjectType::Key == type_of(object)) && (objectSize > 5))
+				if ((VirtualTerminalObjectType::Key == object.type) && (objectSize > KEY_NUMBER_OF_OBJECTS_OFFSET))
 				{
-					for (std::size_t i = 0; i < (*pool)[offset + 5]; i++)
+					for (std::size_t i = 0; i < (*pool)[offset + KEY_NUMBER_OF_OBJECTS_OFFSET]; i++)
 					{
 						const std::size_t childOffset = KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
 
-						if ((childOffset + 2) <= objectSize)
+						if ((childOffset + OBJECT_ID_LENGTH) <= objectSize)
 						{
 							pending.push_back(read_id(object, childOffset));
 						}
@@ -4143,19 +4143,19 @@ namespace isobus
 				// Not an object in any pool (such as the null ID), or already visited
 				continue;
 			}
-			const ObjectLocation &object = location->second;
+			const ObjectPoolEntry &object = location->second;
 
-			switch (type_of(object))
+			switch (object.type)
 			{
 				case VirtualTerminalObjectType::Container:
 				{
-					if (object.size > 8)
+					if (object.size > CONTAINER_NUMBER_OF_OBJECTS_OFFSET)
 					{
-						for (std::size_t i = 0; i < (*object.pool)[object.offset + 8]; i++)
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + CONTAINER_NUMBER_OF_OBJECTS_OFFSET]; i++)
 						{
 							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
 
-							if ((childOffset + 2) <= object.size)
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
 							{
 								pending.push_back(read_id(object, childOffset));
 							}
@@ -4166,7 +4166,7 @@ namespace isobus
 
 				case VirtualTerminalObjectType::ObjectPointer:
 				{
-					if ((OBJECT_POINTER_VALUE_OFFSET + 2) <= object.size)
+					if ((OBJECT_POINTER_VALUE_OFFSET + OBJECT_ID_LENGTH) <= object.size)
 					{
 						pending.push_back(read_id(object, OBJECT_POINTER_VALUE_OFFSET));
 					}
@@ -4176,7 +4176,7 @@ namespace isobus
 				case VirtualTerminalObjectType::OutputString:
 				case VirtualTerminalObjectType::OutputNumber:
 				{
-					if ((FONT_ATTRIBUTES_OFFSET + 2) <= object.size)
+					if ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size)
 					{
 						fontsOnKeys.insert(read_id(object, FONT_ATTRIBUTES_OFFSET));
 					}
@@ -4191,10 +4191,10 @@ namespace isobus
 		// A font that is also used off the keys, in any pool, keeps the data mask factor
 		for (const auto &entry : objects)
 		{
-			const ObjectLocation &object = entry.second;
+			const ObjectPoolEntry &object = entry.second;
 
-			if (uses_font(type_of(object)) &&
-			    ((FONT_ATTRIBUTES_OFFSET + 2) <= object.size) &&
+			if (uses_font(object.type) &&
+			    ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size) &&
 			    (0 == shownOnKeys.count(entry.first)))
 			{
 				const std::uint16_t fontID = read_id(object, FONT_ATTRIBUTES_OFFSET);
@@ -4209,17 +4209,14 @@ namespace isobus
 		}
 
 		// Only fonts that exist in a pool are reported
-		std::vector<std::uint16_t> retVal(shownOnKeys.begin(), shownOnKeys.end());
 		for (const auto fontID : fontsOnKeys)
 		{
 			if (objects.end() != objects.find(fontID))
 			{
-				retVal.push_back(fontID);
+				shownOnKeys.insert(fontID);
 			}
 		}
-		std::sort(retVal.begin(), retVal.end());
-		retVal.erase(std::unique(retVal.begin(), retVal.end()), retVal.end());
-		return retVal;
+		return std::vector<std::uint16_t>(shownOnKeys.begin(), shownOnKeys.end());
 	}
 
 	bool VirtualTerminalClient::scale_object_pools()
@@ -4282,7 +4279,7 @@ namespace isobus
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
-				const std::uint16_t objectID = static_cast<std::uint16_t>(poolIterator[0] | (poolIterator[1] << 8));
+				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
 
 				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
 				    std::binary_search(softKeyObjectIDs.begin(), softKeyObjectIDs.end(), objectID))

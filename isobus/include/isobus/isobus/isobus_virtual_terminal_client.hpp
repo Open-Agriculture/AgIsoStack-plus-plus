@@ -1453,6 +1453,15 @@ namespace isobus
 			bool uploaded; ///< The upload state of this pool
 		};
 
+		/// @brief An object in one of the working set's pools, as found by get_soft_key_scaled_object_ids()
+		struct ObjectPoolEntry
+		{
+			const std::vector<std::uint8_t> *pool; ///< The pool that holds the object
+			std::size_t offset; ///< The offset of the object in that pool
+			std::uint32_t size; ///< The size of the object, in bytes
+			VirtualTerminalObjectType type; ///< The type of the object
+		};
+
 		/// @brief A struct for storing information about an auxiliary input device
 		struct AssignedAuxiliaryInputDevice
 		{
@@ -1705,24 +1714,12 @@ namespace isobus
 		/// @returns true if all object pools scaled with no error
 		bool scale_object_pools();
 
-		/// @brief Finds the objects in the working set's pools that are drawn on soft keys, so they can be scaled like the keys
-		/// @details A Key is sized by the soft key designator, but the objects it shows (label strings,
-		/// numbers, containers of those) are separate objects in the pool, and so are the fonts they use.
-		/// Scaled with the data mask factor they outgrow the key whenever the data mask grows more than
-		/// the soft key designator does. The search follows a Key's children through Containers and
-		/// through Object Pointers (to the object a pointer holds in the pool as uploaded). It does not
-		/// follow Output Lists, Animations or Working Set objects on a Key.
-		///
-		/// All pools are searched together, because they are uploaded as one working set: a Key in one
-		/// pool may show an object from another, and a font may be used by a Key in one pool and by a
-		/// data mask in another. Pass every pool, including ones that are not auto-scaled.
-		///
-		/// Fonts that are also used by an output or input string or number outside the keys, in any
-		/// pool, are left out, so the data mask is not affected. No other object gets that rule: an
-		/// object that is shown both on a Key and outside the keys, such as a Picture Graphic used as a
-		/// key icon and on a data mask, is returned, and so is scaled with the soft key factor everywhere.
-		/// IDs that are not in any pool, such as the null object ID, are never returned.
-		/// @param[in] pools The object pools of the working set to search
+		/// @brief Finds the objects drawn on soft keys, so they can be scaled with the soft key factor
+		/// @details Starts from the children of every Key and follows Containers and Object Pointers,
+		/// but not Output Lists, Animations or Working Set objects. Fonts also used outside the keys
+		/// are left out, so data mask text keeps its size. Other objects shown both on and off the keys,
+		/// such as a Picture Graphic, get the soft key factor everywhere.
+		/// @param[in] pools Every pool of the working set, including the ones that are not auto-scaled
 		/// @returns The sorted IDs of the objects shown on keys, and of the fonts only those objects use
 		static std::vector<std::uint16_t> get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools);
 
