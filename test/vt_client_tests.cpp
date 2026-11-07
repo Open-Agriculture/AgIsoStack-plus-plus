@@ -123,6 +123,18 @@ public:
 		return objectPools.at(poolIndex).scaledObjectPool;
 	}
 
+	// The command queued last, while not connected to a VT; the queue is emptied
+	std::vector<std::uint8_t> test_wrapper_take_queued_command()
+	{
+		std::vector<std::uint8_t> retVal;
+		if (!commandQueue.empty())
+		{
+			retVal = commandQueue.back();
+			commandQueue.clear();
+		}
+		return retVal;
+	}
+
 	static std::vector<std::uint8_t> staticTestPool;
 
 	static bool testWrapperDataChunkCallback(std::uint32_t,
@@ -1477,6 +1489,76 @@ namespace
 		append_u16(pool, 0); // Y
 	}
 
+	void append_output_rectangle(std::vector<std::uint8_t> &pool, std::uint16_t id)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputRectangle));
+		append_u16(pool, 0xFFFF); // No line attributes
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		pool.push_back(0); // Line suppression
+		append_u16(pool, 0xFFFF); // No fill attributes
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_output_line(std::vector<std::uint8_t> &pool, std::uint16_t id)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputLine));
+		append_u16(pool, 0xFFFF); // No line attributes
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		pool.push_back(0); // Line direction
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_output_polygon(std::vector<std::uint8_t> &pool, std::uint16_t id)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputPolygon));
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		append_u16(pool, 0xFFFF); // No line attributes
+		append_u16(pool, 0xFFFF); // No fill attributes
+		pool.push_back(3); // Polygon type: open
+		pool.push_back(3); // Number of points
+		pool.push_back(0); // Number of macros
+		for (std::uint16_t value : { 0, 0, 50, 0, 50, 20 })
+		{
+			append_u16(pool, value);
+		}
+	}
+
+	void append_data_mask(std::vector<std::uint8_t> &pool, std::uint16_t id, const std::vector<std::uint16_t> &children)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask));
+		pool.push_back(0); // Background colour
+		append_u16(pool, 0xFFFF); // No soft key mask
+		pool.push_back(static_cast<std::uint8_t>(children.size()));
+		pool.push_back(0); // Number of macros
+		for (std::uint16_t child : children)
+		{
+			append_u16(pool, child);
+			append_u16(pool, 0); // X
+			append_u16(pool, 0); // Y
+		}
+	}
+
+	using ValuePair = std::pair<std::uint16_t, std::uint16_t>;
+
+	// The two pixel values a command carries at this offset
+	std::pair<std::uint16_t, std::uint16_t> command_values(const std::vector<std::uint8_t> &command, std::size_t offset)
+	{
+		EXPECT_GE(command.size(), offset + 4);
+		if (command.size() < (offset + 4))
+		{
+			return { 0, 0 };
+		}
+		return { static_cast<std::uint16_t>(command[offset] | (command[offset + 1] << 8)),
+			       static_cast<std::uint16_t>(command[offset + 2] | (command[offset + 3] << 8)) };
+	}
+
 	// The object with this ID in an uploaded pool: its offset, or -1.
 	int find_object(const std::vector<std::uint8_t> &pool, std::uint16_t id, DerivedTestVTClient &client)
 	{
@@ -1872,6 +1954,116 @@ TEST_F(VirtualTerminalTest, FontRemappingKeepsTheFontBetweenTheFudgeAndTheFirstT
 	EXPECT_EQ(FontSize::Size8x12, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size8x8, 1.5f));
 	EXPECT_EQ(FontSize::Size16x16, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size12x16, 1.3f));
 	EXPECT_EQ(FontSize::Size32x32, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size24x32, 1.3f));
+}
+
+// #221: commands that carry pixels can be scaled like the uploaded pool. The pool is drawn for
+// 200 px masks and 60 px keys and shown on a 480 px mask (factor 2.4) with 90 px keys (1.5).
+TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheFactorOfTheObject)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t KEY_LABEL = 200;
+	constexpr std::uint16_t KEY = 300;
+	constexpr std::uint16_t RECTANGLE = 400;
+	constexpr std::uint16_t LINE = 401;
+	constexpr std::uint16_t POLYGON = 402;
+	constexpr std::uint16_t MASK = 500;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, 100, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, KEY_LABEL, 60, 100);
+	append_key(pool, KEY, KEY_LABEL);
+	append_output_rectangle(pool, RECTANGLE);
+	append_output_line(pool, LINE);
+	append_output_polygon(pool, POLYGON);
+	append_data_mask(pool, MASK, { RECTANGLE, LINE, POLYGON, KEY_LABEL });
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+
+	// Before the pool is scaled, nothing is
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(RECTANGLE));
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(RECTANGLE));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(MASK));
+	EXPECT_FLOAT_EQ(1.5f, clientUnderTest.get_object_scale_factor(KEY));
+	EXPECT_FLOAT_EQ(1.5f, clientUnderTest.get_object_scale_factor(KEY_LABEL));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(999));
+
+	// Without autoScale the values go out as given
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(RECTANGLE, 50, 20));
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(RECTANGLE, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(KEY_LABEL, 60, 20, true));
+	EXPECT_EQ(ValuePair(90, 30), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(RECTANGLE, 60000, 1, true));
+	EXPECT_EQ(ValuePair(0xFFFF, 2), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+
+	EXPECT_TRUE(clientUnderTest.send_change_endpoint(LINE, 50, 20, VirtualTerminalClient::LineDirection::TopLeftToBottomRightOfEnclosingVirtualRectangle, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_scale(POLYGON, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_point(POLYGON, 1, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 4));
+
+	// Positions follow the parent, which positions its children: the mask, or the key
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(RECTANGLE, MASK, 10, 20, true));
+	EXPECT_EQ(ValuePair(24, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(KEY_LABEL, KEY, 10, 20, true));
+	EXPECT_EQ(ValuePair(15, 30), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	// The key label is also on the mask: it has the soft key factor, but the mask positions it
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(KEY_LABEL, MASK, 10, 20, true));
+	EXPECT_EQ(ValuePair(24, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(RECTANGLE, MASK, static_cast<std::uint16_t>(-10), 0, true));
+	EXPECT_EQ(ValuePair(static_cast<std::uint16_t>(-24), 0), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+
+	// Relative moves carry an offset of 127, and stay within -127 to +128 px
+	EXPECT_TRUE(clientUnderTest.send_change_child_location(RECTANGLE, MASK, 127 + 10, 127 - 10, true));
+	std::vector<std::uint8_t> command = clientUnderTest.test_wrapper_take_queued_command();
+	ASSERT_EQ(8u, command.size());
+	EXPECT_EQ(127 + 24, command[5]);
+	EXPECT_EQ(127 - 24, command[6]);
+	EXPECT_TRUE(clientUnderTest.send_change_child_location(RECTANGLE, MASK, 127 + 100, 127 - 100, true));
+	command = clientUnderTest.test_wrapper_take_queued_command();
+	ASSERT_EQ(8u, command.size());
+	EXPECT_EQ(255, command[5]);
+	EXPECT_EQ(0, command[6]);
+}
+
+// With several pools, each object is scaled with the factors of its own pool, and objects in a
+// pool without autoscaling are not scaled at all.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheFactorsOfTheObjectsPool)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> firstPool;
+	append_output_rectangle(firstPool, 410);
+	std::vector<std::uint8_t> secondPool;
+	append_output_rectangle(secondPool, 420);
+	std::vector<std::uint8_t> unscaledPool;
+	append_output_rectangle(unscaledPool, 430);
+
+	clientUnderTest.set_object_pool(0, &firstPool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.set_object_pool(1, &secondPool);
+	clientUnderTest.set_object_pool_scaling(1, 240, 60);
+	clientUnderTest.set_object_pool(2, &unscaledPool);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(410));
+	EXPECT_FLOAT_EQ(2.0f, clientUnderTest.get_object_scale_factor(420));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(430));
+
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(420, 50, 20, true));
+	EXPECT_EQ(ValuePair(100, 40), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(430, 50, 20, true));
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
 }
 
 TEST_F(VirtualTerminalTest, FontRemapping)

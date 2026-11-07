@@ -747,8 +747,9 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] relativeXPositionChange The amount to change the X position by (px)
 		/// @param[in] relativeYPositionChange The amount to change the Y position by (px)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to the parent object, which positions its children (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange);
+		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange, bool autoScale = false);
 
 		/// @brief Sends the change child position command
 		/// @details The new position is set relative to the parent object's position.
@@ -765,8 +766,9 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] xPosition The new X position of the object (px)
 		/// @param[in] yPosition The new Y position of the object (px)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to the parent object, which positions its children (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition);
+		bool send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition, bool autoScale = false);
 
 		/// @brief Sends the change size command
 		/// @details A value of 0 for width or height or both
@@ -774,8 +776,9 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] newWidth The new width of the object
 		/// @param[in] newHeight The new height of the object
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight);
+		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight, bool autoScale = false);
 
 		/// @brief Sends the change background colour command
 		/// @param[in] objectID The ID of the target object
@@ -817,8 +820,9 @@ namespace isobus
 		/// @param[in] width_px The width to change the output line to
 		/// @param[in] height_px The height to change the output line to
 		/// @param[in] direction The line direction (refer to output line object attributes)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction);
+		bool send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction, bool autoScale = false);
 
 		/// @brief Sends the change font attributes command
 		/// @details This command is used to change the Font Attributes in a Font Attributes object.
@@ -939,8 +943,9 @@ namespace isobus
 		/// @param[in] pointIndex The index of the point in the polygon to edit
 		/// @param[in] newXValue The new X axis value (px)
 		/// @param[in] newYValue The new Y axis value (px)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue);
+		bool send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue, bool autoScale = false);
 
 		/// @brief Sends the change polygon scale command
 		/// @details This command is used by a Working Set to change the scale of a complete Output Polygon object. This
@@ -948,8 +953,9 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] widthAttribute New width attribute
 		/// @param[in] heightAttribute New height attribute
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute);
+		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute, bool autoScale = false);
 
 		/// @brief Sends the select colour map or palette command
 		/// @param[in] objectID The object to select
@@ -1326,6 +1332,15 @@ namespace isobus
 		                             std::uint32_t originalDataMaskDimensions_px,
 		                             std::uint32_t originalSoftKyeDesignatorHeight_px);
 
+		/// @brief Returns the factor autoscaling applied to an object when its pool was uploaded
+		/// @details Objects shown on soft keys were scaled with the soft key factor, all others with
+		/// the data mask factor of their pool. Use it to scale values in commands that take pixels,
+		/// or pass `autoScale` to the commands that support it. Those scale their values when they
+		/// are called, so a command called before the pools are scaled for the VT goes out unscaled.
+		/// @param[in] objectID The ID of the object
+		/// @returns The factor, or 1 for an object that is not in an auto-scaled pool or before the pools were scaled
+		float get_object_scale_factor(std::uint16_t objectID) const;
+
 		/// @brief Assigns an object pool to the client where the client will get data in chunks during upload.
 		/// @details This is probably better for huge pools if you are RAM constrained, or if your
 		/// pool is stored on some external device that you need to get data from in pages.
@@ -1449,6 +1464,9 @@ namespace isobus
 			std::uint32_t objectPoolSize; ///< The size of the object pool
 			std::uint32_t autoScaleDataMaskOriginalDimension; ///< The original length or width of this object pool's data mask area (in pixels)
 			std::uint32_t autoScaleSoftKeyDesignatorOriginalHeight; ///< The original height of a soft key designator as designed in the pool (in pixels)
+			std::vector<std::uint16_t> scaledObjectIDs; ///< The sorted IDs of the objects in this pool, once it was auto-scaled
+			float dataMaskScaleFactor = 1.0f; ///< The factor autoscaling applied to the objects outside the soft keys
+			float softKeyScaleFactor = 1.0f; ///< The factor autoscaling applied to the soft keys and the objects they show
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
 			bool uploaded; ///< The upload state of this pool
 		};
@@ -1728,6 +1746,24 @@ namespace isobus
 		/// @returns true if the object is inherently scalable
 		static bool get_is_object_scalable(VirtualTerminalObjectType type);
 
+		/// @brief Scales a width, height or unsigned coordinate for a command, like autoscaling does
+		/// @param[in] value The value to scale (px)
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled value, limited to what the command can carry
+		static std::uint16_t scale_command_dimension(std::uint16_t value, float scaleFactor);
+
+		/// @brief Scales a child position for a command, which the pool holds as a signed value
+		/// @param[in] value The position to scale (px)
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled position, limited to what the command can carry
+		static std::uint16_t scale_command_position(std::uint16_t value, float scaleFactor);
+
+		/// @brief Scales a relative position change for the change child location command
+		/// @param[in] value The position change, with its offset of 127
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled position change with its offset, limited to -127 to +128 px
+		static std::uint8_t scale_command_position_change(std::uint8_t value, float scaleFactor);
+
 		/// @brief Returns the closest font to the one you passed in, in decending order
 		/// @param[in] originalFont The original font that you want to scale
 		/// @returns The best available font that the VT reported it has available
@@ -1882,6 +1918,7 @@ namespace isobus
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::uint32_t lastAuxiliaryMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
+		std::vector<std::uint16_t> softKeyScaledObjectIDs; ///< The sorted IDs of the keys and the objects they show, which autoscaling scaled with the soft key factor
 		std::vector<std::uint8_t> unsupportedFunctions; ///< Holds the functions unsupported by the server.
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
