@@ -3,12 +3,16 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 #include "isobus/isobus/nmea2000_message_definitions.hpp"
 #include "isobus/isobus/nmea2000_message_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
+
+#include <array>
 
 using namespace isobus;
 using namespace NMEA2000Messages;
@@ -1004,4 +1008,96 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 	}
 
 	CANHardwareInterface::stop();
+}
+
+class FastPacketProtocolTest : public AgIsoStackTestFixture
+{
+};
+
+static constexpr std::uint32_t FAST_PACKET_TEST_PGN = 0x1F001;
+static constexpr std::array<std::uint8_t, 13> FAST_PACKET_TEST_DATA = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
+
+struct FastPacketTestContext
+{
+	FastPacketProtocol *protocol;
+	std::shared_ptr<InternalControlFunction> source;
+	std::uint32_t firstCallbackCalls;
+	std::uint32_t secondCallbackCalls;
+	std::uint32_t thirdCallbackCalls;
+};
+
+static void send_again_on_complete(std::uint32_t, std::uint32_t, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, bool successful, void *parentPointer)
+{
+	auto context = static_cast<FastPacketTestContext *>(parentPointer);
+	EXPECT_TRUE(successful);
+	context->firstCallbackCalls++;
+	if (1 == context->firstCallbackCalls)
+	{
+		EXPECT_TRUE(context->protocol->send_multipacket_message(FAST_PACKET_TEST_PGN,
+		                                                        FAST_PACKET_TEST_DATA.data(),
+		                                                        FAST_PACKET_TEST_DATA.size(),
+		                                                        context->source,
+		                                                        nullptr,
+		                                                        CANIdentifier::CANPriority::PriorityDefault6,
+		                                                        send_again_on_complete,
+		                                                        context));
+	}
+}
+
+TEST_F(FastPacketProtocolTest, TransmitCompleteCallbackCanSendAgain)
+{
+	FastPacketProtocol protocol([](std::uint32_t, CANDataSpan, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, CANIdentifier::CANPriority) {
+		return true;
+	});
+	FastPacketTestContext context{ &protocol, test_helpers::create_mock_internal_control_function(0x80), 0, 0, 0 };
+
+	ASSERT_TRUE(protocol.send_multipacket_message(FAST_PACKET_TEST_PGN,
+	                                              FAST_PACKET_TEST_DATA.data(),
+	                                              FAST_PACKET_TEST_DATA.size(),
+	                                              context.source,
+	                                              nullptr,
+	                                              CANIdentifier::CANPriority::PriorityDefault6,
+	                                              send_again_on_complete,
+	                                              &context));
+	for (std::uint8_t i = 0; i < 10; i++)
+	{
+		protocol.update();
+	}
+	EXPECT_EQ(2u, context.firstCallbackCalls);
+}
+
+static void count_second_on_receive(const CANMessage &, void *parentPointer)
+{
+	static_cast<FastPacketTestContext *>(parentPointer)->secondCallbackCalls++;
+}
+
+static void count_third_on_receive(const CANMessage &, void *parentPointer)
+{
+	static_cast<FastPacketTestContext *>(parentPointer)->thirdCallbackCalls++;
+}
+
+static void remove_first_and_third_on_receive(const CANMessage &, void *parentPointer)
+{
+	auto context = static_cast<FastPacketTestContext *>(parentPointer);
+	context->firstCallbackCalls++;
+	context->protocol->remove_multipacket_message_callback(FAST_PACKET_TEST_PGN, remove_first_and_third_on_receive, context);
+	context->protocol->remove_multipacket_message_callback(FAST_PACKET_TEST_PGN, count_third_on_receive, context);
+}
+
+TEST_F(FastPacketProtocolTest, ReceiveCallbackCanRemoveCallbacks)
+{
+	FastPacketProtocol protocol(nullptr);
+	FastPacketTestContext context{ &protocol, nullptr, 0, 0, 0 };
+	auto originator = test_helpers::create_mock_control_function(0x81);
+
+	protocol.register_multipacket_message_callback(FAST_PACKET_TEST_PGN, remove_first_and_third_on_receive, &context);
+	protocol.register_multipacket_message_callback(FAST_PACKET_TEST_PGN, count_second_on_receive, &context);
+	protocol.register_multipacket_message_callback(FAST_PACKET_TEST_PGN, count_third_on_receive, &context);
+
+	protocol.process_message(test_helpers::create_message_broadcast(6, FAST_PACKET_TEST_PGN, originator, { 0, 13, 1, 2, 3, 4, 5, 6 }));
+	protocol.process_message(test_helpers::create_message_broadcast(6, FAST_PACKET_TEST_PGN, originator, { 1, 7, 8, 9, 10, 11, 12, 13 }));
+
+	EXPECT_EQ(1u, context.firstCallbackCalls);
+	EXPECT_EQ(1u, context.secondCallbackCalls);
+	EXPECT_EQ(0u, context.thirdCallbackCalls);
 }
