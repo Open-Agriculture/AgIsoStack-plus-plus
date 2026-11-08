@@ -747,7 +747,9 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] relativeXPositionChange The amount to change the X position by (px)
 		/// @param[in] relativeYPositionChange The amount to change the Y position by (px)
-		/// @param[in] autoScale Scale the values with the factor autoscaling applied to the parent object, which positions its children (see get_object_scale_factor())
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to the parent object, which positions its children (see get_object_scale_factor()).
+		/// The scaled change is truncated and limited to -127 to +128 px, so a small step can become 0 and a large move is cut short.
+		/// Use send_change_child_position() when the position must be exact, as F.14 recommends.
 		/// @returns true if the message is being sent successfully
 		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange, bool autoScale = false);
 
@@ -1332,13 +1334,16 @@ namespace isobus
 		                             std::uint32_t originalDataMaskDimensions_px,
 		                             std::uint32_t originalSoftKyeDesignatorHeight_px);
 
-		/// @brief Returns the factor autoscaling applied to an object when its pool was uploaded
-		/// @details Objects shown on soft keys were scaled with the soft key factor, all others with
-		/// the data mask factor of their pool. Use it to scale values in commands that take pixels,
-		/// or pass `autoScale` to the commands that support it. Those scale their values when they
-		/// are called, so a command called before the pools are scaled for the VT goes out unscaled.
+		/// @brief Returns the factor autoscaling applies to an object on the VT the client is connecting or connected to
+		/// @details Objects shown on soft keys are scaled with the soft key factor, all others with
+		/// the data mask factor of their pool. Working Set objects, and other objects autoscaling leaves
+		/// alone, have a factor of 1. The factors are set when the client starts uploading the pools,
+		/// or starts loading them from the VT's memory, and are cleared when it disconnects.
+		/// Use it to scale values in commands that take pixels, or pass `autoScale` to the commands
+		/// that support it. Those are scaled when they are sent, with the factors of the VT they go to,
+		/// so a command queued while not connected is still scaled right.
 		/// @param[in] objectID The ID of the object
-		/// @returns The factor, or 1 for an object that is not in an auto-scaled pool or before the pools were scaled
+		/// @returns The factor, or 1 for an object that is not scaled, or while there is no VT
 		float get_object_scale_factor(std::uint16_t objectID) const;
 
 		/// @brief Assigns an object pool to the client where the client will get data in chunks during upload.
@@ -1464,9 +1469,6 @@ namespace isobus
 			std::uint32_t objectPoolSize; ///< The size of the object pool
 			std::uint32_t autoScaleDataMaskOriginalDimension; ///< The original length or width of this object pool's data mask area (in pixels)
 			std::uint32_t autoScaleSoftKeyDesignatorOriginalHeight; ///< The original height of a soft key designator as designed in the pool (in pixels)
-			std::vector<std::uint16_t> scaledObjectIDs; ///< The sorted IDs of the objects in this pool, once it was auto-scaled
-			float dataMaskScaleFactor = 1.0f; ///< The factor autoscaling applied to the objects outside the soft keys
-			float softKeyScaleFactor = 1.0f; ///< The factor autoscaling applied to the soft keys and the objects they show
 			bool useDataCallback; ///< Determines if the client will use callbacks to get the data in chunks.
 			bool uploaded; ///< The upload state of this pool
 		};
@@ -1732,6 +1734,44 @@ namespace isobus
 		/// @returns true if all object pools scaled with no error
 		bool scale_object_pools();
 
+		/// @brief The factors autoscaling applies to one pool, and the objects it applies them to
+		struct CommandScalingPool
+		{
+			std::vector<std::uint16_t> objectIDs; ///< The sorted IDs of every object in the pool
+			std::vector<std::uint16_t> unscaledObjectIDs; ///< The sorted IDs of the pool's objects that autoscaling leaves alone, such as the Working Set
+			float dataMaskScaleFactor = 1.0f; ///< The factor for the objects outside the soft keys
+			float softKeyScaleFactor = 1.0f; ///< The factor for the soft keys and the objects they show
+		};
+
+		/// @brief What the commands with `autoScale` need to know about the scaled pools
+		struct CommandScaling
+		{
+			std::vector<CommandScalingPool> pools; ///< One entry per object pool, in pool order
+			std::vector<std::uint16_t> softKeyObjectIDs; ///< The sorted IDs of the keys and the objects they show
+		};
+
+		/// @brief Makes a read/write copy of every object pool in its scaledObjectPool
+		/// @returns true if every pool was copied
+		bool copy_object_pools();
+
+		/// @brief Works out the command scaling for the VT from the copies copy_object_pools() made
+		/// @details Reads the copies before they are scaled: object IDs and sizes don't change with scaling.
+		/// @returns The factors and the objects they apply to
+		CommandScaling build_command_scaling();
+
+		/// @brief Sets the command scaling for a VT that loads the pools from its memory, which skips scale_object_pools()
+		void prepare_command_scaling_for_loaded_pools();
+
+		/// @brief Returns the factor for an object, the caller holding commandScalingMutex
+		/// @param[in] objectID The ID of the object
+		/// @returns The factor, or 1
+		float get_object_scale_factor_locked(std::uint16_t objectID) const;
+
+		/// @brief Scales the pixel values of one of the commands that take `autoScale`, for the VT it is sent to
+		/// @param[in] command The command as the application gave it
+		/// @returns The command with its values scaled, or as given if it is not one of those commands
+		std::vector<std::uint8_t> scale_command(const std::vector<std::uint8_t> &command) const;
+
 		/// @brief Finds the objects drawn on soft keys, so they can be scaled with the soft key factor
 		/// @details Starts from the children of every Key and follows Containers and Object Pointers,
 		/// but not Output Lists, Animations or Working Set objects. Fonts also used outside the keys
@@ -1746,11 +1786,19 @@ namespace isobus
 		/// @returns true if the object is inherently scalable
 		static bool get_is_object_scalable(VirtualTerminalObjectType type);
 
-		/// @brief Scales a width, height or unsigned coordinate for a command, like autoscaling does
+		/// @brief Scales a width or height for a command, like autoscaling does
+		/// @details A value above 0 stays at least 1: under F.18 a size of 0 hides the object, and
+		/// a Change Polygon Scale to 0 would collapse its points for good.
 		/// @param[in] value The value to scale (px)
 		/// @param[in] scaleFactor The factor to scale with
 		/// @returns The scaled value, limited to what the command can carry
 		static std::uint16_t scale_command_dimension(std::uint16_t value, float scaleFactor);
+
+		/// @brief Scales an unsigned coordinate for a command, like autoscaling does
+		/// @param[in] value The value to scale (px)
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled value, limited to what the command can carry
+		static std::uint16_t scale_command_coordinate(std::uint16_t value, float scaleFactor);
 
 		/// @brief Scales a child position for a command, which the pool holds as a signed value
 		/// @param[in] value The position to scale (px)
@@ -1824,14 +1872,16 @@ namespace isobus
 		/// @brief Tries to send a command to the VT server, and queues it if it fails
 		/// @param[in] data The data to send, including the function-code
 		/// @param[in] replace If true, the message will replace any existing message with the same priority and function-code
+		/// @param[in] autoScale If true, the command's pixel values are scaled when it is sent (see scale_command())
 		/// @returns true if the message was sent/queued successfully
-		bool queue_command(const std::vector<std::uint8_t> &data, bool replace = false);
+		bool queue_command(const std::vector<std::uint8_t> &data, bool replace = false, bool autoScale = false);
 
 		/// @brief Replaces the first message in the queue with the same function-code and priority, and removes the rest
 		/// @note This will not queue a message if one does not already exist.
 		/// @param[in] data The data to send, including the function-code
+		/// @param[in] autoScale If true, the command's pixel values are scaled when it is sent
 		/// @returns true if the message was replaced successfully
-		bool replace_command(const std::vector<std::uint8_t> &data);
+		bool replace_command(const std::vector<std::uint8_t> &data, bool autoScale);
 
 		/// @brief Tests whether two VT commands focus on changing/requesting the same thing
 		/// @param[in] first The first command to compare
@@ -1918,7 +1968,8 @@ namespace isobus
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::uint32_t lastAuxiliaryMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
-		std::vector<std::uint16_t> softKeyScaledObjectIDs; ///< The sorted IDs of the keys and the objects they show, which autoscaling scaled with the soft key factor
+		CommandScaling commandScaling; ///< The factors for the commands with `autoScale`, for the VT the client is connecting or connected to
+		mutable Mutex commandScalingMutex; ///< Protects commandScaling, which the update thread replaces while the application sends commands
 		std::vector<std::uint8_t> unsupportedFunctions; ///< Holds the functions unsupported by the server.
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
@@ -1934,7 +1985,13 @@ namespace isobus
 		std::atomic<bool> shouldTerminate{ false }; ///< Used to determine if the client should exit and join the worker thread
 
 		// Command queue
-		std::vector<std::vector<std::uint8_t>> commandQueue; ///< A queue of commands to send to the VT server
+		/// @brief A command waiting to be sent to the VT server
+		struct QueuedCommand
+		{
+			std::vector<std::uint8_t> data; ///< The command as the application gave it, including the function-code
+			bool autoScale; ///< Scale the command's pixel values when it is sent
+		};
+		std::vector<QueuedCommand> commandQueue; ///< A queue of commands to send to the VT server
 		bool commandAwaitingResponse = false; ///< Determines if we are currently waiting for a response to a command
 		std::uint32_t lastCommandTimestamp_ms = 0; ///< The timestamp of the last command sent
 		std::vector<std::array<std::uint8_t, 32>> pendingExtendedVersionDeletes; ///< Extended version labels still to be deleted from the VT

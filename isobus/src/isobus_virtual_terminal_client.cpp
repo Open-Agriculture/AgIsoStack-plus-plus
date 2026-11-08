@@ -496,12 +496,6 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange, bool autoScale)
 	{
-		if (autoScale)
-		{
-			const float scaleFactor = get_object_scale_factor(parentObjectID);
-			relativeXPositionChange = scale_command_position_change(relativeXPositionChange, scaleFactor);
-			relativeYPositionChange = scale_command_position_change(relativeYPositionChange, scaleFactor);
-		}
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeChildLocationCommand),
 			                                         static_cast<std::uint8_t>(parentObjectID & 0xFF),
 			                                         static_cast<std::uint8_t>(parentObjectID >> 8),
@@ -510,17 +504,11 @@ namespace isobus
 			                                         relativeXPositionChange,
 			                                         relativeYPositionChange,
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition, bool autoScale)
 	{
-		if (autoScale)
-		{
-			const float scaleFactor = get_object_scale_factor(parentObjectID);
-			xPosition = scale_command_position(xPosition, scaleFactor);
-			yPosition = scale_command_position(yPosition, scaleFactor);
-		}
 		const std::vector<std::uint8_t> buffer = {
 			static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
 			static_cast<std::uint8_t>(parentObjectID & 0xFF),
@@ -532,17 +520,11 @@ namespace isobus
 			static_cast<std::uint8_t>(yPosition & 0xFF),
 			static_cast<std::uint8_t>(yPosition >> 8),
 		};
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight, bool autoScale)
 	{
-		if (autoScale)
-		{
-			const float scaleFactor = get_object_scale_factor(objectID);
-			newWidth = scale_command_dimension(newWidth, scaleFactor);
-			newHeight = scale_command_dimension(newHeight, scaleFactor);
-		}
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeSizeCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
 			                                         static_cast<std::uint8_t>(objectID >> 8),
@@ -551,7 +533,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newHeight & 0xFF),
 			                                         static_cast<std::uint8_t>(newHeight >> 8),
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_background_colour(std::uint16_t objectID, std::uint8_t colour)
@@ -626,12 +608,6 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction, bool autoScale)
 	{
-		if (autoScale)
-		{
-			const float scaleFactor = get_object_scale_factor(objectID);
-			width_px = scale_command_dimension(width_px, scaleFactor);
-			height_px = scale_command_dimension(height_px, scaleFactor);
-		}
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeEndPointCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
 			                                         static_cast<std::uint8_t>(objectID >> 8),
@@ -640,7 +616,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(height_px & 0xFF),
 			                                         static_cast<std::uint8_t>(height_px >> 8),
 			                                         static_cast<std::uint8_t>(direction) };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield)
@@ -793,12 +769,6 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue, bool autoScale)
 	{
-		if (autoScale)
-		{
-			const float scaleFactor = get_object_scale_factor(objectID);
-			newXValue = scale_command_dimension(newXValue, scaleFactor);
-			newYValue = scale_command_dimension(newYValue, scaleFactor);
-		}
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangePolygonPointCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
 			                                         static_cast<std::uint8_t>(objectID >> 8),
@@ -807,17 +777,11 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newXValue >> 8),
 			                                         static_cast<std::uint8_t>(newYValue & 0xFF),
 			                                         static_cast<std::uint8_t>(newYValue >> 8) };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute, bool autoScale)
 	{
-		if (autoScale)
-		{
-			const float scaleFactor = get_object_scale_factor(objectID);
-			widthAttribute = scale_command_dimension(widthAttribute, scaleFactor);
-			heightAttribute = scale_command_dimension(heightAttribute, scaleFactor);
-		}
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
 			                                         static_cast<std::uint8_t>(objectID >> 8),
@@ -826,7 +790,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(heightAttribute & 0xFF),
 			                                         static_cast<std::uint8_t>(heightAttribute >> 8),
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_select_colour_map_or_palette(std::uint16_t objectID)
@@ -1708,6 +1672,12 @@ namespace isobus
 
 				case StateMachineState::SendLoadVersion:
 				{
+					if (firstTimeInState)
+					{
+						// The VT loads the scaled pools from its memory, so they are not scaled again: set the factors for the commands
+						prepare_command_scaling_for_loaded_pools();
+					}
+
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
@@ -2671,6 +2641,11 @@ namespace isobus
 
 		if (StateMachineState::Disconnected == value)
 		{
+			{
+				// The next VT may need other factors: commands still queued are scaled when sent
+				LOCK_GUARD(Mutex, commandScalingMutex);
+				commandScaling = CommandScaling();
+			}
 			lastVTStatusTimestamp_ms = 0;
 			++auxiliaryAssignmentSessionGeneration;
 			auxiliaryAssignmentTransaction.reset();
@@ -4255,20 +4230,10 @@ namespace isobus
 		return std::vector<std::uint16_t>(shownOnKeys.begin(), shownOnKeys.end());
 	}
 
-	bool VirtualTerminalClient::scale_object_pools()
+	bool VirtualTerminalClient::copy_object_pools()
 	{
 		bool retVal = true;
 
-		softKeyScaledObjectIDs.clear();
-		for (auto &objectPool : objectPools)
-		{
-			objectPool.scaledObjectIDs.clear();
-			objectPool.dataMaskScaleFactor = 1.0f;
-			objectPool.softKeyScaleFactor = 1.0f;
-		}
-
-		// Step 1: Make a read/write copy of every pool, including the ones that are not auto-scaled,
-		// because the pools are uploaded as one working set and may reference each other's objects
 		for (auto &objectPool : objectPools)
 		{
 			if (nullptr != objectPool.objectPoolDataPointer)
@@ -4296,20 +4261,84 @@ namespace isobus
 				}
 			}
 		}
+		return retVal;
+	}
 
-		// Step 2, Find the objects drawn on soft keys across the whole working set, which scale like the keys
+	VirtualTerminalClient::CommandScaling VirtualTerminalClient::build_command_scaling()
+	{
+		CommandScaling retVal;
+
+		// The objects drawn on soft keys across the whole working set, which scale like the keys
 		std::vector<std::vector<std::uint8_t> *> allPools;
 		allPools.reserve(objectPools.size());
 		for (auto &objectPool : objectPools)
 		{
 			allPools.push_back(&objectPool.scaledObjectPool);
 		}
-		const std::vector<std::uint16_t> softKeyObjectIDs = get_soft_key_scaled_object_ids(allPools);
-		softKeyScaledObjectIDs = softKeyObjectIDs;
+		retVal.softKeyObjectIDs = get_soft_key_scaled_object_ids(allPools);
+		retVal.pools.resize(objectPools.size());
+
+		for (std::size_t i = 0; i < objectPools.size(); i++)
+		{
+			ObjectPoolDataStruct &objectPool = objectPools[i];
+			CommandScalingPool &scaling = retVal.pools[i];
+			const bool autoScaled = (0 != objectPool.autoScaleDataMaskOriginalDimension) &&
+			  (0 != objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
+
+			if (autoScaled)
+			{
+				scaling.dataMaskScaleFactor = static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension);
+				scaling.softKeyScaleFactor = static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
+			}
+
+			std::vector<std::uint8_t> &pool = objectPool.scaledObjectPool;
+			std::size_t offset = 0;
+			while ((pool.size() - offset) > 2)
+			{
+				const std::uint32_t objectSize = get_number_bytes_in_object(&pool[offset], static_cast<std::uint32_t>(pool.size() - offset));
+				if (0 == objectSize)
+				{
+					break; // A broken pool, which scale_object_pools() or the VT reports
+				}
+
+				const std::uint16_t objectID = read_little_endian_uint16(&pool[offset]);
+				const auto type = static_cast<VirtualTerminalObjectType>(pool[offset + 2]);
+				scaling.objectIDs.push_back(objectID);
+				// resize_object() keeps an Input Boolean's width as designed (it is a maximum), so its size isn't scaled either
+				if ((!get_is_object_scalable(type)) || (VirtualTerminalObjectType::InputBoolean == type))
+				{
+					scaling.unscaledObjectIDs.push_back(objectID);
+				}
+				else if (autoScaled && (VirtualTerminalObjectType::Key == type))
+				{
+					retVal.softKeyObjectIDs.push_back(objectID);
+				}
+				offset += objectSize;
+			}
+			std::sort(scaling.objectIDs.begin(), scaling.objectIDs.end());
+			std::sort(scaling.unscaledObjectIDs.begin(), scaling.unscaledObjectIDs.end());
+		}
+		std::sort(retVal.softKeyObjectIDs.begin(), retVal.softKeyObjectIDs.end());
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::scale_object_pools()
+	{
+		// Step 1: Make a read/write copy of every pool, including the ones that are not auto-scaled,
+		// because the pools are uploaded as one working set and may reference each other's objects
+		bool retVal = copy_object_pools();
+		if (!retVal)
+		{
+			return false;
+		}
+
+		// Step 2, Work out the factors, and which objects are on the soft keys, from the pools before they are scaled
+		CommandScaling scaling = build_command_scaling();
 
 		// Step 3, Parse each auto-scaled pool and resize each object with that pool's factors
-		for (auto &objectPool : objectPools)
+		for (std::size_t i = 0; i < objectPools.size(); i++)
 		{
+			ObjectPoolDataStruct &objectPool = objectPools[i];
 			if ((0 == objectPool.autoScaleDataMaskOriginalDimension) ||
 			    (0 == objectPool.autoScaleSoftKeyDesignatorOriginalHeight))
 			{
@@ -4319,33 +4348,26 @@ namespace isobus
 				continue;
 			}
 
-			objectPool.dataMaskScaleFactor = static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension);
-			objectPool.softKeyScaleFactor = static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
-
+			const float dataMaskScaleFactor = scaling.pools[i].dataMaskScaleFactor;
+			const float softKeyScaleFactor = scaling.pools[i].softKeyScaleFactor;
 			auto poolIterator = objectPool.scaledObjectPool.begin();
 
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
 				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
-				objectPool.scaledObjectIDs.push_back(objectID);
-
-				if (VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2]))
-				{
-					softKeyScaledObjectIDs.push_back(objectID);
-				}
 
 				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
-				    std::binary_search(softKeyObjectIDs.begin(), softKeyObjectIDs.end(), objectID))
+				    std::binary_search(scaling.softKeyObjectIDs.begin(), scaling.softKeyObjectIDs.end(), objectID))
 				{
 					retVal &= resize_object(&poolIterator[0],
-					                        objectPool.softKeyScaleFactor,
+					                        softKeyScaleFactor,
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 				else
 				{
 					retVal &= resize_object(&poolIterator[0],
-					                        objectPool.dataMaskScaleFactor,
+					                        dataMaskScaleFactor,
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
@@ -4374,35 +4396,149 @@ namespace isobus
 				}
 				poolIterator += objectSize;
 			}
-			std::sort(objectPool.scaledObjectIDs.begin(), objectPool.scaledObjectIDs.end());
 		}
-		std::sort(softKeyScaledObjectIDs.begin(), softKeyScaledObjectIDs.end());
+
+		if (retVal)
+		{
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			commandScaling = std::move(scaling);
+		}
 		return retVal;
+	}
+
+	void VirtualTerminalClient::prepare_command_scaling_for_loaded_pools()
+	{
+		if (!get_any_pool_needs_scaling())
+		{
+			return;
+		}
+
+		if (copy_object_pools())
+		{
+			CommandScaling scaling = build_command_scaling();
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			commandScaling = std::move(scaling);
+		}
+		else
+		{
+			LOG_ERROR("[VT]: Could not read the object pools for the loaded version, commands with autoScale go out unscaled");
+		}
+
+		// The VT already has the scaled pools: the copies were only needed to find the objects
+		for (auto &objectPool : objectPools)
+		{
+			objectPool.scaledObjectPool.clear();
+			objectPool.scaledObjectPool.shrink_to_fit();
+		}
 	}
 
 	float VirtualTerminalClient::get_object_scale_factor(std::uint16_t objectID) const
 	{
-		float retVal = 1.0f;
+		LOCK_GUARD(Mutex, commandScalingMutex);
+		return get_object_scale_factor_locked(objectID);
+	}
 
-		for (const auto &objectPool : objectPools)
+	float VirtualTerminalClient::get_object_scale_factor_locked(std::uint16_t objectID) const
+	{
+		// From the last pool: when pools share an object ID, the VT keeps the object it got last (4.6.10.3)
+		for (auto pool = commandScaling.pools.rbegin(); pool != commandScaling.pools.rend(); ++pool)
 		{
-			if (std::binary_search(objectPool.scaledObjectIDs.begin(), objectPool.scaledObjectIDs.end(), objectID))
+			if (std::binary_search(pool->objectIDs.begin(), pool->objectIDs.end(), objectID))
 			{
-				if (std::binary_search(softKeyScaledObjectIDs.begin(), softKeyScaledObjectIDs.end(), objectID))
+				if (std::binary_search(pool->unscaledObjectIDs.begin(), pool->unscaledObjectIDs.end(), objectID))
 				{
-					retVal = objectPool.softKeyScaleFactor;
+					return 1.0f;
 				}
-				else
+				if (std::binary_search(commandScaling.softKeyObjectIDs.begin(), commandScaling.softKeyObjectIDs.end(), objectID))
 				{
-					retVal = objectPool.dataMaskScaleFactor;
+					return pool->softKeyScaleFactor;
 				}
-				break;
+				return pool->dataMaskScaleFactor;
 			}
+		}
+		return 1.0f;
+	}
+
+	std::vector<std::uint8_t> VirtualTerminalClient::scale_command(const std::vector<std::uint8_t> &command) const
+	{
+		std::vector<std::uint8_t> retVal = command;
+
+		if (retVal.size() < 3)
+		{
+			return retVal;
+		}
+
+		// Bytes 1-2 hold the object whose factor applies: the parent for the two child commands,
+		// because the parent positions its children, and the object itself for the others
+		float scaleFactor = 1.0f;
+		{
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			scaleFactor = get_object_scale_factor_locked(read_little_endian_uint16(&retVal[1]));
+		}
+
+		const auto get = [&retVal](std::size_t offset) { return read_little_endian_uint16(&retVal[offset]); };
+		const auto put = [&retVal](std::size_t offset, std::uint16_t value) {
+			retVal[offset] = static_cast<std::uint8_t>(value & 0xFF);
+			retVal[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+		};
+
+		switch (static_cast<Function>(retVal[0]))
+		{
+			case Function::ChangeChildLocationCommand: // Parent, object, X change, Y change
+			{
+				if (retVal.size() >= 7)
+				{
+					retVal[5] = scale_command_position_change(retVal[5], scaleFactor);
+					retVal[6] = scale_command_position_change(retVal[6], scaleFactor);
+				}
+			}
+			break;
+
+			case Function::ChangeChildPositionCommand: // Parent, object, X, Y
+			{
+				if (retVal.size() >= 9)
+				{
+					put(5, scale_command_position(get(5), scaleFactor));
+					put(7, scale_command_position(get(7), scaleFactor));
+				}
+			}
+			break;
+
+			case Function::ChangeSizeCommand: // Object, width, height
+			case Function::ChangeEndPointCommand: // Object, width, height, direction
+			case Function::ChangePolygonScaleCommand: // Object, width, height
+			{
+				if (retVal.size() >= 7)
+				{
+					put(3, scale_command_dimension(get(3), scaleFactor));
+					put(5, scale_command_dimension(get(5), scaleFactor));
+				}
+			}
+			break;
+
+			case Function::ChangePolygonPointCommand: // Object, point index, X, Y
+			{
+				if (retVal.size() >= 8)
+				{
+					put(4, scale_command_coordinate(get(4), scaleFactor));
+					put(6, scale_command_coordinate(get(6), scaleFactor));
+				}
+			}
+			break;
+
+			default:
+				break;
 		}
 		return retVal;
 	}
 
 	std::uint16_t VirtualTerminalClient::scale_command_dimension(std::uint16_t value, float scaleFactor)
+	{
+		const std::uint16_t scaled = scale_command_coordinate(value, scaleFactor);
+		return ((0 != value) && (0 == scaled)) ? 1 : scaled;
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_coordinate(std::uint16_t value, float scaleFactor)
 	{
 		// Truncated like autoscaling does, so a command gives the same size as the uploaded pool
 		const float scaled = static_cast<float>(value) * scaleFactor;
@@ -5537,7 +5673,7 @@ namespace isobus
 		return success;
 	}
 
-	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace)
+	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace, bool autoScale)
 	{
 		std::uint8_t functionCode = data[0];
 		if (is_function_unsupported(functionCode))
@@ -5545,30 +5681,30 @@ namespace isobus
 			return false;
 		}
 
-		if (get_is_connected() && send_command(data))
+		if (get_is_connected() && send_command(autoScale ? scale_command(data) : data))
 		{
 			return true;
 		}
 
 		LOCK_GUARD(Mutex, commandQueueMutex);
-		if (replace && replace_command(data))
+		if (replace && replace_command(data, autoScale))
 		{
 			return true;
 		}
-		commandQueue.emplace_back(data);
+		commandQueue.push_back(QueuedCommand{ data, autoScale });
 		return true;
 	}
 
-	bool VirtualTerminalClient::replace_command(const std::vector<std::uint8_t> &data)
+	bool VirtualTerminalClient::replace_command(const std::vector<std::uint8_t> &data, bool autoScale)
 	{
 		bool alreadyReplaced = false;
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			if (are_commands_similar(*it, data))
+			if (are_commands_similar(it->data, data))
 			{
 				if (!alreadyReplaced)
 				{
-					*it = data;
+					*it = QueuedCommand{ data, autoScale };
 					alreadyReplaced = true;
 					it++;
 				}
@@ -5698,7 +5834,7 @@ namespace isobus
 		LOCK_GUARD(Mutex, commandQueueMutex);
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			if (send_command(*it))
+			if (send_command(it->autoScale ? scale_command(it->data) : it->data))
 			{
 				it = commandQueue.erase(it);
 			}

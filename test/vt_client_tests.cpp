@@ -123,13 +123,14 @@ public:
 		return objectPools.at(poolIndex).scaledObjectPool;
 	}
 
-	// The command queued last, while not connected to a VT; the queue is emptied
+	// The command queued last, while not connected to a VT, as it would be sent now; the queue is emptied
 	std::vector<std::uint8_t> test_wrapper_take_queued_command()
 	{
 		std::vector<std::uint8_t> retVal;
 		if (!commandQueue.empty())
 		{
-			retVal = commandQueue.back();
+			const QueuedCommand &command = commandQueue.back();
+			retVal = command.autoScale ? scale_command(command.data) : command.data;
 			commandQueue.clear();
 		}
 		return retVal;
@@ -1545,6 +1546,41 @@ namespace
 		}
 	}
 
+	void append_working_set(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t activeMask, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet));
+		pool.push_back(0); // Background colour
+		pool.push_back(1); // Selectable
+		append_u16(pool, activeMask);
+		pool.push_back(1); // Number of children
+		pool.push_back(0); // Number of macros
+		pool.push_back(0); // Number of language codes
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
+	void append_animation(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::Animation));
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		append_u16(pool, 100); // Refresh interval
+		pool.push_back(0); // Value
+		pool.push_back(1); // Enabled
+		pool.push_back(0); // First child index
+		pool.push_back(0); // Last child index
+		pool.push_back(0); // Default child index
+		pool.push_back(0); // Options
+		pool.push_back(1); // Number of object references
+		pool.push_back(0); // Number of macros
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
 	using ValuePair = std::pair<std::uint16_t, std::uint16_t>;
 
 	// The two pixel values a command carries at this offset
@@ -2064,6 +2100,176 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheFactorsOfTheObjectsPool)
 	EXPECT_EQ(ValuePair(100, 40), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
 	EXPECT_TRUE(clientUnderTest.send_change_size_command(430, 50, 20, true));
 	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// Commands with autoScale are scaled when they are sent, with the factors of the VT they go to: one
+// queued before the pools are scaled is still scaled, and the factors don't outlive a disconnect.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAreScaledForTheVtTheyAreSentTo)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_data_mask(pool, 500, { 400 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+
+	// Queued at startup, before there is a VT
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(400, 50, 20, true));
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+
+	// Queued for the 480 px VT, which then goes away; the next VT is 200 px
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(400, 50, 20, true));
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Disconnected);
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(400));
+	clientUnderTest.test_wrapper_set_screen(200, 60);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// A VT with a matching version label loads the pools from its memory, which skips the upload and
+// with it the scaling: the factors are set all the same, and the copies of the pools are released.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsTheVersion)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_data_mask(pool, 500, { 400 });
+	client.set_object_pool(0, &pool, "TEST");
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendLoadVersion);
+	update_auxiliary_client(client);
+
+	EXPECT_FLOAT_EQ(2.4f, client.get_object_scale_factor(400));
+	EXPECT_TRUE(client.test_wrapper_get_scaled_pool(0).empty());
+	EXPECT_TRUE(client.send_change_size_command(400, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(client.test_wrapper_take_queued_command(), 3));
+}
+
+// Autoscaling leaves a Working Set and an Animation alone, so commands on them aren't scaled either
+TEST_F(VirtualTerminalTest, AutoScaledCommandsLeaveObjectsTheUploadDoesNotScale)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_working_set(pool, 1, 500, 400);
+	append_output_rectangle(pool, 400);
+	append_animation(pool, 600, 400);
+	append_data_mask(pool, 500, { 400, 600 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(1));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(600));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(400));
+
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(400, 1, 10, 20, true));
+	EXPECT_EQ(ValuePair(10, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(600, 50, 20, true));
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// Below a factor of 1, a size above 0 stays at least 1 px: 0 hides the object (F.18), and a Change
+// Polygon Scale to 0 would collapse its points. 0 itself stays 0, and coordinates may become 0.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsKeepSizesAboveZero)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_output_line(pool, 401);
+	append_output_polygon(pool, 402);
+	append_data_mask(pool, 500, { 400, 401, 402 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 480, 90);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(200, 60); // Factor 0.4167
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(400, 2, 0, true));
+	EXPECT_EQ(ValuePair(1, 0), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_endpoint(401, 0, 2, VirtualTerminalClient::LineDirection::TopLeftToBottomRightOfEnclosingVirtualRectangle, true));
+	EXPECT_EQ(ValuePair(0, 1), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_scale(402, 1, 2, true));
+	EXPECT_EQ(ValuePair(1, 1), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_point(402, 1, 2, 24, true));
+	EXPECT_EQ(ValuePair(0, 10), command_values(clientUnderTest.test_wrapper_take_queued_command(), 4));
+
+	// A relative move of 1 px truncates to no move: send_change_child_location() says so
+	EXPECT_TRUE(clientUnderTest.send_change_child_location(400, 500, 127 + 1, 127 - 10, true));
+	const std::vector<std::uint8_t> command = clientUnderTest.test_wrapper_take_queued_command();
+	ASSERT_EQ(8u, command.size());
+	EXPECT_EQ(127, command[5]);
+	EXPECT_EQ(127 - 4, command[6]);
+}
+
+// Autoscaling keeps an Input Boolean's width as designed (ResizeInputBoolean), so a Change Size on
+// one is sent as given too: scaling it would make a 30 px box uploaded at 30 px grow to 72 px.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsKeepInputBooleansAsUploaded)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_u16(pool, 700);
+	pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputBoolean));
+	pool.push_back(0); // Background colour
+	append_u16(pool, 30); // Width
+	append_u16(pool, 0xFFFF); // No foreground colour
+	append_u16(pool, 0xFFFF); // No variable reference
+	pool.push_back(0); // Value
+	pool.push_back(1); // Enabled
+	pool.push_back(0); // Number of macros
+	append_data_mask(pool, 500, { 700 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	ASSERT_GE(scaled.size(), 6u);
+	EXPECT_EQ(30, scaled[4] | (scaled[5] << 8));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(700));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(700, 30, 30, true));
+	EXPECT_EQ(ValuePair(30, 30), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// When pools share an object ID, the VT keeps the object it got last (4.6.10.3), so its pool's factor applies
+TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheLastPoolWithTheObject)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> firstPool;
+	append_output_rectangle(firstPool, 410);
+	append_output_rectangle(firstPool, 411);
+	std::vector<std::uint8_t> secondPool;
+	append_output_rectangle(secondPool, 410);
+	std::vector<std::uint8_t> unscaledPool;
+	append_output_rectangle(unscaledPool, 411);
+
+	clientUnderTest.set_object_pool(0, &firstPool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.set_object_pool(1, &secondPool);
+	clientUnderTest.set_object_pool_scaling(1, 240, 60);
+	clientUnderTest.set_object_pool(2, &unscaledPool);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(2.0f, clientUnderTest.get_object_scale_factor(410));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(411));
 }
 
 TEST_F(VirtualTerminalTest, FontRemapping)
