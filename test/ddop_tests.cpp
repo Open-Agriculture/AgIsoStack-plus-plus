@@ -801,3 +801,10 @@ TEST(DDOP_TESTS, DataSpanOfBytesIsUnchanged)
 	EXPECT_EQ(3, span.end() - span.begin());
 	EXPECT_EQ(3, span[2]);
 }
+
+TEST(DDOP_TESTS, TruncatedDeviceElementIsRejected)
+{
+	std::vector<std::uint8_t> binaryPool = { 'D', 'E', 'T', 0x01, 0x00 };
+	DeviceDescriptorObjectPool pool;
+	EXPECT_FALSE(pool.deserialize_binary_object_pool(binaryPool, NAME(0)));
+}
