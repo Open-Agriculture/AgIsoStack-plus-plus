@@ -26,7 +26,7 @@ jobs:
           restore-keys: ${{ runner.os }}-pio-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.12"
           cache: "pip"
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
