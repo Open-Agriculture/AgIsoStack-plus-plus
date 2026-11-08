@@ -2944,6 +2944,93 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, CheckAuxiliaryAssignmentApplie
 	EXPECT_EQ(Result::Allowed, server->check_auxiliary_assignment(functions, 24, inputs, 11));
 }
 
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, LearnModeIsReportedInTheStatusMessage)
+{
+	std::uint8_t busyCodesBefore = 0;
+	std::uint8_t busyCodesDuring = 0;
+	std::uint8_t busyCodesAfter = 0;
+	ASSERT_TRUE(start(0x5F, 0xEA, 0xEB));
+	ASSERT_TRUE(read_status_busy_codes(*server, testPlugin, busyCodesBefore));
+	server->set_auxiliary_learn_mode(true);
+	ASSERT_TRUE(read_status_busy_codes(*server, testPlugin, busyCodesDuring));
+	server->set_auxiliary_learn_mode(false);
+	ASSERT_TRUE(read_status_busy_codes(*server, testPlugin, busyCodesAfter));
+
+	EXPECT_EQ(0x00, busyCodesBefore & 0x40);
+	EXPECT_EQ(0x40, busyCodesDuring & 0x40);
+	EXPECT_EQ(0x00, busyCodesAfter & 0x40);
+	EXPECT_FALSE(server->get_auxiliary_learn_mode());
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, InputStatusIsReportedInLearnMode)
+{
+	std::vector<VirtualTerminalServer::AuxiliaryInputStatus> statuses;
+	ASSERT_TRUE(start(0x70, 0xEC, 0xED));
+	auto statusHandle = server->get_on_auxiliary_input_status_event_dispatcher().add_listener([&statuses](const VirtualTerminalServer::AuxiliaryInputStatus &status) { statuses.push_back(status); });
+
+	receive_from_client(serverCF, inputUnit, { 0x26, 0x0A, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 });
+	run_server_update();
+	const auto statusesOutsideLearnMode = statuses.size();
+	server->set_auxiliary_learn_mode(true);
+	// An input the unit does not have is not reported
+	receive_from_client(serverCF, inputUnit, { 0x26, 0x63, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03 });
+	receive_from_client(serverCF, inputUnit, { 0x26, 0x0A, 0x00, 0x34, 0x12, 0x78, 0x56, 0x03 });
+	run_server_update();
+
+	EXPECT_EQ(0U, statusesOutsideLearnMode);
+	ASSERT_EQ(1U, statuses.size());
+	EXPECT_EQ(get_working_set(inputUnit), statuses.front().inputWorkingSet);
+	EXPECT_EQ(INPUT_OBJECT_ID, statuses.front().inputObjectID);
+	EXPECT_EQ(0x1234, statuses.front().value1);
+	EXPECT_EQ(0x5678, statuses.front().value2);
+	EXPECT_TRUE(statuses.front().isActivated);
+	EXPECT_FALSE(statuses.front().isLocked);
+}
+
+TEST_F(VirtualTerminalServerAuxiliaryControlTest, AuxiliaryCapabilitiesListTheUnitsAndTheirSets)
+{
+	CANMessageFrame response = {};
+	CANMessageFrame invalidTypeResponse = {};
+	std::vector<std::uint8_t> assignmentCommand;
+	std::vector<std::uint8_t> inputUnits;
+	std::vector<std::uint8_t> functionUnits;
+	ASSERT_TRUE(start(0x71, 0xEE, 0xEF, { { FUNCTION_OBJECT_ID, BOOLEAN_NON_LATCHING } }, { { INPUT_OBJECT_ID, BOOLEAN_NON_LATCHING }, { 11, BOOLEAN_NON_LATCHING }, { 12, BOOLEAN_NON_LATCHING | CRITICAL_CONTROL } }));
+	server->version = VirtualTerminalBase::VTVersion::Version5;
+	ASSERT_TRUE(send_preferred_assignment(preferred_assignment_of_the_input(), response));
+	ASSERT_TRUE(answer_assignment_of_the_input(assignmentCommand));
+
+	receive_from_client(serverCF, implement, { 0x27, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(read_tp_from_server(testPlugin, serverCF, implement, inputUnits));
+	receive_from_client(serverCF, implement, { 0x27, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(read_tp_from_server(testPlugin, serverCF, implement, functionUnits));
+	testPlugin.clear_queue();
+	receive_from_client(serverCF, implement, { 0x27, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x27, invalidTypeResponse));
+
+	// One input unit with an assigned input, an unassigned one and an unassigned critical one, padded to 24 bytes
+	const std::vector<std::uint8_t> expectedSets = { 3, 1, BOOLEAN_NON_LATCHING, 0x02, 1, BOOLEAN_NON_LATCHING, 0x00, 1, BOOLEAN_NON_LATCHING | CRITICAL_CONTROL, 0x00 };
+	ASSERT_EQ(24U, inputUnits.size());
+	EXPECT_EQ(0x27, inputUnits[0]);
+	EXPECT_EQ(1U, inputUnits[1]);
+	for (std::uint8_t i = 0; i < 8; i++)
+	{
+		EXPECT_EQ(static_cast<std::uint8_t>(inputUnit->get_NAME().get_full_name() >> (8 * i)), inputUnits[2 + i]);
+	}
+	EXPECT_EQ(expectedSets, std::vector<std::uint8_t>(inputUnits.begin() + 10, inputUnits.begin() + 20));
+	EXPECT_EQ(0xFF, inputUnits[20]);
+
+	// One function unit with its one assigned function, padded to 16 bytes
+	ASSERT_EQ(16U, functionUnits.size());
+	EXPECT_EQ(1U, functionUnits[1]);
+	EXPECT_EQ(static_cast<std::uint8_t>(implement->get_NAME().get_full_name()), functionUnits[2]);
+	EXPECT_EQ(1U, functionUnits[10]);
+	EXPECT_EQ(1U, functionUnits[11]);
+	EXPECT_EQ(BOOLEAN_NON_LATCHING, functionUnits[12]);
+	EXPECT_EQ(0x03, functionUnits[13]);
+
+	EXPECT_EQ(0x00, invalidTypeResponse.data[1]);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, MacroExecutesLongMacro)
 {
 	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
@@ -3158,7 +3245,7 @@ TEST_F(VirtualTerminalServerMessagingTest, FunctionsTheVTAcceptsWithoutAnAnswerO
 
 	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	testPlugin.clear_queue();
-	for (const std::uint8_t function : { 0x07, 0x09, 0x20, 0x24, 0x25, 0x26, 0xC1, 0xC2, 0xC3, 0xC4, 0xC7, 0xFD })
+	for (const std::uint8_t function : { 0x07, 0x09, 0x20, 0x24, 0x25, 0x26, 0x27, 0xC1, 0xC2, 0xC3, 0xC4, 0xC7, 0xFD })
 	{
 		receive_from_client(internalECU, client, { function, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	}

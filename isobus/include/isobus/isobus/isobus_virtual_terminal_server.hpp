@@ -18,6 +18,7 @@
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
 #include <utility>
 
 namespace isobus
@@ -452,6 +453,31 @@ namespace isobus
 		/// @brief Returns the event dispatcher for auxiliary assignment events, called from update()
 		/// @returns The event dispatcher for auxiliary assignment events
 		EventDispatcher<AuxiliaryAssignment, AuxiliaryAssignmentEvent> &get_on_auxiliary_assignment_event_dispatcher();
+
+		/// @brief The status of an Auxiliary Input, as sent to the VT in learn mode
+		struct AuxiliaryInputStatus
+		{
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet; ///< The working set of the input
+			std::uint16_t inputObjectID = NULL_OBJECT_ID; ///< The Auxiliary Input object ID
+			std::uint16_t value1 = 0; ///< Value 1, its meaning depends on the function type
+			std::uint16_t value2 = 0; ///< Value 2, its meaning depends on the function type
+			bool isActivated = false; ///< True if the operator activated the input
+			bool isLocked = false; ///< True if the input is locked (VT 6+)
+			bool isInteractionDetectedWhileLocked = false; ///< True if operated while locked (VT 6+)
+		};
+
+		/// @brief Turns the auxiliary controls learn mode on or off
+		/// @details Only turn it on while the assignment screen is shown. The VT Status message is sent right away.
+		/// @param[in] active True to turn learn mode on, false to turn it off
+		void set_auxiliary_learn_mode(bool active);
+
+		/// @brief Returns if the auxiliary controls learn mode is on
+		/// @returns True if learn mode is on
+		bool get_auxiliary_learn_mode() const;
+
+		/// @brief Returns the event dispatcher for learn mode input statuses, called from update()
+		/// @returns The event dispatcher for auxiliary input status events
+		EventDispatcher<AuxiliaryInputStatus> &get_on_auxiliary_input_status_event_dispatcher();
 
 		//----------------- Other Server Settings -----------------------------
 
@@ -954,6 +980,12 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_auxiliary_input_status_enable_command(std::uint16_t inputObjectID, bool enable, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends an Auxiliary Capabilities response
+		/// @param[in] requestType 0 for input units, 1 for function units, others list none
+		/// @param[in] destination The control function that sent the request
+		/// @returns True if the message was sent, otherwise false
+		bool send_auxiliary_capabilities_response(std::uint8_t requestType, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to the select input object command
 		/// @param[in] objectID The object ID for the object
 		/// @param[in] errorBitfield An error bitfield
@@ -1125,6 +1157,11 @@ namespace isobus
 		/// @param[in] workingSet The working set that sent it
 		void process_auxiliary_input_status_enable_response(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
+		/// @brief Handles an Auxiliary Input Type 2 Status message sent to the VT in learn mode
+		/// @param[in] message The status message
+		/// @param[in] workingSet The working set that sent it
+		void process_auxiliary_input_status_message(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
 		/// @brief Sends due auxiliary commands, handles timeouts and reports events. Called from update().
 		void update_auxiliary_assignments();
 
@@ -1257,8 +1294,11 @@ namespace isobus
 		std::vector<AuxiliaryFunctionState> auxiliaryFunctionStates; ///< The assignment of each known Auxiliary Function
 		std::vector<AuxiliaryInputState> auxiliaryInputStates; ///< The enable state of each Auxiliary Input in use
 		std::vector<std::pair<AuxiliaryAssignment, AuxiliaryAssignmentEvent>> pendingAuxiliaryAssignmentEvents; ///< Events for update() to dispatch
+		std::vector<AuxiliaryInputStatus> pendingAuxiliaryInputStatuses; ///< Learn mode input statuses for update() to dispatch
 		mutable Mutex auxiliaryAssignmentMutex; ///< Protects the auxiliary assignment state
 		EventDispatcher<AuxiliaryAssignment, AuxiliaryAssignmentEvent> onAuxiliaryAssignmentEventDispatcher; ///< Event dispatcher for auxiliary assignment events
+		EventDispatcher<AuxiliaryInputStatus> onAuxiliaryInputStatusEventDispatcher; ///< Event dispatcher for learn mode input statuses
+		std::atomic<bool> isAuxiliaryLearnModeActive = { false }; ///< True while the auxiliary controls learn mode is on
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP
