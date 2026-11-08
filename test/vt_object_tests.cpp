@@ -923,6 +923,14 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, InputStringTests)
 	objects[inputString->get_id()] = inputString;
 	EXPECT_TRUE(inputString->get_is_valid(objects));
 
+	auto extendedInputAttribute = std::make_shared<ExtendedInputAttributes>();
+	extendedInputAttribute->set_id(6);
+	objects[extendedInputAttribute->get_id()] = extendedInputAttribute;
+	EXPECT_TRUE(inputString->set_attribute(static_cast<std::uint8_t>(InputString::AttributeName::InputAttributes), extendedInputAttribute->get_id(), objects, error));
+	EXPECT_TRUE(inputString->get_is_valid(objects));
+	EXPECT_FALSE(inputString->set_attribute(static_cast<std::uint8_t>(InputString::AttributeName::InputAttributes), fontAttribute->get_id(), objects, error));
+	EXPECT_TRUE(inputString->set_attribute(static_cast<std::uint8_t>(InputString::AttributeName::InputAttributes), inputAttribute->get_id(), objects, error));
+
 	// Add an invalid object, a picture graphic
 	auto pictureGraphic = std::make_shared<PictureGraphic>();
 	pictureGraphic->set_id(200);
@@ -1562,6 +1570,27 @@ TEST(VIRTUAL_TERMINAL_OBJECT_TESTS, OutputListTests)
 	objects[dataMask->get_id()] = dataMask;
 	outputList->add_child(dataMask->get_id(), 0, 0);
 	EXPECT_FALSE(outputList->get_is_valid(objects));
+	EXPECT_FALSE(outputList->change_list_item(0, dataMask->get_id(), objects));
+
+	auto numberVariable = std::make_shared<NumberVariable>();
+	numberVariable->set_id(201);
+	objects[numberVariable->get_id()] = numberVariable;
+	EXPECT_FALSE(outputList->change_list_item(0, numberVariable->get_id(), objects));
+	EXPECT_FALSE(outputList->change_list_item(0, 202, objects));
+	EXPECT_TRUE(outputList->change_list_item(0, outputString2->get_id(), objects));
+
+	// Replacing the Data Mask with an Output Number makes the list valid again
+	auto outputNumber = std::make_shared<OutputNumber>();
+	outputNumber->set_id(203);
+	objects[outputNumber->get_id()] = outputNumber;
+	EXPECT_TRUE(outputList->change_list_item(4, outputNumber->get_id(), objects));
+	EXPECT_TRUE(outputList->get_is_valid(objects));
+
+	auto auxDesignator = std::make_shared<AuxiliaryControlDesignatorType2>();
+	auxDesignator->set_id(204);
+	objects[auxDesignator->get_id()] = auxDesignator;
+	EXPECT_TRUE(outputList->change_list_item(4, auxDesignator->get_id(), objects));
+	EXPECT_TRUE(outputList->get_is_valid(objects));
 
 	// Test variable reference attribute
 	EXPECT_TRUE(outputList->set_attribute(static_cast<std::uint8_t>(OutputList::AttributeName::VariableReference), 0xFFFF, objects, error));

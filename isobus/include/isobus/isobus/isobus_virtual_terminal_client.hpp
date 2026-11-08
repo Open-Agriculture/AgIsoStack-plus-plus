@@ -1453,6 +1453,15 @@ namespace isobus
 			bool uploaded; ///< The upload state of this pool
 		};
 
+		/// @brief An object in one of the working set's pools, as found by get_soft_key_scaled_object_ids()
+		struct ObjectPoolEntry
+		{
+			const std::vector<std::uint8_t> *pool; ///< The pool that holds the object
+			std::size_t offset; ///< The offset of the object in that pool
+			std::uint32_t size; ///< The size of the object, in bytes
+			VirtualTerminalObjectType type; ///< The type of the object
+		};
+
 		/// @brief A struct for storing information about an auxiliary input device
 		struct AssignedAuxiliaryInputDevice
 		{
@@ -1704,6 +1713,15 @@ namespace isobus
 		/// @brief Iterates through each object pool and scales each object in the pool automatically
 		/// @returns true if all object pools scaled with no error
 		bool scale_object_pools();
+
+		/// @brief Finds the objects drawn on soft keys, so they can be scaled with the soft key factor
+		/// @details Starts from the children of every Key and follows Containers and Object Pointers,
+		/// but not Output Lists, Animations or Working Set objects. Fonts also used outside the keys
+		/// are left out, so data mask text keeps its size. Other objects shown both on and off the keys,
+		/// such as a Picture Graphic, get the soft key factor everywhere.
+		/// @param[in] pools Every pool of the working set, including the ones that are not auto-scaled
+		/// @returns The sorted IDs of the objects shown on keys, and of the fonts only those objects use
+		static std::vector<std::uint16_t> get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools);
 
 		/// @brief Returns if the specified object type can be scaled
 		/// @param[in] type The object type to check
