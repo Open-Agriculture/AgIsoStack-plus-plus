@@ -363,6 +363,7 @@ namespace isobus
 		{
 			workingSet->set_preferred_auxiliary_assignments(assignments, {});
 			LOG_INFO("[VT Server]: Client %u preferred assignment command: accepted %u assignments.", workingSet->get_control_function()->get_address(), static_cast<std::uint32_t>(assignments.size()));
+			apply_preferred_auxiliary_assignments(workingSet);
 		}
 		else
 		{
@@ -460,6 +461,631 @@ namespace isobus
 		return errorBitfield;
 	}
 
+	VirtualTerminalServer::AuxiliaryAssignmentResult VirtualTerminalServer::check_auxiliary_assignment(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet,
+	                                                                                                   std::uint16_t functionObjectID,
+	                                                                                                   std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet,
+	                                                                                                   std::uint16_t inputObjectID) const
+	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+		return check_auxiliary_assignment_locked(functionWorkingSet, functionObjectID, inputWorkingSet, inputObjectID, true);
+	}
+
+	VirtualTerminalServer::AuxiliaryAssignmentResult VirtualTerminalServer::assign_auxiliary_function(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet,
+	                                                                                                  std::uint16_t functionObjectID,
+	                                                                                                  std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet,
+	                                                                                                  std::uint16_t inputObjectID)
+	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+		const auto result = check_auxiliary_assignment_locked(functionWorkingSet, functionObjectID, inputWorkingSet, inputObjectID, true);
+
+		if (AuxiliaryAssignmentResult::Allowed == result)
+		{
+			set_auxiliary_assignment_locked(get_auxiliary_function_state_locked(functionWorkingSet, functionObjectID), inputWorkingSet, inputObjectID, true);
+			update_auxiliary_input_states_locked();
+		}
+		return result;
+	}
+
+	VirtualTerminalServer::AuxiliaryAssignmentResult VirtualTerminalServer::unassign_auxiliary_function(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet, std::uint16_t functionObjectID)
+	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+		auto result = AuxiliaryAssignmentResult::Allowed;
+
+		if (!get_is_primary_vt())
+		{
+			result = AuxiliaryAssignmentResult::NotPrimaryVT;
+		}
+		else if ((nullptr == functionWorkingSet) || (!has_object_of_type(*functionWorkingSet, functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2)))
+		{
+			result = AuxiliaryAssignmentResult::InvalidFunction;
+		}
+		else if (!functionWorkingSet->get_was_preferred_assignment_received())
+		{
+			result = AuxiliaryAssignmentResult::NoPreferredAssignment;
+		}
+		else
+		{
+			set_auxiliary_assignment_locked(get_auxiliary_function_state_locked(functionWorkingSet, functionObjectID), nullptr, NULL_OBJECT_ID, true);
+			update_auxiliary_input_states_locked();
+		}
+		return result;
+	}
+
+	std::vector<VirtualTerminalServer::AuxiliaryAssignment> VirtualTerminalServer::get_auxiliary_assignments() const
+	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+		std::vector<AuxiliaryAssignment> assignments;
+
+		for (const auto &state : auxiliaryFunctionStates)
+		{
+			assignments.push_back(state.assignment);
+		}
+		return assignments;
+	}
+
+	EventDispatcher<VirtualTerminalServer::AuxiliaryAssignment, VirtualTerminalServer::AuxiliaryAssignmentEvent> &VirtualTerminalServer::get_on_auxiliary_assignment_event_dispatcher()
+	{
+		return onAuxiliaryAssignmentEventDispatcher;
+	}
+
+	bool VirtualTerminalServer::get_is_primary_vt() const
+	{
+		return (nullptr != serverInternalControlFunction) && (0 == serverInternalControlFunction->get_NAME().get_function_instance());
+	}
+
+	/// @brief Checks if a working assignment uses an input.
+	/// @param assignment The assignment to check.
+	/// @param inputWorkingSet The working set of the input.
+	/// @param inputObjectID The Auxiliary Input object ID.
+	/// @returns true if it does, otherwise false.
+	static bool get_does_assignment_use_input(const VirtualTerminalServer::AuxiliaryAssignment &assignment, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID)
+	{
+		return (!assignment.hasFailed) && (nullptr != inputWorkingSet) && (inputWorkingSet == assignment.inputWorkingSet) && (inputObjectID == assignment.inputObjectID);
+	}
+
+	/// @brief Checks if an assignment's function is missing from a new object pool.
+	/// @param assignment The assignment to check.
+	/// @param workingSet The working set whose object pool was parsed.
+	/// @returns true if it is missing, otherwise false.
+	static bool get_is_function_gone_from_object_pool(const VirtualTerminalServer::AuxiliaryAssignment &assignment, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
+		return (workingSet == assignment.functionWorkingSet) && (!has_object_of_type(*workingSet, assignment.functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2));
+	}
+
+	/// @brief Checks if an Auxiliary Function has the Single Assignment attribute.
+	/// @param workingSet The working set of the function.
+	/// @param functionObjectID The Auxiliary Function object ID.
+	/// @returns true if it does, otherwise false.
+	static bool get_is_single_assignment_function(VirtualTerminalServerManagedWorkingSet &workingSet, std::uint16_t functionObjectID)
+	{
+		return has_object_of_type(workingSet, functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2) &&
+		  std::static_pointer_cast<AuxiliaryFunctionType2>(workingSet.get_object_by_id(functionObjectID))->get_function_attribute(AuxiliaryFunctionType2::SingleAssignment);
+	}
+
+	/// @brief Checks if the Preferred Assignment assigns a function to an input.
+	/// @param functionWorkingSet The working set of the function.
+	/// @param functionObjectID The Auxiliary Function object ID.
+	/// @param inputWorkingSet The working set of the input.
+	/// @param inputObjectID The Auxiliary Input object ID.
+	/// @returns true if it does, otherwise false.
+	static bool get_is_preferred_assignment(VirtualTerminalServerManagedWorkingSet &functionWorkingSet, std::uint16_t functionObjectID, VirtualTerminalServerManagedWorkingSet &inputWorkingSet, std::uint16_t inputObjectID)
+	{
+		const std::uint64_t inputUnitName = inputWorkingSet.get_control_function()->get_NAME().get_full_name();
+		bool retVal = false;
+
+		for (const auto &assignment : functionWorkingSet.get_preferred_auxiliary_assignments())
+		{
+			retVal = retVal || ((functionObjectID == assignment.functionObjectID) && (inputObjectID == assignment.inputObjectID) && (inputUnitName == assignment.inputUnitName));
+		}
+		return retVal;
+	}
+
+	VirtualTerminalServer::AuxiliaryAssignmentResult VirtualTerminalServer::check_auxiliary_assignment_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &functionWorkingSet,
+	                                                                                                          std::uint16_t functionObjectID,
+	                                                                                                          const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet,
+	                                                                                                          std::uint16_t inputObjectID,
+	                                                                                                          bool isMadeByOperator) const
+	{
+		auto result = AuxiliaryAssignmentResult::Allowed;
+
+		if (!get_is_primary_vt())
+		{
+			result = AuxiliaryAssignmentResult::NotPrimaryVT;
+		}
+		else if ((nullptr == functionWorkingSet) || (!has_object_of_type(*functionWorkingSet, functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2)))
+		{
+			result = AuxiliaryAssignmentResult::InvalidFunction;
+		}
+		else if (isMadeByOperator && (!functionWorkingSet->get_was_preferred_assignment_received()))
+		{
+			result = AuxiliaryAssignmentResult::NoPreferredAssignment;
+		}
+		else if ((nullptr == inputWorkingSet) || (!inputWorkingSet->get_is_auxiliary_input_ready()) || (!has_object_of_type(*inputWorkingSet, inputObjectID, VirtualTerminalObjectType::AuxiliaryInputType2)))
+		{
+			result = AuxiliaryAssignmentResult::InvalidInput;
+		}
+		else
+		{
+			const auto function = std::static_pointer_cast<AuxiliaryFunctionType2>(functionWorkingSet->get_object_by_id(functionObjectID));
+			const auto input = std::static_pointer_cast<AuxiliaryInputType2>(inputWorkingSet->get_object_by_id(inputObjectID));
+			const bool isSingleAssignment = function->get_function_attribute(AuxiliaryFunctionType2::SingleAssignment) || input->get_function_attribute(AuxiliaryInputType2::SingleAssignment);
+
+			if (function->get_function_type() != input->get_function_type())
+			{
+				result = AuxiliaryAssignmentResult::TypeMismatch;
+			}
+			else if (function->get_function_attribute(AuxiliaryFunctionType2::CriticalControl) && (!input->get_function_attribute(AuxiliaryInputType2::CriticalControl)))
+			{
+				result = AuxiliaryAssignmentResult::CriticalControl;
+			}
+			else if (isMadeByOperator &&
+			         function->get_function_attribute(AuxiliaryFunctionType2::AssignmentRestriction) &&
+			         (!get_is_preferred_assignment(*functionWorkingSet, functionObjectID, *inputWorkingSet, inputObjectID)))
+			{
+				result = AuxiliaryAssignmentResult::AssignmentRestriction;
+			}
+
+			for (const auto &state : auxiliaryFunctionStates)
+			{
+				const auto &other = state.assignment;
+				const bool isOtherFunction = (functionWorkingSet != other.functionWorkingSet) || (functionObjectID != other.functionObjectID);
+
+				if ((AuxiliaryAssignmentResult::Allowed == result) &&
+				    isOtherFunction &&
+				    get_does_assignment_use_input(other, inputWorkingSet, inputObjectID) &&
+				    (isSingleAssignment || get_is_single_assignment_function(*other.functionWorkingSet, other.functionObjectID)))
+				{
+					result = AuxiliaryAssignmentResult::SingleAssignment;
+				}
+			}
+		}
+		return result;
+	}
+
+	VirtualTerminalServer::AuxiliaryFunctionState &VirtualTerminalServer::get_auxiliary_function_state_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &functionWorkingSet, std::uint16_t functionObjectID)
+	{
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			if ((functionWorkingSet == state.assignment.functionWorkingSet) && (functionObjectID == state.assignment.functionObjectID))
+			{
+				return state;
+			}
+		}
+
+		// A new function sends its removal once (ISO 11783-6 J.5 step 9)
+		AuxiliaryFunctionState newState;
+		newState.assignment.functionWorkingSet = functionWorkingSet;
+		newState.assignment.functionObjectID = functionObjectID;
+		auxiliaryFunctionStates.push_back(newState);
+		return auxiliaryFunctionStates.back();
+	}
+
+	void VirtualTerminalServer::set_auxiliary_assignment_locked(AuxiliaryFunctionState &state, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID, bool isMadeByOperator)
+	{
+		auto &assignment = state.assignment;
+		const bool isUnchanged = (inputWorkingSet == assignment.inputWorkingSet) && (inputObjectID == assignment.inputObjectID) && (!assignment.hasFailed);
+
+		// Only the operator resends an unchanged assignment (ISO 11783-6 J.5 step 8)
+		if ((!isUnchanged) || isMadeByOperator)
+		{
+			assignment.inputWorkingSet = inputWorkingSet;
+			assignment.inputObjectID = inputObjectID;
+			assignment.isMadeByOperator = isMadeByOperator;
+			assignment.isAcknowledged = false;
+			assignment.hasFailed = false;
+			state.functionType = REMOVE_ASSIGNMENT_FUNCTION_TYPE;
+			state.attempts = 0;
+			state.isChangedWhileAwaitingResponse = state.isAwaitingResponse;
+
+			if ((nullptr != inputWorkingSet) && has_object_of_type(*assignment.functionWorkingSet, assignment.functionObjectID, VirtualTerminalObjectType::AuxiliaryFunctionType2))
+			{
+				state.functionType = static_cast<std::uint8_t>(std::static_pointer_cast<AuxiliaryFunctionType2>(assignment.functionWorkingSet->get_object_by_id(assignment.functionObjectID))->get_function_type());
+			}
+
+			// A refused input is retried when it is assigned again
+			for (auto &input : auxiliaryInputStates)
+			{
+				if ((nullptr != inputWorkingSet) && (inputWorkingSet == input.inputWorkingSet) && (inputObjectID == input.inputObjectID) && input.hasFailed)
+				{
+					input.hasFailed = false;
+					input.attempts = 0;
+				}
+			}
+		}
+	}
+
+	void VirtualTerminalServer::remove_auxiliary_assignment_locked(AuxiliaryFunctionState &state, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID)
+	{
+		auto removedAssignment = state.assignment;
+		removedAssignment.inputWorkingSet = inputWorkingSet;
+		removedAssignment.inputObjectID = inputObjectID;
+
+		// Not stored as preferred, as it is an error condition (ISO 11783-6 J.7.10)
+		set_auxiliary_assignment_locked(state, nullptr, NULL_OBJECT_ID, false);
+		pendingAuxiliaryAssignmentEvents.emplace_back(removedAssignment, AuxiliaryAssignmentEvent::Removed);
+	}
+
+	void VirtualTerminalServer::remove_auxiliary_assignments_of_input_unit_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet)
+	{
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			if (inputWorkingSet == state.assignment.inputWorkingSet)
+			{
+				const auto inputObjectID = state.assignment.inputObjectID;
+				remove_auxiliary_assignment_locked(state, inputWorkingSet, inputObjectID);
+			}
+		}
+
+		auxiliaryInputStates.erase(std::remove_if(auxiliaryInputStates.begin(), auxiliaryInputStates.end(), [&inputWorkingSet](const AuxiliaryInputState &input) { return inputWorkingSet == input.inputWorkingSet; }),
+		                           auxiliaryInputStates.end());
+	}
+
+	void VirtualTerminalServer::fail_auxiliary_assignments_of_input_locked(const AuxiliaryInputState &input)
+	{
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			if (get_does_assignment_use_input(state.assignment, input.inputWorkingSet, input.inputObjectID))
+			{
+				state.assignment.hasFailed = true;
+				pendingAuxiliaryAssignmentEvents.emplace_back(state.assignment, AuxiliaryAssignmentEvent::NotAvailable);
+			}
+		}
+	}
+
+	void VirtualTerminalServer::apply_preferred_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> functionWorkingSet)
+	{
+		// Only the primary VT makes assignments (ISO 11783-6 J.3.1)
+		if (get_is_primary_vt())
+		{
+			const auto preferredAssignments = functionWorkingSet->get_preferred_auxiliary_assignments();
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+
+			for (const auto &object : functionWorkingSet->get_object_tree())
+			{
+				if ((nullptr != object.second) && (VirtualTerminalObjectType::AuxiliaryFunctionType2 == object.second->get_object_type()))
+				{
+					auto &state = get_auxiliary_function_state_locked(functionWorkingSet, object.first);
+					std::shared_ptr<VirtualTerminalServerManagedWorkingSet> inputWorkingSet;
+					std::uint16_t inputObjectID = NULL_OBJECT_ID;
+
+					for (const auto &preferred : preferredAssignments)
+					{
+						if (object.first == preferred.functionObjectID)
+						{
+							inputWorkingSet = get_managed_working_set(preferred.inputUnitName);
+							inputObjectID = preferred.inputObjectID;
+						}
+					}
+
+					if (nullptr == inputWorkingSet)
+					{
+						// A function that is not in the command is unassigned (ISO 11783-6 J.7.7)
+						set_auxiliary_assignment_locked(state, nullptr, NULL_OBJECT_ID, false);
+					}
+					else
+					{
+						const auto result = check_auxiliary_assignment_locked(functionWorkingSet, object.first, inputWorkingSet, inputObjectID, false);
+
+						if (AuxiliaryAssignmentResult::Allowed == result)
+						{
+							set_auxiliary_assignment_locked(state, inputWorkingSet, inputObjectID, false);
+						}
+						else
+						{
+							// Conflicts are removed for the operator to redo (ISO 11783-6 J.5 step 7)
+							LOG_WARNING("[VT Server]: Client %u preferred assignment of function %u to input %u conflicts (reason %u), removing it.", functionWorkingSet->get_control_function()->get_address(), object.first, inputObjectID, static_cast<std::uint8_t>(result));
+							remove_auxiliary_assignment_locked(state, inputWorkingSet, inputObjectID);
+						}
+					}
+				}
+			}
+			update_auxiliary_input_states_locked();
+		}
+	}
+
+	void VirtualTerminalServer::remove_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+
+		auxiliaryFunctionStates.erase(std::remove_if(auxiliaryFunctionStates.begin(), auxiliaryFunctionStates.end(), [&workingSet](const AuxiliaryFunctionState &state) { return workingSet == state.assignment.functionWorkingSet; }),
+		                              auxiliaryFunctionStates.end());
+		remove_auxiliary_assignments_of_input_unit_locked(workingSet);
+		update_auxiliary_input_states_locked();
+	}
+
+	void VirtualTerminalServer::revalidate_auxiliary_assignments(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+
+		// Functions that the new object pool no longer has are forgotten
+		auxiliaryFunctionStates.erase(std::remove_if(auxiliaryFunctionStates.begin(), auxiliaryFunctionStates.end(), [&workingSet](const AuxiliaryFunctionState &state) { return get_is_function_gone_from_object_pool(state.assignment, workingSet); }),
+		                              auxiliaryFunctionStates.end());
+
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			const auto inputWorkingSet = state.assignment.inputWorkingSet;
+			const auto inputObjectID = state.assignment.inputObjectID;
+
+			if ((nullptr != inputWorkingSet) &&
+			    ((workingSet == state.assignment.functionWorkingSet) || (workingSet == inputWorkingSet)) &&
+			    (AuxiliaryAssignmentResult::Allowed != check_auxiliary_assignment_locked(state.assignment.functionWorkingSet, state.assignment.functionObjectID, inputWorkingSet, inputObjectID, false)))
+			{
+				LOG_WARNING("[VT Server]: The object pool of client %u invalidates the assignment of function %u to input %u, removing it.", workingSet->get_control_function()->get_address(), state.assignment.functionObjectID, inputObjectID);
+				remove_auxiliary_assignment_locked(state, inputWorkingSet, inputObjectID);
+			}
+		}
+		update_auxiliary_input_states_locked();
+	}
+
+	void VirtualTerminalServer::update_auxiliary_input_states_locked()
+	{
+		for (const auto &state : auxiliaryFunctionStates)
+		{
+			const auto &assignment = state.assignment;
+
+			if ((!assignment.hasFailed) &&
+			    (nullptr != assignment.inputWorkingSet) &&
+			    (auxiliaryInputStates.end() == std::find_if(auxiliaryInputStates.begin(), auxiliaryInputStates.end(), [&assignment](const AuxiliaryInputState &input) { return get_does_assignment_use_input(assignment, input.inputWorkingSet, input.inputObjectID); })))
+			{
+				AuxiliaryInputState newInput;
+				newInput.inputWorkingSet = assignment.inputWorkingSet;
+				newInput.inputObjectID = assignment.inputObjectID;
+				auxiliaryInputStates.push_back(newInput);
+			}
+		}
+
+		for (auto &input : auxiliaryInputStates)
+		{
+			bool isUsed = false;
+
+			for (const auto &state : auxiliaryFunctionStates)
+			{
+				isUsed = isUsed || get_does_assignment_use_input(state.assignment, input.inputWorkingSet, input.inputObjectID);
+			}
+
+			if (isUsed != input.shouldBeEnabled)
+			{
+				input.shouldBeEnabled = isUsed;
+				input.attempts = 0;
+				input.hasFailed = false;
+			}
+		}
+	}
+
+	bool VirtualTerminalServer::get_is_auxiliary_input_enabled_locked(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &inputWorkingSet, std::uint16_t inputObjectID) const
+	{
+		bool retVal = false;
+
+		for (const auto &input : auxiliaryInputStates)
+		{
+			retVal = retVal || ((inputWorkingSet == input.inputWorkingSet) && (inputObjectID == input.inputObjectID) && input.isEnabled && (!input.hasFailed));
+		}
+		return retVal;
+	}
+
+	void VirtualTerminalServer::collect_auxiliary_input_commands_locked(std::vector<AuxiliaryCommand> &commands)
+	{
+		for (auto &input : auxiliaryInputStates)
+		{
+			if (input.isAwaitingResponse && SystemTiming::time_expired_ms(input.commandTimestamp_ms, AUXILIARY_COMMAND_TIMEOUT_MS))
+			{
+				input.isAwaitingResponse = false;
+				if (input.attempts >= AUXILIARY_COMMAND_ATTEMPTS)
+				{
+					// The operator is alerted that the input is not available (ISO 11783-6 J.7.11)
+					LOG_WARNING("[VT Server]: Client %u did not answer the status enable command for input %u, it is not available.", input.inputWorkingSet->get_control_function()->get_address(), input.inputObjectID);
+					input.hasFailed = true;
+					fail_auxiliary_assignments_of_input_locked(input);
+				}
+			}
+
+			if ((!input.hasFailed) && (!input.isAwaitingResponse) && (input.shouldBeEnabled != input.isEnabled))
+			{
+				AuxiliaryCommand command;
+				command.destination = input.inputWorkingSet->get_control_function();
+				command.inputObjectID = input.inputObjectID;
+				command.flag = input.shouldBeEnabled;
+				commands.push_back(command);
+				input.isAwaitingResponse = true;
+				input.commandTimestamp_ms = SystemTiming::get_timestamp_ms();
+				input.attempts++;
+			}
+		}
+
+		// Unused inputs are forgotten once disabled or failed
+		auxiliaryInputStates.erase(std::remove_if(auxiliaryInputStates.begin(), auxiliaryInputStates.end(), [](const AuxiliaryInputState &input) { return (!input.shouldBeEnabled) && (!input.isAwaitingResponse) && ((!input.isEnabled) || input.hasFailed); }),
+		                           auxiliaryInputStates.end());
+	}
+
+	void VirtualTerminalServer::collect_auxiliary_assignment_commands_locked(std::vector<AuxiliaryCommand> &commands)
+	{
+		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> busyWorkingSets;
+
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			if (state.isAwaitingResponse && SystemTiming::time_expired_ms(state.commandTimestamp_ms, AUXILIARY_COMMAND_TIMEOUT_MS))
+			{
+				state.isAwaitingResponse = false;
+				if (state.isChangedWhileAwaitingResponse)
+				{
+					state.isChangedWhileAwaitingResponse = false;
+				}
+				else if (state.attempts >= AUXILIARY_COMMAND_ATTEMPTS)
+				{
+					// The operator is alerted that the function is not available (ISO 11783-6 J.7.5)
+					LOG_WARNING("[VT Server]: Client %u did not answer the assignment command for function %u, it is not available.", state.assignment.functionWorkingSet->get_control_function()->get_address(), state.assignment.functionObjectID);
+					state.assignment.hasFailed = true;
+					pendingAuxiliaryAssignmentEvents.emplace_back(state.assignment, AuxiliaryAssignmentEvent::NotAvailable);
+				}
+			}
+
+			if (state.isAwaitingResponse)
+			{
+				busyWorkingSets.push_back(state.assignment.functionWorkingSet);
+			}
+		}
+
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			const auto &assignment = state.assignment;
+			// An input is only assigned once its status message is enabled (ISO 11783-6 J.7.11)
+			const bool isDue = (!assignment.isAcknowledged) &&
+			  (!assignment.hasFailed) &&
+			  (!state.isAwaitingResponse) &&
+			  ((nullptr == assignment.inputWorkingSet) || get_is_auxiliary_input_enabled_locked(assignment.inputWorkingSet, assignment.inputObjectID));
+
+			// One unanswered assignment command per working set (ISO 11783-6 J.7.5)
+			if (isDue && (busyWorkingSets.end() == std::find(busyWorkingSets.begin(), busyWorkingSets.end(), assignment.functionWorkingSet)))
+			{
+				AuxiliaryCommand command;
+				command.isAssignment = true;
+				command.destination = assignment.functionWorkingSet->get_control_function();
+				command.functionObjectID = assignment.functionObjectID;
+				command.flag = assignment.isMadeByOperator;
+				command.inputUnitName = std::numeric_limits<std::uint64_t>::max();
+
+				if (nullptr != assignment.inputWorkingSet)
+				{
+					command.inputUnitName = assignment.inputWorkingSet->get_control_function()->get_NAME().get_full_name();
+					command.inputObjectID = assignment.inputObjectID;
+					command.functionType = state.functionType;
+				}
+				commands.push_back(command);
+				state.isAwaitingResponse = true;
+				state.commandTimestamp_ms = SystemTiming::get_timestamp_ms();
+				state.attempts++;
+				busyWorkingSets.push_back(assignment.functionWorkingSet);
+			}
+		}
+	}
+
+	void VirtualTerminalServer::update_auxiliary_assignments()
+	{
+		std::vector<AuxiliaryCommand> commands;
+		std::vector<std::pair<AuxiliaryAssignment, AuxiliaryAssignmentEvent>> events;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> silentInputUnits;
+
+			for (const auto &state : auxiliaryFunctionStates)
+			{
+				const auto &inputWorkingSet = state.assignment.inputWorkingSet;
+
+				if ((nullptr != inputWorkingSet) &&
+				    SystemTiming::time_expired_ms(inputWorkingSet->get_auxiliary_input_maintenance_timestamp_ms(), AUXILIARY_INPUT_MAINTENANCE_TIMEOUT_MS) &&
+				    (silentInputUnits.end() == std::find(silentInputUnits.begin(), silentInputUnits.end(), inputWorkingSet)))
+				{
+					silentInputUnits.push_back(inputWorkingSet);
+				}
+			}
+
+			for (const auto &inputWorkingSet : silentInputUnits)
+			{
+				// It has to report Ready again before its inputs are assigned (ISO 11783-6 J.7.10)
+				LOG_WARNING("[VT Server]: Client %u has not sent an auxiliary input maintenance message for %u ms, removing the assignments to its inputs.", inputWorkingSet->get_control_function()->get_address(), AUXILIARY_INPUT_MAINTENANCE_TIMEOUT_MS);
+				inputWorkingSet->set_auxiliary_input_maintenance_status(inputWorkingSet->get_auxiliary_input_model_identification_code(), false);
+				remove_auxiliary_assignments_of_input_unit_locked(inputWorkingSet);
+			}
+			if (!silentInputUnits.empty())
+			{
+				update_auxiliary_input_states_locked();
+			}
+
+			// Removals go before disables (ISO 11783-6 J.6 rule 9)
+			collect_auxiliary_assignment_commands_locked(commands);
+			collect_auxiliary_input_commands_locked(commands);
+			events.swap(pendingAuxiliaryAssignmentEvents);
+		}
+
+		// Sent outside the lock, which the application may be waiting for
+		for (const auto &command : commands)
+		{
+			if (command.isAssignment)
+			{
+				send_auxiliary_assignment_command(command.inputUnitName, command.flag, command.functionType, command.inputObjectID, command.functionObjectID, command.destination);
+			}
+			else
+			{
+				send_auxiliary_input_status_enable_command(command.inputObjectID, command.flag, command.destination);
+			}
+		}
+
+		for (const auto &event : events)
+		{
+			onAuxiliaryAssignmentEventDispatcher.call(event.first, event.second);
+		}
+	}
+
+	void VirtualTerminalServer::process_auxiliary_assignment_response(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		const auto &data = message.get_data();
+		const std::uint16_t functionObjectID = get_little_endian_uint16(data, 1);
+		// Up to VT version 5, bit 1 only means already assigned, not an error (J.7.6)
+		const bool isRejected = (0 != (data[3] & 0x01));
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+
+		for (auto &state : auxiliaryFunctionStates)
+		{
+			if ((workingSet == state.assignment.functionWorkingSet) && (functionObjectID == state.assignment.functionObjectID) && state.isAwaitingResponse)
+			{
+				state.isAwaitingResponse = false;
+				if (state.isChangedWhileAwaitingResponse)
+				{
+					// It answers an outdated command, the current one is sent next
+					state.isChangedWhileAwaitingResponse = false;
+				}
+				else if (isRejected)
+				{
+					LOG_WARNING("[VT Server]: Client %u rejected the assignment of function %u.", workingSet->get_control_function()->get_address(), functionObjectID);
+					state.assignment.hasFailed = true;
+					pendingAuxiliaryAssignmentEvents.emplace_back(state.assignment, AuxiliaryAssignmentEvent::Rejected);
+					update_auxiliary_input_states_locked();
+				}
+				else
+				{
+					state.assignment.isAcknowledged = true;
+					if (nullptr != state.assignment.inputWorkingSet)
+					{
+						pendingAuxiliaryAssignmentEvents.emplace_back(state.assignment, AuxiliaryAssignmentEvent::Assigned);
+					}
+					else if (state.assignment.isMadeByOperator)
+					{
+						pendingAuxiliaryAssignmentEvents.emplace_back(state.assignment, AuxiliaryAssignmentEvent::Unassigned);
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	void VirtualTerminalServer::process_auxiliary_input_status_enable_response(const CANMessage &message, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		const auto &data = message.get_data();
+		const std::uint16_t inputObjectID = get_little_endian_uint16(data, 1);
+		const bool isEnabled = (1 == data[3]);
+		const bool hasError = (0 != data[4]);
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+
+		for (auto &input : auxiliaryInputStates)
+		{
+			if ((workingSet == input.inputWorkingSet) && (inputObjectID == input.inputObjectID) && input.isAwaitingResponse)
+			{
+				input.isAwaitingResponse = false;
+				if (hasError)
+				{
+					LOG_WARNING("[VT Server]: Client %u refused the status enable command for input %u with error bits 0x%02X, it is not available.", workingSet->get_control_function()->get_address(), inputObjectID, data[4]);
+					input.hasFailed = true;
+					fail_auxiliary_assignments_of_input_locked(input);
+				}
+				else
+				{
+					input.isEnabled = isEnabled;
+				}
+				break;
+			}
+		}
+	}
+
 	void VirtualTerminalServer::process_working_set_maintenance_message(const CANMessage &message)
 	{
 		const auto &data = message.get_data();
@@ -531,6 +1157,7 @@ namespace isobus
 	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
 	{
 		deactivate_working_set(workingSet);
+		remove_auxiliary_assignments(workingSet);
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
 
@@ -887,6 +1514,7 @@ namespace isobus
 					auto loadedVersion = load_version(versionLabel, message.get_source_control_function()->get_NAME());
 					if (!loadedVersion.empty())
 					{
+						remove_auxiliary_assignments(managedWorkingSet);
 						managedWorkingSet->clear_object_pool_data({});
 						managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
 						managedWorkingSet->add_iop_raw_data(loadedVersion);
@@ -2076,6 +2704,18 @@ namespace isobus
 			}
 			break;
 
+			case Function::AuxiliaryAssignmentTypeTwoCommand:
+			{
+				process_auxiliary_assignment_response(message, managedWorkingSet);
+			}
+			break;
+
+			case Function::AuxiliaryInputStatusTypeTwoEnableCommand:
+			{
+				process_auxiliary_input_status_enable_response(message, managedWorkingSet);
+			}
+			break;
+
 			case Function::ExecuteMacroCommand:
 			{
 				auto objectID = static_cast<std::uint16_t>(data[1]);
@@ -2156,6 +2796,7 @@ namespace isobus
 				{
 					deactivate_working_set(managedWorkingSet);
 					managedWorkingSetIopLoadStateMap.erase(managedWorkingSet);
+					remove_auxiliary_assignments(managedWorkingSet);
 					managedWorkingSet->clear_object_pool_data({});
 					{
 						LOCK_GUARD(Mutex, pendingShutdownsMutex);
@@ -2255,8 +2896,6 @@ namespace isobus
 			case Function::VTChangeSoftKeyMaskMessage:
 			case Function::VTOnUserLayoutHideShowMessage:
 			case Function::AuxiliaryAssignmentTypeOneCommand:
-			case Function::AuxiliaryAssignmentTypeTwoCommand:
-			case Function::AuxiliaryInputStatusTypeTwoEnableCommand:
 			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
@@ -3210,6 +3849,62 @@ namespace isobus
 		                                                      get_priority());
 	}
 
+	bool VirtualTerminalServer::send_auxiliary_assignment_command(std::uint64_t inputUnitName,
+	                                                              bool storeAsPreferredAssignment,
+	                                                              std::uint8_t functionType,
+	                                                              std::uint16_t inputObjectID,
+	                                                              std::uint16_t functionObjectID,
+	                                                              std::shared_ptr<ControlFunction> destination) const
+	{
+		// 14 bytes, padded to the 8 byte boundary (ISO 11783-6 4.6.26)
+		const std::array<std::uint8_t, 2 * CAN_DATA_LENGTH> buffer = {
+			static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand),
+			static_cast<std::uint8_t>(inputUnitName),
+			static_cast<std::uint8_t>(inputUnitName >> 8),
+			static_cast<std::uint8_t>(inputUnitName >> 16),
+			static_cast<std::uint8_t>(inputUnitName >> 24),
+			static_cast<std::uint8_t>(inputUnitName >> 32),
+			static_cast<std::uint8_t>(inputUnitName >> 40),
+			static_cast<std::uint8_t>(inputUnitName >> 48),
+			static_cast<std::uint8_t>(inputUnitName >> 56),
+			static_cast<std::uint8_t>((storeAsPreferredAssignment ? 0x00 : 0x80) | (functionType & REMOVE_ASSIGNMENT_FUNCTION_TYPE)),
+			get_low_byte(inputObjectID),
+			get_high_byte(inputObjectID),
+			get_low_byte(functionObjectID),
+			get_high_byte(functionObjectID),
+			0xFF,
+			0xFF
+		};
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      static_cast<std::uint32_t>(buffer.size()),
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
+	bool VirtualTerminalServer::send_auxiliary_input_status_enable_command(std::uint16_t inputObjectID, bool enable, std::shared_ptr<ControlFunction> destination) const
+	{
+		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+			static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand),
+			get_low_byte(inputObjectID),
+			get_high_byte(inputObjectID),
+			static_cast<std::uint8_t>(enable ? 0x01 : 0x00),
+			0xFF,
+			0xFF,
+			0xFF,
+			0xFF
+		};
+
+		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                      buffer.data(),
+		                                                      CAN_DATA_LENGTH,
+		                                                      serverInternalControlFunction,
+		                                                      destination,
+		                                                      get_priority());
+	}
+
 	bool VirtualTerminalServer::send_esc_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
@@ -3462,8 +4157,13 @@ namespace isobus
 		}
 		for (const auto &parsed : parsedWorkingSets)
 		{
+			if (parsed.second)
+			{
+				revalidate_auxiliary_assignments(parsed.first);
+			}
 			object_pool_parse_finished(parsed.first, parsed.second);
 		}
+		update_auxiliary_assignments();
 	}
 }
 #endif // !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
