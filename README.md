@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/github/license/Open-Agriculture/AgIsoStack-plus-plus)](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/LICENSE)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ad3154_ISO11783-CAN-Stack&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ad3154_ISO11783-CAN-Stack)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ad3154_ISO11783-CAN-Stack&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ad3154_ISO11783-CAN-Stack)
-[![Cite this repository](https://img.shields.io/badge/Cite-CITATION.cff-blue)](CITATION.cff)
+[![Cite this repository](https://img.shields.io/badge/Cite-CITATION.cff-blue)](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/CITATION.cff)
 
 </div>
 
@@ -112,12 +112,12 @@ Our manufacturer code is 1407 (decimal).
 
 | Directory | Contents |
 | --- | --- |
-| [isobus/](isobus/) | The protocol stack: network manager, control functions, transport protocols and the application interfaces (VT, TC, diagnostics, ...) |
-| [hardware_integration/](hardware_integration/) | `CANHardwareInterface` and the CAN driver plugins |
-| [utility/](utility/) | Dependency-free helpers used by the rest of the library (event dispatcher, timing, IOP file parsing, ...) |
-| [examples/](examples/) | Example applications demonstrating library features |
-| [test/](test/) | GoogleTest unit tests |
-| [sphinx/](sphinx/) | Source of the documentation website |
+| [isobus/](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/isobus) | The protocol stack: network manager, control functions, transport protocols and the application interfaces (VT, TC, diagnostics, ...) |
+| [hardware_integration/](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/hardware_integration) | `CANHardwareInterface` and the CAN driver plugins |
+| [utility/](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/utility) | Dependency-free helpers used by the rest of the library (event dispatcher, timing, IOP file parsing, ...) |
+| [examples/](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/examples) | Example applications demonstrating library features |
+| [test/](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/test) | GoogleTest unit tests |
+| [sphinx/](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/tree/main/sphinx) | Source of the documentation website |
 
 ## Contributing
 
