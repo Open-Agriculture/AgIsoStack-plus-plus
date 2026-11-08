@@ -1066,6 +1066,19 @@ TEST_F(FastPacketProtocolTest, TransmitCompleteCallbackCanSendAgain)
 	EXPECT_EQ(2u, context.firstCallbackCalls);
 }
 
+TEST_F(FastPacketProtocolTest, DuplicateSendIsRejected)
+{
+	FastPacketProtocol protocol([](std::uint32_t, CANDataSpan, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, CANIdentifier::CANPriority) {
+		return true;
+	});
+	auto source = test_helpers::create_mock_internal_control_function(0x80);
+
+	for (bool expected : { true, false })
+	{
+		EXPECT_EQ(expected, protocol.send_multipacket_message(FAST_PACKET_TEST_PGN, FAST_PACKET_TEST_DATA.data(), FAST_PACKET_TEST_DATA.size(), source, nullptr, CANIdentifier::CANPriority::PriorityDefault6, nullptr, nullptr));
+	}
+}
+
 static void count_second_on_receive(const CANMessage &, void *parentPointer)
 {
 	static_cast<FastPacketTestContext *>(parentPointer)->secondCallbackCalls++;

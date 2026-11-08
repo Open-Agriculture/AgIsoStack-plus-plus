@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 
 namespace isobus
 {
@@ -157,9 +158,9 @@ namespace isobus
 			LOG_ERROR("[FP]: Unable to send multipacket message, data is invalid or has invalid length.");
 			return false;
 		}
-		else if ((nullptr == source) || (!source->get_address_valid()) || has_session(parameterGroupNumber, source, destination))
+		else if ((nullptr == source) || (!source->get_address_valid()))
 		{
-			LOG_ERROR("[FP]: Unable to send multipacket message, source is invalid or already in a session for the PGN.");
+			LOG_ERROR("[FP]: Unable to send multipacket message, source is invalid.");
 			return false;
 		}
 		else if ((parameterGroupNumber < FP_MIN_PARAMETER_GROUP_NUMBER) || (parameterGroupNumber > FP_MAX_PARAMETER_GROUP_NUMBER))
@@ -173,8 +174,13 @@ namespace isobus
 			return false;
 		}
 
-		// One lock for the sequence number and the push, so two sends can not get the same number
+		// One lock for the duplicate check and the push, so two sends can not open the same session
 		LOCK_GUARD(Mutex, sessionMutex);
+		if (has_session(parameterGroupNumber, source, destination))
+		{
+			LOG_ERROR("[FP]: Unable to send multipacket message, already in a session for the PGN.");
+			return false;
+		}
 		activeSessions.push_back(std::make_shared<FastPacketProtocolSession>(FastPacketProtocolSession::Direction::Transmit,
 		                                                                     std::move(data),
 		                                                                     parameterGroupNumber,
@@ -287,13 +293,6 @@ namespace isobus
 			return;
 		}
 
-		// Called on a copy, unlocked, so that a callback can register or remove callbacks without deadlocking.
-		std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
-		{
-			LOCK_GUARD(Mutex, callbacksMutex);
-			callbacksCopy = parameterGroupNumberCallbacks;
-		}
-
 		if ((!message.is_destination_our_device()) && (!allowAnyControlFunction) && (!message.is_broadcast()))
 		{
 			// Destined for someone else, no need to process the message
@@ -306,9 +305,12 @@ namespace isobus
 			  ((nullptr == callback.get_internal_control_function()) ||
 			   (callback.get_internal_control_function() == message.get_destination_control_function()));
 		};
-		if (!std::any_of(callbacksCopy.begin(), callbacksCopy.end(), callbackMatches))
 		{
-			return;
+			LOCK_GUARD(Mutex, callbacksMutex);
+			if (!std::any_of(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), callbackMatches))
+			{
+				return;
+			}
 		}
 
 		std::shared_ptr<FastPacketProtocolSession> session = get_session(message.get_identifier().get_parameter_group_number(),
@@ -374,10 +376,17 @@ namespace isobus
 					                            message.get_can_port_index(),
 					                            message.get_timestamp_us());
 
-					// Find the appropriate callback and let them know
-					for (const auto &callback : callbacksCopy)
+					// Called on a copy, unlocked, so that a callback can register or remove callbacks without deadlocking.
+					std::vector<ParameterGroupNumberCallbackData> matchingCallbacks;
 					{
-						if (callbackMatches(callback) && is_callback_registered(callback))
+						LOCK_GUARD(Mutex, callbacksMutex);
+						std::copy_if(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), std::back_inserter(matchingCallbacks), callbackMatches);
+					}
+
+					// Find the appropriate callback and let them know
+					for (const auto &callback : matchingCallbacks)
+					{
+						if (is_callback_registered(callback))
 						{
 							callback.get_callback()(completedMessage, callback.get_parent());
 						}
@@ -547,7 +556,6 @@ namespace isobus
 
 	bool FastPacketProtocol::has_session(std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
-		LOCK_GUARD(Mutex, sessionMutex);
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<FastPacketProtocolSession> &session) {
 			return session->matches(source, destination) && (session->get_parameter_group_number() == parameterGroupNumber);
 		});

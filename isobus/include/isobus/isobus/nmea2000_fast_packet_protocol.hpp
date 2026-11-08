@@ -31,6 +31,8 @@
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
+
 namespace isobus
 {
 	/// @brief A protocol that handles the NMEA 2000 fast packet protocol.
@@ -199,7 +201,7 @@ namespace isobus
 		/// @returns a matching session, or nullptr if no session matched the supplied parameters
 		std::shared_ptr<FastPacketProtocolSession> get_session(std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
-		/// @brief Checks if a session by the passed in source and destination and PGN combination exists
+		/// @brief Checks if a session by the passed in source and destination and PGN combination exists. The caller must hold sessionMutex.
 		/// @param[in] parameterGroupNumber The PGN of the session
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
@@ -229,7 +231,7 @@ namespace isobus
 		Mutex callbacksMutex; ///< A mutex to lock the callbacks list, as callbacks can be registered from any thread
 		std::vector<FastPacketHistory> sessionHistory; ///< Used to keep track of sequence numbers for future sessions
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks that will be parsed as fast packet messages
-		bool allowAnyControlFunction = false; ///< Denotes if messages for non-internal control functions should be parsed by this protocol
+		std::atomic_bool allowAnyControlFunction{ false }; ///< Denotes if messages for non-internal control functions should be parsed by this protocol
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 	};
 
