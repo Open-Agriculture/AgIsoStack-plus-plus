@@ -98,7 +98,7 @@ sudo ip link add vcan0 type vcan
 sudo ip link set vcan0 up
 ```
 
-See [examples/README.md](examples/README.md) for installing the library as a CMake package and building a single example against it.
+See [examples/README.md](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/examples/README.md) for installing the library as a CMake package and building a single example against it.
 
 ### Use of our SAE/ISOBUS Manufacturer Code
 
@@ -121,7 +121,7 @@ Our manufacturer code is 1407 (decimal).
 
 ## Contributing
 
-Contributions are welcome! Read [CONTRIBUTING.md](CONTRIBUTING.md) for the code style, formatting and testing rules a pull request has to meet. It also explains how to install `docs/pre-commit-hook.sh`, which formats your changes before each commit.
+Contributions are welcome! Read [CONTRIBUTING.md](https://github.com/Open-Agriculture/AgIsoStack-plus-plus/blob/main/CONTRIBUTING.md) for the code style, formatting and testing rules a pull request has to meet. It also explains how to install `docs/pre-commit-hook.sh`, which formats your changes before each commit.
 
 ## Related Projects
 
